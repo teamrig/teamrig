@@ -46,7 +46,7 @@ describe('the automatic last-task ask', () => {
     const kit = await teamWithHelper(AUTOMATIC, ['port it']);
     ok(await close(kit, 'T1'));
     const self = await kit.run(['retire', 'helper', '--yes', '--session', 'helper']);
-    assert.match(self.stdout.join('\n'), /^REFUSED only a lead over the session retires it/);
+    assert.match(self.stdout.join('\n'), /^REFUSED only the lead retires a session/);
     assert.match(kit.files.get(ASK) ?? '', /"task":"T1"/);
     ok(await kit.run(['retire', 'helper', '--yes', '--session', 'lead']));
     assert.equal(kit.files.get(ASK), undefined);
