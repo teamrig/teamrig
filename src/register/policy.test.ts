@@ -779,19 +779,6 @@ describe('RegisterPolicy.setStatus to waiting', () => {
     assert.equal(led.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'bravo' }] }, CTX).ok, true, 'the lead is whoever roles.lead names');
   });
 
-  it("takes a wait on a leader above the owner, refusing another group's sub-lead (T781)", () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
-    const bravos = testTask({ id: 'T9', owner: 'bravo', status: 'in-progress' });
-    const wait = (who: string) =>
-      tree.setStatus(bravos, 'bravo', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who }], card: TEST_CARD }, { ...CTX, state: stateOf(bravos) });
-    assert.equal(wait('alpha').ok, true, "bravo's sub-lead approves");
-    assert.equal(wait('lead').ok, true, 'the lead above the sub-lead still does');
-    assert.equal(
-      error(wait('charlie')),
-      `approval charlie: approval waits are for a leader above bravo (alpha or lead) and owner; wait on charlie's work by its task: teamrig set T9 --status waiting --ask charlie --text "<the work you need>"`,
-    );
-  });
-
   it("has a child team's lead wait on the parent team's lead, its members still on theirs (T1140)", () => {
     const child = new RegisterPolicy(testConfig(), { team: 'app', id: 'boss' });
     const leads = testTask({ owner: 'lead', status: 'in-progress', startedAt: TASK.startedAt });
@@ -1017,7 +1004,7 @@ describe('RegisterPolicy.update', () => {
   });
 
   it("lets only the lead point a session's task holding no issue at the issue it opened for it, never replace an issue ref (T2550)", () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'], leads: { alpha: ['bravo'] } }));
+    const tree = new RegisterPolicy(testConfig());
     const bravos = testTask({ id: 'T9', owner: 'bravo' });
     assert.deepEqual(tree.update(bravos, 'lead', { ref: 'gh:acme/app#7' }, undefined, EMPTY), { ok: true, value: { changes: { ref: 'gh:acme/app#7' }, note: null } });
     assert.equal(tree.update(bravos, 'lead', { ref: 'gh:acme/app#7', priority: 1 }, undefined, EMPTY).ok, true, 'beside the work order');
@@ -1027,8 +1014,7 @@ describe('RegisterPolicy.update', () => {
     assert.deepEqual(tree.update(noted, 'lead', { ref: 'gh:acme/app#7' }, 'ref was: notes/plan.md', EMPTY), { ok: true, value: { changes: { ref: 'gh:acme/app#7' }, note: 'ref was: notes/plan.md' } }, 'a note ref gives way');
     assert.equal(error(tree.update(noted, 'lead', { ref: 'notes/other.md' }, undefined, EMPTY)), refused, 'only to an issue');
     assert.equal(error(tree.update(testTask({ id: 'T9', owner: 'bravo', ref: 'gh:acme/app#3' }), 'lead', { ref: 'gh:acme/app#7' }, undefined, EMPTY)), refused, 'its issue stays');
-    assert.equal(error(tree.update(bravos, 'alpha', { ref: 'gh:acme/app#7' }, undefined, EMPTY)), refused, 'a sub-lead does not');
-    assert.equal(error(tree.update(bravos, 'charlie', { ref: 'gh:acme/app#7' }, undefined, EMPTY)), 'only the owner (bravo) or a leader above bravo (alpha or lead) changes T9');
+    assert.equal(error(tree.update(bravos, 'alpha', { ref: 'gh:acme/app#7' }, undefined, EMPTY)), 'only the owner (bravo) or the lead (lead) changes T9', 'no peer');
   });
 
   it('keeps a class the team renamed out of focus.classes on any other change, and refuses setting one outside them (T2076)', () => {
@@ -1072,40 +1058,25 @@ describe('RegisterPolicy.update', () => {
     assert.equal(error(required.update(TASK, 'alpha', { priority: 1 }, undefined, EMPTY)), 'allowed', 'required asks a goal only of a new task');
   });
 
-  it("lets a sub-lead set its group's work order and keep the work in its group, never another group's (T782)", () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta', 'echo'], leads: { alpha: ['bravo', 'charlie'], charlie: ['delta'] } }));
-    const deltas = testTask({ id: 'T9', owner: 'delta' });
-    assert.equal(tree.update(deltas, 'charlie', { priority: 1, due: '2030-01-10', after: [] }, undefined, EMPTY).ok, true, "delta's sub-lead orders its work");
-    assert.equal(tree.update(deltas, 'alpha', { size: 2 }, undefined, EMPTY).ok, true, "charlie's sub-lead leads delta too");
-    assert.equal(tree.update(deltas, 'alpha', { owner: 'bravo' }, undefined, EMPTY).ok, true, 'to a session in its group');
-    assert.equal(tree.update(deltas, 'charlie', { owner: 'charlie' }, undefined, EMPTY).ok, true, 'to itself');
-    assert.equal(
-      error(tree.update(deltas, 'charlie', { owner: 'bravo' }, undefined, EMPTY)),
-      'charlie hands T9 only to itself or a session it leads (delta); the lead (lead) moves work between groups',
-    );
-    assert.equal(tree.update(deltas, 'lead', { owner: 'echo' }, undefined, EMPTY).ok, true, 'the lead moves work anywhere');
-    assert.equal(error(tree.update(deltas, 'bravo', { priority: 1 }, undefined, EMPTY)), 'only the owner (delta) or a leader above delta (charlie or alpha or lead) changes T9');
-    assert.equal(error(tree.update(testTask({ owner: 'alpha' }), 'charlie', { priority: 1 }, undefined, EMPTY)), 'only the owner (alpha) or the lead (lead) changes T1', 'not its own leader');
-    assert.equal(error(tree.update(testTask({ owner: 'echo' }), 'alpha', { priority: 1 }, undefined, EMPTY)), 'only the owner (echo) or the lead (lead) changes T1', 'nor a session outside its group');
-    assert.match(error(tree.update(deltas, 'charlie', { title: 'x' }, undefined, EMPTY)), /^a leader may change only owner, .* \(asked: title\)$/);
+  it("lets only the lead set the work order of a session's task and hand it to any session (T782, T1320)", () => {
+    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'] }));
+    const bravos = testTask({ id: 'T9', owner: 'bravo' });
+    assert.equal(tree.update(bravos, 'lead', { priority: 1, due: '2030-01-10', after: [] }, undefined, EMPTY).ok, true, 'the lead orders its work');
+    assert.equal(tree.update(bravos, 'lead', { owner: 'charlie' }, undefined, EMPTY).ok, true, 'the lead moves work anywhere');
+    assert.equal(error(tree.update(bravos, 'alpha', { priority: 1 }, undefined, EMPTY)), 'only the owner (bravo) or the lead (lead) changes T9');
+    assert.equal(error(tree.update(bravos, 'alpha', { owner: 'alpha' }, undefined, EMPTY)), 'only the owner (bravo) or the lead (lead) changes T9', 'nor takes it');
   });
 
-  it("lets only the owner's leaders pin its task, each pin naming who set it, and the lead its own tasks too (T637)", () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo', 'charlie'], charlie: ['delta'] } }));
-    const deltas = testTask({ id: 'T9', owner: 'delta' });
-    assert.equal(tree.update(deltas, 'charlie', { pin: 'charlie' }, undefined, EMPTY).ok, true, "delta's sub-lead pins");
-    assert.equal(tree.update(deltas, 'alpha', { pin: null }, undefined, EMPTY).ok, true, 'a leader above unpins');
-    const own = "delta does not pin its own T9: a leader above delta (charlie or alpha or lead) pins a task above its owner's order";
-    assert.equal(error(tree.update(deltas, 'delta', { pin: 'delta' }, undefined, EMPTY)), own);
-    assert.equal(error(tree.update(deltas, 'delta', { pin: null }, undefined, EMPTY)), own, 'nor unpins it');
-    assert.equal(
-      error(tree.update(deltas, 'charlie', { owner: 'charlie', pin: 'charlie' }, undefined, EMPTY)),
-      "charlie does not pin its own T9: a leader above charlie (alpha or lead) pins a task above its owner's order",
-      'nor a task it takes in the same change',
-    );
-    assert.equal(error(tree.update(deltas, 'charlie', { pin: 'alpha' }, undefined, EMPTY)), 'a pin names the session that sets it (charlie), not alpha');
-    assert.equal(tree.update(testTask({ owner: 'lead' }), 'lead', { pin: 'lead' }, undefined, EMPTY).ok, true, 'the lead pins its own');
-    assert.equal(error(tree.update(deltas, 'bravo', { pin: 'bravo' }, undefined, EMPTY)), 'only the owner (delta) or a leader above delta (charlie or alpha or lead) changes T9');
+  it("lets only the lead pin a session's task, each pin naming who set it, and the lead its own tasks too (T637)", () => {
+    const bravos = testTask({ id: 'T9', owner: 'bravo' });
+    assert.equal(policy.update(bravos, 'lead', { pin: 'lead' }, undefined, EMPTY).ok, true, 'the lead pins');
+    assert.equal(policy.update(bravos, 'lead', { pin: null }, undefined, EMPTY).ok, true, 'and unpins');
+    const own = "bravo does not pin its own T9: the lead (lead) pins a task above its owner's order";
+    assert.equal(error(policy.update(bravos, 'bravo', { pin: 'bravo' }, undefined, EMPTY)), own);
+    assert.equal(error(policy.update(bravos, 'bravo', { pin: null }, undefined, EMPTY)), own, 'nor unpins it');
+    assert.equal(error(policy.update(bravos, 'lead', { pin: 'alpha' }, undefined, EMPTY)), 'a pin names the session that sets it (lead), not alpha');
+    assert.equal(policy.update(testTask({ owner: 'lead' }), 'lead', { pin: 'lead' }, undefined, EMPTY).ok, true, 'the lead pins its own');
+    assert.equal(error(policy.update(bravos, 'alpha', { pin: 'alpha' }, undefined, EMPTY)), 'only the owner (bravo) or the lead (lead) changes T9', 'no peer pins');
   });
 
   it('plans an open task after others, and clears that plan on any task', () => {
@@ -1197,13 +1168,6 @@ describe('RegisterPolicy.triage (T2086)', () => {
   it("lets the lead write goals, which a leader's update may not", () => {
     assert.deepEqual(policy.triage(TASK, 'lead', ROW, EMPTY), { ok: true, value: { changes: ROW, note: null } });
     assert.match(error(policy.update(TASK, 'lead', { goals: ['A1'] }, undefined, EMPTY)), /asked: goals/);
-  });
-
-  it('lets a sub-lead over the owner, never one of another group', () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
-    const bravos = testTask({ owner: 'bravo' });
-    assert.equal(tree.triage(bravos, 'alpha', ROW, EMPTY).ok, true);
-    assert.match(error(tree.triage(bravos, 'charlie', ROW, EMPTY)), /^only the owner \(bravo\) or /);
   });
 
   it('refuses a session that neither owns the task nor leads its owner', () => {
@@ -1699,18 +1663,6 @@ describe('RegisterPolicy.approve (T684)', () => {
     assert.match(error(policy.approve(owners, 'lead', 'approved', 'ok')), /does not wait on the lead's approval/);
   });
 
-  it("lets a sub-lead above the owner answer its own approval wait, never another group's sub-lead nor its own task's (T781)", () => {
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
-    const bravos = (who: string) => testTask({ owner: 'bravo', status: 'waiting', waits: [{ kind: 'approval', who }] });
-    assert.equal(tree.approve(bravos('alpha'), 'alpha', 'approved', 'ok').ok, true);
-    assert.equal(tree.approve(bravos('lead'), 'lead', 'approved', 'ok').ok, true);
-    assert.equal(error(tree.approve(bravos('alpha'), 'charlie', 'approved', 'ok')), "only a leader above bravo (alpha or lead) answers an approval of bravo's");
-    assert.match(error(tree.approve(bravos('alpha'), 'lead', 'approved', 'ok')), /T1 does not wait on the lead's approval \(approval:lead\)/);
-    assert.match(error(tree.approve(bravos('lead'), 'alpha', 'approved', 'ok')), /T1 does not wait on alpha's approval \(approval:alpha\)/);
-    const alphas = testTask({ status: 'waiting', waits: [{ kind: 'approval', who: 'alpha' }] });
-    assert.equal(error(tree.approve(alphas, 'alpha', 'approved', 'ok')), "only the lead (lead) answers an approval of alpha's");
-  });
-
   it("lets only the parent team's lead answer a child team's lead, and not a member's wait (T1140)", () => {
     const child = new RegisterPolicy(testConfig(), { team: 'app', id: 'boss' });
     const leads = testTask({ owner: 'lead', status: 'waiting', waits: [{ kind: 'approval', who: 'app/boss' }] });
@@ -1892,10 +1844,6 @@ describe('RegisterPolicy.defer: a Later (T1295)', () => {
   it('lets the owner of the task or a leader above it record one, no peer', () => {
     assert.equal(error(policy.defer(asking, 'lead', '2030-01-09 09:00', 'after the demo', at)), 'allowed');
     assert.equal(error(policy.defer(asking, 'bravo', '2030-01-09 09:00', 'after the demo', at)), 'only the owner (alpha) or the lead (lead) puts T1 off');
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
-    const bravos = testTask({ owner: 'bravo', status: 'waiting', waits: OWNER_DECISION });
-    assert.equal(error(tree.defer(bravos, 'alpha', '2030-01-09 09:00', 'n', at)), 'allowed', 'its sub-lead');
-    assert.equal(error(tree.defer(bravos, 'charlie', '2030-01-09 09:00', 'n', at)), 'only the owner (bravo) or a leader above bravo (alpha or lead) puts T1 off');
   });
 
   it("refuses a task that waits on no decision or approval of the owner's", () => {
@@ -1941,10 +1889,6 @@ describe('RegisterPolicy.decide: a Decided (T1366)', () => {
   it('lets the owner of the task or a leader above it record one, no peer', () => {
     assert.equal(error(policy.decide(asking, 'lead', 'go')), 'allowed');
     assert.equal(error(policy.decide(asking, 'bravo', 'go')), 'only the owner (alpha) or the lead (lead) records a decision on T1');
-    const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
-    const bravos = testTask({ owner: 'bravo', status: 'waiting', waits: OWNER_DECISION });
-    assert.equal(error(tree.decide(bravos, 'alpha', 'go')), 'allowed', 'its sub-lead');
-    assert.equal(error(tree.decide(bravos, 'charlie', 'go')), 'only the owner (bravo) or a leader above bravo (alpha or lead) records a decision on T1');
   });
 
   it("refuses a task that waits on no decision or approval of the owner's", () => {
