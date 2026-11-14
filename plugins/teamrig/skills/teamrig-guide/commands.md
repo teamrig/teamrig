@@ -5345,10 +5345,8 @@ time to the pace end (`budget.paceEndHoursBeforeReset` before the reset; quiet h
 its sessions last started in, kept in `state/usage/claude-config-dir.json`) split that day by weight: a session's
 weight is its share times its top queued task's weight (by priority, not how many tasks it has queued), a team's
 its sessions' summed. Past 100% of the week, what is left in the extra-usage
-pool takes the place of that remainder (see [teamrig budget extra](#teamrig-budget-extra)). With sub-leads
-(`leads`), the team's budget splits first among their groups and the sessions the lead leads directly, a group's
-weight its sessions' summed, and each group splits its part the same way. What the lifts leave of a budget is split
-among the other sessions and groups under it by `budget.sessions.<id>.share` times their top queued task's weight. Short by
+pool takes the place of that remainder (see [teamrig budget extra](#teamrig-budget-extra)). What the lifts leave of the
+team's budget is split among the other sessions by `budget.sessions.<id>.share` times their top queued task's weight. Short by
 default: the busiest 7 sessions, then who is past the daily budget. A session past its part is held only while the
 team has no room today: everyone's use today, the outside's included, at or past the in-day pace (today's use in
 quiet hours, plus today's budget times the share of today's active time gone by). The team past its part of the
@@ -5438,11 +5436,7 @@ A session's row marks a budget a lift or a burst raised: `(lifted)`, `(burst)`; 
 reserve release (`--reserve`), and its `week now` gives the share of the week that part comes to now, moving with the
 budget it is a part of (`-` while the week's use is unknown). With `budget.pauseByPriority` on, a short day marks the 0 of a session it pauses
 `(paused)`, and a line names the paused sessions, idle ones too: `Paused today, funded by priority as the week's use is
-past its pace line (budget.pauseByPriority): web.` With sub-leads (`leads`), a `group <sub-lead> (<n>)` row follows the team's: the
-use of its n sessions, the sub-lead's own included, against the group's daily budget, marked `(lifted)` under a
-group lift. The lifts block then lists group lifts first, adds an `of` column naming the budget each lift is a part
-of (`the team` or `group <sub-lead>`), and its heading says that quiet hours do not apply to a session's lift, but do
-to a group's. With no status line snapshot and no `budget.weeklyLimitW`, the week line says its use is
+past its pace line (budget.pauseByPriority): web.` With no status line snapshot and no `budget.weeklyLimitW`, the week line says its use is
 unknown and the table gives W and calls only. `Not on the team: N Claude Code sessions (top by W: <title> <W>, ...)`
 counts the tabs not tied to a session that made a call that day (with `--day`, the day picked) and names the top
 ones by that day's W.
@@ -5554,31 +5548,24 @@ usage errors (exit 64).
 
 ### teamrig budget lift
 
-A leader lifts one session under it to a part of its parent's daily budget for today: the team's for a session the
-lead leads directly, else its sub-lead's group's (`leads`). The session gets `--part` % of that budget, recomputed at
-every reading like the budget itself, and the other sessions and groups under the same parent split the rest by
-their shares and top queued tasks' weights. The lead lifts any session; a sub-lead lifts the sessions in its group at any depth,
-and its own session too, a part of its own group's budget. With `--group`, a leader above a sub-lead lifts the
-sub-lead's whole group: the group gets `--part` % of its parent's budget, and its sessions split that as usual. The
-lifts in force under one parent never give more than all of its budget. Every lift carries a stop %: it ends at the
+The lead lifts one session, its own too, to a part of the team's daily budget for today. The session gets `--part`
+% of that budget, recomputed at every reading like the budget itself, and the other sessions split the rest by their
+shares and top queued tasks' weights. The lifts in force never give more than all of the team's budget. Every lift carries a stop %: it ends at the
 stop %, at `--until` or at the end of the budget day (a UTC day), whichever comes first, and quiet hours do not
-apply to a lifted session while it runs; a group lift keeps them. The stop % is at most `budget.lift.maxStopPct` (99.3). Above that, up to `budget.lift.reserveStopPct`
+apply to a lifted session while it runs. The stop % is at most `budget.lift.maxStopPct` (99.3). Above that, up to `budget.lift.reserveStopPct`
 (99.9), only with `--reserve` and only in the last hour before the reset; a reserve lift ends 15 minutes before
 the reset. Lifts are kept in the team's `state/usage/lifts.jsonl`.
 
 The lead also lifts `<team>/<session>`, a session of a team under its own at any depth, on the same Claude account:
 the session gets `--part` % of the lead's own team's daily budget on top of its own budget. It is kept in the lead's
 team's lift log, comes out of that team's budget like its other lifts, and the team below reads it beside the other
-teams on the account. Quiet hours still apply to it, and `--group` does not lift a group of a team below.
+teams on the account. Quiet hours still apply to it.
 
 Flags:
 
-- `--session <id|name>`: the caller; a leader over the session (the lead, or a sub-lead whose group holds it), or
-  a sub-lead lifting its own session.
-- `--group`: lift the named sub-lead's whole group, a part of its parent's daily budget; only a leader above that
-  sub-lead may.
-- `--part <pct>`: the part of the parent's daily budget today, in percent (above 0, up to 100); a percent of that
-  budget, not of the week. For X% of the week, give X divided by the parent's daily budget (its `budget` column in
+- `--session <id|name>`: the caller; the lead.
+- `--part <pct>`: the part of the team's daily budget today, in percent (above 0, up to 100); a percent of that
+  budget, not of the week. For X% of the week, give X divided by the team's daily budget (its `budget` column in
   [teamrig budget](#teamrig-budget), in % of the week) times 100. The `LIFTED` line and the lifts table give the
   share of the week the part comes to now.
 - `--stop-pct <pct>`: required: the week's use at which the lift ends.
@@ -5598,20 +5585,6 @@ Output:
 LIFTED api to 50.0% of the team's daily budget (6.2% of the week now) today until 03:00 IDT (the end of the budget day) or 97.0% of the week, whichever comes first; quiet hours do not apply to it.
 ```
 
-With `web` a sub-lead over `api`, the lead lifts web's whole group, and web lifts api inside it:
-
-```sh
-teamrig budget lift web --session lead --group --part 40 --stop-pct 97 --reason "web's release"
-teamrig budget lift api --session web --part 50 --stop-pct 97 --reason "the release branch"
-```
-
-Output:
-
-```text
-LIFTED web's group to 40.0% of the team's daily budget (5.0% of the week now) today until 03:00 IDT (the end of the budget day) or 97.0% of the week, whichever comes first.
-LIFTED api to 50.0% of web's group's daily budget (2.5% of the week now) today until 03:00 IDT (the end of the budget day) or 97.0% of the week, whichever comes first; quiet hours do not apply to it.
-```
-
 With `docs` a team under the lead's team `app`, the lead tops up docs's session `writer`:
 
 ```sh
@@ -5624,33 +5597,29 @@ Output:
 LIFTED docs/docs-writer to 18.0% of team app's daily budget (1.8% of the week now) on top of its own budget today until 03:00 IDT (the end of the budget day) or 50.0% of the week, whichever comes first.
 ```
 
-A lift wakes what it frees: the lifted session, or each session of a lifted group, held past its daily budget
-today gets an inbox line and a wake, and a `WOKE <names>: held past the daily budget, now free` line follows the
-`LIFTED` line. A session not held gets nothing. `NOTE <name> is still held and was not woken: <why>` names one
-whose line was not posted; the lift stands either way.
+A lift wakes what it frees: the lifted session, held past its daily budget today, gets an inbox line and a wake,
+and a `WOKE <names>: held past the daily budget, now free` line follows the `LIFTED` line. A session not held gets
+nothing. `NOTE <name> is still held and was not woken: <why>` names one whose line was not posted; the lift stands
+either way.
 
-A caller that leads no group over the session, a `--group` of the lead or of a session that leads no group, a
-missing stop %, a stop % above the bounds, a part that with the other lifts in force under the same parent would
-give more than all of its budget (inside a group, the line names the group's budget, its use today and the group
-lift that gives more), a week already at the stop % or an unknown week (no status line and no
+A caller other than the lead, a missing stop %, a stop % above the bounds, a part that with the other lifts in
+force would give more than all of the team's budget, a week already at the stop % or an unknown week (no status line and no
 `budget.weeklyLimitW`) is `REFUSED` (exit 2); [errors.md](errors.md#budget) lists each line.
 
 ### teamrig budget cut
 
-A leader cuts one session under it to its own daily budget, for today at most. Without a cut, a session past its
+The lead cuts one session to its own daily budget, for today at most. Without a cut, a session past its
 daily budget uses the room the others left: it is held only once the team has no room left today. Under a cut it is
 held as soon as it is past its own budget, whatever room the team has: it wakes, and is reopened, for p0 work only,
-and `budget.overAction` holds its new helpers back as it says. Its budget lines name the cut, and its leader gets no
-inbox line about it, since a leader gave the cut. A lift in force still sets the session's budget; a lift of the
+and `budget.overAction` holds its new helpers back as it says. Its budget lines name the cut, and the lead gets no
+inbox line about it, since the lead gave the cut. A lift in force still sets the session's budget; a lift of the
 session given after the cut ends it. A cut ends at `--until` or at the end of the budget day (a UTC day), whichever
-comes first, and a newer cut of the session replaces an older one. The leaders who may lift a session may cut it:
-the lead cuts any session, a sub-lead the sessions in its group at any depth and its own session. Cuts are kept in
-the team's `state/usage/cuts.jsonl`. A session of a team under the lead's own is cut by its own team's leaders.
+comes first, and a newer cut of the session replaces an older one. Cuts are kept in the team's
+`state/usage/cuts.jsonl`. A session of a team under the lead's own is cut by its own team's lead.
 
 Flags:
 
-- `--session <id|name>`: the caller; a leader over the session (the lead, or a sub-lead whose group holds it), or
-  a sub-lead cutting its own session.
+- `--session <id|name>`: the caller; the lead.
 - `--until <HH:MM|date>`: an earlier end: `HH:MM` today or `"YYYY-MM-DD HH:MM"`, on the team's clock unless marked `UTC`.
 - `--reason "<why>"`: required: why the session keeps to its own budget today.
 

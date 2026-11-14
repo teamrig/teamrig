@@ -74,8 +74,7 @@ or take it to the lead.
 | `REFUSED --one-commit goes only with --status in-progress` | Drop `--one-commit`, or set `in-progress`. |
 | `REFUSED T1 is already done; add --note to record why you set it again` | Add a `--note`, or leave the status as it is. |
 | `REFUSED a leader may change only owner, priority, due, week, after, size, kind, pin on a task it does not own (asked: title)` | Ask the owner to change that field. |
-| `REFUSED only the owner (web) or the lead (lead) changes T2` | Ask the owner or a leader it names (a sub-lead's member: `a leader above web (backend or lead)`). |
-| `REFUSED backend hands T2 only to itself or a session it leads (importer, search); the lead (lead) moves work between groups` | Hand it within your group, or ask the lead to move it to another. |
+| `REFUSED only the owner (web) or the lead (lead) changes T2` | Ask the owner or the lead it names. |
 | `REFUSED nothing to change: give a field or a --note` | `update` needs a field flag, or a `--note` to add alone. |
 | `REFUSED priority p9 is not one of p0, p1, p2, p3, p4, p5` | Use a priority the team defines, or p0 for urgent work. |
 | `REFUSED the title has 141 characters; the limit is 140` | Shorten the title; put the detail in `--description`. |
@@ -111,17 +110,16 @@ or take it to the lead.
 | `REFUSED <project> is already tied to team X by <pointer>; give another --project, or remove that pointer first` | The folder belongs to another team: use another folder, or ask the user. |
 | `REFUSED team X already exists at <path> with sessions ...; choose another team name, or change that config by hand` | Pick another team id, or add sessions to the existing team with the user. |
 | `REFUSED the session name N is already used by ..., and Claude Code session names are machine-wide; choose another team id, or rename ... with teamrig rename` | Choose another team id. |
-| `REFUSED only a lead hires sessions: the lead (<id>), or a sub-lead into its own group` | Ask your leader to hire the session. |
+| `REFUSED only the lead hires sessions: the lead (<id>)` | Ask the lead to hire the session. |
 | `REFUSED hiring.policy is off: the team takes no hires by command` | Ask the owner whether to allow hires; the lead then sets `hiring.policy` in the team config. |
-| `REFUSED hiring.policy is owner: the owner approves each hire; ask the owner, then pass --approved-by "<who>"` | Ask the owner (in a child team the refusal names the parent team's lead, and for a sub-lead its own leader, who takes it to the owner), then run the hire again with `--approved-by`. |
+| `REFUSED hiring.policy is owner: the owner approves each hire; ask the owner, then pass --approved-by "<who>"` | Ask the owner (in a child team the refusal names the parent team's lead, who takes it to the owner), then run the hire again with `--approved-by`. |
 | `REFUSED <id> owns open task(s) T1: pass --to <heir> to hand them over, or close them first` | Retire it with `--to <heir>`, or let it close its tasks first. |
 | `REFUSED no handover at <path>: write it (open work, next steps, branches, traps) or pass --no-handover "<why>"` | Ask the session to write its handover there, or retire it with `--no-handover "<why>"`. |
 | `REFUSED <id> holds roles.<role>: give the role to another session first` | Set the role to another session in the team config, then retire it. |
 | `REFUSED github.owners names <id> for <login>: point it at another session first` | Point that login (or the repository in `github.sessions`) at another session, then retire it. |
-| `REFUSED only a lead over the session retires it (the lead, or its sub-lead): the leader decides which workers the team needs` | Ask the session's leader (its sub-lead, else the lead) to retire it. |
-| `REFUSED <sub-lead> hands work only within its group: the heir <id> is not led by <sub-lead>; the lead (<id>) moves work between groups` | Pass an heir in your group (or yourself), or ask the lead to retire it. |
+| `REFUSED only the lead retires a session: the lead decides which workers the team needs` | Ask the lead to retire it. |
 | `REFUSED <id> is already on the team: a hired session is kept with --review <YYYY-MM-DD> --reason "<why>"` | To keep a hired session to a new review day, pass both; to hire another session, give a new id. |
-| `REFUSED only a lead over the session keeps it (the lead, or its sub-lead): the leader decides which workers the team needs` | Ask the session's leader (its sub-lead, else the lead) to keep it. |
+| `REFUSED only the lead keeps a hired session: the lead decides which workers the team needs` | Ask the lead to keep it. |
 | `REFUSED <id> is set up with the team, not hired: it has no review day to keep` | Nothing to keep: only a hired session has a review day. |
 | `REFUSED the review day <day> has passed` (or `is not a YYYY-MM-DD date`) | Give a future day, `YYYY-MM-DD`. |
 | `--scope: a keep of <id> changes only its review day` (exit 2; also `--name`, `--model`, `--effort`, `--approved-by`, `--burst`) | Drop the flag: a keep leaves the hire's job and launch as they are. |
@@ -156,16 +154,13 @@ From `teamrig budget lift` ([commands.md](commands.md#teamrig-budget-lift)), `te
 
 | Output | Fix |
 | --- | --- |
-| `REFUSED api's budget is lifted only by web or lead` | The caller leads no group over that session: ask one of the leaders it names (nearest first) for the lift. |
-| `REFUSED web's group's budget is lifted only by lead` | A sub-lead does not lift its own group: ask a leader it names. |
-| `REFUSED api's budget is cut only by web or lead` | The caller leads no group over that session: ask one of the leaders it names (nearest first) for the cut. |
-| `REFUSED --group lifts a sub-lead's group, and api leads none` | Lift the session without `--group`, or name its sub-lead. |
-| `REFUSED --group lifts a sub-lead's group; lead is the lead, whose group is the whole team` | No lift takes a part of the whole team: lift a session, or a sub-lead's group. |
+| `REFUSED api's budget is lifted only by lead` | Only the lead lifts a session's budget: ask it for the lift. |
+| `REFUSED api's budget is cut only by lead` | Only the lead cuts a session's budget: ask it for the cut. |
 | `REFUSED only the lead (lead) lifts a session of a team under its own` | A `<team>/<session>` lift is the lead's: ask it. |
 | `REFUSED team ops is not a team under team web` | The lead lifts only sessions of teams below its own: ask the lead of a team above both. |
 | `REFUSED team web is on another Claude account than team app, so team app's daily budget cannot top its sessions up` | The teams' weeks are separate: web's own lead lifts its session. |
 | `REFUSED on team web, ...` | The session is not on that team: check its id with `teamrig who`. |
-| `REFUSED the other lifts in force give 60.0% of web's group's daily budget, so --part 60 would give more than all of it; the most this lift may give is 40.0%. web's group gets 6.0% of the week today and has used 2.5%; lead can lift it: ...` | Lift by at most the part it names, or ask the leader it names to lift the whole group with the command it gives. Outside a group, the line ends after the most this lift may give. |
+| `REFUSED the other lifts in force give 60.0% of the team's daily budget, so --part 60 would give more than all of it; the most this lift may give is 40.0%` | Lift by at most the part it names, or end another lift first. |
 | `REFUSED only the lead (lead) sets the team's budget` | Ask the lead to run it. |
 | `REFUSED nothing written: budget.quietHours.startUtc: ...` | The line names the value the config checks reject: give the flag another one. |
 | `REFUSED a lift needs --stop-pct <n>: the share of the week, in %, at which it ends` | Add `--stop-pct`. |
