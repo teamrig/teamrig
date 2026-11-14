@@ -17,8 +17,7 @@ import { teamRegister } from '../team-register.ts';
 import { inboxDepsOf } from './inbox.ts';
 
 /**
- * `retire`: a lead over a session takes it off the team once the team no longer needs it: the lead, or a
- * sub-lead the session is under, who hands its tasks only within its group (T509); a session never retires
+ * `retire`: the lead takes a session off the team once the team no longer needs it (T509); a session never retires
  * itself. Without --yes it only shows the retire; with it, its open tasks go to the heir (who gets one inbox line),
  * the old config is kept in the backups folder, the session's keys leave the config, then the retire is logged in
  * the hire log. Its tasks, inbox and records stay where they are, readable by its id.
@@ -56,12 +55,11 @@ async function requestOf(args: ParsedArgs, runtime: CliRuntime, kit: Kit, roster
 
 /** One line on what the retire does. */
 function describeRetire(plan: RetirePlan, roster: Roster): string {
-  const { retire, handOver, hired, regrouped } = plan;
+  const { retire, handOver, hired } = plan;
   const tasks = handOver.length === 0 ? '' : `; its open task(s) ${handOver.join(', ')} go to ${retire.heir ?? ''}`;
-  const members = regrouped.members.length === 0 ? '' : `; the session(s) it led, ${regrouped.members.join(', ')}, are now led by ${regrouped.to}`;
   const handover = retire.handover === undefined ? `no handover: ${retire.noHandover ?? ''}` : `handover ${retire.handover}`;
   const member = hired ? 'hired' : 'set up with the team';
-  return `${retire.session} (name ${roster.nameOf(retire.session) ?? retire.session}, ${member}): ${retire.reason}${tasks}${members}; ${handover}`;
+  return `${retire.session} (name ${roster.nameOf(retire.session) ?? retire.session}, ${member}): ${retire.reason}${tasks}; ${handover}`;
 }
 
 /** Hands the open tasks to the heir and tells it in one inbox line; a line that cannot be posted is named, never thrown. */

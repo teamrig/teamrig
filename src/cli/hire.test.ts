@@ -107,20 +107,9 @@ describe('hire', () => {
     assert.deepEqual(configOf(kit)['sessions'], ['lead', 'alpha', 'helper', 'second', 'third']);
   });
 
-  it("lets a sub-lead hire into its own group, on the lead's launch", async () => {
-    const kit = new CliHarness({ ...LEAD_TEAM, sessions: ['lead', 'alpha', 'beta'], leads: { alpha: ['beta'] } });
-    const result = await kit.run(['hire', 'helper', ...JOB, '--session', 'alpha', '--yes']);
-    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.match(result.stdout[0] ?? '', /^HIRED helper \(name app-helper\) for "port the importer", led by app-alpha: model opus at high effort, /);
-    const config = configOf(kit);
-    assert.deepEqual(config['leads'], { alpha: ['beta', 'helper'] });
-    assert.deepEqual(config['sessions'], ['lead', 'alpha', 'beta', 'helper']);
-    assert.match(refusal(await kit.run(['hire', 'second', ...JOB, '--session', 'beta'])), /only a lead hires sessions/);
-  });
-
   it('is for a lead only, and follows hiring.policy', async () => {
     const kit = new CliHarness(LEAD_TEAM);
-    assert.match(refusal(await kit.run(['hire', 'helper', ...JOB, '--session', 'alpha'])), /only a lead hires sessions: the lead \(lead\), or a sub-lead into its own group/);
+    assert.match(refusal(await kit.run(['hire', 'helper', ...JOB, '--session', 'alpha'])), /only the lead hires sessions: the lead \(lead\)/);
     const owner = new CliHarness({ ...LEAD_TEAM, hiring: { policy: 'owner' } });
     assert.match(refusal(await hire(owner, 'helper', ...JOB)), /--approved-by/);
     assert.equal((await hire(owner, 'helper', ...JOB, '--approved-by', 'the owner')).code, EXIT.ok);
@@ -154,12 +143,13 @@ describe('hire', () => {
     assert.deepEqual((await hire(kit, 'helper', '--review', '2030-03-01', '--reason', 'still porting')).stdout.at(-1), 'PREVIEW keep helper on the team, review by 2030-03-01 (was 2030-02-01): "still porting"; nothing written (add --yes to write)');
   });
 
-  it("lets a sub-lead keep its own group's hire, and refuses every other session and a set-up session", async () => {
-    const kit = new CliHarness({ ...LEAD_TEAM, sessions: ['lead', 'alpha', 'beta'], leads: { alpha: ['beta'] } });
-    assert.equal((await kit.run(['hire', 'helper', ...JOB, '--session', 'alpha', '--yes'])).code, EXIT.ok);
+  it('lets only the lead keep a hire, and refuses every other session and a set-up session (T1320)', async () => {
+    const kit = new CliHarness({ ...LEAD_TEAM, sessions: ['lead', 'alpha', 'beta'] });
+    assert.equal((await hire(kit, 'helper', ...JOB, '--yes')).code, EXIT.ok);
     const keepArgs = ['hire', 'helper', '--review', '2030-02-01', '--reason', 'the importer grew', '--yes'];
-    assert.equal((await kit.run([...keepArgs, '--session', 'alpha'])).code, EXIT.ok);
-    const notLead = 'REFUSED only a lead over the session keeps it (the lead, or its sub-lead): the leader decides which workers the team needs';
+    assert.equal((await kit.run([...keepArgs, '--session', 'lead'])).code, EXIT.ok);
+    const notLead = 'REFUSED only the lead keeps a hired session: the lead decides which workers the team needs';
+    assert.equal(refusal(await kit.run([...keepArgs, '--session', 'alpha'])), notLead);
     assert.equal(refusal(await kit.run([...keepArgs, '--session', 'beta'])), notLead);
     assert.equal(refusal(await kit.run([...keepArgs, '--session', 'helper'])), notLead);
     assert.equal(refusal(await hire(kit, 'beta', '--review', '2030-02-01', '--reason', 'x')), 'REFUSED beta is set up with the team, not hired: it has no review day to keep');

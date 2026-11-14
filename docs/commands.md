@@ -306,18 +306,18 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION)
       (the session itself or the lead)
   hire <id> --scope "<its job>" --reason "<why>" [--name <name>] [--model <model>] [--effort <level>]
       [--review <YYYY-MM-DD>] [--approved-by "<who>"] [--burst] [--yes]
-      (a lead: the lead, or a sub-lead into its own group) adds a worker the leader is sure the team needs,
+      (the lead) adds a worker it is sure the team needs,
       or hires a retired one back, within hiring.policy, on the lead's model and effort unless given;
       without --yes it shows the hire and writes nothing;
       with no room on the host for one more session it is hired home, left closed until there is room;
       --burst: a hire for the burst in force, within its hires, never a cheaper model or lower effort, due to
       retire when the burst is over (under hiring.policy owner the burst's approver approves it);
       on a hired session already on the team, --review <YYYY-MM-DD> --reason "<why>" keeps it to that new
-      review day instead (a lead over it), which clears its REVIEW-DUE
+      review day instead (the lead), which clears its REVIEW-DUE
   retire <id|name> [--to <heir>] [--no-handover "<why>"] [--reason "<why>"] [--yes]
-      (a lead over it: the lead, or its sub-lead; never the session itself) takes a session the team no longer
-      needs off the team; its open tasks go to --to, and it needs its handover unless --no-handover; its
-      tasks and inbox stay readable; without --yes it shows the retire and writes nothing
+      (the lead; never the session itself) takes a session the team no longer needs off the team; its open
+      tasks go to --to, and it needs its handover unless --no-handover; its tasks and inbox stay readable;
+      without --yes it shows the retire and writes nothing
   promote <id|name> --members <a,b> [--yes]
       (the lead or a sub-lead) makes one of the sessions it leads directly the sub-lead of others it leads
       directly: their decision and approval waits may go to it, and it approves them; without --yes it shows

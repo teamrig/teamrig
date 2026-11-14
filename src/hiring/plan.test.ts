@@ -58,17 +58,13 @@ describe('planHire', () => {
     assert.equal(result.hire.model, undefined);
   });
 
-  it("lets a sub-lead hire into its own group, on the lead's launch, and no one else but the lead (T509)", () => {
-    const tree = { ...FILE, sessions: ['lead', 'alpha', 'bravo'], leads: { alpha: ['bravo'] }, launch: { lead: { model: 'opus', effort: 'high' }, alpha: { model: 'sonnet' } } };
-    const result = planned(tree, { by: 'alpha' });
-    assert.deepEqual(result.config['leads'], { alpha: ['bravo', 'helper'] });
+  it('lets only the lead hire, writing no leads key, as the sub-lead groups are gone (T1320)', () => {
+    const team = { ...FILE, sessions: ['lead', 'alpha', 'bravo'] };
+    const result = planned(team);
     assert.deepEqual(result.config['sessions'], ['lead', 'alpha', 'bravo', 'helper']);
-    assert.deepEqual(result.hire, { kind: 'hire', session: 'helper', scope: 'port the importer', reason: 'release week', model: 'opus', effort: 'high', reviewBy: '2030-01-15', by: 'alpha', at: NOW });
-    assert.equal(result.leader, 'alpha');
-    assert.equal(planned(tree).leader, 'lead');
-    assert.deepEqual(planned(tree).config['leads'], { alpha: ['bravo'] }, "the lead's hire joins no sub-lead's group");
-    assert.equal(problem(tree, { by: 'bravo' }), 'only a lead hires sessions: the lead (lead), or a sub-lead into its own group');
-    assert.match(problem({ ...tree, hiring: { policy: 'owner' } }, { by: 'alpha' }), /the owner approves each hire; ask lead, your leader, who takes it to the owner, then pass --approved-by/);
+    assert.equal('leads' in result.config, false);
+    assert.equal(problem(team, { by: 'alpha' }), 'only the lead hires sessions: the lead (lead)');
+    assert.equal(problem({ ...team, hiring: { policy: 'owner' } }, { by: 'alpha' }), 'only the lead hires sessions: the lead (lead)');
   });
 
   it('ties the hire to the burst it is for', () => {
@@ -87,8 +83,8 @@ describe('planHire', () => {
     assert.equal(planned({ ...FILE, hiring: { policy: 'automatic' } }).hire.session, 'helper');
   });
 
-  it('refuses a hirer that leads no one, a missing job or reason, a bad or taken id, and a bad model', () => {
-    assert.match(problem(FILE, { by: 'alpha' }), /^only a lead hires sessions/);
+  it('refuses a hirer that is not the lead, a missing job or reason, a bad or taken id, and a bad model', () => {
+    assert.match(problem(FILE, { by: 'alpha' }), /^only the lead hires sessions/);
     assert.match(problem(FILE, { scope: ' ' }), /--scope/);
     assert.match(problem(FILE, { reason: '' }), /--reason/);
     assert.match(problem(FILE, { id: 'Helper' }), /not a session id/);
@@ -96,7 +92,7 @@ describe('planHire', () => {
     assert.match(problem(FILE, { model: 'gpt' }), /--model gpt/);
   });
 
-  it('hires past any count of sessions: no cap bounds hiring, the host room and the leader do', () => {
+  it('hires past any count of sessions: no cap bounds hiring, the host room and the lead do', () => {
     const file = { ...FILE, sessions: ['lead', 'alpha', 'one', 'two', 'three'] };
     assert.deepEqual(planned(file).config['sessions'], ['lead', 'alpha', 'one', 'two', 'three', 'helper']);
   });

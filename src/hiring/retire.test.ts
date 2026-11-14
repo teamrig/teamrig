@@ -63,16 +63,6 @@ describe('planRetire', () => {
     assert.deepEqual(planned({ ...bare, budget: { weeklyLimitW: 5000000 } }, {}, []).config['budget'], { weeklyLimitW: 5000000 });
   });
 
-  it("keeps the lead tree whole: a member leaves its sub-lead's list, a sub-lead's members go to its leader (T781)", () => {
-    const tree = { sessions: ['lead', 'alpha', 'bravo', 'helper'], roles: { lead: 'lead' } };
-    assert.deepEqual(planned(FILE).regrouped, { members: [], to: 'lead' }, 'a session the tree does not name moves no one');
-    const member = planned({ ...tree, leads: { alpha: ['helper'] } });
-    assert.equal(Object.hasOwn(member.config, 'leads'), false, 'a list left empty goes, and leads with it');
-    const subLead = planned({ ...tree, leads: { alpha: ['helper'], helper: ['bravo'] } });
-    assert.deepEqual(subLead.config['leads'], { alpha: ['bravo'] });
-    assert.deepEqual(subLead.regrouped, { members: ['bravo'], to: 'alpha' });
-  });
-
   it('hands its open tasks to the heir, and records the heir, the reason and why there is no handover', () => {
     const result = planned(FILE, { openTasks: ['T1', 'T2'], heir: 'alpha', hasHandover: false, noHandover: ' nothing to hand over ' });
     assert.deepEqual(result.handOver, ['T1', 'T2']);
@@ -108,22 +98,17 @@ describe('planRetire', () => {
     assert.deepEqual(result, { ok: false, problem: 'the config has no sessions list to take it from' });
   });
 
-  it('lets only a lead over the session retire it, under every policy: a hired session never retires itself', () => {
-    const refusal = /^only a lead over the session retires it \(the lead, or its sub-lead\): the leader decides which workers the team needs$/;
+  it('lets only the lead retire a session, under every policy: a hired session never retires itself (T1320)', () => {
+    const refusal = /^only the lead retires a session: the lead decides which workers the team needs$/;
     for (const file of [FILE, { ...FILE, hiring: { policy: 'automatic' } }]) {
       assert.match(problem(file, { by: 'helper' }), refusal);
       assert.match(problem(file, { by: 'alpha' }), refusal);
     }
   });
 
-  it('lets a sub-lead retire a session it leads, at any depth, handing its tasks only within its group (T509)', () => {
-    const tree = { ...FILE, sessions: ['lead', 'alpha', 'bravo', 'helper', 'other'], leads: { alpha: ['bravo'], bravo: ['helper'] } };
-    assert.equal(planned(tree, { by: 'bravo' }).retire.by, 'bravo');
-    assert.equal(planned(tree, { by: 'alpha', openTasks: ['T1'], heir: 'bravo' }).retire.heir, 'bravo', 'a session two levels down, to one in the group');
-    assert.deepEqual(planned(tree, { by: 'bravo', openTasks: ['T1'], heir: 'bravo' }).handOver, ['T1'], 'to the sub-lead itself');
-    assert.match(problem(tree, { by: 'bravo', id: 'alpha' }), /^only a lead over the session retires it/, 'never its own leader');
-    assert.match(problem(tree, { by: 'bravo', id: 'other' }), /^only a lead over the session retires it/, 'never a session outside its group');
-    assert.match(problem(tree, { by: 'bravo', openTasks: ['T1'], heir: 'other' }), /^bravo hands work only within its group: the heir other is not led by bravo; the lead \(lead\) moves work between groups$/);
-    assert.equal(planned(tree, { openTasks: ['T1'], heir: 'other' }).retire.heir, 'other', 'the lead hands work anywhere');
+  it('lets the lead hand the open tasks to any session of the team', () => {
+    const team = { ...FILE, sessions: ['lead', 'alpha', 'bravo', 'helper', 'other'] };
+    assert.equal(planned(team, { openTasks: ['T1'], heir: 'other' }).retire.heir, 'other');
+    assert.match(problem(team, { by: 'bravo', id: 'other' }), /^only the lead retires a session/);
   });
 });

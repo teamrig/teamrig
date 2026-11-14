@@ -7,7 +7,7 @@ import type { HireRecord } from './record.ts';
 
 const NOW = Date.parse('2030-01-16T10:00:00Z');
 
-const FILE: JsonRecord = { sessions: ['lead', 'alpha', 'bravo', 'helper'], roles: { lead: 'lead' }, leads: { alpha: ['bravo', 'helper'] }, hiring: { policy: 'off' } };
+const FILE: JsonRecord = { sessions: ['lead', 'alpha', 'bravo', 'helper'], roles: { lead: 'lead' }, hiring: { policy: 'off' } };
 
 const HIRE: HireRecord = { kind: 'hire', session: 'helper', scope: 'port the importer', reason: 'release week', reviewBy: '2030-01-15', by: 'alpha', at: NOW - 8 * 86_400_000 };
 
@@ -39,9 +39,10 @@ describe('planKeep', () => {
     });
   });
 
-  it('is for a lead over the session: the lead, or its sub-lead, never another session', () => {
-    assert.equal(planned({ by: 'alpha' }).keep.by, 'alpha');
-    const refused = 'only a lead over the session keeps it (the lead, or its sub-lead): the leader decides which workers the team needs';
+  it('is for the lead only, never another session, the session that hired it included (T1320)', () => {
+    assert.equal(planned().keep.by, 'lead');
+    const refused = 'only the lead keeps a hired session: the lead decides which workers the team needs';
+    assert.equal(problem({ by: 'alpha' }), refused, 'alpha hired it, as a sub-lead could');
     assert.equal(problem({ by: 'bravo' }), refused);
     assert.equal(problem({ by: 'helper' }), refused, 'a hire never keeps itself');
   });

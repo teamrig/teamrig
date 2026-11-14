@@ -2046,9 +2046,8 @@ NOTE shop-web still finds web in every teamrig command; teamrig never edits perm
 
 ### teamrig hire
 
-Adds a worker the leader is sure the team needs (`teamrig hire <id> --scope "<its job>" --reason "<why>"`), by a
-lead only: the team's lead, or a sub-lead, whose hire joins its own group (`leads`, the preview says "led by"), within
-the team's `hiring` policy. Without `--yes` it shows the hire and writes
+Adds a worker the lead is sure the team needs (`teamrig hire <id> --scope "<its job>" --reason "<why>"`), by the
+team's lead only, within the team's `hiring` policy. Without `--yes` it shows the hire and writes
 nothing. With it, the hire goes into the hire log (`state/hires.jsonl`), the old config into the backups folder, and
 the session into the config: `sessions`, `names` with `--name` and `launch` (its model and effort, the lead's own
 unless given); no daily budget, as its part of the team's follows its share and queued work. Its name is
@@ -2068,7 +2067,7 @@ names are machine-wide.
 - When its job is done, retire it (`teamrig retire`).
 - Past its review day, `check` flags it REVIEW-DUE. While the team still needs it, keep it to a new review day: the
   same command on the session already on the team, `teamrig hire <id> --review <YYYY-MM-DD> --reason "<why>"`. Only
-  a lead over it (the lead, or its sub-lead) keeps it, under every `hiring.policy`, and only the hire log changes;
+  the lead keeps it, under every `hiring.policy`, and only the hire log changes;
   `--scope`, `--name`, `--model`, `--effort`, `--approved-by` and `--burst` are refused, as its job and launch stay.
 - A burst hire (`--burst`) is for the burst in force ([teamrig burst start](#teamrig-burst-start)), within that burst's
   `--hires`. It runs on the lead's model at no lower effort: another `--model` or a lower
@@ -2127,12 +2126,10 @@ KEPT importer on the team, review by 2030-01-22 (was 2030-01-15)
 
 ### teamrig retire
 
-Takes a session the team no longer needs off the team (`teamrig retire <id|name>`): only a lead over it (the lead,
-or a sub-lead it is under, who hands its tasks only to itself or a session it leads) decides that; a session never
-retires itself. Without `--yes` it shows the retire and writes nothing. With it, the session's open tasks go to the heir (`--to`), who gets one inbox line; the old
-config goes into the backups folder; the session leaves `sessions`, `names`, `launch`, `budget.sessions` and
-`leads`, a retired sub-lead's members going to its own leader (the preview names them); and the retire goes into
-the hire log (`state/hires.jsonl`). Its tasks, inbox and records stay where they are, readable by its id.
+Takes a session the team no longer needs off the team (`teamrig retire <id|name>`): only the lead decides that; a
+session never retires itself. Without `--yes` it shows the retire and writes nothing. With it, the session's open tasks go to the heir (`--to`), who gets one inbox line; the old
+config goes into the backups folder; the session leaves `sessions`, `names`, `launch` and `budget.sessions`;
+and the retire goes into the hire log (`state/hires.jsonl`). Its tasks, inbox and records stay where they are, readable by its id.
 
 - It refuses while the session owns open tasks, unless `--to <heir>` hands them over.
 - It refuses without the session's handover (`<handover>/<id>.md`, the file a refresh writes: open work, next

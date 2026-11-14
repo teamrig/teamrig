@@ -1,4 +1,3 @@
-import { LeadTree } from '../config/lead-tree.ts';
 import type { KitConfig } from '../config/types.ts';
 import type { Checked } from '../setup/team-create.ts';
 import { checkedReviewDay } from './plan.ts';
@@ -6,8 +5,8 @@ import type { HireRecord, KeepRecord } from './record.ts';
 
 /**
  * The plan behind `hire <id> --review <day>` on a hired session: it stays on the team to a new review day, which clears
- * its REVIEW-DUE (src/hiring/due.ts); its job and launch stay as hired. Only a lead over it keeps it, as only one
- * retires it, under every `hiring.policy` and with no owner's approval: a keep adds no session, and the leader decides
+ * its REVIEW-DUE (src/hiring/due.ts); its job and launch stay as hired. Only the team's lead keeps it, as only it
+ * retires it, under every `hiring.policy` and with no owner's approval: a keep adds no session, and the lead decides
  * which workers the team needs. Pure: it takes the hires still active and returns the record to log.
  */
 
@@ -29,9 +28,9 @@ export interface KeepPlan {
 }
 
 /** The keep to log for a hired session, or why not. */
-export function planKeep(config: Pick<KitConfig, 'sessions' | 'roles' | 'leads'>, active: readonly HireRecord[], request: KeepRequest): Checked<KeepPlan> {
-  if (request.by !== config.roles.lead && !new LeadTree(config).leads(request.by, request.id)) {
-    return { ok: false, problem: 'only a lead over the session keeps it (the lead, or its sub-lead): the leader decides which workers the team needs' };
+export function planKeep(config: Pick<KitConfig, 'roles'>, active: readonly HireRecord[], request: KeepRequest): Checked<KeepPlan> {
+  if (request.by !== config.roles.lead) {
+    return { ok: false, problem: 'only the lead keeps a hired session: the lead decides which workers the team needs' };
   }
   const hire = active.find((record) => record.session === request.id);
   if (hire === undefined) {

@@ -1,5 +1,4 @@
 import { isDefaultModel, isModel, launchOf } from '../config/launch.ts';
-import { LeadTree } from '../config/lead-tree.ts';
 import { ownerAsk } from '../config/tree.ts';
 import type { EffortLevel, KitConfig } from '../config/types.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
@@ -10,7 +9,7 @@ import type { HireRecord } from './record.ts';
 
 /**
  * The plan behind `hire`: a new session written into the team config within `hiring`'s policy. No count of hires
- * bounds it: the host's room bounds who is at the office (`hire --yes` checks it), the leader decides who is hired.
+ * bounds it: the host's room bounds who is at the office (`hire --yes` checks it), the lead decides who is hired.
  * Pure: it takes the file's JSON and the config read from it, and returns the next JSON and the record to log, so
  * the command can preview before it writes. The new file is checked afterwards by the config parser every command
  * reads with (the id's and name's rules live there).
@@ -33,7 +32,7 @@ export interface HireRequest {
   readonly reviewBy?: string;
   /** The `at` of the burst it is hired for, checked by `burstHireOf` (src/hiring/burst-hire.ts). */
   readonly burst?: number;
-  /** The session hiring it: the lead, or a sub-lead hiring into its own group. */
+  /** The session hiring it: only the lead may. */
   readonly by: string;
   readonly now: number;
 }
@@ -42,8 +41,6 @@ export interface HirePlan {
   /** The whole next config file. */
   readonly config: JsonRecord;
   readonly hire: HireRecord;
-  /** Who leads the new session: the session that hired it, so a sub-lead's hire joins its group (T509). */
-  readonly leader: string;
 }
 
 function recordAt(record: JsonRecord, key: string): JsonRecord {
@@ -71,17 +68,11 @@ function reviewDayOf(request: HireRequest, config: KitConfig): Checked<string> {
 }
 
 /**
- * Why `by` may not hire, or undefined when it may: a lead hires, the team's lead or a sub-lead (T781), and a
- * sub-lead's hire joins its own group, so work it hires for never leaves the group (T509).
+ * Why `by` may not hire, or undefined when it may: only the team's lead hires, as it alone sets the team's staffing
+ * (T1320: the sub-leads that hired into their own groups are gone).
  */
-export function hirerProblem(config: Pick<KitConfig, 'sessions' | 'roles' | 'leads'>, by: string): string | undefined {
-  return new LeadTree(config).isLeader(by) ? undefined : `only a lead hires sessions: the lead (${config.roles.lead}), or a sub-lead into its own group`;
-}
-
-/** Whom the hirer asks for the owner's approval: a sub-lead its own leader, who takes it up; the lead {@link ownerAsk}. */
-function approvalAsk(config: KitConfig, by: string): string {
-  const leader = new LeadTree(config).leaderOf(by);
-  return by === config.roles.lead || leader === undefined ? ownerAsk(config) : `${leader}, your leader, who takes it to the owner`;
+export function hirerProblem(config: Pick<KitConfig, 'roles'>, by: string): string | undefined {
+  return by === config.roles.lead ? undefined : `only the lead hires sessions: the lead (${config.roles.lead})`;
 }
 
 /** The refusal under `hiring.policy`, or undefined when it allows this hire. */
@@ -91,7 +82,7 @@ function policyProblem(config: KitConfig, request: HireRequest): string | undefi
       return 'hiring.policy is off: the team takes no hires by command';
     case 'owner':
       return request.approvedBy === undefined || request.approvedBy.trim() === ''
-        ? `hiring.policy is owner: the owner approves each hire; ask ${approvalAsk(config, request.by)}, then pass --approved-by "<who>"`
+        ? `hiring.policy is owner: the owner approves each hire; ask ${ownerAsk(config)}, then pass --approved-by "<who>"`
         : undefined;
     case 'lead':
     case 'automatic':
@@ -100,9 +91,8 @@ function policyProblem(config: KitConfig, request: HireRequest): string | undefi
 }
 
 /**
- * The new session written into `sessions`, `names` and `launch`, and its hire record; or why not. A sub-lead's hire is
- * also listed under it in `leads`. It launches on the lead's own model and effort unless told otherwise, whoever hires
- * it, so a burst hire stays on the lead's (src/hiring/burst-hire.ts). It gets no fixed daily budget: like any session,
+ * The new session written into `sessions`, `names` and `launch`, and its hire record; or why not. It launches on the
+ * lead's own model and effort unless told otherwise, so a burst hire stays on the lead's (src/hiring/burst-hire.ts). It gets no fixed daily budget: like any session,
  * its part of the team's daily budget follows its share and its queued work (src/budget/parts.ts).
  */
 export function planHire(file: JsonRecord, config: KitConfig, request: HireRequest): Checked<HirePlan> {
@@ -136,13 +126,11 @@ export function planHire(file: JsonRecord, config: KitConfig, request: HireReque
   const model = request.model ?? leads.model;
   const effort = request.effort ?? leads.effort;
   const launch = { ...(isDefaultModel(model) ? {} : { model }), ...(effort === undefined ? {} : { effort }) };
-  const subLead = request.by === lead ? undefined : request.by;
   const next: JsonRecord = {
     ...file,
     sessions: [...sessions, request.id],
     ...(request.name === undefined ? {} : { names: { ...recordAt(file, 'names'), [request.id]: request.name } }),
     launch: { ...recordAt(file, 'launch'), [request.id]: launch },
-    ...(subLead === undefined ? {} : { leads: { ...recordAt(file, 'leads'), [subLead]: [...(config.leads[subLead] ?? []), request.id] } }),
   };
   const hire: HireRecord = {
     kind: 'hire',
@@ -156,5 +144,5 @@ export function planHire(file: JsonRecord, config: KitConfig, request: HireReque
     by: request.by,
     at: request.now,
   };
-  return { ok: true, value: { config: next, hire, leader: request.by } };
+  return { ok: true, value: { config: next, hire } };
 }
