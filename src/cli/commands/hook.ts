@@ -1,7 +1,6 @@
 import { tmpdir } from 'node:os';
 import { launchOf } from '../../config/launch.ts';
 import { autoRestartOf, sessionRefreshOf } from '../../config/refresh.ts';
-import { LeadTree } from '../../config/lead-tree.ts';
 import { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { recordConfigDir } from '../../budget/config-dir.ts';
@@ -9,13 +8,11 @@ import { errorMessage, isRecord, stringField, type JsonRecord } from '../../core
 import { claudeConfigDir, claudeTempDir, KIT_NAME, resolveKitHome } from '../../core/home.ts';
 import type { TimeZone } from '../../core/zone.ts';
 import { sessionIdOf } from '../../inbox/inbox.ts';
-import { routeReminderOf } from '../../inbox/route.ts';
 import { boundPromptNote, boundStartNote, tabTitleFor } from '../../hooks/bind.ts';
 import { modelCheckLine, payloadEffortOf } from '../../hooks/model-check.ts';
 import { ModelNoticeStore } from '../../hooks/model-notices.ts';
 import { sendTargetOf } from '../../hooks/cold-send.ts';
 import { failedSendLine, failedSendOf } from '../../hooks/failed-send.ts';
-import { deliveredSendOf } from '../../hooks/route-reminder.ts';
 import { postToolUseContext } from '../../hooks/post-tool-use.ts';
 import { passRecordGuardOutput } from '../../hooks/pass-record-guard.ts';
 import { JsonlHintLog } from '../../hooks/hint-log.ts';
@@ -363,41 +360,6 @@ export async function failedSend(args: ParsedArgs, runtime: CliRuntime): Promise
   }
   const receiver = (await rosterOf(runtime, kit, kit.load.config)).lookup(failed.to);
   runtime.out.stdout(postToolUseContext(failedSendLine(failed, receiver.ok ? receiver.id : undefined, KIT_NAME, kit.load.config.wake.enabled)));
-  return EXIT.ok;
-}
-
-/**
- * PostToolUse on SendMessage (T783): after a delivered message to a session under a sub-lead below the sender, hands
- * the model one line to route such work via that sub-lead next time, naming sessions by the names they are messaged
- * by. A CRITICAL message, a send to or from no team session, or anything outside a loaded team gets nothing.
- */
-export async function routeReminder(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
-  noPositionals(args);
-  const payload = parseJson(await runtime.readStdin());
-  const sent = deliveredSendOf(payload);
-  if (sent === undefined || !isRecord(payload)) {
-    return EXIT.ok;
-  }
-  const found = await sessionTeam(payload, runtime);
-  if (found.kind !== 'team') {
-    return EXIT.ok;
-  }
-  const kit = await openKit(runtime, found.team);
-  if (kit.load.status !== 'loaded') {
-    return EXIT.ok;
-  }
-  const { config } = kit.load;
-  const roster = await rosterOf(runtime, kit, config);
-  const receiver = roster.lookup(sent.to);
-  const sender = await teamSessionOf(runtime, kit, roster, sessionIdOf(payload));
-  if (!receiver.ok || sender === undefined) {
-    return EXIT.ok;
-  }
-  const message = { from: sender, to: receiver.id, text: sent.text };
-  const line = routeReminderOf(new LeadTree(config), message, (id) => roster.nameOf(id) ?? id, KIT_NAME);
-  if (line !== undefined) {
-    runtime.out.stdout(postToolUseContext(line));
-  }
   return EXIT.ok;
 }
 

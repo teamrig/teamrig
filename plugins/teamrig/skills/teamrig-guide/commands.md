@@ -1536,10 +1536,6 @@ WAKES web at 14:30 UTC if it has not seen the line by then and its tab is idle: 
 
 The line is stored as `- 2026-10-15 08:58 lead: api error codes are in docs/errors.md`.
 
-A line to a session under a sub-lead below the sender (`leads` in the config) is posted all the same, then a second
-line names the sub-lead to route such work via next time; a line that starts with CRITICAL gets none. See
-[the route reminder](hooks.md#after-a-send-past-a-sub-lead-the-route-reminder).
-
 ## Privileged commands
 
 A command that writes a database, calls a writing route, writes the cluster or an outside service runs only through
@@ -6372,24 +6368,6 @@ teamrig hook missing-cli < post-tool-use.json
 ```
 
 Output: nothing after any other call; otherwise the line as JSON `additionalContext`, in a team or not.
-
-### teamrig hook route-reminder
-
-After a SendMessage call that was delivered to a session under a sub-lead below the sender (the message skipped that
-sub-lead in the lead tree), hands the model one line: route such work via the sub-lead next time. A message that
-starts with CRITICAL, an urgent incident, stays direct and gets no line. `teamrig inbox add` prints the same reminder
-for each session it names, never for a group.
-
-Flags: none.
-
-Example:
-
-```sh
-teamrig hook route-reminder < post-tool-use.json
-```
-
-Output: nothing after a failed send, a message that skips no sub-lead, a CRITICAL one or outside a team; otherwise the
-line as JSON `additionalContext`.
 
 ### teamrig hook loop-nudge
 

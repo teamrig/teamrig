@@ -162,17 +162,6 @@ const SAMPLES: Readonly<Record<string, Sample>> = {
     },
     check: addsContext('PostToolUseFailure'),
   },
-  'hook route-reminder': {
-    payload: {
-      hook_event_name: 'PostToolUse',
-      session_id: SESSION_ID,
-      tool_name: 'SendMessage',
-      tool_use_id: 'toolu_4',
-      tool_input: { to: 'lead', message: 'hello' },
-      tool_response: { success: true, message: "Message sent to lead's inbox" },
-    },
-    check: quiet(),
-  },
   'hook loop-nudge': {
     payload: { hook_event_name: 'PostToolUse', session_id: SESSION_ID, tool_name: 'Read', tool_use_id: 'toolu_1', tool_input: { file_path: 'a.ts' } },
     check: quiet(),

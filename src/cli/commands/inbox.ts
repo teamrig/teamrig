@@ -14,7 +14,6 @@ import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLi
 import { lineHash } from '../../inbox/line-hash.ts';
 import { CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf, type InboxMark } from '../../inbox/marks.ts';
 import { reachOf } from '../../inbox/reach.ts';
-import { routeReminderOf } from '../../inbox/route.ts';
 import { InboxDir, JsonlMarkLog } from '../../inbox/store.ts';
 import { WAKE_AT_ONCE, WAKE_NOW, wakeByOf, wakeRefusal, wakesLine, type ReceiverWake, type WakeSender, type WakeTarget, type WakeWhen } from '../../inbox/wake-now.ts';
 import { WakeAsks } from '../../wake/asks.ts';
@@ -247,27 +246,6 @@ function postedLine(recipients: readonly Recipient[]): string {
   return `POSTED to ${recipients.length} sessions (${recipients.map((recipient) => recipient.label).join(', ')}); each is reminded at its next prompt`;
 }
 
-/**
- * The route reminders (T783) for the sessions of the sender's team that `--to` names one by one, each once. A group
- * (`all`, `leads`, `group:<leader>`, `team:<team>`, `tree:leads`, `task:T<n>`) is a broadcast, not work handed past a
- * sub-lead, so it gets none.
- */
-function routeRemindersOf(own: SenderTeam, items: readonly ToItem[], text: string): string[] {
-  const tree = new LeadTree(own.config);
-  const reminders = new Set<string>();
-  for (const item of items) {
-    if (item.kind !== 'session' || (item.address.team !== undefined && item.address.team !== own.from.team)) {
-      continue;
-    }
-    const to = sessionIdOf(own.roster, item.address.session);
-    const reminder = routeReminderOf(tree, { from: own.from.id, to, text }, (id) => id, KIT_NAME);
-    if (reminder !== undefined) {
-      reminders.add(reminder);
-    }
-  }
-  return [...reminders];
-}
-
 /** The sender as the `--wake now` / `--wake-by` gate reads it; the teams below its own are read only when a recipient is on another team. */
 async function wakeSenderOf(own: SenderTeam, recipients: readonly Recipient[], reads: SenderTreeReads): Promise<WakeSender> {
   const leads = new LeadTree(own.config);
@@ -409,9 +387,6 @@ export async function add(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
     for (const line of await postWakes(runtime, own, recipients, text.trim(), now, when)) {
       runtime.out.stdout(line);
     }
-  }
-  for (const reminder of routeRemindersOf(own, items, text)) {
-    runtime.out.stdout(reminder);
   }
   return EXIT.ok;
 }
