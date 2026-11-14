@@ -6,9 +6,8 @@ description: Use when the lead needs one more worker (check flags SCALE-OUT), wh
 # Hire, retire and rehire a session
 
 A hired session is a worker you are sure the team needs. You, the lead, hire it within the team config's `hiring`
-policy, give it tasks, and retire it once the team no longer needs it. A sub-lead hires the same way (`--session <sub-lead>`):
-its hire joins its own group, and it retires only sessions it leads, handing their tasks within its group. Its tasks,
-inbox and records stay readable by its id.
+policy, give it tasks, and retire it once the team no longer needs it. A retired session's
+tasks, inbox and records stay readable by its id.
 `check` says when: `HIRE SCALE-OUT` on an area that cannot finish its dated work in time, `HIRE RETIRE-DUE` on a
 burst hire once its burst is over, `HIRE REVIEW-DUE` on a hire past its review day.
 

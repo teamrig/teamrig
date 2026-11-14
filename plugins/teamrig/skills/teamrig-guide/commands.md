@@ -294,12 +294,10 @@ The status is a flag, never a word after the id: `teamrig set T1 done` is a usag
 
 ### teamrig update
 
-Changes a task's fields. The owner may change any of them; a leader above the owner (the lead on any task, a
-sub-lead on its group's) may change only the owner, priority, due date, week, plan order (`--after`), size, type, work class, critical mark and
-pin of a task it does not own. A pin puts a task above every other task of its owner, whatever its priority: a
-leader above the owner sets or clears it (the lead on its own tasks too), never the owner itself; an owner has one
-pin, so a new pin clears the earlier one in the same write, and handing the task to another owner clears it. A sub-lead hands a task only to itself or a session it leads; the lead moves work between
-groups. A `--note` alone adds context to any task's history, from any session; one from the task's owner also becomes the note `show` and the waiting text print, as a note on `set` does, so a restated note shows at once.
+Changes a task's fields. The owner may change any of them; the lead may change only the owner, priority, due date, week, plan order (`--after`), size, type, work class, critical mark and
+pin of a task it does not own. A pin puts a task above every other task of its owner, whatever its priority: the
+lead sets or clears it (on its own tasks too), never another owner itself; an owner has one
+pin, so a new pin clears the earlier one in the same write, and handing the task to another owner clears it. A `--note` alone adds context to any task's history, from any session; one from the task's owner also becomes the note `show` and the waiting text print, as a note on `set` does, so a restated note shows at once.
 With the leader digest on, a member's `--note` that tells none of its leaders prints
 `NOTED in the register (the lead sees it at its next prompt)` on stderr, as `set` does.
 The status never changes here: use `set`.
@@ -486,8 +484,7 @@ in its waiting text and `check` flags it `READY` until its owner sets the next s
 To hold an approved task until another task lands or a time comes, set it waiting again with the approval wait and the
 new one (`--waits approval:<lead>,task:T<id>`): that keeps the approval, and `check` flags the task `READY` once the
 new wait clears, so merge then. Restating the same waits, or adding a decision or another approval, asks anew.
-Only the lead answers (or a sub-lead above the task's owner, or the security reviewer, `roles.securityReviewer`, on
-a task not its own), only a task waiting on its approval, always with a note; an approval of the owner's stays the
+Only the lead answers (or the security reviewer, `roles.securityReviewer`, on a task not its own), only a task waiting on its approval, always with a note; an approval of the owner's stays the
 owner's. The same answer clears a review hold or a gate hold that `teamrig merge` made on the task's branch
 (see [merge](#teamrig-merge)).
 Under `pushGuard.pushToProtected: lead` or `gated` the push guard lets the owner's push to a protected branch through while
@@ -2369,7 +2366,7 @@ act on and the week's use. Between the list and the flags, `WAITING ON YOU` list
 sessions that need one of your unfinished tasks or wait on your decision or approval not yet answered (at most 5,
 then `+N more`),
 when some do. The lead gets every flag, as `teamrig check` prints them; any other session gets the
-flags of the tasks and skills it owns, and a sub-lead also those of its group's tasks. Run it at the start of every work block and after every `/clear`.
+flags of the tasks and skills it owns. Run it at the start of every work block and after every `/clear`.
 
 When the checkout you run it in lacks commits of origin's default branch, a `BEHIND` line after the time says how
 many: rebase before you edit. It counts against that branch as last fetched and never fetches itself; every worktree
@@ -2781,7 +2778,7 @@ otherwise; other sessions get no line. A new owner wait's inbox line to the lead
 it: `AT ONCE, due <date> before the next batch`, `BATCH DUE: <why>`, `asked in the next batch <date>` or, for a held
 wait, `asked in the weekly Improvements batch on wed UTC (focus.improvementsDay)`. Its times,
 and a typed due date, are on the team's clock (`timeZone`); `batchTimesUtc` stays in UTC. An `AT ONCE` line to the
-lead also wakes it, as an `inbox add --wake now` line does; one that went to a sub-lead leaves the session setting
+lead also wakes it, as an `inbox add --wake now` line does; one that could not be posted leaves the session setting
 the wait the `--wake now` line to post the lead. With `wake.enabled: false` that session is told to message the lead
 instead, as a line then wakes no one. Anyone may run it; it changes nothing.
 
@@ -4718,8 +4715,8 @@ security answers it, and lead too from 10:30 IST: teamrig set T12 --status waiti
 --note "review hold H3f2a9c0d1e7b of t12-ci 4f1c2a9e..9a0b1c2d" --session web; merge again once it is approved
 ```
 
-A security hold goes to `roles.securityReviewer`, with the session's nearest leader (its sub-lead, else the lead)
-answering it too from 30 minutes on; a leader hold goes to that leader. Neither is ever the session itself, so the
+A security hold goes to `roles.securityReviewer`, with the lead answering it too from 30 minutes on; a leader hold
+goes to the lead. Neither is ever the session itself, so the
 lead's own change goes to security, and with no other reviewer it is REFUSED with what to set. The reviewer answers
 with `teamrig approve <task>`; `teamrig merge` again merges the change. A hold binds the base, the head and the tree
 they make: an approval given before the hold, or a branch that changed since (a new commit, or a rebase onto a moved
@@ -4734,7 +4731,7 @@ tree; only the repo's own local runner writes one, so run its checks on the reba
 over the size rule without a `Large-commit:` line. tests: a change of source (`commits.sourcePatterns`) changes a
 test too. review: the repository sets `reviewGate`. A change that holds every gate merges with no approval. A task
 miss is refused with no hold, since a hold waits on the approval of the branch's task. Any other miss is REFUSED
-with a gate hold for the session's nearest leader (the lead's own change goes to security), kept in `gate-holds/`
+with a gate hold for the lead (the lead's own change goes to security), kept in `gate-holds/`
 in `delivery.dir`:
 
 ```text

@@ -73,7 +73,7 @@ The injected context holds:
    No session is set ($TEAMRIG_SESSION): ask the user which session you are (`teamrig who` lists them) and pass --session <id> to every `teamrig` task and inbox command. Message the lead as `shop-lead`.
    ```
 
-   When the lead's (or a sub-lead's) name is one Claude Code keeps for itself (`main`, `team-lead`, `user`,
+   When the lead's name is one Claude Code keeps for itself (`main`, `team-lead`, `user`,
    `system`), which `rename` refuses now but an older rename may hold, the line names the inbox instead of a message:
    ``Write to the lead with `teamrig inbox add --to lead --text "..."`: its name `team-lead` is a name Claude Code keeps for itself, so a message sent to it never reaches a session.``
 3. **The tree of teams**, when the team has a parent or children: whom to escalate to, and for a lead with
@@ -1525,22 +1525,22 @@ it is held: only p0 work wakes it or keeps its idle tab open, and it is escalate
 | `overAction` | What happens |
 | --- | --- |
 | `warn` (default) | the lines only |
-| `ask-lead` | the session's leader (the lead, or its sub-lead) also gets one inbox line a day, naming the lift command |
-| `ask` | the leader's line, and the person is asked before each new helper launch |
-| `block` | the leader's line, and new helper launches are refused |
+| `ask-lead` | the lead also gets one inbox line a day, naming the lift command |
+| `ask` | the lead's line, and the person is asked before each new helper launch |
+| `block` | the lead's line, and new helper launches are refused |
 
-Under a leader's cut ([teamrig budget cut](commands.md#teamrig-budget-cut)), a session is held as soon as it is past
+Under the lead's cut ([teamrig budget cut](commands.md#teamrig-budget-cut)), a session is held as soon as it is past
 its part, whatever room the team has, and it is escalated whatever `budget.escalate` says: `Budget: shop-web has
 used 1.1% of the week today; its daily budget is 1.0%. The lead cut it to its own daily budget until 03:00 IDT (the
-end of the budget day). New helpers are refused. More: teamrig budget`. Its leader gets no inbox line, since a leader
+end of the budget day). New helpers are refused. More: teamrig budget`. The lead gets no inbox line, since the lead
 gave the cut, and the model reads `you are past today's budget and the lead cut you to it until 03:00 IDT (the end of
 the budget day)`.
 
 While escalated, the model is told with the next prompt, once per level: `teamrig budget: you are past today's
 budget and the team has no room left today, and it is ahead of its pace line. Finish the step in hand and start
 no new work items or helpers.
-Never skip a test or check to save budget. The lead can lift it.` A sub-lead's session reads `Your leader <name> can
-lift it.` instead, and the lead `As the lead, lift it only with a stop %.` Under `budget.overAction` `warn` the line
+Never skip a test or check to save budget. The lead can lift it.` The lead reads `As the lead, lift it only with
+a stop %.` instead. Under `budget.overAction` `warn` the line
 only reports the overrun and says no stop, a cut session's too: `... The budget only warns (budget.overAction warn),
 so nothing is held: go on with your task list.` A session with an open or in-progress p0 task
 reads `start no new work items or helpers, except your p0 work (T5): it goes on past the daily stop.`, and its

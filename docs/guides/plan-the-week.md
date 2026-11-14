@@ -97,12 +97,12 @@ Week: 31.0% used at 12:00 IDT (status line); the pace line is at 28.6%: 2.4 poin
   today, the lead is told.
 - Past its part once the team has no room, a session is held: only p0 work wakes it or keeps its idle tab open, and
   its helper launches can be held too ([the daily budget](../../plugins/teamrig/skills/teamrig-guide/hooks.md#the-daily-budget-warnings-and-the-helper-gate)).
-- A leader moves budget for a day: `teamrig budget lift` gives one session, or a sub-lead's group, a part of its
-  parent's daily budget until a stop % (at most `budget.lift.maxStopPct`, 99.3), the end of the day or `--until`;
+- The lead moves budget for a day: `teamrig budget lift` gives one session a part of the team's daily budget until a stop %
+  (at most `budget.lift.maxStopPct`, 99.3), the end of the day or `--until`;
   the lead also tops up a session of a team under its own, `<team>/<session>`, from its own team's daily budget.
-  `--part` is a percent of that parent's daily budget, not of the week: the `LIFTED` line and the lifts table in
+  `--part` is a percent of that daily budget, not of the week: the `LIFTED` line and the lifts table in
   `teamrig budget` give the share of the week it comes to now.
-- A leader also holds a session to its own part for a day: `teamrig budget cut` holds it as soon as it is past its
+- The lead also holds a session to its own part for a day: `teamrig budget cut` holds it as soon as it is past its
   own daily budget, whatever room the team has, until the end of the day or `--until`; a lift of it given later ends
   the cut.
 - On a short day, when the week's use is past its pace line so what is left gives the day less than the line plans,

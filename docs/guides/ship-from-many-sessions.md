@@ -181,8 +181,8 @@ Under `pushGuard.pushToProtected: gated`, `teamrig merge` checks five self-merge
 - review: the repo's `delivery.repos` entry sets `reviewGate` (a repo not listed there always misses it).
 
 A change that holds every gate merges with no approval. A task miss is refused and writes no hold: name the branch
-after your task first. Any other miss writes a gate hold (`gate-holds/` in `delivery.dir`) for the session's
-nearest leader, or for `roles.securityReviewer` on the lead's own change, and is refused with the `teamrig set`
+after your task first. Any other miss writes a gate hold (`gate-holds/` in `delivery.dir`) for the lead, or
+for `roles.securityReviewer` on the lead's own change, and is refused with the `teamrig set`
 command that asks. The reviewer answers with `teamrig approve`, and `teamrig merge` again merges it, but only for the
 gates the hold named. A hold binds the base, the head and the tree, so a new commit or any rebase onto a moved
 default branch, the push's own retry included, needs a new hold. Each merge, with an approval or not, is a line in

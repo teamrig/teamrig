@@ -414,8 +414,7 @@ each flag (full table: [tasks.md](tasks.md#check-flags)):
 - `OVERDUE` or `STALE`: ask the owner what blocks it, then re-date it (`--due`) or tell the human.
 - `READY`: a waiting task can go on: one inbox line to its owner, if it has not set the next status.
 - `ROADMAP-WAITS-ON-LEAD`: Roadmap work has waited on a leader past `focus.leaderWaitMinutes`: answer it before
-  anything else (`teamrig approve <id>`, or the decision it asks for); it leads that leader's `WAITING ON YOU`. One
-  held on a sub-lead is that sub-lead's to answer: one inbox line to it.
+  anything else (`teamrig approve <id>`, or the decision it asks for); it leads the lead's `WAITING ON YOU`.
 - `NO-CARD`: a task waits on the owner with no card: one inbox line to its owner to set it waiting again with the
   card, before the meeting reads it.
 - `OWNER-ORDERED`: a task the owner ordered asks the owner with no why: never read it to the owner; one inbox line
