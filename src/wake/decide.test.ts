@@ -331,10 +331,8 @@ describe('wakeRestOf', () => {
     budgetPct: 1,
     lift: undefined,
     liftBy: undefined,
-    liftParent: undefined,
     liftWeekPct: undefined,
     cut: undefined,
-    cutBy: undefined,
     burst: undefined,
     paused: false,
     surplus: undefined,
@@ -345,7 +343,6 @@ describe('wakeRestOf', () => {
     isLead: false,
     urgent: [],
     awaited: [],
-    leader: { id: 'lead', name: 'lead', isLead: true },
     zone: TimeZone.UTC,
     ...overrides,
   });
@@ -376,10 +373,9 @@ describe('wakeRestOf', () => {
     assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 1.5, teamDay: { usedPct: 4.9, pacePct: 5 } }), undefined, NOW, 0), { held: false, quiet: false });
   });
 
-  it('holds a session a leader cut once past its part, whatever room the team has (T1616)', () => {
+  it('holds a session the lead cut once past its part, whatever room the team has (T1616)', () => {
     const cut = { session: 'alpha', endsAt: NOW + 60 * MINUTE, reason: 'over on a p3', by: 'lead', at: NOW - MINUTE };
-    const cutBy = { id: 'lead', name: 'lead', isLead: true };
-    assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 1.5, teamDay: { usedPct: 4.9, pacePct: 5 }, cut, cutBy }), undefined, NOW, 0), { held: true, quiet: false });
+    assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 1.5, teamDay: { usedPct: 4.9, pacePct: 5 }, cut }), undefined, NOW, 0), { held: true, quiet: false });
   });
 
   it('holds a session a short day pauses, whatever room the team has and before any use today (T1598)', () => {

@@ -11,7 +11,7 @@ import { holdsPastPart, type PaceReading, type TeamDay } from './pace.ts';
 
 /**
  * The live budget warning, pure: from a session's use today and the team's pace, which line its
- * person sees at a turn's end, which line the model gets with the next prompt, whether its leader gets
+ * person sees at a turn's end, which line the model gets with the next prompt, whether the lead gets
  * an inbox line, and whether a helper launch goes ahead, asks the person or is refused. Lines come
  * only at crossings, each once, so a session sees a few a day and none on most turns. A burst's lines
  * (`burst-lines.ts`) come the same way: at its start and end, and the lead's surplus line once a week.
@@ -36,10 +36,8 @@ export interface BudgetFacts extends LiftNames {
   /** Its daily budget in % of the week: its lift's while lifted, at least its burst's while in a burst. */
   readonly budgetPct: number;
   readonly lift: Lift | undefined;
-  /** A leader's cut of the session in force (`teamrig budget cut`): past its budget it is held whatever room the team has. */
+  /** The lead's cut of the session in force (`teamrig budget cut`): past its budget it is held whatever room the team has. */
   readonly cut: Cut | undefined;
-  /** The leader that gave the cut in force; undefined without one. */
-  readonly cutBy: BudgetLeader | undefined;
   /** The burst in force, when the session is in it. */
   readonly burst: Burst | undefined;
   /** A short day funds none of its work (src/budget/pause.ts `isPaused`), so its budget is 0 unless a burst holds it up. */
@@ -60,18 +58,8 @@ export interface BudgetFacts extends LiftNames {
    * past the daily stop as p0 work does, helpers too (T2656).
    */
   readonly awaited: readonly string[];
-  /** Who gets the session's inbox line when it escalates: its own leader; undefined for the lead, which gets none. */
-  readonly leader: BudgetLeader | undefined;
   /** The team's zone, which the lines print their times in. */
   readonly zone: TimeZone;
-}
-
-/** A session's own leader in the team's lead tree (the sub-lead that lists it, else the lead), by id and name. */
-export interface BudgetLeader {
-  readonly id: string;
-  readonly name: string;
-  /** The leader is the team's lead, which the lines call "the lead"; a sub-lead they name. Either lifts the session's budget. */
-  readonly isLead: boolean;
 }
 
 export type WarnBudget = Pick<BudgetConfig, 'warnAtPct' | 'overAction' | 'escalate' | 'quietHours'>;
@@ -88,9 +76,9 @@ export interface WarnState extends BurstMarks {
   readonly ahead: boolean;
   /** The session was held (`isHeld`) at the last turn's end. */
   readonly held: boolean;
-  /** The session had escalated (held, and the team ahead, escalating on the session alone or a leader's cut) at the last turn's end. */
+  /** The session had escalated (held, and the team ahead, escalating on the session alone or the lead's cut) at the last turn's end. */
   readonly escalated: boolean;
-  /** The session's leader got today's inbox line about it (the lead's, before sub-leads, hence the name). */
+  /** The lead got today's inbox line about the session. */
   readonly leadTold: boolean;
   /** When the quiet hours whose line was shown began, epoch ms. */
   readonly quietFrom: number | undefined;
@@ -173,9 +161,9 @@ interface Standing {
   readonly over: boolean;
   readonly level: number;
   readonly ahead: boolean;
-  /** Past budget while the team has no room today, or under a leader's cut (`isHeld`). */
+  /** Past budget while the team has no room today, or under the lead's cut (`isHeld`). */
   readonly held: boolean;
-  /** Held, and (unless the team escalates on the session alone or a leader cut it) the team is ahead of its pace line. */
+  /** Held, and (unless the team escalates on the session alone or the lead cut it) the team is ahead of its pace line. */
   readonly escalated: boolean;
   /** The current quiet hours, unless the session's lift exempts it from them. */
   readonly quiet: QuietSpan | undefined;
@@ -191,10 +179,10 @@ export function isPastDailyBudget(facts: BudgetFacts, extraPct = 0): boolean {
 
 /**
  * True when the session is past its daily budget while the team has no room today (its use at or past its in-day
- * pace, `hasRoom`), or while a leader's cut of it is in force (`holdsPastPart`, by which `teamrig budget` names its
+ * pace, `hasRoom`), or while the lead's cut of it is in force (`holdsPastPart`, by which `teamrig budget` names its
  * holds too): only then is it held, woken for urgent work alone and
  * escalated as `budget.escalate` says (a cut escalates it whatever that says). While the team has room, a session past
- * its part uses room the others left, so no session waits while the week has room, unless its leader cut it to its
+ * its part uses room the others left, so no session waits while the week has room, unless the lead cut it to its
  * own part (T1616). A turn about to start counts as spent (`extraPct`, in % of the week), for the session and for the
  * team: a session with next to nothing left, idle since the night, is held before its wake, not after the wake's own
  * turn spent it; and as the quiet hours end the in-day pace is the night's use alone, so the team's room is a few
@@ -262,10 +250,10 @@ function aheadClause(facts: BudgetFacts): string {
   return `the team is ${(facts.pace?.gapPts ?? 0).toFixed(1)} points ahead of its pace line`;
 }
 
-/** Why a held session is held: its leader's cut, else the team has no room today, and the week's pace when it is ahead. */
+/** Why a held session is held: the lead's cut, else the team has no room today, and the week's pace when it is ahead. */
 function heldClause(facts: BudgetFacts, standing: Standing): string {
   if (facts.cut !== undefined) {
-    return cutClause(facts.cut, leaderText(facts.cutBy, 'its'), facts.zone);
+    return cutClause(facts.cut, 'the lead', facts.zone);
   }
   const noRoom = noRoomText(facts.teamDay);
   return standing.ahead ? `${noRoom}, and ${aheadClause(facts)}` : noRoom;
@@ -301,20 +289,10 @@ function escalatedText(facts: BudgetFacts, budget: WarnBudget): string {
   }
   const goesOn = pastStopWork(facts, 'its');
   const helpers = goesOn === undefined ? helperClause(budget.overAction) : `${goesOn.text} ${goesOn.plural ? 'go' : 'goes'} on past the stop, helpers too`;
-  // A leader gave the cut, so no inbox line tells it.
-  const told = facts.cut === undefined ? toldText(facts.leader) : undefined;
+  // The lead gave the cut, so no inbox line tells it.
+  const told = facts.cut === undefined ? 'the lead has an inbox line' : undefined;
   const parts = [helpers, told].filter((part): part is string => part !== undefined);
   return parts.length === 0 ? '' : `${capitalized(parts.join('; '))}.`;
-}
-
-/** The session's leader in its lines: `the lead`, or for a sub-lead's member `its leader <name>` (`your leader <name>` to the model). */
-function leaderText(leader: BudgetLeader | undefined, whose: 'its' | 'your'): string {
-  return leader === undefined || leader.isLead ? 'the lead' : `${whose} leader ${leader.name}`;
-}
-
-/** `the lead has an inbox line`, or for a sub-lead's member `its leader <name> has an inbox line`. */
-function toldText(leader: BudgetLeader | undefined): string {
-  return `${leaderText(leader, 'its')} has an inbox line`;
 }
 
 function joined(parts: readonly string[]): string {
@@ -347,14 +325,13 @@ function quietLine(quiet: QuietHours, span: QuietSpan, facts: BudgetFacts): stri
 export interface StopWarning {
   /** Lines for the person, oldest concern first. */
   readonly lines: readonly string[];
-  /** Its leader's inbox line ({@link BudgetFacts.leader}), when this turn escalated the session and the leader was not told today. */
+  /** The lead's inbox line, when this turn escalated a session other than the lead and the lead was not told today. */
   readonly leadLine: string | undefined;
   readonly state: WarnState;
 }
 
 /**
- * The leader's line, with the lift it can give: the lead's or a sub-lead's alike, as `budget lift` itself refuses a part
- * past the parent's budget and names the `--group` lift that would make room.
+ * The lead's line, with the lift it can give.
  */
 function leadLineOf(facts: BudgetFacts, standing: Standing): string {
   const command = `teamrig budget lift ${facts.id} --part <pct> --stop-pct <pct> --reason "<why>"`;
@@ -369,8 +346,8 @@ function leadLineOf(facts: BudgetFacts, standing: Standing): string {
 /**
  * The person's lines at a turn's end: a lift or a burst starting or ending, the quiet hours starting, a new
  * warning level, or the session escalating with no new level (the team's room for the day running out, or the
- * team moving ahead of its pace line, or a leader's cut, while the session is past budget). Its leader gets one inbox
- * line a day per session once it escalates, unless the action is only `warn` or a leader's cut holds it.
+ * team moving ahead of its pace line, or the lead's cut, while the session is past budget). The lead gets one inbox
+ * line a day per session once it escalates, unless the action is only `warn` or the lead's cut holds it.
  */
 export function stopWarning(facts: BudgetFacts, budget: WarnBudget, previous: WarnState | undefined): StopWarning {
   const state = stateFor(previous, facts.now);
@@ -431,11 +408,11 @@ function escalationLine(facts: BudgetFacts, budget: WarnBudget, standing: Standi
   const why =
     facts.cut === undefined
       ? `the team has no room left today${standing.ahead ? ', and it is ahead of its pace line' : ''}`
-      : `${leaderText(facts.cutBy, 'your')} cut you to it until ${formatEndTime(facts.cut.endsAt, facts.zone)}`;
+      : `the lead cut you to it until ${formatEndTime(facts.cut.endsAt, facts.zone)}`;
   if (budget.overAction === 'warn') {
     return `${BUDGET_COMMAND}: you are past today's budget and ${why}. The budget only warns (budget.overAction warn), so nothing is held: go on with your task list.`;
   }
-  const lift = facts.isLead ? 'As the lead, lift it only with a stop %.' : `${capitalized(leaderText(facts.leader, 'your'))} can lift it.`;
+  const lift = facts.isLead ? 'As the lead, lift it only with a stop %.' : 'The lead can lift it.';
   const goesOn = pastStopWork(facts, 'your');
   const except = goesOn === undefined ? '' : `, except ${goesOn.text}: ${goesOn.plural ? 'they go' : 'it goes'} on past the daily stop`;
   return (
@@ -475,7 +452,7 @@ export type HelperGate = { readonly kind: 'allow' } | { readonly kind: 'ask' | '
  * Before a helper launch: past budget once escalated, `overAction` applies; in quiet hours,
  * `quietHours.action`; the stronger wins. Only "ask" and "block" hold a launch back. The lead's own
  * helpers, a session under its own lift and no cut, and one with p0 work or an answer another session waits on always go
- * ahead: the lead decides, a lift is a leader's decision (a cut given after it, a later one), p0 work is done right now,
+ * ahead: the lead decides, a lift is the lead's decision (a cut given after it, a later one), p0 work is done right now,
  * and a held answer blocks its waiter.
  */
 export function helperGate(facts: BudgetFacts, budget: WarnBudget): HelperGate {
@@ -498,7 +475,7 @@ export function helperGate(facts: BudgetFacts, budget: WarnBudget): HelperGate {
   if (strongest === 0) {
     return { kind: 'allow' };
   }
-  const reason = `${BUDGET_COMMAND}: ${reasons.map((each) => each.text).join(' ')} ${strongest === 2 ? 'New helpers are refused' : 'New helpers ask first'}; ${leaderText(facts.leader, 'its')} can lift it. ${MORE}`;
+  const reason = `${BUDGET_COMMAND}: ${reasons.map((each) => each.text).join(' ')} ${strongest === 2 ? 'New helpers are refused' : 'New helpers ask first'}; the lead can lift it. ${MORE}`;
   return { kind: strongest === 2 ? 'deny' : 'ask', reason };
 }
 

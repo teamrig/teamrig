@@ -9,7 +9,7 @@ import type { Cut } from './cut.ts';
 import type { Lift } from './lift.ts';
 import { DailyProfile } from './active-time.ts';
 import { readPace, weekWindow, type PaceBudget, type TeamDay } from './pace.ts';
-import { emptyWarnState, helperGate, isHeld, isPastDailyBudget, levelOf, promptWarning, quietSpanOf, sessionQuietSpan, stopWarning, type BudgetFacts, type BudgetLeader, type WarnBudget, type WarnState } from './warn.ts';
+import { emptyWarnState, helperGate, isHeld, isPastDailyBudget, levelOf, promptWarning, quietSpanOf, sessionQuietSpan, stopWarning, type BudgetFacts, type WarnBudget, type WarnState } from './warn.ts';
 
 const RESET = Date.parse('2026-10-21T01:00:00Z');
 const WINDOW = weekWindow(RESET, 1);
@@ -26,9 +26,6 @@ const BUDGET: WarnBudget = { ...DAYTIME, quietHours: QUIET };
 const NO_ROOM: TeamDay = { usedPct: 5, pacePct: 5 };
 const ROOM: TeamDay = { usedPct: 2, pacePct: 5 };
 
-/** The team's lead as a session's leader, and a sub-lead that leads alpha. */
-const LEAD: BudgetLeader = { id: 'lead', name: 'lead', isLead: true };
-const SUB_LEAD: BudgetLeader = { id: 'bravo', name: 'app-bravo', isLead: false };
 
 /** A session at `usedTodayPct` of a 1% daily budget, with the week `weekUsedPct` used at `now` and no room today; 10M W make 1%. */
 function facts(usedTodayPct: number, weekUsedPct: number, now = DAY, extra: Partial<BudgetFacts> = {}): BudgetFacts {
@@ -44,7 +41,6 @@ function facts(usedTodayPct: number, weekUsedPct: number, now = DAY, extra: Part
    
     liftWeekPct: undefined,
     cut: undefined,
-    cutBy: undefined,
     burst: undefined,
     paused: false,
     surplus: undefined,
@@ -54,7 +50,6 @@ function facts(usedTodayPct: number, weekUsedPct: number, now = DAY, extra: Part
     isLead: false,
     urgent: [],
     awaited: [],
-    leader: LEAD,
     zone: TimeZone.UTC,
     ...extra,
   };
@@ -164,13 +159,13 @@ describe('isPastDailyBudget and sessionQuietSpan', () => {
     assert.equal(isHeld(facts(1, AHEAD)), false);
   });
 
-  it('holds a session a leader cut once past its own budget, whatever room the team has (T1616)', () => {
-    assert.equal(isHeld(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD })), true);
-    assert.equal(isHeld(facts(0.9, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD })), false);
+  it('holds a session the lead cut once past its own budget, whatever room the team has (T1616)', () => {
+    assert.equal(isHeld(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() })), true);
+    assert.equal(isHeld(facts(0.9, BEHIND, DAY, { teamDay: ROOM, cut: cut() })), false);
   });
 
   it('holds a cut session under a lift only past its lifted budget', () => {
-    const lifted = { teamDay: ROOM, lift: lift(), budgetPct: 2, cut: cut(), cutBy: LEAD };
+    const lifted = { teamDay: ROOM, lift: lift(), budgetPct: 2, cut: cut() };
     assert.equal(isHeld(facts(1.5, BEHIND, DAY, lifted)), false);
     assert.equal(isHeld(facts(2.5, BEHIND, DAY, lifted)), true);
   });
@@ -271,21 +266,14 @@ describe('stopWarning', () => {
     assert.equal(later.lines.length, 1);
   });
 
-  it("names a sub-lead's member's own leader, whose line has it lift the session itself", () => {
-    const result = stopWarning(facts(1.1, AHEAD, DAY, { leader: SUB_LEAD }), BUDGET, undefined);
-    assert.match(result.lines[0] ?? '', /Its leader app-bravo has an inbox line\./);
-    assert.ok(!(result.lines[0] ?? '').includes('the lead has'), result.lines[0]);
-    assert.match(result.leadLine ?? '', /It finishes the step in hand; lift it only with a stop %: teamrig budget lift alpha --part <pct> --stop-pct <pct> --reason "<why>"\.$/);
-  });
-
-  it('tells the person and the leader that p0 work goes on past the stop, helpers too', () => {
+  it('tells the person and the lead that p0 work goes on past the stop, helpers too', () => {
     const result = stopWarning(facts(1.1, AHEAD, DAY, { urgent: ['T5', 'T7'] }), { ...BUDGET, overAction: 'block' }, undefined);
     assert.match(result.lines[0] ?? '', /Its p0 work \(T5, T7\) goes on past the stop, helpers too; the lead has an inbox line\./);
     assert.ok(!(result.lines[0] ?? '').includes('refused'), result.lines[0]);
     assert.match(result.leadLine ?? '', /It goes on with its p0 work \(T5, T7\) past the stop; lift it only with a stop %: teamrig budget lift alpha /);
   });
 
-  it('tells the person and the leader that the answers other sessions wait on go on past the stop, helpers too (T2656)', () => {
+  it('tells the person and the lead that the answers other sessions wait on go on past the stop, helpers too (T2656)', () => {
     const result = stopWarning(facts(1.1, AHEAD, DAY, { awaited: ['T9'] }), { ...BUDGET, overAction: 'block' }, undefined);
     assert.match(result.lines[0] ?? '', /The answers other sessions wait on it for \(T9\) go on past the stop, helpers too; the lead has an inbox line\./);
     assert.match(result.leadLine ?? '', /It goes on with the answers other sessions wait on it for \(T9\) past the stop; lift it only with a stop %/);
@@ -368,28 +356,21 @@ describe('stopWarning', () => {
     assert.ok(result.leadLine !== undefined);
   });
 
-  it('escalates a session a leader cut while the team has room, once, naming the cut and no inbox line (T1616)', () => {
-    const result = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD }), BUDGET, undefined);
+  it('escalates a session the lead cut while the team has room, once, naming the cut and no inbox line (T1616)', () => {
+    const result = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() }), BUDGET, undefined);
     assert.deepEqual(result.lines, ['Budget: alpha has used 1.1% of the week today; its daily budget is 1.0%. The lead cut it to its own daily budget until 00:00 UTC (the end of the budget day). More: teamrig budget']);
     assert.equal(result.leadLine, undefined);
     assert.equal(result.state.escalated, true);
     assert.equal(result.state.leadTold, false);
-    assert.deepEqual(stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD }), BUDGET, result.state).lines, []);
+    assert.deepEqual(stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() }), BUDGET, result.state).lines, []);
   });
 
   it('shows a cut given after the level was shown, with no new level', () => {
     const room = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM }), BUDGET, undefined);
     assert.equal(room.state.escalated, false);
-    const cutNow = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD }), BUDGET, room.state);
+    const cutNow = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() }), BUDGET, room.state);
     assert.deepEqual(cutNow.lines, [`Budget: alpha is past its daily budget, and ${CUT_BY_LEAD}. More: teamrig budget`]);
     assert.equal(cutNow.leadLine, undefined);
-  });
-
-  it('names the sub-lead that cut its member, and what happens to new helpers', () => {
-    const result = stopWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, leader: SUB_LEAD, cut: { ...cut(), by: 'bravo' }, cutBy: SUB_LEAD }), { ...BUDGET, overAction: 'block' }, undefined);
-    assert.deepEqual(result.lines, [
-      'Budget: alpha has used 1.1% of the week today; its daily budget is 1.0%. Its leader app-bravo cut it to its own daily budget until 00:00 UTC (the end of the budget day). New helpers are refused. More: teamrig budget',
-    ]);
   });
 });
 
@@ -412,12 +393,8 @@ describe('promptWarning', () => {
       "teamrig budget: you are past today's budget and the team has no room left today, and it is ahead of its pace line. " +
         'The budget only warns (budget.overAction warn), so nothing is held: go on with your task list.',
     );
-    assert.doesNotMatch(promptWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD }), warn, undefined).line ?? '', /start no new work/);
+    assert.doesNotMatch(promptWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() }), warn, undefined).line ?? '', /start no new work/);
     assert.match(promptWarning(facts(1.1, AHEAD), { ...BUDGET, overAction: 'ask-lead' }, undefined).line ?? '', /start no new work items or helpers/);
-  });
-
-  it("tells a sub-lead's member that its own leader can lift it", () => {
-    assert.match(promptWarning(facts(1.1, AHEAD, DAY, { leader: SUB_LEAD }), BUDGET, undefined).line ?? '', /Never skip a test or check to save budget\. Your leader app-bravo can lift it\.$/);
   });
 
   it('says nothing under budget, while the team is not ahead or while it has room today', () => {
@@ -444,14 +421,12 @@ describe('promptWarning', () => {
     );
   });
 
-  it('tells a session a leader cut that the cut holds it, whatever room the team has (T1616)', () => {
+  it('tells a session the lead cut that the cut holds it, whatever room the team has (T1616)', () => {
     assert.equal(
-      promptWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD }), BUDGET, undefined).line,
+      promptWarning(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut() }), BUDGET, undefined).line,
       "teamrig budget: you are past today's budget and the lead cut you to it until 00:00 UTC (the end of the budget day). Finish the step in hand and start no new work items or helpers. " +
         'Never skip a test or check to save budget. The lead can lift it.',
     );
-    const bySubLead = { teamDay: ROOM, leader: SUB_LEAD, cut: { ...cut(), by: 'bravo' }, cutBy: SUB_LEAD };
-    assert.match(promptWarning(facts(1.1, BEHIND, DAY, bySubLead), BUDGET, undefined).line ?? '', /past today's budget and your leader app-bravo cut you to it until 00:00 UTC/);
   });
 
   it('tells the lead to lift itself only with a stop %', () => {
@@ -516,11 +491,6 @@ describe('helperGate', () => {
     );
   });
 
-  it("names a sub-lead's member's own leader as the one who can lift it", () => {
-    const gate = helperGate(facts(1.5, AHEAD, DAY, { leader: SUB_LEAD }), { ...BUDGET, overAction: 'block' });
-    assert.match(gate.kind === 'deny' ? gate.reason : gate.kind, /New helpers are refused; its leader app-bravo can lift it\. More: teamrig budget$/);
-  });
-
   it('lets a session past its budget launch helpers while the team has room today', () => {
     assert.equal(helperGate(facts(1.5, AHEAD, DAY, { teamDay: ROOM }), { ...BUDGET, overAction: 'block' }).kind, 'allow');
   });
@@ -531,8 +501,8 @@ describe('helperGate', () => {
     assert.equal(helperGate(facts(5, AHEAD, NIGHT, { lift: lift({ endsAt: NIGHT + 3_600_000 }) }), budget).kind, 'allow');
   });
 
-  it('holds back the helpers of a lifted session a leader cut once past its lifted budget, whatever room the team has', () => {
-    const lifted = { teamDay: ROOM, lift: lift(), budgetPct: 2, cut: cut(), cutBy: LEAD };
+  it('holds back the helpers of a lifted session the lead cut once past its lifted budget, whatever room the team has', () => {
+    const lifted = { teamDay: ROOM, lift: lift(), budgetPct: 2, cut: cut() };
     const gate = helperGate(facts(2.5, BEHIND, DAY, lifted), { ...BUDGET, overAction: 'block' });
     assert.equal(gate.kind === 'deny' ? gate.reason : gate.kind, `teamrig budget: alpha is past its daily budget (2.5% of the week today against 2.0%), and ${CUT_BY_LEAD}. New helpers are refused; the lead can lift it. More: teamrig budget`);
     assert.equal(helperGate(facts(1.5, BEHIND, DAY, lifted), { ...BUDGET, overAction: 'block' }).kind, 'allow');
