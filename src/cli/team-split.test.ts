@@ -69,37 +69,20 @@ describe('team split', () => {
     assert.ok(files?.includes(join('state', 'inbox', 'alpha.md')), stdout.join('\n'));
   });
 
-  it('prints the sub-lead lists, the links and the renames that cross the new border', async () => {
-    const kit = new CliHarness({ ...TEAM, roles: { lead: 'lead' }, sessions: [...TEAM.sessions, 'dave'], leads: { alpha: ['dave'], carol: ['bravo'] } });
+  it('prints the links and the renames that cross the new border', async () => {
+    const kit = new CliHarness({ ...TEAM, roles: { lead: 'lead' }, sessions: [...TEAM.sessions, 'dave'] });
     await kit.run(['add', '--title', 'Ship the CLI', '--description', 'what and why', '--priority', 'p1', '--owner', 'alpha', '--session', 'lead']);
     await kit.run(['add', '--title', 'Use the CLI', '--description', 'what and why', '--priority', 'p1', '--owner', 'carol', '--after', 'T1', '--session', 'lead']);
     await kit.run(['rename', 'bravo', 'bee', '--session', 'lead']);
     const result = await split(kit);
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     for (const line of [
-      `PARENT ${CONFIG_PATH} loses sessions alpha, bravo and keys leads.alpha`,
-      "SUB-LEAD carol's list loses bravo, which moves",
-      'UNLED dave: its sub-lead alpha moves, so the lead leads it',
+      `PARENT ${CONFIG_PATH} loses sessions alpha, bravo`,
       'LINK T2 in app runs after T1 in web',
       'RENAMES bravo: 1 rename line(s) move',
     ]) {
       assert.ok(result.stdout.includes(line), `${line}\n---\n${result.stdout.join('\n')}`);
     }
-  });
-
-  it("prints what blocks the split: a staying task's wait on the approval of its sub-lead, which moves", async () => {
-    const kit = new CliHarness({ ...TEAM, leads: { alpha: ['carol'] } });
-    await kit.run(['add', '--title', 'Merge the CLI', '--description', 'what and why', '--priority', 'p1', '--owner', 'carol', '--session', 'lead']);
-    await kit.run(['set', 'T1', '--status', 'in-progress', '--session', 'carol']);
-    const waits = await kit.run(['set', 'T1', '--status', 'waiting', '--waits', 'approval:alpha', '--note', 'asks alpha', '--session', 'carol']);
-    assert.equal(waits.code, EXIT.ok, [...waits.stdout, ...waits.stderr].join('\n'));
-    const result = await split(kit);
-    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    const blocked = "T1 waits on alpha's approval, and alpha moves: ask it of a session that stays, then split";
-    assert.ok(result.stdout.includes(`BLOCKED ${blocked}`), result.stdout.join('\n'));
-    const before = filesOf(kit);
-    assert.equal(refusal(await split(kit, WRITE)), `REFUSED ${blocked}`);
-    assert.deepEqual(filesOf(kit), before);
   });
 
   it("refuses while a moved session's Claude Code runs, which the dry run names", async () => {

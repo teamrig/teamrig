@@ -64,7 +64,6 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   sessions: 'split',
   names: 'split',
   roles: 'split',
-  leads: 'split',
   launch: 'split',
   github: 'own',
   paths: 'own',
@@ -176,23 +175,13 @@ export interface SplitLink {
   readonly taskMoves: boolean;
 }
 
-/** A session on a `leads` list, by the sub-lead whose list it is. */
-export interface LedSession {
-  readonly lead: string;
-  readonly id: string;
-}
-
 /** What the parent's config loses besides the moved sessions. */
 export interface ParentTrim {
   /**
-   * What it loses of the moved sessions: the keys `names.<id>`, `launch.<id>`, `leads.<id>` and `budget.sessions.<id>`,
-   * and the items `open.idle.keepOpen[<id>]`.
+   * What it loses of the moved sessions: the keys `names.<id>`, `launch.<id>` and `budget.sessions.<id>`, and the
+   * items `open.idle.keepOpen[<id>]`.
    */
   readonly keys: readonly string[];
-  /** Moved sessions taken off a staying sub-lead's list. */
-  readonly leftLeads: readonly LedSession[];
-  /** Staying sessions a moved sub-lead led: the parent's lead leads them from then on. */
-  readonly unled: readonly LedSession[];
 }
 
 export interface SplitPlan extends SplitTasks {
@@ -232,15 +221,6 @@ function sessionProblem(parent: SplitParent, spec: TeamSpec): string | undefined
     }
   }
   return undefined;
-}
-
-/** The moved sub-leads' lists, kept to the moved sessions; the child's lead leads the rest of them itself. */
-function childLeadsOf(parent: SplitParent, spec: TeamSpec, moved: ReadonlySet<string>): Record<string, string[]> {
-  const kept = Object.entries(parent.config.leads)
-    .filter(([lead]) => moved.has(lead) && lead !== spec.lead)
-    .map(([lead, ids]): [string, string[]] => [lead, ids.filter((id) => moved.has(id))])
-    .filter(([, ids]) => ids.length > 0);
-  return Object.fromEntries(kept);
 }
 
 /** The path at `key` made absolute to the parent's folder; the record as it is when it holds none there. */
@@ -312,8 +292,8 @@ function leftOutOf(parent: SplitParent): string[] {
 
 /**
  * The child's config as team create writes it, plus every block of the parent's (takenBlocks), so the child runs as its
- * parent did, and what keeps the moved sessions as they were: their names, launch blocks and sub-leads, and the parent's
- * holder of each role a child may leave to a team above.
+ * parent did, and what keeps the moved sessions as they were: their names and launch blocks, and the parent's holder of each
+ * role a child may leave to a team above.
  */
 function childConfigOf(parent: SplitParent, spec: TeamSpec): Checked<JsonRecord> {
   const moved = new Set(spec.sessions);
@@ -329,13 +309,11 @@ function childConfigOf(parent: SplitParent, spec: TeamSpec): Checked<JsonRecord>
     const block = launch === undefined ? undefined : recordField(launch, id);
     return block === undefined ? [] : [[id, block]];
   });
-  const leads = childLeadsOf(parent, spec, moved);
   const record: JsonRecord = {
     ...configRecordOf(spec),
     ...takenBlocks({ parent, moved }),
     names: Object.fromEntries(spec.sessions.map((id) => [id, parent.roster.nameOf(id) ?? id])),
     roles,
-    ...(Object.keys(leads).length === 0 ? {} : { leads }),
     ...(blocks.length === 0 ? {} : { launch: Object.fromEntries(blocks) }),
   };
   const [issue] = parseConfig(record).issues;
@@ -374,20 +352,14 @@ function treeProblem(tree: TeamTree, parent: SplitParent, child: TeamNode): stri
 }
 
 function trimOf(parent: SplitParent, moved: ReadonlySet<string>): ParentTrim {
-  const { names, launch, leads, budget, open } = parent.config;
+  const { names, launch, budget, open } = parent.config;
   const keys = [...moved].flatMap((id) => [
     ...(Object.hasOwn(names, id) ? [`names.${id}`] : []),
     ...(Object.hasOwn(launch, id) ? [`launch.${id}`] : []),
-    ...(Object.hasOwn(leads, id) ? [`leads.${id}`] : []),
     ...(Object.hasOwn(budget.sessions, id) ? [`budget.sessions.${id}`] : []),
     ...(open.idle.keepOpen.includes(id) ? [`open.idle.keepOpen[${id}]`] : []),
   ]);
-  const listed = Object.entries(leads).flatMap(([lead, ids]) => ids.map((id) => ({ lead, id })));
-  return {
-    keys,
-    leftLeads: listed.filter(({ lead, id }) => !moved.has(lead) && moved.has(id)),
-    unled: listed.filter(({ lead, id }) => moved.has(lead) && !moved.has(id)),
-  };
+  return { keys };
 }
 
 /** The sessions a task names, by where it names them; its owner moves with it and is never rewritten. */
@@ -498,25 +470,9 @@ function idleKeptBy(open: JsonRecord, keep: (id: string) => boolean): JsonRecord
   };
 }
 
-/** The sub-leads' lists without a moved sub-lead's, and each staying one's without the moved sessions, an emptied one dropped. */
-function trimmedLeads(record: JsonRecord, moved: ReadonlySet<string>): JsonRecord {
-  const leads = recordField(record, 'leads');
-  if (leads === undefined) {
-    return {};
-  }
-  const kept = Object.entries(leads).flatMap(([lead, ids]): [string, unknown][] => {
-    if (moved.has(lead)) {
-      return [];
-    }
-    const left = isStringArray(ids) ? ids.filter((id) => !moved.has(id)) : ids;
-    return isStringArray(left) && left.length === 0 ? [] : [[lead, left]];
-  });
-  return { leads: Object.fromEntries(kept) };
-}
-
 /**
  * The parent's config after the split, as its file holds it: the moved sessions gone from its sessions, names, launch
- * blocks, sub-leads' lists, budget shares and idle keep-open list (ParentTrim says which), every other key as it was.
+ * blocks, budget shares and idle keep-open list (ParentTrim says which), every other key as it was.
  */
 export function trimmedParentOf(record: JsonRecord, moved: ReadonlySet<string>): JsonRecord {
   const sessions = record['sessions'];
@@ -526,7 +482,6 @@ export function trimmedParentOf(record: JsonRecord, moved: ReadonlySet<string>):
     ...(isStringArray(sessions) ? { sessions: sessions.filter(stays) } : {}),
     ...keptIn(record, 'names', stays),
     ...keptIn(record, 'launch', stays),
-    ...trimmedLeads(record, moved),
     ...changedBlock(record, 'budget', (budget) => ({ ...budget, ...keptIn(budget, 'sessions', stays) })),
     ...changedBlock(record, 'open', (open) => idleKeptBy(open, stays)),
   };

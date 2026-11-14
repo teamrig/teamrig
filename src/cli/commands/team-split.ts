@@ -72,8 +72,6 @@ function planLines(plan: SplitPlan, parent: string, roster: Roster, configPaths:
     ...formatConfig(plan.config).trimEnd().split('\n'),
     `PARENT ${configPaths.parent} loses sessions ${spec.sessions.join(', ')}${trim.keys.length === 0 ? '' : ` and keys ${trim.keys.join(', ')}`}`,
     ...(plan.leftOut.length === 0 ? [] : [`LEFT OUT ${plan.leftOut.join(', ')}: the child starts without them`]),
-    ...trim.leftLeads.map(({ lead, id }) => `SUB-LEAD ${lead}'s list loses ${id}, which moves`),
-    ...trim.unled.map(({ lead, id }) => `UNLED ${id}: its sub-lead ${lead} moves, so the lead leads it`),
     `TASKS ${plan.moving.length} move to ${spec.team}, ${plan.staying} stay in ${parent}`,
     ...spec.sessions.flatMap((id) => {
       const counts = statusCounts(plan, id);

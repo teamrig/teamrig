@@ -11,14 +11,12 @@ import { configRecordOf, teamNodeOfSpec, teamSpecOf, type Checked, type TeamSpec
 import { planTeamSplit, trimmedParentOf, type SplitParent, type SplitPlan } from './team-split.ts';
 
 /**
- * Team `app`: `dave` reviews security and leads `alpha`, `bravo` leads `carol` and `erin`, `alpha` has its own name
- * and `carol` a launch block. The split moves `alpha` (the child's lead), `bravo` and `carol` into `web`.
+ * Team `app`: `dave` reviews security, `alpha` has its own name and `carol` a launch block. The split moves `alpha` (the child's lead), `bravo` and `carol` into `web`.
  */
 const RECORD: JsonRecord = {
   sessions: ['lead', 'alpha', 'bravo', 'carol', 'dave', 'erin'],
   roles: { lead: 'lead', securityReviewer: 'dave' },
   names: { alpha: 'alfa' },
-  leads: { bravo: ['carol', 'erin'], dave: ['alpha'] },
   launch: { carol: { model: 'opus' } },
   timeZone: 'Asia/Jerusalem',
 };
@@ -70,7 +68,6 @@ describe('planTeamSplit', () => {
       delivery: SHARED_DELIVERY,
       names: { alpha: 'alfa', bravo: 'app-bravo', carol: 'app-carol' },
       roles: { lead: 'alpha', securityReviewer: 'app/dave' },
-      leads: { bravo: ['carol'] },
       launch: { carol: { model: 'opus' } },
     });
   });
@@ -141,7 +138,7 @@ describe('planTeamSplit', () => {
     const split = valueOf(plan(new Map(), parentOf(record)));
     assert.deepEqual(split.config['budget'], { sessions: { bravo: { share: 2 } } });
     assert.deepEqual(split.config['open'], { idle: { mode: 'on', keepOpen: ['carol'] } });
-    assert.deepEqual(split.trim.keys, ['names.alpha', 'leads.bravo', 'budget.sessions.bravo', 'launch.carol', 'open.idle.keepOpen[carol]']);
+    assert.deepEqual(split.trim.keys, ['names.alpha', 'budget.sessions.bravo', 'launch.carol', 'open.idle.keepOpen[carol]']);
     const trimmed = trimmedParentOf(record, new Set(['alpha', 'bravo', 'carol']));
     assert.deepEqual(trimmed['budget'], { sessions: { dave: { share: 3 } } });
     assert.deepEqual(trimmed['open'], { idle: { mode: 'on', keepOpen: ['erin'] } });
@@ -178,12 +175,8 @@ describe('planTeamSplit', () => {
     assert.deepEqual(valueOf(plan()).leftOut, []);
   });
 
-  it('trims the parent of the moved keys and reports the sub-lead lists the border cuts', () => {
-    assert.deepEqual(valueOf(plan()).trim, {
-      keys: ['names.alpha', 'leads.bravo', 'launch.carol'],
-      leftLeads: [{ lead: 'dave', id: 'alpha' }],
-      unled: [{ lead: 'bravo', id: 'erin' }],
-    });
+  it('trims the parent of the moved keys', () => {
+    assert.deepEqual(valueOf(plan()).trim, { keys: ['names.alpha', 'launch.carol'] });
   });
 
   it('moves the tasks the moved sessions own and counts the rest', () => {
@@ -273,13 +266,13 @@ describe('planTeamSplit', () => {
 });
 
 describe('trimmedParentOf', () => {
-  it("drops the moved sessions from the sessions, names, launch blocks and sub-leads' lists, every other key as written", () => {
+  it('drops the moved sessions from the sessions, names and launch blocks, every other key as written', () => {
     const record = {
       version: 1,
       sessions: ['lead', 'alpha', 'bravo', 'carol', 'dave'],
       names: { alpha: 'scout', carol: 'cee' },
       launch: { bravo: { effort: 'high' }, carol: { effort: 'low' } },
-      leads: { alpha: ['dave'], carol: ['bravo'], dave: ['erin', 'alpha'] },
+      leads: {},
       roles: { lead: 'lead' },
       future: { kept: true },
     };
@@ -288,7 +281,7 @@ describe('trimmedParentOf', () => {
       sessions: ['lead', 'carol', 'dave'],
       names: { carol: 'cee' },
       launch: { carol: { effort: 'low' } },
-      leads: { dave: ['erin'] },
+      leads: {},
       roles: { lead: 'lead' },
       future: { kept: true },
     });
@@ -296,6 +289,6 @@ describe('trimmedParentOf', () => {
 
   it('adds no key the config lacks, and leaves a damaged list for the config check to name', () => {
     assert.deepEqual(trimmedParentOf({ sessions: ['lead', 'alpha'] }, new Set(['alpha'])), { sessions: ['lead'] });
-    assert.deepEqual(trimmedParentOf({ sessions: 'lead', leads: { carol: 'alpha' } }, new Set(['alpha'])), { sessions: 'lead', leads: { carol: 'alpha' } });
+    assert.deepEqual(trimmedParentOf({ sessions: 'lead', names: 'alpha' }, new Set(['alpha'])), { sessions: 'lead', names: 'alpha' });
   });
 });

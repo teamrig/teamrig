@@ -1778,8 +1778,8 @@ old, it first prints one `WARN` line each ([the check](requirements.md#the-requi
 
 Moves sessions of your team, with the tasks they own, into a new child team under you, the lead. Run it with
 `--dry-run` first: that writes nothing and prints the plan, the child's config, what your team's config loses, the
-tasks that move, what crosses the new border and what blocks the split. The child keeps each moved session's name,
-launch block and sub-lead list, so no tab title changes, and a role it has no holder for names your team's holder as
+tasks that move, what crosses the new border and what blocks the split. The child keeps each moved session's name and
+launch block, so no tab title changes, and a role it has no holder for names your team's holder as
 `<team>/<id>`. It starts with a copy of your team's settings, so it runs as your team does, and shares your delivery
 setup (its folder, host lock and main checkouts, written as absolute paths), so two teams' queued steps never
 overlap; your budget shares and idle keep-open list go with the sessions they name, and the budget keys of the
@@ -1845,11 +1845,9 @@ INBOX ui: 1 line(s) move
 FILES ui: state/inbox/ui.md
 ```
 
-Besides the sessions, `PARENT` names the `names`, `launch` and `leads` keys, `budget.sessions` shares and
+Besides the sessions, `PARENT` names the `names` and `launch` keys, `budget.sessions` shares and
 `open.idle.keepOpen` entries your team's config loses. `LEFT OUT` names the keys of your team's config the child
-starts without: `github` and `paths`, which stay yours, and any key this teamrig does not know. `SUB-LEAD`
-names a staying sub-lead whose list loses a moved session, and `UNLED` a staying session whose sub-lead moves, so you
-lead it. `TASKS` counts the moved sessions' tasks by status. `LINK` names an `after` or a task wait between a task that
+starts without: `github` and `paths`, which stay yours, and any key this teamrig does not know. `TASKS` counts the moved sessions' tasks by status. `LINK` names an `after` or a task wait between a task that
 moves and one that stays. `INBOX`, `FILES` and `RENAMES` name what each moved session leaves in your team's folders.
 `BLOCKED` names what the split refuses until you clear it: a task that stays and waits on a moved session's decision or
 approval (ask it of a session that stays), or a moved session whose Claude Code runs (close its tab).
