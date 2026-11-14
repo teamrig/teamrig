@@ -64,7 +64,7 @@ export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   (await waitingReport(own, runtime)).forEach((line) => runtime.out.stdout(line));
   const report = await checkReport(own, runtime);
   await tellLead(runtime, kit, config, report);
-  checkLines(id === tree.lead ? report : ownCheck(report, id, tree.groupOf(id)), args.switches.has('all')).forEach((line) => runtime.out.stdout(line));
+  checkLines(id === tree.lead ? report : ownCheck(report, id), args.switches.has('all')).forEach((line) => runtime.out.stdout(line));
   runtime.out.stdout(await weekLineOf(runtime, kit, config, roster));
   const resets = id === tree.lead ? resetSummaryLine(config.budget.resets, now, zone, KIT_NAME) : undefined;
   if (resets !== undefined) {
