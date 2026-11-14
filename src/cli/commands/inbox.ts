@@ -1,5 +1,4 @@
 import { claudeProjectsDir, lastWriteOf } from '../../budget/discover.ts';
-import { LeadTree } from '../../config/lead-tree.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { formatAddress, type SessionAddress } from '../../core/address.ts';
@@ -9,7 +8,7 @@ import { NAME_RULE } from '../../core/ids.ts';
 import { PlainLogFile } from '../../core/log-file.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import type { TimeZone } from '../../core/zone.ts';
-import { groupIds, parseTo, taskGroupOf, treeLeadsOf, type ToItem } from '../../inbox/groups.ts';
+import { parseTo, taskGroupOf, treeLeadsOf, type ToItem } from '../../inbox/groups.ts';
 import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLines, readInbox, type InboxDeps } from '../../inbox/inbox.ts';
 import { lineHash } from '../../inbox/line-hash.ts';
 import { CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf, type InboxMark } from '../../inbox/marks.ts';
@@ -214,12 +213,7 @@ async function recipientsOfItem(runtime: CliRuntime, own: SenderTeam, item: ToIt
   if (item.kind === 'task') {
     return taskRecipients(runtime, own, reads, item.id);
   }
-  const group = item.kind === 'group' ? { kind: item.kind, leader: sessionIdOf(own.roster, item.leader) } : item;
-  const ids = groupIds(own.config, group, own.from.id);
-  if (!ids.ok) {
-    throw new RefusedError(ids.problem);
-  }
-  return ids.ids.map((id) => ownTeamRecipient(own, id));
+  return own.config.sessions.filter((id) => id !== own.from.id).map((id) => ownTeamRecipient(own, id));
 }
 
 /** Every recipient the `--to` items name, each once, in the order first named; refused when none is left. */
@@ -248,9 +242,8 @@ function postedLine(recipients: readonly Recipient[]): string {
 
 /** The sender as the `--wake now` / `--wake-by` gate reads it; the teams below its own are read only when a recipient is on another team. */
 async function wakeSenderOf(own: SenderTeam, recipients: readonly Recipient[], reads: SenderTreeReads): Promise<WakeSender> {
-  const leads = new LeadTree(own.config);
   const below = recipients.some((recipient) => recipient.crossing) ? (await reads.tree()).tree.descendantsOf(own.from.team) : [];
-  return { team: own.from.team, id: own.from.id, leader: leads.isLeader(own.from.id), teamLead: leads.lead === own.from.id, below };
+  return { team: own.from.team, id: own.from.id, teamLead: own.config.roles.lead === own.from.id, below };
 }
 
 /**
@@ -320,19 +313,18 @@ function wakeWhenOf(wake: string | undefined, wakeBy: string | undefined, now: n
   return wakeByOf(at, now, zone);
 }
 
-const TO_FORMS = 'a session id or name, <team>/<id>, all, leads, group:<leader>, team:<team>, tree:leads, task:T<n>, or a comma-separated list of them';
+const TO_FORMS = 'a session id or name, <team>/<id>, all, team:<team>, tree:leads, task:T<n>, or a comma-separated list of them';
 
 /**
  * `inbox add --to <to> --text "<line>" [--wake now]`: appends one dated line to each receiver's inbox, all of them
  * or, when one is refused, none. A bare id or name is on the sender's team; `<team>/<id>` reaches any session of
- * another team of its tree, and that line names the sender `<team>/<id>`. `all`, `leads` and `group:<leader>` are
- * groups of the sender's team, `team:<team>` (every session of a team of its tree), `tree:leads` (every team's lead
- * of its tree) and `task:T<n>` (the owner of that task and of each active task of its tree whose ref is T<n>, T1151)
- * groups of its tree; a group leaves the sender out, and a comma-separated list names each receiver once.
- * A line to a session named on the sender's team that skips a sub-lead below the sender is posted, then a further line
- * tells the sender to route such work via that sub-lead (T783). `--wake now` (T1147) also wakes each receiver idle at
- * its prompt within about 3 minutes (`wake.batchSeconds`), and says what that costs; `--wake-by <time>` (T1148) wakes
- * it at that time instead, and only if it has not seen the line by then. A group is woken only by a leader, another
+ * another team of its tree, and that line names the sender `<team>/<id>`. `all` is every session of the sender's team,
+ * `team:<team>` (every session of a team of its tree), `tree:leads` (every team's lead of its tree) and `task:T<n>`
+ * (the owner of that task and of each active task of its tree whose ref is T<n>, T1151) groups of its tree; a group
+ * leaves the sender out, and a comma-separated list names each receiver once. `--wake now` (T1147) also wakes each
+ * receiver idle at its prompt within about 3 minutes (`wake.batchSeconds`), and says what that costs; `--wake-by
+ * <time>` (T1148) wakes it at that time instead, and only if it has not seen the line by then. A group is woken only
+ * by the team's lead, another
  * team only by a team lead (a team below its own, any team's lead, a role holder its config names), else nothing is
  * posted.
  */

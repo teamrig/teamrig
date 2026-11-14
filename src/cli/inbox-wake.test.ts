@@ -14,8 +14,8 @@ const NOW = Date.parse('2030-01-08T10:00:00Z');
 const MINUTE = 60_000;
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
 const BRAVO_TAB = '0123abcd-0000-4000-8000-0000000000b1';
-/** `lead` leads `alpha` and the sub-lead `bravo`, which leads `charlie`. */
-const LED = { sessions: ['lead', 'alpha', 'bravo', 'charlie'], leads: { bravo: ['charlie'] } };
+/** `lead` leads `alpha`, `bravo` and `charlie`. */
+const LED = { sessions: ['lead', 'alpha', 'bravo', 'charlie'] };
 
 function askOf(kit: CliHarness, team: string, id: string): string | undefined {
   return kit.files.get(join(teamHomeOf(team), 'state', 'wake-asks', id, `${NOW}-0.json`));
@@ -57,20 +57,19 @@ describe('teamrig inbox add --wake now', () => {
     assert.equal(result.stdout[1], "WAKES bravo if its tab is idle, within about 3 minutes: at least about 210k W for the first call, cold, 0.04% of the week; whole turns usually cost more, on app's budget line", 'the week rate would say 0.02%');
   });
 
-  it('lets a leader wake its group, and refuses a group to a session that leads no one, posting nothing', async () => {
+  it("lets the team's lead wake a group, and refuses a group to any other session, posting nothing (T1320)", async () => {
     const kit = await treeHarness(LED);
-    const group = await kit.run(['inbox', 'add', '--to', 'group:bravo', '--text', 'merge slot is yours', '--wake', 'now', '--session', 'bravo']);
-    assert.deepEqual(group.stdout, [
-      'POSTED to charlie; charlie is reminded at its next prompt',
-      "WAKES charlie if its tab is idle, within about 3 minutes: at least about 210k W for the first call, cold; whole turns usually cost more, on app's budget line",
-    ]);
-    const member = await kit.run(['inbox', 'add', '--to', 'all', '--text', 'main is frozen', '--wake', 'now', '--session', 'alpha']);
+    const group = await kit.run(['inbox', 'add', '--to', 'all', '--text', 'merge slot is yours', '--wake', 'now', '--session', 'lead']);
+    assert.deepEqual([group.code, group.stdout[0]], [EXIT.ok, 'POSTED to 3 sessions (alpha, bravo, charlie); each is reminded at its next prompt']);
+    assert.equal(askOf(kit, 'app', 'charlie'), formatWakeAsk({ from: 'lead', text: 'merge slot is yours', at: NOW }));
+    const refused = await treeHarness(LED);
+    const member = await refused.run(['inbox', 'add', '--to', 'all', '--text', 'main is frozen', '--wake', 'now', '--session', 'alpha']);
     assert.deepEqual(
       [member.code, member.stdout],
-      [EXIT.refused, ["REFUSED --wake now on a group is a leader's: alpha leads no one on app; post the line without --wake, and each receiver reads it at its next prompt"]],
+      [EXIT.refused, ["REFUSED --wake now on a group is the lead's: alpha is not app's lead; post the line without --wake, and each receiver reads it at its next prompt"]],
     );
-    assert.equal(kit.files.get(teamInboxOf('app', 'lead')), undefined, 'no line posted');
-    assert.equal(askOf(kit, 'app', 'lead'), undefined, 'no ask posted');
+    assert.equal(refused.files.get(teamInboxOf('app', 'lead')), undefined, 'no line posted');
+    assert.equal(askOf(refused, 'app', 'lead'), undefined, 'no ask posted');
   });
 
   it("lets the root lead wake sessions of the teams below it, each ask in the receiver's team, on their budget lines", async () => {
@@ -199,7 +198,7 @@ describe('teamrig inbox add --wake-by', () => {
     const member = await kit.run(['inbox', 'add', '--to', 'all', '--text', 'main is frozen', '--wake-by', '16:30', '--session', 'alpha']);
     assert.deepEqual(
       [member.code, member.stdout],
-      [EXIT.refused, ["REFUSED --wake-by on a group is a leader's: alpha leads no one on app; post the line without --wake-by, and each receiver reads it at its next prompt"]],
+      [EXIT.refused, ["REFUSED --wake-by on a group is the lead's: alpha is not app's lead; post the line without --wake-by, and each receiver reads it at its next prompt"]],
     );
   });
 });

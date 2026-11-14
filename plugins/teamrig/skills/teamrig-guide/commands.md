@@ -1481,8 +1481,7 @@ Flags:
   - `<id|name>`: a session of your team.
   - `<team>/<id>`: any session of another team of your tree, members and sibling teams included; a team of a
     separate tree is out of reach. It always names one session, so a session called `all` is `<team>/all`.
-  - `all`: every session of your team; `leads`: its lead and its sub-leads; `group:<leader>`: that lead or sub-lead
-    and every session under it, at any depth.
+  - `all`: every session of your team.
   - `team:<team>`: every session of a team of your tree; `tree:leads`: every team's lead in your tree, the root's
     first, so the root lead sends one notice down the tree instead of a relay per child lead. A group leaves you out.
   - `task:T<n>`: everyone working a task: its owner, then the owner of each open, in-progress, verifying or waiting
@@ -1506,19 +1505,19 @@ Flags:
   keeps no idle session open. It takes the same gate as `--wake now`, and one or the other, not both.
 
 Every receiver gets the same line, stamped with the same minute, or none does: an unknown session or team, one out
-of reach, `group:` on a session that leads no one, a task no register of your tree holds, a group that holds only
+of reach, a task no register of your tree holds, a group that holds only
 you, or a line any receiving team's secret patterns refuse is `REFUSED` (exit 2) and posts nothing. With `--wake now`
-or `--wake-by`, so is a group sent by a session that leads no one, and a session of another team unless you lead
+or `--wake-by`, so is a group sent by any session but your team's lead, and a session of another team unless you lead
 your team and it sits on a team below yours, leads its own team, or is named in your team's `roles` (deliveryOwner,
 securityReviewer), since a wake spends that team's budget line: post the line without the flag instead. Both flags
 together, a `--wake-by` time that is not a time, and one already past are usage errors (exit 64): send a line due now
 with `--wake now`.
 
-Example, on a team `shop` whose one sub-lead is `web`:
+Example, on a team `shop` with the sessions `web` and `ops`:
 
 ```sh
 teamrig inbox add --session lead --to web --text "api error codes are in docs/errors.md"
-teamrig inbox add --session lead --to leads,ops --text "main is frozen until 14:00"
+teamrig inbox add --session lead --to web,ops --text "main is frozen until 14:00"
 teamrig inbox add --session lead --to ops --text "checkout fails since 0.4.1: roll it back" --wake now
 teamrig inbox add --session lead --to web --text "the 15:00 release needs your sign-off" --wake-by 14:30
 ```

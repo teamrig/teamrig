@@ -11,10 +11,9 @@ const BY: WakeWhen = { kind: 'by', at: Date.parse('2030-01-08T16:30:00Z'), clock
 /** A week of 1M W per percent: a warm wake (27k W) is 0.027% of it, a cold one (210k W) 0.21%. */
 const W_PER_PCT = 1_000_000;
 
-const MEMBER: WakeSender = { team: 'app', id: 'alpha', leader: false, teamLead: false, below: ['web', 'ui', 'ops'] };
-const SUB_LEAD: WakeSender = { ...MEMBER, id: 'bravo', leader: true };
-const APP_LEAD: WakeSender = { ...MEMBER, id: 'lead', leader: true, teamLead: true };
-const WEB_LEAD: WakeSender = { team: 'web', id: 'lead', leader: true, teamLead: true, below: ['ui'] };
+const MEMBER: WakeSender = { team: 'app', id: 'alpha', teamLead: false, below: ['web', 'ui', 'ops'] };
+const APP_LEAD: WakeSender = { ...MEMBER, id: 'lead', teamLead: true };
+const WEB_LEAD: WakeSender = { team: 'web', id: 'lead', teamLead: true, below: ['ui'] };
 
 /** A receiver that holds no role the gate reads. */
 function member(label: string, team: string): WakeTarget {
@@ -39,12 +38,12 @@ describe('wakeRefusal', () => {
     assert.equal(wakeRefusal(MEMBER, false, [member('bravo', 'app'), lead('lead', 'app')], WAKE_AT_ONCE), undefined);
   });
 
-  it('refuses a group from a session that leads no one, and lets a leader wake one', () => {
+  it("refuses a group from a session that is not its team's lead, and lets the lead wake one (T1320)", () => {
     assert.equal(
       wakeRefusal(MEMBER, true, [member('bravo', 'app')], WAKE_AT_ONCE),
-      "--wake now on a group is a leader's: alpha leads no one on app; post the line without --wake, and each receiver reads it at its next prompt",
+      "--wake now on a group is the lead's: alpha is not app's lead; post the line without --wake, and each receiver reads it at its next prompt",
     );
-    assert.equal(wakeRefusal(SUB_LEAD, true, [member('charlie', 'app')], WAKE_AT_ONCE), undefined);
+    assert.equal(wakeRefusal(APP_LEAD, true, [member('charlie', 'app')], WAKE_AT_ONCE), undefined);
   });
 
   it('lets the lead of a team above wake sessions of the teams below it, at any depth', () => {
@@ -61,12 +60,11 @@ describe('wakeRefusal', () => {
     assert.equal(wakeRefusal(WEB_LEAD, false, [{ ...member('app/security', 'app'), servesSender: true }], WAKE_AT_ONCE), undefined);
   });
 
-  it("refuses another team to a member or a sub-lead, even its lead or a role holder, and a lead the other sessions above or beside, naming each refused receiver", () => {
+  it("refuses another team to a member, even its lead or a role holder, and a lead the other sessions above or beside, naming each refused receiver", () => {
     const outside = (sender: string, labels: string): string =>
       `--wake now reaches another team only from a team lead, since a wake spends that team's budget line: a session of a team below its own, any team's lead, or a session its config names in roles; ${sender} may not wake ${labels}; post the line without --wake, or ask your lead to wake it`;
     assert.equal(wakeRefusal(MEMBER, false, [member('bravo', 'app'), member('web/front', 'web')], WAKE_AT_ONCE), outside('app/alpha', 'web/front'));
     assert.equal(wakeRefusal(MEMBER, false, [lead('web/lead', 'web'), { ...member('web/security', 'web'), servesSender: true }], WAKE_AT_ONCE), outside('app/alpha', 'web/lead, web/security'));
-    assert.equal(wakeRefusal(SUB_LEAD, false, [member('web/front', 'web')], WAKE_AT_ONCE), outside('app/bravo', 'web/front'));
     assert.equal(
       wakeRefusal(WEB_LEAD, false, [lead('app/lead', 'app'), member('ui/pixel', 'ui'), member('ops/run', 'ops'), member('app/design', 'app')], WAKE_AT_ONCE),
       outside('web/lead', 'ops/run, app/design'),
@@ -76,11 +74,11 @@ describe('wakeRefusal', () => {
   it('names --wake-by in its refusals when that flag asked the wake', () => {
     assert.equal(
       wakeRefusal(MEMBER, true, [member('bravo', 'app')], BY),
-      "--wake-by on a group is a leader's: alpha leads no one on app; post the line without --wake-by, and each receiver reads it at its next prompt",
+      "--wake-by on a group is the lead's: alpha is not app's lead; post the line without --wake-by, and each receiver reads it at its next prompt",
     );
     assert.equal(
-      wakeRefusal(SUB_LEAD, false, [member('web/front', 'web')], BY),
-      "--wake-by reaches another team only from a team lead, since a wake spends that team's budget line: a session of a team below its own, any team's lead, or a session its config names in roles; app/bravo may not wake web/front; post the line without --wake-by, or ask your lead to wake it",
+      wakeRefusal(MEMBER, false, [member('web/front', 'web')], BY),
+      "--wake-by reaches another team only from a team lead, since a wake spends that team's budget line: a session of a team below its own, any team's lead, or a session its config names in roles; app/alpha may not wake web/front; post the line without --wake-by, or ask your lead to wake it",
     );
   });
 });

@@ -596,14 +596,13 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       that belong to no task; makes it when missing
   inbox read [--session <area>]     prints the unread lines and marks them read
   inbox status [--session <area>]   unread lines per area
-  inbox add --to <id|name|team/id|all|leads|group:<leader>|team:<team>|tree:leads|task:T<n>>[,...] --text "<one line>" [--wake now | --wake-by <time>]
-      team/id: any session of another team of your tree; all, leads (the
-      lead and the sub-leads) and group:<leader> (it and every session under it) are your own team's;
+  inbox add --to <id|name|team/id|all|team:<team>|tree:leads|task:T<n>>[,...] --text "<one line>" [--wake now | --wake-by <time>]
+      team/id: any session of another team of your tree; all is every session of your own team;
       team:<team> is every session of a team of your tree and tree:leads every team's lead in it;
       task:T<n> is that task's owner and the owner of each active task of your tree whose ref is T<n>; a
       group leaves you out; a comma-separated list posts the line to each receiver once
       --wake now: also wakes each receiver idle at its prompt within about 3 minutes and says what
-      that costs; a group only from a leader, another team only from a team lead: a team below its
+      that costs; a group only from the lead, another team only from a team lead: a team below its
       own, any team's lead, or a session its config names in roles
       --wake-by <time>: wakes each receiver at that time instead, only if it has not seen the line by
       then and its tab is idle; the same gate
