@@ -106,50 +106,18 @@ describe('parseConfig', () => {
     assert.deepEqual(config.names, { alpha: 'boss' });
   });
 
-  it('keeps each sub-lead with its members, nested, and defaults to none', () => {
-    assert.deepEqual(parseConfig(ROSTER).config.leads, {});
-    const { config, issues } = parseConfig({
-      sessions: ['alpha', 'bravo', 'charlie', 'delta'],
-      roles: { lead: 'alpha' },
-      leads: { bravo: ['charlie'], charlie: ['delta'] },
-    });
+  it('reads an empty leads, which older configs kept, as absent (T1320)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, leads: {} });
     assert.deepEqual(issues, []);
-    assert.deepEqual(config.leads, { bravo: ['charlie'], charlie: ['delta'] });
+    assert.equal(Object.hasOwn(config, 'leads'), false);
   });
 
-  it('refuses a sub-lead or member that breaks the tree, and leaves it out', () => {
-    const { config, issues } = parseConfig({
-      sessions: ['alpha', 'bravo', 'charlie', 'delta', 'echo'],
-      roles: { lead: 'alpha' },
-      leads: { alpha: ['bravo'], zulu: ['charlie'], bravo: ['alpha', 'bravo', 'zulu', 'charlie'], delta: ['charlie'], echo: [] },
-    });
+  it('refuses a non-empty leads, naming the team split that replaces sub-leads (T1320)', () => {
+    const { issues } = parseConfig({ sessions: ['alpha', 'bravo', 'charlie', 'delta'], roles: { lead: 'alpha' }, leads: { bravo: ['charlie'], charlie: ['delta'] } });
     assert.deepEqual(
       issues.map((issue) => `${issue.path}: ${issue.message}`),
-      [
-        'leads.alpha: is the lead, which leads every session no sub-lead lists; list sub-leads only',
-        'leads.zulu: is not one of the sessions',
-        'leads.bravo: "alpha" is the lead, which no one leads',
-        'leads.bravo: "bravo" is the sub-lead itself',
-        'leads.bravo: "zulu" is not one of the sessions',
-        'leads.delta: "charlie" is already led by bravo; a session has one leader',
-        'leads.delta: lists no member; a sub-lead leads at least one session',
-        'leads.echo: lists no member; a sub-lead leads at least one session',
-      ],
+      ['leads: sub-leads are gone: move each group (bravo, charlie) to a child team with `teamrig team split <team> --lead <id> --sessions <id,id>`, then drop leads'],
     );
-    assert.deepEqual(config.leads, { bravo: ['charlie'] });
-  });
-
-  it('refuses a sub-lead that leads itself through its members, which breaks the cycle', () => {
-    const { config, issues } = parseConfig({
-      sessions: ['alpha', 'bravo', 'charlie', 'delta'],
-      roles: { lead: 'alpha' },
-      leads: { bravo: ['charlie'], charlie: ['delta'], delta: ['bravo'] },
-    });
-    assert.deepEqual(
-      issues.map((issue) => `${issue.path}: ${issue.message}`),
-      ['leads.bravo: leads itself through its members; a sub-lead cannot be under its own group'],
-    );
-    assert.deepEqual(config.leads, { charlie: ['delta'], delta: ['bravo'] });
   });
 
   it('keeps the launch settings of each session and defaults to none', () => {

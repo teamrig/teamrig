@@ -86,20 +86,16 @@ describe('wouldPark', () => {
 });
 
 describe('isUntriaged', () => {
-  const LEADERS = new LeadTree(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'], leads: { alpha: ['bravo'] } }));
+  const LEADERS = new LeadTree(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'] }));
 
   it("reads a task with no class as untriaged when a session added it for itself or a peer", () => {
     assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'bravo' }), LEADERS), true);
     assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'charlie' }), LEADERS), true);
   });
 
-  it('takes the add of any leader on the owner\'s chain as the triage', () => {
-    assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'alpha' }), LEADERS), false, 'its sub-lead');
-    assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'lead' }), LEADERS), false, 'the lead over its sub-lead');
-  });
-
-  it('reads a member\'s add on its leader\'s task as untriaged: the chain runs up from the owner only', () => {
-    assert.equal(isUntriaged(testTask({ owner: 'alpha', createdBy: 'bravo' }), LEADERS), true);
+  it("takes the lead's add as the triage, and a peer's not", () => {
+    assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'lead' }), LEADERS), false);
+    assert.equal(isUntriaged(testTask({ owner: 'bravo', createdBy: 'alpha' }), LEADERS), true);
   });
 
   it("takes the lead's add on its own task as the triage, and no one else's on it", () => {

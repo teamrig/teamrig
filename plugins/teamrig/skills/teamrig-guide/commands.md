@@ -2162,64 +2162,6 @@ RETIRED importer (name shop-importer, hired): its job is done; its open task(s) 
 NEXT its records stay readable by its id (teamrig list --session importer --all); close its tab if it is open
 ```
 
-### teamrig promote
-
-Makes a session a sub-lead (`teamrig promote <id|name> --members <a,b>`): the lead, or a sub-lead, picks one of
-the sessions it leads directly and puts others it leads directly under it. The team's `leads` config lists each
-sub-lead's members; the lead leads every session no list names, and a sub-lead may list sub-leads, at any depth.
-A member's decision and approval waits may then name its sub-lead, who answers them with `teamrig approve`; the
-lead above still may. The sub-lead also sets its group's work order (`teamrig update`: owner within the group,
-priority, due, week, `--after`, size) and sees their tasks' flags at `teamrig start`. Without `--yes` it shows the change and writes nothing. With it, the old config goes into
-the backups folder, `leads` is rewritten, and the sub-lead gets one inbox line.
-
-- It refuses unless the caller leads the sub-lead and every member directly.
-- It refuses a member listed twice, or the sub-lead among its own members.
-- A sub-lead promoted again keeps its members and adds the new ones; a member that leads others brings its
-  group along.
-
-Flags:
-
-- `--session <id|name>`: the caller, the lead or a sub-lead.
-- `--members <a,b>`: the sessions the sub-lead will lead.
-- `--yes`: write it.
-
-Example:
-
-```sh
-teamrig promote backend --members importer,search --session lead --yes
-```
-
-Output:
-
-```text
-PROMOTED backend leads importer, search, under lead; the old config is at ~/.teamrig/teams/shop/backups/config.promote.json
-NOTE backend has an inbox line: lead made you a sub-lead over importer, search: their decision and approval waits may come to you, answered with teamrig approve
-```
-
-### teamrig demote
-
-Takes a sub-lead's whole group back (`teamrig demote <id|name>`): only its own leader may. Its members become the
-caller's (the lead lists no one, so they simply leave `leads`). Without `--yes` it shows the change; with it, the
-old config goes into the backups folder and the sub-lead gets one inbox line.
-
-Flags:
-
-- `--session <id|name>`: the sub-lead's own leader.
-- `--yes`: write it.
-
-Example:
-
-```sh
-teamrig demote backend --session lead --yes
-```
-
-Output:
-
-```text
-DEMOTED backend leads no one; importer, search go back to lead; the old config is at ~/.teamrig/teams/shop/backups/config.demote.json
-NOTE backend has an inbox line: lead took back the sessions you led (importer, search); you lead no one now
-```
-
 ### teamrig rules
 
 Prints the team rules and who the session is, exactly as a session start injects them. Run it when you did
@@ -3738,8 +3680,8 @@ read warn and use the default for each bad field, and commands that write refuse
 
 Lists every key of the team config, or with `<key>` those at and under it (`messages`, `messages.maxLines`): its
 value as the team's file holds it, or its default when unset, the default beside a changed one, and why a key is
-read-only. The roster (`team`, `sessions`, `names`, `leads`, `roles`) changes only through hire, retire, rename,
-promote and demote; `configVersion` only through `config migrate`; maps and lists of records only in config.json or
+read-only. The roster (`team`, `sessions`, `names`, `roles`) changes only through hire, retire and rename;
+`configVersion` only through `config migrate`; maps and lists of records only in config.json or
 their own command; and the budget, `focus.allocation`, permissions, `ownerGates`, `leadBoundary`, `exec`,
 `readonlyShell` and every guard are owner gates the owner decides. A value `config validate` finds wrong is named
 with its problem, read as its default meanwhile.

@@ -52,16 +52,15 @@ describe('holdClassOf', () => {
 });
 
 describe('reviewRoute', () => {
-  const tree = new LeadTree(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'security'], leads: { alpha: ['bravo'] } }));
+  const tree = new LeadTree(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'security'] }));
   const roles = { securityReviewer: 'security' };
 
-  it("routes a security hold to the reviewer, with the session's nearest leader as its fallback", () => {
-    assert.deepEqual(reviewRoute('security', 'bravo', tree, roles), { kind: 'route', who: 'security', fallback: 'alpha' });
-    assert.deepEqual(reviewRoute('security', 'alpha', tree, roles), { kind: 'route', who: 'security', fallback: 'lead' });
+  it('routes a security hold to the reviewer, with the lead as its fallback', () => {
+    assert.deepEqual(reviewRoute('security', 'bravo', tree, roles), { kind: 'route', who: 'security', fallback: 'lead' });
   });
 
-  it("routes a leader hold to the session's nearest leader, without a fallback", () => {
-    assert.deepEqual(reviewRoute('leader', 'bravo', tree, roles), { kind: 'route', who: 'alpha', fallback: undefined });
+  it('routes a leader hold to the lead, without a fallback', () => {
+    assert.deepEqual(reviewRoute('leader', 'bravo', tree, roles), { kind: 'route', who: 'lead', fallback: undefined });
   });
 
   it("never routes a hold to its own session: the reviewer's change goes to its leader, the lead's to security", () => {
@@ -71,7 +70,7 @@ describe('reviewRoute', () => {
   });
 
   it('goes to a leader when the team has no security reviewer, and says so when no one else is left', () => {
-    assert.deepEqual(reviewRoute('security', 'bravo', tree, {}), { kind: 'route', who: 'alpha', fallback: undefined });
+    assert.deepEqual(reviewRoute('security', 'bravo', tree, {}), { kind: 'route', who: 'lead', fallback: undefined });
     const none = reviewRoute('leader', 'lead', tree, {});
     assert.equal(none.kind, 'none');
     assert.match(none.kind === 'none' ? none.reason : '', /no one but lead could review its change: set roles\.securityReviewer/);

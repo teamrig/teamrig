@@ -17,7 +17,7 @@ export interface ConfigWriter {
 
 /**
  * The team config's one lock. A command that changes the config reads the file and writes it inside `run`, the only
- * place a `ConfigWriter` comes from, so a hire, retire, promote, budget setup, rules change, migration or split never
+ * place a `ConfigWriter` comes from, so a hire, retire, budget setup, rules change, migration or split never
  * writes over another's change made between its read and its write.
  */
 export class ConfigLock {

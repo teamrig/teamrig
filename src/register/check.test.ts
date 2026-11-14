@@ -215,15 +215,13 @@ describe('leaderWaitFlags', () => {
     ]);
   });
 
-  it('raises one flag on a task held on two leaders, naming both', () => {
-    const tree = new LeadTree(testConfig({ leads: { bravo: ['alpha'] } }));
-    const both = testTask({ status: 'waiting', workClass: 'Roadmap', waits: [{ kind: 'approval', who: 'bravo' }, { kind: 'decision', who: 'lead' }], waitsAt: askedAt });
-    assert.deepEqual(details([both], tree), ['ROADMAP-WAITS-ON-LEAD T1: approval:bravo, decision:lead unanswered for 90 min, past the 60 min limit: answer it first']);
+  it('raises one flag on a task held on two waits on the lead, naming both', () => {
+    const both = testTask({ status: 'waiting', workClass: 'Roadmap', waits: [{ kind: 'approval', who: 'lead' }, { kind: 'decision', who: 'lead' }], waitsAt: askedAt });
+    assert.deepEqual(details([both]), ['ROADMAP-WAITS-ON-LEAD T1: approval:lead, decision:lead unanswered for 90 min, past the 60 min limit: answer it first']);
   });
 
-  it("reads the leaders of each task's own owner, so a wait on a leader of someone else is no hold", () => {
-    const tree = new LeadTree(testConfig({ leads: { bravo: ['alpha'] } }));
-    assert.deepEqual(details([held('T1', 'bravo'), held('T2', 'bravo', 'charlie')], tree).map((line) => line.slice(0, 25)), ['ROADMAP-WAITS-ON-LEAD T1:']);
+  it('holds no task on a wait on a session other than the lead', () => {
+    assert.deepEqual(details([held('T1', 'lead'), held('T2', 'bravo')]).map((line) => line.slice(0, 25)), ['ROADMAP-WAITS-ON-LEAD T1:']);
   });
 
   it('flags nothing inside the limit', () => {

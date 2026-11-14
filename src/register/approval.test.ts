@@ -22,16 +22,16 @@ describe('answerTo (T996)', () => {
 });
 
 describe('waitAnswerersOf (T828)', () => {
-  const tree = new LeadTree(testConfig({ leads: { alpha: ['bravo'] } }));
+  const tree = new LeadTree(testConfig());
 
   it("adds the security reviewer to an approval's answerers, never to a decision's", () => {
-    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security' }, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead', 'security'] });
+    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security' }, 'bravo'), { decision: ['lead'], approval: ['lead', 'security'] });
   });
 
-  it("leaves the leaders alone with no reviewer, on the reviewer's own task, or when the reviewer is a leader already", () => {
-    assert.deepEqual(waitAnswerersOf(tree, {}, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead'] });
+  it("leaves the lead alone with no reviewer, on the reviewer's own task, or when the reviewer is the lead", () => {
+    assert.deepEqual(waitAnswerersOf(tree, {}, 'bravo'), { decision: ['lead'], approval: ['lead'] });
     assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security' }, 'security'), { decision: ['lead'], approval: ['lead'] });
-    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'alpha' }, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead'] });
+    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'lead' }, 'bravo'), { decision: ['lead'], approval: ['lead'] });
   });
 });
 

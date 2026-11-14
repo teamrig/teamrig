@@ -60,8 +60,8 @@ To update an installed teamrig, follow
   numbering across the tree, so a wait or an `after` may name another team's task; work crosses teams as a task
   (`teamrig add --team <team>`), a note as `<team>/<id>`. A child team's sessions also start with the `rules.md` of
   each team above, and a role it leaves to a team above names that holder (`root/security`). `teamrig team split`
-  moves sessions into a new child team; `teamrig team tree` prints the tree. A sub-lead group inside one team
-  (`teamrig promote`) still works, but a group with its own lead belongs in a child team.
+  moves sessions into a new child team; `teamrig team tree` prints the tree. A group with its own lead is a child
+  team; inside one team, the lead leads every session.
 
 ## Which session you are
 

@@ -84,14 +84,12 @@ describe('the read entry', () => {
     assert.deepEqual(roster.ids, ['lead', 'alpha']);
   });
 
-  it("finds a session's leader and a leader's group from the config's lead tree", () => {
-    const config = read.parseConfigText(
-      JSON.stringify({ configVersion: read.CONFIG_VERSION, sessions: ['lead', 'sub', 'alpha', 'beta'], roles: { lead: 'lead' }, leads: { sub: ['alpha'] } }),
-    );
+  it("finds a session's leader and the lead's members from the config's lead tree", () => {
+    const config = read.parseConfigText(JSON.stringify({ configVersion: read.CONFIG_VERSION, sessions: ['lead', 'alpha', 'beta'], roles: { lead: 'lead' } }));
     assert.ok(config.status === 'loaded');
     const tree = new read.LeadTree(config.config);
-    assert.deepEqual(['alpha', 'beta', 'sub', 'lead'].map((id) => tree.leaderOf(id)), ['sub', 'lead', 'lead', undefined]);
-    assert.deepEqual([tree.membersOf('sub'), tree.membersOf('lead'), tree.groupOf('lead')], [['alpha'], ['sub', 'beta'], ['sub', 'alpha', 'beta']]);
+    assert.deepEqual(['alpha', 'beta', 'lead'].map((id) => tree.leaderOf(id)), ['lead', 'lead', undefined]);
+    assert.deepEqual([tree.membersOf('alpha'), tree.membersOf('lead')], [[], ['alpha', 'beta']]);
   });
 
   it('judges a row by the park and untriaged rules the lists use', () => {

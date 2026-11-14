@@ -34,7 +34,6 @@ const ROSTER_KEYS = new Set(['sessions', 'roles']);
 const EVERY_KEY = {
   ...ROSTER,
   sessions: ['alpha', 'bravo', 'charlie'],
-  leads: { bravo: ['charlie'] },
   team: { id: 'web', parent: 'app' },
   names: { alpha: 'captain' },
   ruleConflicts: [{ file: '~/CLAUDE.md', text: 'Commit straight to main.', rule: 'worktrees', wins: 'local', reason: 'solo repo' }],

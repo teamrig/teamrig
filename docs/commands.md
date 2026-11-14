@@ -194,8 +194,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION)
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
       [--prepares <goal>:<slice>|none] [--note ..]
       the lead may change owner, priority, due, week, after, size, type, class, critical and pin on any task
-      --pin: puts the task above every other task on its owner's list, set by the owner's leaders (the lead
-      on its own tasks too); it moves the owner's earlier pin, and handing the task on clears it
+      --pin: puts the task above every other task on its owner's list, set by the lead (on its own tasks
+      too); it moves the owner's earlier pin, and handing the task on clears it
       --prepares <goal>:<slice>|none: marks a design, study or prep plan for that slice of a goal, set only by
       a leader above the owner (the lead on its own tasks too); while the slice is the goal's open one or the
       next, the task runs outside the slice cap; none clears it
@@ -218,10 +218,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION)
   sweep apply <file> [--apply]   writes the class, goal and size of each row whose confirm is yes, as its task's
       owner or a leader over it, a size only when it differs from the row's proposedSize: a dry run names each
       row's fate, --apply writes; never deletes, never parks
-  approve <id> --note "<what you checked, or why not>" [--decline]   a leader above the task's owner (the
-      lead or a sub-lead), or roles.securityReviewer on a task not its own: answers a task waiting on
-      its approval (approval:<lead>); its owner gets an inbox line, which wakes its idle tab, to push or
-      merge (or to fix the note's point and ask again), and check flags the approved task READY
+  approve <id> --note "<what you checked, or why not>" [--decline]   the lead, or
+      roles.securityReviewer on a task not its own: answers a task waiting on its approval
+      (approval:<lead>); its owner gets an inbox line, which wakes its idle tab, to push or merge (or to fix
+      the note's point and ask again), and check flags the approved task READY
   approve <team>/<id> --note .. [--decline]   the lead of a team's parent team answers a task of that
       team's lead waiting on its approval (approval:app/lead), named as its inbox line prints it: web/T3
   audit T<n> --file <path> [--note "<what you checked>"] [--team <child>]   the security reviewer
@@ -318,11 +318,6 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION)
       (the lead; never the session itself) takes a session the team no longer needs off the team; its open
       tasks go to --to, and it needs its handover unless --no-handover; its tasks and inbox stay readable;
       without --yes it shows the retire and writes nothing
-  promote <id|name> --members <a,b> [--yes]
-      (the lead or a sub-lead) makes one of the sessions it leads directly the sub-lead of others it leads
-      directly: their decision and approval waits may go to it, and it approves them; without --yes it shows
-      the change and writes nothing
-  demote <id|name> [--yes]     (its own leader) takes a sub-lead's members back; without --yes it shows it
   refresh <id|name>            the lead asks a session to write its handover when it next sets a task done
   refresh --ready              the handover the turn end asked to fix is complete as it is (the turn end takes one with both sections itself)
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;

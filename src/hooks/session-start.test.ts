@@ -41,16 +41,6 @@ function context(overrides: Partial<SessionStartInput> = {}): string {
 }
 
 describe('sessionStartContext', () => {
-  it("tells a sub-lead's member to message its own leader, and the sub-lead the lead", () => {
-    const load = loaded({ config: testConfig({ names: { lead: 'captain', bravo: 'app-bravo' }, leads: { bravo: ['alpha'] } }) });
-    const member = context({ load });
-    assert.match(member, /Message your leader as `app-bravo`, who takes to the lead what it cannot settle\.\n/);
-    assert.ok(!member.includes('Message the lead as'), member);
-    assert.match(context({ load, session: 'bravo' }), /Message the lead as `captain`\.\n/);
-    // Rule 3 names SendMessage; the lead is only never told a leader to message.
-    assert.doesNotMatch(context({ load, session: 'lead' }), /\bMessage (the lead|your leader)\b/, 'the lead messages no leader');
-  });
-
   it('sends a session to the inbox, not to messages, when its leader has a name Claude Code reserves', () => {
     const renames = [renameOf('lead', 'captain', 'team-lead')];
     const inbox = ' Write to the lead with `teamrig inbox add --to lead --text "..."`: its name `team-lead` is a name Claude Code keeps for itself, so a message sent to it never reaches a session.\n';
@@ -59,9 +49,6 @@ describe('sessionStartContext', () => {
       assert.ok(text.includes(inbox), text);
       assert.ok(!text.includes('Message the lead as'), text);
     }
-    const load = loaded({ config: testConfig({ names: { lead: 'captain', bravo: 'app-bravo' }, leads: { bravo: ['alpha'] } }) });
-    const sub = context({ load, renames: [renameOf('bravo', 'app-bravo', 'main')] });
-    assert.match(sub, / Write to your leader, who takes to the lead what it cannot settle, with `teamrig inbox add --to bravo --text "\.\.\."`: its name `main` is a name Claude Code keeps/);
   });
 
   it('gives the core rules, then who the session is and how to reach the lead', () => {

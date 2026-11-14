@@ -17,7 +17,6 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `team` | [object](#team) |  | Where the team sits in a tree of teams. A team with no parent is the root of its own tree. teamrig team create writes it. |
 | `sessions` (required) | array (unique) of [session name](#shared-types) |  | Every session id on the team, the lead included. Ids key every file and record, so they never change; a rename only appends to the team's rename log. |
 | `names` | map from [session name](#shared-types) to string (matching `^[a-z][a-z0-9-]{0,64}$`) | `{}` | Each session's first display and Claude Code session name, by id. A session not listed is named \<team>-\<id>. A name must be unique, never another session's id and never one Claude Code keeps for itself (main, team-lead, user, system), since a message to one never reaches a session. A rename in the team's rename log wins over it, and it keeps finding the session. |
-| `leads` | map from [session name](#shared-types) to array (at least 1 item, unique) of [session name](#shared-types) | `{}` | Each sub-lead's members, by id: a sub-lead leads the sessions it lists, and roles.lead every session no sub-lead lists; a sub-lead may list sub-leads, at any depth. A session has one leader, roles.lead is never a member, and no sub-lead leads itself. Written by teamrig promote and demote. |
 | `roles` (required) | [object](#roles) |  | Each role's session, by id. |
 | `ownerGates` | array (at most 8 items) of string (1 to 60 characters, matching `^[^\r\n]+$`) | `["destructive data operations","product and design decisions","permissions","budget","resource changes"]` | Decision areas only the human owner can approve; silence never counts as consent for them. |
 | `securityGates` | array (at most 8 items) of string (1 to 60 characters, matching `^[^\r\n]+$`) | `["permissions"]` | The owner gates (each one of ownerGates) whose cards reach the owner only with the security reviewer's verdict on the card, recorded by teamrig audit --verdict. A card edited after the verdict waits for a new one. With the key absent, permissions where ownerGates names it. |
@@ -217,7 +216,7 @@ The team's review gate entries, read on top of teamrig's generic security list (
 | --- | --- | --- | --- |
 | `glob` (required) | string (1 to 200 characters) |  | The paths the entry covers: with no slash a file name at any depth, with one a path from the repo root; case is ignored. |
 | `mode` | one of `"always"`, `"check"` | `"always"` | always holds a change touching the paths for the class's reviewer; check runs the repo's reviewCheck first, which clears the change or holds it. |
-| `class` | one of `"security"`, `"leader"` | `"security"` | Who reviews a held change: security (roles.securityReviewer), or leader (the session's lead or sub-lead). |
+| `class` | one of `"security"`, `"leader"` | `"security"` | Who reviews a held change: security (roles.securityReviewer), or leader (the lead). |
 
 ## `exec`
 

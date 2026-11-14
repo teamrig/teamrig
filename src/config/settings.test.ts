@@ -110,7 +110,7 @@ describe('settingRows', () => {
 
   it('keeps the roster and the format version read-only, naming what changes them', () => {
     for (const path of ['sessions', 'roles.lead']) {
-      assert.deepEqual([rowAt(rows, path).editable, rowAt(rows, path).readOnly], [false, 'the roster: changed only by teamrig hire, retire, rename, promote and demote']);
+      assert.deepEqual([rowAt(rows, path).editable, rowAt(rows, path).readOnly], [false, 'the roster: changed only by teamrig hire, retire and rename']);
     }
     assert.deepEqual(rowAt(rows, 'roles.lead').meaning, 'The lead.');
     assert.equal(rowAt(rows, 'roles.lead').type, 'string');

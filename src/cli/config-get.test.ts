@@ -42,7 +42,7 @@ describe('config get', () => {
     assert.equal(result.code, EXIT.ok);
     assert.ok(result.stdout.includes('messages.maxLines 12  (default 10)'));
     assert.ok(result.stdout.includes('messages.coldAfterMinutes 60'));
-    assert.ok(result.stdout.includes('sessions ["lead","alpha","bravo"]  (read-only: the roster: changed only by teamrig hire, retire, rename, promote and demote)'));
+    assert.ok(result.stdout.includes('sessions ["lead","alpha","bravo"]  (read-only: the roster: changed only by teamrig hire, retire and rename)'));
     assert.ok(result.stdout.some((line) => /^budget\.targetPct .*\(.*read-only: owner gate: budget\)$/.test(line)));
   });
 

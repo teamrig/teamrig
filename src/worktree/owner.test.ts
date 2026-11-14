@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { LeadTree } from '../config/lead-tree.ts';
 import { branchTaskOf, removalRefusal, type WorktreeRemover } from './owner.ts';
 
-/** The lead over sub-lead `web`, who leads `ui`; `api` answers to the lead. */
-const TREE = new LeadTree({ sessions: ['lead', 'web', 'ui', 'api'], roles: { lead: 'lead' }, leads: { web: ['ui'] } });
+/** The lead over `web`, `ui` and `api`. */
+const TREE = new LeadTree({ sessions: ['lead', 'web', 'ui', 'api'], roles: { lead: 'lead' } });
 const OWNERS: ReadonlyMap<string, string> = new Map([
   ['T4', 'ui'],
   ['T5', 'api'],
@@ -46,15 +46,15 @@ describe('removalRefusal', () => {
     assert.equal(refusal('api', 't5-routes'), undefined);
   });
 
-  it('lets each leader above the owner remove it, the lead any worktree', () => {
-    assert.equal(refusal('web', 't4-parser'), undefined);
+  it('lets the lead remove any worktree', () => {
     assert.equal(refusal('lead', 't4-parser'), undefined);
     assert.equal(refusal('lead', 'scratch'), undefined);
     assert.equal(refusal('lead', undefined), undefined);
   });
 
   it("refuses another session's worktree, naming who may remove it", () => {
-    assert.equal(refusal('api', 't4-parser'), "the worktree's branch t4-parser is T4's, which ui owns: only ui or web or lead removes it");
+    assert.equal(refusal('api', 't4-parser'), "the worktree's branch t4-parser is T4's, which ui owns: only ui or lead removes it");
+    assert.equal(refusal('web', 't4-parser'), "the worktree's branch t4-parser is T4's, which ui owns: only ui or lead removes it");
     assert.equal(refusal('web', 't5-routes'), "the worktree's branch t5-routes is T5's, which api owns: only api or lead removes it");
     assert.equal(refusal('ui', 't6-plan'), "the worktree's branch t6-plan is T6's, which lead owns: only lead removes it");
   });
@@ -74,7 +74,7 @@ describe('removalRefusal', () => {
   });
 
   it('still asks the branch owner for a worktree on a branch, whatever the default branch holds', () => {
-    assert.equal(refusal('api', 't4-parser', 'origin/main'), "the worktree's branch t4-parser is T4's, which ui owns: only ui or web or lead removes it");
+    assert.equal(refusal('api', 't4-parser', 'origin/main'), "the worktree's branch t4-parser is T4's, which ui owns: only ui or lead removes it");
   });
 
   it('names the lead for an owner off the team', () => {
