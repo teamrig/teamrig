@@ -61,18 +61,6 @@ interface PastOne {
   readonly cut: boolean;
 }
 
-/** A sub-lead's group today (src/budget/parts.ts `groupPartsOf`): its sessions' use against its part of the day, and its group lift. */
-export interface GroupToday extends LiftNames {
-  /** The sub-lead's id. */
-  readonly id: string;
-  /** The sub-lead's name. */
-  readonly name: string;
-  /** The group's sessions at any depth, the sub-lead's own included. */
-  readonly sessions: readonly string[];
-  /** Its daily budget in percent of the week; undefined when unknown. */
-  readonly budgetPct: number | undefined;
-  readonly lift: Lift | undefined;
-}
 
 export interface OutsideToday {
   readonly w: number;
@@ -102,8 +90,6 @@ export interface TodayReport {
   readonly teamPct: number | undefined;
   /** Every team session, in roster order. */
   readonly sessions: readonly SessionToday[];
-  /** Each sub-lead's group, each before the groups under it; none while no sub-lead leads. */
-  readonly groups: readonly GroupToday[];
   /** The team's spend by work class (`classRowsOf`); undefined when the register cannot be read, which prints no block. */
   readonly classes: readonly ClassRow[] | undefined;
   /**
@@ -250,7 +236,7 @@ function indented(lines: readonly string[]): string[] {
  * account with its part of the account's day; W and calls alone while the week's W is unknown.
  */
 function todayTable(report: TodayReport, teamW: number, teamCalls: number): string[] {
-  const { week, sessions, groups, peers, all } = report;
+  const { week, sessions, peers, all } = report;
   const row = (who: string, w: number, calls: number, budgetPct: number | undefined, mark: string): string[] => {
     const use = [formatW(w), formatCount(calls)];
     const used = todayPctOf(w, week);
@@ -258,17 +244,11 @@ function todayTable(report: TodayReport, teamW: number, teamCalls: number): stri
   };
   const { rows, notes } = sessionRows(sessions, all, 'today', (session) => row(session.name, session.w, session.calls, session.budgetPct, budgetMarkOf(session.lift, session.inBurst !== undefined, session.paused)));
   const team = row('the team', teamW, teamCalls, report.teamPct, '');
-  const groupRows = groups.map((group) => {
-    const members = sessions.filter((session) => group.sessions.includes(session.id));
-    const w = members.reduce((sum, session) => sum + session.w, 0);
-    const calls = members.reduce((sum, session) => sum + session.calls, 0);
-    return row(`group ${group.name} (${group.sessions.length})`, w, calls, group.budgetPct, budgetMarkOf(group.lift, false, false));
-  });
   const peerRows = peers.map((peer) => row(`team ${peer.team} (${peer.sessions})`, peer.w, peer.calls, peer.budgetPct, ''));
   if (week.wPerPct === undefined) {
-    return ['Today (UTC day):', ...indented([...aligned([['session', 'W', 'calls'], team, ...groupRows, ...rows, ...peerRows]), ...notes])];
+    return ['Today (UTC day):', ...indented([...aligned([['session', 'W', 'calls'], team, ...rows, ...peerRows]), ...notes])];
   }
-  const table = aligned([['session', 'used', 'budget', '', 'W', 'calls'], team, ...groupRows, ...rows, ...peerRows], ['left', 'right', 'right', 'left', 'right', 'right']);
+  const table = aligned([['session', 'used', 'budget', '', 'W', 'calls'], team, ...rows, ...peerRows], ['left', 'right', 'right', 'left', 'right', 'right']);
   return ['Today (UTC day), used and daily budget in % of the week:', ...indented([...table, ...notes])];
 }
 
@@ -301,38 +281,29 @@ function classLines(report: TodayReport): string[] {
 }
 
 /**
- * The lifts in force as one block: the terms every lift shares once in its heading, then a row each, group lifts
- * first, with the budget it is a part of while the team has sub-leads, its part, the share of the week that part comes
- * to now ('-' while unknown), its end time and its stop; a lift that lasts the day ends at its UTC midnight.
+ * The lifts in force as one block: the terms every lift shares once in its heading, then a row each with its part,
+ * the share of the week that part comes to now ('-' while unknown), its end time and its stop; a lift that lasts the
+ * day ends at its UTC midnight.
  */
 function liftLines(report: TodayReport): string[] {
-  const { sessions, groups, zone } = report;
-  const lifts = [
-    ...groups.flatMap((group) => (group.lift === undefined ? [] : [{ who: `group ${group.name}`, lift: group.lift, parent: group.liftParent, weekPct: group.liftWeekPct }])),
-    ...sessions.flatMap((session) => (session.lift === undefined ? [] : [{ who: session.name, lift: session.lift, parent: session.liftParent, weekPct: session.liftWeekPct }])),
-  ];
+  const { sessions, zone } = report;
+  const lifts = sessions.flatMap((session) => (session.lift === undefined ? [] : [{ who: session.name, lift: session.lift, weekPct: session.liftWeekPct }]));
   if (lifts.length === 0) {
     return [];
   }
-  // With no sub-lead every lift is a session's part of the team's budget: no parent column, and none keeps quiet hours.
-  const nested = groups.length > 0;
-  const parentOf = (parent: string | undefined): string => (!nested ? '' : parent === undefined ? 'the team' : `group ${parent}`);
-  const rows = lifts.map(({ who, lift, parent, weekPct }) => [
+  const rows = lifts.map(({ who, lift, weekPct }) => [
     who,
-    parentOf(parent),
     `${formatPct(lift.partPct)}${lift.reserve ? ' (reserve)' : ''}`,
     weekPct === undefined ? '-' : formatPct(weekPct),
     zone.clock(new Date(lift.endsAt)),
     formatPct(lift.stopPct),
   ]);
-  const table = aligned([['session', nested ? 'of' : '', 'part', 'week now', 'until', 'stop at'], ...rows], ['left', 'left']);
+  const table = aligned([['session', 'part', 'week now', 'until', 'stop at'], ...rows], ['left']);
   const dayEnd = lifts.find(({ lift }) => isBudgetDayEnd(lift.endsAt));
   const notes = dayEnd === undefined ? [] : [`${zone.clock(new Date(dayEnd.lift.endsAt))} is the end of the budget day.`];
-  const share = 'the share of the week it comes to now beside it';
-  const terms = nested
-    ? `a part of the team's or a group's daily budget, ${share}, until its time or its stop % of the week, whichever comes first; ` +
-      "quiet hours do not apply to a session's lift, but do to a group's."
-    : `a part of the team's daily budget, ${share}, until its time or its stop % of the week, whichever comes first; quiet hours do not apply to them.`;
+  const terms =
+    "a part of the team's daily budget, the share of the week it comes to now beside it, until its time or its stop % of the week, " +
+    'whichever comes first; quiet hours do not apply to them.';
   return [`Lifts, today only: ${terms}`, ...indented([...table, ...notes])];
 }
 

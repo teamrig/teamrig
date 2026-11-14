@@ -7,14 +7,13 @@ import { fieldPaths } from '../testing/field-paths.ts';
 import { JERUSALEM } from '../testing/zone.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import {
-  activeGroupLift,
   activeLift,
   decideLift,
   LIFT_FORMAT,
   LiftLog,
   liftedLine,
   liftText,
-  parentBudgetText,
+  LIFT_PARENT_TEXT,
   parseLift,
   type Lift,
   type LiftContext,
@@ -28,9 +27,9 @@ const RESET = Date.parse('2030-01-09T01:00:00Z');
 const DAY_END = Date.parse('2030-01-09T00:00:00Z');
 const MINUTE = 60_000;
 
-const TEAM = parentBudgetText(undefined);
-const REQUEST: LiftRequest = { session: 'alpha', group: false, partPct: 40, stopPct: 97, until: undefined, reserve: false, reason: 'release week', by: 'lead', now: NOW };
-const CONTEXT: LiftContext = { usedPct: 57, reset: RESET, limits: DEFAULT_BUDGET.lift, liftedPct: 0, parent: TEAM, beyondParent: undefined, zone: TimeZone.UTC };
+const TEAM = LIFT_PARENT_TEXT;
+const REQUEST: LiftRequest = { session: 'alpha', partPct: 40, stopPct: 97, until: undefined, reserve: false, reason: 'release week', by: 'lead', now: NOW };
+const CONTEXT: LiftContext = { usedPct: 57, reset: RESET, limits: DEFAULT_BUDGET.lift, liftedPct: 0, parent: TEAM, zone: TimeZone.UTC };
 
 function refusal(decision: LiftDecision): string {
   assert.equal(decision.kind, 'refused');
@@ -52,10 +51,6 @@ function lift(overrides: Partial<Lift> = {}): Lift {
 describe('decideLift', () => {
   it('lifts until the end of the day, exempt from quiet hours', () => {
     assert.deepEqual(given(decideLift(REQUEST, CONTEXT)), lift());
-  });
-
-  it('lifts a group as a share: quiet hours still apply to its sessions', () => {
-    assert.deepEqual(given(decideLift({ ...REQUEST, group: true }, CONTEXT)), lift({ group: true, quietHoursExempt: false }));
   });
 
   it("lifts a session of a team below without exempting it from quiet hours, which its own team's log rules", () => {
@@ -81,14 +76,6 @@ describe('decideLift', () => {
       /other lifts in force give 70\.0% of the team's daily budget, so --part 40 would give more than all of it; the most this lift may give is 30\.0%/,
     );
     assert.equal(given(decideLift({ ...REQUEST, partPct: 30 }, { ...CONTEXT, liftedPct: 70 })).partPct, 30);
-  });
-
-  it("names a group parent in the refusal, followed by what to ask the leader above", () => {
-    const inGroup: LiftContext = { ...CONTEXT, liftedPct: 70, parent: parentBudgetText('tr'), beyondParent: 'Ask lead for a group lift.' };
-    assert.match(
-      refusal(decideLift(REQUEST, inGroup)),
-      /other lifts in force give 70\.0% of tr's group's daily budget, so --part 40 would give more than all of it; the most this lift may give is 30\.0%\. Ask lead for a group lift\.$/,
-    );
   });
 
   it('refuses a passed --until, an unknown week and a week already at the stop %', () => {
@@ -123,13 +110,11 @@ describe('activeLift', () => {
     assert.equal(activeLift(lifts, 'charlie', NOW, 57), undefined);
   });
 
-  it("keeps a sub-lead's own lift apart from its group's", () => {
+  it("never counts an old lift of a sub-lead's group (before T1320) as the session's own", () => {
     const own = lift({ partPct: 20, at: NOW - 2 * 60 * MINUTE });
     const group = lift({ group: true, partPct: 50, at: NOW - 60 * MINUTE });
     assert.equal(activeLift([own, group], 'alpha', NOW, 57), own);
-    assert.equal(activeGroupLift([own, group], 'alpha', NOW, 57), group);
-    assert.equal(activeGroupLift([own], 'alpha', NOW, 57), undefined);
-    assert.equal(activeGroupLift([group], 'alpha', NOW, 97), undefined);
+    assert.equal(activeLift([group], 'alpha', NOW, 57), undefined);
   });
 });
 
@@ -143,14 +128,6 @@ describe('liftText', () => {
       liftText(lift({ partPct: 100, reserve: true, endsAt: RESET - 15 * MINUTE, stopPct: 99.9 }), 'alpha', TEAM, undefined, TimeZone.UTC),
       "alpha to 100.0% of the team's daily budget today from the reserve until 00:45 UTC or 99.9% of the week, whichever comes first; quiet hours do not apply to it.",
     );
-  });
-
-  it("names a group and a group parent; a group lift leaves quiet hours in place", () => {
-    assert.equal(
-      liftText(lift({ group: true, quietHoursExempt: false }), 'alpha', TEAM, undefined, TimeZone.UTC),
-      "alpha's group to 40.0% of the team's daily budget today until 00:00 UTC (the end of the budget day) or 97.0% of the week, whichever comes first.",
-    );
-    assert.match(liftText(lift(), 'bravo', parentBudgetText('alpha'), undefined, TimeZone.UTC), /^bravo to 40\.0% of alpha's group's daily budget today until /);
   });
 
   it('gives the share of the week its part comes to now right after the budget it is a part of', () => {
@@ -176,13 +153,13 @@ describe('liftText', () => {
 describe('liftedLine', () => {
   it('names the leader that lifted the session, the budget the lift is a part of and the share of the week it comes to', () => {
     assert.match(
-      liftedLine(lift({ by: 'bravo' }), 'charlie', { liftBy: 'app-bravo', liftParent: 'app-bravo', liftWeekPct: 4.1 }, TimeZone.UTC),
-      /^Budget: app-bravo lifted charlie to 40\.0% of app-bravo's group's daily budget \(4\.1% of the week now\) today /,
+      liftedLine(lift({ by: 'bravo' }), 'charlie', { liftBy: 'app-bravo', liftWeekPct: 4.1 }, TimeZone.UTC),
+      /^Budget: app-bravo lifted charlie to 40\.0% of the team's daily budget \(4\.1% of the week now\) today /,
     );
   });
 
   it('names the leader by its id when its name is not known', () => {
-    assert.match(liftedLine(lift({ by: 'bravo' }), 'charlie', { liftBy: undefined, liftParent: undefined, liftWeekPct: undefined }, TimeZone.UTC), /^Budget: bravo lifted charlie to 40\.0% of the team's daily budget today /);
+    assert.match(liftedLine(lift({ by: 'bravo' }), 'charlie', { liftBy: undefined, liftWeekPct: undefined }, TimeZone.UTC), /^Budget: bravo lifted charlie to 40\.0% of the team's daily budget today /);
   });
 });
 

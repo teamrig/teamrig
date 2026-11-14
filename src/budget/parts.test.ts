@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_REGISTER, DEFAULT_SESSION_SHARE } from '../config/defaults.ts';
 import type { SessionBudget } from '../config/types.ts';
 import type { Lift } from './lift.ts';
-import { addedSessionPct, budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, groupPartsOf, liftPlaceOf, liftWeekPctOf, partOf, sessionWeightOf, shareOf, teamPartOf, teamShareOf, teamTreeOf, type BudgetSplit, type GroupPart, type SplitNode } from './parts.ts';
+import { addedSessionPct, budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, liftPlaceOf, liftWeekPctOf, partOf, sessionWeightOf, shareOf, teamPartOf, teamShareOf, teamTreeOf, type BudgetSplit, type SplitNode } from './parts.ts';
 import { workWeightOf, workWeights, type WorkByPriority } from './work.ts';
 
 const IDS = ['lead', 'alpha', 'bravo'];
@@ -11,7 +11,7 @@ const NOW = Date.parse('2030-01-08T10:00:00Z');
 const MINUTE = 60_000;
 
 function split(sessions: Readonly<Record<string, SessionBudget>> = {}, extra: Partial<BudgetSplit> = {}): BudgetSplit {
-  return { team: 'app', ids: IDS, sessions, leads: {}, work: new Map(), lifted: new Map(), liftedGroups: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map(), ...extra };
+  return { team: 'app', ids: IDS, sessions, work: new Map(), lifted: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map(), ...extra };
 }
 
 /** Each session's queued work as one weight, all of it at p1. */
@@ -21,12 +21,7 @@ function workOf(weights: Readonly<Record<string, number>>): ReadonlyMap<string, 
 
 /** Another team on the account, its sessions at the default share with no queued work unless `extra` says so. */
 function otherTeam(team: string, ids: readonly string[], extra: Partial<BudgetSplit> = {}): BudgetSplit {
-  return { team, ids, sessions: {}, leads: {}, work: new Map(), lifted: new Map(), liftedGroups: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map(), ...extra };
-}
-
-/** A team led as lead > alpha > bravo > charlie, with delta beside alpha under the lead, every session at weight 1. */
-function nested(extra: Partial<BudgetSplit> = {}): BudgetSplit {
-  return split({}, { ids: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], bravo: ['charlie'] }, ...extra });
+  return { team, ids, sessions: {}, work: new Map(), lifted: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map(), ...extra };
 }
 
 function lift(overrides: Partial<Lift> = {}): Lift {
@@ -125,68 +120,13 @@ describe('dailyBudgetOf', () => {
     const next = sequence(940);
     const ids = ['lead', 'alpha', 'bravo', 'charlie', 'delta'];
     for (let round = 0; round < 500; round++) {
-      const each: BudgetSplit = { team: 'app', ids, ...randomParts(next, ids, () => true), leads: {}, liftedGroups: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map() };
+      const each: BudgetSplit = { team: 'app', ids, ...randomParts(next, ids, () => true), crossLifted: new Map(), pausable: new Set(), funded: new Map() };
       const allowancePct = next() * 20;
       for (const id of ids) {
         assert.equal(dailyBudgetOf(allowancePct, id, each), flatSplitPct(allowancePct, id, each), `round ${round}, ${id}`);
         assert.equal(dailyBudgetOf(allowancePct, id, each, []), flatSplitPct(allowancePct, id, each), `round ${round}, ${id}, no other team`);
       }
     }
-  });
-
-  it('gives every session of a lead tree the flat split part while no group and no session inside one is lifted', () => {
-    const next = sequence(784);
-    const ids = ['lead', 'alpha', 'bravo', 'charlie', 'delta', 'echo'];
-    for (let round = 0; round < 500; round++) {
-      // Each session after alpha is listed, half the time, by a session before it other than the lead: trees of any depth.
-      const leads: Record<string, string[]> = {};
-      for (const [index, id] of ids.entries()) {
-        const leader = index >= 2 && next() < 0.5 ? ids[1 + Math.floor(next() * (index - 1))] : undefined;
-        if (leader !== undefined) {
-          (leads[leader] ??= []).push(id);
-        }
-      }
-      const inGroups = new Set([...Object.keys(leads), ...Object.values(leads).flat()]);
-      const each: BudgetSplit = { team: 'app', ids, ...randomParts(next, ids, (id) => !inGroups.has(id)), leads, liftedGroups: new Map(), crossLifted: new Map(), pausable: new Set(), funded: new Map() };
-      const allowancePct = next() * 20;
-      for (const id of ids) {
-        near(dailyBudgetOf(allowancePct, id, each), flatSplitPct(allowancePct, id, each), `round ${round}, ${id}, leads ${JSON.stringify(leads)}`);
-      }
-    }
-  });
-
-  it("gives a lifted group its lift's part of its parent's budget, split among its sessions, and the rest to its siblings", () => {
-    const team = split({}, { ids: ['lead', 'alpha', 'bravo', 'charlie'], leads: { alpha: ['bravo', 'charlie'] }, liftedGroups: new Map([['alpha', 60]]) });
-    // The group (alpha, bravo, charlie) takes 60% of 10; the lead the 40% left.
-    near(dailyBudgetOf(10, 'alpha', team), 2, 'alpha');
-    near(dailyBudgetOf(10, 'charlie', team), 2, 'charlie');
-    near(dailyBudgetOf(10, 'lead', team), 4, 'lead');
-  });
-
-  it("gives a session lifted inside a group its lift's part of the group's budget, not of the team's", () => {
-    const team = split({}, { ids: ['lead', 'alpha', 'bravo', 'charlie'], leads: { alpha: ['bravo', 'charlie'] }, lifted: new Map([['bravo', 50]]) });
-    // The group weighs 3 of 4: 7.5 of 10; bravo takes half of it, alpha and charlie split the rest.
-    near(dailyBudgetOf(10, 'bravo', team), 3.75, 'bravo');
-    near(dailyBudgetOf(10, 'alpha', team), 1.875, 'alpha');
-    near(dailyBudgetOf(10, 'lead', team), 2.5, 'the lead keeps its part');
-  });
-
-  it("splits a nested sub-lead's group out of the group that lists it", () => {
-    const team = nested({ liftedGroups: new Map([['bravo', 50]]) });
-    // Alpha's group weighs 3 of 5: 6 of 10; bravo's group (bravo, charlie) takes half of it, alpha's own leaf the rest.
-    near(dailyBudgetOf(10, 'alpha', team), 3, 'alpha');
-    near(dailyBudgetOf(10, 'bravo', team), 1.5, 'bravo');
-    near(dailyBudgetOf(10, 'charlie', team), 1.5, 'charlie');
-    near(dailyBudgetOf(10, 'delta', team), 2, 'delta');
-  });
-
-  it('splits the day among the sessions no sub-lead off the roster or in a loop of listings leaves out', () => {
-    const offRoster = split({}, { leads: { zulu: ['alpha'] } });
-    assert.equal(dailyBudgetOf(9, 'alpha', offRoster), 3, "an off-roster sub-lead's members are the lead's");
-    const loop = split({}, { ids: ['lead', 'alpha', 'bravo', 'charlie'], leads: { alpha: ['bravo'], bravo: ['alpha'] } });
-    assert.equal(dailyBudgetOf(10, 'alpha', loop), undefined);
-    assert.equal(dailyBudgetOf(10, 'bravo', loop), undefined);
-    assert.equal(dailyBudgetOf(10, 'charlie', loop), 5);
   });
 
   it('gives every session on the account the same part at equal weights, whichever team it is on', () => {
@@ -213,63 +153,8 @@ describe('dailyBudgetOf', () => {
     assert.equal(dailyBudgetOf(10, 'front', web, [split({}, { lifted })]), 2, 'a lift moves nothing between the teams');
   });
 
-  it("splits a team's part down its own lead tree beside another team, a group lift moving nothing between the teams", () => {
-    const app = split({}, { leads: { alpha: ['bravo'] }, liftedGroups: new Map([['alpha', 50]]) });
-    const web = otherTeam('web', ['lead', 'ops', 'front'], { leads: { ops: ['front'] } });
-    // Each team weighs 3: 6 of 12. Alpha's group takes half of app's, bravo half the group's; ops's group weighs 2 of 3.
-    near(dailyBudgetOf(12, 'bravo', app, [web]), 1.5, 'bravo');
-    near(dailyBudgetOf(12, 'lead', app, [web]), 3, 'lead');
-    near(dailyBudgetOf(12, 'front', web, [app]), 2, 'front');
-  });
-
   it('is unknown for a session only another team holds', () => {
     assert.equal(dailyBudgetOf(10, 'front', split(), [otherTeam('web', ['front'])]), undefined);
-  });
-});
-
-describe('groupPartsOf', () => {
-  /** The parts without their budgets, which `near` checks: a tree's parts can be an ulp off the sums they pin. */
-  const shapes = (parts: readonly GroupPart[]): Omit<GroupPart, 'budgetPct'>[] => parts.map(({ id, sessions, liftedPct }) => ({ id, sessions, liftedPct }));
-
-  it("gives each group, before the groups under it, its sessions' daily budgets summed while nothing is lifted", () => {
-    const team = nested();
-    const parts = groupPartsOf(10, team);
-    assert.deepEqual(shapes(parts), [
-      { id: 'alpha', sessions: ['alpha', 'bravo', 'charlie'], liftedPct: undefined },
-      { id: 'bravo', sessions: ['bravo', 'charlie'], liftedPct: undefined },
-    ]);
-    for (const part of parts) {
-      near(part.budgetPct, part.sessions.reduce((sum, id) => sum + (dailyBudgetOf(10, id, team) ?? 0), 0), part.id);
-    }
-    near(parts[0]?.budgetPct, 6, "alpha's group weighs 3 of 5");
-  });
-
-  it("gives a lifted group its lift's part of its parent's budget, and a group under it its part of that", () => {
-    const parts = groupPartsOf(10, nested({ liftedGroups: new Map([['alpha', 80]]) }));
-    assert.deepEqual(shapes(parts).map(({ id, liftedPct }) => [id, liftedPct]), [['alpha', 80], ['bravo', undefined]]);
-    near(parts[0]?.budgetPct, 8, 'alpha');
-    near(parts[1]?.budgetPct, 16 / 3, "bravo's group weighs 2 of the 3 in alpha's");
-    const inner = groupPartsOf(10, nested({ liftedGroups: new Map([['bravo', 50]]) }));
-    near(inner[0]?.budgetPct, 6, "a lift inside alpha's group leaves the group's part as it was");
-    near(inner[1]?.budgetPct, 3, 'bravo');
-  });
-
-  it("splits each group's part out of its team's part beside the other teams on the account", () => {
-    const team = nested();
-    const web = otherTeam('web', ['lead', 'front']);
-    const parts = groupPartsOf(14, team, [web]);
-    // App weighs 5 of 7: 10 of 14; alpha's group 3 of app's 5, bravo's 2.
-    near(parts[0]?.budgetPct, 6, 'alpha');
-    near(parts[1]?.budgetPct, 4, 'bravo');
-    for (const part of parts) {
-      near(part.budgetPct, part.sessions.reduce((sum, id) => sum + (dailyBudgetOf(14, id, team, [web]) ?? 0), 0), `${part.id} beside web`);
-    }
-  });
-
-  it("is unknown while the account's day is, and holds no group while no sub-lead on the roster leads", () => {
-    assert.deepEqual(groupPartsOf(undefined, nested()).map((part) => part.budgetPct), [undefined, undefined]);
-    assert.deepEqual(groupPartsOf(10, split()), []);
-    assert.deepEqual(groupPartsOf(10, split({}, { leads: { zulu: ['alpha'] } })), [], 'a sub-lead off the roster');
   });
 });
 
@@ -307,7 +192,6 @@ describe('teamShareOf', () => {
     // Weights app 3, web 3.
     assert.equal(teamShareOf(8, split(), [web]), 4);
     assert.equal(teamShareOf(8, split({}, { lifted: new Map([['alpha', 80]]) }), [web]), 4);
-    assert.equal(teamShareOf(8, split({}, { leads: { alpha: ['bravo'] }, liftedGroups: new Map([['alpha', 80]]) }), [web]), 4);
     assert.equal(teamShareOf(8, web, [split()]), 4);
   });
 
@@ -351,7 +235,7 @@ describe('partOf', () => {
 });
 
 describe('teamTreeOf', () => {
-  it("puts every session at the top while no sub-lead leads, weighed by its share times its queued work, at least 1, with its lift's part", () => {
+  it("puts every session at the top (a flat tree), weighed by its share times its queued work, at least 1, with its lift's part", () => {
     const tree = teamTreeOf(split({ alpha: { share: 2 } }, { work: workOf({ alpha: 3, bravo: 0 }), lifted: new Map([['bravo', 30]]) }));
     assert.deepEqual(tree.nodes, [
       { id: 'lead', liftedPct: undefined, weight: 1 },
@@ -359,74 +243,39 @@ describe('teamTreeOf', () => {
       { id: 'bravo', liftedPct: 30, weight: 1 },
     ]);
     assert.deepEqual([...tree.sessionPaths], [['lead', ['lead']], ['alpha', ['alpha']], ['bravo', ['bravo']]]);
-    assert.equal(tree.groupPaths.size, 0);
-  });
-
-  it("makes each sub-lead a group of its own leaf and the sessions it lists, at any depth, with its group lift's part", () => {
-    const tree = teamTreeOf(nested({ lifted: new Map([['bravo', 40]]), liftedGroups: new Map([['bravo', 25]]) }));
-    const at = (id: string, liftedPct?: number): SplitNode => ({ id, liftedPct, weight: 1 });
-    assert.deepEqual(tree.nodes, [
-      at('lead'),
-      { id: 'alpha', liftedPct: undefined, nodes: [at('alpha'), { id: 'bravo', liftedPct: 25, nodes: [at('bravo', 40), at('charlie')] }] },
-      at('delta'),
-    ]);
-    assert.deepEqual(tree.sessionPaths.get('charlie'), ['alpha', 'bravo', 'charlie']);
-    assert.deepEqual(tree.sessionPaths.get('bravo'), ['alpha', 'bravo', 'bravo']);
-    assert.deepEqual([...tree.groupPaths], [['alpha', ['alpha']], ['bravo', ['alpha', 'bravo']]]);
   });
 });
 
 describe('liftPlaceOf', () => {
-  const team = split({}, {
-    ids: ['lead', 'alpha', 'bravo', 'charlie'],
-    leads: { alpha: ['bravo', 'charlie'] },
-    lifted: new Map([['lead', 20], ['alpha', 10], ['bravo', 30]]),
-    liftedGroups: new Map([['alpha', 50]]),
+  const team = split({}, { lifted: new Map([['lead', 20], ['alpha', 10], ['bravo', 30]]) });
+
+  it("places a session's lift in the team's budget beside the other lifts there, its own not counted", () => {
+    assert.deepEqual(liftPlaceOf(team, 'lead'), { liftedPct: 40 });
+    assert.deepEqual(liftPlaceOf(team, 'alpha'), { liftedPct: 50 });
   });
 
-  it("places a session's lift in its parent's budget beside the other lifts there, its own not counted", () => {
-    assert.deepEqual(liftPlaceOf(team, 'lead', false), { parent: undefined, liftedPct: 50 });
-    assert.deepEqual(liftPlaceOf(team, 'bravo', false), { parent: 'alpha', liftedPct: 10 });
-    assert.deepEqual(liftPlaceOf(team, 'charlie', false), { parent: 'alpha', liftedPct: 40 });
-  });
-
-  it("places a sub-lead's own lift in its group's budget, and its group's lift in the budget above", () => {
-    assert.deepEqual(liftPlaceOf(team, 'alpha', false), { parent: 'alpha', liftedPct: 30 });
-    assert.deepEqual(liftPlaceOf(team, 'alpha', true), { parent: undefined, liftedPct: 20 });
-    assert.deepEqual(liftPlaceOf(nested(), 'bravo', true), { parent: 'alpha', liftedPct: 0 });
-  });
-
-  it('is undefined for a group no sub-lead leads and for a session the tree does not hold', () => {
-    assert.equal(liftPlaceOf(team, 'bravo', true), undefined);
-    assert.equal(liftPlaceOf(team, 'zulu', false), undefined);
+  it('is undefined for a session the team does not hold', () => {
+    assert.equal(liftPlaceOf(team, 'zulu'), undefined);
   });
 });
 
 describe('liftWeekPctOf', () => {
   it("gives a lift of the team's budget its part of the account's day, the daily budget the lift gives", () => {
-    assert.equal(liftWeekPctOf(10, undefined, 40, split()), 4);
-    near(liftWeekPctOf(10, undefined, 40, split()), dailyBudgetOf(10, 'alpha', split({}, { lifted: new Map([['alpha', 40]]) })) ?? 0, 'the lifted session');
+    assert.equal(liftWeekPctOf(10, 40, split()), 4);
+    near(liftWeekPctOf(10, 40, split()), dailyBudgetOf(10, 'alpha', split({}, { lifted: new Map([['alpha', 40]]) })) ?? 0, 'the lifted session');
     // Of the team's part beside web: weights 3 and 2, so 6 of 10, whatever its own lifts give out of it.
     const web = otherTeam('web', ['lead', 'front']);
-    near(liftWeekPctOf(10, undefined, 50, split({}, { lifted: new Map([['bravo', 30]]) }), [web]), 3, 'beside another team');
-  });
-
-  it("gives a lift inside a group its part of the group's budget, and a group's lift its part of the team's", () => {
-    // In nested() every session weighs 1: alpha's group holds 3 of the 5, so 6 of 10.
-    near(liftWeekPctOf(10, 'alpha', 50, nested()), 3, "a part of alpha's group's");
-    near(liftWeekPctOf(10, 'alpha', 50, nested()), dailyBudgetOf(10, 'alpha', nested({ lifted: new Map([['alpha', 50]]) })) ?? 0, 'the lifted sub-lead');
-    near(liftWeekPctOf(10, undefined, 50, nested()), groupPartsOf(10, nested({ liftedGroups: new Map([['alpha', 50]]) }))[0]?.budgetPct ?? 0, 'the lifted group');
+    near(liftWeekPctOf(10, 50, split({}, { lifted: new Map([['bravo', 30]]) }), [web]), 3, 'beside another team');
   });
 
   it("gives a cross-team lift its part of the lifting team's part: the top-up the lifted session gets", () => {
     const app = split({}, { crossLifted: new Map([['web/front', 50]]) });
     const web = otherTeam('web', ['lead', 'front']);
-    near(liftWeekPctOf(10, undefined, 50, app, [web]), (dailyBudgetOf(10, 'front', web, [app]) ?? 0) - (dailyBudgetOf(10, 'lead', web, [app]) ?? 0), "front's top-up");
+    near(liftWeekPctOf(10, 50, app, [web]), (dailyBudgetOf(10, 'front', web, [app]) ?? 0) - (dailyBudgetOf(10, 'lead', web, [app]) ?? 0), "front's top-up");
   });
 
-  it("is unknown while the account's day is, and for a group the tree does not hold", () => {
-    assert.equal(liftWeekPctOf(undefined, undefined, 40, split()), undefined);
-    assert.equal(liftWeekPctOf(10, 'zulu', 40, nested()), undefined);
+  it("is unknown while the account's day is", () => {
+    assert.equal(liftWeekPctOf(undefined, 40, split()), undefined);
   });
 });
 
@@ -466,9 +315,9 @@ describe('cross-team lifts', () => {
 
   it("places a cross-team lift at the top of the lifting team's tree, beside its other lifts there, its own not counted", () => {
     const lifting = split({}, { lifted: new Map([['alpha', 20]]), crossLifted: new Map([['web/front', 50], ['ui/pixel', 10]]) });
-    assert.deepEqual(crossLiftPlaceOf(lifting, 'web/front'), { parent: undefined, liftedPct: 30 });
-    assert.deepEqual(crossLiftPlaceOf(lifting, 'web/lead'), { parent: undefined, liftedPct: 80 });
-    assert.deepEqual(liftPlaceOf(lifting, 'bravo', false), { parent: undefined, liftedPct: 80 }, "the team's own lifts count the cross-team ones");
+    assert.deepEqual(crossLiftPlaceOf(lifting, 'web/front'), { liftedPct: 30 });
+    assert.deepEqual(crossLiftPlaceOf(lifting, 'web/lead'), { liftedPct: 80 });
+    assert.deepEqual(liftPlaceOf(lifting, 'bravo'), { liftedPct: 80 }, "the team's own lifts count the cross-team ones");
   });
 
   it('holds a cross-team lift as a top-level lifted leaf of weight 0 with no session path', () => {
@@ -492,9 +341,9 @@ describe('funded parts', () => {
 });
 
 describe('budgetSplitOf', () => {
-  const source = { team: 'app', ids: IDS, sessions: {}, leads: { alpha: ['bravo'] }, work: workOf({ bravo: 2 }), pausable: new Set(['bravo']), now: NOW };
+  const source = { team: 'app', ids: IDS, sessions: {}, work: workOf({ bravo: 2 }), pausable: new Set(['bravo']), now: NOW };
 
-  it("maps each session's and each on-roster sub-lead's group's lift in force to its part, and keeps the sessions a short day may pause", () => {
+  it("maps each session's lift in force to its part, never an old group lift (before T1320), and keeps the sessions a short day may pause", () => {
     const lifts = [
       lift(),
       lift({ session: 'bravo', partPct: 20, endsAt: NOW }),
@@ -508,11 +357,9 @@ describe('budgetSplitOf', () => {
       team: 'app',
       ids: IDS,
       sessions: {},
-      leads: { alpha: ['bravo'] },
       work: workOf({ bravo: 2 }),
       pausable: new Set(['bravo']),
       lifted: new Map([['alpha', 50]]),
-      liftedGroups: new Map([['alpha', 40]]),
       crossLifted: new Map([['web/front', 25]]),
       funded: new Map(),
     });

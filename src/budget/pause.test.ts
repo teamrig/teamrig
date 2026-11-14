@@ -18,10 +18,10 @@ function app(extra: Partial<BudgetSplit> = {}): BudgetSplit {
     team: 'app',
     ids: ['lead', 'alpha', 'bravo', 'charlie'],
     sessions: {},
-    leads: {},
+   
     work: workOf({ alpha: { 1: 5 }, bravo: { 3: 3 } }),
     lifted: new Map(),
-    liftedGroups: new Map(),
+   
     crossLifted: new Map(),
     pausable: new Set(['alpha', 'bravo', 'charlie']),
     funded: new Map(),
@@ -105,13 +105,11 @@ describe('fundByPriority', () => {
     near(dailyBudgetOf(6, 'bravo', split), 0, 'bravo, paused');
   });
 
-  it('keeps a lifted session and the sessions of a lifted group whole, and pays them first', () => {
+  it('keeps the lifted sessions whole, and pays them first', () => {
     const split = app({
       ids: ['lead', 'alpha', 'bravo', 'charlie', 'delta'],
-      leads: { alpha: ['bravo'] },
       work: workOf({ delta: { 2: 4 } }),
-      lifted: new Map([['charlie', 20]]),
-      liftedGroups: new Map([['alpha', 40]]),
+      lifted: new Map([['alpha', 20], ['bravo', 20], ['charlie', 20]]),
       pausable: new Set(['alpha', 'bravo', 'charlie', 'delta']),
     });
     assert.deepEqual(fundedOf(split, { allowancePct: 4, plannedPct: 10 }), [['delta', 0]]);

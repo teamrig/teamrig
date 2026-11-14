@@ -19,7 +19,7 @@ import { loadTree, type KitTree } from './tree.ts';
 /** The team that asks: its id, its config's budget and lead tree, and its usage folder, which keeps the other teams' work caches. */
 export interface AskingTeam {
   readonly team: string;
-  readonly config: Pick<KitConfig, 'budget' | 'leads'>;
+  readonly config: Pick<KitConfig, 'budget'>;
   readonly usageDir: string;
 }
 
@@ -54,8 +54,8 @@ export async function otherTeamsOnAccount(runtime: CliRuntime, asking: AskingTea
 
 /** The team that asks with what splits it: its roster, its roles, its lift log and each session's queued work. */
 export interface AskingRoster extends AskingTeam {
-  /** Its config's budget, lead tree and roles, whose holders a short day never pauses (src/budget/pause.ts `pausableOf`). */
-  readonly config: Pick<KitConfig, 'budget' | 'leads' | 'roles'>;
+  /** Its config's budget and roles, whose holders a short day never pauses (src/budget/pause.ts `pausableOf`). */
+  readonly config: Pick<KitConfig, 'budget' | 'roles'>;
   readonly ids: readonly string[];
   readonly liftsPath: string;
   /** Each session's queued work by priority (src/budget/work.ts `workWeights` or `cachedWork`). */
@@ -68,7 +68,7 @@ export interface AskingRoster extends AskingTeam {
  */
 export async function teamsOnAccountOf(runtime: CliRuntime, asking: AskingRoster, now: number, usedPct: number | undefined): Promise<TeamsOnAccount> {
   const { lifts } = await new LiftLog(runtime.files, asking.liftsPath).read();
-  const split = budgetSplitOf({ team: asking.team, ids: asking.ids, sessions: asking.config.budget.sessions, leads: asking.config.leads, work: asking.work, pausable: pausableOf(asking.config, asking.team, asking.ids), lifts, now, usedPct });
+  const split = budgetSplitOf({ team: asking.team, ids: asking.ids, sessions: asking.config.budget.sessions, work: asking.work, pausable: pausableOf(asking.config, asking.team, asking.ids), lifts, now, usedPct });
   return { split, others: await otherTeamsOnAccount(runtime, asking, now, usedPct) };
 }
 

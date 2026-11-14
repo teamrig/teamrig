@@ -223,7 +223,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'budget lift': {
     effect: 'write',
     flags: ['session', 'part', 'stop-pct', 'until', 'reason'],
-    switches: ['group', 'reserve'],
+    switches: ['reserve'],
     load: async () => (await budgetCommands()).lift,
   },
   'budget cut': { effect: 'write', flags: ['session', 'until', 'reason'], load: async () => (await budgetCommands()).cut },
@@ -703,15 +703,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       each session's W on that task by UTC day; a turn's W splits equally over the task ids its calls
       name: T<n> in a command, t<n>- in a branch or path, not one a teamrig text, note, proof or
       follow-up only mentions
-  budget lift <id|name|team/id> [--group] --part <pct> --stop-pct <pct> --reason "<why>"
-      [--until <HH:MM|date>] [--reserve]
-      (its leaders; a sub-lead its own too) that session's part of its parent's daily budget (the team's, or its
-      sub-lead's group's), in % of that budget, not of the week (the LIFTED line gives the week share it comes to
-      now), today, until --until, the day's end or the week reaching --stop-pct; --group: the sub-lead's whole
-      group's part; --reserve: above budget.lift.maxStopPct, in the last hour before the reset; team/id: (the lead)
-      a session of a team under its own, topped up by a part of its own team's daily budget
+  budget lift <id|name|team/id> --part <pct> --stop-pct <pct> --reason "<why>" [--until <HH:MM|date>]
+      [--reserve]
+      (the lead) that session's part of the team's daily budget, in % of that budget, not of the week (the LIFTED
+      line gives the week share it comes to now), today, until --until, the day's end or the week reaching
+      --stop-pct; --reserve: above budget.lift.maxStopPct, in the last hour before the reset; team/id: a session of
+      a team under its own, topped up by a part of its own team's daily budget
   budget cut <id|name> [--until <HH:MM|date>] --reason "<why>"
-      (its leaders; a sub-lead its own too) holds that session to its own daily budget today, until --until or
+      (the lead) holds that session to its own daily budget today, until --until or
       the day's end: past it, it is held whatever room the team has; a new lift of it ends the cut
   budget extra [--add <usd>] [--spent <usd>]
       the extra-usage pool past 100% of the week: what is left, in dollars and W; (the lead only) --add: dollars

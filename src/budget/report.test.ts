@@ -22,7 +22,6 @@ import {
   todayLines,
   W_EXPLAINED,
   WARN_ONLY_ADVICE,
-  type GroupToday,
   type OutsideToday,
   type PeerToday,
   type SessionToday,
@@ -102,7 +101,7 @@ const LIFT_BLOCK = [LIFT_HEADING, '  session   part  week now      until  stop a
 /** A session's row; a lifted one's daily budget is the share of the week its lift comes to. */
 function session(id: string, w: number, calls: number, budgetPct: number | undefined = 10.25 / 3, lift: Lift | undefined = undefined): SessionToday {
   const lifted = lift !== undefined;
-  return { id, name: id === 'lead' ? 'commander' : id, w, calls, budgetPct, lift, liftBy: lifted ? 'commander' : undefined, liftParent: undefined, liftWeekPct: lifted ? budgetPct : undefined, inBurst: undefined, paused: false, cut: false };
+  return { id, name: id === 'lead' ? 'commander' : id, w, calls, budgetPct, lift, liftBy: lifted ? 'commander' : undefined, liftWeekPct: lifted ? budgetPct : undefined, inBurst: undefined, paused: false, cut: false };
 }
 
 /** A surplus burst for alpha and bravo until the pace end, Wed 10-21 00:00 UTC, started at a 12.5% floor that is 9.5% now. */
@@ -116,7 +115,7 @@ function inBurst(id: string, w: number): SessionToday {
 const SESSIONS: readonly SessionToday[] = [session('lead', 7_500_000, 310), session('alpha', 30_000_000, 1_000), session('bravo', 0, 0, 2, LIFT)];
 const OUTSIDE: OutsideToday = { w: 1_200_000, calls: 40, sessions: 2, top: [{ title: 'release checks', w: 1_100_000 }, { title: 'Docs', w: 100_000 }] };
 const NOBODY_OUTSIDE: OutsideToday = { w: 0, calls: 0, sessions: 0, top: [] };
-const REPORT: TodayReport = { week: WEEK, fiveHour: undefined, teamPct: WEEK.allowancePct, sessions: SESSIONS, groups: [], classes: undefined, peers: [], outside: OUTSIDE, behind: [], all: false, zone: TimeZone.UTC, overAction: 'ask-lead' };
+const REPORT: TodayReport = { week: WEEK, fiveHour: undefined, teamPct: WEEK.allowancePct, sessions: SESSIONS, classes: undefined, peers: [], outside: OUTSIDE, behind: [], all: false, zone: TimeZone.UTC, overAction: 'ask-lead' };
 /** At WEEK's 7.5M W per percent: Roadmap 2% today and 10% of the week, Improvements past its 15%, a class the config dropped, and the rest. */
 const CLASSES: readonly ClassRow[] = [
   { name: 'Roadmap', todayW: 15_000_000, weekW: 75_000_000, allocationPct: 60 },
@@ -350,41 +349,6 @@ describe('todayLines', () => {
     assert.deepEqual(block, [LIFT_HEADING, '  session             part  week now      until  stop at', '  bravo    40.0% (reserve)      2.0%  23:45 UTC    97.0%']);
     assert.ok(!lines.some((line) => line.includes('end of the budget day')), lines.join('\n'));
   });
-  describe('with a sub-lead', () => {
-    /** bravo leads alpha: the lead lifted bravo's group to 60% of the team's day, and bravo lifted alpha to 50% of its group's. */
-    const GROUP_LIFT: Lift = { ...LIFT, group: true, partPct: 60, quietHoursExempt: false };
-    const ALPHA_LIFT: Lift = { ...LIFT, session: 'alpha', partPct: 50, by: 'bravo' };
-    const MEMBERS: readonly SessionToday[] = [session('lead', 7_500_000, 310), { ...session('alpha', 30_000_000, 1_000, 3, ALPHA_LIFT), liftBy: 'bravo', liftParent: 'bravo' }, session('bravo', 0, 0, 3)];
-    const GROUP: GroupToday = { id: 'bravo', name: 'bravo', sessions: ['bravo', 'alpha'], budgetPct: 6, lift: GROUP_LIFT, liftBy: 'commander', liftParent: undefined, liftWeekPct: 6 };
-
-    it("gives the group a row after the team's: its sessions' use summed against its part of the day", () => {
-      const lines = todayLines({ ...REPORT, sessions: MEMBERS, groups: [GROUP] });
-      assert.match(lines[3] ?? '', /^ {2}the team +5\.0% +10\.3% +37\.50M +1,310$/);
-      assert.match(lines[4] ?? '', /^ {2}group bravo \(2\) +4\.0% +6\.0% +\(lifted\) +30\.00M +1,000$/);
-      assert.match(lines[5] ?? '', /^ {2}alpha +4\.0% +3\.0% +\(lifted\) +30\.00M +1,000$/);
-      const unknown = todayLines({ ...REPORT, week: UNKNOWN, teamPct: undefined, sessions: MEMBERS, groups: [{ ...GROUP, budgetPct: undefined }] });
-      assert.match(unknown[4] ?? '', /^ {2}group bravo \(2\) +30\.00M +1,000$/);
-    });
-
-    it("lists the group's lift first and names the budget each lift is a part of, and that a group's keeps quiet hours", () => {
-      const lines = todayLines({ ...REPORT, sessions: MEMBERS, groups: [GROUP] });
-      const heading = lines.findIndex((line) => line.startsWith('Lifts, today only: '));
-      assert.deepEqual(lines.slice(heading, heading + 5), [
-        "Lifts, today only: a part of the team's or a group's daily budget, the share of the week it comes to now beside it, until its time or its stop % of the week, whichever comes first; " +
-          "quiet hours do not apply to a session's lift, but do to a group's.",
-        '  session      of            part  week now      until  stop at',
-        '  group bravo  the team     60.0%      6.0%  00:00 UTC    97.0%',
-        '  alpha        group bravo  50.0%      3.0%  00:00 UTC    97.0%',
-        '  00:00 UTC is the end of the budget day.',
-      ]);
-    });
-
-    it('shows a group with no lift unmarked, and no lifts block while nothing is lifted', () => {
-      const lines = todayLines({ ...REPORT, sessions: [session('lead', 0, 0), session('alpha', 7_500_000, 5), session('bravo', 0, 0)], groups: [{ ...GROUP, lift: undefined, liftBy: undefined }] });
-      assert.match(lines[4] ?? '', /^ {2}group bravo \(2\) +1\.0% +6\.0% +7\.50M +5$/);
-      assert.ok(!lines.some((line) => line.startsWith('Lifts')), lines.join('\n'));
-    });
-  });
 
   describe('with other teams on the account', () => {
     /** At WEEK's 7.5M W per percent, org's 15M W today is 2.0% of the week, against its 1.5% part of the account's day. */
@@ -531,11 +495,6 @@ describe('sessionLines', () => {
     ]);
   });
 
-  it("names the leader that lifted the session and the sub-lead's group whose daily budget the lift is a part of", () => {
-    const lines = sessionLines({ ...session('bravo', 0, 0, 2, { ...LIFT, by: 'alpha' }), liftBy: 'alpha', liftParent: 'alpha' }, state({}), WEEK, TimeZone.UTC);
-    assert.match(lines.find((line) => line.startsWith('Budget:')) ?? '', /^Budget: alpha lifted bravo to 40\.0% of alpha's group's daily budget \(2\.0% of the week now\) today /);
-  });
-
   it("gives the session's burst under its budget today", () => {
     const lines = sessionLines(inBurst('alpha', 0), state({}), WEEK, TimeZone.UTC);
     assert.equal(lines[2], 'Its daily budget today is 9.5% of the week (burst).');
@@ -544,7 +503,7 @@ describe('sessionLines', () => {
   });
 
   it('says when there is no use and no budget', () => {
-    const unbudgeted: SessionToday = { id: 'lead', name: 'commander', w: 0, calls: 0, budgetPct: undefined, lift: undefined, liftBy: undefined, liftParent: undefined, liftWeekPct: undefined, inBurst: undefined, paused: false, cut: false };
+    const unbudgeted: SessionToday = { id: 'lead', name: 'commander', w: 0, calls: 0, budgetPct: undefined, lift: undefined, liftBy: undefined, liftWeekPct: undefined, inBurst: undefined, paused: false, cut: false };
     assert.deepEqual(sessionLines(unbudgeted, state({}), UNKNOWN, TimeZone.UTC), ['commander (lead), by UTC day:', '  no use in the last 8 days', W_EXPLAINED]);
     assert.deepEqual(sessionLines(unbudgeted, state({ '2026-10-15': usage(500, 2) }), UNKNOWN, TimeZone.UTC).slice(1, 2), ['  2026-10-15  500 W in 2 calls']);
   });

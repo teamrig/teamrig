@@ -56,9 +56,9 @@ interface FundedLeaf {
 function leavesOf(splits: readonly BudgetSplit[]): FundedLeaf[] {
   const crossLifted = new Set(splits.flatMap((split) => [...split.crossLifted.keys()]));
   return splits.flatMap((split) =>
-    [...teamTreeOf(split).sessionPaths].map(([id, path]): FundedLeaf => {
+    [...teamTreeOf(split).sessionPaths.keys()].map((id): FundedLeaf => {
       const lifted =
-        split.lifted.has(id) || crossLifted.has(formatAddress({ team: split.team, id })) || path.slice(0, -1).some((group) => split.liftedGroups.has(group));
+        split.lifted.has(id) || crossLifted.has(formatAddress({ team: split.team, id }));
       return { team: split.team, id, share: shareOf(split, id), work: split.work.get(id) ?? new Map(), weight: sessionWeightOf(split, id), kept: lifted || !split.pausable.has(id) };
     }),
   );

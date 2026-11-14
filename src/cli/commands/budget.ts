@@ -22,11 +22,11 @@ import { activeCut, CutLog, cutText, decideCut, type Cut } from '../../budget/cu
 import { claudeProjectsDir } from '../../budget/discover.ts';
 import { ExtraLog, lastSpentOf, type ExtraEntry } from '../../budget/extra.ts';
 import { formatPct, formatUsd } from '../../budget/format.ts';
-import { activeGroupLift, activeLift, decideLift, LiftLog, liftText, parentBudgetText, type Lift, type LiftNames } from '../../budget/lift.ts';
+import { activeLift, decideLift, LIFT_PARENT_TEXT, LiftLog, liftText, type Lift, type LiftNames } from '../../budget/lift.ts';
 import { CATCH_UP_CHUNK_BYTES, MAX_RUNS_PER_SESSION, measure, OUTSIDE_ID, outsideUsageDir, type Measured } from '../../budget/measure.ts';
 import { paceLineOfWeek } from '../../budget/pace.ts';
 import { resetStockLines } from '../../budget/resets.ts';
-import { budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, groupPartsOf, liftPlaceOf, liftWeekPctOf, teamPartOf, type BudgetSplit, type TeamsOnAccount } from '../../budget/parts.ts';
+import { budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, liftPlaceOf, liftWeekPctOf, teamPartOf, type BudgetSplit, type TeamsOnAccount } from '../../budget/parts.ts';
 import { fundForDay, isPaused, pausableOf } from '../../budget/pause.ts';
 import { nextPeriod, sightOf, type Period } from '../../budget/period.ts';
 import {
@@ -41,7 +41,6 @@ import {
   taskLines,
   todayLines,
   weekLine,
-  type GroupToday,
   type PeerToday,
   type SessionToday,
 } from '../../budget/report.ts';
@@ -84,7 +83,7 @@ import { loadTree } from '../tree.ts';
 /**
  * The weekly budget from the command line: `budget` measures every session's use from the Claude Code
  * transcripts and shows it against the week's pace, or with `--task` what each session spent on one task;
- * `budget lift` is a leader's lift of one session's, or a sub-lead's group's,
+ * `budget lift` is the lead's lift of one session's
  * daily budget, or the lead's top-up of a session of a team below from its own team's; `budget cut` is a leader's cut
  * of one session to its own daily budget; `statusline` is a status line that saves the plan's own reading for `budget`.
  * Measuring, showing and logging only: nothing here blocks or stops a session; the hooks read the lifts and cuts.
@@ -179,8 +178,8 @@ export async function weekLineOf(runtime: CliRuntime, kit: Kit, config: KitConfi
 }
 
 /** How the team's part of the day is split among its sessions: down its lead tree, by their queued work (`work`), the lifts in force and the sessions a short day may pause. */
-function splitOf(reading: Reading, team: string, roster: Roster, config: Pick<KitConfig, 'budget' | 'leads' | 'roles'>, work: ReadonlyMap<string, WorkByPriority>): BudgetSplit {
-  return budgetSplitOf({ team, ids: roster.ids, sessions: config.budget.sessions, leads: config.leads, work, pausable: pausableOf(config, team, roster.ids), lifts: reading.lifts, now: reading.now, usedPct: reading.week.usedPct });
+function splitOf(reading: Reading, team: string, roster: Roster, config: Pick<KitConfig, 'budget' | 'roles'>, work: ReadonlyMap<string, WorkByPriority>): BudgetSplit {
+  return budgetSplitOf({ team, ids: roster.ids, sessions: config.budget.sessions, work, pausable: pausableOf(config, team, roster.ids), lifts: reading.lifts, now: reading.now, usedPct: reading.week.usedPct });
 }
 
 /** Each session today: its use, and its part (`split`) of the team's part of the account's daily budget beside the `others` on it, its lift, the burst and whether a leader's cut of it is in force. */
@@ -195,15 +194,7 @@ function sessionsToday(reading: Reading, roster: Roster, budget: BudgetConfig, s
     const lift = activeLift(reading.lifts, id, reading.now, reading.week.usedPct);
     const inBurst = burstNow !== undefined && burstNow.burst.sessions.includes(id) ? burstNow : undefined;
     const budgetPct = withBurst(dailyBudgetOf(reading.week.allowancePct, id, split, others), inBurst?.floorPct);
-    return { id, name: roster.nameOf(id) ?? id, w, calls: state?.byDay[today]?.calls ?? 0, budgetPct, lift, ...liftNamesOf({ split, others }, reading.week.allowancePct, roster, id, lift), inBurst, paused: isPaused(split, id), cut: activeCut(reading.cuts, reading.lifts, id, reading.now) !== undefined };
-  });
-}
-
-/** Each sub-lead's group today: its part of the day (`groupPartsOf`) and its group lift by name. */
-function groupsToday(reading: Reading, roster: Roster, split: BudgetSplit, others: readonly BudgetSplit[]): GroupToday[] {
-  return groupPartsOf(reading.week.allowancePct, split, others).map((group) => {
-    const lift = activeGroupLift(reading.lifts, group.id, reading.now, reading.week.usedPct);
-    return { id: group.id, name: roster.nameOf(group.id) ?? group.id, sessions: group.sessions, budgetPct: group.budgetPct, lift, ...liftNamesOf({ split, others }, reading.week.allowancePct, roster, group.id, lift) };
+    return { id, name: roster.nameOf(id) ?? id, w, calls: state?.byDay[today]?.calls ?? 0, budgetPct, lift, ...liftNamesOf({ split, others }, reading.week.allowancePct, roster, lift), inBurst, paused: isPaused(split, id), cut: activeCut(reading.cuts, reading.lifts, id, reading.now) !== undefined };
   });
 }
 
@@ -225,19 +216,16 @@ function peerToday(peer: PeerUsage, reading: Reading, split: BudgetSplit, others
 }
 
 /**
- * The lift of session `id`, or of the group sub-lead `id` leads, by name: the leader that gave it, the sub-lead whose
- * group's daily budget it is a part of (the team's `split` tree) and the share of the week its part comes to now, of
- * the account's day `allowancePct` beside the `others` on it.
+ * A session's lift by name: the leader that gave it and the share of the week its part comes to now, of the team's
+ * part of the account's day `allowancePct` beside the `others` on it.
  */
-export function liftNamesOf(teams: TeamsOnAccount, allowancePct: number | undefined, roster: Roster, id: string, lift: Lift | undefined): LiftNames {
+export function liftNamesOf(teams: TeamsOnAccount, allowancePct: number | undefined, roster: Roster, lift: Lift | undefined): LiftNames {
   if (lift === undefined) {
-    return { liftBy: undefined, liftParent: undefined, liftWeekPct: undefined };
+    return { liftBy: undefined, liftWeekPct: undefined };
   }
-  const parent = liftPlaceOf(teams.split, id, lift.group)?.parent;
   return {
     liftBy: roster.nameOf(lift.by) ?? lift.by,
-    liftParent: parent === undefined ? undefined : (roster.nameOf(parent) ?? parent),
-    liftWeekPct: liftWeekPctOf(allowancePct, parent, lift.partPct, teams.split, teams.others),
+    liftWeekPct: liftWeekPctOf(allowancePct, lift.partPct, teams.split, teams.others),
   };
 }
 
@@ -351,7 +339,7 @@ export async function budget(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
       const fiveHour = await readFolderFiveHour(runtime.files, snapshotDirOf(config.budget, kit.paths), now);
       const peers = reading.peerUsage.map((peer) => peerToday(peer, reading, split, others));
       lines = [
-        ...todayLines({ week, fiveHour, teamPct, sessions, groups: groupsToday(reading, roster, split, others), classes, peers, outside, behind, all, zone, overAction: config.budget.overAction }),
+        ...todayLines({ week, fiveHour, teamPct, sessions, classes, peers, outside, behind, all, zone, overAction: config.budget.overAction }),
         ...resetStockLines(config.budget.resets, now, zone),
       ];
     } else {
@@ -395,51 +383,14 @@ function orList(words: readonly string[]): string {
   return words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} or ${words.at(-1) ?? ''}`;
 }
 
-/**
- * Why session `by` may not lift session `id`'s daily budget, or with `group` sub-lead `id`'s group's; undefined when it
- * may. A leader lifts every session and sub-lead's group under it, at any depth, and a sub-lead its own session too,
- * a part of its own group's budget; the lead's group is the whole team, which no lift takes a part of.
- */
-function liftRefusalOf(tree: LeadTree, nameOf: (id: string) => string, by: string, id: string, group: boolean): string | undefined {
-  const name = nameOf(id);
-  if (group) {
-    if (id === tree.lead) {
-      return `--group lifts a sub-lead's group; ${name} is the lead, whose group is the whole team`;
-    }
-    if (!tree.isLeader(id)) {
-      return `--group lifts a sub-lead's group, and ${name} leads none`;
-    }
-    return tree.leads(by, id) ? undefined : `${name}'s group's budget is lifted only by ${orList(tree.chainOf(id).map(nameOf))}`;
-  }
-  return sessionRefusalOf(tree, nameOf, by, id, 'lifted');
-}
-
-/**
- * Why session `by` may not lift or cut (`verb`) session `id`'s daily budget; undefined when it may. A leader may for
- * every session under it, at any depth, and a sub-lead for its own session too.
- */
+/** Why session `by` may not lift or cut (`verb`) session `id`'s daily budget; undefined when it may: only the lead may, its own too. */
 function sessionRefusalOf(tree: LeadTree, nameOf: (id: string) => string, by: string, id: string, verb: 'lifted' | 'cut'): string | undefined {
-  if (tree.leads(by, id) || (by === id && tree.isLeader(by))) {
-    return undefined;
-  }
-  return `${nameOf(id)}'s budget is ${verb} only by ${orList([...(tree.isLeader(id) ? [id] : []), ...tree.chainOf(id)].map(nameOf))}`;
-}
-
-/**
- * What a lift too big for sub-lead `group`'s group's budget can do instead, for its refusal: the lift of that group its
- * leader (`leader`) can give, after the group's budget and use today in percent of the week, each left out when unknown.
- */
-function beyondGroupText(group: string, leader: string, budgetPct: number | undefined, usedPct: number | undefined): string {
-  const facts = [budgetPct === undefined ? undefined : `gets ${formatPct(budgetPct)} of the week today`, usedPct === undefined ? undefined : `has used ${formatPct(usedPct)}`];
-  const known = facts.filter((each): each is string => each !== undefined);
-  const command = `\`teamrig budget lift ${group} --group --part <pct> --stop-pct <n> --reason "<why>"\``;
-  return known.length === 0 ? `${leader} can lift ${group}'s group: ${command}` : `${group}'s group ${known.join(' and ')}; ${leader} can lift it: ${command}`;
+  return by === tree.lead ? undefined : `${nameOf(id)}'s budget is ${verb} only by ${nameOf(tree.lead)}`;
 }
 
 /** What a `budget lift` asks for, from its flags: who asks, the part and its stops, and why. */
 interface LiftAsk {
   readonly caller: string;
-  readonly group: boolean;
   readonly partPct: number;
   readonly stopPct: number | undefined;
   readonly until: number | undefined;
@@ -457,9 +408,8 @@ interface LiftingTeam {
 }
 
 /**
- * `budget lift <session> [--group] --part <pct> --stop-pct <n> [--until <time>] [--reserve] --reason "<text>"`: a
- * leader lifts a session under it, or with `--group` the group of a sub-lead under it (`liftRefusalOf`); the lead
- * also lifts `<team>/<session>`, a session of a team under its own (`crossTeamLift`).
+ * `budget lift <session> --part <pct> --stop-pct <n> [--until <time>] [--reserve] --reason "<text>"`: the lead lifts
+ * a session of its team (`sessionRefusalOf`), or `<team>/<session>`, a session of a team under its own (`crossTeamLift`).
  */
 export async function lift(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const caller = callerOf(args.flags, runtime.env);
@@ -479,17 +429,15 @@ export async function lift(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const zone = teamZone(config, runtime);
   const until = timeFlag(args.flags, 'until', { nowMs: now, zone });
   const roster = await rosterOf(runtime, kit, config);
-  const group = args.switches.has('group');
   const address = splitAddress(target);
   if (address?.team !== undefined && address.team !== kit.paths.team) {
-    const ask: LiftAsk = { caller, group, partPct, stopPct, until, reserve: args.switches.has('reserve'), reason, now };
+    const ask: LiftAsk = { caller, partPct, stopPct, until, reserve: args.switches.has('reserve'), reason, now };
     return crossTeamLift(runtime, { kit, config, roster, zone }, { team: address.team, session: address.session }, ask);
   }
   const nameOf = (each: string): string => roster.nameOf(each) ?? each;
   const by = sessionIdOf(roster, caller);
   const id = sessionIdOf(roster, address?.session ?? target);
-  const tree = new LeadTree(config);
-  const refusal = liftRefusalOf(tree, nameOf, by, id, group);
+  const refusal = sessionRefusalOf(new LeadTree(config), nameOf, by, id, 'lifted');
   if (refusal !== undefined) {
     throw new RefusedError(refusal);
   }
@@ -498,31 +446,22 @@ export async function lift(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const { week } = reading;
   const { weights: work } = await readWork(runtime.files, kit.paths.events, config.register.priorities, now);
   const split = splitOf(reading, kit.paths.team, roster, config, work);
-  const place = liftPlaceOf(split, id, group);
+  const place = liftPlaceOf(split, id);
   if (place === undefined) {
-    throw new RefusedError(`${group ? `${name}'s group` : name} has no daily budget to lift: \`leads\` lists it in a loop of sub-leads no leader above reaches`);
+    throw new RefusedError(`${name} is not on the team, so it has no daily budget to lift`);
   }
-  const parent = parentBudgetText(place.parent === undefined ? undefined : nameOf(place.parent));
   const others = await otherTeamsOnAccount(runtime, { team: kit.paths.team, config, usageDir: kit.paths.usage }, reading.now, week.usedPct);
   const funded = fundForDay({ split, others }, week);
-  let beyondParent: string | undefined;
-  if (place.parent !== undefined) {
-    const part = groupPartsOf(week.allowancePct, funded.split, funded.others).find((each) => each.id === place.parent);
-    const states = (part?.sessions ?? []).flatMap((each) => reading.measured.bySession.get(each) ?? []);
-    const usedPct = week.todayWPerPct === undefined || part === undefined ? undefined : wSince(states, week.todayFrom, reading.now) / week.todayWPerPct;
-    beyondParent = beyondGroupText(nameOf(place.parent), nameOf(tree.leaderOf(place.parent) ?? tree.lead), part?.budgetPct, usedPct);
-  }
   const decision = decideLift(
-    { session: id, group, partPct, stopPct, until, reserve: args.switches.has('reserve'), reason, by, now },
-    { usedPct: week.usedPct, reset: week.reset, limits: config.budget.lift, liftedPct: place.liftedPct, parent, beyondParent, zone },
+    { session: id, partPct, stopPct, until, reserve: args.switches.has('reserve'), reason, by, now },
+    { usedPct: week.usedPct, reset: week.reset, limits: config.budget.lift, liftedPct: place.liftedPct, parent: LIFT_PARENT_TEXT, zone },
   );
   if (decision.kind === 'refused') {
     throw new RefusedError(decision.reason);
   }
   await new LiftLog(runtime.files, kit.paths.lifts).append(decision.lift);
-  runtime.out.stdout(`LIFTED ${liftText(decision.lift, name, parent, liftWeekPctOf(week.allowancePct, place.parent, partPct, funded.split, funded.others), zone)}`);
-  const ids = group ? [...new Set([id, ...tree.groupOf(id)])] : [id];
-  await wakeReleased(runtime, { kit, config, from: by, how: group ? "lifted your group's daily budget" : 'lifted your daily budget', ids }, nameOf);
+  runtime.out.stdout(`LIFTED ${liftText(decision.lift, name, LIFT_PARENT_TEXT, liftWeekPctOf(week.allowancePct, partPct, funded.split, funded.others), zone)}`);
+  await wakeReleased(runtime, { kit, config, from: by, how: 'lifted your daily budget', ids: [id] }, nameOf);
   return EXIT.ok;
 }
 
@@ -530,15 +469,12 @@ export async function lift(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
  * `budget lift <team>/<session>`: the team's lead lifts a session of a team under its own, at any depth, on the same
  * Claude account, by a part of its own team's daily budget (src/budget/lift.ts). It is logged in its own team's lift
  * log, which the lifted team reads beside the other teams on the account, and refused past what its team's other
- * lifts leave of that budget; a group of the team below is not lifted this way.
+ * lifts leave of that budget.
  */
 async function crossTeamLift(runtime: CliRuntime, lifting: LiftingTeam, target: { readonly team: string; readonly session: string }, ask: LiftAsk): Promise<ExitCode> {
   const { kit, config, roster, zone } = lifting;
   const own = kit.paths.team;
   const by = leadOnly(roster, ask.caller, 'lifts a session of a team under its own');
-  if (ask.group) {
-    throw new UsageError(`--group lifts a sub-lead's group of team ${own}; a session of a team under it is lifted alone`);
-  }
   const { tree, teams } = await loadTree(runtime);
   const below = teams.get(target.team);
   if (below === undefined || !tree.ancestorsOf(target.team).includes(own)) {
@@ -559,8 +495,8 @@ async function crossTeamLift(runtime: CliRuntime, lifting: LiftingTeam, target: 
   const place = crossLiftPlaceOf(split, address);
   const parent = `team ${own}'s daily budget`;
   const decision = decideLift(
-    { session: address, group: false, partPct: ask.partPct, stopPct: ask.stopPct, until: ask.until, reserve: ask.reserve, reason: ask.reason, by, now: ask.now },
-    { usedPct: reading.week.usedPct, reset: reading.week.reset, limits: config.budget.lift, liftedPct: place.liftedPct, parent, beyondParent: undefined, zone },
+    { session: address, partPct: ask.partPct, stopPct: ask.stopPct, until: ask.until, reserve: ask.reserve, reason: ask.reason, by, now: ask.now },
+    { usedPct: reading.week.usedPct, reset: reading.week.reset, limits: config.budget.lift, liftedPct: place.liftedPct, parent, zone },
   );
   if (decision.kind === 'refused') {
     throw new RefusedError(decision.reason);
@@ -568,7 +504,7 @@ async function crossTeamLift(runtime: CliRuntime, lifting: LiftingTeam, target: 
   await new LiftLog(runtime.files, kit.paths.lifts).append(decision.lift);
   const others = await otherTeamsOnAccount(runtime, { team: own, config, usageDir: kit.paths.usage }, reading.now, reading.week.usedPct);
   const funded = fundForDay({ split, others }, reading.week);
-  const weekPct = liftWeekPctOf(reading.week.allowancePct, undefined, ask.partPct, funded.split, funded.others);
+  const weekPct = liftWeekPctOf(reading.week.allowancePct, ask.partPct, funded.split, funded.others);
   runtime.out.stdout(`LIFTED ${liftText(decision.lift, `${target.team}/${below.roster.nameOf(found.id) ?? found.id}`, parent, weekPct, zone)}`);
   const release = { kit: below.kit, config: below.config, from: sessionNameOn(target.team, own, by), how: 'lifted your daily budget', ids: [found.id] };
   await wakeReleased(runtime, release, (id) => `${target.team}/${below.roster.nameOf(id) ?? id}`);
