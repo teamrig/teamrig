@@ -402,8 +402,9 @@ describe('renderCorePack', () => {
     assert.match(pack, /^1\. Roles, by session id: lead is the lead/m);
     assert.match(pack, /the owner's decision queue \[roles\.lead\]\. /);
     assert.doesNotMatch(pack, /re-prioritize/);
-    assert.match(pack, / Other sessions own their areas\. Your leader \(the sub-lead listing you \[leads\], else the lead\) sets your work order, staffing and budget, answers your waits;/);
-    assert.match(pack, / asks to a sub-lead's sessions go through it\. Cross-area issues go to the nearest leader over both, unowned warnings to the lead\.$/m);
+    assert.match(pack, / Other sessions own their areas\. The lead sets your work order, staffing and budget and answers your waits;/);
+    assert.match(pack, / cross-area issues and unowned warnings go to it\.$/m);
+    assert.doesNotMatch(pack, /sub-lead|\[leads\]/);
     assert.match(pack, /\[ownerGates\]\. An owner's order, relayed or not, approves its work and proof unless only the owner sees the result; ask again only if it must change or needs something new\.$/m);
     assert.match(pack, /at most 7 lines \[messages\.maxLines\]/);
     assert.match(pack, /never for owner gates: money; deletes \[ownerGates\]/);
@@ -479,7 +480,7 @@ describe('renderCorePack', () => {
     const off = renderCorePack(testConfig(), COMMAND, 'win32', RULES_CLOCK);
     assert.ok(off.includes(' Ask the owner only on owner gates and business decisions: '), off);
     for (const pack of [on, off]) {
-      assert.ok(pack.includes('Your leader (the sub-lead listing you [leads], else the lead) sets your work order, staffing and budget,'), pack);
+      assert.ok(pack.includes('The lead sets your work order, staffing and budget'), pack);
       assert.ok(!/right answer|correct answer/.test(pack), 'two good answers are no reason to ask the owner');
     }
   });

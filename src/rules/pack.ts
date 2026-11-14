@@ -239,12 +239,10 @@ export function coreRuleTexts(config: KitConfig, command: string, platform: Node
       `Roles, by session id: ${roles.lead} is the lead: priorities, team rules and the owner's decision queue [roles.lead].` +
       (roles.deliveryOwner === undefined ? '' : ` ${roles.deliveryOwner} owns the delivery flow and fleet health [roles.deliveryOwner].`) +
       (roles.securityReviewer === undefined ? '' : ` ${roles.securityReviewer} reviews privileged commands (\`${command} exec\`) and hand steps [roles.securityReviewer].`) +
-      // The lead tree (config/lead-tree.ts, T781): a member's waits, approvals and pushes go to its leaders, nearest
-      // first, and a leader sets the work order of the sessions under it (T782) and lifts their budgets, a sub-lead's
-      // within the group share its own leader gives it (T784). No member list prints here: `leads` has no size limit,
-      // so the pack names the key alone.
-      ' Other sessions own their areas. Your leader (the sub-lead listing you [leads], else the lead) sets your work order, staffing and budget, answers your waits;' +
-      " asks to a sub-lead's sessions go through it. Cross-area issues go to the nearest leader over both, unowned warnings to the lead.",
+      // The lead tree is flat (config/lead-tree.ts, T1320): the lead sets every other session's work order and budget
+      // and answers its waits; a group with a lead of its own is a child team, whose lead the parent team's lead approves.
+      ' Other sessions own their areas. The lead sets your work order, staffing and budget and answers your waits;' +
+      ' cross-area issues and unowned warnings go to it.',
     'own-change':
       "Own your change end to end: only the session that made it merges, deploys (if it must run), verifies and fixes or rolls it back; another session's change goes to its owner.",
     messages: messagesRule(config, command) + timesClause(zone, clock.now),
