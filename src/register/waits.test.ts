@@ -79,11 +79,11 @@ describe('isPeerWait', () => {
     assert.equal(isPeerWait(APPROVAL, leadersOnly(['alpha']), 'owner'), true, 'the lead is whoever the team config names');
   });
 
-  it("is no peer's when the one asked is a sub-lead above the task's owner (T781)", () => {
+  it("is no peer's when the one asked is one of the task's answerers (T781)", () => {
     const answerers = leadersOnly(['alpha', 'lead']);
     assert.equal(isPeerWait({ kind: 'approval', who: 'alpha' }, answerers, 'owner'), false);
     assert.equal(isPeerWait({ kind: 'decision', who: 'alpha' }, answerers, 'owner'), false);
-    assert.equal(isPeerWait({ kind: 'approval', who: 'bravo' }, answerers, 'owner'), true, 'a session outside the chain is a peer');
+    assert.equal(isPeerWait({ kind: 'approval', who: 'bravo' }, answerers, 'owner'), true, 'a session outside the answerers is a peer');
   });
 
   it("reads each kind's own answerers: the security reviewer answers an approval, not a decision (T828)", () => {

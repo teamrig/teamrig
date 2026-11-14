@@ -95,11 +95,11 @@ describe('teamrig inbox add --wake now', () => {
     }
   });
 
-  it("refuses another team to a sub-lead, and a team above's other sessions to a child team's lead, posting nothing", async () => {
+  it("refuses another team to a member, and a team above's other sessions to a child team's lead, posting nothing", async () => {
     const kit = await treeHarness(LED);
-    const subLead = await kit.run(['inbox', 'add', '--to', 'web/front', '--text', 'hi', '--wake', 'now', '--session', 'bravo']);
+    const member = await kit.run(['inbox', 'add', '--to', 'web/front', '--text', 'hi', '--wake', 'now', '--session', 'bravo']);
     assert.deepEqual(
-      [subLead.code, subLead.stdout],
+      [member.code, member.stdout],
       [
         EXIT.refused,
         [

@@ -55,12 +55,12 @@ describe('approvedTaskOf (T684, T781)', () => {
     assert.deepEqual([approved?.task.id, approved?.by], ['T2', 'lead']);
   });
 
-  it("finds one a sub-lead above the owner approved, but none from a leader outside the owner's chain", () => {
+  it("finds one any of the owner's approvers gave, but none from a session outside them", () => {
     const sub: WaitReason = { kind: 'approval', who: 'bravo' };
     const tasks = [testTask({ id: 'T1', ...waiting, waits: [sub], answer: { ...APPROVED, by: 'bravo' } })];
     const approved = approvedTaskOf(tasks, 'alpha', ['bravo', 'lead']);
     assert.deepEqual([approved?.task.id, approved?.by], ['T1', 'bravo']);
-    assert.equal(approvedTaskOf(tasks, 'alpha', ['lead']), undefined, 'bravo leads someone else, not alpha');
+    assert.equal(approvedTaskOf(tasks, 'alpha', ['lead']), undefined, 'bravo is not among the approvers given');
   });
 
   it("finds none in another owner's task, a decline, the owner's approval, or a task no longer waiting", () => {
