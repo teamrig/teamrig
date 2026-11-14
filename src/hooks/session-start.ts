@@ -86,7 +86,7 @@ function identityLines(roster: Roster, leaders: LeadTree, input: SessionStartInp
   const tree = input.tree === undefined ? [] : [treeLine(input.tree, input, isLead)];
   if (found === undefined || !found.ok) {
     const why = session === undefined ? `No session is set ($${ENV.session})` : `$${ENV.session} does not name a session on this team`;
-    const toLead = lead === undefined || leadName === undefined ? '' : reachNote(lead, leadName, true, command);
+    const toLead = lead === undefined || leadName === undefined ? '' : reachNote(lead, leadName, command);
     return [`${why}: ask the user which session you are (\`${command} who\` lists them) and pass --session <id> to every \`${command}\` task and inbox command.${toLead}`, names, ...tree];
   }
   const roles = roster.rolesOf(found.id);
@@ -96,29 +96,25 @@ function identityLines(roster: Roster, leaders: LeadTree, input: SessionStartInp
   return [`${you}${pass}${messageNote(roster, leaders, found.id, command)}`, names, ...tree];
 }
 
-/**
- * Whom the session messages: the lead, or for a sub-lead's member its own leader (T781), who takes up what it cannot
- * settle; nothing for the lead itself.
- */
+/** Whom the session messages: the lead, its leader (T1320: no sub-leads); nothing for the lead itself. */
 function messageNote(roster: Roster, leaders: LeadTree, id: string, command: string): string {
   const leader = leaders.leaderOf(id);
   const name = leader === undefined ? undefined : roster.nameOf(leader);
   if (leader === undefined || name === undefined) {
     return '';
   }
-  return reachNote(leader, name, leader === leaders.lead, command);
+  return reachNote(leader, name, command);
 }
 
 /**
- * How the session reaches its leader `id`, named `name`: by message, or by inbox line when Claude Code keeps the name
+ * How the session reaches the lead `id`, named `name`: by message, or by inbox line when Claude Code keeps the name
  * for itself (T1124), since every message sent to it fails.
  */
-function reachNote(id: string, name: string, isLead: boolean, command: string): string {
+function reachNote(id: string, name: string, command: string): string {
   if (!isReservedName(name)) {
-    return isLead ? ` Message the lead as \`${name}\`.` : ` Message your leader as \`${name}\`, who takes to the lead what it cannot settle.`;
+    return ` Message the lead as \`${name}\`.`;
   }
-  const who = isLead ? 'the lead' : 'your leader, who takes to the lead what it cannot settle,';
-  return ` Write to ${who} with \`${command} inbox add --to ${id} --text "..."\`: its name \`${name}\` ${RESERVED_RULE}.`;
+  return ` Write to the lead with \`${command} inbox add --to ${id} --text "..."\`: its name \`${name}\` ${RESERVED_RULE}.`;
 }
 
 /** A team config that loaded no rules: missing, or present but unreadable. */
