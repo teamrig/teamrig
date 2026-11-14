@@ -231,7 +231,7 @@ function indented(lines: readonly string[]): string[] {
 }
 
 /**
- * Today's use as a table: the team, each sub-lead's group (its sessions' use summed), then each session, with its use
+ * Today's use as a table: the team, then each session, with its use
  * and daily budget in % of the week, its mark (lifted, burst, paused), its W and calls, then each other team on the
  * account with its part of the account's day; W and calls alone while the week's W is unknown.
  */

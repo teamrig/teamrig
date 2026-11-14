@@ -269,7 +269,7 @@ export function isReviewPathMode(value: unknown): value is ReviewPathMode {
   return REVIEW_PATH_MODES.some((mode) => mode === value);
 }
 
-/** Who reviews a held change: security, or the session's leader (the lead or a sub-lead, T781). */
+/** Who reviews a held change: security, or the session's leader (the lead, or for a child team's lead the parent team's). */
 export type ReviewClass = 'security' | 'leader';
 
 export const REVIEW_CLASSES: readonly ReviewClass[] = ['security', 'leader'];
@@ -1268,10 +1268,10 @@ export interface RefreshConfig {
 }
 
 /**
- * Who may hire a session onto the team (`teamrig hire`): `off` nobody; `owner` a lead (the lead, or a sub-lead
- * into its own group), once the owner approved (`--approved-by`, kept with the hire); `lead` a lead; `automatic` as
- * `lead`, and a hired session whose last open task closes is asked to write its handover (hiring/last-task-ask.ts).
- * Under every policy only a lead over a session retires it (`teamrig retire`).
+ * Who may hire a session onto the team (`teamrig hire`): `off` nobody; `owner` the lead, once the owner approved
+ * (`--approved-by`, kept with the hire); `lead` the lead; `automatic` as `lead`, and a hired session whose last open
+ * task closes is asked to write its handover (hiring/last-task-ask.ts). Under every policy only the lead retires a
+ * session (`teamrig retire`).
  */
 export const HIRING_POLICIES = ['off', 'owner', 'lead', 'automatic'] as const;
 export type HiringPolicy = (typeof HIRING_POLICIES)[number];

@@ -190,8 +190,8 @@ export { Roster, type SessionLookup } from '../config/roster.ts';
 export { readRenames, RENAME_VERSION, type Rename, type RenameLogRead } from '../names/rename.ts';
 export { bareName, sessionDisplay } from '../core/ids.ts';
 
-// The lead tree: `roles.lead` over the sub-leads the config's `leads` names, so a reader shows a session's leader
-// and a leader's group as teamrig's approvals and lists find them.
+// The lead tree: `roles.lead` over every other session of its team (T1320), so a reader shows a session's leader
+// and the lead's members as teamrig's approvals and lists find them.
 export { LeadTree } from '../config/lead-tree.ts';
 
 // The team tree: each team config's `team.parent` link, read across the kit home's team folders, so a reader shows a

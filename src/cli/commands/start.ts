@@ -30,8 +30,7 @@ export const MAX_UNOWNED_NOTICES = 5;
  * lacks commits, T1006), today's and the missed scheduled meetings it is met in or joins (`MEETINGS`, every one for the
  * lead, only when there are some), its unread inbox lines (marked read, which also ties this tab to it, as `inbox read`), its task list (`list
  * --session`), the other sessions' tasks waiting on it (`WAITING ON YOU`, only when some do), the check flags it
- * acts on (the lead's: every flag, as `check`; any other session's: those of the tasks and skills it owns, a sub-lead's
- * also those of its group's tasks) and the
+ * acts on (the lead's: every flag, as `check`; any other session's: those of the tasks and skills it owns) and the
  * week's use (the first line of `budget`), then for the lead the account's resets in stock (T2450). `--all` prints the list and the flags in their long form, as `list
  * --all` and `check --all` do, and every task waiting on it. Any session's start also posts the lead one inbox line on
  * each warning no session owns that the lead was not told of yet (T951), at most MAX_UNOWNED_NOTICES per start; a told

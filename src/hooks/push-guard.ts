@@ -47,7 +47,7 @@ export type ClearedChoice = Extract<PushToProtected, 'lead' | 'gated'>;
 /**
  * What lets a normal push to a protected branch through under `pushToProtected: lead` or `gated` (T684): the lead's own
  * push on a root team, since the owner gave the lead the push approvals, or a waiting task of the session's that a leader
- * above it (`by`: the lead or a sub-lead, T781; for a child team's lead, the parent team's lead as `<team>/<id>`, T1140)
+ * above it (`by`: the lead; for a child team's lead, the parent team's lead as `<team>/<id>`, T1140)
  * approved on the register (`teamrig approve`). `none` says why neither holds and whose approval to ask: the session's
  * direct leader.
  */
