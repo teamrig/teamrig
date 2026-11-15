@@ -34,6 +34,8 @@ export interface InstallStep {
   readonly cwd: string;
   /** Text the step's stdout must hold; a step without one needs only exit 0. */
   readonly expect?: string;
+  /** A reading the step prints that its log line carries, so the CI log keeps the number (its first match). */
+  readonly show?: RegExp;
 }
 
 export interface InstallReport {
@@ -153,7 +155,17 @@ export function installSteps(input: InstallInput): readonly InstallStep[] {
     teamrig('list', ['list'], `T2 open, Improvements`),
     teamrig('set', ['set', 'T2', '--session', WORKER, '--status', 'in-progress', '--note', 'started'], 'SET T2 in-progress'),
     teamrig('inbox read', ['inbox', 'read', '--session', WORKER], `T2 is yours (p1): ${TASK_TITLE}`),
+    // The free memory the queue's gate reads: on macOS from vm_stat's reclaimable pages, not only its free ones (T2634).
+    { ...teamrig('sessions, the host memory the queue reads', ['sessions'], 'MB free'), show: /host: \d+ MB free/ },
+    // A first queued step: the queue admits it on the host's memory, runs it and records its end.
+    teamrig('queue a first step', ['queue', '--session', WORKER, '--what', 'first step', '--small', '--', 'git', '--version'], 'DONE exit 0'),
   ];
+}
+
+/** The step's log line: its exit code and label, then the reading it prints when it names one. */
+function logLine(step: InstallStep, result: RunResult): string {
+  const shown = step.show === undefined ? null : step.show.exec(result.stdout);
+  return `exit ${result.status ?? 'none'} ${step.label}${shown === null ? '' : `: ${shown[0]}`}`;
 }
 
 /** What is wrong with a step's result, or undefined when it ran as expected. */
@@ -192,7 +204,7 @@ export function freshInstall(input: InstallInput, run: InstallRunner, readManife
   const log: string[] = [];
   for (const step of installSteps(input)) {
     const result = run(step.request, step.cwd);
-    log.push(`exit ${result.status ?? 'none'} ${step.label}`);
+    log.push(logLine(step, result));
     const finding = stepFinding(step, result);
     if (finding !== undefined) {
       return { log, findings: [finding] };
