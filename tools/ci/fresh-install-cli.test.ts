@@ -28,6 +28,8 @@ const said = {
   list: 'T2 open, Improvements, score 3.33, p1, owner web | Build the signup form',
   set: 'SET T2 in-progress, p1, owner web, from lead | Build the signup form',
   inbox: '- lead: T2 is yours (p1): Build the signup form',
+  sessions: 'host: 6000 MB free; commit charge unknown',
+  queue: args.slice(args.indexOf('--') + 1).join(' ') === 'git --version' ? 'DONE exit 0' : 'the step was cut',
 };
 if (args[0] === ${JSON.stringify(fail)} || process.env.TEAMRIG_TEAM !== 'demo') {
   console.error(args[0] + ' failed in team ' + process.env.TEAMRIG_TEAM);
@@ -81,7 +83,10 @@ describe('fresh-install-cli', () => {
     assert.match(result.stdout, /^ {2}exit 0 git clone, no login$/m);
     assert.match(result.stdout, /^ {2}exit 0 copy in the built dist, as the release branch carries it$/m);
     assert.match(result.stdout, /^ {2}exit 0 inbox read$/m);
+    assert.match(result.stdout, /^ {2}exit 0 sessions, the host memory the queue reads: host: 6000 MB free$/m);
+    assert.match(result.stdout, /^ {2}exit 0 queue a first step$/m);
     assert.match(result.stdout, /^ {2}exit 0 SessionStart hook \(hook session-start\)$/m);
+    assert.match(result.stdout, /^ {2}node os\.freemem\(\): \d+ MB free$/m);
     assert.match(result.stdout, new RegExp(`^fresh-install: a new team runs from a fresh clone on ${process.platform}\\n$`, 'm'));
   });
 

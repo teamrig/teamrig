@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { freemem, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DIST_DIR } from '../build/dist-dir.ts';
@@ -29,6 +29,8 @@ async function main(): Promise<number> {
     const run: InstallRunner = (request, cwd) => spawnRun(request, { env, cwd, timeout: 120_000 });
     const report = freshInstall(input, run, (plugin) => JSON.parse(readFileSync(join(plugin, 'hooks', 'hooks.json'), 'utf8')));
     report.log.forEach((line) => console.log(`  ${line}`));
+    // Beside the sessions step's reading: on macOS Node counts free pages only, below what the queue reads (T2634).
+    console.log(`  node os.freemem(): ${Math.round(freemem() / 1024 / 1024)} MB free`);
     if (report.findings.length === 0) {
       console.log(`fresh-install: a new team runs from a fresh clone on ${process.platform}`);
       return EXIT_CLEAN;
