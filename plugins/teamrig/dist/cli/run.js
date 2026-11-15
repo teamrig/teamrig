@@ -87,7 +87,6 @@ const meetingsCommands = () => import("./commands/meetings.js");
 const decisionsCommands = () => import("./commands/decisions.js");
 const hireCommands = () => import("./commands/hire.js");
 const retireCommands = () => import("./commands/retire.js");
-const promoteCommands = () => import("./commands/promote.js");
 const slashCommands = () => import("./commands/slash.js");
 const restoreCommands = () => import("./commands/restore.js");
 const restoreInstallCommands = () => import("./commands/restore-install.js");
@@ -190,8 +189,6 @@ const COMMANDS = {
         load: async () => (await hireCommands()).hire,
     },
     retire: { effect: 'write', flags: ['session', 'to', 'no-handover', 'reason'], switches: ['yes'], load: async () => (await retireCommands()).retire },
-    promote: { effect: 'write', flags: ['session', 'members'], switches: ['yes'], load: async () => (await promoteCommands()).promote },
-    demote: { effect: 'write', flags: ['session'], switches: ['yes'], load: async () => (await promoteCommands()).demote },
     refresh: { effect: 'write', flags: ['session'], switches: ['ready'], load: async () => (await refreshCommands()).refresh },
     doctor: { effect: 'read', flags: [], load: async () => (await doctorCommands()).doctor },
     'page test': { effect: 'write', flags: [], load: async () => (await pageCommands()).pageTest },
@@ -205,7 +202,7 @@ const COMMANDS = {
     'budget lift': {
         effect: 'write',
         flags: ['session', 'part', 'stop-pct', 'until', 'reason'],
-        switches: ['group', 'reserve'],
+        switches: ['reserve'],
         load: async () => (await budgetCommands()).lift,
     },
     'budget cut': { effect: 'write', flags: ['session', 'until', 'reason'], load: async () => (await budgetCommands()).cut },
@@ -268,7 +265,6 @@ const COMMANDS = {
     'hook cold-send': { effect: 'internal', flags: [], load: async () => (await hookCommands()).coldSend },
     'hook failed-send': { effect: 'internal', flags: [], load: async () => (await hookCommands()).failedSend },
     'hook missing-cli': { effect: 'internal', flags: [], load: async () => (await missingCliCommand()).missingCli },
-    'hook route-reminder': { effect: 'internal', flags: [], load: async () => (await hookCommands()).routeReminder },
     'hook loop-nudge': { effect: 'internal', flags: [], load: async () => (await loopNudgeCommand()).loopNudge },
     'hook secret-redact': { effect: 'internal', flags: [], load: async () => (await secretRedactCommand()).secretRedact },
     'hook helper-gate': { effect: 'internal', flags: [], load: async () => (await hookCommands()).helperGateHook },
@@ -499,8 +495,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
       [--prepares <goal>:<slice>|none] [--note ..]
       the lead may change owner, priority, due, week, after, size, type, class, critical and pin on any task
-      --pin: puts the task above every other task on its owner's list, set by the owner's leaders (the lead
-      on its own tasks too); it moves the owner's earlier pin, and handing the task on clears it
+      --pin: puts the task above every other task on its owner's list, set by the lead (on its own tasks
+      too); it moves the owner's earlier pin, and handing the task on clears it
       --prepares <goal>:<slice>|none: marks a design, study or prep plan for that slice of a goal, set only by
       a leader above the owner (the lead on its own tasks too); while the slice is the goal's open one or the
       next, the task runs outside the slice cap; none clears it
@@ -523,10 +519,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   sweep apply <file> [--apply]   writes the class, goal and size of each row whose confirm is yes, as its task's
       owner or a leader over it, a size only when it differs from the row's proposedSize: a dry run names each
       row's fate, --apply writes; never deletes, never parks
-  approve <id> --note "<what you checked, or why not>" [--decline]   a leader above the task's owner (the
-      lead or a sub-lead), or roles.securityReviewer on a task not its own: answers a task waiting on
-      its approval (approval:<lead>); its owner gets an inbox line, which wakes its idle tab, to push or
-      merge (or to fix the note's point and ask again), and check flags the approved task READY
+  approve <id> --note "<what you checked, or why not>" [--decline]   the lead, or
+      roles.securityReviewer on a task not its own: answers a task waiting on its approval
+      (approval:<lead>); its owner gets an inbox line, which wakes its idle tab, to push or merge (or to fix
+      the note's point and ask again), and check flags the approved task READY
   approve <team>/<id> --note .. [--decline]   the lead of a team's parent team answers a task of that
       team's lead waiting on its approval (approval:app/lead), named as its inbox line prints it: web/T3
   audit T<n> --file <path> [--note "<what you checked>"] [--team <child>]   the security reviewer
@@ -576,14 +572,13 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       that belong to no task; makes it when missing
   inbox read [--session <area>]     prints the unread lines and marks them read
   inbox status [--session <area>]   unread lines per area
-  inbox add --to <id|name|team/id|all|leads|group:<leader>|team:<team>|tree:leads|task:T<n>>[,...] --text "<one line>" [--wake now | --wake-by <time>]
-      team/id: any session of another team of your tree; all, leads (the
-      lead and the sub-leads) and group:<leader> (it and every session under it) are your own team's;
+  inbox add --to <id|name|team/id|all|team:<team>|tree:leads|task:T<n>>[,...] --text "<one line>" [--wake now | --wake-by <time>]
+      team/id: any session of another team of your tree; all is every session of your own team;
       team:<team> is every session of a team of your tree and tree:leads every team's lead in it;
       task:T<n> is that task's owner and the owner of each active task of your tree whose ref is T<n>; a
       group leaves you out; a comma-separated list posts the line to each receiver once
       --wake now: also wakes each receiver idle at its prompt within about 3 minutes and says what
-      that costs; a group only from a leader, another team only from a team lead: a team below its
+      that costs; a group only from the lead, another team only from a team lead: a team below its
       own, any team's lead, or a session its config names in roles
       --wake-by <time>: wakes each receiver at that time instead, only if it has not seen the line by
       then and its tab is idle; the same gate
@@ -612,23 +607,18 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       (the session itself or the lead)
   hire <id> --scope "<its job>" --reason "<why>" [--name <name>] [--model <model>] [--effort <level>]
       [--review <YYYY-MM-DD>] [--approved-by "<who>"] [--burst] [--yes]
-      (a lead: the lead, or a sub-lead into its own group) adds a worker the leader is sure the team needs,
+      (the lead) adds a worker it is sure the team needs,
       or hires a retired one back, within hiring.policy, on the lead's model and effort unless given;
       without --yes it shows the hire and writes nothing;
       with no room on the host for one more session it is hired home, left closed until there is room;
       --burst: a hire for the burst in force, within its hires, never a cheaper model or lower effort, due to
       retire when the burst is over (under hiring.policy owner the burst's approver approves it);
       on a hired session already on the team, --review <YYYY-MM-DD> --reason "<why>" keeps it to that new
-      review day instead (a lead over it), which clears its REVIEW-DUE
+      review day instead (the lead), which clears its REVIEW-DUE
   retire <id|name> [--to <heir>] [--no-handover "<why>"] [--reason "<why>"] [--yes]
-      (a lead over it: the lead, or its sub-lead; never the session itself) takes a session the team no longer
-      needs off the team; its open tasks go to --to, and it needs its handover unless --no-handover; its
-      tasks and inbox stay readable; without --yes it shows the retire and writes nothing
-  promote <id|name> --members <a,b> [--yes]
-      (the lead or a sub-lead) makes one of the sessions it leads directly the sub-lead of others it leads
-      directly: their decision and approval waits may go to it, and it approves them; without --yes it shows
-      the change and writes nothing
-  demote <id|name> [--yes]     (its own leader) takes a sub-lead's members back; without --yes it shows it
+      (the lead; never the session itself) takes a session the team no longer needs off the team; its open
+      tasks go to --to, and it needs its handover unless --no-handover; its tasks and inbox stay readable;
+      without --yes it shows the retire and writes nothing
   refresh <id|name>            the lead asks a session to write its handover when it next sets a task done
   refresh --ready              the handover the turn end asked to fix is complete as it is (the turn end takes one with both sections itself)
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
@@ -682,15 +672,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       each session's W on that task by UTC day; a turn's W splits equally over the task ids its calls
       name: T<n> in a command, t<n>- in a branch or path, not one a teamrig text, note, proof or
       follow-up only mentions
-  budget lift <id|name|team/id> [--group] --part <pct> --stop-pct <pct> --reason "<why>"
-      [--until <HH:MM|date>] [--reserve]
-      (its leaders; a sub-lead its own too) that session's part of its parent's daily budget (the team's, or its
-      sub-lead's group's), in % of that budget, not of the week (the LIFTED line gives the week share it comes to
-      now), today, until --until, the day's end or the week reaching --stop-pct; --group: the sub-lead's whole
-      group's part; --reserve: above budget.lift.maxStopPct, in the last hour before the reset; team/id: (the lead)
-      a session of a team under its own, topped up by a part of its own team's daily budget
+  budget lift <id|name|team/id> --part <pct> --stop-pct <pct> --reason "<why>" [--until <HH:MM|date>]
+      [--reserve]
+      (the lead) that session's part of the team's daily budget, in % of that budget, not of the week (the LIFTED
+      line gives the week share it comes to now), today, until --until, the day's end or the week reaching
+      --stop-pct; --reserve: above budget.lift.maxStopPct, in the last hour before the reset; team/id: a session of
+      a team under its own, topped up by a part of its own team's daily budget
   budget cut <id|name> [--until <HH:MM|date>] --reason "<why>"
-      (its leaders; a sub-lead its own too) holds that session to its own daily budget today, until --until or
+      (the lead) holds that session to its own daily budget today, until --until or
       the day's end: past it, it is held whatever room the team has; a new lift of it ends the cut
   budget extra [--add <usd>] [--spent <usd>]
       the extra-usage pool past 100% of the week: what is left, in dollars and W; (the lead only) --add: dollars
@@ -904,7 +893,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   test [--session <id|name>] -- <command ...>   runs a test command in the shell, writes all it printed
       to a log (each session keeps its newest 20) and prints one PASS or FAIL line, then each failing
       test within tests.maxFailureChars; exit 0 when the command passed, 1 otherwise
-  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
+  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook cold-send | hook failed-send | hook missing-cli | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by Claude Code, hook JSON on stdin)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
       (run by the plugin's mod: the automatic restart's /clear in the tab)

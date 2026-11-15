@@ -1,17 +1,15 @@
 import { claudeProjectsDir, lastWriteOf } from "../../budget/discover.js";
-import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
 import { ENV, KIT_NAME } from "../../core/home.js";
 import { NAME_RULE } from "../../core/ids.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { SecretScanner } from "../../core/secrets.js";
-import { groupIds, parseTo, taskGroupOf, treeLeadsOf } from "../../inbox/groups.js";
+import { parseTo, taskGroupOf, treeLeadsOf } from "../../inbox/groups.js";
 import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLines, readInbox } from "../../inbox/inbox.js";
 import { lineHash } from "../../inbox/line-hash.js";
 import { CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf } from "../../inbox/marks.js";
 import { reachOf } from "../../inbox/reach.js";
-import { routeReminderOf } from "../../inbox/route.js";
 import { InboxDir, JsonlMarkLog } from "../../inbox/store.js";
 import { WAKE_AT_ONCE, WAKE_NOW, wakeByOf, wakeRefusal, wakesLine } from "../../inbox/wake-now.js";
 import { WakeAsks } from "../../wake/asks.js";
@@ -175,12 +173,7 @@ async function recipientsOfItem(runtime, own, item, reads) {
     if (item.kind === 'task') {
         return taskRecipients(runtime, own, reads, item.id);
     }
-    const group = item.kind === 'group' ? { kind: item.kind, leader: sessionIdOf(own.roster, item.leader) } : item;
-    const ids = groupIds(own.config, group, own.from.id);
-    if (!ids.ok) {
-        throw new RefusedError(ids.problem);
-    }
-    return ids.ids.map((id) => ownTeamRecipient(own, id));
+    return own.config.sessions.filter((id) => id !== own.from.id).map((id) => ownTeamRecipient(own, id));
 }
 /** Every recipient the `--to` items name, each once, in the order first named; refused when none is left. */
 async function recipientsOf(runtime, own, items, to, reads) {
@@ -204,31 +197,10 @@ function postedLine(recipients) {
     }
     return `POSTED to ${recipients.length} sessions (${recipients.map((recipient) => recipient.label).join(', ')}); each is reminded at its next prompt`;
 }
-/**
- * The route reminders (T783) for the sessions of the sender's team that `--to` names one by one, each once. A group
- * (`all`, `leads`, `group:<leader>`, `team:<team>`, `tree:leads`, `task:T<n>`) is a broadcast, not work handed past a
- * sub-lead, so it gets none.
- */
-function routeRemindersOf(own, items, text) {
-    const tree = new LeadTree(own.config);
-    const reminders = new Set();
-    for (const item of items) {
-        if (item.kind !== 'session' || (item.address.team !== undefined && item.address.team !== own.from.team)) {
-            continue;
-        }
-        const to = sessionIdOf(own.roster, item.address.session);
-        const reminder = routeReminderOf(tree, { from: own.from.id, to, text }, (id) => id, KIT_NAME);
-        if (reminder !== undefined) {
-            reminders.add(reminder);
-        }
-    }
-    return [...reminders];
-}
 /** The sender as the `--wake now` / `--wake-by` gate reads it; the teams below its own are read only when a recipient is on another team. */
 async function wakeSenderOf(own, recipients, reads) {
-    const leads = new LeadTree(own.config);
     const below = recipients.some((recipient) => recipient.crossing) ? (await reads.tree()).tree.descendantsOf(own.from.team) : [];
-    return { team: own.from.team, id: own.from.id, leader: leads.isLeader(own.from.id), teamLead: leads.lead === own.from.id, below };
+    return { team: own.from.team, id: own.from.id, teamLead: own.config.roles.lead === own.from.id, below };
 }
 /**
  * A recipient as the wake gate reads it: whether it leads its team, and whether the sender's team config names it in
@@ -295,18 +267,17 @@ function wakeWhenOf(wake, wakeBy, now, zone) {
     }
     return wakeByOf(at, now, zone);
 }
-const TO_FORMS = 'a session id or name, <team>/<id>, all, leads, group:<leader>, team:<team>, tree:leads, task:T<n>, or a comma-separated list of them';
+const TO_FORMS = 'a session id or name, <team>/<id>, all, team:<team>, tree:leads, task:T<n>, or a comma-separated list of them';
 /**
  * `inbox add --to <to> --text "<line>" [--wake now]`: appends one dated line to each receiver's inbox, all of them
  * or, when one is refused, none. A bare id or name is on the sender's team; `<team>/<id>` reaches any session of
- * another team of its tree, and that line names the sender `<team>/<id>`. `all`, `leads` and `group:<leader>` are
- * groups of the sender's team, `team:<team>` (every session of a team of its tree), `tree:leads` (every team's lead
- * of its tree) and `task:T<n>` (the owner of that task and of each active task of its tree whose ref is T<n>, T1151)
- * groups of its tree; a group leaves the sender out, and a comma-separated list names each receiver once.
- * A line to a session named on the sender's team that skips a sub-lead below the sender is posted, then a further line
- * tells the sender to route such work via that sub-lead (T783). `--wake now` (T1147) also wakes each receiver idle at
- * its prompt within about 3 minutes (`wake.batchSeconds`), and says what that costs; `--wake-by <time>` (T1148) wakes
- * it at that time instead, and only if it has not seen the line by then. A group is woken only by a leader, another
+ * another team of its tree, and that line names the sender `<team>/<id>`. `all` is every session of the sender's team,
+ * `team:<team>` (every session of a team of its tree), `tree:leads` (every team's lead of its tree) and `task:T<n>`
+ * (the owner of that task and of each active task of its tree whose ref is T<n>, T1151) groups of its tree; a group
+ * leaves the sender out, and a comma-separated list names each receiver once. `--wake now` (T1147) also wakes each
+ * receiver idle at its prompt within about 3 minutes (`wake.batchSeconds`), and says what that costs; `--wake-by
+ * <time>` (T1148) wakes it at that time instead, and only if it has not seen the line by then. A group is woken only
+ * by the team's lead, another
  * team only by a team lead (a team below its own, any team's lead, a role holder its config names), else nothing is
  * posted.
  */
@@ -356,9 +327,6 @@ export async function add(args, runtime) {
         for (const line of await postWakes(runtime, own, recipients, text.trim(), now, when)) {
             runtime.out.stdout(line);
         }
-    }
-    for (const reminder of routeRemindersOf(own, items, text)) {
-        runtime.out.stdout(reminder);
     }
     return EXIT.ok;
 }

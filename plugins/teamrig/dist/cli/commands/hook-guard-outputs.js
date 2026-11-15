@@ -1,4 +1,3 @@
-import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
 import { checkClient, clientRootOf } from "../../exec/client-integrity.js";
@@ -23,8 +22,7 @@ import { teamSessionOf } from "./hook-input.js";
  */
 /**
  * Under `pushToProtected: lead` or `gated`, what lets this tab's normal push to a protected branch through (T684): the
- * lead's own push, else a waiting task of its session's that a leader above it approved (T781), read lock-free from the
- * register. A child team's lead is no lead of the whole tree: its push needs the parent team's lead's approval (T1140).
+ * lead's own push, else a waiting task of its session's that the lead approved, read lock-free from the register. A child team's lead is no lead of the whole tree: its push needs the parent team's lead's approval (T1140).
  * It never throws: a register or tree it cannot read clears nothing, so the push is refused, saying why.
  */
 async function pushClearanceOf(runtime, kit, payload) {
@@ -34,7 +32,6 @@ async function pushClearanceOf(runtime, kit, payload) {
     }
     const { config } = kit.load;
     const lead = config.roles.lead;
-    const tree = new LeadTree(config);
     try {
         const roster = await rosterOf(runtime, kit, config);
         const session = await teamSessionOf(runtime, kit, roster, sessionIdOf(payload));
@@ -45,10 +42,9 @@ async function pushClearanceOf(runtime, kit, payload) {
             return leadClearanceOf(runtime, kit, config);
         }
         const { state } = await new JsonlEventLog(runtime.files, kit.paths.events).read();
-        const approvers = tree.chainOf(session);
-        const approved = approvedTaskOf(state.tasks.values(), session, approvers);
+        const approved = approvedTaskOf(state.tasks.values(), session, [lead]);
         return approved === undefined
-            ? { kind: 'none', approver: approvers[0] ?? lead, why: approvers.length > 1 ? `neither ${approvers.join(' nor ')} has approved a waiting task of ${session}'s` : `${lead} has approved no waiting task of ${session}'s` }
+            ? { kind: 'none', approver: lead, why: `${lead} has approved no waiting task of ${session}'s` }
             : { kind: 'approved', by: approved.by, task: approved.task.id };
     }
     catch (error) {

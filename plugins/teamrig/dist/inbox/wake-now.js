@@ -21,16 +21,15 @@ function leadMayWake(sender, target) {
 }
 /**
  * Why the sender may not wake these receivers; undefined when it may. A wake spends the receiver's turn and its
- * team's budget line, so a group (`all`, `leads`, `group:<leader>`, `team:<team>`, `tree:leads`) is woken only by a
- * leader, and a session of another team only by a team lead: in a team below its own, the lead of any team of its tree,
+ * team's budget line, so a group (`all`, `team:<team>`, `tree:leads`) is woken only by the team's lead, and a session of another team only by a team lead: in a team below its own, the lead of any team of its tree,
  * or a session its own config names in `roles`. Leads escalate up and across (T2685: a child team's lead could wake
  * neither its parent lead nor its security reviewer while a p0 waited on them); on its own team any session may wake
  * one it names.
  */
 export function wakeRefusal(sender, group, targets, when) {
     const { asked, flag } = flagsOf(when);
-    if (group && !sender.leader) {
-        return `${asked} on a group is a leader's: ${sender.id} leads no one on ${sender.team}; post the line without ${flag}, and each receiver reads it at its next prompt`;
+    if (group && !sender.teamLead) {
+        return `${asked} on a group is the lead's: ${sender.id} is not ${sender.team}'s lead; post the line without ${flag}, and each receiver reads it at its next prompt`;
     }
     const outside = targets.filter((target) => target.team !== sender.team && !leadMayWake(sender, target));
     if (outside.length > 0) {

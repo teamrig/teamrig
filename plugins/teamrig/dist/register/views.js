@@ -549,7 +549,7 @@ export function endedNotice(task, team) {
     return `${team}/${task.id} ${task.status}: ${task.title}${why === null ? '' : ` | ${label}: ${why.replace(/\s+/g, ' ')}`}`;
 }
 /**
- * The inbox line telling a leader (the lead, or a sub-lead, T781) that a task now waits on it, or, for the lead, on
+ * The inbox line telling a leader (the lead, or a child team's lead's parent lead) that a task now waits on it, or, for the lead, on
  * the owner, whose decision queue the lead keeps: `T2 waits on your approval and the owner's decision: <note>`, the
  * note (else the title) on one line.
  */

@@ -19,8 +19,8 @@ const GATED_KEYS = new Map([
     ['ownerGates', 'permissions'],
 ]);
 /** The roster: who is on the team and what each holds, which only its own commands change. */
-const ROSTER_KEYS = new Set(['team', 'sessions', 'names', 'leads', 'roles']);
-const ROSTER_NOTE = 'the roster: changed only by teamrig hire, retire, rename, promote and demote';
+const ROSTER_KEYS = new Set(['team', 'sessions', 'names', 'roles']);
+const ROSTER_NOTE = 'the roster: changed only by teamrig hire, retire and rename';
 const VERSION_NOTE = 'the config format: teamrig config migrate writes it';
 const STRUCTURE_NOTE = 'a list of records or a map: edit it in config.json or with its own command';
 const SKIPPED_KEYS = new Set(['$schema']);

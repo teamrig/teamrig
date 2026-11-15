@@ -1,5 +1,4 @@
 import { basename, dirname, join } from 'node:path';
-import { LeadTree } from "../../config/lead-tree.js";
 import { ownerAsk } from "../../config/tree.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { activeBurst, burstFloorOf, withBurst } from "../../budget/burst.js";
@@ -50,7 +49,7 @@ async function meterTab(runtime, store, id, transcript, budget) {
  * `otherTeamsOnAccount`) is weighed by its queued work in the register, replayed only when the register
  * changed since the last reading (`cachedWork`), or set by a lift; a burst the session is in raises it to at least
  * the burst's. Everyone's use today against the team's in-day pace
- * (`teamDay`) says whether a session past its part is held, unless a leader's cut of it is in force (`activeCut`):
+ * (`teamDay`) says whether a session past its part is held, unless the lead's cut of it is in force (`activeCut`):
  * then it is held past its part whatever room the team has. The lead,
  * with no burst in force, also gets the week's surplus when it is worth one. On the way, it keeps the team's week
  * summary, its sessions' week and its tasks' spend for readers that show them (budget/team-week-file.ts,
@@ -85,7 +84,7 @@ export async function budgetFactsOf(runtime, scope, transcript) {
     const { cuts } = await new CutLog(files, kit.paths.cuts).read();
     const cut = activeCut(cuts, lifts, id, now);
     const work = await cachedWork(files, kit.paths.events, join(kit.paths.usage, WORK_CACHE_FILE), config.register.priorities, now);
-    const split = budgetSplitOf({ team: kit.paths.team, ids: roster.ids, sessions: budget.sessions, leads: config.leads, work: work.weights, pausable: pausableOf(config, kit.paths.team, roster.ids), lifts, now, usedPct: week.usedPct });
+    const split = budgetSplitOf({ team: kit.paths.team, ids: roster.ids, sessions: budget.sessions, work: work.weights, pausable: pausableOf(config, kit.paths.team, roster.ids), lifts, now, usedPct: week.usedPct });
     const others = await otherTeamsOnAccount(runtime, { team: kit.paths.team, config, usageDir: kit.paths.usage }, now, week.usedPct);
     const teams = { split, others };
     const summary = teamWeekSummaryOf({ account: account.account, window: week.window, usedPct: week.usedPct, wPerPct: week.usedWPerPct, targetPct: budget.targetPct, states: [...byId.values()], teams, limits: week.limits, now });
@@ -132,8 +131,7 @@ export async function budgetFactsOf(runtime, scope, transcript) {
         budgetPct,
         lift,
         cut,
-        cutBy: cut === undefined ? undefined : leaderNamed(config, roster, cut.by),
-        ...liftNamesOf(funded, week.allowancePct, roster, id, lift),
+        ...liftNamesOf(funded, week.allowancePct, roster, lift),
         burst,
         paused: isPaused(funded.split, id),
         surplus,
@@ -143,35 +141,22 @@ export async function budgetFactsOf(runtime, scope, transcript) {
         isLead,
         urgent: work.urgent.get(id) ?? [],
         awaited: work.awaited.get(id) ?? [],
-        leader: budgetLeaderOf(config, roster, id),
         zone: teamZone(config, runtime),
     };
 }
-/**
- * The session's own leader, who gets its inbox line: the sub-lead that lists it, else the lead; undefined for the lead.
- * A session the config does not list (the tree knows only listed ones) still tells the lead.
- */
-function budgetLeaderOf(config, roster, id) {
+/** The lead's inbox line about the session; a refusal (a secret pattern, a bad id) comes back as a line for the person. */
+async function tellLead(runtime, scope, text, now) {
+    const { kit, config, roster, id } = scope;
     const lead = config.roles.lead;
-    const leader = new LeadTree(config).leaderOf(id) ?? (id === lead ? undefined : lead);
-    return leader === undefined ? undefined : leaderNamed(config, roster, leader);
-}
-/** A leader by its session id, with the name its lines call it by. */
-function leaderNamed(config, roster, id) {
-    return { id, name: roster.nameOf(id) ?? id, isLead: id === config.roles.lead };
-}
-/** The leader's inbox line about the session; a refusal (a secret pattern, a bad id) comes back as a line for the person. */
-async function tellLeader(runtime, scope, leader, text, now) {
-    const { kit, config, id } = scope;
     const problem = await postLine(inboxDepsOf(runtime, kit.paths).inboxes, new SecretScanner(config.register.secretPatterns), {
-        to: leader.id,
+        to: lead,
         from: id,
         text,
         now: new Date(now),
     });
-    return problem === undefined ? undefined : `Budget: the inbox line to ${leader.name} was not posted: ${problem}`;
+    return problem === undefined ? undefined : `Budget: the inbox line to ${roster.nameOf(lead) ?? lead} was not posted: ${problem}`;
 }
-/** The budget lines for the person at this turn's end (`stopWarning`), after metering the tab; posts its leader's inbox line when it is due. */
+/** The budget lines for the person at this turn's end (`stopWarning`), after metering the tab; posts the lead's inbox line when it is due. */
 export async function stopBudgetLines(runtime, scope, transcript) {
     const facts = await budgetFactsOf(runtime, scope, transcript);
     if (facts === undefined) {
@@ -179,9 +164,9 @@ export async function stopBudgetLines(runtime, scope, transcript) {
     }
     const store = new WarnStore(runtime.files, scope.kit.paths.warn);
     const result = stopWarning(facts, scope.config.budget, await store.read(scope.id));
-    // Saved before anything goes out: an unsaved state would repeat the lines, and the leader's line, at every stop.
+    // Saved before anything goes out: an unsaved state would repeat the lines, and the lead's line, at every stop.
     await store.write(scope.id, result.state);
-    const refused = result.leadLine === undefined || facts.leader === undefined ? undefined : await tellLeader(runtime, scope, facts.leader, result.leadLine, facts.now);
+    const refused = result.leadLine === undefined || facts.isLead ? undefined : await tellLead(runtime, scope, result.leadLine, facts.now);
     return refused === undefined ? result.lines : [...result.lines, refused];
 }
 /** The model's line with the next prompt (`promptWarning`), from the use as last stored: the turn's end metered it. */

@@ -1,5 +1,3 @@
-import { leadsAfterRetire } from "../config/lead-edits.js";
-import { LeadTree } from "../config/lead-tree.js";
 import { isRecord } from "../core/guards.js";
 /**
  * The plan behind `retire`: a session taken off the team config, its open tasks to an heir. Pure: it takes
@@ -23,25 +21,12 @@ function withoutBudget(file, id) {
     const budget = file['budget'];
     return isRecord(budget) ? { ...file, budget: withoutEntry(budget, 'sessions', id) } : file;
 }
-/** The file with the session out of `leads` and its members given to its leader, dropping `leads` once empty (T781). */
-function withoutLeader(file, config, id) {
-    const after = leadsAfterRetire(config, id);
-    if (after === undefined) {
-        return { file, regrouped: { members: [], to: config.roles.lead } };
-    }
-    const { members, to, leads } = after;
-    const next = Object.keys(leads).length === 0 ? Object.fromEntries(Object.entries(file).filter(([key]) => key !== 'leads')) : { ...file, leads };
-    return { file: next, regrouped: { members, to } };
-}
 /**
- * The refusal for who asked, or undefined: only a lead over the session (the lead, or a sub-lead it is under, T509)
- * retires it, as the leader decides which workers the team needs; a session never retires itself.
+ * The refusal for who asked, or undefined: only the lead retires a session (T509, T1320), as the lead decides which workers
+ * the team needs; a session never retires itself.
  */
-function callerProblem(config, tree, request) {
-    if (request.by === config.roles.lead || tree.leads(request.by, request.id)) {
-        return undefined;
-    }
-    return 'only a lead over the session retires it (the lead, or its sub-lead): the leader decides which workers the team needs';
+function callerProblem(config, request) {
+    return request.by === config.roles.lead ? undefined : 'only the lead retires a session: the lead decides which workers the team needs';
 }
 /** The refusal while another part of the config names the session, or undefined. */
 function namedProblem(config, id) {
@@ -59,12 +44,9 @@ function namedProblem(config, id) {
     }
     return undefined;
 }
-/**
- * The refusal for its open tasks and heir, or undefined. A sub-lead hands them only to itself or a session it leads,
- * so work never leaves its group by a sub-lead's hand (T782's rule for a task's owner, src/register/policy.ts).
- */
-function heirProblem(config, tree, request) {
-    const { by, heir, id, openTasks } = request;
+/** The refusal for its open tasks and heir, or undefined. */
+function heirProblem(config, request) {
+    const { heir, id, openTasks } = request;
     if (heir === undefined) {
         return openTasks.length === 0 ? undefined : `${id} owns open task(s) ${openTasks.join(', ')}: pass --to <heir> to hand them over, or close them first`;
     }
@@ -73,9 +55,6 @@ function heirProblem(config, tree, request) {
     }
     if (!config.sessions.includes(heir)) {
         return `the heir ${heir} is not on the team`;
-    }
-    if (by !== config.roles.lead && heir !== by && !tree.leads(by, heir)) {
-        return `${by} hands work only within its group: the heir ${heir} is not led by ${by}; the lead (${config.roles.lead}) moves work between groups`;
     }
     return undefined;
 }
@@ -92,7 +71,7 @@ function reasonOf(request) {
     const given = request.reason?.trim();
     return given === undefined || given === '' ? RETIRE_REASON : given;
 }
-/** The session taken out of `sessions`, `names`, `launch`, `budget.sessions` and `leads`, and its retire record; or why not. */
+/** The session taken out of `sessions`, `names`, `launch` and `budget.sessions`, and its retire record; or why not. */
 export function planRetire(file, config, active, request) {
     const { id } = request;
     if (!config.sessions.includes(id)) {
@@ -103,13 +82,12 @@ export function planRetire(file, config, active, request) {
         return { ok: false, problem: 'the config has no sessions list to take it from' };
     }
     const hired = active.some((hire) => hire.session === id);
-    const tree = new LeadTree(config);
-    const problem = callerProblem(config, tree, request) ?? namedProblem(config, id) ?? heirProblem(config, tree, request) ?? handoverProblem(request);
+    const problem = callerProblem(config, request) ?? namedProblem(config, id) ?? heirProblem(config, request) ?? handoverProblem(request);
     if (problem !== undefined) {
         return { ok: false, problem };
     }
     const off = { ...file, sessions: sessions.filter((session) => session !== id) };
-    const { file: next, regrouped } = withoutLeader(withoutBudget(withoutEntry(withoutEntry(off, 'names', id), 'launch', id), id), config, id);
+    const next = withoutBudget(withoutEntry(withoutEntry(off, 'names', id), 'launch', id), id);
     const handOver = request.heir === undefined ? [] : request.openTasks;
     const retire = {
         kind: 'retire',
@@ -121,5 +99,5 @@ export function planRetire(file, config, active, request) {
         by: request.by,
         at: request.now,
     };
-    return { ok: true, value: { config: next, retire, handOver, hired, regrouped } };
+    return { ok: true, value: { config: next, retire, handOver, hired } };
 }

@@ -67,8 +67,8 @@ export { describeLaunch, launchOf } from "../config/launch.js";
 export { Roster } from "../config/roster.js";
 export { readRenames, RENAME_VERSION } from "../names/rename.js";
 export { bareName, sessionDisplay } from "../core/ids.js";
-// The lead tree: `roles.lead` over the sub-leads the config's `leads` names, so a reader shows a session's leader
-// and a leader's group as teamrig's approvals and lists find them.
+// The lead tree: `roles.lead` over every other session of its team (T1320), so a reader shows a session's leader
+// and the lead's members as teamrig's approvals and lists find them.
 export { LeadTree } from "../config/lead-tree.js";
 // The team tree: each team config's `team.parent` link, read across the kit home's team folders, so a reader shows a
 // team's parent, children and root as teamrig's routing and `list --tree` find them.

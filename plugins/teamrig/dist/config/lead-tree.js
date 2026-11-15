@@ -1,46 +1,31 @@
 import { formatAddress } from "../core/address.js";
 /**
- * The team's lead tree (T781): `roles.lead` at the top, and each sub-lead in `leads` over the sessions it lists. A
- * session's leader is the sub-lead that lists it, else the lead; the lead has none on its team. The parser keeps the tree
- * whole (one leader per session, the lead never a member, no cycles), so every walk here ends at the lead. On a child
- * team, `above` is the parent team's lead (T1140), who approves the lead's own work, as the lead approves its members'.
+ * The team's lead tree: `roles.lead` leads every other session on the team, as a group with a lead of its own is a
+ * child team (T1140; config sub-leads went in T1320). On a child team, `above` is the parent team's lead, who approves
+ * the lead's own work, as the lead approves its members'.
  */
 export class LeadTree {
     lead;
     /** The parent team's lead as `<team>/<id>`, on a child team; undefined on a root team. */
     above;
     sessions;
-    /** Each listed member to the sub-lead that leads it. */
-    listedLeader;
-    subLeads;
     constructor(config, above) {
         this.lead = config.roles.lead;
         this.above = above === undefined ? undefined : formatAddress(above);
         this.sessions = config.sessions;
-        this.subLeads = new Set(Object.keys(config.leads));
-        this.listedLeader = new Map(Object.entries(config.leads).flatMap(([subLead, members]) => members.map((member) => [member, subLead])));
     }
-    /** The session's direct leader: its sub-lead, else the lead; undefined for the lead and for an id not on the team. */
+    /** The session's leader on the team: the lead; undefined for the lead and for an id not on the team. */
     leaderOf(id) {
-        if (id === this.lead || !this.sessions.includes(id)) {
-            return undefined;
-        }
-        return this.listedLeader.get(id) ?? this.lead;
+        return id === this.lead || !this.sessions.includes(id) ? undefined : this.lead;
     }
-    /** The leaders above the session, nearest first, ending at the lead; empty for the lead itself. */
+    /** The leaders above the session on the team: the lead, or none for the lead itself. */
     chainOf(id) {
-        const chain = [];
-        // The parser refuses cycles; the seen set only keeps a hand-built config from looping.
-        const seen = new Set([id]);
-        for (let leader = this.leaderOf(id); leader !== undefined && !seen.has(leader); leader = this.leaderOf(leader)) {
-            chain.push(leader);
-            seen.add(leader);
-        }
-        return chain;
+        const leader = this.leaderOf(id);
+        return leader === undefined ? [] : [leader];
     }
     /**
-     * Whose decision or approval a session's task may wait on, besides the human owner: its leaders, nearest first, so
-     * the lead always; the lead's own task waits on the parent team's lead on a child team, else on the lead.
+     * Whose decision or approval a session's task may wait on, besides the human owner: the lead; the lead's own task
+     * waits on the parent team's lead on a child team, else on the lead.
      */
     approversOf(id) {
         const chain = this.chainOf(id);
@@ -49,29 +34,16 @@ export class LeadTree {
         }
         return id === this.lead && this.above !== undefined ? [this.above] : [this.lead];
     }
-    /** The sessions the leader leads directly, in config order: for the lead, every session no sub-lead lists. */
+    /** The sessions the leader leads, in config order: every other session for the lead, none for anyone else. */
     membersOf(leader) {
         return this.sessions.filter((id) => this.leaderOf(id) === leader);
     }
-    /** Every session under the leader, at any depth, in config order. */
-    groupOf(leader) {
-        return this.sessions.filter((id) => this.chainOf(id).includes(leader));
-    }
-    /** Whether the session leads anyone: the lead, or a sub-lead. */
+    /** Whether the session leads anyone on the team: only the lead does. */
     isLeader(id) {
-        return id === this.lead || this.subLeads.has(id);
+        return id === this.lead;
     }
-    /** Whether `leader` is above `id` in the tree, at any depth. */
+    /** Whether `leader` leads `id` on the team. */
     leads(leader, id) {
-        return this.chainOf(id).includes(leader);
-    }
-    /**
-     * The sub-lead a message from `sender` to `receiver` skips: the one right below the sender on the receiver's chain.
-     * Undefined when the sender is the receiver's direct leader, or not above the receiver at all.
-     */
-    routeVia(sender, receiver) {
-        const chain = this.chainOf(receiver);
-        const at = chain.indexOf(sender);
-        return at > 0 ? chain[at - 1] : undefined;
+        return this.leaderOf(id) === leader;
     }
 }

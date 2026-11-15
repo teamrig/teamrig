@@ -551,7 +551,7 @@ export class RegisterPolicy {
             : `the security verdict ${verdict.by} gave on ${task.id}'s card read another question, options or recommendation: an edit needs a new verdict (core rule 9)`;
         return `${why}; ${route}`;
     }
-    /** Who leads the task's owner: its sub-lead or the lead, and for the lead, the parent team's lead; undefined at the root. */
+    /** Who leads the task's owner: the lead, and for the lead, the parent team's lead; undefined at the root. */
     leaderOf(task) {
         return this.tree.leaderOf(task.owner) ?? (task.owner === this.tree.lead ? this.tree.above : undefined);
     }
@@ -614,7 +614,7 @@ export class RegisterPolicy {
         }
     }
     /**
-     * Decision and approval waits are for the task owner's leaders (the lead, and any sub-lead above it; for a child
+     * Decision and approval waits are for the task owner's leaders (the lead; for a child
      * team's lead, the parent team's lead) and the owner, an approval wait also for the security reviewer, on another's
      * task (`waitAnswerersOf`): a peer's work is a task, waited on by its id, which clears by itself once that task
      * finishes, where a peer's decision would hold the task until its owner noticed.
@@ -630,7 +630,7 @@ export class RegisterPolicy {
             : `${reason.kind} ${reason.who}: ${reason.who} is neither ${answerers} nor ${ownerSource}`;
     }
     /**
-     * An answer to a task's approval wait (T684): only a leader above the task's owner answers (the lead, or a sub-lead,
+     * An answer to a task's approval wait (T684): only a leader above the task's owner answers (the lead,
      * T781; on a child team's lead's task, the parent team's lead, as `<team>/<id>`, T1140), or the security reviewer on
      * another's task (T828), only a task waiting on its own approval, and always with a note, which the task's owner
      * reads: what it checked, or why it declines. An approval of the owner's stays the owner's: no lead answers it.
@@ -657,7 +657,7 @@ export class RegisterPolicy {
      * {@link deferFrom} judges it.
      */
     defer(task, caller, until, note, context) {
-        if (caller !== task.owner && caller !== this.tree.lead && !this.tree.leads(caller, task.owner)) {
+        if (caller !== task.owner && caller !== this.tree.lead) {
             return refuse(`only the owner (${task.owner}) or ${this.approversText(task.owner)} puts ${task.id} off`);
         }
         return this.deferFrom(task, until, note, context);
@@ -693,7 +693,7 @@ export class RegisterPolicy {
      * in a decision batch. Its owner or a leader above it records the answer, as {@link decideFrom} judges it.
      */
     decide(task, caller, note) {
-        if (caller !== task.owner && caller !== this.tree.lead && !this.tree.leads(caller, task.owner)) {
+        if (caller !== task.owner && caller !== this.tree.lead) {
             return refuse(`only the owner (${task.owner}) or ${this.approversText(task.owner)} records a decision on ${task.id}`);
         }
         return this.decideFrom(task, note);
@@ -896,7 +896,7 @@ export class RegisterPolicy {
      * team's leader sorts tasks their owners never tagged, so it is widened here and not in LEAD_FIELDS.
      */
     triage(task, caller, asked, state, elsewhere = NO_TASKS_ELSEWHERE, goalTags = NO_GOAL_TAGS) {
-        if (caller !== task.owner && caller !== this.tree.lead && !this.tree.leads(caller, task.owner)) {
+        if (caller !== task.owner && caller !== this.tree.lead) {
             return refuse(`only the owner (${task.owner}) or ${this.approversText(task.owner)} changes ${task.id}`);
         }
         return this.triageFrom(task, asked, state, elsewhere, goalTags);
@@ -947,40 +947,33 @@ export class RegisterPolicy {
     }
     /**
      * Why `caller` may not set or clear the prep marker of task `id` (T2453), or undefined when it may: the marker lets a
-     * design for a ranked goal's near slice past the slice cap, so only a lead sets it (the lead, or a sub-lead over the
-     * task's `owner`), never the owner itself unless it is the lead, so a build cannot ride it. A marker names one of
+     * design for a ranked goal's near slice past the slice cap, so only the lead sets it, never the
+     * task's `owner` itself unless it is the lead, so a build cannot ride it. A marker names one of
      * `goalTags`, the goal records of the team and the teams above it, whatever register.goals says: a marker on no goal
      * would only ever lapse.
      */
     prepProblem(id, owner, caller, prepares, goalTags) {
-        if (caller !== this.tree.lead && !this.tree.leads(caller, owner)) {
+        if (caller !== this.tree.lead) {
             return `only ${this.approversText(owner)} marks what ${id} prepares: the marker lets a design run outside the slice cap`;
         }
         return prepares === null || goalTags.has(prepares.goal) ? undefined : `goal ${prepares.goal} is not a goal record of the team or a team above: teamrig goal list lists them`;
     }
     /**
-     * Why a session may not change the work order of a task it does not own, or undefined when it may (T782): the lead
-     * on any task, a sub-lead on the tasks of its group; only the LEAD_FIELDS (the lead the LEFT_OWNER_LEAD_FIELDS on a
-     * task whose owner left the team, or when it points a task holding no issue ref at an issue: issue migrate opens an
-     * issue for each task of the team and links it, replacing a note ref, while a task's issue stays its issue), and a
-     * sub-lead hands a task only
-     * to itself or a session it leads, so work never leaves its group by a sub-lead's hand.
+     * Why a session may not change the work order of a task it does not own, or undefined when it may (T782): only the
+     * lead, and only the LEAD_FIELDS (the LEFT_OWNER_LEAD_FIELDS on a task whose owner left the team, or when it points a
+     * task holding no issue ref at an issue: issue migrate opens an issue for each task of the team and links it,
+     * replacing a note ref, while a task's issue stays its issue). Sub-leads went in T1320: a group with a lead of its
+     * own is a child team.
      */
     leaderUpdateProblem(task, caller, names, changes) {
-        const isLead = caller === this.tree.lead;
-        if (!isLead && !this.tree.leads(caller, task.owner)) {
+        if (caller !== this.tree.lead) {
             return `only the owner (${task.owner}) or ${this.approversText(task.owner)} changes ${task.id}`;
         }
         const linksIssue = task.ref?.startsWith(ISSUE_REF_PREFIX) !== true && changes.ref !== undefined && changes.ref !== null && changes.ref.startsWith(ISSUE_REF_PREFIX);
-        const allowed = isLead && (linksIssue || !this.config.sessions.includes(task.owner)) ? LEFT_OWNER_LEAD_FIELDS : LEAD_FIELDS;
+        const allowed = linksIssue || !this.config.sessions.includes(task.owner) ? LEFT_OWNER_LEAD_FIELDS : LEAD_FIELDS;
         const notLead = names.filter((name) => !allowed.includes(name));
         if (notLead.length > 0) {
             return `a leader may change only ${allowed.join(', ')} on a task it does not own (asked: ${notLead.join(', ')})`;
-        }
-        const group = this.tree.groupOf(caller);
-        const { owner } = changes;
-        if (!isLead && owner !== undefined && owner !== caller && !group.includes(owner)) {
-            return `${caller} hands ${task.id} only to itself or a session it leads (${group.join(', ')}); the lead (${this.tree.lead}) moves work between groups`;
         }
         return undefined;
     }

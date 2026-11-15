@@ -242,9 +242,8 @@ function noteRegisterOnly(runtime, team, by, note, verdict, told) {
 }
 /**
  * One inbox line to each leader that a write set a task waiting on, or a verifying task's proof, for a decision or an
- * approval it did not wait on before: a wait on one of the task owner's leaders (the lead, or a sub-lead, T781) goes
- * to that leader, a wait on the owner to the task owner's own leader, which passes it up (the lead keeps the owner's
- * decision queue and asks it in its batch); never to the leader who set it. A wait on the parent team's lead, the
+ * approval it did not wait on before: a wait on the lead goes to the lead, a wait on the owner to the task owner's
+ * leader, the lead, which keeps the owner's decision queue and asks it in its batch; never to the leader who set it. A wait on the parent team's lead, the
  * lead's own approver on a child team (T1140), goes to that lead's inbox in the parent team, the task named
  * `<team>/T12`, and so does a child team's lead's own wait on the owner (T1265), as that lead is its leader. A new
  * wait on the owner says when the owner hears it (src/decisions/batch.ts): in the next batch, in the one due now, or
@@ -284,7 +283,7 @@ async function tellLeadersOfWaits(runtime, team, by, verdict) {
         }
         const root = owner.askedBy;
         if (root === undefined) {
-            runtime.out.stderr(await atOnceNote(runtime, team, by, task.id, receiver, posted ? text : undefined));
+            runtime.out.stderr(await atOnceNote(runtime, team, by, task.id, posted ? text : undefined));
             continue;
         }
         const lined = receiver === formatAddress(root.address);
@@ -343,23 +342,19 @@ async function atOnceAtRoot(runtime, team, by, id, root, posted) {
     return `NOTE ${due}: its line wakes ${name}, who asks the owner, so no message is needed`;
 }
 /**
- * What the setter of an owner wait due before the next batch is told, so the lead hears of it at once. With wakes on,
- * the lead's own posted line also gets a wake ask, as an `inbox add --wake now` line does; a line that went to a
- * sub-lead, or was not posted, leaves the setter the wake line to post the lead. With wakes off a line wakes no one,
- * so the setter messages the lead.
+ * What the setter of an owner wait due before the next batch is told, so the lead, which got the line (T1320: no
+ * sub-lead takes it), hears of it at once. With wakes on, the posted line also gets a wake ask, as an
+ * `inbox add --wake now` line does; a line that was not posted leaves the setter the wake line to post the lead.
+ * With wakes off a line wakes no one, so the setter messages the lead.
  */
-async function atOnceNote(runtime, team, by, id, receiver, posted) {
+async function atOnceNote(runtime, team, by, id, posted) {
     const { lead } = team.config.roles;
     const leadName = team.roster.nameOf(lead) ?? lead;
     const due = `${id} is due before the owner's next batch`;
     if (!team.config.wake.enabled) {
-        const how = receiver === lead ? ' too, as an inbox line wakes no one' : `, who asks the owner: the inbox line went to ${receiver}, and a line wakes no one`;
-        return `NOTE ${due}: message ${leadName}${how}`;
+        return `NOTE ${due}: message ${leadName} too, as an inbox line wakes no one`;
     }
     const wakeLine = `${KIT_NAME} inbox add --to ${lead} --text "..." --wake now`;
-    if (receiver !== lead) {
-        return `NOTE ${due}: wake ${leadName}, who asks the owner (the inbox line went to ${receiver}): ${wakeLine}`;
-    }
     if (posted === undefined) {
         return `NOTE ${due}: wake ${leadName}: ${wakeLine}`;
     }

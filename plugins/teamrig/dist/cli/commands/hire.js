@@ -20,8 +20,7 @@ import { loadTree } from "../tree.js";
 import { freshOpenOf, resumeVerdictOf } from "./rehire.js";
 import { sessionProjectOf } from "./setup.js";
 /**
- * `hire`: a lead adds a worker it is sure the team needs within `hiring`'s policy: the team's lead, or a
- * sub-lead, whose hire joins its own group (T509). Without
+ * `hire`: the team's lead adds a worker it is sure the team needs within `hiring`'s policy (T1320). Without
  * --yes it only shows the hire; with it, the old config is kept in the backups folder, the hire is
  * logged in the hire log, then the session and its launch are written to the config. A hire gets no fixed daily
  * budget: its part of the team's follows its share and queued work, like any session's.
@@ -182,9 +181,8 @@ export async function hire(args, runtime) {
         const next = checkedNextConfig(plan.value.config);
         const nextRoster = await rosterOf(runtime, kit, next);
         await refuseNameClash(runtime, kit.paths.team, request.id, next, nextRoster);
-        const { hire: record, leader } = plan.value;
-        const ledBy = leader === config.roles.lead ? '' : `, led by ${nextRoster.nameOf(leader) ?? leader}`;
-        const what = `${record.session} (name ${nextRoster.nameOf(record.session) ?? record.session}) for "${record.scope}"${ledBy}: ${describeLaunch(record)}, review by ${record.reviewBy}${record.burst === undefined ? '' : `, for the burst started ${teamZone(config, runtime).weekdayMinute(new Date(record.burst))}`}`;
+        const { hire: record } = plan.value;
+        const what = `${record.session} (name ${nextRoster.nameOf(record.session) ?? record.session}) for "${record.scope}": ${describeLaunch(record)}, review by ${record.reviewBy}${record.burst === undefined ? '' : `, for the burst started ${teamZone(config, runtime).weekdayMinute(new Date(record.burst))}`}`;
         const from = retiredSessions(records).find((record) => record.session === request.id);
         // Measured before anything is written, so the preview shows it too.
         const rehire = from === undefined ? undefined : { from, verdict: await resumeVerdictOf(runtime, kit.paths, config.hiring, request.id, await sessionProjectOf(runtime, config, request.id, undefined, found.from)) };
