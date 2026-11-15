@@ -14,8 +14,8 @@ import type { TaskStatus } from '../register/model.ts';
  * note that lands only in the register (a `set` or `update` that told no leader) still reaches
  * the leader, at its next prompt and never by a wake. One line per task, the newest change first, at most
  * {@link DIGEST_MAX_LINES} of them; each change shows once, as a cursor per leader keeps how far the digest has read.
- * It reads the leader's own register alone, and only the tasks of its own group, so a task of another team or of another
- * sub-lead's group never shows; teamrig marks no task private, and a note matching a secret shape is withheld.
+ * It reads the leader's own register alone, and only the tasks of its own team, so a task of another team never
+ * shows; teamrig marks no task private, and a note matching a secret shape is withheld.
  */
 
 /** At most this many task lines; the rest are counted on one closing line. */

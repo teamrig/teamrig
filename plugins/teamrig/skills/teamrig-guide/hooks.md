@@ -226,7 +226,7 @@ first line over 1,500 characters is cut, and a note names the command that print
 ### Each prompt: the leader digest
 
 Off by default [register.leaderDigest]: while it is off, no leader is shown a digest and `set` and `update` print no
-`NOTED` line. Turned on, a leader (the lead, or a sub-lead listed in `leads`) is also shown, under its inbox lines,
+`NOTED` line. Turned on, the lead is also shown, under its inbox lines,
 the register changes in its tree since its last prompt: the tasks it owns and those of every session under it, as
 other sessions changed them. A note that lands only in the register (a `set` or `update` that told no leader, which
 prints `NOTED in the register (the lead sees it at its next prompt)`) reaches the leader this way, never by a wake:
@@ -242,8 +242,7 @@ teamrig: register changes in your tree since your last prompt (12 tasks):
 Each task gets one line, the newest change first: its status change since the last prompt (`new` for a task added
 since), or its status alone when that did not change, and the newest note another session wrote, else a new task's
 title, cut to 80 characters. At most 10 lines are shown, and one more counts the rest. Changes the leader wrote itself
-are left out. It reads only the leader's own register and its own group's tasks, so a task of another team or of another
-sub-lead's group never shows; a note or title that matches a secret shape (the shipped ones and
+are left out. It reads only the leader's own register and its own team's tasks, so a task of another team never shows; a note or title that matches a secret shape (the shipped ones and
 `register.secretPatterns`, a pattern added after the note too) shows as `(note withheld: it matches a secret shape)`.
 How far each leader has read is kept in `state/leader-digest/<id>.json`, so each change shows once, across a `/clear`
 too; a leader's first prompt only sets it, so it is never shown the whole history. The digest posts no inbox line and

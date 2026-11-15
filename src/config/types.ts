@@ -103,7 +103,7 @@ export interface RegisterConfig {
    */
   readonly autoArchive: boolean;
   /**
-   * Whether a leader (the lead, or a sub-lead in `leads`) is shown, at each prompt, the register changes in its tree
+   * Whether the lead is shown, at each prompt, the register changes in its tree
    * since its last one (hooks/leader-digest.ts), and a member's note that told no leader says it waits for that digest.
    * Off (the default), neither: a note reaches a leader only by a line posted to it.
    */
