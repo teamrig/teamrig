@@ -13,8 +13,8 @@ const under = (folder: string): string => `${folder.replaceAll('\\', '/')}/`;
 const HEADING = /^teamrig: register changes in your tree since your last prompt \((\d+) tasks?\):$/m;
 /** The digest is off by default (register.leaderDigest); these teams turn it on. */
 const ON: JsonRecord = { ...TEAM, register: { leaderDigest: true } };
-/** A team with a sub-lead: alpha leads bravo; charlie answers to the lead. */
-const SUB_LEADS: JsonRecord = { sessions: ['lead', 'alpha', 'bravo', 'charlie'], roles: { lead: 'lead' }, leads: { alpha: ['bravo'] }, register: { leaderDigest: true } };
+/** A team of the lead and three members, every one answering to the lead (sub-leads went in T1320). */
+const THREE_MEMBERS: JsonRecord = { sessions: ['lead', 'alpha', 'bravo', 'charlie'], roles: { lead: 'lead' }, register: { leaderDigest: true } };
 
 async function ok(kit: CliHarness, argv: readonly string[]): Promise<CliResult> {
   const result = await kit.run(argv);
@@ -120,18 +120,17 @@ describe('the leader digest at UserPromptSubmit', () => {
     assert.deepEqual(digestRows(await prompt(kit, 'lead')), ['- T1 open: on it']);
   });
 
-  it('goes to leaders only: a sub-lead sees its own group, the lead its whole tree, a member nothing and no cursor', async () => {
-    const kit = new CliHarness(SUB_LEADS);
+  it("goes to the lead only: the lead sees every member's task, a member nothing and no cursor", async () => {
+    const kit = new CliHarness(THREE_MEMBERS);
     for (const session of ['lead', 'alpha', 'bravo', 'charlie']) {
       assert.doesNotMatch(await prompt(kit, session), HEADING);
     }
     kit.clock.advance(1_000);
+    await addTask(kit, 'alpha', 'Alpha work');
     await addTask(kit, 'bravo', 'Bravo work');
     await addTask(kit, 'charlie', 'Charlie work');
-    const alpha = digestRows(await prompt(kit, 'alpha'));
-    assert.deepEqual(alpha, ['- T1 new -> open: Bravo work'], "the sub-lead sees its member's task alone");
-    assert.deepEqual(digestRows(await prompt(kit, 'lead')), ['- T2 new -> open: Charlie work', '- T1 new -> open: Bravo work']);
-    for (const member of ['bravo', 'charlie']) {
+    assert.deepEqual(digestRows(await prompt(kit, 'lead')), ['- T3 new -> open: Charlie work', '- T2 new -> open: Bravo work', '- T1 new -> open: Alpha work']);
+    for (const member of ['alpha', 'bravo', 'charlie']) {
       assert.doesNotMatch(await prompt(kit, member), HEADING, `${member} is shown nothing`);
       assert.equal(kit.files.get(join(CURSORS, `${member}.json`)), undefined, `${member} gets no cursor`);
     }

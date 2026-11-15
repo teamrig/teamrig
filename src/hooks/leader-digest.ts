@@ -43,7 +43,7 @@ export interface DigestInput {
   readonly since: DigestCursor;
   /** The leader shown the digest: its own writes are none of its news. */
   readonly leader: string;
-  /** The owners of the leader's tree: the leader and every session under it (LeadTree.groupOf). */
+  /** The owners of the leader's tree: the leader and its members (LeadTree.membersOf). */
   readonly tree: ReadonlySet<string>;
   /**
    * Whether a text matches a secret shape (core/secrets.ts with the team's `register.secretPatterns`): such a note or

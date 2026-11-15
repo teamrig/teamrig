@@ -69,7 +69,7 @@ describe('digestLines', () => {
   it("leaves out the leader's own writes and tasks outside its tree", () => {
     const events = [...before, create('T3', 2, 'charlie'), note('T1', 3, 'lead', 'looked at it'), status('T2', 4, 'bravo', 'in-progress', 'started')];
     assert.deepEqual(digest(events, cursor).slice(1), ['- T2 open -> in-progress: started']);
-    assert.deepEqual(digest(events, cursor, ['alpha', 'bravo'], 'alpha').slice(1), ['- T2 open -> in-progress: started', '- T1 open: looked at it'], "a sub-lead sees the lead's note on its member's task");
+    assert.deepEqual(digest(events, cursor, ['alpha', 'bravo'], 'alpha').slice(1), ['- T2 open -> in-progress: started', '- T1 open: looked at it'], "a leader other than the writer sees the lead's note on a task of its tree");
   });
 
   it('keeps the note of another session when the leader wrote the newest one', () => {

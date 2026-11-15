@@ -29,7 +29,7 @@ export async function leaderDigestText(runtime: Pick<CliRuntime, 'files' | 'cloc
   }
   const secrets = new SecretScanner(config.register.secretPatterns);
   const isSecret = (text: string): boolean => secrets.find(text) !== undefined;
-  const lines = digestLines({ events: read.events, tasks: state.tasks, since, leader: id, tree: new Set([id, ...leaders.groupOf(id)]), isSecret });
+  const lines = digestLines({ events: read.events, tasks: state.tasks, since, leader: id, tree: new Set([id, ...leaders.membersOf(id)]), isSecret });
   if (after !== undefined && (after.at !== since.at || after.seen !== since.seen)) {
     await store.write(id, after);
   }
