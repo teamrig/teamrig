@@ -190,7 +190,8 @@ secret's data or a dump command's output (`kubectl config view --raw`), and read
 too. A line that reads a saved credential out of the host's store is refused whether it prints the key or not
 (`gh auth token`, `git credential fill`, `cmdkey /list`, `CredRead`, a `teamrig-gh-<owner>` name), and so is a line
 that starts a script file holding one of them (`node x.js`, `bash x.sh`), so a key saved for one tool stays with that
-tool. Output piped or redirected away from the screen passes (`cat .env | wc -c`, `echo "$T" | docker login
+tool. The script check is a tripwire, not a boundary: it reads only the entry file on this host's drives, up to 1 MB,
+not what that file imports or sources. Output piped or redirected away from the screen passes (`cat .env | wc -c`, `echo "$T" | docker login
 --password-stdin`), and the reason names the ways to use or check a secret unprinted. It also refuses a shell line
 that holds a secret as text, since the line itself stays in the transcript: a token by its shape, credentials in a
 URL, the credentials of an `Authorization` or API key header. A reference (`${DB_URI}`, `<db_password>`) or a
