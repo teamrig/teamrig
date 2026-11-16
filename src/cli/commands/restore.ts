@@ -6,6 +6,7 @@ import { resolveKitHome } from '../../core/home.ts';
 import { PlainLogFile } from '../../core/log-file.ts';
 import { indexMarks } from '../../inbox/marks.ts';
 import { JsonlMarkLog } from '../../inbox/store.ts';
+import { closedOf, SessionLog } from '../../sessions/log.ts';
 import { openedWords, openTab, type OpenOutcome } from '../../open/open-tab.ts';
 import { teamWindowOf } from '../../open/terminals.ts';
 import { encodePrompt } from '../../open/prompt.ts';
@@ -51,6 +52,7 @@ async function restoreTeamsOf(runtime: CliRuntime, teams: ReadonlyMap<string, Tr
   const found: RestoreTeam[] = [];
   for (const [team, { kit, config, roster }] of teams) {
     const { marks } = await new JsonlMarkLog(new PlainLogFile(runtime.files, kit.paths.inboxMarks)).read();
+    const { records } = await new SessionLog(runtime.files, kit.paths.sessionLog).read();
     found.push({
       team,
       lead: config.roles.lead,
@@ -58,6 +60,7 @@ async function restoreTeamsOf(runtime: CliRuntime, teams: ReadonlyMap<string, Tr
       terminal: config.open.terminal,
       teamWindow: config.open.teamWindow,
       areaBySession: indexMarks(marks).areaBySession,
+      closed: new Set(roster.ids.flatMap((id) => closedOf(records, id)?.hostSession ?? [])),
       efforts: new Map(
         roster.ids.flatMap((id) => {
           const { effort } = ownLaunchOf(config, id);

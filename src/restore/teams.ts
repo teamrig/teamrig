@@ -19,6 +19,11 @@ export interface RestoreTeam {
    * unset is not here and reopens in the team's `terminal` (T5093).
    */
   readonly terminals: ReadonlyMap<string, TerminalChoice>;
+  /**
+   * The Claude Code sessions teamrig closed (the idle pass, `teamrig close`) and has not reopened since: their newest
+   * session-log record is a close (src/sessions/log.ts `closedOf`). The restore leaves their tabs closed (#767).
+   */
+  readonly closed: ReadonlySet<string>;
 }
 
 /** The team session a Claude Code session ran as. */

@@ -81,6 +81,8 @@ export interface JudgeFacts {
   readonly kinds: ReadonlyMap<string, TranscriptKind>;
   /** The host's reading of where a session ran, from the words its entry kept; one it says nothing of reads as a tab. */
   readonly placeOf: SessionLauncher['sessionPlaceOf'];
+  /** The host sessions teamrig closed and has not reopened since (`RestoreTeam.closed`), of every team. */
+  readonly closedByTeamrig: ReadonlySet<string>;
 }
 
 export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
@@ -121,6 +123,11 @@ export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
   }
   if (kind?.continuedIn !== undefined) {
     return { verdict: 'discard', reason: `continued in ${kind.continuedIn.slice(0, 8)}` };
+  }
+  // Ended on purpose, whatever end its SessionEnd hook recorded after the close: work or an answer reopens it, with a
+  // reopen record that takes it off this set (#767).
+  if (facts.closedByTeamrig.has(entry.hostSession)) {
+    return { verdict: 'discard', reason: 'closed by teamrig' };
   }
   if (entry.endedAt === undefined) {
     return { verdict: 'restore', reason: 'killed without exiting' };
