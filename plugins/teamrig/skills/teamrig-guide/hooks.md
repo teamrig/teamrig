@@ -601,7 +601,8 @@ a session that only captures a key (`T=$(gh auth token)`) holds it all the same:
 tokens under (`teamrig-gh-<owner>`, `teamrig-ship-gh`), or asks teamrig's own git credential helper for a key
 (`git-credential get`, however teamrig is launched; a `git config` line that only names the helper passes). Without this any session could read every key its user saved,
 so a key kept for one tool drew no line between sessions; teamrig's own commands still read theirs, in their own
-process. A line that only mentions one of these words is refused as well (`grep -rn teamrig-gh- src`): search with the
+process. The script file such a line starts is read for the same words too (`node x.js`, `bash x.sh`,
+`pwsh -File x.ps1`, a script run as its program), up to 1 MB. A line that only mentions one of these words is refused as well (`grep -rn teamrig-gh- src`): search with the
 Grep tool instead, which runs no shell. `secretGuard.secretReads` settles it; no `!pattern` lets one through. The
 reason: "teamrig secret guard: this call reads a saved credential out of the host's credential store (gh auth token),
 printed or not. A session never reads the store: each tool's key stays with the tool that reads it (teamrig's own
