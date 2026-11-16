@@ -578,7 +578,7 @@ nested shells, `cd`, pipes and substitutions) and refuses a call that would prin
   (`grep -c`, `wc -l`, a Grep count) still passes.
 - **the whole environment**: `env`, `printenv`, `export -p`, `declare -x`, cmd's `set`, `Get-ChildItem Env:`,
   `[Environment]::GetEnvironmentVariables()`, `/proc/<pid>/environ`, and inline code that prints `process.env` or
-  `os.environ`.
+  `os.environ`. An `env` that runs a program is that run, a shell handed a script file too (`env -u FOO sh run`).
 - **a secret variable's value**: `echo $GITHUB_TOKEN`, `printenv NPM_TOKEN`, a bare `$env:GH_TOKEN`,
   `[Environment]::GetEnvironmentVariable("X")`, `[Console]::WriteLine($env:X)` (even in an assignment), a call that
   passes one on into what it prints (`[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($env:X))`,
