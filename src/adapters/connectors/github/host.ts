@@ -89,6 +89,7 @@ import {
   labelCreateArgs,
   labelFileReadArgs,
   subIssueAddArgs,
+  PULL_FILES_PAGE,
   WATCH_PATHS,
   watchProbeArgs,
   userReadArgs,
@@ -469,7 +470,7 @@ export class GitHubIssueHost implements IssueHost {
       return read;
     }
     const files = readPullFilesIn(read.stdout);
-    return files === undefined ? { kind: 'failed', reason: `gh printed no file list for ${shown}` } : { kind: 'read', ...files };
+    return files === undefined ? { kind: 'failed', reason: `gh printed no file list for ${shown}` } : { kind: 'read', ...files, perRead: PULL_FILES_PAGE };
   }
 
   /**

@@ -99,10 +99,11 @@ export type HostIssueLabels = { readonly kind: 'read'; readonly labels: readonly
 export type HostComments = { readonly kind: 'read'; readonly comments: readonly ReadComment[] } | { readonly kind: 'failed'; readonly reason: string };
 
 /**
- * The paths one read of a pull request's changed files gave, at most one page (gh.ts PULL_FILES_PAGE), with how many
- * names it left out as no plain path (more than one line, a control character, or too long); or the read failed.
+ * The paths one read of a pull request's changed files gave, with how many names it left out as no plain path (more
+ * than one line, a control character, or too long) and the most names one read gives (`perRead`, the host's page): a
+ * read that reached it may have missed the rest. Or the read failed.
  */
-export type HostPullFiles = { readonly kind: 'read'; readonly paths: readonly string[]; readonly leftOut: number } | { readonly kind: 'failed'; readonly reason: string };
+export type HostPullFiles = { readonly kind: 'read'; readonly paths: readonly string[]; readonly leftOut: number; readonly perRead: number } | { readonly kind: 'failed'; readonly reason: string };
 
 /**
  * A repository's issues as one list read them, the open ones and those closed since the day it was given, with what
