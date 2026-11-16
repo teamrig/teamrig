@@ -523,6 +523,13 @@ test('with --merge on a rebase whose parent was amended before it merged, the pa
   assert.ok(!events.some((event) => event.startsWith('clear ')));
 });
 
+test("with --merge on a rebase that keeps the parent's landed commit on top of main, that commit counts as added: a new approval (T3343)", async () => {
+  const options = rebased([workOf('6666666667', 'core: the parent (T8)', 'pp'), ...STACKED_HEAD]);
+  const { deps, events } = fake({ ...options, work: { ...options.work, [APPROVED_SHA]: [PARENT, ...APPROVED_WORK] }, landed: { [APPROVED_SHA]: [PARENT] } });
+  await assert.rejects(shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, deps), /: added 666666666 "core: the parent \(T8\)"\. Ship it without --merge/);
+  assert.ok(!events.some((event) => event.startsWith('clear ')));
+});
+
 test('with --merge, an --approved that is neither the head nor a commit here is refused before anything changes (T2913)', async () => {
   const { deps, events } = fake({ gitFails: 'rev-parse --verify --quiet 61854f9e1^{commit}' });
   await assert.rejects(shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, deps), /^Error: REFUSED --approved 61854f9e1 is not the branch head 5efae2e91, nor a commit here to compare its work with$/);
