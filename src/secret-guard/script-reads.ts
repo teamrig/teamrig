@@ -83,10 +83,20 @@ function scriptEntryOf(run: ProgramRun): ScriptEntry | undefined {
 }
 
 /**
+ * True when `path` is on one of this host's drives: `C:\` or `C:/`, or on a host other than Windows a root `/`. The
+ * guard runs before the line is let run, so any other path (`//host/share`, `\\host\share`, `\\?\UNC\host`, a device)
+ * is never opened: opening it would connect to a host the line's text chose, as the user (T3038).
+ */
+export function onLocalDrive(path: string, platform: typeof process.platform = process.platform): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || (platform !== 'win32' && /^\/(?!\/)/.test(path));
+}
+
+/**
  * The saved credentials the script files a line starts read (T3038): the entry file each program run hands an
  * interpreter or runs as its program, and each file a shell runs (`bash x.sh`, `pwsh -File x.ps1`), read through
  * `scripts` and matched for the store commands, store APIs and teamrig's token names. A word only known when the line
- * runs, a relative path from a folder only known then, and a file `scripts` cannot read hold no finding.
+ * runs, a relative path from a folder only known then, a path off this host's drives (`onLocalDrive`) and a file
+ * `scripts` cannot read hold no finding.
  */
 export function scriptReadFindings(runs: Pick<LineRuns, 'programs' | 'files'>, scripts: ScriptTexts, home: string): SecretFinding[] {
   const entries = [
@@ -99,7 +109,7 @@ export function scriptReadFindings(runs: Pick<LineRuns, 'programs' | 'files'>, s
     }
     const written = entry.dialect === 'bash' ? bashDrivePath(entry.word.text, home) : entry.word.text;
     const path = resolveDir(entry.dir, written, home);
-    const text = path === undefined ? undefined : scripts.text(path);
+    const text = path === undefined || !onLocalDrive(path) ? undefined : scripts.text(path);
     return text === undefined || (entry.needsShebang && !text.startsWith('#!')) ? [] : scriptCredentialFindings(text, entry.word.text);
   });
 }

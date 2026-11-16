@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runsOf } from '../package-guard/programs.ts';
 import type { ShellDialect } from '../push-guard/tokenizer.ts';
 import { FakeScripts } from '../testing/fake-scripts.ts';
-import { scriptReadFindings } from './script-reads.ts';
+import { onLocalDrive, scriptReadFindings } from './script-reads.ts';
 
 const KEY_READER = "const { execSync } = require('node:child_process');\nconst t = execSync('gh auth token').toString();\n";
 const PLAIN = "console.log('hello');\n";
@@ -89,5 +89,39 @@ describe('scriptReadFindings (T3038)', () => {
 
   it('holds no finding for a script it cannot read', () => {
     assert.deepEqual(reads('node missing.js', new FakeScripts()), []);
+  });
+
+  it('opens no script off this host\'s drives, as a share or device path, before the line is let run', () => {
+    const cases: readonly (readonly [string, ShellDialect])[] = [
+      ['bash //host/share/x.sh', 'bash'],
+      ["node '\\\\host\\share\\x.js'", 'bash'],
+      ['cd //host/share && bash x.sh', 'bash'],
+      ['pwsh -File \\\\host\\share\\x.ps1', 'powershell'],
+      ['& \\\\host\\share\\x.ps1', 'powershell'],
+      ['python \\\\?\\UNC\\host\\share\\x.py', 'powershell'],
+      ['node \\\\.\\pipe\\x.js', 'powershell'],
+    ];
+    for (const [line, dialect] of cases) {
+      const scripts = new FakeScripts({ '//host/share/x.sh': KEY_READER });
+      assert.deepEqual(reads(line, scripts, dialect), [], line);
+      assert.deepEqual(scripts.reads, [], line);
+    }
+  });
+});
+
+describe('onLocalDrive (T3038)', () => {
+  it('takes a drive path on any host, and a root path only off Windows', () => {
+    assert.equal(onLocalDrive('C:\\w\\x.js', 'win32'), true);
+    assert.equal(onLocalDrive('d:/w/x.js', 'win32'), true);
+    assert.equal(onLocalDrive('/srv/w/x.sh', 'linux'), true);
+    assert.equal(onLocalDrive('/w/x.js', 'win32'), false);
+  });
+
+  it('refuses a share, a device and a relative path on every host', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      for (const path of ['//host/share/x.sh', '\\\\host\\share\\x.js', '\\\\?\\UNC\\host\\share\\x.py', '\\\\.\\pipe\\x', '\\w\\x.js', 'x.js', 'C:x.js']) {
+        assert.equal(onLocalDrive(path, platform), false, `${platform} ${path}`);
+      }
+    }
   });
 });
