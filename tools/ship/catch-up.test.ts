@@ -51,6 +51,8 @@ function fakeGit(fixture: Fixture = {}): { git: (...args: string[]) => string; c
     'rev-parse --abbrev-ref HEAD': fixture.checkedOut ?? HEAD,
     'status --porcelain': fixture.status ?? '',
     [`merge-base ${SHA} ${TIP}`]: BASE,
+    // Main holds none of the head's commits: it is stacked on no parent.
+    [`cherry ${TIP} ${SHA} ${BASE}`]: `+ ${SHA}`,
     [diff(BASE, SHA)]: DIFF_AT_BASE,
     'rebase --abort': '',
     'rev-parse HEAD': REBASED,
@@ -528,4 +530,80 @@ test('another merge landing the same version while the catch-up push runs its ga
   assert.equal(readFileSync(join(dir, PLUGIN), 'utf8'), '{\n  "name": "teamrig",\n  "version": "0.2.2"\n}\n');
   assert.equal(readFileSync(join(dir, KIT), 'utf8'), "export const KIT_VERSION = '0.2.2';\n");
   assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${HEAD}`).split('\t')[0], git('rev-parse', 'HEAD'));
+});
+
+type Files = Readonly<Record<string, string>>;
+
+/**
+ * A head stacked on a parent branch (t8-parent, cut from the base) that rebase-merged first (T3343): main holds the
+ * parent's work under new shas, at its own raise 0.2.1. The head carries the parent's commits under the old shas, its
+ * raise to 0.1.1 and dist, then its own work and its raise to 0.1.2. `parentWork` is the parent's, a commit each;
+ * `landedWork` what main lands of it (the same by default); `ownWork` the head's own.
+ */
+function stackedOnLanded(t: { after: (fn: () => void) => void }, options: { parentWork?: readonly Files[]; landedWork?: readonly Files[]; ownWork?: readonly Files[] } = {}) {
+  const parentWork = options.parentWork ?? [{ 'src/a.ts': 'export const a = 2;\n' }];
+  const repo = teamrigRepo(t);
+  const { git, commitFiles, raise } = repo;
+  const base = git('rev-parse', 'HEAD');
+  commitFiles({ 'src/b.ts': 'export const b = 1;\n' }, 'main: its own work');
+  raise('0.2.0', 'plugin: version 0.2.0, b arrives');
+  git('switch', '-q', '--create', 't8-parent', base);
+  parentWork.forEach((files, at) => commitFiles(files, `a: the parent's work ${at + 1} (T8)`));
+  raise('0.1.1', 'plugin: version 0.1.1, a changes (T8)');
+  git('switch', '-q', '--create', HEAD);
+  (options.ownWork ?? [{ 'src/c.ts': 'export const c = 1;\n' }]).forEach((files, at) => commitFiles(files, `c: c arrives ${at + 1} (T9)`));
+  const sha = raise('0.1.2', 'plugin: version 0.1.2, c arrives (T9)');
+  git('push', '-q', 'origin', HEAD);
+  git('switch', '-q', 'main');
+  (options.landedWork ?? parentWork).forEach((files, at) => commitFiles(files, `a: the parent's work ${at + 1} (T8)`));
+  const tip = raise('0.2.1', 'plugin: version 0.2.1, a changes (T8)');
+  git('push', '-q', 'origin', 'main');
+  git('switch', '-q', HEAD);
+  const logs: string[] = [];
+  const request: CatchUpRequest = { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
+  const deps: CatchUpDeps = { git, log: (line) => logs.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
+  return { ...repo, base, tip, sha, request, deps, logs };
+}
+
+test("a head stacked on a parent that merged first replays only its own work from the parent's tip, raised above main's (T3343)", (t) => {
+  const { git, tip, request, deps, logs } = stackedOnLanded(t);
+  assert.equal(reasonOf(catchUp(deps, request)), '');
+  assert.deepEqual(git('log', '--format=%s', `${tip}..HEAD`).split('\n'), ['build: rebuild the plugin dist', 'plugin: version 0.2.2, c arrives (T9)', 'c: c arrives 1 (T9)']);
+  assert.equal(git('show', 'HEAD:src/c.ts'), 'export const c = 1;');
+  assert.ok(logs.some((line) => /^t9-change is stacked on a parent main holds already \([0-9a-f]{9}(?:, [0-9a-f]{9})*\): its own commits after [0-9a-f]{9} are caught up$/.test(line)), logs.join('\n'));
+});
+
+test("a stacked head in a repo that makes nothing again is rebased from the parent's tip, its own diff read from there (T3343)", (t) => {
+  const { git, commitFiles } = teamrigRepo(t);
+  const base = git('rev-parse', 'HEAD');
+  commitFiles({ 'src/b.ts': 'export const b = 1;\n' }, 'main: its own work');
+  git('switch', '-q', '--create', HEAD, base);
+  commitFiles({ 'src/a.ts': 'export const a = 2;\n' }, "a: the parent's work (T8)");
+  const sha = commitFiles({ 'src/c.ts': 'export const c = 1;\n' }, 'c: c arrives (T9)');
+  git('push', '-q', 'origin', HEAD);
+  git('switch', '-q', 'main');
+  const tip = commitFiles({ 'src/a.ts': 'export const a = 2;\n' }, "a: the parent's work (T8)");
+  git('push', '-q', 'origin', 'main');
+  git('switch', '-q', HEAD);
+  const deps: CatchUpDeps = { git, log: () => undefined, readText: () => '', writeText: () => undefined, build: () => undefined };
+  const caught = catchUp(deps, { head: HEAD, tip, main: 'main', regenerated: [] });
+  assert.equal(reasonOf(caught), '');
+  assert.deepEqual(git('log', '--format=%s', `${tip}..HEAD`).split('\n'), ['c: c arrives (T9)']);
+  assert.notEqual(git('rev-parse', 'HEAD'), sha);
+});
+
+test("a stacked head with a commit main holds after its own work is refused, untouched (T3343)", (t) => {
+  const late = { 'src/d.ts': 'export const d = 1;\n' };
+  const { git, request, deps, sha } = stackedOnLanded(t, { ownWork: [{ 'src/c.ts': 'export const c = 1;\n' }, late], landedWork: [{ 'src/a.ts': 'export const a = 2;\n' }, late] });
+  assert.match(reasonOf(catchUp(deps, request)), /, and its commit [0-9a-f]{9} is on main already but follows the branch's own work: rebase it by hand, push it under a new name and merge that$/);
+  assertRestored(git, sha);
+});
+
+test('a head stacked on a parent amended before it merged is refused at the amended commit, untouched (T3343)', (t) => {
+  const { git, request, deps, sha } = stackedOnLanded(t, {
+    parentWork: [{ 'src/a.ts': 'export const a = 2;\n' }, { 'src/e.ts': 'export const e = 1;\n' }],
+    landedWork: [{ 'src/a.ts': 'export const a = 2;\n' }, { 'src/e.ts': 'export const e = 2;\n' }],
+  });
+  assert.match(reasonOf(catchUp(deps, request)), /, and replaying its commit [0-9a-f]{9} onto that tip conflicts: rebase it by hand/);
+  assertRestored(git, sha);
 });
