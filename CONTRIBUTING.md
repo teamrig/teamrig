@@ -416,6 +416,10 @@ as how teamrig works today.
 - **Your commit e-mail**: the `Signed-off-by:` line carries your commit e-mail, and the scrub refuses an e-mail
   address in a commit message unless it is one of GitHub's no-reply addresses. Before your first commit, set the
   no-reply address GitHub shows under Settings, Emails: `git config user.email <id>+<user>@users.noreply.github.com`.
+- **A branch stacked on another**: once the parent branch merged first, the merge replays only the child's own
+  commits, from the parent's tip, and the child's review still holds: its leading commits that `main` now holds
+  under other shas are the parent's. A parent commit after the child's own work, or a parent amended before it
+  merged, is rebased by hand and reviewed again.
 - **A flaky test leg**: the merge re-runs a test leg listed `flaky` in `tools/ship/repos.json` once when only it
   failed, and reads the checks once more after a GitHub server error or timeout; a second failure stops the merge.
 - **A leg a docs run leaves out**: a check listed `conditional` in `tools/ship/repos.json` (teamrig's windows and
