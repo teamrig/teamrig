@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import { nodeFiles } from '../../src/core/files.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
-import { landedRun } from '../../src/merge/work-commits.ts';
-import { changePatch, changePatchFrom, clearMergeFrom, type ShipWrites, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import { approvalReads, clearMergeFrom, teamrigShipWritesOf } from './approval.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { proveTree, realGateDeps } from './local-gate.ts';
 import { mergeBranch } from './merge.ts';
@@ -32,9 +31,6 @@ export function realShipDeps(repo: string, noteFile: string | null): ShipDeps {
   const gitLine = (...args: string[]): string => git(args).trim();
   const log = (line: string): void => console.log(line);
   const profile = profileFor(readProfiles(), slugOf(gitLine('remote', 'get-url', 'origin')));
-  const mainRef = `refs/remotes/origin/${profile.main}`;
-  // Read at each use, as a profile whose regenerated paths no approval can skip refuses only a --merge.
-  const writes = (): ShipWrites => teamrigShipWritesOf(profile.regenerated);
   return {
     run,
     node: (args) => run(process.execPath, ['--disable-warning=ExperimentalWarning', ...args]),
@@ -56,8 +52,6 @@ export function realShipDeps(repo: string, noteFile: string | null): ShipDeps {
     merge: (branch) => mergeBranch([repo, '--head', branch, ...(noteFile === null ? [] : ['--note-file', noteFile])]),
     mainMove: () => mainMovedPast(gitLine, profile.main),
     clearMerge: clearMergeFrom(process.env, { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock }),
-    patchOf: (rev, from) => (from === null ? changePatch(git, rev, mainRef, writes()) : changePatchFrom(git, from, rev, writes())),
-    workOf: (rev) => workCommitsOf(git, rev, mainRef, writes()),
-    landedOf: (rev) => landedRun(workCommitsOf(git, rev, mainRef, writes()), workCommitsOf(git, mainRef, rev, writes())),
+    ...approvalReads(git, `refs/remotes/origin/${profile.main}`, () => teamrigShipWritesOf(profile.regenerated)),
   };
 }

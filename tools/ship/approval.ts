@@ -4,7 +4,7 @@ import { RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, tabCallerOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { ENV, type Env } from '../../src/core/home.ts';
 import { answerNamesHead, approvedTaskOf, isCommitSha } from '../../src/register/approval.ts';
-import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
+import { landedRun, type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
 import { branchTaskOf } from '../../src/worktree/owner.ts';
 import { shipsInVersions, shipVersionFileOf, TEAMRIG_RELEASE_STAMPS, versionIn, type ReleaseStamp, type Version, type VersionFile } from './version-bump.ts';
 
@@ -378,6 +378,32 @@ export function workCommitsOf(git: GitText, rev: string, mainRef: string, writes
   });
 }
 
+/** What `approvedRebase` reads of a head against main. */
+export interface RebaseReads {
+  /** The work commits `rev` carries over main, with their patch ids (`workCommitsOf`). */
+  readonly workOf: (rev: string) => readonly WorkCommit[];
+  /** `rev`'s leading work commits whose patch main carries under another sha: a parent that merged first (`landedRun`). */
+  readonly landedOf: (rev: string) => readonly WorkCommit[];
+}
+
+/** What a --merge run reads of a head against main to hold it to its approval (ship-commits.ts). */
+export interface ApprovalReads extends RebaseReads {
+  /** The fingerprint of what `rev` changes, regenerated paths apart: over main (`changePatch`), or over `from`, one of its commits (`changePatchFrom`). */
+  readonly patchOf: (rev: string, from: string | null) => string;
+}
+
+/**
+ * The approval reads of a repo against `mainRef`. `writesOf` is called at each read, never here: a profile whose
+ * regenerated paths no approval can skip (`shipWritesOf` throws) then refuses only a --merge, not every ship.
+ */
+export function approvalReads(git: GitText, mainRef: string, writesOf: () => ShipWrites): ApprovalReads {
+  return {
+    patchOf: (rev, from) => (from === null ? changePatch(git, rev, mainRef, writesOf()) : changePatchFrom(git, from, rev, writesOf())),
+    workOf: (rev) => workCommitsOf(git, rev, mainRef, writesOf()),
+    landedOf: (rev) => landedRun(workCommitsOf(git, rev, mainRef, writesOf()), workCommitsOf(git, mainRef, rev, writesOf())),
+  };
+}
+
 /**
  * Whether a head is a rebase of the approved one (`approvedRebase`): `rebased`, with the approved head's full sha, its
  * count of work commits of its own and its leading ones main holds already (`landed`, a parent that merged first);
@@ -387,14 +413,6 @@ export type ApprovedRebase =
   | { readonly kind: 'rebased'; readonly approved: string; readonly work: number; readonly landed: readonly WorkCommit[] }
   | { readonly kind: 'unknown'; readonly reason: string }
   | { readonly kind: 'differs'; readonly reason: string };
-
-/** What `approvedRebase` reads of a head against main. */
-export interface RebaseReads {
-  /** The work commits `rev` carries over main, with their patch ids (`workCommitsOf`). */
-  readonly workOf: (rev: string) => readonly WorkCommit[];
-  /** `rev`'s leading work commits whose patch main carries under another sha: a parent that merged first (`landedRun`). */
-  readonly landedOf: (rev: string) => readonly WorkCommit[];
-}
 
 /**
  * Whether `head` is a rebase of the head `approved` names: the same work commits, patch for patch, in the same order

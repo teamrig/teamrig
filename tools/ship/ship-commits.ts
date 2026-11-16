@@ -2,7 +2,7 @@ import { DEFAULT_COMMITS } from '../../src/config/defaults.ts';
 import { stampTrailer } from '../../src/core/stamp.ts';
 import { pathMatcher, weighCommit, type CommitWeight, type FileChange } from '../../src/push-guard/commit-size.ts';
 import { named, type WorkCommit } from '../../src/merge/work-commits.ts';
-import { approvedRebase, type ClearMerge } from './approval.ts';
+import { approvedRebase, type ApprovalReads, type ClearMerge } from './approval.ts';
 import type { HeldHead } from './hold.ts';
 import type { BuildStep } from './build-steps.ts';
 import type { CheckScope } from '../ci/check-scope.ts';
@@ -25,8 +25,11 @@ export const DIST_SUBJECT = 'build: rebuild the plugin dist';
  */
 export const TRAILER = ['Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>', stampTrailer()].join('\n');
 
-/** What a ship does to the repo dir and the outside world; ship.ts wires the real ones, specs pass fakes. */
-export interface ShipDeps {
+/**
+ * What a ship does to the repo dir and the outside world; ship.ts wires the real ones, specs pass fakes. Its reads of
+ * a head against origin's main for --merge are approval.ts's `ApprovalReads`.
+ */
+export interface ShipDeps extends ApprovalReads {
   /** Runs a command in the repo dir with its output shown; throws when it fails. */
   run: (command: string, args: readonly string[]) => void;
   /** Runs this node binary with `args` in the repo dir, like `run`. */
@@ -54,15 +57,6 @@ export interface ShipDeps {
   mainMove: () => MainMove | null;
   /** Whether the caller may merge the branch at its head on the approval it names (approval.ts, T2788). */
   clearMerge: ClearMerge;
-  /**
-   * The fingerprint of what `rev` changes, regenerated paths apart: over origin's main (approval.ts `changePatch`), or
-   * over `from`, one of its commits (`changePatchFrom`).
-   */
-  patchOf: (rev: string, from: string | null) => string;
-  /** The work commits `rev` carries over origin's main, with their patch ids (approval.ts `workCommitsOf`). */
-  workOf: (rev: string) => readonly WorkCommit[];
-  /** `rev`'s leading work commits whose patch origin's main carries under another sha: a parent that merged first (work-commits.ts `landedRun`). */
-  landedOf: (rev: string) => readonly WorkCommit[];
 }
 
 /** The approved head a --merge run started from, and the fingerprint of its change, which the push must still carry. */
