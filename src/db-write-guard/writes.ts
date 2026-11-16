@@ -1,5 +1,6 @@
 import type { DbProgramShape, DbWriteGuardConfig, DbWriteProgram } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
+import { NODE_CODE, NODE_NO_SCRIPT, NODE_VALUED } from '../core/node-options.ts';
 import { programsOf, type ProgramRun, type ProgramsContext } from '../package-guard/programs.ts';
 import { programName } from '../push-guard/launchers.ts';
 import { resolveDir } from '../push-guard/location.ts';
@@ -68,16 +69,6 @@ const FILE_PRINTERS: ReadonlySet<string> = new Set(['cat', 'type', 'get-content'
 
 /** A file name's extension: a document shell runs a word ending in one as a script (`fix.js`), when it is no option or address. */
 const FILE_EXTENSION = /\.[A-Za-z0-9]+$/;
-
-/** Options of node, tsx and ts-node that take the next word as their value. */
-const NODE_VALUED: ReadonlySet<string> = new Set([
-  '-r', '--require', '--import', '--loader', '--experimental-loader', '-C', '--conditions', '--input-type', '--title',
-  '--env-file', '--tsconfig', '-P', '--project', '-O', '--compiler-options', '--compiler', '--cwd',
-]);
-/** Options of node, tsx and ts-node whose next word is code to run. */
-const NODE_CODE: ReadonlySet<string> = new Set(['-e', '--eval', '-p', '--print']);
-/** Options that make node, tsx or ts-node run no script: a test run, a syntax check, its version or help. */
-const NODE_NO_SCRIPT: ReadonlySet<string> = new Set(['--test', '--check', '-c', '--version', '-v', '--help', '-h']);
 
 /** Options of a key-value command-line client that take the next word as their value: its host, port, auth, TLS files. */
 const KEY_VALUE_CLI_VALUED: ReadonlySet<string> = new Set([
