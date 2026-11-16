@@ -43,6 +43,18 @@ describe('intakePlan (T3187)', () => {
     assert.ok(plan.reply.description.endsWith('Yours to review, owned by no other area: "src/github/c.ts", "README.md"'), plan.reply.description);
   });
 
+  it('asks the security review, saying why, whenever the read could not see every file: a full page, or a name left out', () => {
+    const page = Array.from({ length: PER_READ }, (_, at) => `README${at}.md`);
+    const full = intakePlan(input(page)).asks.find((ask) => ask.kind === 'security');
+    assert.equal(full?.owner, 'ops/security');
+    assert.ok(full?.description.includes('whose files the read could not all see'), full?.description);
+    assert.ok(full?.description.endsWith(`The read gave its first ${PER_READ} files only: review the rest on GitHub.`), full?.description);
+    const odd = intakePlan(input(['README.md'], { files: { paths: ['README.md'], leftOut: 1, listed: 2, perRead: PER_READ } })).asks.find((ask) => ask.kind === 'security');
+    assert.ok(odd?.description.endsWith('1 file name(s) were no plain path and were left out: read them on GitHub.'), odd?.description);
+    const both = intakePlan(input(['src/guard/a.ts'], { files: { paths: ['src/guard/a.ts'], leftOut: 1, listed: 2, perRead: PER_READ } })).asks.find((ask) => ask.kind === 'security');
+    assert.ok(both?.description.includes('which changes guarded paths, ') && both.description.endsWith('read them on GitHub. The guarded paths, as the PR names them: "src/guard/a.ts"'), both?.description);
+  });
+
   it('counts the page by the files listed, not the paths: a full page of renames is no more than it lists', () => {
     const paths = Array.from({ length: PER_READ }, (_, at) => `README${at}.md`);
     assert.ok(!intakePlan(input(paths, { files: { paths, leftOut: 0, listed: PER_READ / 2, perRead: PER_READ } })).reply.description.includes('files only'));

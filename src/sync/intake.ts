@@ -77,16 +77,18 @@ export function intakePlan(input: IntakeInput): IntakePlan {
       ),
     }));
   const guarded = files.paths.filter((path) => input.isSecurityPath(path));
+  const unseen = unseenNotes(files);
   const reviewer = input.securityReviewer;
-  if (guarded.length > 0 && reviewer !== undefined) {
+  // A file the read could not see may be guarded, so the security review is asked whenever one is unseen: which files
+  // fill the one page is the author's choice, and it must not decide who reviews.
+  if ((guarded.length > 0 || unseen.length > 0) && reviewer !== undefined) {
+    const why = guarded.length > 0 ? 'which changes guarded paths' : 'whose files the read could not all see';
+    const head = `Security review of outside PR ${shown}, ${why}, in parallel with its area reviews. Say your verdict on this task; ${caller} replies to the author once every review is in. ${unseen.join(' ')}`.trimEnd();
     asks.push({
       kind: 'security',
       owner: reviewer,
       title: `Security review of outside PR ${shown}`,
-      description: described(
-        `Security review of outside PR ${shown}, which changes guarded paths, in parallel with its area reviews. Say your verdict on this task; ${caller} replies to the author once every review is in. The guarded paths, as the PR names them:`,
-        guarded,
-      ),
+      description: guarded.length === 0 ? head : described(`${head} The guarded paths, as the PR names them:`, guarded),
     });
   }
   return { asks, reply: { title: intakeReplyTitle(target), description: replyDescription(input, shown, [...own, ...split.unowned], guarded.length > 0 && reviewer === undefined) } };
@@ -96,12 +98,19 @@ export function intakePlan(input: IntakeInput): IntakePlan {
 function replyDescription(input: IntakeInput, shown: string, yours: readonly string[], guardedUnasked: boolean): string {
   const { files } = input;
   const notes = [
-    ...(files.listed >= files.perRead ? [`The read gave its first ${files.perRead} files only: review the rest yourself.`] : []),
-    ...(files.leftOut > 0 ? [`${files.leftOut} file name(s) were no plain path and were left out: read them on GitHub.`] : []),
+    ...unseenNotes(files),
     ...(guardedUnasked ? ['It changes guarded paths and no one but you reviews them: set roles.securityReviewer.'] : []),
   ];
   const head = `Answer the author of outside PR ${shown} once every review task this depends on is done: the best fix, or the change asked. ${notes.join(' ')}`.trimEnd();
   return yours.length === 0 ? head : described(`${head} Yours to review, owned by no other area:`, yours);
+}
+
+/** What the read could not see, a sentence each: a full page may have more files after it, and a name left out may be any path. */
+function unseenNotes(files: IntakeFiles): string[] {
+  return [
+    ...(files.listed >= files.perRead ? [`The read gave its first ${files.perRead} files only: review the rest on GitHub.`] : []),
+    ...(files.leftOut > 0 ? [`${files.leftOut} file name(s) were no plain path and were left out: read them on GitHub.`] : []),
+  ];
 }
 
 /** `head`, then the paths quoted as JSON, as many as fit a task's description, the rest counted. */

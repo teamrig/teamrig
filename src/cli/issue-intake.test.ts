@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JsonRecord } from '../core/guards.ts';
-import { isPullFilesRead } from '../adapters/connectors/github/gh.ts';
+import { isPullFilesRead, PULL_FILES_PAGE } from '../adapters/connectors/github/gh.ts';
 import { intakeReplyTitle } from '../sync/intake.ts';
 import { CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeGh } from '../testing/fake-gh.ts';
@@ -71,6 +71,17 @@ describe('teamrig issue intake (T3187)', () => {
     assert.match(added[0] ?? '', /owner alpha, .*Best-fix and overlap review of outside PR acme\/web#7 for alpha/u, printed);
     assert.match(added[1] ?? '', /owner bravo, .*Security review of outside PR acme\/web#7/u, printed);
     assert.ok(eventOf(kit, 'Security review of outside PR acme/web#7').includes(JSON.stringify('src/guard/a.ts').slice(1, -1)));
+  });
+
+  it('asks the security review when the read could not see every file: a page filled to its end, or a name left out', async () => {
+    for (const files of [Array.from({ length: PULL_FILES_PAGE + 1 }, (_, at) => `README${at}.md`), ['README.md', 'bell\u0007.md']]) {
+      const kit = new CliHarness(INTAKE_TEAM);
+      const result = await kit.run(INTAKE, { ...AS_LEAD, gh: new FakeGh().pullFiles('acme/web#7', files) });
+      const printed = [...result.stdout, ...result.stderr].join('\n');
+      assert.equal(result.code, EXIT.ok, printed);
+      assert.match(result.stdout.find((line) => line.includes('Security review')) ?? '', /^ADDED T1 open, p2, owner bravo, /u, printed);
+      assert.ok(eventOf(kit, 'Security review of outside PR acme/web#7').includes('whose files the read could not all see'));
+    }
   });
 
   it('adds only the reply, holding every path, when no area holds one and none is guarded', async () => {
