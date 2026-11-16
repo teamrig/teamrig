@@ -585,6 +585,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,
       such as a comment asking to take it), at most 3 logins in all; refused on a design issue
+  issue intake <owner/name#n> --priority <p> [--due <when>] [--goals <tags>]   takes in an outside
+      pull request of the team's repositories: reads its changed paths once (one page of 100), asks the
+      session owning each area it changes (github.areaPaths, owned through github.areaOwners) a
+      best-fix and overlap review task, the security reviewer one too when it changes a guarded path,
+      then adds the caller's task to answer its author, planned after every review; writes nothing to
+      GitHub; refuses a pull request taken in already while its reply task is not dropped
   pr conflicts <owner/name#n> [--base <branch>]   in a clone of that repository, fetches the pull
       request's head and prints the files it conflicts on against origin's newest base (its default
       branch unless --base) and the rebase it needs; changes no local branch or file of the clone and

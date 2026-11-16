@@ -88,6 +88,7 @@ Give the token only what the commands you run need:
 | `teamrig issue migrate` | **Issues: Read and write** |
 | `teamrig issue reply`, `teamrig issue label`, `teamrig issue edit`, `teamrig issue assign`, `teamrig issue close` | **Issues: Read and write** and **Pull requests: Read and write** (a pull request's comments, labels, description, assignees and state are written through its issue) |
 | `teamrig issue links` | **Issues: Read-only** for the preview, **Issues: Read and write** with `--yes` |
+| `teamrig issue intake` | **Pull requests: Read-only** (the paths a pull request changes) |
 
 ### Why one token per owner
 
@@ -552,6 +553,24 @@ ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
 
 GitHub's own required checks and reviews still gate the landing; these commands only take a person's hand out of it.
 
+## Taking in a pull request from outside
+
+A pull request from outside the team is judged by the sessions that own what it changes before anyone answers its
+author. Name each area's paths in `github.areaPaths`, by the area labels `github.areaOwners` gives a session:
+
+```json
+"github": {
+  "repos": ["acme/web"],
+  "areaOwners": { "area:guard": "guards", "area:docs": "docs" },
+  "areaPaths": { "area:guard": ["src/push-guard/**"], "area:docs": ["docs/**", "*.md"] }
+}
+```
+
+Then `teamrig issue intake acme/web#7 --priority p2` reads the paths the pull request changes and adds each owning
+session a best-fix and overlap review task, and the security reviewer one when it changes a guarded path. Your own
+task to answer the author comes last, planned after every review, so the answer waits for each verdict; it lists the
+paths no area holds, which you judge yourself. Nothing is written to GitHub.
+
 ## Showing each task's status on its issue
 
 `teamrig issue sync --push` plans the other way: for each issue a task holds (its ref `gh:owner/name#number`), what
@@ -715,7 +734,9 @@ again.
   run, to find a claim line, and keeps no text. The mention scan reads post text to find mentions of your users and
   keeps only each post's key, the logins it routed and its time ([Mentions of your users](#mentions-of-your-users)).
   The push also reads each open issue's type and field values, with the repository's fields and types, never its text.
-  Any other `gh` command or query is refused in code, except
+  `teamrig issue intake` reads one page of a pull request's changed files
+  (`repos/<owner>/<name>/pulls/<number>/files -X GET` with `per_page=100` only) and keeps only their paths. Any other
+  `gh` command or query is refused in code, except
   the writes, each run by hand on a repository in `github.repos`: `teamrig issue migrate`'s create of one issue
   (`gh api repos/<owner>/<name>/issues -X POST` with its title, body and labels only), `teamrig issue reply`'s
   one comment (`.../issues/<number>/comments -X POST` with its body only), `teamrig issue label`'s read of one label

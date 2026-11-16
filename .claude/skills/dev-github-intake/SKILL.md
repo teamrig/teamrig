@@ -42,9 +42,14 @@ page you point them to.
 1. Still relevant first: check that main has not changed the code it touches since it was written, no later change
    already fixed or replaced it, the behaviour it changes is still wanted, and landing it now undoes no newer work.
    A stale one is closed or re-scoped with a comment saying what changed, never landed as written.
-2. Best fix first: judge whether its fix is the best one. If a better one exists, propose it on the pull request
-   (what and why) before taking it; else say in one line why theirs is best.
-3. Read its full diff before any checkout: fetch its head (`git fetch origin pull/<n>/head:pr-<n>`) and read
+2. Take it in at once: `teamrig issue intake <owner/name#n> --priority <p>` asks each session owning an area it
+   changes (`github.areaPaths`) a best-fix and overlap review task, and the security reviewer one when it changes a
+   guarded path (CONTRIBUTING.md, Review), all in parallel. Your task to reply comes last, planned after them all:
+   answer the author only once every verdict is in.
+3. Best fix first: weigh the owners' verdicts and judge the paths no area holds yourself. If a better fix exists,
+   or an open task of ours does the same, propose it on the pull request (what and why) before taking it; else say
+   in one line why theirs is best.
+4. Read its full diff before any checkout: fetch its head (`git fetch origin pull/<n>/head:pr-<n>`) and read
    `git diff origin/main...pr-<n>`. Its code runs on this host (its specs, `npm run check`, the local gate at push)
    only once you have read that diff and taken it into your branch, as it runs with your GitHub token, your Claude
    Code login and `~/.teamrig`. A pull request that touches `package.json`, a lockfile, `.npmrc`, an install script,
@@ -52,7 +57,6 @@ page you point them to.
    be read as text is never checked out on this host: read its diff from the fetched ref, and run it only in a Linux
    container with no home mount and no tokens, or in GitHub CI, until CI is green and the security reviewer has
    passed it.
-4. A change under a guarded path (CONTRIBUTING.md, Review) gets a security review before it lands.
 5. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).

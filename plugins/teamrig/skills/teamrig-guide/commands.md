@@ -1805,10 +1805,41 @@ with or without candidates.
 
 Flags: none.
 
+### teamrig issue intake
+
+Takes in a pull request from outside the team, named as `owner/name#number`, so each session that owns what it
+changes judges it before anyone answers its author. It reads the paths the pull request changes once (the first 100;
+the reply task says when there are more) and writes nothing to GitHub. Each session owning an area whose paths it
+changes (`[github.areaPaths]`, each area label's session in `[github.areaOwners]`) gets a task, "Best-fix and overlap
+review of outside PR <owner/name#number>", listing its paths: is this the best fix, and does an open task of ours do
+the same? A session owning several areas gets one task; the caller's own area is left to its reply. When it changes a
+guarded path (a review gate entry of class security, `[pushGuard.reviewPaths]`), the security reviewer
+(`[roles.securityReviewer]`, on this team or one above) gets a "Security review of outside PR" task too, in that
+reviewer's team. Last comes the caller's task, "Reply to outside PR <owner/name#number> once its reviews are in",
+planned after every review task, so the answer waits for each verdict; it lists the paths no area holds, for the
+caller to judge. Each task takes the priority, due date and goals given, as `teamrig add` does.
+
+It refuses, adding nothing, a caller not on the team, a target that is not `owner/name#number`, a repository not in
+`github.repos`, a missing `--priority`, and a pull request taken in already while its reply task is not dropped (drop
+it to take the pull request in again). A task the team's own register refuses (a goal or description rule) stops it
+at the first, with nothing added. A review another team's register refuses is named in a `FAILED` line while the rest
+still go: ask it with `teamrig add` and list it in the reply task's `--after`. A read that fails prints `FAILED
+<reason>` and adds nothing; `TEAMRIG_GITHUB=off` prints an `OFF` line and adds nothing. Exit 1 when something
+failed, 2 when refused, else 0.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team; its reply task is its own.
+- `--priority <p>`: the priority of every task it adds, required.
+- `--due <when>`: their due date, as `teamrig add` reads it.
+- `--goals <tags>`: the goals they serve, or `none`.
+
 Example:
 
 ```sh
 teamrig issue similar acme/web#31
+
+teamrig issue intake acme/web#7 --priority p2
 ```
 
 Output:
@@ -1817,6 +1848,11 @@ Output:
 SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.similarThreshold)
 0.71 acme/web#12 T388 Login fails after a password reset
 0.41 acme/web#27 T405 Reset email never arrives
+
+ADDED T41 open, p2, owner guards, from lead | Best-fix and overlap review of outside PR acme/web#7
+ADDED T42 open, p2, owner docs, from lead | Best-fix and overlap review of outside PR acme/web#7
+ADDED T43 open, p2, owner security, from lead | Security review of outside PR acme/web#7
+ADDED T44 open, p2, owner lead, after T41,T42,T43, from lead | Reply to outside PR acme/web#7 once its reviews are in
 ```
 
 ### teamrig issue search
