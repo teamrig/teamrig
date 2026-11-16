@@ -1,4 +1,5 @@
 import { extname } from 'node:path';
+import { onLocalDrive } from '../core/local-drive.ts';
 import { NODE_CODE, NODE_NO_SCRIPT, NODE_VALUED } from '../core/node-options.ts';
 import type { LineRuns, ProgramRun } from '../package-guard/programs.ts';
 import { bashDrivePath, resolveDir } from '../push-guard/location.ts';
@@ -80,15 +81,6 @@ function scriptEntryOf(run: ProgramRun): ScriptEntry | undefined {
   const extension = extname(program).toLowerCase();
   const asProgram = { word: run.program, dialect: run.dialect, dir: run.dir };
   return extension === '' ? { ...asProgram, needsShebang: true } : SCRIPT_EXTENSIONS.has(extension) ? { ...asProgram, needsShebang: false } : undefined;
-}
-
-/**
- * True when `path` is on one of this host's drives: `C:\` or `C:/`, or on a host other than Windows a root `/`. The
- * guard runs before the line is let run, so any other path (`//host/share`, `\\host\share`, `\\?\UNC\host`, a device)
- * is never opened: opening it would connect to a host the line's text chose, as the user (T3038).
- */
-export function onLocalDrive(path: string, platform: typeof process.platform = process.platform): boolean {
-  return /^[A-Za-z]:[\\/]/.test(path) || (platform !== 'win32' && /^\/(?!\/)/.test(path));
 }
 
 /**
