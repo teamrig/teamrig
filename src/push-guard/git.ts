@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { runGit as runKitGit, type GitRun } from '../core/git-run.ts';
 import { COMMIT_LOG_FORMAT, parseCommitLog, type CommitLog } from './commit-size.ts';
 import type { ConfigValue } from './invocations.ts';
+import { commitLogOnLocalDrives, onLocalDrivesOnly } from './local-git.ts';
 import type { RepoState } from './push.ts';
 import { scaledLimitMs } from '../core/time-limit.ts';
 
@@ -33,15 +34,15 @@ function readConfig(dir: string, key: string): ConfigValue {
   }
 }
 
-/** Repository state from the git CLI. */
-export const GIT_CLI: RepoState = {
+/** Repository state from the git CLI, read only in a folder on this host's drives (T3339). */
+export const GIT_CLI: RepoState = onLocalDrivesOnly({
   // symbolic-ref names a branch before its first commit, and nothing on a detached HEAD.
   branch: (dir) => readGit(dir, ['symbolic-ref', '--short', '-q', 'HEAD']),
   head: (dir) => readGit(dir, ['rev-parse', '--short', '-q', '--verify', 'HEAD']),
   // A name starting with `-` would read as an option, so it has no push target the guard can ask for.
   pushTarget: (dir, branch) => (branch?.startsWith('-') === true ? undefined : readGit(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch ?? ''}@{push}`])),
   config: readConfig,
-};
+});
 
 /**
  * The limit on one commit-log query. The push guard runs it, once per update a Bash line pushes, inside its own 12 s
@@ -73,5 +74,5 @@ export function commitLogWith(run: GitRunner): CommitLog {
   };
 }
 
-/** Commits from the git CLI. */
-export const GIT_COMMIT_LOG: CommitLog = commitLogWith(runKitGit);
+/** Commits from the git CLI, read only in a folder on this host's drives (T3339). */
+export const GIT_COMMIT_LOG: CommitLog = commitLogOnLocalDrives(commitLogWith(runKitGit));
