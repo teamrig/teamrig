@@ -62,6 +62,17 @@ describe('teamrig issue intake (T3187)', () => {
     assert.match(retaken.stdout[1] ?? '', /^ADDED T3 open, .*after T1, .*Reply to outside PR acme\/web#7/u);
   });
 
+  it('routes a renamed file by its earlier path too: a guarded file moved out of its folder asks its area and security', async () => {
+    const kit = new CliHarness(INTAKE_TEAM);
+    const result = await kit.run(INTAKE, { ...AS_LEAD, gh: new FakeGh().pullFiles('acme/web#7', [{ filename: 'README.md', from: 'src/guard/a.ts' }]) });
+    const printed = [...result.stdout, ...result.stderr].join('\n');
+    assert.equal(result.code, EXIT.ok, printed);
+    const added = result.stdout.filter((line) => line.startsWith('ADDED '));
+    assert.match(added[0] ?? '', /owner alpha, .*Best-fix and overlap review of outside PR acme\/web#7 for alpha/u, printed);
+    assert.match(added[1] ?? '', /owner bravo, .*Security review of outside PR acme\/web#7/u, printed);
+    assert.ok(eventOf(kit, 'Security review of outside PR acme/web#7').includes(JSON.stringify('src/guard/a.ts').slice(1, -1)));
+  });
+
   it('adds only the reply, holding every path, when no area holds one and none is guarded', async () => {
     const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web'] } });
     const result = await kit.run(INTAKE, { ...AS_LEAD, gh: new FakeGh().pullFiles('acme/web#7', ['README.md']) });

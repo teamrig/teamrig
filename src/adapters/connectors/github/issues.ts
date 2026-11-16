@@ -415,12 +415,20 @@ function isPlainPath(name: string): boolean {
   return name !== '' && name.length <= PULL_PATH_MAX && !/[\p{Cc}\p{Cf}]/u.test(name);
 }
 
+/** What one read of a pull request's files gave: each path once, the names left out, and how many files it listed. */
+export interface PullFilesRead {
+  readonly paths: string[];
+  readonly leftOut: number;
+  readonly listed: number;
+}
+
 /**
  * The paths one REST read of a pull request's files printed (gh.ts pullFilesArgs), with the count of names it left
- * out as no plain path (isPlainPath): the read keeps each file's `filename` and nothing else of it, no patch or
- * content. Undefined when gh printed no list.
+ * out as no plain path (isPlainPath): the read keeps each file's `filename`, and a renamed file's `previous_filename`
+ * too, as a move out of a folder changes what that folder held, and nothing else of it, no patch or content. Undefined
+ * when gh printed no list.
  */
-export function readPullFilesIn(stdout: string): { readonly paths: string[]; readonly leftOut: number } | undefined {
+export function readPullFilesIn(stdout: string): PullFilesRead | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
@@ -431,9 +439,14 @@ export function readPullFilesIn(stdout: string): { readonly paths: string[]; rea
     return undefined;
   }
   const items: readonly unknown[] = parsed;
-  const names = items.map((item) => (isRecord(item) ? stringField(item, 'filename') : undefined));
-  const paths = names.filter((name): name is string => name !== undefined && isPlainPath(name));
-  return { paths, leftOut: names.length - paths.length };
+  const names = items.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [undefined];
+    }
+    return [stringField(item, 'filename'), ...('previous_filename' in item ? [stringField(item, 'previous_filename')] : [])];
+  });
+  const plain = names.filter((name): name is string => name !== undefined && isPlainPath(name));
+  return { paths: [...new Set(plain)], leftOut: names.length - plain.length, listed: items.length };
 }
 
 /**

@@ -381,14 +381,24 @@ describe('readPullFilesIn (T3187)', () => {
       'not a file',
       { filename: 'y'.repeat(PULL_PATH_MAX) },
     ]);
-    assert.deepEqual(readPullFilesIn(stdout), { paths: ['src/a.ts', 'docs/b.md', 'y'.repeat(PULL_PATH_MAX)], leftOut: 7 });
+    assert.deepEqual(readPullFilesIn(stdout), { paths: ['src/a.ts', 'docs/b.md', 'y'.repeat(PULL_PATH_MAX)], leftOut: 7, listed: 10 });
+  });
+
+  it("keeps a renamed file's earlier path too, each path once, counting a file as one and a bad earlier name as left out", () => {
+    const stdout = JSON.stringify([
+      { filename: 'docs/moved.ts', previous_filename: 'src/guard/moved.ts', status: 'renamed' },
+      { filename: 'src/guard/moved.ts', previous_filename: 'docs/moved.ts', status: 'renamed' },
+      { filename: 'docs/c.md', previous_filename: 'bell\u0007.md', status: 'renamed' },
+      { filename: 'docs/d.md', previous_filename: 7, status: 'renamed' },
+    ]);
+    assert.deepEqual(readPullFilesIn(stdout), { paths: ['docs/moved.ts', 'src/guard/moved.ts', 'docs/c.md', 'docs/d.md'], leftOut: 2, listed: 4 });
   });
 
   it('gives undefined when gh printed no list', () => {
     for (const stdout of ['', '{}', 'null', '{"filename":"a"}', 'not json']) {
       assert.equal(readPullFilesIn(stdout), undefined, stdout);
     }
-    assert.deepEqual(readPullFilesIn('[]'), { paths: [], leftOut: 0 });
+    assert.deepEqual(readPullFilesIn('[]'), { paths: [], leftOut: 0, listed: 0 });
   });
 });
 

@@ -15,7 +15,7 @@ const AREAS = new AreaMap({
 function input(paths: readonly string[], changes: Partial<IntakeInput> = {}): IntakeInput {
   return {
     target: TARGET,
-    files: { paths, leftOut: 0, perRead: PER_READ },
+    files: { paths, leftOut: 0, listed: paths.length, perRead: PER_READ },
     areas: AREAS,
     isSecurityPath: (path) => path.startsWith('src/guard/'),
     securityReviewer: 'ops/security',
@@ -43,6 +43,11 @@ describe('intakePlan (T3187)', () => {
     assert.ok(plan.reply.description.endsWith('Yours to review, owned by no other area: "src/github/c.ts", "README.md"'), plan.reply.description);
   });
 
+  it('counts the page by the files listed, not the paths: a full page of renames is no more than it lists', () => {
+    const paths = Array.from({ length: PER_READ }, (_, at) => `README${at}.md`);
+    assert.ok(!intakePlan(input(paths, { files: { paths, leftOut: 0, listed: PER_READ / 2, perRead: PER_READ } })).reply.description.includes('files only'));
+  });
+
   it('asks no one when no area owns a path and none is guarded: the caller reviews it all', () => {
     const plan = intakePlan(input(['README.md'], { areas: new AreaMap({ areaOwners: {}, areaPaths: {} }) }));
     assert.deepEqual(plan.asks, []);
@@ -51,12 +56,12 @@ describe('intakePlan (T3187)', () => {
 
   it("names a guarded path no one else reviews, and what the read could not see by the host's own read size", () => {
     const paths = (count: number): string[] => Array.from({ length: count }, (_, at) => `src/guard/${at}.ts`);
-    const plan = intakePlan(input([], { securityReviewer: undefined, files: { paths: paths(PER_READ - 2), leftOut: 2, perRead: PER_READ } }));
+    const plan = intakePlan(input([], { securityReviewer: undefined, files: { paths: paths(PER_READ - 2), leftOut: 2, listed: PER_READ, perRead: PER_READ } }));
     assert.deepEqual(plan.asks.map((ask) => ask.kind), ['area']);
     for (const said of [`its first ${PER_READ} files only`, '2 file name(s) were no plain path', 'set roles.securityReviewer']) {
       assert.ok(plan.reply.description.includes(said), said);
     }
-    const under = intakePlan(input([], { files: { paths: paths(PER_READ - 3), leftOut: 2, perRead: PER_READ } }));
+    const under = intakePlan(input([], { files: { paths: paths(PER_READ - 3), leftOut: 2, listed: PER_READ - 1, perRead: PER_READ } }));
     assert.ok(!under.reply.description.includes('files only'), under.reply.description);
   });
 

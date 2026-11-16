@@ -142,11 +142,11 @@ export class FakeIssueHost implements IssueHost {
   private readonly files = new Map<string, HostPullFiles>();
 
   /**
-   * From now on, a read of the pull request `<repo>#<number>`'s changed files gives these paths (as many left out), by
-   * a host whose one read gives at most `perRead` names.
+   * From now on, a read of the pull request `<repo>#<number>`'s changed files gives these paths (as many left out),
+   * one file each, by a host whose one read lists at most `perRead` files.
    */
   changes(pull: string, paths: readonly string[], leftOut = 0, perRead = 100): this {
-    this.files.set(pull, { kind: 'read', paths, leftOut, perRead });
+    this.files.set(pull, { kind: 'read', paths, leftOut, listed: paths.length + leftOut, perRead });
     return this;
   }
 

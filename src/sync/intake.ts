@@ -16,7 +16,9 @@ export interface IntakeFiles {
   readonly paths: readonly string[];
   /** Names the read left out as no plain path. */
   readonly leftOut: number;
-  /** The most names one read gives: a read that reached it may have missed the rest. */
+  /** The files the read listed: a rename gives two paths of one file, so the page's count is this, not the paths'. */
+  readonly listed: number;
+  /** The most files one read lists: a read that listed that many may have missed the rest. */
   readonly perRead: number;
 }
 
@@ -94,7 +96,7 @@ export function intakePlan(input: IntakeInput): IntakePlan {
 function replyDescription(input: IntakeInput, shown: string, yours: readonly string[], guardedUnasked: boolean): string {
   const { files } = input;
   const notes = [
-    ...(files.paths.length + files.leftOut >= files.perRead ? [`The read gave its first ${files.perRead} files only: review the rest yourself.`] : []),
+    ...(files.listed >= files.perRead ? [`The read gave its first ${files.perRead} files only: review the rest yourself.`] : []),
     ...(files.leftOut > 0 ? [`${files.leftOut} file name(s) were no plain path and were left out: read them on GitHub.`] : []),
     ...(guardedUnasked ? ['It changes guarded paths and no one but you reviews them: set roles.securityReviewer.'] : []),
   ];
