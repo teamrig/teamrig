@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { DEFAULT_SECRET_GUARD } from '../config/defaults.ts';
 import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
+import { NO_SCRIPTS } from '../secret-guard/script-reads.ts';
 import { testConfig } from '../testing/config.ts';
+import { FakeScripts } from '../testing/fake-scripts.ts';
 import { editEventOf, hookEventOf, replyText, testSecrets } from '../testing/host.ts';
 import { secretFindingsOf, secretGuardOf, secretGuardReply, secretPatternsOf, secretReason, type SecretGuardEnv } from './secret-guard.ts';
 
@@ -16,7 +18,7 @@ const PASSWORD = join('s3', 'cret', 'Value9');
 type SpecEnv = SecretGuardEnv & { readonly platform?: NodeJS.Platform };
 
 function env(overrides: Partial<SpecEnv> = {}): SpecEnv {
-  return { cwd: 'C:/w', rules: RULES, secretReads: 'deny', writes: 'deny', ...overrides };
+  return { cwd: 'C:/w', rules: RULES, secretReads: 'deny', writes: 'deny', scripts: NO_SCRIPTS, ...overrides };
 }
 
 /** What the shipped host is handed for the guard's reply to this hook input. */
@@ -29,7 +31,7 @@ function call(tool_name: string, tool_input: JsonRecord, extra: JsonRecord = {})
 }
 
 function findings(payload: JsonRecord, rules = RULES): string[] {
-  return secretFindingsOf(hookEventOf(payload), 'C:/w', rules).map((finding) => {
+  return secretFindingsOf(hookEventOf(payload), 'C:/w', rules, NO_SCRIPTS).map((finding) => {
     switch (finding.kind) {
       case 'file':
         return finding.path;
@@ -174,7 +176,7 @@ describe('secretFindingsOf on the text a file-writing call writes (T1369 R3)', (
 
   it('reads every file of an edit that touches several: a secret in a second file is found, one in a secret file passes', () => {
     const kinds = (files: Parameters<typeof editEventOf>[1]): string[] =>
-      secretFindingsOf(editEventOf({ tool_name: 'apply_patch' }, files), 'C:/w', RULES).map((finding) => finding.kind);
+      secretFindingsOf(editEventOf({ tool_name: 'apply_patch' }, files), 'C:/w', RULES, NO_SCRIPTS).map((finding) => finding.kind);
     const secretFile = { path: 'C:/w/.env', texts: [join('GH=', TOKEN)], change: undefined };
     const plain = { path: 'C:/w/src/a.ts', texts: ['const a = 1;'], change: undefined };
     assert.deepEqual(kinds([secretFile, { ...plain, texts: [TOKEN] }]), ['written']);
@@ -464,5 +466,15 @@ describe('secretGuardOf', () => {
     for (const load of [undefined, { status: 'missing', path: 'c.json' } as const, { status: 'unreadable', path: 'c.json', issue: { path: '', message: 'bad' } } as const]) {
       assert.deepEqual(secretGuardOf(load), DEFAULT_SECRET_GUARD);
     }
+  });
+});
+
+describe('secretGuardOutput on a script the line starts (T3038)', () => {
+  it('refuses a line that runs a script reading a saved credential, and passes the same line over a plain script', () => {
+    const line = call('Bash', { command: 'node x.js' });
+    const refused = secretGuardOutput(line, env({ scripts: new FakeScripts({ 'C:/w/x.js': "execSync('gh auth token')" }) }));
+    assert.match(refused, /"permissionDecision":"deny"/);
+    assert.match(refused, /gh auth token in x\.js/);
+    assert.equal(secretGuardOutput(line, env({ scripts: new FakeScripts({ 'C:/w/x.js': "console.log('hi')" }) })), '');
   });
 });

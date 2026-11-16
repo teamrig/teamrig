@@ -55,6 +55,33 @@ const STORE_TEXTS: readonly CredentialRead[] = [
 ];
 
 /**
+ * The store commands as a script's text writes them, wherever they stand: a script that runs one through a child
+ * process or a shell holds it as one string (`execSync('gh auth token')`).
+ */
+const SCRIPT_COMMANDS: readonly CredentialRead[] = [
+  { label: 'git credential fill', pattern: /\bgit\s+credential\s+fill\b/i },
+  { label: 'git credential-<helper> get', pattern: /\bgit[\s-]credential-[\w-]+\s+get\b/i },
+  { label: 'gh auth token', pattern: /\bgh\s+auth\s+token\b/i },
+  { label: 'gh auth status --show-token', pattern: /\bgh\s+auth\s+status\b[^\n]*?\s(?:-t|--show-token)\b/i },
+  { label: 'security find-*-password', pattern: /\b(?:find-(?:generic|internet)-password|dump-keychain)\b/i },
+  { label: 'secret-tool lookup', pattern: /\bsecret-tool\s+(?:lookup|search)\b/i },
+  { label: 'cmdkey /list', pattern: /\bcmdkey(?:\.exe)?\s+[/-]list\b/i },
+  { label: 'vaultcmd /listcreds', pattern: /\bvaultcmd(?:\.exe)?\s+[/-]listcreds\b/i },
+  { label: 'keyring get', pattern: /\bkeyring\s+get\b/i },
+  { label: 'Get-Secret', pattern: /\bGet-Secret\b/i },
+];
+
+/**
+ * The saved credentials a script's text reads (T3038): a store command written as one string, a store API, or a name
+ * teamrig saves its GitHub tokens under. `script` is the script as the line names it, for the refusal.
+ */
+export function scriptCredentialFindings(text: string, script: string): SecretFinding[] {
+  return [...SCRIPT_COMMANDS, ...STORE_TEXTS]
+    .filter(({ pattern }) => pattern.test(text))
+    .map(({ label }): SecretFinding => ({ kind: 'credential', via: `${label} in ${script}` }));
+}
+
+/**
  * The saved credentials a shell line reads: each run whose command reads the store, printed or not, then each store API
  * or teamrig credential name the line's text holds. Once the guard refuses these, a key saved for one tool draws a line
  * between sessions; until then any session could read every key its user saved.

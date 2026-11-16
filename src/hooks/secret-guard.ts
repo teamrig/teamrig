@@ -7,6 +7,7 @@ import { describeFinding, uniqueFindings, type SecretFinding } from '../secret-g
 import { braceAlternatives } from '../secret-guard/glob.ts';
 import { literalFindings, writtenFindings } from '../secret-guard/literals.ts';
 import type { SecretRules } from '../secret-guard/rules.ts';
+import type { ScriptTexts } from '../secret-guard/script-reads.ts';
 import { shellFindings } from '../secret-guard/shell.ts';
 import { heldBack } from './permission.ts';
 
@@ -28,6 +29,8 @@ export interface SecretGuardEnv {
   readonly secretReads: SecretReads;
   /** What a call whose command line or written text holds a secret gets. */
   readonly writes: SecretWrites;
+  /** Reads the script files a line starts, for the saved credentials they read (secret-guard/script-reads.ts). */
+  readonly scripts: ScriptTexts;
 }
 
 /** The secret guard's config. A missing or unreadable config keeps the default, so a broken config never switches the guard off. */
@@ -43,13 +46,13 @@ export function secretGuardOf(load: ConfigLoad | undefined): SecretGuardConfig {
  * content; one over a folder with no glob, or only `!globs`, may still show a secret file's lines: a gap. Also the
  * secrets a file-writing call writes as text (T1369 R3), unless it writes a secret file.
  */
-export function secretFindingsOf(event: HookEvent, cwd: string, rules: SecretRules): SecretFinding[] {
+export function secretFindingsOf(event: HookEvent, cwd: string, rules: SecretRules, scripts: ScriptTexts): SecretFinding[] {
   const { call } = event;
   const dir = event.cwd ?? cwd;
   switch (call?.kind) {
     case 'shell': {
       const context = { cwd: dir, home: rules.home, dialect: call.dialect };
-      return call.readings.flatMap((text) => [...literalFindings(text, rules.shapes), ...shellFindings(text, context, rules)]);
+      return call.readings.flatMap((text) => [...literalFindings(text, rules.shapes), ...shellFindings(text, context, rules, scripts)]);
     }
     case 'read':
       return call.path !== undefined && rules.paths.listed(toolPath(call.path, dir, rules.home)) ? [{ kind: 'file', path: call.path }] : [];
@@ -185,7 +188,7 @@ export function secretGuardReply(event: HookEvent, env: SecretGuardEnv): HookRep
   if (env.secretReads === 'allow' && env.writes === 'allow') {
     return undefined;
   }
-  const findings = uniqueFindings(secretFindingsOf(event, env.cwd, env.rules)).filter((finding) => actionOf(finding, env) !== 'allow');
+  const findings = uniqueFindings(secretFindingsOf(event, env.cwd, env.rules, env.scripts)).filter((finding) => actionOf(finding, env) !== 'allow');
   if (findings.length === 0) {
     return undefined;
   }

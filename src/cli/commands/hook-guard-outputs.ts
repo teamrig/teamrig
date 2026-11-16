@@ -19,6 +19,7 @@ import type { HookEvent, HookReply } from '../../ports/host/index.ts';
 import { approvedTaskOf } from '../../register/approval.ts';
 import { JsonlEventLog } from '../../register/store.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
+import { diskScriptTexts } from '../../secret-guard/script-files.ts';
 import { runBy } from '../agent-run.ts';
 import { hookFilePlacesOf, secretFilesOf, sessionVariablesOf } from '../host.ts';
 import { rosterOf, type Kit } from '../kit.ts';
@@ -144,6 +145,7 @@ export function secretGuardReplyOf(runtime: CliRuntime, guard: GuardLoad, event:
     rules: secretRulesOf(config, runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(guard.load)),
     secretReads: config.secretReads,
     writes: config.writes,
+    scripts: diskScriptTexts(),
   });
 }
 

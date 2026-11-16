@@ -9,6 +9,7 @@ import { inlineFindings } from './inline.ts';
 import { quiet } from './output.ts';
 import { remoteFindings } from './remote.ts';
 import type { SecretRules } from './rules.ts';
+import { NO_SCRIPTS, scriptReadFindings, type ScriptTexts } from './script-reads.ts';
 import { consoleWriteFindings, fileReadFindings } from './static-calls.ts';
 
 /** Lines run in a container or on a remote host deeper than this are not read. */
@@ -19,16 +20,17 @@ const MAX_REMOTE_DEPTH = 4;
  * secrets it would print into the conversation: each program and expression whose output reaches the
  * screen, read for the secret files it prints, the environment or secret variables it prints, a command whose output is
  * a secret, the inline code it runs, and the lines it runs somewhere else. `depth` counts the remote lines read on the
- * way here.
+ * way here. `scripts` reads the script files the line starts, for the credentials they read (script-reads.ts).
  */
-export function shellFindings(command: string, context: ProgramsContext, rules: SecretRules, depth = 0): SecretFinding[] {
+export function shellFindings(command: string, context: ProgramsContext, rules: SecretRules, scripts: ScriptTexts, depth = 0): SecretFinding[] {
   const runs = runsOf(command, context);
   const inner = (line: string, dialect: ShellDialect): SecretFinding[] =>
-    depth < MAX_REMOTE_DEPTH ? shellFindings(line, { cwd: undefined, home: context.home, dialect }, rules, depth + 1) : [];
+    depth < MAX_REMOTE_DEPTH ? shellFindings(line, { cwd: undefined, home: context.home, dialect }, rules, NO_SCRIPTS, depth + 1) : [];
   const printing = runs.programs.filter((run) => !quiet(run));
   const printingBare = runs.bare.filter((bare) => !quiet(bare));
   return uniqueFindings([
     ...credentialReadFindings(command, runs.programs),
+    ...scriptReadFindings(runs, scripts, context.home),
     ...printing.flatMap((run) => [
       ...fileFindings(run, rules),
       ...envFindings(run, rules.names),

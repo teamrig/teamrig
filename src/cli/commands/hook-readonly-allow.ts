@@ -5,6 +5,7 @@ import { secretFindingsOf } from '../../hooks/secret-guard.ts';
 import type { HookEvent, HookReply } from '../../ports/host/index.ts';
 import { newestSnapshotExports, UNREAD_SNAPSHOT } from '../../readonly-shell/snapshot.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
+import { diskScriptTexts } from '../../secret-guard/script-files.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { pathsIfKnown, secretFilesOf } from '../host.ts';
 import { openKit } from '../kit.ts';
@@ -22,9 +23,10 @@ export async function readonlyCheckOf(runtime: CliRuntime, config: KitConfig): P
   const snapshots = pathsIfKnown(runtime)?.shellSnapshots(runtime.userHome);
   const snapshot = snapshots === undefined ? UNREAD_SNAPSHOT : await newestSnapshotExports(runtime.files, snapshots);
   const secrets = secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform, secretFilesOf(runtime), config.register.secretPatterns);
+  const scripts = diskScriptTexts();
   return {
     rules: readonlyRulesOf(config.readonlyShell, runtime.env, snapshot),
-    printsSecret: (event) => secretFindingsOf(event, runtime.cwd, secrets).length > 0,
+    printsSecret: (event) => secretFindingsOf(event, runtime.cwd, secrets, scripts).length > 0,
   };
 }
 

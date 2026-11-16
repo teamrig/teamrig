@@ -5,12 +5,13 @@ import type { ShellDialect } from '../push-guard/tokenizer.ts';
 import { testSecrets } from '../testing/host.ts';
 import { describeFinding } from './findings.ts';
 import { secretRulesOf } from './rules.ts';
+import { NO_SCRIPTS } from './script-reads.ts';
 import { shellFindings } from './shell.ts';
 
 const rules = secretRulesOf(DEFAULT_SECRET_GUARD, 'C:/u', 'win32', testSecrets());
 
 function printed(command: string, dialect: ShellDialect = 'bash'): string[] {
-  return shellFindings(command, { cwd: 'C:/w', home: 'C:/u', dialect }, rules).map(describeFinding);
+  return shellFindings(command, { cwd: 'C:/w', home: 'C:/u', dialect }, rules, NO_SCRIPTS).map(describeFinding);
 }
 
 describe('shellFindings', () => {
