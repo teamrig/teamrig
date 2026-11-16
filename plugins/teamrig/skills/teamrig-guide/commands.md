@@ -1808,15 +1808,15 @@ Flags: none.
 ### teamrig issue intake
 
 Takes in a pull request from outside the team, named as `owner/name#number`, so each session that owns what it
-changes judges it before anyone answers its author. It reads the paths the pull request changes once (the first 100;
-the reply task says when there are more) and writes nothing to GitHub. Each session owning an area whose paths it
-changes (`[github.areaPaths]`, each area label's session in `[github.areaOwners]`) gets a task, "Best-fix and overlap
-review of outside PR <owner/name#number> for <session>", listing its paths: is this the best fix, and does an open
-task of ours do the same? A session owning several areas gets one task; the caller's own area is left to its reply.
-When it changes a
-guarded path (a review gate entry of class security, `[pushGuard.reviewPaths]`), the security reviewer
-(`[roles.securityReviewer]`, on this team or one above) gets a "Security review of outside PR" task too, in that
-reviewer's team. Last comes the caller's task, "Reply to outside PR <owner/name#number> once its reviews are in",
+changes judges it before anyone answers its author. It reads the paths the pull request changes once (the first 100
+files; the reply task says when there are more), a renamed file's earlier path among them, and writes nothing to
+GitHub. Each session owning an area whose paths it changes (`[github.areaPaths]`, each area label's session in
+`[github.areaOwners]`) gets a task, "Best-fix and overlap review of outside PR <owner/name#number> for <session>",
+listing its paths: is this the best fix, and does an open task of ours do the same? A session owning several areas
+gets one task; the caller's own area is left to its reply. When it changes a guarded path (a review gate entry of
+class security, `[pushGuard.reviewPaths]`), or the read could not see every file (100 files or more, or a name left
+out as no plain path), the security reviewer (`[roles.securityReviewer]`, on this team or one above) gets a "Security
+review of outside PR" task too, in that reviewer's team, saying which. Last comes the caller's task, "Reply to outside PR <owner/name#number> once its reviews are in",
 planned after every review task, so the answer waits for each verdict; it lists the paths no area holds, for the
 caller to judge. Each task takes the priority, due date and goals given, as `teamrig add` does.
 
