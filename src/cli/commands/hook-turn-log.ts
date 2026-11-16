@@ -2,6 +2,7 @@ import type { KitConfig } from '../../config/types.ts';
 import type { TeamPaths } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
+import type { PromptOrigin } from '../../refresh/state.ts';
 import { LastTypedStore } from '../../sessions/last-typed.ts';
 import { cappedText, type TurnLogEntry, type TurnLogKind } from '../../turn-log/entry.ts';
 import { REPLY_TAIL_BYTES, replyOf, type Reply } from '../../turn-log/reply.ts';
@@ -69,6 +70,24 @@ export async function sentPromptOf(runtime: CliRuntime, wake: string, id: string
   // The host's own prompt is never teamrig's wake, so it leaves the kept wake for the prompt that is.
   const woke = !hostPrompt && (await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt }));
   return { tab: session, text: prompt, woke, byHost: hostPrompt };
+}
+
+/** A peer's message as the host hands it to the session, with the sending session when it names one. */
+const PEER_MESSAGE = /^<cross-session-message\b(?:[^>]*\bfrom="([^"]*)")?/;
+
+/**
+ * Where a sent prompt came from (#706): teamrig's wake of the tab (`sentPromptOf` took the text it kept for the tab, so
+ * it marks one prompt only), a peer's message by its tag, as the usage meter reads a peer turn, or else a person's.
+ */
+export function promptOriginOf(sent: SentPrompt | undefined): PromptOrigin {
+  if (sent === undefined) {
+    return { kind: 'person' };
+  }
+  if (sent.woke) {
+    return { kind: 'wake' };
+  }
+  const peer = PEER_MESSAGE.exec(sent.text.trimStart());
+  return peer === null ? { kind: 'person' } : { kind: 'peer', from: peer[1] ?? null };
 }
 
 /** UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`; nothing with the log off. */
