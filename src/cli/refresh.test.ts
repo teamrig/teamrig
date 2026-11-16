@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { HostSource } from '../composition/host-ports.ts';
-import type { JsonRecord } from '../core/guards.ts';
+import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { MeetingSchedule } from '../meeting/schedule.ts';
 import { HOOKS_ONLY_HOST, hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -368,6 +368,33 @@ describe('runCli: context refresh', () => {
     const none = new FakeProcesses();
     assert.deepEqual(stopJson(await off.run(['hook', 'stop'], { ...AS_ALPHA, stdin: stopPayload(true), sessionProcesses: UNDER_CLAUDE(), processes: none })), clear);
     assert.deepEqual([await offStore.restart('alpha'), none.hidden.filter((run) => run.args[1] === 'restart')], [undefined, []]);
+  });
+
+  // #706: a failed lookup used to read as no Claude Code, and nothing said why the restart never came.
+  it('logs why the lookup of its Claude Code failed on the row of the restart it stopped, and nothing for a lookup that works', async () => {
+    const log = join(TEAM_HOME, 'state', 'refresh', 'restarts.jsonl');
+    const env = { TEAMRIG_SESSION: 'alpha', CLAUDE_PROJECT_DIR: APP, TEAMRIG_LAUNCHED: 'alpha' };
+    for (const why of ['ps timed out after 20000 ms', 'ps exited with code 1: ps: cannot read /proc', 'powershell.exe gave no listing it could read: Access denied']) {
+      const kit = new CliHarness(AUTO_RESTART_TEAM);
+      const store = await handoverWritten(kit);
+      await openTask(kit, 'alpha');
+      const result = await kit.run(['hook', 'stop'], { env, stdin: stopPayload(true), sessionProcesses: UNDER_CLAUDE().hideLineage(why), processes: new FakeProcesses() });
+      assert.match(JSON.stringify(stopJson(result)), /type \/clear for a fresh start/);
+      assert.equal(await store.restart('alpha'), undefined);
+      const rows = ((await kit.files.read(log)) ?? '').split('\n').filter((line) => line !== '');
+      assert.equal(rows.length, 1);
+      const row: unknown = JSON.parse(rows[0] ?? '');
+      assert.ok(isRecord(row));
+      assert.deepEqual(
+        [row['session'], row['result'], row['lookupFailure']],
+        ['alpha', { kind: 'failed', why: "its session's process could not be looked up, so no restart was armed" }, why],
+      );
+    }
+    const works = new CliHarness(AUTO_RESTART_TEAM);
+    await handoverWritten(works);
+    await openTask(works, 'alpha');
+    await works.run(['hook', 'stop'], { env, stdin: stopPayload(true), sessionProcesses: UNDER_CLAUDE(), processes: new FakeProcesses() });
+    assert.equal(await works.files.read(log), undefined, 'a lookup that works leaves the row to the restart');
   });
 
   it('holds the restart back when no work of its own follows the handover, for the wake that brings some to arm (T1383)', async () => {

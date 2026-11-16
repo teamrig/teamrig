@@ -51,6 +51,7 @@ const MINUTE = 60 * SECOND;
 const WAKE_LOG = join(TEAM_HOME, 'state', 'wakes.jsonl');
 const ALPHA_LOCK = join(TEAM_HOME, 'state', 'wake', 'alpha.lock');
 const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
+const RESTART_LOG = join(TEAM_HOME, 'state', 'refresh', 'restarts.jsonl');
 /** What a waiting tab of the session watches: the register, and the session's asks folder. */
 const watchOf = (id = 'alpha'): readonly string[] => [EVENTS_PATH, join(ASKS, id)];
 
@@ -478,6 +479,19 @@ describe('hook wake-check', () => {
     const processes = new FakeProcesses();
     assert.equal((await checkUnder(unseen.kit, processes, new FakeSessionProcesses(7000))).stdout[0]?.includes('"kind":"wake","ids":["T1"]'), true, 'no Claude Code found');
     assert.deepEqual([await unseen.store.restart('alpha'), processes.hidden], [undefined, []]);
+    assert.equal(await unseen.kit.files.read(RESTART_LOG), undefined, 'a lookup that worked and found none logs no failure');
+
+    // #706: a failed lookup leaves a row saying why the re-arm stopped.
+    const blind = await deadRestart(AUTO_RESTART_TEAM);
+    const hidden = UNDER_CLAUDE().hideLineage('ps exited with code 1: ps: cannot read /proc');
+    assert.equal((await checkUnder(blind.kit, new FakeProcesses(), hidden)).stdout[0]?.includes('"kind":"wake","ids":["T1"]'), true);
+    assert.equal(await blind.store.restart('alpha'), undefined);
+    const row: unknown = JSON.parse((await blind.kit.files.read(RESTART_LOG)) ?? '');
+    assert.ok(isRecord(row));
+    assert.deepEqual(
+      [row['session'], row['result'], row['lookupFailure']],
+      ['alpha', { kind: 'failed', why: "its session's process could not be looked up, so no restart was armed" }, 'ps exited with code 1: ps: cannot read /proc'],
+    );
   });
 
   it('starts a session whose restart waits for work fresh once work is handed, the work left to wake the fresh session (T1383)', async () => {

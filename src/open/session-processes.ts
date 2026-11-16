@@ -121,6 +121,19 @@ export async function sessionProcessOf(processes: Pick<SessionProcesses, 'lineag
   return lineage?.slice(0, SESSION_HOPS).find((process) => isSessionProcess(process))?.pid;
 }
 
+/** The session's host program above a hook, none when the listing holds none near, or why the listing failed (#706). */
+export type SessionLookup = { readonly kind: 'found'; readonly pid: number } | { readonly kind: 'none' } | { readonly kind: 'failed'; readonly why: string };
+
+/** `sessionProcessOf`, with why the lookup failed when it did, for a caller that logs the failure. */
+export async function lookUpSessionProcess(processes: Pick<SessionProcesses, 'lineageLookup'>, pid: number, isSessionProcess: SessionProcessCheck): Promise<SessionLookup> {
+  const looked = await processes.lineageLookup(pid);
+  if (looked.kind === 'failed') {
+    return looked;
+  }
+  const found = looked.lineage.slice(0, SESSION_HOPS).find((process) => isSessionProcess(process));
+  return found === undefined ? { kind: 'none' } : { kind: 'found', pid: found.pid };
+}
+
 export interface SessionProcessesOptions {
   readonly platform?: NodeJS.Platform;
   readonly parentPid?: number;

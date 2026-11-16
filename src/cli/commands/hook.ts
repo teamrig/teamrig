@@ -51,7 +51,7 @@ import { hookLogOf } from '../hook-logs.ts';
 import { contextSourceIfTold, hostHomeIfKnown, leadLaunchFrom, modelsIfKnown, pathsIfKnown, transcriptsIfKept, transcriptsOf } from '../host.ts';
 import { openKit, renameDepsOf, rosterOf, rulesClockOf, teamZone, type Kit } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { hostSessionAbove } from '../session-process.ts';
+import { hostSessionLookup } from '../session-process.ts';
 import { keptRulesAboveOf, readTeamRules } from '../team-rules.ts';
 import { loadTree } from '../tree.ts';
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle, type TitleRead } from './hook-bind.ts';
@@ -811,10 +811,11 @@ async function refreshDecisionOf(runtime: CliRuntime, scope: SessionScope, event
     facts !== undefined && measured.kind === 'measure' ? decideStop(state, context, { ...facts, due: await dueFactsAt(runtime, store, id, event.transcript) }) : measured;
   // Looked up once for the restart and the state: each look at a process starts a PowerShell on Windows, and a Stop
   // hook past Claude Code's timeout is killed with every process it started.
-  const claude = decided.kind === 'notice' ? await hostSessionAbove(runtime) : undefined;
+  const looked = decided.kind === 'notice' ? await hostSessionLookup(runtime) : undefined;
+  const claude = looked?.kind === 'found' ? looked.pid : undefined;
   const decision =
-    decided.kind === 'notice' && decided.restart && target !== undefined
-      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, claude }, decided, { paths: kit.paths, config })
+    looked !== undefined && decided.kind === 'notice' && decided.restart && target !== undefined
+      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, claude: looked }, decided, { paths: kit.paths, config })
       : decided;
   switch (decision.kind) {
     case 'write':

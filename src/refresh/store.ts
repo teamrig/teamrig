@@ -3,6 +3,7 @@ import type { Files } from '../core/files.ts';
 import type { TeamPaths } from '../core/home.ts';
 import { writableObject } from '../core/jsonl.ts';
 import { formatCarriedJobs, parseCarriedJobs, type CarriedJobs } from './carry.ts';
+import { RestartLog } from './restart-log.ts';
 import {
   formatParkedRestart,
   formatRefreshRequest,
@@ -85,6 +86,11 @@ export class RefreshStore {
 
   async clearRequest(id: string): Promise<void> {
     await this.files.remove(this.requestPath(id));
+  }
+
+  /** The team's restart log, beside the restart requests. */
+  restartLog(): RestartLog {
+    return new RestartLog(this.files, this.paths);
   }
 
   async restart(id: string): Promise<RestartRequest | undefined> {

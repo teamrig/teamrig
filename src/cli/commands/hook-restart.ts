@@ -3,7 +3,8 @@ import { ENV, type TeamPaths } from '../../core/home.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
 import { CARRY_TAIL_BYTES, carryOf, type CarriedCron } from '../../refresh/carry.ts';
 import { noticeOf, type NoticeDecision, type StopContext } from '../../refresh/decide.ts';
-import { restartMayAct } from '../../refresh/restart.ts';
+import type { SessionLookup } from '../../open/session-processes.ts';
+import { restartMayAct, type RestartResult } from '../../refresh/restart.ts';
 import type { ParkedRestart, RestartRequest, RestartTab } from '../../refresh/state.ts';
 import type { RefreshStore } from '../../refresh/store.ts';
 import { parkRulesOf } from '../../register/park.ts';
@@ -11,7 +12,7 @@ import { startableTasks } from '../../wake/day-start.ts';
 import { identityOf, transcriptsIfKept } from '../host.ts';
 import { teamZone } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
-import { hostSessionAbove } from '../session-process.ts';
+import { hostSessionLookup } from '../session-process.ts';
 import { teamRegister } from '../team-register.ts';
 
 /** What the automatic restart needs from the turn end's hook event and environment. */
@@ -41,8 +42,8 @@ export interface RestartScope {
   readonly id: string;
   readonly context: StopContext;
   readonly target: RestartTarget;
-  /** The session's host process the hook runs under (`hostSessionAbove`); undefined when it was not found. */
-  readonly claude: number | undefined;
+  /** The session's host process the hook runs under (`hostSessionLookup`), or why it could not be looked up. */
+  readonly claude: SessionLookup;
 }
 
 /** Starts `restart` hidden for the request recorded at `at`, to wait until the session is idle; whether it started. */
@@ -77,14 +78,30 @@ export async function workFollows(runtime: CliRuntime, paths: TeamPaths, config:
  */
 export async function armRestart(runtime: CliRuntime, store: RefreshStore, scope: RestartScope, notice: NoticeDecision): Promise<NoticeDecision> {
   const { team, id, context, target, claude } = scope;
-  if (claude !== undefined) {
-    await store.setRestart(id, { ...restartTabOf(runtime, id, target), phase: 'pending', at: context.now, pid: claude });
+  if (claude.kind === 'found') {
+    await store.setRestart(id, { ...restartTabOf(runtime, id, target), phase: 'pending', at: context.now, pid: claude.pid });
     if (await startRunner(runtime, team, id, context.now, target.project)) {
       return notice;
     }
     await store.clearRestart(id);
   }
+  await logLookupFailure(runtime, store, id, context.now, claude);
   return noticeOf(notice.state, context, 'clear');
+}
+
+/**
+ * A restart a failed lookup of its session's process stopped before it was armed leaves a row saying why (#706): no
+ * runner starts, so nothing else would log it. A log it cannot write is no reason to fail the hook.
+ */
+async function logLookupFailure(runtime: CliRuntime, store: RefreshStore, id: string, at: string, claude: SessionLookup): Promise<void> {
+  if (claude.kind !== 'failed') {
+    return;
+  }
+  const result: RestartResult = { kind: 'failed', why: "its session's process could not be looked up, so no restart was armed" };
+  await store
+    .restartLog()
+    .record({ session: id, at, endedAt: new Date(runtime.clock.now()).toISOString(), result, lookupFailure: claude.why })
+    .catch(() => undefined);
 }
 
 /**
@@ -158,16 +175,17 @@ export interface RearmScope {
 async function armFromTab(runtime: CliRuntime, store: RefreshStore, scope: RearmScope, tab: RestartTab): Promise<boolean> {
   const { team, id, cwd } = scope;
   // Looked up on this rare path only: each look at a process starts a PowerShell on Windows.
-  const claude = await hostSessionAbove(runtime);
+  const claude = await hostSessionLookup(runtime);
   const project = identityOf(runtime).projectDir ?? tab.cwd ?? cwd;
-  if (claude !== undefined && project !== undefined) {
-    const at = new Date(runtime.clock.now()).toISOString();
-    await store.setRestart(id, { ...tab, phase: 'pending', at, pid: claude });
+  const at = new Date(runtime.clock.now()).toISOString();
+  if (claude.kind === 'found' && project !== undefined) {
+    await store.setRestart(id, { ...tab, phase: 'pending', at, pid: claude.pid });
     if (await startRunner(runtime, team, id, at, project)) {
       return true;
     }
   }
   await store.clearRestart(id);
+  await logLookupFailure(runtime, store, id, at, claude);
   return false;
 }
 

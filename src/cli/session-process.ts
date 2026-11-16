@@ -1,4 +1,4 @@
-import { runsSession, sessionProcessOf } from '../open/session-processes.ts';
+import { lookUpSessionProcess, runsSession, sessionProcessOf, type SessionLookup } from '../open/session-processes.ts';
 import { sessionProcessCheckOf } from './host.ts';
 import type { CliRuntime } from './runtime.ts';
 
@@ -20,4 +20,9 @@ export function runsHostSession(runtime: SessionProcessRuntime, pid: number | un
  */
 export function hostSessionAbove(runtime: SessionProcessRuntime): Promise<number | undefined> {
   return sessionProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid, sessionProcessCheckOf(runtime));
+}
+
+/** {@link hostSessionAbove}, with why the lookup failed when it did, for the restart log (#706). */
+export function hostSessionLookup(runtime: SessionProcessRuntime): Promise<SessionLookup> {
+  return lookUpSessionProcess(runtime.sessionProcesses, runtime.sessionProcesses.parentPid, sessionProcessCheckOf(runtime));
 }
