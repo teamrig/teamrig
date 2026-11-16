@@ -45,7 +45,7 @@ describe('teamrig issue intake (T3187)', () => {
     assert.ok(reply.includes('"owner":"lead"') && reply.includes(JSON.stringify('README.md').slice(1, -1)), reply);
   });
 
-  it('refuses a pull request taken in already, writing nothing more, until its reply is dropped', async () => {
+  it('refuses a pull request taken in already, writing nothing more, until its reply is dropped, then keeps its open reviews', async () => {
     const kit = new CliHarness(INTAKE_TEAM);
     const gh = new FakeGh().pullFiles('acme/web#7', ['docs/b.md']);
     assert.equal((await kit.run(INTAKE, { ...AS_LEAD, gh })).code, EXIT.ok);
@@ -54,8 +54,12 @@ describe('teamrig issue intake (T3187)', () => {
     assert.equal(again.code, EXIT.refused);
     assert.match(again.stdout.join('\n'), /^REFUSED acme\/web#7 is taken in already: T2 answers its author/u);
     assert.equal(kit.files.get(EVENTS_PATH), log);
-    assert.equal((await kit.run(['set', 'T2', '--status', 'dropped', '--note', 'author closed it'], AS_LEAD)).code, EXIT.ok);
-    assert.equal((await kit.run(INTAKE, { ...AS_LEAD, gh })).code, EXIT.ok);
+    const dropped = await kit.run(['set', 'T2', '--status', 'dropped', '--note', 'author closed it'], AS_LEAD);
+    assert.equal(dropped.code, EXIT.ok, [...dropped.stdout, ...dropped.stderr].join('\n'));
+    const retaken = await kit.run(INTAKE, { ...AS_LEAD, gh });
+    assert.equal(retaken.code, EXIT.ok, [...retaken.stdout, ...retaken.stderr].join('\n'));
+    assert.match(retaken.stdout[0] ?? '', /^KEPT T1 open, owner bravo \| Best-fix and overlap review of outside PR acme\/web#7 for bravo$/u);
+    assert.match(retaken.stdout[1] ?? '', /^ADDED T3 open, .*after T1, .*Reply to outside PR acme\/web#7/u);
   });
 
   it('adds only the reply, holding every path, when no area holds one and none is guarded', async () => {

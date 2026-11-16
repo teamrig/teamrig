@@ -6,6 +6,7 @@ import { targetText, type IssueTarget } from '../../issues/host.ts';
 import { reviewRoute } from '../../push-guard/review-gate.ts';
 import { GENERIC_REVIEW_PATHS, reviewPathMatcher } from '../../push-guard/review-paths.ts';
 import type { Task } from '../../register/fold.ts';
+import { ACTIVE_STATUSES } from '../../register/model.ts';
 import type { AddInput, Verdict } from '../../register/policy.ts';
 import type { WriteResult } from '../../register/register.ts';
 import { requiredFlag, type ParsedArgs } from '../args.ts';
@@ -95,10 +96,25 @@ async function replyOf(team: Team, target: IssueTarget): Promise<Task | undefine
   return [...state.tasks.values()].find((task) => task.title === title && task.status !== 'dropped');
 }
 
-/** Adds one review task, in the caller's register or, for a reviewer on another team of the tree, in that team's; its id. */
+/** The caller's register's active task titled `title`, which the register would refuse to add again. */
+async function openAskOf(team: Team, title: string): Promise<Task | undefined> {
+  const { state } = await team.register.snapshot();
+  return [...state.tasks.values()].find((task) => task.title === title && ACTIVE_STATUSES.includes(task.status));
+}
+
+/**
+ * Adds one review task, in the caller's register or, for a reviewer on another team of the tree, in that team's; its id.
+ * A review of the caller's register still open from an earlier intake is kept, its KEPT line printed, and not added again.
+ */
 async function askOf(runtime: CliRuntime, team: Team, caller: string, ask: IntakeAsk, base: IntakeFields): Promise<string> {
   const input = { ...base, title: ask.title, description: ask.description };
   const other = teamOf(ask, team);
+  // An intake again after its reply was dropped finds its own reviews still open: the new reply waits on them.
+  const open = other === undefined ? await openAskOf(team, ask.title) : undefined;
+  if (open !== undefined) {
+    runtime.out.stdout(`KEPT ${open.id} ${open.status}, owner ${open.owner} | ${open.title}`);
+    return open.id;
+  }
   if (other !== undefined) {
     const { verdict, target } = await askTeam(runtime, await treeCallerOf(runtime, team.paths.team, caller, other.team), { asked: other.team, owner: other.session }, input);
     return added(runtime, verdict, target, other.team).id;
