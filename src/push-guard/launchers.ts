@@ -50,6 +50,16 @@ export interface ScriptLaunch extends Surroundings {
   readonly sameShell: boolean;
 }
 
+/**
+ * A script file a shell runs (`bash x.sh`, `pwsh -File x.ps1`, `pwsh x.ps1`): the guards that follow a line read it as
+ * starting nothing they can follow, and the secret guard reads the file for the credentials it reads (T3038).
+ */
+export interface FileLaunch extends Surroundings {
+  readonly kind: 'file';
+  readonly file: ShellWord;
+  readonly dialect: ShellDialect;
+}
+
 /** A command whose program or script cannot be read from the command line. */
 export interface OpaqueLaunch {
   readonly kind: 'opaque';
@@ -66,8 +76,8 @@ export interface OpaqueLaunch {
   readonly stdinScript?: true;
 }
 
-/** What one simple command starts: nothing (a keyword line, an expression, a script file), a program, a script, or something unreadable. */
-export type Launch = { readonly kind: 'nothing' } | ProgramLaunch | ScriptLaunch | OpaqueLaunch;
+/** What one simple command starts: nothing (a keyword line, an expression), a script file, a program, a script, or something unreadable. */
+export type Launch = { readonly kind: 'nothing' } | FileLaunch | ProgramLaunch | ScriptLaunch | OpaqueLaunch;
 
 /** How a wrapper such as `env`, `sudo` or `timeout` reads its options before the program it runs. */
 interface WrapperSpec {
@@ -401,6 +411,10 @@ class LaunchReader {
     return { kind: 'script', script, dialect, sameShell, env: this.env, chdirs: this.chdirs, runner: this.runner, captured: this.captured };
   }
 
+  private file(file: ShellWord, dialect: ShellDialect): FileLaunch {
+    return { kind: 'file', file, dialect, env: this.env, chdirs: this.chdirs, runner: this.runner, captured: this.captured };
+  }
+
   /**
    * A shell that reads its commands from stdin runs the heredoc or here-string the line gives it, in a shell
    * of its own. Without one, or under `xargs`, which feeds stdin to the arguments, the commands are unknown.
@@ -513,7 +527,7 @@ class LaunchReader {
     if (command) {
       return operand === undefined ? NOTHING : this.script(operand, 'bash', false);
     }
-    return operand === undefined || stdin ? this.fromStdin('bash') : NOTHING;
+    return operand === undefined || stdin ? this.fromStdin('bash') : this.file(operand, 'bash');
   }
 
   /**
@@ -529,7 +543,7 @@ class LaunchReader {
       }
       const option = powerShellOption(word.text);
       if (option === undefined) {
-        return name === 'powershell' ? this.script(joinWords(args.slice(index), false), 'powershell', false) : NOTHING;
+        return name === 'powershell' ? this.script(joinWords(args.slice(index), false), 'powershell', false) : this.file(word, 'powershell');
       }
       const value = args[index + 1];
       switch (option) {
@@ -540,7 +554,7 @@ class LaunchReader {
         case 'encoded':
           return value === undefined ? NOTHING : this.encoded(value);
         case 'file':
-          return value?.text === '-' ? this.fromStdin('powershell') : NOTHING;
+          return value?.text === '-' ? this.fromStdin('powershell') : value === undefined ? NOTHING : this.file(value, 'powershell');
         case 'chdir':
           if (value !== undefined) {
             this.chdirs.push(value);

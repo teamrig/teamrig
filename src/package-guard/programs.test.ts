@@ -317,6 +317,20 @@ describe('runsOf', () => {
     assert.deepEqual(edits('git status && echo "$A"'), []);
   });
 
+  it('keeps each script file a shell runs, in the folder the shell starts in, and none for a command line or stdin (T3038)', () => {
+    const files = (command: string, dialect: ShellDialect = 'bash'): (readonly [string, ShellDialect, string | undefined])[] =>
+      runsOf(command, context(dialect)).files.map(({ file, dialect: named, dir }) => [file.text, named, dir] as const);
+    assert.deepEqual(files('bash x.sh'), [['x.sh', 'bash', APP]]);
+    assert.deepEqual(files('cd sub && sh -e x.sh'), [['x.sh', 'bash', resolve(APP, 'sub')]]);
+    assert.deepEqual(files('env -C sub bash x.sh'), [['x.sh', 'bash', resolve(APP, 'sub')]]);
+    assert.deepEqual(files('pwsh -NoProfile -File x.ps1', 'powershell'), [['x.ps1', 'powershell', APP]]);
+    assert.deepEqual(files('bash -c "pwsh x.ps1"'), [['x.ps1', 'bash', APP]]);
+    assert.deepEqual(files('cd "$D" && bash x.sh'), [['x.sh', 'bash', undefined]]);
+    assert.deepEqual(files('bash -c "git status"'), []);
+    assert.deepEqual(files('bash -s x.sh'), []);
+    assert.deepEqual(files('pwsh -File', 'powershell'), []);
+  });
+
   it('marks a program whose output a PowerShell assignment takes', () => {
     const captured = (command: string): boolean[] => runsOf(command, context('powershell')).programs.map((run) => run.captured);
     assert.deepEqual(captured('$c = Get-Content a; $n=Get-Content b; Get-Content c'), [true, true, false]);

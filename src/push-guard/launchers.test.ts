@@ -6,16 +6,21 @@ import { parseShell, type ShellDialect, type ShellWord } from './tokenizer.ts';
 
 const show = (word: ShellWord): string => (word.dynamic ? `~${word.text}` : word.text);
 
-/** A launch as one line: its kind, what it runs, then ` env=`, ` cd=` and ` stdin` when set. */
+/** A launch as one line: its kind, what it runs or reads, then ` env=`, ` cd=` and ` stdin` when set. */
 function summary(launched: Launch): string {
   switch (launched.kind) {
     case 'nothing':
       return 'nothing';
     case 'opaque':
       return `opaque${launched.gated ? '' : '!'}: ${launched.reason}`;
+    case 'file':
     case 'program':
     case 'script': {
-      const head = launched.kind === 'program' ? `program ${[launched.program, ...launched.args].map(show).join(' ')}` : `script(${launched.dialect}${launched.sameShell ? ', same' : ''}) ${show(launched.script)}`;
+      const head = launched.kind === 'program'
+        ? `program ${[launched.program, ...launched.args].map(show).join(' ')}`
+        : launched.kind === 'file'
+          ? `file(${launched.dialect}) ${show(launched.file)}`
+          : `script(${launched.dialect}${launched.sameShell ? ', same' : ''}) ${show(launched.script)}`;
       const env = launched.env.length === 0 ? '' : ` env=${launched.env.map((assignment) => `${assignment.name}=${show(assignment.value)}`).join(',')}`;
       const chdirs = launched.chdirs.length === 0 ? '' : ` cd=${launched.chdirs.map(show).join(',')}`;
       const stdin = launched.kind === 'program' && launched.stdinArgs ? ' stdin' : '';
@@ -66,9 +71,9 @@ describe('launch: a shell given its commands on stdin by the line', () => {
     assert.deepEqual(['cmd', 'cmd /q'].map(given), new Array<string>(2).fill('script(cmd) git push origin main'));
   });
 
-  it('keeps it opaque under xargs, and ignores it for a script file or a command line', () => {
+  it('keeps it opaque under xargs, and ignores it for a script file the shell runs or a command line', () => {
     assert.equal(given('xargs bash'), STDIN);
-    assert.equal(given('bash script.sh'), 'nothing');
+    assert.equal(given('bash script.sh'), 'file(bash) script.sh');
     assert.equal(given('bash -c "echo"'), 'script(bash) echo');
     assert.equal(given('git'), 'program git');
   });
@@ -376,8 +381,9 @@ describe('launch: shells handed a command line', () => {
       ["bash -o pipefail -c 'git push'", 'script(bash) git push'],
       ["bash --norc -c 'git push'", 'script(bash) git push'],
       ['bash -c', 'nothing'],
-      ['bash script.sh', 'nothing'],
-      ['bash -- script.sh', 'nothing'],
+      ['bash script.sh', 'file(bash) script.sh'],
+      ['env -C sub bash script.sh', 'file(bash) script.sh cd=sub'],
+      ['bash -- script.sh', 'file(bash) script.sh'],
       ['bash', STDIN],
       ['bash -s', STDIN],
     ]);
@@ -398,8 +404,9 @@ describe('launch: shells handed a command line', () => {
       ["pwsh -e 'not base64!'", 'opaque!: an encoded PowerShell command cannot be read'],
       ['pwsh -ec', 'nothing'],
       ['pwsh -Command', 'nothing'],
-      ['pwsh -File x.ps1', 'nothing'],
-      ['pwsh script.ps1', 'nothing'],
+      ['pwsh -File x.ps1', 'file(powershell) x.ps1'],
+      ['pwsh -File', 'nothing'],
+      ['pwsh script.ps1', 'file(powershell) script.ps1'],
       ['pwsh -c -', STDIN],
       ['pwsh -File -', STDIN],
       ['pwsh -', STDIN],

@@ -715,6 +715,7 @@ class GitInvocationFinder {
     const launched = launch(words, dialect, stdin);
     switch (launched.kind) {
       case 'nothing':
+      case 'file':
         break;
       case 'opaque':
         this.doubt(launched.reason, launched.gated);

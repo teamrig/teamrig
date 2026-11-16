@@ -137,6 +137,17 @@ export interface LineRuns {
    * stays in `bare`.
    */
   readonly envEdits: EnvEdits[];
+  /** The script files its shells run (`bash x.sh`, `pwsh -File x.ps1`), each with the folder it is read from (T3038). */
+  readonly files: ScriptFileRun[];
+}
+
+/** A script file a shell the line starts runs. */
+export interface ScriptFileRun {
+  readonly file: ShellWord;
+  /** The dialect the file is named in: the shell the line writes it for, not the file's own. */
+  readonly dialect: ShellDialect;
+  /** The folder the shell starts in; undefined when that is only known when the line runs. */
+  readonly dir: string | undefined;
 }
 
 export interface ProgramsContext {
@@ -166,7 +177,7 @@ const PIPE_END = /(?:^|[^|])\|&?[\n(]*$/;
 
 /** What `command` runs, each in the order it runs. */
 export function runsOf(command: string, context: ProgramsContext): LineRuns {
-  const runs: LineRuns = { programs: [], bare: [], opaque: [], fedShells: [], foreignShells: [], envEdits: [] };
+  const runs: LineRuns = { programs: [], bare: [], opaque: [], fedShells: [], foreignShells: [], envEdits: [], files: [] };
   visitScript(staticWord(command), context.dialect, new Location(context.cwd, context.home), 0, TOP, runs, SCREEN, false);
   return runs;
 }
@@ -291,7 +302,12 @@ function visitCommand(
     runs.opaque.push({ ...launched.command, dialect });
   } else if (launched.kind === 'opaque' && launched.stdinScript === true && inlet.fed) {
     runs.fedShells.push(dialect);
-  } else if (launched.kind === 'nothing' && command.words.length > 0) {
+  } else if ((launched.kind === 'nothing' || launched.kind === 'file') && command.words.length > 0) {
+    if (launched.kind === 'file') {
+      const inner = location.child();
+      launched.chdirs.forEach((chdir) => inner.moveTo(chdir, dialect));
+      runs.files.push({ file: launched.file, dialect, dir: inner.dir });
+    }
     const bare: Draft<BareCommand> = { words: command.words, dialect, redirections: command.redirections, pipe: outlet.pipe, substitution: outlet.substitution };
     runs.bare.push(bare);
     return { launched, run: undefined, bare };
