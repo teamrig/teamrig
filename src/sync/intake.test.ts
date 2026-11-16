@@ -30,8 +30,8 @@ describe('intakePlan (T3187)', () => {
     assert.deepEqual(
       plan.asks.map((ask) => [ask.kind, ask.owner, ask.title]),
       [
-        ['area', 'guards', 'Best-fix and overlap review of outside PR acme/web#7'],
-        ['area', 'docs', 'Best-fix and overlap review of outside PR acme/web#7'],
+        ['area', 'guards', 'Best-fix and overlap review of outside PR acme/web#7 for guards'],
+        ['area', 'docs', 'Best-fix and overlap review of outside PR acme/web#7 for docs'],
         ['security', 'ops/security', 'Security review of outside PR acme/web#7'],
       ],
     );

@@ -67,7 +67,8 @@ export function intakePlan(input: IntakeInput): IntakePlan {
     .map((share) => ({
       kind: 'area',
       owner: share.session,
-      title: `Best-fix and overlap review of outside PR ${shown}`,
+      // The register refuses an active task's title again whoever owns it, so each owner's ask names that owner.
+      title: `Best-fix and overlap review of outside PR ${shown} for ${share.session}`,
       description: described(
         `Review outside PR ${shown} in your area: is its fix the best one, and does it overlap your open tasks? Say your verdict on this task; ${caller} replies to the author once every review is in. Your paths, as the PR names them:`,
         share.paths,
