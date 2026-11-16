@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ProgramOutputCapError, type HostIssue, type JsonRecord } from '../../../plugin-api/index.ts';
 import { commentNode, FakeGh, ghIssue, labeledEvent, renamedEvent } from '../../../testing/fake-gh.ts';
 import { GH_PROGRAM, isIssueQuery, type GhRequest, type GhResult, type GhRunner } from './gh.ts';
-import { createdNumber, issuePageArgs, latestIssues, listIssues, parseIssuePage, readCommentsIn, startFailureText, type IssueListRequest } from './issues.ts';
+import { createdNumber, issuePageArgs, latestIssues, listIssues, parseIssuePage, readCommentsIn, readPullFilesIn, PULL_PATH_MAX, startFailureText, type IssueListRequest } from './issues.ts';
 import { closedPageArgs, openPageArgs } from './queries.ts';
 import type { RepoAccess } from './tokens.ts';
 
@@ -364,6 +364,31 @@ describe('parseIssuePage', () => {
 
   it('gives no next cursor on the last page', () => {
     assert.deepEqual(parseIssuePage(pageText([], { hasNextPage: false, endCursor: 'Y3Vyc29y' }), OPEN), { kind: 'page', issues: [], unreadable: 0, items: 0, next: undefined });
+  });
+});
+
+describe('readPullFilesIn (T3187)', () => {
+  it("keeps each file's path and nothing else, leaving out and counting a name that is no plain path", () => {
+    const stdout = JSON.stringify([
+      { filename: 'src/a.ts', status: 'modified', patch: '@@ secret? @@' },
+      { filename: 'docs/b.md', status: 'added' },
+      { filename: 'two\nlines.ts' },
+      { filename: 'bell\u0007.ts' },
+      { filename: 'mark‮.ts' },
+      { filename: 'x'.repeat(PULL_PATH_MAX + 1) },
+      { filename: '' },
+      { status: 'removed' },
+      'not a file',
+      { filename: 'y'.repeat(PULL_PATH_MAX) },
+    ]);
+    assert.deepEqual(readPullFilesIn(stdout), { paths: ['src/a.ts', 'docs/b.md', 'y'.repeat(PULL_PATH_MAX)], leftOut: 7 });
+  });
+
+  it('gives undefined when gh printed no list', () => {
+    for (const stdout of ['', '{}', 'null', '{"filename":"a"}', 'not json']) {
+      assert.equal(readPullFilesIn(stdout), undefined, stdout);
+    }
+    assert.deepEqual(readPullFilesIn('[]'), { paths: [], leftOut: 0 });
   });
 });
 

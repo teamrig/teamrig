@@ -36,13 +36,13 @@ export const GH_PROGRAM = 'gh';
  * and issue label), one sub-issue or blocked-by link added (issue links), and `issue watch`'s two probes,
  * conditional reads that tell whether a repository changed (isWatchProbe), the read of one failed Actions job's log
  * (the pull request monitor names its failed step), the reads of a repository's comments, review comments, issue
- * and pull request bodies changed since a time and of one pull request's reviews (the mention scan), and `pr approve`
- * and `pr merge`'s lines (T4817): one pull request's stand read, its APPROVE review pinned to a full head sha with a
- * fixed body, and its landing pinned to that sha, by enqueue where the repository has a merge queue, else a rebase
- * merge. The runner refuses any other command line before it starts: no title or state edit besides the close and
- * the bare reopen, removal of more than one assignee at once, label create but teamrig's own, label edit or delete, link
- * removal, a merge not pinned to a head, a review other than that approval, branch delete, run rerun or cancel, or
- * log download.
+ * and pull request bodies changed since a time and of one pull request's reviews (the mention scan), the read of one
+ * page of a pull request's changed files (issue intake, which keeps their paths), and `pr approve` and `pr merge`'s
+ * lines (T4817): one pull request's stand read, its APPROVE review pinned to a full head sha with a fixed body, and
+ * its landing pinned to that sha, by enqueue where the repository has a merge queue, else a rebase merge. The runner
+ * refuses any other command line before it starts: no title or state edit besides the close and the bare reopen,
+ * removal of more than one assignee at once, label create but teamrig's own, label edit or delete, link removal, a
+ * merge not pinned to a head, a review other than that approval, branch delete, run rerun or cancel, or log download.
  *
  * isIssueQuery is true for `gh api graphql -f query=<a text of queries.ts> -f <variable>=<value> ...` and nothing more: the query
  * word for word, each variable one it declares and given once, every field raw (`-f`). Any other flag (`-F`,
@@ -214,6 +214,37 @@ export const COMMENTS_PAGE = 30;
  */
 export function commentsReadArgs(target: IssueNumber, since: string): string[] {
   return ['api', `repos/${target.repo}/issues/${target.number}/comments`, '-X', 'GET', RAW_FIELD, `since=${since}`, RAW_FIELD, `per_page=${COMMENTS_PAGE}`];
+}
+
+/** The changed files one read of a pull request gives at most: issue intake routes by the paths of this one page. */
+export const PULL_FILES_PAGE = 100;
+
+/** The command line that reads the first page of one pull request's changed files, for their paths. */
+export function pullFilesArgs(target: IssueNumber): string[] {
+  return ['api', `repos/${target.repo}/pulls/${target.number}/files`, '-X', 'GET', RAW_FIELD, `per_page=${PULL_FILES_PAGE}`];
+}
+
+/** `repos/<owner>/<name>/pulls/<number>/files`. */
+const PULL_FILES_PATH = /^repos\/([^/]+\/[^/]+)\/pulls\/[1-9][0-9]{0,9}\/files$/;
+
+/**
+ * True for `gh api repos/<owner>/<name>/pulls/<number>/files -X GET -f per_page=100` and nothing more: one page of
+ * one pull request's changed files. Another field, page, page size, method or `--paginate` is refused, so the read
+ * stays one bounded page and writes nothing.
+ */
+export function isPullFilesRead(args: readonly string[]): boolean {
+  const match = PULL_FILES_PATH.exec(args[1] ?? '');
+  const [page, ...rest] = rawPairs(args.slice(4)) ?? [];
+  return (
+    args[0] === 'api' &&
+    match !== null &&
+    REPO_NAME.test(match[1] ?? '') &&
+    args[2] === '-X' &&
+    args[3] === 'GET' &&
+    page?.[0] === 'per_page' &&
+    page[1] === String(PULL_FILES_PAGE) &&
+    rest.length === 0
+  );
 }
 
 /** A UTC time as Date.toISOString writes it. */
@@ -1087,12 +1118,12 @@ export function isPullMerge(args: readonly string[]): boolean {
   return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullMergeArgs(target, head));
 }
 
-/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, reopen, link, type or field, a failed job's log, a CI run's read or re-run, a mention scan's read, or a pull request's stand read, approval or landing. */
+/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, reopen, link, type or field, a failed job's log, a CI run's read or re-run, a mention scan's read, or a pull request's changed files, stand read, approval or landing. */
 export class GhRefusedError extends Error {
   override readonly name = 'GhRefusedError';
 
   constructor(args: readonly string[]) {
-    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, reopen, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, reopen, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry and the files it changes: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
   }
 }
 
@@ -1141,6 +1172,7 @@ export function isAllowedGh(args: readonly string[]): boolean {
     isRunRerun(args) ||
     isMentionRead(args) ||
     isReviewRead(args) ||
+    isPullFilesRead(args) ||
     isPullStandRead(args) ||
     isPullCompareRead(args) ||
     isCommitRead(args) ||

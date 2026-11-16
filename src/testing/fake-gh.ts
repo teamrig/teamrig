@@ -35,12 +35,14 @@ import {
   isPullStandRead,
   isPullCompareRead,
   isCommitRead,
+  isPullFilesRead,
   isReviewRead,
   isRunRead,
   isRunRerun,
   isWatchProbe,
   LabelFileReads,
   labelFileRepoOf,
+  PULL_FILES_PAGE,
   WATCH_PATHS,
   type GhCall,
   type GhRequest,
@@ -479,6 +481,7 @@ export class FakeGh implements GhRunner {
   private readonly compares = new Map<string, JsonRecord>();
   private readonly commits = new Map<string, JsonRecord>();
   private readonly postFailures = new Map<string, GhResult>();
+  private readonly files = new Map<string, readonly string[]>();
   /** Set by `pages`; else each query's own page size. */
   private pageSize: number | undefined;
   /** How often each `<repo> <probe path>` changed: its entity tag is `W/"v<count>"`. */
@@ -646,6 +649,12 @@ export class FakeGh implements GhRunner {
     return this;
   }
 
+  /** From now on, the pull request `<repo>#<number>` changes these files, and a files read of any other is Not Found. */
+  pullFiles(pull: string, paths: readonly string[]): this {
+    this.files.set(pull, paths);
+    return this;
+  }
+
   /** From now on, every read of an issue's new comments ends as given. */
   answersCommentsRead(result: GhResult): this {
     this.commentsAnswer = result;
@@ -732,6 +741,9 @@ export class FakeGh implements GhRunner {
     }
     if (isViewerRead(request.args)) {
       return this.viewerAnswer ?? { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ login: FAKE_VIEWER, type: 'User' }), stderr: '' };
+    }
+    if (isPullFilesRead(request.args)) {
+      return this.filesRead(request.args[1] ?? '');
     }
     if (isCommentsRead(request.args)) {
       return this.commentsAnswer ?? this.commentsRead(request.args);
@@ -982,6 +994,21 @@ export class FakeGh implements GhRunner {
       .filter((issue) => terms.every((term) => (stringField(issue, 'title') ?? '').toLowerCase().includes(term)))
       .map((issue) => ({ ...heldIssueRest(issue, Number(issue['number'])), repository_url: `https://api.github.com/repos/${repo}` }));
     return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ total_count: items.length, incomplete_results: false, items }), stderr: '' };
+  }
+
+  /** One page of the pull request's files, in REST's shape with a patch beside each name; Not Found for one it does not hold. */
+  private filesRead(path: string): GhResult {
+    const [, owner = '', name = '', , number = ''] = path.split('/');
+    const canned = this.canned.get(`${owner}/${name}`);
+    if (canned !== undefined) {
+      return canned;
+    }
+    const paths = this.files.get(`${owner}/${name}#${number}`);
+    if (paths === undefined) {
+      return { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Not Found (HTTP 404)\n' };
+    }
+    const page = paths.slice(0, PULL_FILES_PAGE).map((filename) => ({ filename, status: 'modified', patch: '@@ -1 +1 @@' }));
+    return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(page), stderr: '' };
   }
 
   private issueRead(path: string): GhResult {

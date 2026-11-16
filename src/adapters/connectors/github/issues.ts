@@ -407,6 +407,35 @@ function namesOf(connection: unknown, key: string): string[] {
   });
 }
 
+/** The longest path a pull request's file read keeps: a longer name is left out, not cut, so no path is changed. */
+export const PULL_PATH_MAX = 400;
+
+/** A path of a changed file as an outsider's pull request names it: no control or format character, within PULL_PATH_MAX. */
+function isPlainPath(name: string): boolean {
+  return name !== '' && name.length <= PULL_PATH_MAX && !/[\p{Cc}\p{Cf}]/u.test(name);
+}
+
+/**
+ * The paths one REST read of a pull request's files printed (gh.ts pullFilesArgs), with the count of names it left
+ * out as no plain path (isPlainPath): the read keeps each file's `filename` and nothing else of it, no patch or
+ * content. Undefined when gh printed no list.
+ */
+export function readPullFilesIn(stdout: string): { readonly paths: string[]; readonly leftOut: number } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) {
+    return undefined;
+  }
+  const items: readonly unknown[] = parsed;
+  const names = items.map((item) => (isRecord(item) ? stringField(item, 'filename') : undefined));
+  const paths = names.filter((name): name is string => name !== undefined && isPlainPath(name));
+  return { paths, leftOut: names.length - paths.length };
+}
+
 /**
  * The comments one REST read of an issue's comments printed (gh.ts commentsReadArgs), each with its text matched for
  * a claim line and dropped, so no outsider's words leave this function; undefined when gh printed no list. A comment
