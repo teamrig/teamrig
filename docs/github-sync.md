@@ -229,11 +229,15 @@ while it lasts; the first run on a repository only notes what is there.
   of the same repository it closes (a `Fixes #12` link GitHub knows), whatever its branch or author, and to each
   session following it (`teamrig follow`). Such a copy never wakes.
 - Each session gets one inbox line, for example
-  `github: GitHub pull requests: gh:acme/web#20 "Fix the login redirect": conflicts with its base`. A conflict,
-  failing checks or changes requested on the session's own pull request (a `t<id>-` branch of one of the team's
-  authors, not a fork) also wake the session (when `wake.enabled`); a merge, a close, an approval, green checks, an
-  outsider's conflict, red checks or changes requested, and an outsider's new pull request, which is the watcher's
-  intake work, wait for its next turn.
+  `github: GitHub pull requests: gh:acme/web#20 "Fix the login redirect": conflicts with its base (rebase it onto the
+  newest base and push it back to the same branch with --force-with-lease)`. A conflict, failing checks or changes
+  requested on the session's own pull request (a `t<id>-` branch of one of the team's authors, not a fork) also wake
+  the session (when `wake.enabled`); a merge, a close, an approval, green checks, an outsider's conflict, red checks
+  or changes requested, and an outsider's new pull request, which is the watcher's intake work, wait for its next turn.
+- A conflict says the way out: on one of the team's own pull requests, a rebase onto the newest base pushed back to
+  the same branch with a lease, so it stays one branch and one pull request; on an outsider's, the
+  `teamrig pr conflicts` line that names its files, to comment the rebase it needs or take the change over
+  ([A pull request in conflict](#a-pull-request-in-conflict)).
 - When the checks of a session's own pull request start failing, the run reads the end of each failed job's log
   (`gh run view --job <id> --log-failed`, at most 5 jobs a run) and writes it to
   `~/.teamrig/teams/<team>/state/github-ci/<owner>-<name>-<number>.md`, one file per pull request, the newest

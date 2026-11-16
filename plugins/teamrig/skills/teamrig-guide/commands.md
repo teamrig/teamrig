@@ -1408,7 +1408,9 @@ Flags:
   repository's owner or a login in `github.owners`, when `wake.enabled`; an outsider's new pull request wakes no one, as
   it is the watcher's intake work). When its own pull request's checks start failing, it reads the
   end of each failed job's log (at most 5 a run) into `state/github-ci/<owner>-<name>-<number>.md` and the line names
-  the job, its failed step and that file. An open issue labelled `security` wakes the session it routes to and pages
+  the job, its failed step and that file. A conflict names the way out: the team's own change is rebased onto the
+  newest base and goes back to the same branch; an outsider's gets the `teamrig pr conflicts`
+  line that names its files, for a comment on the rebase it needs, or is taken over. An open issue labelled `security` wakes the session it routes to and pages
   the owner through the `alerts` page webhook, once per issue ever and for at most 3 issues a run (the rest go to the
   lead in one line and one page); the lead is woken when no page goes. It also reads each repository's posts changed
   since its last `--auto` read (the first read only starts the scan) and sends each new `@` mention of a login in
