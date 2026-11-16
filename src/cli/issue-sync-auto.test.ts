@@ -135,7 +135,7 @@ describe('teamrig issue sync --auto', () => {
       }
       assert.deepEqual(githubLines(kit, 'bravo'), [
         'GitHub sync added 1 task(s) for you: T1 gh:acme/web#7 "Fix login"',
-        'GitHub pull requests: gh:acme/web#20 "Change 20": conflicts with its base',
+        'GitHub pull requests: gh:acme/web#20 "Change 20": conflicts with its base (rebase it onto the newest base and push it back to the same branch with --force-with-lease)',
       ]);
       assert.deepEqual(githubLines(kit, 'alpha'), [
         // The outsider's pull request waits on the watcher's answer from its opening (#1351): the response clock's unwoken reminder.

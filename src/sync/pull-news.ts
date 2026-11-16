@@ -238,10 +238,24 @@ function wakes(kind: PullEventKind, pull: HostPull, ours: OurLogins): boolean {
   }
 }
 
+/**
+ * The way out of a conflict, said with the news (T2693). One of the team's own pull requests is rebased onto the
+ * newest base and pushed back to its own branch with a lease, so it stays one branch and one pull request. An outsider's
+ * is theirs to rebase, so the watcher names its files (`teamrig pr conflicts`) in a comment, or takes the change over.
+ */
+function conflictFix(pull: HostPull, ours: OurLogins): string {
+  return isOurAuthor(pull.authorAssociation, pull.author, ours)
+    ? 'rebase it onto the newest base and push it back to the same branch with --force-with-lease'
+    : `teamrig pr conflicts ${pull.repo}#${pull.number} names its files: comment the rebase it needs, or take it over`;
+}
+
 function eventWords({ kind, pull, ci }: PullEvent, ours: OurLogins): string {
   if (kind === 'checks-failing' && ci !== undefined) {
     const jobs = ci.jobs.map(({ name, step }) => `${JSON.stringify(cut(name, JOB_CHARS))}${step === undefined ? '' : ` at ${JSON.stringify(cut(step, JOB_CHARS))}`}`);
     return `${EVENT_WORDS[kind]} (${jobs.join(', ')}; log end in ${ci.file})`;
+  }
+  if (kind === 'conflict') {
+    return `${EVENT_WORDS[kind]} (${conflictFix(pull, ours)})`;
   }
   if (kind !== 'opened') {
     return EVENT_WORDS[kind];

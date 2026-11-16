@@ -8,6 +8,8 @@ const T1 = '2030-01-02T00:00:00Z';
 const T2 = '2030-01-03T00:00:00Z';
 /** One login the team named in github.owners; the default author is ours as the repository owner. */
 const OURS: ReadonlySet<string> = new Set(['teammate']);
+/** The way out a conflict on one of the team's own pull requests names. */
+const RESHIP = 'rebase it onto the newest base and push it back to the same branch with --force-with-lease';
 
 /** An open, clean pull request of acme/web by its owner, opened and changed at T0. */
 function pull(number: number, overrides: Partial<HostPull> = {}): HostPull {
@@ -182,8 +184,21 @@ describe('pullNewsText', () => {
       { kind: 'conflict', pull: long },
       { kind: 'checks-failing', pull: long },
     ], OURS);
-    assert.equal(news.text, `GitHub pull requests: gh:acme/web#1 "Change 1": merged; gh:acme/web#2 ${JSON.stringify(`Fix "the" ${'x'.repeat(49)}…`)}: conflicts with its base, checks failing`);
+    assert.equal(news.text, `GitHub pull requests: gh:acme/web#1 "Change 1": merged; gh:acme/web#2 ${JSON.stringify(`Fix "the" ${'x'.repeat(49)}…`)}: conflicts with its base (${RESHIP}), checks failing`);
     assert.equal(news.wake, true);
+  });
+
+  it("says the way out of a conflict: a re-ship for the team's own, the files and a comment for an outsider's (T2693)", () => {
+    for (const ours of [pull(1, { head: 't12-fix' }), pull(1, { head: 'feature-x' }), pull(1, { authorAssociation: 'MEMBER', author: 'teammate', fork: true })]) {
+      assert.equal(pullNewsText([{ kind: 'conflict', pull: ours }], OURS).text, `GitHub pull requests: gh:acme/web#1 "Change 1": conflicts with its base (${RESHIP})`, JSON.stringify(ours));
+    }
+    for (const outside of [pull(7, { authorAssociation: 'CONTRIBUTOR', author: 'stranger', fork: true }), pull(7, { authorAssociation: 'COLLABORATOR', author: 'helper', head: 't12-fix' })]) {
+      assert.equal(
+        pullNewsText([{ kind: 'conflict', pull: outside }], OURS).text,
+        'GitHub pull requests: gh:acme/web#7 "Change 7": conflicts with its base (teamrig pr conflicts acme/web#7 names its files: comment the rebase it needs, or take it over)',
+        JSON.stringify(outside),
+      );
+    }
   });
 
   it('names each failed job, its step and the excerpt file of failing checks that carry one', () => {

@@ -302,7 +302,7 @@ describe('teamrig issue sync', () => {
     const gh = twoIssues().holdsPulls('acme/web', [ghPull('acme/web', 20, { mergeable: 'CONFLICTING', updatedAt: '2030-01-02T00:00:00Z' })]);
     const lines = await expectRun(kit, ['issue', 'sync'], gh, EXIT.ok);
     assert.deepEqual(lines.slice(-3), [
-      'PULL NEWS lead (wakes): GitHub pull requests: gh:acme/web#20 "Change 20": conflicts with its base',
+      'PULL NEWS lead (wakes): GitHub pull requests: gh:acme/web#20 "Change 20": conflicts with its base (rebase it onto the newest base and push it back to the same branch with --force-with-lease)',
       'NOTE only teamrig issue sync --auto tells the pull request news and keeps what it read, so the next run names it again',
       'PREVIEW nothing was written; teamrig issue sync --yes writes the above as github',
     ]);
