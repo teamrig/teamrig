@@ -784,6 +784,12 @@ export interface GithubConfig {
    * read after the assignees and before `sessions`, the first label in this list the issue carries winning.
    */
   readonly areaOwners: Readonly<Record<string, string>>;
+  /**
+   * The paths each area label of `areaOwners` holds (lowercase), such as `area:guard` for `src/push-guard/**`: globs read
+   * as the review gate reads them, each held to one repository by an `<owner>/<name>:` prefix, else matching in every one.
+   * `issue intake` asks the owner of each area an outside pull request changes for a review (areas.ts).
+   */
+  readonly areaPaths: Readonly<Record<string, readonly string[]>>;
   /** The session each repository's (lowercase) issues go to when none of their assignees is in `owners` and none of their labels in `areaOwners`; else the lead. */
   readonly sessions: Readonly<Record<string, string>>;
   /** How many days back closed issues are read, to finish the tasks they were imported as. */

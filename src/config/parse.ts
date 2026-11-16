@@ -99,6 +99,7 @@ import {
 } from './limits.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ConfigReader, describe, isValidRegex, shortLine, type Check, type ConfigIssue } from './reader.ts';
+import { splitAreaGlob } from './areas.ts';
 import {
   AUTO_RESTART_LEAD,
   type AutoRestart,
@@ -846,10 +847,12 @@ function parseGithub(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     repos.push(key);
   }
   const issueAtAdd = readIssueAtAdd(read, raw, repos);
+  const areaOwners = readGithubAreaOwners(read, read.section(raw, 'areaOwners', 'github'), sessions);
   return {
     repos,
     owners: readGithubOwners(read, read.section(raw, 'owners', 'github'), sessions),
-    areaOwners: readGithubAreaOwners(read, read.section(raw, 'areaOwners', 'github'), sessions),
+    areaOwners,
+    areaPaths: readGithubAreaPaths(read, read.section(raw, 'areaPaths', 'github'), areaOwners),
     sessions: readGithubSessions(read, read.section(raw, 'sessions', 'github'), repos, sessions),
     closedDays: read.integer(raw, 'closedDays', 'github', DEFAULT_GITHUB.closedDays, CONFIG_LIMITS.closedDays),
     probeSeconds: readProbeSeconds(read, raw),
@@ -1187,6 +1190,39 @@ function readGithubAreaOwners(read: ConfigReader, raw: JsonRecord, sessions: rea
     }
   }
   return owners;
+}
+
+/** A glob that names a path once its `<owner>/<name>:` prefix is taken off. */
+const isAreaGlob: Check<string> = (text) => (splitAreaGlob(text).glob.trim() === '' ? 'expected a path glob after the repository' : undefined);
+
+/**
+ * `github.areaPaths`: the paths each area label of `github.areaOwners` holds (T3187), the label in lowercase. A label
+ * areaOwners lacks, one listed twice or one listing no glob is reported and left out, so a path never goes to an area no
+ * session owns.
+ */
+function readGithubAreaPaths(read: ConfigReader, raw: JsonRecord, areaOwners: Readonly<Record<string, string>>): Record<string, readonly string[]> {
+  const { maxItems, maxLength } = CONFIG_LIMITS.areaPaths;
+  const areas = new Map<string, readonly string[]>();
+  for (const label of Object.keys(raw)) {
+    const path = `github.areaPaths.${label}`;
+    const key = label.toLowerCase();
+    if (!Object.hasOwn(areaOwners, key)) {
+      read.report(path, 'is no label of github.areaOwners: name the session that owns it there first');
+      continue;
+    }
+    if (areas.has(key)) {
+      read.report(path, 'is listed twice');
+      continue;
+    }
+    const globs = read.stringList(raw, label, 'github.areaPaths', [], shortLine(maxLength, isAreaGlob), maxItems);
+    const value = raw[label];
+    if (globs.length > 0) {
+      areas.set(key, globs);
+    } else if (Array.isArray(value) && value.length === 0) {
+      read.report(path, 'lists no path: name the globs of the paths the area holds, or leave the label out');
+    }
+  }
+  return Object.fromEntries(areas);
 }
 
 /** Config version 1's name for `register.priorities`; the v1-to-v2 migration renames it, so a current file never holds it. */

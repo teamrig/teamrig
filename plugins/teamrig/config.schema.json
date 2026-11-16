@@ -1511,6 +1511,23 @@
           "additionalProperties": { "$ref": "#/$defs/sessionName" },
           "default": {}
         },
+        "areaPaths": {
+          "description": "The paths each area label of areaOwners holds, such as \"area:guard\": [\"src/push-guard/**\"]: teamrig issue intake asks the session owning each area an outside pull request changes for a best-fix and overlap review. A glob reads as a review gate glob does: with no slash a file name at any depth, with one a path from the repository root, case ignored; an <owner>/<name>: prefix holds it to that repository, else it matches in every one. Each label must be one of areaOwners; matched without case. Two areas may hold the same path: each owner then reviews it.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 240 },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "default": {}
+        },
         "sessions": {
           "description": "The session that owns the issues of each repository (owner/name, one of repos; matched without case) when none of their assignees is in owners and none of their labels in areaOwners. Without one, they go to the lead.",
           "type": "object",

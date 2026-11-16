@@ -43,7 +43,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.steps, { backupDays: 7 });
-    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
+    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
@@ -688,6 +688,7 @@ describe('parseConfig', () => {
       repos: ['acme/web', 'acme/docs.site'],
       owners: { octocat: 'bravo' },
       areaOwners: {},
+      areaPaths: {},
       sessions: {},
       closedDays: 365,
       probeSeconds: 0,
@@ -906,6 +907,44 @@ describe('parseConfig', () => {
       ['bug', 'bravo'],
     ]);
     assert.equal(parseConfig({ ...ROSTER, github: { areaOwners: { ['y'.repeat(GITHUB_LABEL_MAX_LENGTH)]: 'alpha' } } }).issues.length, 0);
+  });
+
+  it("reads each area label's paths, the label in lowercase, and defaults to none", () => {
+    assert.deepEqual(parseConfig(ROSTER).config.github.areaPaths, {});
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      github: { areaOwners: { 'area:guard': 'alpha', 'area:docs': 'bravo' }, areaPaths: { 'Area:Guard': ['src/guard/**', 'acme/web:docs/guard.md'], 'area:docs': ['*.md'] } },
+    });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.github.areaPaths, { 'area:guard': ['src/guard/**', 'acme/web:docs/guard.md'], 'area:docs': ['*.md'] });
+  });
+
+  it('reports an area label github.areaOwners lacks, one listed twice, an empty list, a bad glob or too many, leaving each out', () => {
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      github: {
+        areaOwners: { 'area:guard': 'alpha', 'area:docs': 'bravo' },
+        areaPaths: { 'area:web': ['src/**'], constructor: ['src/**'], 'area:docs': [], 'area:guard': ['src/**', '', 'acme/web:', 'a\nb', 'x'.repeat(241)], 'AREA:GUARD': ['lib/**'] },
+      },
+    });
+    // Each message without the value it quotes, which the reader's own tests hold.
+    assert.deepEqual(
+      issues.map((issue) => `${issue.path}: ${issue.message.replace(/(, got | \(got ).*$/s, '')}`),
+      [
+        'github.areaPaths.area:web: is no label of github.areaOwners: name the session that owns it there first',
+        'github.areaPaths.constructor: is no label of github.areaOwners: name the session that owns it there first',
+        'github.areaPaths.area:docs: lists no path: name the globs of the paths the area holds, or leave the label out',
+        'github.areaPaths.area:guard[1]: expected a non-empty string',
+        'github.areaPaths.area:guard[2]: expected a path glob after the repository',
+        'github.areaPaths.area:guard[3]: expected a single line',
+        'github.areaPaths.area:guard[4]: expected at most 240 characters',
+        'github.areaPaths.AREA:GUARD: is listed twice',
+      ],
+    );
+    assert.deepEqual(config.github.areaPaths, { 'area:guard': ['src/**'] });
+    const many = parseConfig({ ...ROSTER, github: { areaOwners: { 'area:guard': 'alpha' }, areaPaths: { 'area:guard': Array.from({ length: 65 }, (_, index) => `src/${index}/**`) } } });
+    assert.deepEqual(many.issues.map((issue) => issue.path), ['github.areaPaths.area:guard']);
+    assert.deepEqual(many.config.github.areaPaths, {});
   });
 
   it('reports a blank, multi-line or long area label, an unknown session, a session that is no name and a label listed twice', () => {

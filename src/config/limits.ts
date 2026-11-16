@@ -71,6 +71,7 @@ export const CONFIG_LIMITS = {
   /** Only the ids a detached team's waits named: a team rarely waits on more than a few of another team's tasks. */
   detachedAway: { maxItems: 1000 },
   issueTypeNames: { maxItems: 5, maxLength: 100 },
+  areaPaths: { maxItems: 64, maxLength: 240 },
   closedDays: { min: 1, max: 365 },
   githubProbeSeconds: { min: 0, max: 3600 },
   similarThreshold: { min: 0, max: 1 },
