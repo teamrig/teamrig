@@ -58,6 +58,8 @@ export interface FileLaunch extends Surroundings {
   readonly kind: 'file';
   readonly file: ShellWord;
   readonly dialect: ShellDialect;
+  /** The command from the shell's word on: that, not a wrapper before it (`env -u X sh run`), is what the line starts (T1302). */
+  readonly command: readonly ShellWord[];
 }
 
 /** A command whose program or script cannot be read from the command line. */
@@ -379,10 +381,10 @@ class LaunchReader {
       return this.wrapper(wrapper, args);
     }
     if (POSIX_SHELLS.has(name)) {
-      return this.posixShell(args);
+      return this.posixShell(head, args);
     }
     if (POWERSHELLS.has(name)) {
-      return this.powerShell(name, args);
+      return this.powerShell(name, head, args);
     }
     if (name === 'cmd') {
       return this.cmd(args);
@@ -411,8 +413,8 @@ class LaunchReader {
     return { kind: 'script', script, dialect, sameShell, env: this.env, chdirs: this.chdirs, runner: this.runner, captured: this.captured };
   }
 
-  private file(file: ShellWord, dialect: ShellDialect): FileLaunch {
-    return { kind: 'file', file, dialect, env: this.env, chdirs: this.chdirs, runner: this.runner, captured: this.captured };
+  private file(file: ShellWord, dialect: ShellDialect, command: readonly ShellWord[]): FileLaunch {
+    return { kind: 'file', file, dialect, command, env: this.env, chdirs: this.chdirs, runner: this.runner, captured: this.captured };
   }
 
   /**
@@ -504,7 +506,7 @@ class LaunchReader {
   }
 
   /** `sh`, `bash`, `zsh`, ...: `-c` runs the first operand as a script; with no operand, or `-s`, they read stdin; otherwise they run a script file. */
-  private posixShell(args: readonly ShellWord[]): Step {
+  private posixShell(head: ShellWord, args: readonly ShellWord[]): Step {
     let command = false;
     let stdin = false;
     let index = 0;
@@ -527,7 +529,7 @@ class LaunchReader {
     if (command) {
       return operand === undefined ? NOTHING : this.script(operand, 'bash', false);
     }
-    return operand === undefined || stdin ? this.fromStdin('bash') : this.file(operand, 'bash');
+    return operand === undefined || stdin ? this.fromStdin('bash') : this.file(operand, 'bash', [head, ...args]);
   }
 
   /**
@@ -535,7 +537,8 @@ class LaunchReader {
    * `-File` a script file; a first operand is a command for Windows PowerShell and a file for pwsh. Options
    * may be abbreviated and start with `-`, `--` or `/`.
    */
-  private powerShell(name: string, args: readonly ShellWord[]): Step {
+  private powerShell(name: string, head: ShellWord, args: readonly ShellWord[]): Step {
+    const command = [head, ...args];
     for (let index = 0; index < args.length; index += 1) {
       const word = args[index] ?? staticWord('');
       if (word.text === '-') {
@@ -543,7 +546,7 @@ class LaunchReader {
       }
       const option = powerShellOption(word.text);
       if (option === undefined) {
-        return name === 'powershell' ? this.script(joinWords(args.slice(index), false), 'powershell', false) : this.file(word, 'powershell');
+        return name === 'powershell' ? this.script(joinWords(args.slice(index), false), 'powershell', false) : this.file(word, 'powershell', command);
       }
       const value = args[index + 1];
       switch (option) {
@@ -554,7 +557,7 @@ class LaunchReader {
         case 'encoded':
           return value === undefined ? NOTHING : this.encoded(value);
         case 'file':
-          return value?.text === '-' ? this.fromStdin('powershell') : value === undefined ? NOTHING : this.file(value, 'powershell');
+          return value?.text === '-' ? this.fromStdin('powershell') : value === undefined ? NOTHING : this.file(value, 'powershell', command);
         case 'chdir':
           if (value !== undefined) {
             this.chdirs.push(value);

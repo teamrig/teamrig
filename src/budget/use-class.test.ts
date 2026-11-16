@@ -66,6 +66,7 @@ describe('isCoordinationTool, a shell call', () => {
     assert.equal(bash('/bin/bash -x a.sh'), false);
     assert.equal(powershell('pwsh -File a.ps1'), false);
     assert.equal(powershell('powershell.exe -File a.ps1'), false);
+    assert.equal(bash('env -u FOO sh run'), false);
   });
 
   it('is work with no command to read', () => {

@@ -28,6 +28,11 @@ describe('printedNames', () => {
 describe('envFindings and bareFindings', () => {
   it('reads bash dumps of the environment and the secret variables a call prints', () => {
     assert.deepEqual(printed('printenv; env; set; export -p; declare'), Array(5).fill('the whole environment'));
+  });
+
+  it('reads env running a shell script file as the run it is, and env with no program as a dump (T1302)', () => {
+    assert.deepEqual(printed('env -u FOO sh run; env -C dir bash run; env FOO=1 sh run.sh a b; env -u FOO pwsh -File a.ps1'), []);
+    assert.deepEqual(printed('env -u FOO; env -C dir'), Array(2).fill('the whole environment'));
     assert.deepEqual(printed('printenv GITHUB_TOKEN HOME; declare -p NPM_TOKEN PATH'), ['the value of $GITHUB_TOKEN', 'the value of $NPM_TOKEN']);
     assert.deepEqual(printed('echo "$GITHUB_TOKEN" ${#NPM_TOKEN} ${NPM_TOKEN:+set} $HOME; cat <<< "$API_KEY"'), [
       'the value of $GITHUB_TOKEN',

@@ -308,7 +308,9 @@ function visitCommand(
       launched.chdirs.forEach((chdir) => inner.moveTo(chdir, dialect));
       runs.files.push({ file: launched.file, dialect, dir: inner.dir });
     }
-    const bare: Draft<BareCommand> = { words: command.words, dialect, redirections: command.redirections, pipe: outlet.pipe, substitution: outlet.substitution };
+    // A shell handed a script file starts at the shell, past any wrapper before it (T1302).
+    const words = launched.kind === 'file' ? launched.command : command.words;
+    const bare: Draft<BareCommand> = { words, dialect, redirections: command.redirections, pipe: outlet.pipe, substitution: outlet.substitution };
     runs.bare.push(bare);
     return { launched, run: undefined, bare };
   }

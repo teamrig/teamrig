@@ -171,6 +171,16 @@ describe('runsOf', () => {
     assert.deepEqual(bare('cd sub && git status'), []);
   });
 
+  it('starts a shell handed a script file at the shell, past the wrappers before it (T1302)', () => {
+    const bare = (command: string, dialect: ShellDialect = 'bash'): string[] =>
+      runsOf(command, context(dialect)).bare.map((run) => run.words.map((word) => word.text).join(' '));
+    assert.deepEqual(bare('env -u FOO sh run'), ['sh run']);
+    assert.deepEqual(bare('nohup env -C dir bash -x run a'), ['bash -x run a']);
+    assert.deepEqual(bare('env -u FOO pwsh -File a.ps1'), ['pwsh -File a.ps1']);
+    assert.deepEqual(bare('env -u FOO pwsh a.ps1'), ['pwsh a.ps1']);
+    assert.deepEqual(bare('env -u FOO'), ['env -u FOO']);
+  });
+
   it('keeps each program word as the line writes it, after its literal variables', () => {
     const words = (command: string): string[] => runsOf(command, context('bash')).programs.map((run) => `${run.name}: ${run.program.text}`);
     assert.deepEqual(words('C:/nodejs/npx.cmd tsc && teamrig list'), ['npx: C:/nodejs/npx.cmd', 'tsc: tsc', 'teamrig: teamrig']);
