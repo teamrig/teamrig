@@ -267,6 +267,11 @@ while it lasts; the first run on a repository only notes what is there.
   pull request, its author and when to answer it by. A ref a task already holds gets no second task. A run with
   `--yes` or `--auto` writes it (`PULL TASKS <repo>: 1 added`); the dry run prints the `ADD` line it would write. The
   status push names such a task `PULL`, not `UNLISTED`, while its pull request is open; set it done once you answered.
+- That watcher may approve a pull request's head alone, and teamrig's own ship merge takes that approval, only when
+  every path the branch changes is one of `github.lowRiskPaths` (docs and test code by default; a team adds its own
+  feature folders) and none of `github.sensitivePaths`, the generic review paths or `pushGuard.reviewPaths`. Any
+  other path, a new one too, waits for the security reviewer's approval of that head. This holds for every task the
+  watcher owns: its own changes as well as outside pull requests.
 - With `github.activity` on, the same news also goes to the owner of the task holding the pull request or an issue
   of the same repository it closes (a `Fixes #12` link GitHub knows), whatever its branch or author, and to each
   session following it (`teamrig follow`). Such a copy never wakes.
