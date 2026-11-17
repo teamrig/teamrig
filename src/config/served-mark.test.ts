@@ -39,7 +39,7 @@ describe('the served mark over the shipped schema', async () => {
 
   it('is stated on every key whose path may name a secret or the place of one, so a new one cannot slip in', () => {
     assert.deepEqual(sensitive.filter(([, node]) => statedMarkOf(node) === undefined).map(([path]) => path), []);
-    assert.ok(sensitive.length >= 16);
+    assert.ok(sensitive.length >= 15);
   });
 
   it('is one of the two marks wherever a key states it', () => {

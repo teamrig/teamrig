@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC } from './defaults.ts';
-import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from './migrate.ts';
+import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
 import { parseConfig } from './parse.ts';
@@ -1807,7 +1807,6 @@ describe('parseConfig', () => {
     const chosen = {
       enabled: false,
       contextTokens: 150_000,
-      largeWindowContextTokens: 0,
       everyTasks: 0,
       everyTasksMinTokens: 60_000,
       tabTitle: false,
@@ -1828,7 +1827,6 @@ describe('parseConfig', () => {
       refresh: {
         enabled: 'yes',
         contextTokens: 9_999,
-        largeWindowContextTokens: -1,
         everyTasks: 101,
         everyTasksMinTokens: 9_999,
         tabTitle: 1,
@@ -1854,7 +1852,6 @@ describe('parseConfig', () => {
       'refresh.handoverDir',
       'refresh.handoverMaxBytes',
       'refresh.holdAfterActivityMinutes',
-      'refresh.largeWindowContextTokens',
       'refresh.restartDelaySeconds',
       'refresh.tabTitle',
     ]);
@@ -1935,6 +1932,13 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(issues), ['hiring.idleHours']);
     assert.equal(issues[0]?.message, `is no longer read: ${IDLE_RETIRE_DROPPED}; delete it`);
     assert.deepEqual(config.hiring, DEFAULT_HIRING);
+  });
+
+  it('flags refresh.largeWindowContextTokens a current-format file still holds, as one threshold holds for every window (T4083)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, refresh: { contextTokens: 150_000, largeWindowContextTokens: 250_000 } });
+    assert.deepEqual(paths(issues), ['refresh.largeWindowContextTokens']);
+    assert.equal(issues[0]?.message, `is no longer read: ${LARGE_WINDOW_DROPPED}; delete it`);
+    assert.deepEqual(config.refresh, { ...DEFAULT_REFRESH, contextTokens: 150_000 });
   });
 
   it('reads the terminal teamrig open uses and the room it needs, refusing a terminal it does not know or a bad size', () => {

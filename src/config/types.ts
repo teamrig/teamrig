@@ -9,7 +9,7 @@ import type { ChangeSourceId } from '../changes/ids.ts';
 import type { ImportScope } from '../sync/scope.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
-export const CONFIG_VERSION = 9;
+export const CONFIG_VERSION = 10;
 
 export interface RolesConfig {
   /** Owns priorities, team rules and the owner's decision queue; may re-prioritize and reassign tasks; hands the work itself to others (`leadBoundary`). */
@@ -1405,17 +1405,11 @@ export type AutoRestart = boolean | typeof AUTO_RESTART_LEAD;
  */
 export interface RefreshConfig {
   readonly enabled: boolean;
-  /** The context size, in tokens, that asks for a refresh. Absolute, since a hook cannot see the window size. */
-  readonly contextTokens: number;
   /**
-   * The threshold for a session on a context window larger than 200k, when larger than `contextTokens`: its `launch`
-   * model ends in `[1m]`, or its refresh state shows the window, since a model can run a 1M window without the suffix
-   * (the lead's plain `opus`) and no hook is told it: the window the plugin's mod reports, a context past 200k, or a
-   * fresh start measured over `contextTokens` (src/refresh/decide.ts `windowOf`). A fresh session on it starts at over
-   * 120k (its system prompt, rules and handover), and the window has room far past it. 0: `contextTokens` for every
-   * window.
+   * The context size, in tokens, that asks for a refresh, on every context window (T4083): a larger threshold for a 1M
+   * window let a tab that never reached it never refresh. Absolute, since a hook cannot see the window size.
    */
-  readonly largeWindowContextTokens: number;
+  readonly contextTokens: number;
   /**
    * Also refresh once this many tasks were finished since the context was last fresh (a /clear, a new
    * process or a compaction), when the context is at least `everyTasksMinTokens`; 0 turns it off.

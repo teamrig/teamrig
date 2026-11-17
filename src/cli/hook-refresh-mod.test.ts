@@ -96,8 +96,7 @@ function answerOf(result: CliResult): unknown {
 
 describe('runCli: hook refresh-mid', () => {
   it("records a fresh start's first size as its baseline and asks only past real growth", async () => {
-    // The larger threshold off: a fresh start over 120k shows a large window otherwise, so the guard reads alone.
-    const tab = new Tab({ ...TEAM, refresh: { tabTitle: false, largeWindowContextTokens: 0 } });
+    const tab = new Tab({ ...TEAM, refresh: { tabTitle: false } });
     await tab.transcript('{}\n');
     const store = new RefreshStore(tab.kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
     await store.setState('alpha', { phase: 'refreshed', task: 'T1', at: '2030-01-08T09:59:00.000Z', baseline: null });
@@ -107,34 +106,32 @@ describe('runCli: hook refresh-mid', () => {
     assert.equal(((await tab.mid(154_000)) as { kind: string }).kind, 'ask');
   });
 
-  it('refreshes a session launched on a 1M window at largeWindowContextTokens', async () => {
-    const tab = new Tab({ ...TEAM, refresh: { tabTitle: false }, launch: { alpha: { model: 'opus[1m]' } } });
-    await tab.transcript('{}\n');
-    assert.deepEqual(await tab.mid(200_000), { kind: 'wait', nextAt: 250_000 });
-    const off = new Tab({ ...TEAM, refresh: { tabTitle: false, largeWindowContextTokens: 0 }, launch: { alpha: { model: 'opus[1m]' } } });
-    await off.transcript('{}\n');
-    assert.deepEqual(await off.mid(100_000), { kind: 'wait', nextAt: 120_000 }, '0: the one threshold');
+  it('asks a session on a 1M window at 120k, as a plain one: one threshold for every window', async () => {
+    for (const model of ['opus[1m]', 'opus']) {
+      const tab = new Tab({ ...TEAM, refresh: { tabTitle: false }, launch: { alpha: { model } } });
+      await tab.transcript('{}\n');
+      assert.deepEqual(await tab.mid(119_000), { kind: 'wait', nextAt: 120_000 }, model);
+      assert.equal(((await tab.mid(120_000)) as { kind: string }).kind, 'ask', model);
+    }
   });
 
-  it('lifts a plain opus session that starts fresh past 120k to largeWindowContextTokens', async () => {
+  it('asks a plain opus session that starts fresh past 120k once it grew 24k, never at 250k', async () => {
     const tab = new Tab({ ...TEAM, refresh: { tabTitle: false }, launch: { alpha: { model: 'opus' } } });
     await tab.transcript('{}\n');
     const store = new RefreshStore(tab.kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
     await store.setState('alpha', { phase: 'refreshed', task: 'T1', at: '2030-01-08T09:59:00.000Z', baseline: null });
-    assert.deepEqual(await tab.mid(122_000), { kind: 'wait', nextAt: 250_000 }, 'its first measure shows the window, no ask');
-    assert.match((await tab.state()) ?? '', /"baseline":122000,"largeWindow":true/);
-    assert.deepEqual(await tab.mid(146_000), { kind: 'wait', nextAt: 250_000 }, 'no ask at its baseline + 24k');
-    assert.equal(((await tab.mid(250_000)) as { kind: string }).kind, 'ask');
+    assert.deepEqual(await tab.mid(122_000), { kind: 'wait', nextAt: 146_000 }, 'its first measure is its baseline, no ask');
+    assert.doesNotMatch((await tab.state()) ?? '', /largeWindow/);
+    assert.equal(((await tab.mid(146_000)) as { kind: string }).kind, 'ask');
   });
 
-  it('takes the window the mod reports: a large one lifts the threshold, a 200k one keeps it', async () => {
-    const large = new Tab();
-    await large.transcript('{}\n');
-    assert.deepEqual(answerOf(await large.run('refresh-mid', { tokens: 130_000, window: 1_000_000 })), { kind: 'wait', nextAt: 250_000 });
-    const small = new Tab();
-    await small.transcript('{}\n');
-    assert.equal((answerOf(await small.run('refresh-mid', { tokens: 130_000, window: 200_000 })) as { kind: string }).kind, 'ask');
-    assert.match((await small.state()) ?? '', /"largeWindow":false/);
+  it('reads no window an older mod sends: a 1M one asks at 120k as a 200k one does', async () => {
+    for (const window of [1_000_000, 200_000]) {
+      const tab = new Tab();
+      await tab.transcript('{}\n');
+      assert.equal((answerOf(await tab.run('refresh-mid', { tokens: 130_000, window })) as { kind: string }).kind, 'ask', String(window));
+      assert.doesNotMatch((await tab.state()) ?? '', /largeWindow/);
+    }
   });
 
   it('asks within the turn once the context reaches the threshold, and the turn end asks once more until the handover is written', async () => {

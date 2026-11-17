@@ -13,18 +13,15 @@ export const REFRESH_FORMAT = 1;
 export const REFRESH_RESTART_NEXT_FORMAT = 2;
 
 /**
- * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 the `largeWindow` every phase
- * carries. A format 1 or 2 file reads as it did, with neither field; a file in a newer format reads as absent and is
- * never overwritten (`RefreshStore.setState`).
+ * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 added a `largeWindow` that
+ * raised the threshold on a large context window. One threshold holds for every window since (T4083), so this code
+ * writes no `largeWindow` and ignores one a file still has; the format stays 3, so a tab on an older release still
+ * reads what this one writes. A format 1 or 2 file reads as it did, without a baseline; a file in a newer format reads
+ * as absent and is never overwritten (`RefreshStore.setState`).
  */
 export const REFRESH_STATE_FORMAT = 3;
 /** The format before `largeWindow`, still read. */
 const REFRESH_STATE_FORMAT_2 = 2;
-
-/** The window field every phase of a `RefreshState` carries (its `largeWindow`): absent while nothing told. */
-export interface WindowField {
-  readonly largeWindow?: boolean;
-}
 
 /**
  * An ask for the handover that `refresh --ready` has not answered yet: the fields of the `asked` phase it was made in
@@ -66,18 +63,12 @@ export interface StandingAsk {
  *   real growth past it (`decide.ts` `askAt`), so a fresh session that starts over the threshold is never asked to
  *   refresh again before it did any work. null from a fresh start (a /clear, a new process) until that turn end
  *   measures it, which asks nothing; absent after a compaction and in a format 1 file.
- * - `largeWindow` (on every phase): whether the session runs on a context window larger than 200k, as teamrig
- *   inferred it (`decide.ts` `windowOf`): true on evidence (the window the plugin's mod reports, a context past
- *   200k, or a fresh start measured over `refresh.contextTokens`), false when the mod reported a 200k window. It is
- *   carried through every phase, so a /clear, an ask and a compaction keep it; absent while nothing told (a file from
- *   before it has none). On it the threshold rises to `refresh.largeWindowContextTokens`.
  * In `asked`, `ready` and `refreshed`, `task` is the task whose end asked for the refresh, null when another
  * turn end asked. In `asked` and `ready`, `tokens` is the context the refresh was asked at, null when unknown or
  * when the context was made small since (a compaction, a /clear): a session that goes on without its fresh
  * start is asked again only once its context grew well past it.
  */
-export type RefreshState = WindowField &
-  (
+export type RefreshState =
   | {
       readonly phase: 'boundary';
       readonly task: string;
@@ -106,8 +97,7 @@ export type RefreshState = WindowField &
       readonly transcript: string | null;
       readonly claudePid: number | null;
     }
-  | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null }
-  );
+  | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null };
 
 /** The lead's ask that a session refresh at its next finished task, whatever its context. */
 export interface RefreshRequest {
@@ -231,31 +221,23 @@ function standingAskOf(value: unknown): StandingAsk | null | undefined {
     : { task, at, tokens, handoverHash, ...fix };
 }
 
-/** The window field as a spread: absent while nothing told; undefined when damaged. */
-function windowFieldOf(record: JsonRecord): WindowField | undefined {
-  const largeWindow = record['largeWindow'];
-  if (largeWindow === undefined) {
-    return {};
-  }
-  return typeof largeWindow === 'boolean' ? { largeWindow } : undefined;
-}
-
-/** A refresh state file's content; undefined when it is damaged, from another format or names no known phase. */
+/**
+ * A refresh state file's content; undefined when it is damaged, from another format or names no known phase. A
+ * `largeWindow` an older release wrote is not read (`REFRESH_STATE_FORMAT`).
+ */
 export function parseRefreshState(text: string): RefreshState | undefined {
   const record = stateRecordOf(text);
   // Only a task end names its task: a refresh another turn end asked for has none.
   const task = record === undefined ? undefined : nullableString(record, 'task');
   const at = record === undefined ? undefined : stringField(record, 'at');
   const base = record === undefined ? undefined : baselineOf(record);
-  const window = record === undefined ? undefined : windowFieldOf(record);
-  if (record === undefined || task === undefined || at === undefined || base === undefined || window === undefined) {
+  if (record === undefined || task === undefined || at === undefined || base === undefined) {
     return undefined;
   }
-  const phase = phaseOf(record, task, at, base);
-  return phase === undefined ? undefined : { ...phase, ...window };
+  return phaseOf(record, task, at, base);
 }
 
-/** The phase a refresh state file names, its window field aside; undefined when damaged or unknown. */
+/** The phase a refresh state file names; undefined when damaged or unknown. */
 function phaseOf(record: JsonRecord, task: string | null, at: string, base: { readonly baseline?: number | null }): RefreshState | undefined {
   switch (record['phase']) {
     case 'boundary': {

@@ -346,9 +346,9 @@ export const DEFAULT_SYNC: SyncConfig = { scope: DEFAULT_SCOPE, ...DEFAULT_CAPS 
  * The user types /clear for the fresh start of a member (`autoRestart` 'lead'): an automatic /clear wiped the screen
  * while the user was still reading the last reply, still had its question to answer, or was away. The lead restarts
  * on its own: with it off, a lead grew unasked through the night, and the mod's activity hold and countdown keep the
- * /clear from landing under the user. A session on a 1M window refreshes at 250k (a `[1m]` launch, or one whose
- * state shows the window, as a plain `opus` lead's fresh start past 120k does): a fresh one starts at about 122k,
- * and the window has room far past it. While a handover is pending, the compaction at 167k waits up to 185k: 18k of
+ * /clear from landing under the user. A session on a 1M window refreshes at 120k too (T4083): a fresh one starts at
+ * about 122k, which its baseline holds, and a larger threshold left a tab that never reached it unrefreshed. While a
+ * handover is pending, the compaction at 167k waits up to 185k: 18k of
  * room to finish the step and write it, and 15k under the window for a large tool result. A handover over 20 KB is
  * refused: on 10-24 most were 4 to 8 KB, and one appended
  * to section by section (29 of them) reached 88 KB, which its every fresh start read whole.
@@ -356,7 +356,6 @@ export const DEFAULT_SYNC: SyncConfig = { scope: DEFAULT_SCOPE, ...DEFAULT_CAPS 
 export const DEFAULT_REFRESH: RefreshConfig = {
   enabled: true,
   contextTokens: 120_000,
-  largeWindowContextTokens: 250_000,
   everyTasks: 3,
   everyTasksMinTokens: 80_000,
   tabTitle: true,
