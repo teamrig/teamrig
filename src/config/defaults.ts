@@ -339,21 +339,12 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
 
 /**
  * `github.lowRiskPaths` (owner order, T3448, security verdict): the only paths an outside pull request may touch and
- * merge on the GitHub answerer's approval alone, so a path added tomorrow is sensitive until a team lists it. Docs and
- * tests, which no installed copy runs: the test globs name code files only, so a `.md` command or skill named like a
- * test is no test. A team adds its own feature folders; `github.sensitivePaths` wins over every entry.
+ * merge on the GitHub answerer's approval alone, so a path added tomorrow is sensitive until a team lists it. Docs text
+ * and pictures only, which nothing runs: not `docs/**`, which would take a script placed there too, and no test code,
+ * as the ship gate and every session's test runs execute tests on the host as the user. A team may add its own paths,
+ * knowing a code path's merged code runs there; `github.sensitivePaths` wins over every entry.
  */
-export const DEFAULT_LOW_RISK_PATHS: readonly string[] = [
-  'docs/**',
-  '*.test.ts',
-  '*.test.tsx',
-  '*.test.js',
-  '*.test.mjs',
-  '*.spec.ts',
-  '*.spec.tsx',
-  '*.spec.js',
-  '**/testing/**/*.ts',
-];
+export const DEFAULT_LOW_RISK_PATHS: readonly string[] = ['docs/**/*.md', 'docs/**/*.png', 'docs/**/*.svg', 'docs/**/*.jpg'];
 
 /**
  * `github.sensitivePaths` (owner order, T3448): what stays sensitive inside `github.lowRiskPaths`, so a team's broad

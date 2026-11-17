@@ -698,10 +698,10 @@ describe('parseConfig', () => {
     }
   });
 
-  it("reads the github low-risk paths as a team's own globs, else keeps docs and test code only (T3448)", () => {
+  it("reads the github low-risk paths as a team's own globs, else keeps docs text and pictures only (T3448)", () => {
     const defaults = parseConfig(ROSTER).config.github.lowRiskPaths;
     assert.deepEqual(defaults, DEFAULT_LOW_RISK_PATHS);
-    assert.ok(defaults.includes('docs/**') && defaults.includes('*.test.ts') && !defaults.some((glob) => glob.startsWith('src/')), JSON.stringify(defaults));
+    assert.ok(defaults.length > 0 && defaults.every((glob) => glob.startsWith('docs/**/*.')), JSON.stringify(defaults));
     const { config, issues } = parseConfig({ ...ROSTER, github: { lowRiskPaths: ['src/pane/**', 'README.md'] } });
     assert.deepEqual(issues, []);
     assert.deepEqual(config.github.lowRiskPaths, ['src/pane/**', 'README.md']);

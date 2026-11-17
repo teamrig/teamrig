@@ -346,10 +346,12 @@ describe("sensitivePathsOf: the security verdict's paths stay sensitive under th
   /** Paths named like docs or tests that still steer an agent or a gate, which the sensitive list carves out of the low-risk one. */
   const CARVED = ['docs/CLAUDE.md', 'docs/.claude/commands/x.md', 'docs/skills/x/SKILL.md', 'tools/ship/approval.test.ts', 'src/merge/merge.test.ts', 'src/testing/fake-guard.ts'];
 
-  it('names each of them, and clears only docs and test code', async () => {
+  it('names each of them, and clears only docs text and pictures', async () => {
     const team = await standing(await waitingKit());
     assert.deepEqual(sensitivePathsOf([...VERDICT, ...CARVED], team), [...VERDICT, ...CARVED]);
-    const low = ['docs/commands.md', 'docs/guides/setup.md', 'src/cli/list.test.ts', 'src/testing/fake-steps.ts', 'web/app.spec.tsx'];
+    const ranOnHost = ['src/cli/list.test.ts', 'src/testing/fake-steps.ts', 'web/app.spec.tsx', 'docs/build.ts', 'docs/setup.sh', 'docs/tools/run.mjs'];
+    assert.deepEqual(sensitivePathsOf(ranOnHost, team), ranOnHost, 'tests and any code, in docs too, run on the host');
+    const low = ['docs/commands.md', 'docs/guides/setup.md', 'docs/images/flow.svg', 'docs/pictures/pane.png', 'docs/shots/a.jpg'];
     assert.deepEqual(sensitivePathsOf(low, team), []);
     assert.deepEqual(sensitivePathsOf(['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], team), ['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], 'not code, or not listed');
   });

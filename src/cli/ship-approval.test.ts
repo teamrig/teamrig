@@ -37,7 +37,7 @@ describe('mergeStandingOf: who merges, its task and who approves it, read from t
     const unset = await mergeStandingOf((await approved()).runtime(), 'app', 'alpha', 'T1');
     assert.equal(unset.answerer, 'lead', 'no watcher and no intake role: the lead answers');
     assert.ok(unset.sensitive.includes('tools/**') && unset.sensitive.includes('*hook*'), "the owner's default list");
-    assert.ok(unset.lowRisk.includes('docs/**') && !unset.lowRisk.some((glob) => glob.startsWith('src/')), "the default allows docs and tests, no team's code");
+    assert.ok(unset.lowRisk.includes('docs/**/*.md') && unset.lowRisk.every((glob) => glob.startsWith('docs/')), 'the default allows docs text and pictures, no code');
   });
 
   it('reads no task for an id the register does not hold', async () => {
