@@ -159,9 +159,10 @@ export interface ParkedRestart extends RestartTab {
 
 /**
  * Where the prompt that cancelled a restart came from (#706): a person typing, teamrig's own wake of the tab
- * (`WakePrompts`), or a peer's message (`<cross-session-message from="...">`, `from` null when it names none).
+ * (`WakePrompts`), a peer's message (`<cross-session-message from="...">`, `from` null when it names none), or
+ * `unknown` when the prompt hook could not tell, so a failure never reads as a person's prompt.
  */
-export type PromptOrigin = { readonly kind: 'person' } | { readonly kind: 'wake' } | { readonly kind: 'peer'; readonly from: string | null };
+export type PromptOrigin = { readonly kind: 'person' } | { readonly kind: 'wake' } | { readonly kind: 'peer'; readonly from: string | null } | { readonly kind: 'unknown' };
 
 /** What the prompt hook cancelled: the pending restart asked at `at`, and where the prompt came from. */
 export interface RestartCancel {
@@ -419,7 +420,7 @@ function promptOriginOf(value: unknown): PromptOrigin | undefined {
     return undefined;
   }
   const kind = value['kind'];
-  if (kind === 'person' || kind === 'wake') {
+  if (kind === 'person' || kind === 'wake' || kind === 'unknown') {
     return { kind };
   }
   const from = nullableString(value, 'from');

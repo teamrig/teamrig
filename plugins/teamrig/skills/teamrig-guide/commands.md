@@ -5196,7 +5196,8 @@ One that ended without a word (its process was killed) is started again from the
 Every outcome (cleared, restarted, cancelled, failed) is one JSON line in the team's `state/refresh/restarts.jsonl`
 (`session`, `at`, `endedAt`, `result`): the record to judge a trial or a week of automatic restarts by. A cancelled
 row names where the prompt that cancelled it came from in its `why` and in `result.by` (`person`, `wake` for teamrig's
-own wake of the tab, or `peer` with the sender in `from`); a restart held back for work that a prompt drops gets such a
+own wake of the tab, with the turn log on or off, `peer` with the sender in `from`, or `unknown` when the prompt hook
+could not tell); a restart held back for work that a prompt drops gets such a
 row too. A restart a failed lookup of the session's process stopped before it was armed gets a `failed` row with
 `lookupFailure`, the listing's reason: its time limit, its exit code and the first line of its error output, or why it
 could not start.

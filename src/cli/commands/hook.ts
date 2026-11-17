@@ -354,9 +354,10 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
   // Found like a rename: `$TEAMRIG_SESSION` first, so a session is shown its lines before its first `inbox read`.
   const session = await teamSessionOf(runtime, kit, own.roster, hostSession);
   // Taken once: teamrig's wake is known by the text it kept for the tab, which marks one prompt only.
-  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => undefined);
-  const origin = promptOriginOf(sent);
-  if (session !== undefined && sent !== undefined) {
+  // A prompt whose wake record cannot be read is told as unknown (null), not as a person's.
+  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => null);
+  const origin: PromptOrigin = sent === null ? { kind: 'unknown' } : promptOriginOf(sent);
+  if (session !== undefined && sent !== undefined && sent !== null) {
     // Apart, so a log that cannot be written still leaves the UI following the person.
     await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
     await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);

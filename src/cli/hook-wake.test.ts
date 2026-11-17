@@ -161,7 +161,7 @@ describe('hook wake-check', () => {
     assert.deepEqual(answerOf(await check(kit)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'never twice for one task');
   });
 
-  it('keeps the wake prompt with turnLog off too, so the last-typed mark a UI follows does not move to it (T5388)', async () => {
+  it('keeps the wake prompt with turnLog off too, so the last-typed mark does not move to it (T5388) and a restart it cancels is logged as its (#706)', async () => {
     const kit = await teamWithAlphaTab({ ...TEAM, turnLog: { enabled: false } });
     await check(kit);
     await hand(kit, 'Fix the login', 'p1');

@@ -572,17 +572,18 @@ describe('runCli: context refresh', () => {
   });
 
   // #706: the restart log could not tell a person's prompt from teamrig's wake or a peer's message.
-  it("records where the prompt that cancelled the restart came from: a person, teamrig's wake or a peer's message", async () => {
+  it("records where the prompt that cancelled the restart came from: a person, teamrig's wake (turn log on or off) or a peer's message", async () => {
     const env = { TEAMRIG_SESSION: 'alpha', CLAUDE_PROJECT_DIR: APP };
     const peerText = '<cross-session-message from="lead">Ship T1 first</cross-session-message>';
-    const cases: readonly { readonly prompt: string; readonly origin: PromptOrigin; readonly line: string }[] = [
+    const cases: readonly { readonly prompt: string; readonly origin: PromptOrigin; readonly line: string; readonly turnLogOff?: boolean }[] = [
       { prompt: 'one more thing', origin: { kind: 'person' }, line: 'teamrig: the user typed, so the automatic restart is cancelled' },
       { prompt: 'You have new work: T1', origin: { kind: 'wake' }, line: "teamrig: teamrig's wake of the tab arrived, so the automatic restart is cancelled" },
       { prompt: peerText, origin: { kind: 'peer', from: 'lead' }, line: 'teamrig: a message from lead arrived, so the automatic restart is cancelled' },
       { prompt: '<cross-session-message>hi</cross-session-message>', origin: { kind: 'peer', from: null }, line: "teamrig: a peer's message arrived, so the automatic restart is cancelled" },
+      { prompt: 'You have new work: T1', origin: { kind: 'wake' }, line: "teamrig: teamrig's wake of the tab arrived, so the automatic restart is cancelled", turnLogOff: true },
     ];
-    for (const { prompt, origin, line } of cases) {
-      const kit = new CliHarness(AUTO_RESTART_TEAM);
+    for (const { prompt, origin, line, turnLogOff } of cases) {
+      const kit = new CliHarness(turnLogOff === true ? { ...AUTO_RESTART_TEAM, turnLog: { enabled: false } } : AUTO_RESTART_TEAM);
       const store = await handoverWritten(kit);
       await openTask(kit, 'alpha');
       stopJson(await kit.run(['hook', 'stop'], { env, stdin: stopPayload(true), sessionProcesses: UNDER_CLAUDE(), processes: new FakeProcesses() }));
@@ -591,7 +592,7 @@ describe('runCli: context refresh', () => {
       await new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake')).remember('alpha', { tab: CLAUDE_SESSION, text: 'You have new work: T1' });
       const result = await kit.run(['hook', 'inbox-reminder'], { env, stdin: JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, prompt, session_title: 'app-alpha' }) });
       assert.ok(result.stdout.some((text) => text.includes(line)), result.stdout.join('\n'));
-      assert.deepEqual(await store.takeCancel('alpha'), { at: request.at, origin });
+      assert.deepEqual(await store.takeCancel('alpha', request.at), { at: request.at, origin }, `${origin.kind}${turnLogOff === true ? ', turn log off' : ''}`);
       assert.equal(await store.restart('alpha'), undefined);
     }
   });

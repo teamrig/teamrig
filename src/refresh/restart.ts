@@ -105,13 +105,15 @@ export function promptOriginText(origin: PromptOrigin): string {
       return "teamrig's wake of the tab arrived";
     case 'peer':
       return origin.from === null ? "a peer's message arrived" : `a message from ${origin.from} arrived`;
+    case 'unknown':
+      return 'a prompt teamrig could not trace arrived';
   }
 }
 
 /** CANCELLED, naming where the prompt that cancelled this run's request came from when the prompt hook recorded it (#706). */
 async function cancelledOf(deps: RestartDeps, plan: RestartPlan): Promise<RestartResult> {
-  const cancel = await deps.store.takeCancel(plan.id);
-  return cancel === undefined || cancel.at !== plan.at ? CANCELLED : { kind: 'cancelled', why: `${promptOriginText(cancel.origin)}, so the restart was cancelled`, by: cancel.origin };
+  const cancel = await deps.store.takeCancel(plan.id, plan.at);
+  return cancel === undefined ? CANCELLED : { kind: 'cancelled', why: `${promptOriginText(cancel.origin)}, so the restart was cancelled`, by: cancel.origin };
 }
 
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */

@@ -303,12 +303,13 @@ describe('runRestart', () => {
 
   // #706: the cancel row said only "cancelled or replaced", whoever sent the prompt.
   it('names where the prompt that cancelled it came from, as the prompt hook recorded it for its request', async () => {
-    const origins: readonly PromptOrigin[] = [{ kind: 'person' }, { kind: 'wake' }, { kind: 'peer', from: 'lead' }, { kind: 'peer', from: null }];
+    const origins: readonly PromptOrigin[] = [{ kind: 'person' }, { kind: 'wake' }, { kind: 'peer', from: 'lead' }, { kind: 'peer', from: null }, { kind: 'unknown' }];
     const whys = [
       'a person typed, so the restart was cancelled',
       "teamrig's wake of the tab arrived, so the restart was cancelled",
       'a message from lead arrived, so the restart was cancelled',
       "a peer's message arrived, so the restart was cancelled",
+      'a prompt teamrig could not trace arrived, so the restart was cancelled',
     ];
     for (const [index, origin] of origins.entries()) {
       const world = await new World().arm();
@@ -317,7 +318,7 @@ describe('runRestart', () => {
         await world.store.clearRestart('alpha');
       });
       assert.deepEqual(await runRestart(world.deps, PLAN), { kind: 'cancelled', why: whys[index], by: origin });
-      assert.equal(await world.store.takeCancel('alpha'), undefined, 'the record is spent');
+      assert.equal(await world.store.takeCancel('alpha', AT), undefined, 'the record is spent');
     }
     const older = await new World().arm();
     older.onSleep(2, async () => {
@@ -325,6 +326,7 @@ describe('runRestart', () => {
       await older.store.clearRestart('alpha');
     });
     assert.deepEqual(await runRestart(older.deps, PLAN), { kind: 'cancelled', why: 'the restart was cancelled or replaced' }, "another request's record is not this one's");
+    assert.deepEqual(await older.store.takeCancel('alpha', '2030-01-08T09:00:00.000Z'), { at: '2030-01-08T09:00:00.000Z', origin: { kind: 'wake' } }, 'and stays for its own runner');
   });
 
   it('stops without ending anything when the user types while it looks at the process', async () => {
