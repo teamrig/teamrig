@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LeadTree } from '../config/lead-tree.ts';
 import { testConfig } from '../testing/config.ts';
 import { testTask } from '../testing/task.ts';
-import { answerNamesFullHead, answerNamesHead, answerTo, approvalCleared, approvedTaskOf, isCommitSha, isFullCommitSha, waitAnswerersOf } from './approval.ts';
+import { answerNamesFullHead, answerNamesHead, answerTo, approvalCleared, approvalRolesOf, approvedTaskOf, isCommitSha, isFullCommitSha, waitAnswerersOf } from './approval.ts';
 import type { ApprovalAnswer } from './fold.ts';
 import type { WaitReason } from './waits.ts';
 
@@ -59,6 +59,21 @@ describe('waitAnswerersOf (T828)', () => {
     assert.deepEqual(waitAnswerersOf(tree, {}, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead'] });
     assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security' }, 'security'), { decision: ['lead'], approval: ['lead'] });
     assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'alpha' }, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead'] });
+  });
+
+  it("lets every other session approve the GitHub answerer's own task, and no other's, deciding nothing (T3448)", () => {
+    const githubAnswerer = { session: 'bravo', team: ['lead', 'alpha', 'bravo', 'charlie', 'security'] };
+    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security', githubAnswerer }, 'bravo'), {
+      decision: ['alpha', 'lead'],
+      approval: ['alpha', 'lead', 'security', 'charlie'],
+    });
+    assert.deepEqual(waitAnswerersOf(tree, { githubAnswerer }, 'charlie'), { decision: ['lead'], approval: ['lead'] }, "charlie's task: the leaders alone");
+  });
+
+  it('reads the approval roles from the config: the security reviewer, the answerer and its team', () => {
+    const config = testConfig({ roles: { lead: 'lead', securityReviewer: 'bravo' }, github: { watcher: 'alpha' } });
+    assert.deepEqual(approvalRolesOf(config), { securityReviewer: 'bravo', githubAnswerer: { session: 'alpha', team: config.sessions } });
+    assert.deepEqual(approvalRolesOf(testConfig()), {}, 'no watcher: the lead answers GitHub, its approvals as they were');
   });
 });
 

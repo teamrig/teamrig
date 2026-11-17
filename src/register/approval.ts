@@ -1,19 +1,44 @@
 import type { LeadTree } from '../config/lead-tree.ts';
-import type { RolesConfig } from '../config/types.ts';
+import type { KitConfig, RolesConfig } from '../config/types.ts';
+import { githubWatcher } from '../sync/watcher.ts';
 import type { ApprovalAnswer, Task } from './fold.ts';
 import type { PersonWait, WaitAnswerers, WaitReason } from './waits.ts';
 
 /**
+ * The roles that answer an approval besides a task owner's leaders: the security reviewer, and the GitHub answerer
+ * with the team's sessions, any of which may approve an outside change on the answerer's own task (owner order, T3448).
+ */
+export interface ApprovalRoles extends Pick<RolesConfig, 'securityReviewer'> {
+  readonly githubAnswerer?: { readonly session: string; readonly team: readonly string[] };
+}
+
+/**
+ * The approval roles of a team's config: its security reviewer, and its GitHub answerer (`githubWatcher`) among its
+ * sessions, unless that is the team's lead, whose approvals stay as they are: its own clears its merge already.
+ */
+export function approvalRolesOf(config: Pick<KitConfig, 'roles' | 'github' | 'serviceRoles' | 'sessions'>): ApprovalRoles {
+  const { securityReviewer } = config.roles;
+  const session = githubWatcher(config);
+  const answering = session === config.roles.lead ? {} : { githubAnswerer: { session, team: config.sessions } };
+  return securityReviewer === undefined ? answering : { securityReviewer, ...answering };
+}
+
+/**
  * Who answers a wait on a task of `owner`'s: its leaders (`LeadTree.approversOf`) a decision or an approval, and the
  * team's security reviewer (`roles.securityReviewer`) an approval too, which is how the review gate holds a change
- * for it (T828), but never one on its own task. A push to a protected branch still reads only the leaders' approvals
- * (`approvedTaskOf`).
+ * for it (T828), but never one on its own task. On the GitHub answerer's own task every other session of the team
+ * answers an approval too: an outside change touching files of another session's open branch is that session's to
+ * approve (T3448), which only `ship.ts merge` reads, for the session that branch names. A push to a protected branch
+ * still reads only the leaders' approvals (`approvedTaskOf`).
  */
-export function waitAnswerersOf(tree: Pick<LeadTree, 'approversOf'>, roles: Pick<RolesConfig, 'securityReviewer'>, owner: string): WaitAnswerers {
+export function waitAnswerersOf(tree: Pick<LeadTree, 'approversOf'>, roles: ApprovalRoles, owner: string): WaitAnswerers {
   const leaders = tree.approversOf(owner);
   const reviewer = roles.securityReviewer;
   const reviews = reviewer !== undefined && reviewer !== owner && !leaders.includes(reviewer);
-  return { decision: leaders, approval: reviews ? [...leaders, reviewer] : leaders };
+  const approval = reviews ? [...leaders, reviewer] : leaders;
+  const answering = roles.githubAnswerer;
+  const peers = answering !== undefined && answering.session === owner ? answering.team.filter((session) => session !== owner && !approval.includes(session)) : [];
+  return { decision: leaders, approval: [...approval, ...peers] };
 }
 
 /**

@@ -7,7 +7,7 @@ import { clipEnd } from '../core/clip.ts';
 import { SecretScanner } from '../core/secrets.ts';
 import { parseDeadline, parseUtcDay, parseUtcDeadline, showStored, storedText } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
-import { waitAnswerersOf } from './approval.ts';
+import { approvalRolesOf, waitAnswerersOf } from './approval.ts';
 import { blockerHold } from './blocker-hold.ts';
 import type { SlicedGoal } from './focus.ts';
 import { NO_GOAL_TAGS } from './goals.ts';
@@ -332,9 +332,12 @@ export class RegisterPolicy {
   /** Who answers a `kind` wait on the owner's task in words: its approvers, and the security reviewer too when it answers one. */
   private answerersText(owner: string, kind: PersonWaitKind): string {
     const leaders = this.tree.approversOf(owner);
-    const reviewer = waitAnswerersOf(this.tree, this.config.roles, owner)[kind].find((who) => !leaders.includes(who));
+    const roles = approvalRolesOf(this.config);
+    const others = waitAnswerersOf(this.tree, roles, owner)[kind].filter((who) => !leaders.includes(who));
+    const reviewer = others.find((who) => who === roles.securityReviewer);
     const approvers = this.approversText(owner);
-    return reviewer === undefined ? approvers : `${approvers} or the security reviewer (${reviewer})`;
+    const named = reviewer === undefined ? approvers : `${approvers} or the security reviewer (${reviewer})`;
+    return others.some((who) => who !== reviewer) ? `${named} or, on the GitHub answerer's own task, another session of the team` : named;
   }
 
   /** The caller must be on the roster before writing anything. */
@@ -928,12 +931,13 @@ export class RegisterPolicy {
   /**
    * Decision and approval waits are for the task owner's leaders (the lead, and any sub-lead above it; for a child
    * team's lead, the parent team's lead) and the owner, an approval wait also for the security reviewer, on another's
-   * task (`waitAnswerersOf`): a peer's work is a task, waited on by its id, which clears by itself once that task
-   * finishes, where a peer's decision would hold the task until its owner noticed.
+   * task, and any session on the GitHub answerer's own (`waitAnswerersOf`, T3448): a peer's work is a task, waited on
+   * by its id, which clears by itself once that task finishes, where a peer's decision would hold the task until its
+   * owner noticed.
    */
   private personWaitProblem(task: Task, reason: PersonWait): string | undefined {
     const { ownerSource } = this.config.register;
-    if (!isPeerWait(reason, waitAnswerersOf(this.tree, this.config.roles, task.owner), ownerSource)) {
+    if (!isPeerWait(reason, waitAnswerersOf(this.tree, approvalRolesOf(this.config), task.owner), ownerSource)) {
       return undefined;
     }
     const answerers = this.answerersText(task.owner, reason.kind);
@@ -945,12 +949,13 @@ export class RegisterPolicy {
   /**
    * An answer to a task's approval wait (T684): only a leader above the task's owner answers (the lead, or a sub-lead,
    * T781; on a child team's lead's task, the parent team's lead, as `<team>/<id>`, T1140), or the security reviewer on
-   * another's task (T828), only a task waiting on its own approval, and always with a note, which the task's owner
-   * reads: what it checked, or why it declines. An approval of the owner's stays the owner's: no lead answers it.
+   * another's task (T828), or any other session on the GitHub answerer's own task (T3448), only a task waiting on its
+   * own approval, and always with a note, which the task's owner reads: what it checked, or why it declines. An
+   * approval of the owner's stays the owner's: no lead answers it.
    */
   approve(task: Task, caller: string, verdict: ApprovalVerdict, note: string | undefined): Verdict<ApprovalChange> {
     const { lead } = this.config.roles;
-    if (!waitAnswerersOf(this.tree, this.config.roles, task.owner).approval.includes(caller)) {
+    if (!waitAnswerersOf(this.tree, approvalRolesOf(this.config), task.owner).approval.includes(caller)) {
       return refuse(`only ${this.answerersText(task.owner, 'approval')} answers an approval of ${task.owner}'s`);
     }
     if (task.status !== 'waiting' || !task.waits.some((reason) => reason.kind === 'approval' && reason.who === caller)) {

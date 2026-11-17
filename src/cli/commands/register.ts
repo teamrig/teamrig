@@ -20,7 +20,7 @@ import { postLine } from '../../inbox/inbox.ts';
 import { formatTaskLines, taskLinesOf } from '../../inbox/task-lines.ts';
 import { WakeAsks } from '../../wake/asks.ts';
 import { teamDayStartAt } from '../../wake/day-start.ts';
-import { waitAnswerersOf } from '../../register/approval.ts';
+import { approvalRolesOf, waitAnswerersOf } from '../../register/approval.ts';
 import { byFlagKind, checkTasks, leaderWaitFlags, noIssueFlags, peerWaitFlags, runFileFlags, unknownGoalFlags, untriagedFlags } from '../../register/check.ts';
 import { currentWeekOf } from '../../register/week.ts';
 import type { ApprovalVerdict, TaskFields } from '../../register/events.ts';
@@ -353,7 +353,7 @@ async function tellLeadersOfWaits(runtime: CliRuntime, team: Team, by: string, v
   const { task, before } = verdict.value;
   const earlier = before?.waits ?? [];
   const leaders = new LeadTree(team.config, team.above);
-  const answerers = waitAnswerersOf(leaders, team.config.roles, task.owner);
+  const answerers = waitAnswerersOf(leaders, approvalRolesOf(team.config), task.owner);
   const added = task.waits.filter(
     (reason): reason is PersonWait =>
       (reason.kind === 'decision' || reason.kind === 'approval') && !isPeerWait(reason, answerers, ownerSource) && !earlier.some((other) => sameWait(reason, other)),
@@ -1115,7 +1115,7 @@ function checkRegister(
   const flags = [
     ...checkTasks(tasks, now, zone, week, config.register, elsewhere, ranking),
     ...sliceLateFlags(goals, snapshot.state.tasks, tree, zone.day(now)),
-    ...peerWaitFlags(tasks, leads, config.roles, config.register.ownerSource),
+    ...peerWaitFlags(tasks, leads, approvalRolesOf(config), config.register.ownerSource),
     ...runFileFlags(tasks, runFiles),
     // In plan order, so the leader reads the most urgent wait first.
     ...leaderWaitFlags(tree.inPlanOrder(tasks), leads, config.focus, now.getTime()),

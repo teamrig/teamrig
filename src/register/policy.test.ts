@@ -814,6 +814,19 @@ describe('RegisterPolicy.setStatus to waiting', () => {
     assert.equal(led.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'bravo' }] }, CTX).ok, true, 'the lead is whoever roles.lead names');
   });
 
+  it("takes a wait on another session's approval on the GitHub answerer's own task, a decision still refused (T3448)", () => {
+    const answering = new RegisterPolicy(testConfig({ github: { watcher: 'alpha' } }));
+    assert.equal(answering.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'bravo' }] }, CTX).ok, true);
+    assert.match(
+      error(answering.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'decision', who: 'bravo' }] }, CTX)),
+      /^decision bravo: decision waits are for the lead \(lead\) and owner;/,
+    );
+    assert.equal(
+      error(answering.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'zulu' }] }, CTX)),
+      "approval zulu: zulu is neither the lead (lead) or, on the GitHub answerer's own task, another session of the team nor owner",
+    );
+  });
+
   it("takes a wait on a leader above the owner, refusing another group's sub-lead (T781)", () => {
     const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
     const bravos = testTask({ id: 'T9', owner: 'bravo', status: 'in-progress' });
@@ -1814,6 +1827,15 @@ describe('RegisterPolicy.approve (T684)', () => {
     assert.match(error(tree.approve(bravos('lead'), 'alpha', 'approved', 'ok')), /T1 does not wait on alpha's approval \(approval:alpha\)/);
     const alphas = testTask({ status: 'waiting', waits: [{ kind: 'approval', who: 'alpha' }] });
     assert.equal(error(tree.approve(alphas, 'alpha', 'approved', 'ok')), "only the lead (lead) answers an approval of alpha's");
+  });
+
+  it("lets another session answer an approval of the GitHub answerer's own task, and no other's (T3448)", () => {
+    const team = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'], github: { watcher: 'bravo' } }));
+    const bravos = testTask({ owner: 'bravo', status: 'waiting', waits: [{ kind: 'approval', who: 'charlie' }] });
+    assert.equal(team.approve(bravos, 'charlie', 'approved', 'its files are mine, fine').ok, true);
+    assert.match(error(team.approve(bravos, 'alpha', 'approved', 'ok')), /T1 does not wait on alpha's approval \(approval:alpha\)/);
+    const charlies = testTask({ owner: 'charlie', status: 'waiting', waits: [{ kind: 'approval', who: 'bravo' }] });
+    assert.equal(error(team.approve(charlies, 'bravo', 'approved', 'ok')), "only the lead (lead) answers an approval of charlie's");
   });
 
   it("lets only the parent team's lead answer a child team's lead, and not a member's wait (T1140)", () => {
