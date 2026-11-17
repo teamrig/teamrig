@@ -1440,8 +1440,9 @@ Flags:
   issue one label (`open` `status:open` while no one scheduled or took it, `status:claimed` once it has a due date
   or an assignee, `in-progress` `status:in progress`, `waiting` `status:waiting`, `verifying` `status:in review`)
   and any other `status:` label comes off; a goal, a task planned after its parts, shows none, as its parts' issues
-  carry theirs, and so does a design issue (labelled `design`: talk, not work to take until agreed), which is also
-  assigned to no one; a done task closes it as completed, a
+  carry theirs, and so does a design issue (labelled `design`: talk, not work to take until agreed), which is
+  assigned to every login of `[github.designAssignees]` while it is open and no one is assigned (one write; none
+  by default, and an assignee a person set stays); a done task closes it as completed, a
   dropped one as not planned. It plans against the issues as GitHub lists them now, so a label someone changed by
   hand is set back and a run that stopped half way is planned again whole. It never reopens an issue a person
   closed: a `KEPT` line names it, an `UNLISTED` line an active task's issue that is not open on GitHub, and a `PULL`
@@ -1524,7 +1525,7 @@ STOP no session of the team ran for 10 minutes; the next one starts the watch ag
 
 Its old name, gh migrate, is refused with this one (exit 64).
 Moves the team's tasks to GitHub issues once, from a row file you write: JSON lines, one row per task. An issue row
-is `{"id", "decision": "issue", "repo", "type": "bug"|"task", "priority": "p1"-"p3", "title", "body"}`, with the
+is `{"id", "decision": "issue", "repo", "type": "bug"|"task"|"design", "priority": "p1"-"p3", "title", "body"}`, with the
 task's public wording, since an issue is open to anyone who can read the repository: a task about a security hole
 stays local until its fix is released ([security skill](../security/SKILL.md#a-security-hole)); a local row is `{"id",
 "decision": "local", "reason"}` and keeps the task off GitHub. A bad line, one that looks like it holds a secret,
@@ -1544,7 +1545,10 @@ With `--yes` it opens each issue in row order through `gh api` (one issue, its t
 work then the priority), with the token saved for the repository's owner as `teamrig-gh-<owner>`, else the `gh auth
 login` account (an `ACCESS` line per owner says which; a saved token the store cannot read stops the run, never the
 `gh` login in its place), then sets the task's ref to `gh:<owner>/<name>#<number>` as an `update --ref` by you would, so `teamrig gh
-sync` adds no second task for it. Each opened issue gives an `OPENED` line and the run ends with `DONE`. The first
+sync` adds no second task for it. Each opened issue gives an `OPENED` line and the run ends with `DONE`. A `design`
+row opens a design issue (labelled `design`, then its priority), which is then assigned to the logins of
+`[github.designAssignees]` that may be assigned there: an `ASSIGNED` line, or an `UNASSIGNED` line for a login that
+may not be or an assign that failed, which stops nothing, as the status push assigns it later. The first
 failure stops the run: `FAILED` when gh failed (a stopped gh or one that printed no number may still have opened
 the issue: look before a rerun), `REFUSED` when the register refused the ref (the issue is open: the line gives the
 `teamrig update` that sets it), then `STOPPED`. A rerun skips each task already holding its issue.

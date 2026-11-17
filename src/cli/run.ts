@@ -886,17 +886,19 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       other status: label taken off; done closes it as completed, dropped as not planned; never
       reopens an issue a person closed, and names it; an open issue of a scheduled task (started or
       with a due date), not a design issue, no one is assigned to is assigned to the login
-      github.owners maps to its task's session, else the login the sync runs as, never the repository's owner;
-      a login the repository may not assign takes no write; at most 40 writes a run; without --yes it writes nothing;
+      github.owners maps to its task's session, else the login the sync runs as, never the repository's owner,
+      and an open design issue no one is assigned to every login of github.designAssignees; a login the
+      repository may not assign takes no write; at most 40 writes a run; without --yes it writes nothing;
       --yes sends them, a repository stopping at its first failed write; a status label the repository
       lacks is made first (MADE); after the labels, each held open issue's github.fields (priority,
       start and target day, score) and type are set where they differ, on a repository that has them
   issue migrate <file> [--out <preview.md>] [--yes]   moves the team's tasks to issues of github.repos
-      from a JSON-lines file: per task {id, decision "issue", repo, type bug|task, priority p1-p3,
+      from a JSON-lines file: per task {id, decision "issue", repo, type bug|task|design, priority p1-p3,
       title, body} with its public wording, or {id, decision "local", reason}; without --yes writes
       nothing but the --out preview of every issue in full; --yes opens each issue through gh and
-      sets the task's ref to it, so issue sync adds no second task; stops at the first failure, and a
-      rerun skips each task already holding its issue
+      sets the task's ref to it, so issue sync adds no second task, and assigns a design issue to
+      github.designAssignees; stops at the first failure, and a rerun skips each task already
+      holding its issue
   issue reply <owner/name#n> --body-file <path> [--status <status>] [--pr <n>] [--followup <title>
       [--followup-body-file <path>]] [--assign <login,...>]   a maintainer's reply that takes the
       thread's state with its words, on an issue or pull request of the team's repositories
