@@ -33,7 +33,7 @@ they all stay silent, but `hook restore-track` and `hook tool-end` still record 
 | The mod, every 10 s in each tab | `hook needs-you`, `hook needs-you-focus` | Names another tab of the team that asks the user something (a permission prompt, a question, a decision line) in a toast and a band above the prompt, whose Focus brings that tab to the front ([the needs-you band](#the-mod-the-needs-you-band)) |
 | The mod, every 15 s in each tab | `hook meeting-panel` | While the owner's daily meeting is open, shows its cards in a pane beside the chat of the team's lead that started it, and while a booked `M<n>` is started, its cards beside the chat of the session it meets, in sections (on the table, up next, decided), each with a one-line summary and a decided one with its decision ([the meeting's agenda panel](#the-mod-the-meetings-agenda-panel)) |
 | The mod, a minute after a tab starts and every 10 minutes, and when an install changes `installed_plugins.json` | `hook update-check`, `hook update-dismiss`, `hook update-apply` | Tells, in a band above the prompt, of a newer teamrig or teamrig-pane than the one installed, and runs the band's Update or Dismiss ([the update notice](#the-mod-the-update-notice)) |
-| `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
+| `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, and a tab's first one once for the refresh, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
 | `Stop` (end of each turn) | `hook stop` | Sends the session back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit), once to [a hand step typed into its reply](#end-of-a-turn-a-hand-step-typed-into-the-reply), and after a task is set waiting, once to [its other work](#end-of-a-turn-keep-working-while-a-task-waits); asks for a handover when a context refresh is due, then starts the automatic restart; writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) to the session's `launch` entry; tells the user of another effort than `launch` asks, or of a model Claude Code switched to; shows the budget lines; names a verifying task whose verify-by day has come; starts the team's `issue watch` hidden in the background when none runs; every 10 minutes for the whole team, tells the lead of [a tab that runs without its hooks](#end-of-a-turn-hookless-tabs); with tab status on, sets the tab's ready circle, or the decision circle after a turn that asks the user to decide |
 | `SubagentStop` (a helper about to hand back) | `hook subagent-stop` | Sends the helper back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit) |
 | `SessionEnd` (a tab closes) | `hook effort-writeback` | Writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) with no turn after it to the session's `launch` entry |
@@ -1314,8 +1314,13 @@ Before Claude Code compacts the main conversation on its own (its automatic comp
 ahead), the mod runs `teamrig hook compact-check` with Claude Code's estimate of the context. While your handover
 is asked for or written and the estimate is under `refresh.compactCeilingTokens` (185,000 by default: past the
 167k where Claude Code compacts a 200k window, 15k under the window; 0 turns it off), the mod skips the compaction,
-since the fresh start replaces it. At or past the ceiling, or when the CLI cannot answer, the compaction goes, so a
-session never runs out of room. The user's `/compact`, a plugin's and a helper's compaction are left alone.
+since the fresh start replaces it. Once per tab it also holds back the first automatic compaction with no refresh
+pending, or one that comes after a handover announced whose restart never came, at any size: it records an ask for
+the handover, so the turn's end asks for it and the fresh start follows in place of the compaction. A fresh
+session's own start, before its context grew past the size it started at, is not taken for one. A tab is never held
+back twice, so if the fresh start still does not come, the next compaction goes. Past that, at or past the ceiling,
+or when the CLI cannot answer, the compaction goes, so a session never runs out of room. The user's `/compact`, a
+plugin's and a helper's compaction are left alone.
 
 On a machine with managed settings, Claude Code can seat a managed mod before the plugin's that sends the
 compaction on past the user's mods, so the mod's check never runs. Claude Code's `PreCompact` hook runs either way:

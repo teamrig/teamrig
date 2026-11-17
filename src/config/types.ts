@@ -1448,7 +1448,9 @@ export interface RefreshConfig {
    * own compaction (trigger `auto`) of its main conversation as long as the context, as Claude Code estimates it, is
    * under this many tokens: the /clear at the turn's end replaces the compaction. Past it a compaction goes through, so
    * a session never runs out of room (a prompt too long for the window is past it too); `/compact` and a subagent's own
-   * compaction are never stopped. 0: never stopped. It also bounds an open owner meeting (the lead's daily one, or a
+   * compaction are never stopped. Apart from it, the first automatic compaction of a tab is held back once for the
+   * refresh, which then asks for the handover (src/refresh/decide.ts `decideCompact`). 0: never stopped, not even
+   * that once. It also bounds an open owner meeting (the lead's daily one, or a
    * booked one from its `meeting start M<n>`), which holds the refresh of each session in it only under it
    * (src/refresh/decide.ts `meetingHolds`); 0 holds it until the meeting ends.
    */

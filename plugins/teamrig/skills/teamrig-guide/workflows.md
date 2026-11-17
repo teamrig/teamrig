@@ -264,7 +264,9 @@ so it never loses work to a compaction.
    threshold is never asked again before it did any work. Within a long turn teamrig's mod asks as soon as a tool
    result shows the context past the threshold (`so refresh within this turn: finish the step you are on and start
    no other`, ending `and end your turn: the fresh start follows it`), and until the fresh start Claude Code's own
-   compaction waits, up to `refresh.compactCeilingTokens` (185,000).
+   compaction waits, up to `refresh.compactCeilingTokens` (185,000). The first automatic compaction of a tab is held
+   back once in favour of the refresh even with none asked for: the turn's end asks for the handover instead; the
+   next one goes.
 
 2. Write the handover at that path, with what the register lacks, in two sections: `## State` (where things are:
    branches, worktrees, files, ids; the scratchpad files, plan file and scheduled jobs the next session still needs;
