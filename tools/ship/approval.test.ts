@@ -95,11 +95,19 @@ const pathsReader = (paths: readonly string[], branches: Readonly<Record<string,
     revs,
   };
 };
-/** The standing of `base` with alpha as the GitHub answerer, charlie as the security reviewer and the given sensitive globs. */
-const answering = (base: MergeStanding, sensitive: readonly string[] = ['tools/**', '*guard*', 'package-lock.json', '.github/workflows/**', '*.sql']): MergeStanding => ({
+/**
+ * The standing of `base` with alpha as the GitHub answerer, charlie as the security reviewer, and the given sensitive
+ * globs carved out of the given low-risk ones.
+ */
+const answering = (
+  base: MergeStanding,
+  sensitive: readonly string[] = ['tools/**', '*guard*', 'package-lock.json', '.github/workflows/**', '*.sql'],
+  lowRisk: readonly string[] = ['src/**', 'docs/**', 'README.md'],
+): MergeStanding => ({
   ...base,
   answerer: 'alpha',
   securityReviewer: 'charlie',
+  lowRisk,
   sensitive,
 });
 /** `base` with the unshipped tasks `open` names, by id to owner. */
@@ -225,15 +233,24 @@ describe('mergeClearance: the GitHub answerer approves a low-risk change alone (
     const unreviewed = { ...team, securityReviewer: undefined };
     assert.match(reasonOf(mergeClearance(unreviewed, 'T1', HEAD, HEAD, pathsReader(['src/billing/pay.ts']).read)), /holds no approval of lead: .*; it touches the sensitive src\/billing\/pay\.ts, and the team has no other security reviewer to pass it first$/);
     assert.match(reasonOf(mergeClearance({ ...team, securityReviewer: 'alpha' }, 'T1', HEAD, HEAD, pathsReader(['src/billing/pay.ts']).read)), /no other security reviewer/, 'the answerer passes not its own');
-    assert.equal(mergeClearance(team, 'T1', HEAD, HEAD, pathsReader(['tools/x.ts']).read).kind, 'low-risk', 'the default list replaced');
+    assert.equal(mergeClearance(team, 'T1', HEAD, HEAD, pathsReader(['src/push-guard.ts']).read).kind, 'low-risk', 'the default list replaced');
+  });
+
+  it('asks the security reviewer for a path no low-risk glob names, a new folder, a skill or an agent rule (security verdict)', async () => {
+    const base = answering(await standing(await waitingKit()));
+    for (const path of ['lib/new.ts', 'plugins/teamrig/skills/guide/SKILL.md', 'CLAUDE.md', 'llms.txt', 'tools/x.ts']) {
+      assert.match(reasonOf(mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(['docs/a.md', path]).read)), new RegExp(`^T1 touches the sensitive ${path.replace(/\./g, '\\.')}: set it waiting approval:charlie`), path);
+    }
+    const none = answering(await standing(await waitingKit()), [], []);
+    assert.match(reasonOf(mergeClearance(none, 'T1', HEAD, HEAD, pathsReader(['docs/a.md']).read)), /approval:charlie/, 'no low-risk glob: every path is sensitive');
   });
 
   it("asks the approval of the one session whose open branch changes a file the head changes too", async () => {
     const base = opening(answering(await standing(await waitingKit())), { T2: 'bravo', T5: 'bravo' });
     const repo = pathsReader(['src/a.ts', 'src/c.ts'], { T2: ['src/a.ts', 'src/b.ts'], T5: ['src/c.ts'] });
     assert.equal(reasonOf(mergeClearance(base, 'T1', HEAD, HEAD, repo.read)), `T1 touches src/a.ts, src/c.ts, which bravo's open T2, T5 change: set it waiting approval:bravo and ask bravo to approve it naming ${HEAD} (a leader's approval of it clears it too)`);
-    assert.deepEqual(mergeClearance(await standing(await answererKit('bravo', HEAD)), 'T1', HEAD, HEAD, pathsReader(['src/a.ts'], { T2: ['src/a.ts'] }).read).kind, 'low-risk', 'T2 is in no register here');
-    const approved = opening(await standing(await answererKit('bravo', HEAD)), { T2: 'bravo' });
+    assert.deepEqual(mergeClearance(answering(await standing(await answererKit('bravo', HEAD))), 'T1', HEAD, HEAD, pathsReader(['src/a.ts'], { T2: ['src/a.ts'] }).read).kind, 'low-risk', 'T2 is in no register here');
+    const approved = opening(answering(await standing(await answererKit('bravo', HEAD))), { T2: 'bravo' });
     assert.deepEqual(mergeClearance(approved, 'T1', HEAD, HEAD, pathsReader(['src/a.ts'], { T2: ['src/a.ts'] }).read), { kind: 'approved', by: 'bravo' });
   });
 
@@ -298,17 +315,49 @@ describe('taskBranchesOf: the local and origin branches named for a task', () =>
   });
 });
 
-describe('sensitivePathsOf: the paths the review globs cover, read as the review gate reads them', () => {
+describe('sensitivePathsOf: the paths no low-risk glob covers, or a sensitive one does, read as the review gate reads them', () => {
   it('matches a slash-less glob on a name at any depth, a slashed one from the root, case and dotfiles alike', () => {
-    const globs = ['*guard*', 'tools/**', '.github/**'];
+    const sensitive = ['*guard*', 'tools/**', '.github/**'];
     const paths = ['src/Push-Guard.ts', 'src/push-guard/a.ts', 'lib/tools/x.ts', 'tools/x.ts', '.github/CODEOWNERS', 'src/a.ts'];
-    assert.deepEqual(sensitivePathsOf(paths, globs), ['src/Push-Guard.ts', 'tools/x.ts', '.github/CODEOWNERS'], 'a folder name needs a **/ glob');
-    assert.deepEqual(sensitivePathsOf(['tools/x.ts'], []), []);
+    assert.deepEqual(sensitivePathsOf(paths, { lowRisk: ['*'], sensitive }), ['src/Push-Guard.ts', 'tools/x.ts', '.github/CODEOWNERS'], 'a folder name needs a **/ glob');
+    assert.deepEqual(sensitivePathsOf(['tools/x.ts'], { lowRisk: ['*'], sensitive: [] }), []);
   });
 
-  it("covers every path of the owner's default list", () => {
-    const covered = ['tools/ship/ship.ts', '.github/workflows/ci.yml', '.githooks/pre-push', 'src/push-guard/check.ts', 'src/secret-guard.ts', 'src/hooks/stop.ts', 'plugins/teamrig/hooks/hooks.json', 'src/merge/run.ts', 'src/cli/merge.ts', 'src/permissions/grant.ts', 'src/cli/permission-set.ts', 'src/github/watcher.ts', 'src/cli/github-sync.ts', 'src/issues/migrate.ts', 'src/cli/issue.ts', 'package.json'];
-    assert.deepEqual(sensitivePathsOf([...covered, 'src/cli/list.ts', 'docs/commands.md', 'plugins/teamrig/package.json.md'], DEFAULT_SENSITIVE_PATHS), covered);
+  it('holds every path no low-risk glob covers, whatever the sensitive globs leave out', () => {
+    const lowRisk = ['docs/**', '*.test.ts'];
+    const paths = ['docs/a.md', 'DOCS/b.md', 'src/a.test.ts', 'src/a.ts', 'lib/docs/c.md', 'new-folder/x.ts'];
+    assert.deepEqual(sensitivePathsOf(paths, { lowRisk, sensitive: [] }), ['src/a.ts', 'lib/docs/c.md', 'new-folder/x.ts']);
+    assert.deepEqual(sensitivePathsOf(paths, { lowRisk: [], sensitive: [] }), paths, 'no low-risk glob: all of them');
+  });
+});
+
+describe("sensitivePathsOf: the security verdict's paths stay sensitive under the default lists (T3448)", () => {
+  /** Every path the verdict found merging on the answerer's approval alone: the gate's own code, exec and secret code, and agent instructions. */
+  const VERDICT = [
+    ...['src/config/defaults.ts', 'src/config/parse.ts', 'src/config/roster.ts', 'src/register/approval.ts', 'src/register/policy.ts', 'src/register/review.ts'],
+    ...['src/register/hand-step.ts', 'src/cli/ship-approval.ts', 'src/worktree/owner.ts', 'src/exec/runner.ts', 'src/exec/client-integrity.ts', 'src/exec/redact.ts'],
+    ...['src/cli/commands/exec.ts', 'src/core/secrets.ts', 'src/core/secret-key.ts', 'src/core/secret-patterns.ts', 'src/core/secret-shapes.ts'],
+    ...['src/cli/commands/secret-rotation.ts', 'src/cli/commands/secrets.ts', 'src/cli/commands/audit.ts', 'src/cli/commands/owner.ts'],
+    ...['src/cli/commands/hand-step-file.ts', 'src/cli/commands/allow-scope.ts', 'src/readonly-shell/lines.ts', 'src/automode/write.ts', 'src/skills/grants.ts'],
+    ...['src/doctor/deny-lines.ts', 'src/update/run.ts', 'src/setup/install.ts', 'src/core/home.ts', 'plugins/teamrig/bin/teamrig', '.claude-plugin/marketplace.json'],
+    ...['plugins/teamrig/.claude-plugin/plugin.json', 'plugins/teamrig/skills/teamrig-guide/SKILL.md', '.claude/skills/dev-ship-change/SKILL.md', '.claude/commands/x.md'],
+    ...['CLAUDE.md', 'llms.txt', 'plugins/teamrig/config.schema.json', 'tools/ship/ship.ts', 'package.json'],
+  ];
+  /** Paths named like docs or tests that still steer an agent or a gate, which the sensitive list carves out of the low-risk one. */
+  const CARVED = ['docs/CLAUDE.md', 'docs/.claude/commands/x.md', 'docs/skills/x/SKILL.md', 'tools/ship/approval.test.ts', 'src/merge/merge.test.ts', 'src/testing/fake-guard.ts'];
+
+  it('names each of them, and clears only docs and test code', async () => {
+    const team = await standing(await waitingKit());
+    assert.deepEqual(sensitivePathsOf([...VERDICT, ...CARVED], team), [...VERDICT, ...CARVED]);
+    const low = ['docs/commands.md', 'docs/guides/setup.md', 'src/cli/list.test.ts', 'src/testing/fake-steps.ts', 'web/app.spec.tsx'];
+    assert.deepEqual(sensitivePathsOf(low, team), []);
+    assert.deepEqual(sensitivePathsOf(['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], team), ['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], 'not code, or not listed');
+  });
+
+  it("keeps the gate's own code, secrets and agent rules sensitive inside a team's broad low-risk folder", () => {
+    const broad = { lowRisk: ['*'], sensitive: DEFAULT_SENSITIVE_PATHS };
+    const held = ['src/config/defaults.ts', 'src/cli/ship-approval.ts', 'src/register/approval.ts', 'src/core/secrets.ts', 'tsconfig.json', 'plugins/teamrig/skills/a/SKILL.md', 'src/CLAUDE.md'];
+    assert.deepEqual(sensitivePathsOf([...held, 'src/pane/view.ts'], broad), held);
   });
 });
 

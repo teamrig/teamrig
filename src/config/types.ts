@@ -796,10 +796,15 @@ export interface GithubConfig {
   /** The most issues and pull requests one session follows at once (`teamrig follow`); 0 turns following off. */
   readonly followMax: number;
   /**
-   * The paths, as review globs read the way `pushGuard.reviewPaths` reads them, that make an outside pull request
-   * sensitive (T3448): one whose branch touches any of them, a generic review path or a `pushGuard.reviewPaths` entry
-   * needs the security reviewer's pass and the lead's approval; one touching none merges on the GitHub answerer's own
-   * approval of its head.
+   * The only paths, as review globs read the way `pushGuard.reviewPaths` reads them, an outside pull request may touch
+   * and merge on the GitHub answerer's own approval of its head (T3448). Every other path is sensitive, so a new one is
+   * until a team lists it.
+   */
+  readonly lowRiskPaths: readonly string[];
+  /**
+   * The paths, as review globs, that stay sensitive inside `lowRiskPaths` (T3448), as the generic review paths and the
+   * `pushGuard.reviewPaths` entries do. A change touching a sensitive path merges once the security reviewer approved its
+   * head (a leader's approval clears it too); one touching only low-risk paths, on the GitHub answerer's own approval.
    */
   readonly sensitivePaths: readonly string[];
   /**

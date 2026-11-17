@@ -27,15 +27,17 @@ describe('mergeStandingOf: who merges, its task and who approves it, read from t
     assert.equal(standing.task?.answer?.note, 'head 0123456789abcdef checked');
   });
 
-  it('names the GitHub answerer, and the generic review paths, the review entries and the sensitive paths as sensitive (T3448)', async () => {
-    const kit = new CliHarness({ ...TEAM, github: { watcher: 'bravo', sensitivePaths: ['src/billing/**'] }, pushGuard: { reviewPaths: [{ glob: '*.sql' }] } });
+  it('names the GitHub answerer, the low-risk paths, and the generic review paths, the review entries and the sensitive paths as sensitive (T3448)', async () => {
+    const kit = new CliHarness({ ...TEAM, github: { watcher: 'bravo', lowRiskPaths: ['src/pane/**'], sensitivePaths: ['src/billing/**'] }, pushGuard: { reviewPaths: [{ glob: '*.sql' }] } });
     const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1');
     assert.equal(standing.answerer, 'bravo');
+    assert.deepEqual(standing.lowRisk, ['src/pane/**']);
     assert.deepEqual(standing.sensitive.slice(-2), ['*.sql', 'src/billing/**']);
     assert.ok(standing.sensitive.includes('package-lock.json') && standing.sensitive.includes('.github/workflows/**'), JSON.stringify(standing.sensitive));
     const unset = await mergeStandingOf((await approved()).runtime(), 'app', 'alpha', 'T1');
     assert.equal(unset.answerer, 'lead', 'no watcher and no intake role: the lead answers');
     assert.ok(unset.sensitive.includes('tools/**') && unset.sensitive.includes('*hook*'), "the owner's default list");
+    assert.ok(unset.lowRisk.includes('docs/**') && !unset.lowRisk.some((glob) => glob.startsWith('src/')), "the default allows docs and tests, no team's code");
   });
 
   it('reads no task for an id the register does not hold', async () => {

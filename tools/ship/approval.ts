@@ -94,7 +94,7 @@ export function mergeClearance(standing: MergeStanding, taskId: string, head: st
   const paths = reads.changedPaths(head);
   return answererClearance(standing, task, head, unapproved, {
     paths: paths.length,
-    sensitive: sensitivePathsOf(paths, standing.sensitive),
+    sensitive: sensitivePathsOf(paths, standing),
     overlaps: overlapsOf(paths, openBranchesOf(reads, standing, taskId)),
   });
 }
@@ -223,10 +223,15 @@ export function repoChanges(git: GitText, main: string, regenerated: readonly st
   };
 }
 
-/** The paths that match any of the sensitive review globs, read as the review gate reads its entries (`reviewPathMatcher`). */
-export function sensitivePathsOf(paths: readonly string[], globs: readonly string[]): readonly string[] {
-  const matchers = globs.map(reviewPathMatcher);
-  return paths.filter((path) => matchers.some((matches) => matches(path)));
+/**
+ * The sensitive paths among `paths` (T3448, security verdict): each that matches no low-risk glob, or matches a sensitive
+ * one, read as the review gate reads its entries (`reviewPathMatcher`). An allow list, so a path nobody listed is
+ * sensitive; the sensitive globs carve out of it what no team's low-risk folder may clear.
+ */
+export function sensitivePathsOf(paths: readonly string[], globs: Pick<MergeStanding, 'lowRisk' | 'sensitive'>): readonly string[] {
+  const lowRisk = globs.lowRisk.map(reviewPathMatcher);
+  const sensitive = globs.sensitive.map(reviewPathMatcher);
+  return paths.filter((path) => !lowRisk.some((matches) => matches(path)) || sensitive.some((matches) => matches(path)));
 }
 
 /**

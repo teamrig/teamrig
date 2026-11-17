@@ -199,6 +199,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   similarThreshold: 'github.similarThreshold',
   githubFollowMax: 'github.followMax',
   githubSensitivePaths: 'github.sensitivePaths',
+  githubLowRiskPaths: 'github.lowRiskPaths',
   syncScopeLabels: 'sync.scope.labels',
   syncMaxOpen: 'sync.maxOpen',
   syncMaxNewPerSync: 'sync.maxNewPerSync',

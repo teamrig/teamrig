@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_SENSITIVE_PATHS } from './defaults.ts';
+import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_LOW_RISK_PATHS, DEFAULT_SENSITIVE_PATHS } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
@@ -30,7 +30,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.steps, { backupDays: 7 });
-    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS, sensitivePaths: DEFAULT_SENSITIVE_PATHS });
+    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS, lowRiskPaths: DEFAULT_LOW_RISK_PATHS, sensitivePaths: DEFAULT_SENSITIVE_PATHS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
@@ -602,6 +602,7 @@ describe('parseConfig', () => {
       activity: true,
       followMax: 20,
       stamp: true,
+      lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
       sensitivePaths: DEFAULT_SENSITIVE_PATHS,
     });
     assert.equal(parseConfig({ ...ROSTER, github: { statusPush: true } }).config.github.statusPush, true);
@@ -694,6 +695,20 @@ describe('parseConfig', () => {
     for (const wrong of ['tools/**', [''], ['x'.repeat(201)], ['a\nb'], [7], Array.from({ length: 129 }, (_, i) => `p${i}`)]) {
       const parsed = parseConfig({ ...ROSTER, github: { sensitivePaths: wrong } });
       assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('github.sensitivePaths')), JSON.stringify(parsed.issues));
+    }
+  });
+
+  it("reads the github low-risk paths as a team's own globs, else keeps docs and test code only (T3448)", () => {
+    const defaults = parseConfig(ROSTER).config.github.lowRiskPaths;
+    assert.deepEqual(defaults, DEFAULT_LOW_RISK_PATHS);
+    assert.ok(defaults.includes('docs/**') && defaults.includes('*.test.ts') && !defaults.some((glob) => glob.startsWith('src/')), JSON.stringify(defaults));
+    const { config, issues } = parseConfig({ ...ROSTER, github: { lowRiskPaths: ['src/pane/**', 'README.md'] } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.github.lowRiskPaths, ['src/pane/**', 'README.md']);
+    assert.deepEqual(parseConfig({ ...ROSTER, github: { lowRiskPaths: [] } }).config.github.lowRiskPaths, [], 'none: every outside change is sensitive');
+    for (const wrong of ['docs/**', [''], ['x'.repeat(201)], ['a\nb'], [7], Array.from({ length: 129 }, (_, i) => `p${i}`)]) {
+      const parsed = parseConfig({ ...ROSTER, github: { lowRiskPaths: wrong } });
+      assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('github.lowRiskPaths')), JSON.stringify(parsed.issues));
     }
   });
 

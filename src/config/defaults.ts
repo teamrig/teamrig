@@ -338,10 +338,30 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
 };
 
 /**
- * `github.sensitivePaths` (owner order, T3448): what an outside pull request must leave alone to merge on the GitHub
- * answerer's approval alone. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever guards, hooks,
- * merges or grants permissions, the code that writes to GitHub, and the package file that chooses what installs (the
- * lock files are generic review paths already). A glob with no slash names a file at any depth, so `*hook*` covers a
+ * `github.lowRiskPaths` (owner order, T3448, security verdict): the only paths an outside pull request may touch and
+ * merge on the GitHub answerer's approval alone, so a path added tomorrow is sensitive until a team lists it. Docs and
+ * tests, which no installed copy runs: the test globs name code files only, so a `.md` command or skill named like a
+ * test is no test. A team adds its own feature folders; `github.sensitivePaths` wins over every entry.
+ */
+export const DEFAULT_LOW_RISK_PATHS: readonly string[] = [
+  'docs/**',
+  '*.test.ts',
+  '*.test.tsx',
+  '*.test.js',
+  '*.test.mjs',
+  '*.spec.ts',
+  '*.spec.tsx',
+  '*.spec.js',
+  '**/testing/**/*.ts',
+];
+
+/**
+ * `github.sensitivePaths` (owner order, T3448): what stays sensitive inside `github.lowRiskPaths`, so a team's broad
+ * low-risk folder never clears these. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever guards,
+ * hooks, merges or grants permissions, the code that writes to GitHub, the package file that chooses what installs (the
+ * lock files are generic review paths already), config and the code that reads it (these lists among it), secrets and
+ * approvals, and the instructions agents follow (`CLAUDE.md` and `AGENTS.md` at any depth, `.claude/`, plugin
+ * manifests and skills). A glob with no slash names a file at any depth, so `*hook*` covers a
  * `hook-*.ts` command beside the others, and `**\/hooks/**` a hooks folder anywhere.
  */
 export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
@@ -361,6 +381,16 @@ export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
   '**/issues/**',
   'issue*',
   'package.json',
+  '**/config/**',
+  '*config*',
+  '*secret*',
+  '*approval*',
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  'AGENTS.md',
+  '**/.claude/**',
+  '**/.claude-plugin/**',
+  '**/skills/**',
 ];
 
 /**
@@ -383,6 +413,7 @@ export const DEFAULT_GITHUB: GithubConfig = {
   followMax: 20,
   stamp: true,
   fields: DEFAULT_ISSUE_FIELDS,
+  lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
   sensitivePaths: DEFAULT_SENSITIVE_PATHS,
 };
 
