@@ -56,7 +56,13 @@ page you point them to.
 5. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).
-6. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
+6. Who approves it: the GitHub answerer (`github.watcher`, else the intake role's holder, else the lead) alone, by
+   its own `--approved <full head sha>` on the merge, unless it touches a sensitive path (`github.sensitivePaths`, a
+   generic review path or a `pushGuard.reviewPaths` entry: the security reviewer approves that head first) or a file
+   another session's open branch changes (that session approves it). Needing two such approvals, it goes to the lead.
+   The merge reads the paths and the open branches itself and refuses, naming whose approval to ask
+   (`teamrig set <task> --status waiting --waits approval:<them>`).
+7. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
    leader's approval with a note naming the full 40-hex head, then `teamrig pr approve <owner/name#n> --head <sha>` and
    `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a rebase onto a
    newer base with the same commits keeps the approval (`--head` stays the approved head), any other push needs a new
@@ -65,7 +71,7 @@ page you point them to.
    version and dist commits, which the release workflow makes, and land the rest with `dev-ship-change` and the plan
    `{ "chunks": [] }`, which lands the picked commits as they are; a chunk naming them would commit them again under
    our name. Comment on the pull request naming the landed commit, and close it.
-7. Reply as yourself, in plain words, with the next step and its date, and keep each promise in a task.
+8. Reply as yourself, in plain words, with the next step and its date, and keep each promise in a task.
 
 ## Replying: the state with the words
 
