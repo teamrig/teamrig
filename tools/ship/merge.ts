@@ -7,7 +7,7 @@ import { ENV } from '../../src/core/home.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
-import { type ClearMerge, type ClearTaskMerge, type MergeClearance, approvedRebase, clearMergeFrom, clearTaskMergeFrom, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import { type ChangeReads, type ClearMerge, type ClearTaskMerge, approvedRebase, clearanceText, clearMergeFrom, clearTaskMergeFrom, repoChanges, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { type CatchUp, type CatchUpRequest, catchUp } from './catch-up.ts';
 import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
@@ -653,17 +653,13 @@ function approvalGate(args: MergeArgs, deps: MergeDeps): MergeGate {
     }
     const clearance = await deps.clearMerge(head, rebase === null ? sha : rebase.approved, args.approved);
     if (clearance.kind === 'refused') return clearance.reason;
-    const by = clearedBy(clearance);
+    const by = clearanceText(clearance);
     const carried = rebase === null ? '' : `carries the approved ${rebase.approved.slice(0, 9)}'s ${rebase.work} work commit(s), patch for patch, `;
     deps.out(`merge of ${head} ${sha.slice(0, 9)}: ${carried}${by}`);
     cleared = { head, sha, by };
     return null;
   };
 }
-
-/** Who cleared a merge, as its out line names them. */
-const clearedBy = (clearance: Exclude<MergeClearance, { kind: 'refused' }>): string =>
-  clearance.kind === 'self' ? "the caller's own, a root team's lead" : `approved by ${clearance.by}`;
 
 /** The gate of `ship.ts merge --release`, with the head it last cleared and the caught-up head it lets through on that. */
 interface ReleaseGate {
@@ -698,7 +694,7 @@ function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGat
       if (approved !== null && approved.kind === 'refused') return approved.reason;
       const clearance = await deps.clearTaskMerge(task, approved === null ? sha : approved.sha, args.approved);
       if (clearance.kind === 'refused') return clearance.reason;
-      const by = clearedBy(clearance);
+      const by = clearanceText(clearance);
       const carries = approved === null ? '' : `carries the approved ${approved.sha.slice(0, 9)}, both heads only a release, `;
       deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${carries}${by} on ${task}`);
       cleared = { sha, by };
@@ -934,20 +930,28 @@ export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate
 export function realMergeDeps(dir: string): MergeDeps {
   const out = (line: string): void => console.log(line);
   const err = (line: string): void => console.error(line);
+  // Untrimmed, so a -z path list keeps a name that starts or ends with a space whole.
   const runGit = gitSyncIn(dir);
   const git = (...gitArgs: string[]): string => runGit(gitArgs).trim();
   const kitReader = { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock };
+  const profiles = readProfiles();
+  // Read the profile only when the GitHub answerer's clearance reads the repo.
+  const repo = (): ChangeReads => {
+    const { main, regenerated } = profileFor(profiles, slugOf(git('remote', 'get-url', 'origin')));
+    return repoChanges(runGit, main, regenerated);
+  };
+  const changes: ChangeReads = { changedPaths: (rev) => repo().changedPaths(rev), taskBranches: () => repo().taskBranches() };
   return {
     git,
-    profiles: readProfiles(),
+    profiles,
     credential: () => readCredential(SHIP_TOKEN_TARGET, windowsPowerShell),
     ghFor: token => ghWithToken(token),
     waiter: { now: () => Date.now(), sleep: ms => new Promise(done => setTimeout(done, ms)) },
     gate: realGateDeps(dir, out),
     renamedCallers: (base, tip, repo) => renamedCallersRefusal({ base, tip, repo }, { env: process.env, userHome: homedir() }, realRenamedCallersDeps(dir, out)),
     sweep: (merged, profile, gh) => sweepAfterMerge(merged, profile, { git, pullsOf: pullsOfHead(gh, merged.repo), out, err }),
-    clearMerge: clearMergeFrom(process.env, kitReader),
-    clearTaskMerge: clearTaskMergeFrom(process.env, kitReader),
+    clearMerge: clearMergeFrom(process.env, kitReader, changes),
+    clearTaskMerge: clearTaskMergeFrom(process.env, kitReader, changes),
     // The untrimmed git: a trim would hide a whitespace edit in the diff the release check reads.
     releaseRefusal: (profile, release, sha) => releaseRefusal(runGit, `refs/remotes/origin/${profile.main}`, sha, release, teamrigShipWritesOf(profile.regenerated).versionFiles),
     catchUp: request =>

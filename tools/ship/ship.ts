@@ -9,6 +9,8 @@ import { realShipDeps } from './ship-deps.ts';
  * The ship tool's command line; what each command does lives in its module.
  * Ships a finished teamrig change from a tested working tree (ship-commits.ts):
  *   node ship.ts <teamrig dir> <plan.json> [base, default origin/main] [--merge [--approved <sha>] [--note-file <path>]]
+ *   --approved names the head the lead approved, or the GitHub answerer's own head: alone on a change touching no
+ *   sensitive path and no other session's open branch, else after that session's approval (approval.ts, T3448).
  * plan.json: { "chunks": [ { "files": ["src/a.ts", ...], "subject": "area: what", "body": "why" } ] }; an empty list
  * ships the commits the branch already carries, such as an outside pull request's (T4116)
  *

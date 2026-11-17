@@ -1,7 +1,10 @@
 import { LeadTree } from '../config/lead-tree.ts';
 import type { KitConfig } from '../config/types.ts';
 import { formatAddress, type SessionAddress } from '../core/address.ts';
+import { githubWatcher } from '../sync/watcher.ts';
+import { GENERIC_REVIEW_PATHS } from '../push-guard/review-paths.ts';
 import type { Task } from '../register/fold.ts';
+import type { TaskStatus } from '../register/model.ts';
 import { JsonlEventLog } from '../register/store.ts';
 import { openKit, rosterOf, sessionIdOf, type KitReader } from './kit.ts';
 import { RefusedError } from './runtime.ts';
@@ -23,7 +26,21 @@ export interface MergeStanding {
    * lead as `<team>/<id>` (T1140); none for a root team's lead, whose own merge needs no approval.
    */
   readonly approvers: readonly string[];
+  /** The session that answers on GitHub (`githubWatcher`), whose own approval of its head clears a low-risk merge (T3448). */
+  readonly answerer: string;
+  /**
+   * The review globs a change must touch none of to be low-risk (T3448): the generic review paths, then
+   * `pushGuard.reviewPaths`, then `github.sensitivePaths`.
+   */
+  readonly sensitive: readonly string[];
+  /** The team's security reviewer, who passes a sensitive change before the GitHub answerer merges it (T3448). */
+  readonly securityReviewer: string | undefined;
+  /** The owners of the tasks not shipped yet (open, in progress or waiting), by task id, whose branches a change may overlap (T3448). */
+  readonly open: ReadonlyMap<string, string>;
 }
+
+/** The statuses of a task whose branch is still to land: a verifying or finished one shipped it already. */
+const UNSHIPPED: readonly TaskStatus[] = ['open', 'in-progress', 'waiting'];
 
 /**
  * The merge standing of `callerText` (an id or a name, from `$TEAMRIG_SESSION`) on team `team` for task `taskId`.
@@ -38,7 +55,15 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
   const { config } = kit.load;
   const caller = sessionIdOf(await rosterOf(reader, kit, config), callerText);
   const { state } = await new JsonlEventLog(reader.files, kit.paths.events).read();
-  return { caller, task: state.tasks.get(taskId), approvers: await approversOf(reader, team, config, caller) };
+  return {
+    caller,
+    task: state.tasks.get(taskId),
+    approvers: await approversOf(reader, team, config, caller),
+    answerer: githubWatcher(config),
+    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.github.sensitivePaths],
+    securityReviewer: config.roles.securityReviewer,
+    open: new Map([...state.tasks.values()].filter((task) => UNSHIPPED.includes(task.status)).map((task) => [task.id, task.owner])),
+  };
 }
 
 /**

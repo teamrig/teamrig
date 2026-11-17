@@ -2,7 +2,7 @@ import { DEFAULT_COMMITS } from '../../src/config/defaults.ts';
 import { stampTrailer } from '../../src/core/stamp.ts';
 import { pathMatcher, weighCommit, type CommitWeight, type FileChange } from '../../src/push-guard/commit-size.ts';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
-import { approvedRebase, type ClearMerge } from './approval.ts';
+import { approvedRebase, clearanceText, type ClearMerge } from './approval.ts';
 import type { HeldHead } from './hold.ts';
 import type { BuildStep } from './build-steps.ts';
 import type { CheckScope } from '../ci/check-scope.ts';
@@ -159,10 +159,10 @@ async function clearedChange(args: ShipArgs, branch: string, deps: ShipDeps): Pr
   const clearance = await deps.clearMerge(branch, approvedHead, args.approved);
   if (clearance.kind === 'refused') throw new Error(`REFUSED ${clearance.reason}`);
   if (clearance.kind === 'self') {
-    deps.log(`merge of ${branch} ${head.slice(0, 9)}: the caller's own, a root team's lead`);
+    deps.log(`merge of ${branch} ${head.slice(0, 9)}: ${clearanceText(clearance)}`);
     return null;
   }
-  deps.log(`merge of ${branch} ${approvedHead.slice(0, 9)}: approved by ${clearance.by}`);
+  deps.log(`merge of ${branch} ${approvedHead.slice(0, 9)}: ${clearanceText(clearance)}`);
   return { head: approvedHead, patch: deps.patchOf(approvedHead) };
 }
 

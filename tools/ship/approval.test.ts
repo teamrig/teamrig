@@ -5,8 +5,29 @@ import { EXIT, RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { CLAUDE_SESSION, CliHarness, TEAM_HOME } from '../../src/testing/cli-harness.ts';
 import { TempRepo } from '../lib/temp-repo.ts';
-import { changePatch, clearMerge, clearMergeFrom, clearTaskMerge, clearTaskMergeFrom, mergeClearance, type MergeReads, shipWritesOf, type StandingOf, teamrigShipWritesOf, type TabCallerOf, taskOfBranch, workCommitsOf } from './approval.ts';
 import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
+import { DEFAULT_SENSITIVE_PATHS } from '../../src/config/defaults.ts';
+import {
+  changedPathsOf,
+  changePatch,
+  clearanceText,
+  clearMerge,
+  clearMergeFrom,
+  clearTaskMerge,
+  clearTaskMergeFrom,
+  mergeClearance,
+  overlapsOf,
+  type ChangeReads,
+  type MergeReads,
+  sensitivePathsOf,
+  shipWritesOf,
+  type StandingOf,
+  type TabCallerOf,
+  taskBranchesOf,
+  taskOfBranch,
+  teamrigShipWritesOf,
+  workCommitsOf,
+} from './approval.ts';
 import { profileFor, readProfiles } from './repos.ts';
 import { TEAMRIG_RELEASE_MANIFEST, TEAMRIG_RELEASE_STAMPS, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_VERSION_FILES } from './version-bump.ts';
 
@@ -40,6 +61,63 @@ async function waitingKit(answer?: readonly string[]): Promise<CliHarness> {
 const standing = async (kit: CliHarness, caller = 'alpha'): Promise<MergeStanding> => mergeStandingOf(kit.runtime(), 'app', caller, 'T1');
 const approvedBy = async (note: string): Promise<MergeStanding> => standing(await waitingKit(['--note', note]));
 const reasonOf = (clearance: ReturnType<typeof mergeClearance>): string => (clearance.kind === 'refused' ? clearance.reason : `not refused: ${clearance.kind}`);
+/** A repo the clearance must never read: it decides before the answerer's clearance, or the caller is no answerer. */
+const UNREAD: ChangeReads = {
+  changedPaths: () => {
+    throw new Error("the clearance read the head's paths");
+  },
+  taskBranches: () => {
+    throw new Error("the clearance read the repo's branches");
+  },
+};
+/**
+ * A repo whose head changes `paths` and whose task branches (`refs/heads/t<n>-x`) change `branches[task]`, counting
+ * the head's reads and listing every rev read.
+ */
+const pathsReader = (paths: readonly string[], branches: Readonly<Record<string, readonly string[]>> = {}): { read: ChangeReads; reads: () => number; revs: string[] } => {
+  let reads = 0;
+  const revs: string[] = [];
+  const refOf = (task: string): string => `refs/heads/${task.toLowerCase()}-x`;
+  return {
+    read: {
+      changedPaths: (rev) => {
+        revs.push(rev);
+        if (rev === HEAD) {
+          reads += 1;
+          return paths;
+        }
+        const task = Object.keys(branches).find((id) => refOf(id) === rev);
+        return task === undefined ? [] : (branches[task] ?? []);
+      },
+      taskBranches: () => Object.keys(branches).map((task) => ({ task, ref: refOf(task) })),
+    },
+    reads: () => reads,
+    revs,
+  };
+};
+/** The standing of `base` with alpha as the GitHub answerer, charlie as the security reviewer and the given sensitive globs. */
+const answering = (base: MergeStanding, sensitive: readonly string[] = ['tools/**', '*guard*', 'package-lock.json', '.github/workflows/**', '*.sql']): MergeStanding => ({
+  ...base,
+  answerer: 'alpha',
+  securityReviewer: 'charlie',
+  sensitive,
+});
+/** `base` with the unshipped tasks `open` names, by id to owner. */
+const opening = (base: MergeStanding, open: Readonly<Record<string, string>>): MergeStanding => ({ ...base, open: new Map(Object.entries(open)) });
+
+/**
+ * Team app whose GitHub answerer is alpha and security reviewer charlie, with T1, alpha's, waiting on `approver`'s
+ * approval, which `approver` gave naming `note`.
+ */
+async function answererKit(approver: string, note: string): Promise<CliHarness> {
+  const kit = new CliHarness({ sessions: ['lead', 'alpha', 'bravo', 'charlie'], roles: { lead: 'lead', securityReviewer: 'charlie' }, github: { watcher: 'alpha' } });
+  assert.equal((await kit.run(['add', '--title', 'Outside fix', '--description', 'what and why', '--priority', 'p1', '--session', 'alpha'])).code, EXIT.ok);
+  const wait = await kit.run(['set', 'T1', '--status', 'waiting', '--waits', `approval:${approver}`, '--note', 'branch t1-fix', '--session', 'alpha']);
+  assert.equal(wait.code, EXIT.ok, wait.stderr.join('\n'));
+  const answer = await kit.run(['approve', 'T1', '--note', note, '--session', approver]);
+  assert.equal(answer.code, EXIT.ok, answer.stderr.join('\n'));
+  return kit;
+}
 
 describe('taskOfBranch', () => {
   it('reads the task from the t<id>- prefix, and none from any other name', () => {
@@ -60,59 +138,184 @@ describe('taskOfBranch', () => {
 
 describe('mergeClearance: the merge needs its approver to have approved the head it merges (T2788)', () => {
   it('clears the head the lead approved, by a short or a full sha in its note', async () => {
-    assert.deepEqual(mergeClearance(await approvedBy(`head ${HEAD.slice(0, 9)} checked`), 'T1', HEAD, HEAD.slice(0, 9)), { kind: 'approved', by: 'lead' });
-    assert.deepEqual(mergeClearance(await approvedBy(`approve ${HEAD}`), 'T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
+    assert.deepEqual(mergeClearance(await approvedBy(`head ${HEAD.slice(0, 9)} checked`), 'T1', HEAD, HEAD.slice(0, 9), UNREAD), { kind: 'approved', by: 'lead' });
+    assert.deepEqual(mergeClearance(await approvedBy(`approve ${HEAD}`), 'T1', HEAD, HEAD, UNREAD), { kind: 'approved', by: 'lead' });
   });
 
   it('refuses a task the register does not hold', async () => {
     const kit = await waitingKit(['--note', HEAD]);
-    const clearance = mergeClearance(await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9'), 'T9', HEAD, HEAD);
+    const clearance = mergeClearance(await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9'), 'T9', HEAD, HEAD, UNREAD);
     assert.match(reasonOf(clearance), /holds no task T9/);
   });
 
   it("refuses a caller merging another session's task, the lead too", async () => {
     const kit = await waitingKit(['--note', HEAD]);
-    assert.match(reasonOf(mergeClearance(await standing(kit, 'bravo'), 'T1', HEAD, HEAD)), /T1 is alpha's: only its owner merges it, not bravo/);
-    assert.match(reasonOf(mergeClearance(await standing(kit, 'lead'), 'T1', HEAD, null)), /only its owner merges it, not lead/);
+    assert.match(reasonOf(mergeClearance(await standing(kit, 'bravo'), 'T1', HEAD, HEAD, UNREAD)), /T1 is alpha's: only its owner merges it, not bravo/);
+    assert.match(reasonOf(mergeClearance(await standing(kit, 'lead'), 'T1', HEAD, null, UNREAD)), /only its owner merges it, not lead/);
   });
 
   it("clears a root team's lead on its own task with no --approved", async () => {
     const kit = new CliHarness();
     assert.equal((await kit.run(['add', '--title', 'Lead work', '--description', 'what and why', '--priority', 'p1', '--session', 'lead'])).code, EXIT.ok);
-    assert.deepEqual(mergeClearance(await standing(kit, 'lead'), 'T1', HEAD, null), { kind: 'self' });
+    assert.deepEqual(mergeClearance(await standing(kit, 'lead'), 'T1', HEAD, null, UNREAD), { kind: 'self' });
   });
 
   it('refuses a merge that names no approved head', async () => {
-    assert.match(reasonOf(mergeClearance(await approvedBy(HEAD), 'T1', HEAD, null)), /--approved <sha>: alpha's merge needs the approval of lead/);
+    assert.match(reasonOf(mergeClearance(await approvedBy(HEAD), 'T1', HEAD, null, UNREAD)), /--approved <sha>: alpha's merge needs the approval of lead/);
   });
 
   it('refuses --approved that is no sha, or not the branch head', async () => {
     const approved = await approvedBy(HEAD);
-    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, 'HEAD')), /--approved HEAD is not the branch head/);
-    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, '0123')), /is not the branch head/, 'too short to name a commit');
-    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, 'fedcba987')), /--approved fedcba987 is not the branch head/);
+    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, 'HEAD', UNREAD)), /--approved HEAD is not the branch head/);
+    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, '0123', UNREAD)), /is not the branch head/, 'too short to name a commit');
+    assert.match(reasonOf(mergeClearance(approved, 'T1', HEAD, 'fedcba987', UNREAD)), /--approved fedcba987 is not the branch head/);
   });
 
   it('refuses a task with no approval: none asked, none given yet, or declined', async () => {
     const asked = new CliHarness();
     assert.equal((await asked.run(['add', '--title', 'Ship', '--description', 'what and why', '--priority', 'p1', '--session', 'alpha'])).code, EXIT.ok);
-    assert.match(reasonOf(mergeClearance(await standing(asked), 'T1', HEAD, HEAD)), /T1 \(open\) holds no approval of lead: set it waiting approval:lead/);
-    assert.match(reasonOf(mergeClearance(await standing(await waitingKit()), 'T1', HEAD, HEAD)), /T1 \(waiting\) holds no approval of lead/);
-    assert.match(reasonOf(mergeClearance(await standing(await waitingKit(['--decline', '--note', HEAD])), 'T1', HEAD, HEAD)), /holds no approval of lead/);
+    assert.match(reasonOf(mergeClearance(await standing(asked), 'T1', HEAD, HEAD, UNREAD)), /T1 \(open\) holds no approval of lead: set it waiting approval:lead/);
+    assert.match(reasonOf(mergeClearance(await standing(await waitingKit()), 'T1', HEAD, HEAD, UNREAD)), /T1 \(waiting\) holds no approval of lead/);
+    assert.match(reasonOf(mergeClearance(await standing(await waitingKit(['--decline', '--note', HEAD])), 'T1', HEAD, HEAD, UNREAD)), /holds no approval of lead/);
   });
 
   it('refuses an approval whose note names another head, or no sha', async () => {
     const earlier = 'fedcba9876543210fedcba9876543210fedcba98';
-    assert.match(reasonOf(mergeClearance(await approvedBy(`head ${earlier} checked`), 'T1', HEAD, HEAD)), /lead's approval of T1 names no sha of the head/);
-    assert.match(reasonOf(mergeClearance(await approvedBy('looks good'), 'T1', HEAD, HEAD)), /names no sha of the head/);
-    assert.match(reasonOf(mergeClearance(await approvedBy(`x${HEAD}`), 'T1', HEAD, HEAD)), /names no sha of the head/, 'a sha inside a longer word');
+    assert.match(reasonOf(mergeClearance(await approvedBy(`head ${earlier} checked`), 'T1', HEAD, HEAD, UNREAD)), /lead's approval of T1 names no sha of the head/);
+    assert.match(reasonOf(mergeClearance(await approvedBy('looks good'), 'T1', HEAD, HEAD, UNREAD)), /names no sha of the head/);
+    assert.match(reasonOf(mergeClearance(await approvedBy(`x${HEAD}`), 'T1', HEAD, HEAD, UNREAD)), /names no sha of the head/, 'a sha inside a longer word');
+  });
+});
+
+describe('mergeClearance: the GitHub answerer approves a low-risk change alone (owner order, T3448)', () => {
+  it('clears the answerer naming its own head when no changed path is sensitive, with no approval asked', async () => {
+    const paths = pathsReader(['src/cli/list.ts', 'docs/commands.md', 'README.md']);
+    assert.deepEqual(mergeClearance(answering(await standing(await waitingKit())), 'T1', HEAD, HEAD.slice(0, 9), paths.read), { kind: 'low-risk', by: 'alpha', paths: 3 });
+    const open = new CliHarness();
+    assert.equal((await open.run(['add', '--title', 'Outside fix', '--description', 'what and why', '--priority', 'p1', '--session', 'alpha'])).code, EXIT.ok);
+    assert.deepEqual(mergeClearance(answering(await standing(open)), 'T1', HEAD, HEAD, paths.read), { kind: 'low-risk', by: 'alpha', paths: 3 }, 'an open task, never set waiting');
+    assert.equal(paths.reads(), 2);
+  });
+
+  it("clears it over a declined or stale lead approval, and keeps the lead's approval of the head first", async () => {
+    const paths = pathsReader(['src/a.ts']);
+    assert.deepEqual(mergeClearance(answering(await approvedBy('head fedcba987 checked')), 'T1', HEAD, HEAD, paths.read), { kind: 'low-risk', by: 'alpha', paths: 1 });
+    assert.deepEqual(mergeClearance(answering(await approvedBy(HEAD)), 'T1', HEAD, HEAD, UNREAD), { kind: 'approved', by: 'lead' }, 'the paths are not read');
+  });
+
+  it("asks the security reviewer's approval first when a changed path is sensitive, naming five and counting the rest", async () => {
+    const base = answering(await standing(await waitingKit()));
+    const one = mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(['src/a.ts', 'tools/ship/ship.ts']).read);
+    assert.equal(reasonOf(one), `T1 touches the sensitive tools/ship/ship.ts: set it waiting approval:charlie and ask charlie to approve it naming ${HEAD} (a leader's approval of it clears it too)`);
+    for (const path of ['src/secret-guard.ts', 'package-lock.json', 'web/package-lock.json', '.github/workflows/ci.yml', 'db/Schema.SQL']) {
+      assert.match(reasonOf(mergeClearance(base, 'T1', HEAD, HEAD, pathsReader([path]).read)), /approval:charlie/, path);
+    }
+    const many = ['tools/a', 'tools/b', 'tools/c', 'tools/d', 'tools/e', 'tools/f', 'tools/g'];
+    assert.match(reasonOf(mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(many).read)), /touches the sensitive tools\/a, tools\/b, tools\/c, tools\/d, tools\/e and 2 more: /);
+  });
+
+  it("clears a sensitive change once the security reviewer approved its head, and not an earlier one's", async () => {
+    const paths = pathsReader(['tools/ship/ship.ts']);
+    assert.deepEqual(mergeClearance(await standing(await answererKit('charlie', `passed ${HEAD.slice(0, 9)}`)), 'T1', HEAD, HEAD, paths.read), { kind: 'approved', by: 'charlie' });
+    assert.match(reasonOf(mergeClearance(await standing(await answererKit('charlie', 'passed fedcba987')), 'T1', HEAD, HEAD, paths.read)), /approval:charlie/);
+  });
+
+  it('refuses a sensitive path of the team when no other session reviews security, and clears all when the team lists no glob', async () => {
+    const team = answering(await standing(await waitingKit()), ['src/billing/**']);
+    const unreviewed = { ...team, securityReviewer: undefined };
+    assert.match(reasonOf(mergeClearance(unreviewed, 'T1', HEAD, HEAD, pathsReader(['src/billing/pay.ts']).read)), /holds no approval of lead: .*; it touches the sensitive src\/billing\/pay\.ts, and the team has no other security reviewer to pass it first$/);
+    assert.match(reasonOf(mergeClearance({ ...team, securityReviewer: 'alpha' }, 'T1', HEAD, HEAD, pathsReader(['src/billing/pay.ts']).read)), /no other security reviewer/, 'the answerer passes not its own');
+    assert.equal(mergeClearance(team, 'T1', HEAD, HEAD, pathsReader(['tools/x.ts']).read).kind, 'low-risk', 'the default list replaced');
+  });
+
+  it("asks the approval of the one session whose open branch changes a file the head changes too", async () => {
+    const base = opening(answering(await standing(await waitingKit())), { T2: 'bravo', T5: 'bravo' });
+    const repo = pathsReader(['src/a.ts', 'src/c.ts'], { T2: ['src/a.ts', 'src/b.ts'], T5: ['src/c.ts'] });
+    assert.equal(reasonOf(mergeClearance(base, 'T1', HEAD, HEAD, repo.read)), `T1 touches src/a.ts, src/c.ts, which bravo's open T2, T5 change: set it waiting approval:bravo and ask bravo to approve it naming ${HEAD} (a leader's approval of it clears it too)`);
+    assert.deepEqual(mergeClearance(await standing(await answererKit('bravo', HEAD)), 'T1', HEAD, HEAD, pathsReader(['src/a.ts'], { T2: ['src/a.ts'] }).read).kind, 'low-risk', 'T2 is in no register here');
+    const approved = opening(await standing(await answererKit('bravo', HEAD)), { T2: 'bravo' });
+    assert.deepEqual(mergeClearance(approved, 'T1', HEAD, HEAD, pathsReader(['src/a.ts'], { T2: ['src/a.ts'] }).read), { kind: 'approved', by: 'bravo' });
+  });
+
+  it("reads only other sessions' unshipped branches: not the caller's, the merging task's, a shipped or an unknown task's", async () => {
+    const base = opening(answering(await standing(await waitingKit())), { T1: 'alpha', T4: 'alpha', T2: 'bravo' });
+    const repo = pathsReader(['src/a.ts'], { T1: ['src/a.ts'], T4: ['src/a.ts'], T6: ['src/a.ts'], T2: ['src/b.ts'] });
+    assert.deepEqual(mergeClearance(base, 'T1', HEAD, HEAD, repo.read), { kind: 'low-risk', by: 'alpha', paths: 1 });
+    assert.deepEqual(repo.revs, [HEAD, 'refs/heads/t2-x'], "only bravo's T2 is read, and it changes no file of the head");
+  });
+
+  it('leaves to the leaders a head touching several sessions\' open branches, or a sensitive path and another session\'s branch', async () => {
+    const base = opening(answering(await standing(await waitingKit())), { T2: 'bravo', T3: 'charlie' });
+    const several = mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(['src/a.ts', 'src/b.ts'], { T2: ['src/a.ts'], T3: ['src/b.ts'] }).read);
+    assert.match(reasonOf(several), /^T1 \(waiting\) holds no approval of lead: .*; it touches files of several sessions' open branches \(src\/a\.ts, which bravo's open T2 changes; src\/b\.ts, which charlie's open T3 changes\), which the leaders approve$/);
+    const both = mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(['tools/x.ts', 'src/a.ts'], { T2: ['src/a.ts'] }).read);
+    assert.match(reasonOf(both), /; it touches the sensitive tools\/x\.ts and src\/a\.ts, which bravo's open T2 changes, which the leaders approve$/);
+    const reviewers = mergeClearance(base, 'T1', HEAD, HEAD, pathsReader(['tools/x.ts', 'src/b.ts'], { T3: ['src/b.ts'] }).read);
+    assert.match(reasonOf(reviewers), /^T1 touches the sensitive tools\/x\.ts and src\/b\.ts, which charlie's open T3 changes: set it waiting approval:charlie/, "the reviewer's own branch: one approval");
+  });
+
+  it("refuses the answerer's --approved naming another sha or none, before reading any path", async () => {
+    const base = answering(await standing(await waitingKit()));
+    assert.match(reasonOf(mergeClearance(base, 'T1', HEAD, 'fedcba987', UNREAD)), /--approved fedcba987 is not the branch head/);
+    assert.match(reasonOf(mergeClearance(base, 'T1', HEAD, null, UNREAD)), /--approved <sha>/);
+  });
+
+  it("refuses a caller that is not the answerer, without reading its paths, and the answerer on another's task", async () => {
+    const kit = await waitingKit();
+    assert.match(reasonOf(mergeClearance({ ...(await standing(kit)), answerer: 'bravo', sensitive: [] }, 'T1', HEAD, HEAD, UNREAD)), /^T1 \(waiting\) holds no approval of lead: set it waiting approval:lead and ask for it naming 0123/);
+    assert.match(reasonOf(mergeClearance({ ...(await standing(kit, 'bravo')), answerer: 'bravo', sensitive: [] }, 'T1', HEAD, HEAD, UNREAD)), /T1 is alpha's: only its owner merges it, not bravo/);
+  });
+});
+
+describe('overlapsOf: the files a head shares with other sessions\' open branches (T3448)', () => {
+  it('groups them by owner in branch order, each task and path once, and drops a branch sharing none', () => {
+    const branches = [
+      { task: 'T2', owner: 'bravo', paths: ['src/a.ts', 'src/z.ts'] },
+      { task: 'T3', owner: 'charlie', paths: ['src/b.ts'] },
+      { task: 'T5', owner: 'bravo', paths: ['src/a.ts', 'src/c.ts'] },
+      { task: 'T6', owner: 'delta', paths: ['src/y.ts'] },
+    ];
+    assert.deepEqual(overlapsOf(['src/a.ts', 'src/b.ts', 'src/c.ts'], branches), [
+      { owner: 'bravo', tasks: ['T2', 'T5'], paths: ['src/a.ts', 'src/c.ts'] },
+      { owner: 'charlie', tasks: ['T3'], paths: ['src/b.ts'] },
+    ]);
+    assert.deepEqual(overlapsOf([], branches), []);
+  });
+});
+
+describe('taskBranchesOf: the local and origin branches named for a task', () => {
+  it('reads both ref folders, keeping only a branch named for a task', () => {
+    const asked: (readonly string[])[] = [];
+    const git = (args: readonly string[]): string => {
+      asked.push(args);
+      return 'refs/heads/main\nrefs/heads/feat/t12-parser\nrefs/remotes/origin/HEAD\nrefs/remotes/origin/t5-fix\nrefs/remotes/origin/notes\n';
+    };
+    assert.deepEqual(taskBranchesOf(git), [
+      { task: 'T12', ref: 'refs/heads/feat/t12-parser' },
+      { task: 'T5', ref: 'refs/remotes/origin/t5-fix' },
+    ]);
+    assert.deepEqual(asked, [['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/origin/']]);
+  });
+});
+
+describe('sensitivePathsOf: the paths the review globs cover, read as the review gate reads them', () => {
+  it('matches a slash-less glob on a name at any depth, a slashed one from the root, case and dotfiles alike', () => {
+    const globs = ['*guard*', 'tools/**', '.github/**'];
+    const paths = ['src/Push-Guard.ts', 'src/push-guard/a.ts', 'lib/tools/x.ts', 'tools/x.ts', '.github/CODEOWNERS', 'src/a.ts'];
+    assert.deepEqual(sensitivePathsOf(paths, globs), ['src/Push-Guard.ts', 'tools/x.ts', '.github/CODEOWNERS'], 'a folder name needs a **/ glob');
+    assert.deepEqual(sensitivePathsOf(['tools/x.ts'], []), []);
+  });
+
+  it("covers every path of the owner's default list", () => {
+    const covered = ['tools/ship/ship.ts', '.github/workflows/ci.yml', '.githooks/pre-push', 'src/push-guard/check.ts', 'src/secret-guard.ts', 'src/hooks/stop.ts', 'plugins/teamrig/hooks/hooks.json', 'src/merge/run.ts', 'src/cli/merge.ts', 'src/permissions/grant.ts', 'src/cli/permission-set.ts', 'src/github/watcher.ts', 'src/cli/github-sync.ts', 'src/issues/migrate.ts', 'src/cli/issue.ts', 'package.json'];
+    assert.deepEqual(sensitivePathsOf([...covered, 'src/cli/list.ts', 'docs/commands.md', 'plugins/teamrig/package.json.md'], DEFAULT_SENSITIVE_PATHS), covered);
   });
 });
 
 describe('clearMerge', () => {
   const caller = { session: 'alpha', team: 'app', hostSession: CLAUDE_SESSION } as const;
   /** Reads with the tab bound to whichever session the caller names, unless `tabCallerOf` says otherwise. */
-  const readsOf = (standingOf: StandingOf, tabCallerOf: TabCallerOf = async (_team, _tab, session) => session): MergeReads => ({ tabCallerOf, standingOf });
+  const readsOf = (standingOf: StandingOf, tabCallerOf: TabCallerOf = async (_team, _tab, session) => session): MergeReads => ({ tabCallerOf, standingOf, changes: UNREAD });
   const fixed = (value: MergeStanding): MergeReads => readsOf(async () => value);
 
   it("reads the tab's session, then its standing for the team and branch task, then clears it", async () => {
@@ -153,11 +356,11 @@ describe('clearMerge', () => {
     const marks = join(TEAM_HOME, 'state', 'inbox-marks.jsonl');
     await kit.files.append(marks, `${JSON.stringify({ v: 1, area: 'alpha', line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: CLAUDE_SESSION, lastLineHash: null })}\n`);
     const env = { TEAMRIG_SESSION: ' alpha ', TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION };
-    assert.deepEqual(await clearMergeFrom(env, kit.runtime())('t1-cli', HEAD, HEAD), { kind: 'approved', by: 'lead' });
-    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime())('t1-cli', HEAD, HEAD)), /this Claude Code tab is not bound to bravo alone/);
-    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'stranger' }, kit.runtime())('t1-cli', HEAD, HEAD)), /not bound to stranger alone/);
-    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION }, kit.runtime())('t1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
-    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app' }, kit.runtime())('t1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
+    assert.deepEqual(await clearMergeFrom(env, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD), { kind: 'approved', by: 'lead' });
+    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /this Claude Code tab is not bound to bravo alone/);
+    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'stranger' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /not bound to stranger alone/);
+    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
+    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
   });
 
   it("refuses with the tab's or the register's refusal, and lets any other failure through", async () => {
@@ -196,8 +399,67 @@ describe('clearMerge', () => {
     const marks = join(TEAM_HOME, 'state', 'inbox-marks.jsonl');
     await kit.files.append(marks, `${JSON.stringify({ v: 1, area: 'alpha', line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: CLAUDE_SESSION, lastLineHash: null })}\n`);
     const env = { TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION };
-    assert.deepEqual(await clearTaskMergeFrom(env, kit.runtime())('T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
-    assert.match(reasonOf(await clearTaskMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime())('T1', HEAD, HEAD)), /not bound to bravo alone/);
+    assert.deepEqual(await clearTaskMergeFrom(env, kit.runtime(), UNREAD)('T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
+    assert.match(reasonOf(await clearTaskMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD)('T1', HEAD, HEAD)), /not bound to bravo alone/);
+  });
+
+  it("reads the paths of the head it clears for the GitHub answerer's low-risk merge (T3448)", async () => {
+    const value = answering(await standing(await waitingKit()));
+    const heads: string[] = [];
+    const reads: MergeReads = {
+      ...fixed(value),
+      changes: {
+        changedPaths: (head) => {
+          heads.push(head);
+          return ['src/a.ts'];
+        },
+        taskBranches: () => [],
+      },
+    };
+    assert.deepEqual(await clearMerge(caller, reads, 't1-cli', HEAD, HEAD), { kind: 'low-risk', by: 'alpha', paths: 1 });
+    assert.deepEqual(heads, [HEAD]);
+  });
+});
+
+describe('clearanceText: how the merge log names its clearance', () => {
+  it('names the lead, the approver, or the answerer and the paths it counted', () => {
+    assert.equal(clearanceText({ kind: 'self' }), "the caller's own, a root team's lead");
+    assert.equal(clearanceText({ kind: 'approved', by: 'lead' }), 'approved by lead');
+    assert.equal(clearanceText({ kind: 'low-risk', by: 'gh', paths: 4 }), 'low-risk, approved by gh, the GitHub answerer: 4 changed path(s), none sensitive');
+  });
+});
+
+describe('changedPathsOf: the paths a head changes over main, as the review gate lists them (T3448)', () => {
+  let repo: TempRepo;
+  const git = (args: readonly string[]): string => repo.git(...args);
+  const commitFiles = (subject: string, files: Readonly<Record<string, string>>): void => {
+    for (const [path, text] of Object.entries(files)) repo.write(path, text);
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', subject);
+  };
+
+  beforeEach(() => {
+    repo = new TempRepo('changed').init();
+    repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
+    commitFiles('base', { 'src/a.ts': 'a\n', 'src/old.ts': 'old\n', 'dist/a.js': 'a\n' });
+    repo.git('checkout', '-q', '-b', 't1-change');
+  });
+
+  afterEach(() => repo.remove());
+
+  it('lists an edit, an added file, both sides of a rename, and a name with a space, less the generated folders', () => {
+    commitFiles('core: change', { 'src/a.ts': 'a2\n', 'docs/a b.md': 'doc\n', 'dist/a.js': 'a2\n', 'dist/new.js': 'n\n' });
+    repo.git('mv', 'src/old.ts', 'src/renamed.ts');
+    repo.git('commit', '-q', '-m', 'core: rename');
+    assert.deepEqual([...changedPathsOf(git, 'HEAD', 'main', ['dist/'])].sort(), ['docs/a b.md', 'src/a.ts', 'src/old.ts', 'src/renamed.ts']);
+    assert.ok(changedPathsOf(git, 'HEAD', 'main', []).includes('dist/new.js'), 'listed when not generated');
+  });
+
+  it('reads from the merge base, so what main gains after the fork never counts', () => {
+    commitFiles('core: a', { 'src/a.ts': 'a2\n' });
+    repo.git('checkout', '-q', 'main');
+    commitFiles('main: tools', { 'tools/ship.ts': 'x\n' });
+    assert.deepEqual(changedPathsOf(git, 't1-change', 'main', ['dist/']), ['src/a.ts']);
   });
 });
 
