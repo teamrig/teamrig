@@ -77,6 +77,7 @@ export const CONFIG_LIMITS = {
   syncScopeLabels: { maxItems: 20, maxLength: 255 },
   syncMaxOpen: { min: 0, max: 5000 },
   syncMaxNewPerSync: { min: 0, max: 1000 },
+  githubDesignAssignees: { maxItems: 10 },
   budgetTargetPct: { min: 1, max: 100 },
   budgetReservePct: { min: 0, max: 50 },
   /** 0 turns the floor off; past 50 one team's floor would leave a second less than its own (T2215). */

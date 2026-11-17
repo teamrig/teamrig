@@ -796,6 +796,12 @@ export interface GithubConfig {
   /** The most issues and pull requests one session follows at once (`teamrig follow`); 0 turns following off. */
   readonly followMax: number;
   /**
+   * The logins a design issue (labelled `design`: talk until its maintainers mark it agreed) is assigned to: the status
+   * push assigns an open one with no assignee to all of them, and `issue migrate` each design issue it opens. Empty, the
+   * default: a design issue is assigned to no one. Kept in lowercase.
+   */
+  readonly designAssignees: readonly string[];
+  /**
    * The session that hears the pull request news no task owner takes: a pull request from a fork or by an author
    * outside the repository, or from a branch that names no task. Unset, the first holder of a service role holding
    * `issue close` (sync/watcher.ts), else the lead.

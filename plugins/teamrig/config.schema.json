@@ -1585,6 +1585,16 @@
           "maximum": 100,
           "default": 20
         },
+        "designAssignees": {
+          "description": "The GitHub logins a design issue (labelled design: talk until its maintainers mark it agreed) is assigned to. The status push assigns an open design issue that has no assignee to all of them, and teamrig issue migrate assigns each design issue it opens. Empty, the default: a design issue is assigned to no one. Matched without case.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$"
+          },
+          "maxItems": 10,
+          "default": []
+        },
         "watcher": {
           "description": "The session that hears the pull request news no task owner takes: a pull request from a fork or by an author outside the repository, or from a branch that names no task, and a mention no one else takes. Unset, the first holder of a service role holding issue close, the session that answers on GitHub, else the lead. Who watches is staffing, so the lead may set it with teamrig config set, to one of the sessions.",
           "$ref": "#/$defs/sessionName"

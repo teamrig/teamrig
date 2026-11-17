@@ -249,6 +249,8 @@ const isRepoName: Check<string> = (repo) =>
 /** A GitHub login: letters, digits or -, starting with a letter or digit, at most 39 characters. */
 const GITHUB_LOGIN = /^[a-z0-9][a-z0-9-]{0,38}$/i;
 
+const isGithubLogin: Check<string> = (login) => (GITHUB_LOGIN.test(login) ? undefined : 'expected a GitHub login: letters, digits or -, at most 39 characters');
+
 const BRANCH_NAME: Check<string> = (name) => (/^[^\s~^:?*[\\]+$/.test(name) ? undefined : 'not a valid branch name');
 
 /**
@@ -825,6 +827,7 @@ function parseGithub(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     similarThreshold: read.number(raw, 'similarThreshold', 'github', DEFAULT_GITHUB.similarThreshold, CONFIG_LIMITS.similarThreshold),
     activity: read.boolean(raw, 'activity', 'github', DEFAULT_GITHUB.activity),
     followMax: read.integer(raw, 'followMax', 'github', DEFAULT_GITHUB.followMax, CONFIG_LIMITS.githubFollowMax),
+    designAssignees: readDesignAssignees(read, raw),
     ...readGithubWatcher(read, raw, sessions),
     ...(issueAtAdd === undefined ? {} : { issueAtAdd }),
     stamp: read.boolean(raw, 'stamp', 'github', DEFAULT_GITHUB.stamp),
@@ -854,6 +857,21 @@ function parseSync(read: ConfigReader, raw: JsonRecord): SyncConfig {
     maxOpen: read.integer(raw, 'maxOpen', 'sync', DEFAULT_SYNC.maxOpen, CONFIG_LIMITS.syncMaxOpen),
     maxNewPerSync: read.integer(raw, 'maxNewPerSync', 'sync', DEFAULT_SYNC.maxNewPerSync, CONFIG_LIMITS.syncMaxNewPerSync),
   };
+}
+
+/** `github.designAssignees`: GitHub logins, kept in lowercase as GitHub matches them; one listed twice is reported and read once. */
+function readDesignAssignees(read: ConfigReader, raw: JsonRecord): readonly string[] {
+  const logins: string[] = [];
+  const listed = read.stringList(raw, 'designAssignees', 'github', DEFAULT_GITHUB.designAssignees, isGithubLogin, CONFIG_LIMITS.githubDesignAssignees.maxItems);
+  for (const login of listed) {
+    const key = login.toLowerCase();
+    if (logins.includes(key)) {
+      read.report('github.designAssignees', `${describe(login)} is listed twice`);
+    } else {
+      logins.push(key);
+    }
+  }
+  return logins;
 }
 
 /** `github.issueAtAdd`: unset, or one of `repos` in lowercase; any other repository is reported and reads as unset. */
