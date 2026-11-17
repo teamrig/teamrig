@@ -796,6 +796,13 @@ export interface GithubConfig {
   /** The most issues and pull requests one session follows at once (`teamrig follow`); 0 turns following off. */
   readonly followMax: number;
   /**
+   * The paths, as review globs read the way `pushGuard.reviewPaths` reads them, that make an outside pull request
+   * sensitive (T3448): one whose branch touches any of them, a generic review path or a `pushGuard.reviewPaths` entry
+   * needs the security reviewer's pass and the lead's approval; one touching none merges on the GitHub answerer's own
+   * approval of its head.
+   */
+  readonly sensitivePaths: readonly string[];
+  /**
    * The session that hears the pull request news no task owner takes: a pull request from a fork or by an author
    * outside the repository, or from a branch that names no task. Unset, the first holder of a service role holding
    * `issue close` (sync/watcher.ts), else the lead.

@@ -338,12 +338,53 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
 };
 
 /**
+ * `github.sensitivePaths` (owner order, T3448): what an outside pull request must leave alone to merge on the GitHub
+ * answerer's approval alone. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever guards, hooks,
+ * merges or grants permissions, the code that writes to GitHub, and the package file that chooses what installs (the
+ * lock files are generic review paths already). A glob with no slash names a file at any depth, so `*hook*` covers a
+ * `hook-*.ts` command beside the others, and `**\/hooks/**` a hooks folder anywhere.
+ */
+export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
+  'tools/**',
+  '.github/**',
+  '**/.githooks/**',
+  '**/*guard*/**',
+  '*guard*',
+  '**/hooks/**',
+  '*hook*',
+  '**/merge/**',
+  '*merge*',
+  '**/permissions/**',
+  '*permission*',
+  '**/github/**',
+  '*github*',
+  '**/issues/**',
+  'issue*',
+  'package.json',
+];
+
+/**
  * Off until a team lists a repository; two weeks of closed issues covers a sync missed over a holiday. Every 15
  * minutes a new issue reaches its session within a working block, at two gh calls per repository each time (one more
  * per further hundred open, or recently changed closed, issues). An outsider's issue waits for the `teamrig` label,
  * named after the tool so it does not clash with a repository's own triage labels.
  */
-export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS };
+export const DEFAULT_GITHUB: GithubConfig = {
+  repos: [],
+  owners: {},
+  areaOwners: {},
+  sessions: {},
+  closedDays: 14,
+  probeSeconds: 60,
+  statusPush: false,
+  acceptLabel: 'teamrig',
+  similarThreshold: 0.35,
+  activity: true,
+  followMax: 20,
+  stamp: true,
+  fields: DEFAULT_ISSUE_FIELDS,
+  sensitivePaths: DEFAULT_SENSITIVE_PATHS,
+};
 
 /**
  * The import a team gets with no setup (T5013): its people's issues and those labelled `teamrig`, at most 200 open

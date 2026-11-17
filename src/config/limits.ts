@@ -75,6 +75,8 @@ export const CONFIG_LIMITS = {
   githubProbeSeconds: { min: 0, max: 3600 },
   similarThreshold: { min: 0, max: 1 },
   githubFollowMax: { min: 0, max: 100 },
+  /** As long as a review gate glob (REVIEW_PATH_LIMITS), and as many as that gate's list holds. */
+  githubSensitivePaths: { maxItems: 128, maxLength: 200 },
   /** A label name up to the longest tracker cap (255), past the shortest (50): one list serves every tracker. */
   syncScopeLabels: { maxItems: 20, maxLength: 255 },
   syncMaxOpen: { min: 0, max: 5000 },
