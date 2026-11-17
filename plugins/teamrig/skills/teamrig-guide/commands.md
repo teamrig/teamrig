@@ -1414,7 +1414,7 @@ it lasts, and the first read of a repository only marks what is there. It goes t
 request's branch names (`t<id>-...`) when an author inside the repository pushed that branch to the repository
 itself, else to `[github.watcher]` (unset: the first holder of a service role holding `issue close`, else the
 lead). That answerer approves an outside pull request at its head alone, and teamrig's own ship merge takes that
-approval, unless its branch touches a path outside [github.lowRiskPaths] (docs and test code by default), a path of
+approval, unless its branch touches a path outside [github.lowRiskPaths] (docs text and pictures by default), a path of
 [github.sensitivePaths], a generic review path or a `pushGuard.reviewPaths` entry (the security reviewer approves
 that head first), or a file that another session's open
 branch, local or on origin, changes too (that session approves it; the merge finds the overlap itself). A head needing
