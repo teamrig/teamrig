@@ -288,7 +288,7 @@ export const DROP_ROLE_COMMENT: ConfigMigration = {
 };
 
 /** Why v10 reads no large-window threshold; the parser flags a hand-written one with the same words. */
-export const LARGE_WINDOW_DROPPED = 'refresh.contextTokens holds for every context window, as a tab that never reached the larger one never refreshed';
+export const LARGE_WINDOW_DROPPED = 'a tab that never reached the larger limit never refreshed, so refresh.contextTokens holds on every context window: raise that one instead';
 
 /** v9 to v10: one refresh threshold for every window (T4083), so `refresh.largeWindowContextTokens` goes. */
 export const DROP_LARGE_WINDOW: ConfigMigration = {
