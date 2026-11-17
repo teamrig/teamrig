@@ -22,6 +22,9 @@ const EVERY_PHASE: readonly RefreshState[] = [
   { phase: 'asked', task: null, at: AT, tokens: 262_000, handoverHash: null, midTurn: false },
   { phase: 'ready', task: null, at: AT, tokens: 262_000, noticed: true, transcript: null, claudePid: null },
   { phase: 'refreshed', task: null, at: AT },
+  { phase: 'asked', task: null, at: AT, tokens: 170_000, handoverHash: null, midTurn: true, compactHeld: true },
+  { phase: 'ready', task: null, at: AT, tokens: 170_000, noticed: true, transcript: null, claudePid: null, compactHeld: true },
+  { phase: 'boundary', task: 'T13', at: AT, finished: 1, ask: { task: null, at: AT, tokens: 170_000, handoverHash: null, compactHeld: true } },
 ];
 
 describe('refresh state files', () => {
@@ -64,6 +67,9 @@ describe('refresh state files', () => {
       '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"fixHash":7}',
       '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"fixHash":null}',
       '{"v":1,"phase":"boundary","task":"T1","at":"x","finished":1,"ask":{"task":null,"at":"x","tokens":1,"handoverHash":null,"fixHash":false}}',
+      '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"compactHeld":false}',
+      '{"v":1,"phase":"ready","task":"T1","at":"x","noticed":true,"compactHeld":1}',
+      '{"v":1,"phase":"boundary","task":"T1","at":"x","finished":1,"ask":{"task":null,"at":"x","tokens":1,"handoverHash":null,"compactHeld":"yes"}}',
       '[1]',
     ]) {
       assert.equal(parseRefreshState(text), undefined, text);
@@ -90,6 +96,13 @@ describe('refresh state files', () => {
     assert.equal(asked !== undefined && 'fixHash' in asked, false);
     const boundary = parseRefreshState('{"v":1,"phase":"boundary","task":"T2","at":"x","finished":1,"ask":{"task":"T1","at":"x","tokens":1,"handoverHash":null}}');
     assert.deepEqual(boundary, { phase: 'boundary', task: 'T2', at: 'x', finished: 1, ask: { task: 'T1', at: 'x', tokens: 1, handoverHash: null } });
+  });
+
+  it('reads an ask or a handover from before a compaction was held back as none held (T4119)', () => {
+    const asked = parseRefreshState('{"v":3,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"midTurn":true}');
+    assert.equal(asked !== undefined && 'compactHeld' in asked, false);
+    const ready = parseRefreshState('{"v":3,"phase":"ready","task":"T1","at":"x","noticed":true}');
+    assert.equal(ready !== undefined && 'compactHeld' in ready, false);
   });
 
   it('reads a boundary or a judged one from before the task count as its first task, or none counted', () => {

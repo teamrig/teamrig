@@ -38,6 +38,12 @@ export interface StandingAsk {
    * that leaves it as it is cannot loop the Stop hook.
    */
   readonly fixHash?: string;
+  /**
+   * Set when this ask came from an automatic compaction the refresh held back in its place (`decideCompact`, T4119),
+   * and kept on the ask's handover and on the asks made again after it until a fresh start: the compaction is held so
+   * once per tab, so a session whose restart never comes still compacts at the next one. Absent before.
+   */
+  readonly compactHeld?: true;
 }
 
 /**
@@ -66,7 +72,8 @@ export interface StandingAsk {
  * In `asked`, `ready` and `refreshed`, `task` is the task whose end asked for the refresh, null when another
  * turn end asked. In `asked` and `ready`, `tokens` is the context the refresh was asked at, null when unknown or
  * when the context was made small since (a compaction, a /clear): a session that goes on without its fresh
- * start is asked again only once its context grew well past it.
+ * start is asked again only once its context grew well past it. `compactHeld` (on `asked`, `ready` and a standing
+ * ask) marks that an automatic compaction was already held back for the refresh, as in `StandingAsk`.
  */
 export type RefreshState =
   | {
@@ -87,6 +94,8 @@ export type RefreshState =
       readonly midTurn: boolean;
       /** As in `StandingAsk`: the handover version the turn end asked to be fixed. */
       readonly fixHash?: string;
+      /** As in `StandingAsk`: an automatic compaction was held back for this refresh. */
+      readonly compactHeld?: true;
     }
   | {
       readonly phase: 'ready';
@@ -96,6 +105,8 @@ export type RefreshState =
       readonly noticed: boolean;
       readonly transcript: string | null;
       readonly claudePid: number | null;
+      /** As in `StandingAsk`: an automatic compaction was held back for this refresh. */
+      readonly compactHeld?: true;
     }
   | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null };
 
@@ -203,6 +214,15 @@ function fixHashOf(record: JsonRecord): { readonly fixHash?: string } | false {
   return typeof hash === 'string' ? { fixHash: hash } : false;
 }
 
+/** The `compactHeld` marker as fields to spread: none when absent (a file from before it, or nothing held), false when damaged. */
+function compactHeldOf(record: JsonRecord): { readonly compactHeld?: true } | false {
+  const held = record['compactHeld'];
+  if (held === undefined) {
+    return {};
+  }
+  return held === true ? { compactHeld: held } : false;
+}
+
 /** A boundary's standing ask: null for none, undefined when damaged. */
 function standingAskOf(value: unknown): StandingAsk | null | undefined {
   if (value === null) {
@@ -216,9 +236,10 @@ function standingAskOf(value: unknown): StandingAsk | null | undefined {
   const tokens = tokensOf(value);
   const handoverHash = hashOf(value);
   const fix = fixHashOf(value);
-  return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false
+  const held = compactHeldOf(value);
+  return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false || held === false
     ? undefined
-    : { task, at, tokens, handoverHash, ...fix };
+    : { task, at, tokens, handoverHash, ...fix, ...held };
 }
 
 /**
@@ -257,9 +278,10 @@ function phaseOf(record: JsonRecord, task: string | null, at: string, base: { re
       // A file from before the mod asked within a turn was always the Stop hook's.
       const midTurn = record['midTurn'] ?? false;
       const fix = fixHashOf(record);
-      return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false
+      const held = compactHeldOf(record);
+      return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false || held === false
         ? undefined
-        : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix };
+        : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix, ...held };
     }
     case 'ready': {
       const noticed = record['noticed'];
@@ -268,8 +290,9 @@ function phaseOf(record: JsonRecord, task: string | null, at: string, base: { re
       const claudePid = nullablePidOf(record['claudePid']);
       // A file from before the size was recorded has none.
       const tokens = record['tokens'] === undefined ? null : tokensOf(record);
-      return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined
-        ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid }
+      const held = compactHeldOf(record);
+      return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined && held !== false
+        ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid, ...held }
         : undefined;
     }
     case 'refreshed':
