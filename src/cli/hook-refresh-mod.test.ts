@@ -226,12 +226,49 @@ describe('runCli: hook refresh-mid', () => {
   });
 });
 
+/** The hold of an automatic compaction once for the refresh (T4119), at `size` ('170k'). */
+function heldOnce(size: string): string {
+  return `teamrig: compaction is held back once for a context refresh (now ${size}): the turn end asks for the handover and the fresh start follows it`;
+}
+
+/** A tab whose handover, asked at 130k within a turn, was written and announced, and whose restart never came. */
+async function announcedTab(): Promise<Tab> {
+  const tab = new Tab();
+  await tab.transcript('{}\n');
+  await tab.mid(130_000);
+  await tab.kit.files.write(HANDOVER, '## State\n\n## Next steps\n');
+  assert.deepEqual(answerOf(await tab.run('stop', { transcript_path: TRANSCRIPT, stop_hook_active: true })), {
+    systemMessage: 'teamrig: app-alpha wrote its handover; type /clear for a fresh start',
+  });
+  return tab;
+}
+
 describe('runCli: hook compact-check', () => {
+  it('holds the first compaction back once for the refresh with none pending, and the turn end asks for the handover (T4119)', async () => {
+    const tab = new Tab();
+    await tab.transcript('{}\n');
+    assert.deepEqual(await tab.compact(170_000, 200_000), { kind: 'skip', reason: heldOnce('170k') });
+    const held = (await tab.state()) ?? '';
+    assert.match(held, /"phase":"asked",.*"tokens":170000,.*"midTurn":true/);
+    assert.match(held, /"compactHeld":true/);
+    const stop = await tab.run('stop', { transcript_path: TRANSCRIPT, stop_hook_active: false });
+    assert.match(JSON.stringify(answerOf(stop)), /"decision":"block","reason":"teamrig: the refresh asked within this turn at 170k is still due/);
+    assert.deepEqual(await tab.compact(185_000, 200_000), GO, 'never held back twice: at the ceiling it goes');
+  });
+
+  it('holds it back once past the ceiling when an announced restart never came, and lets the next one go (T4117)', async () => {
+    const tab = await announcedTab();
+    assert.deepEqual(await tab.compact(190_000, 200_000), { kind: 'skip', reason: heldOnce('190k') });
+    assert.match((await tab.state()) ?? '', /"compactHeld":true/);
+    await tab.kit.files.write(HANDOVER, '## State\n\nnewer\n\n## Next steps\n');
+    assert.equal(((await tab.run('stop', { transcript_path: TRANSCRIPT, stop_hook_active: true })).stdout[0] ?? '').includes('wrote its handover'), true);
+    assert.match((await tab.state()) ?? '', /"phase":"ready",.*"noticed":true,.*"compactHeld":true/);
+    assert.deepEqual(await tab.compact(190_000, 200_000), GO, 'the restart still did not come');
+  });
+
   it('holds the compaction until the ceiling while the handover is asked for or written, and lets it go otherwise', async () => {
     const tab = new Tab();
     await tab.transcript('{}\n');
-    assert.deepEqual(await tab.compact(170_000, 200_000), GO, 'no refresh pending');
-
     await tab.mid(130_000);
     assert.deepEqual(await tab.compact(170_000, 200_000), {
       kind: 'skip',
@@ -267,11 +304,20 @@ function resultLine(bytes: number): string {
 }
 
 describe('runCli: hook pre-compact', () => {
+  it("holds Claude Code's first own compaction back once for the refresh, recording the ask, and never twice (T4119)", async () => {
+    const tab = new Tab();
+    await tab.transcript(replyLine(170_000));
+    assert.deepEqual(await tab.preCompact(), { decision: 'block', reason: heldOnce('170k') });
+    assert.match((await tab.state()) ?? '', /"compactHeld":true/);
+    assert.match(JSON.stringify(await tab.preCompact()), /"reason":"teamrig: the handover is asked for and/, 'the ask it recorded holds under the ceiling');
+    assert.equal(await tab.preCompact({ transcript_path: TRANSCRIPT, trigger: 'manual' }), undefined, 'a /compact the user typed');
+    await tab.transcript(replyLine(170_000) + resultLine(45_000));
+    assert.equal(await tab.preCompact(), undefined, 'at the ceiling, not held back again');
+  });
+
   it("holds Claude Code's own compaction under the ceiling while the handover is asked for or written, on the transcript's estimate", async () => {
     const tab = new Tab();
     await tab.transcript(replyLine(170_000));
-    assert.equal(await tab.preCompact(), undefined, 'no refresh pending');
-
     await tab.mid(130_000);
     assert.deepEqual(await tab.preCompact(), {
       decision: 'block',

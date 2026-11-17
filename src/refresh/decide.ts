@@ -105,6 +105,11 @@ export type MidTurnDecision =
 export interface CompactFacts {
   readonly tokens: number;
   readonly window: number | undefined;
+  /**
+   * The fingerprint of the handover file as it is now (`handoverHashOf`); null when there is none. A compaction held
+   * back for the refresh records it on its ask, so only a handover written since counts as this refresh's.
+   */
+  readonly handoverHash: string | null;
 }
 
 /**
@@ -114,7 +119,11 @@ export interface CompactFacts {
  */
 export const SMALLEST_MODEL_WINDOW = 200_000;
 
-export type CompactDecision = { readonly kind: 'go' } | { readonly kind: 'skip'; readonly reason: string };
+/**
+ * What a compaction does: `go`, or `skip` with the line that says why; `state`, when given, is recorded before the
+ * answer: the ask for the handover a compaction held back in favour of the refresh makes (`decideCompact`).
+ */
+export type CompactDecision = { readonly kind: 'go' } | { readonly kind: 'skip'; readonly reason: string; readonly state?: RefreshState };
 
 const NONE: StopDecision = { kind: 'none' };
 const MEASURE: StopDecision = { kind: 'measure' };
@@ -196,9 +205,18 @@ function finishedSoFar(state: RefreshState | undefined): number {
 export function standingAsk(state: RefreshState | undefined): StandingAsk | null {
   if (state?.phase === 'asked') {
     const { task, at, tokens, handoverHash } = state;
-    return { task, at, tokens, handoverHash, ...(state.fixHash === undefined ? {} : { fixHash: state.fixHash }) };
+    return { task, at, tokens, handoverHash, ...(state.fixHash === undefined ? {} : { fixHash: state.fixHash }), ...compactHeldOf(state) };
   }
   return state?.phase === 'boundary' ? state.ask : null;
+}
+
+/**
+ * The `compactHeld` marker `state` carries on to the ask made after it, as fields to spread: an automatic compaction is
+ * held back once per tab (`decideCompact`), so an ask made again before the fresh start keeps it; none when unset.
+ */
+function compactHeldOf(state: RefreshState | undefined): { readonly compactHeld?: true } {
+  const held = state?.phase === 'asked' || state?.phase === 'ready' ? state.compactHeld : state?.phase === 'boundary' ? state.ask?.compactHeld : undefined;
+  return held === true ? { compactHeld: held } : {};
 }
 
 /**
@@ -500,7 +518,7 @@ export function decideStop(state: RefreshState | undefined, context: StopContext
   const task = state?.phase === 'boundary' ? state.task : null;
   return {
     kind: 'block',
-    state: { phase: 'asked', task, at: context.now, tokens, handoverHash: facts.due.handoverHash, midTurn: false },
+    state: { phase: 'asked', task, at: context.now, tokens, handoverHash: facts.due.handoverHash, midTurn: false, ...compactHeldOf(state) },
     reason: handoverAsk({ kind: 'turnEnd', task }, cause, context, facts.due.running),
   };
 }
@@ -564,25 +582,57 @@ export function decideMidTurn(state: RefreshState | undefined, context: AskConte
     return { kind: 'measure' };
   }
   const task = state?.phase === 'boundary' ? state.task : null;
-  const asked: RefreshState = { phase: 'asked', task, at: context.now, tokens: facts.tokens, handoverHash: facts.due.handoverHash, midTurn: true };
+  const asked: RefreshState = { phase: 'asked', task, at: context.now, tokens: facts.tokens, handoverHash: facts.due.handoverHash, midTurn: true, ...compactHeldOf(state) };
   const reason = handoverAsk({ kind: 'midTurn' }, { kind: 'size', tokens: facts.tokens }, context, facts.due.running);
   return { kind: 'ask', state: asked, reason, nextAt: askAt(asked, settings) };
 }
 
 /**
- * A compaction Claude Code is about to run on its own (trigger `auto`) on the main conversation: skipped while the
- * session's handover is asked for or written, since the refresh's fresh start replaces it (the /clear once the turn
- * ended and the person at the tab let it go, or the user's), as long as Claude
- * Code's estimate of the context is under `compactCeilingTokens`. Past the ceiling it goes, so a session never runs
- * out of room: a prompt too long for the window, which compacts with the same trigger, is past it too. A ceiling
- * at or past the window (`SMALLEST_MODEL_WINDOW` when not told) would not leave that room, so it skips nothing.
+ * Whether an automatic compaction is held back once in favour of the refresh (T4119): never twice for one tab
+ * (`compactHeld`); for a handover written and announced whose restart did not come (the person typed on: T4117), at
+ * any size; and for a session with no refresh pending whose context was measured since its fresh start and grew past
+ * its growth floor, so a fresh session's own start is never taken for one. A refresh already asked for, or written and
+ * not yet announced, keeps the ceiling's hold instead: its turn end already brings the fresh start.
  */
-export function decideCompact(state: RefreshState | undefined, context: Pick<AskContext, 'settings' | 'command'>, facts: CompactFacts): CompactDecision {
+function holdsOnce(state: RefreshState | undefined, settings: RefreshSettings, tokens: number): boolean {
+  if (compactHeldOf(state).compactHeld === true) {
+    return false;
+  }
+  if (state?.phase === 'ready') {
+    return state.noticed;
+  }
+  return standingAsk(state) === null && !unmeasured(state) && tokens >= growthFloor(state, settings);
+}
+
+/**
+ * A compaction Claude Code is about to run on its own (trigger `auto`) on the main conversation. Held back once per tab
+ * in favour of the refresh (`holdsOnce`, T4119): the skip records an ask for the handover with `compactHeld`, so the
+ * turn's end asks for it (`pendingAsk`) and the fresh start follows; the conversation goes on uncompacted meanwhile. If
+ * that fresh start still does not come, the next compaction is not held back again, so a tab never dead-ends at the
+ * window's hard limit, where a held compaction fails the request. Past that, skipped while the session's handover is
+ * asked for or written, since the refresh's fresh start replaces it (the /clear once the turn ended and the person at
+ * the tab let it go, or the user's), as long as Claude Code's estimate of the context is under `compactCeilingTokens`.
+ * Past the ceiling it goes, so a session never runs out of room: a prompt too long for the window, which compacts with
+ * the same trigger, is past it too. A ceiling at or past the window (`SMALLEST_MODEL_WINDOW` when not told) would not
+ * leave that room, so it skips nothing. The feature off, or a ceiling of 0, holds back no compaction at all.
+ */
+export function decideCompact(state: RefreshState | undefined, context: Pick<AskContext, 'settings' | 'command' | 'now'>, facts: CompactFacts): CompactDecision {
   const { enabled, compactCeilingTokens: ceiling } = context.settings;
+  if (!enabled || ceiling === 0) {
+    return GO;
+  }
+  if (holdsOnce(state, context.settings, facts.tokens)) {
+    const task = state?.phase === 'boundary' ? state.task : null;
+    return {
+      kind: 'skip',
+      reason: `${context.command}: compaction is held back once for a context refresh (now ${thousands(facts.tokens)}): the turn end asks for the handover and the fresh start follows it`,
+      state: { phase: 'asked', task, at: context.now, tokens: facts.tokens, handoverHash: facts.handoverHash, midTurn: true, compactHeld: true },
+    };
+  }
   const written = state?.phase === 'ready';
   const pending = written || standingAsk(state) !== null;
   const window = facts.window ?? SMALLEST_MODEL_WINDOW;
-  if (!enabled || !pending || ceiling === 0 || ceiling >= window || facts.tokens >= ceiling) {
+  if (!pending || ceiling >= window || facts.tokens >= ceiling) {
     return GO;
   }
   const handover = written ? 'written' : 'asked for';
@@ -655,6 +705,7 @@ export function decideReady(
       noticed: false,
       transcript: null,
       claudePid: null,
+      ...(ask.compactHeld === true ? { compactHeld: ask.compactHeld } : {}),
     },
   };
 }

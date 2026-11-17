@@ -22,10 +22,16 @@ export type MidTurnAnswer =
   | { readonly kind: 'ask'; readonly text: string; readonly nextAt: number }
   | { readonly kind: 'wait'; readonly nextAt: number | null };
 
-const OFF: MidTurnAnswer = { kind: 'wait', nextAt: null };
-const GO: CompactDecision = { kind: 'go' };
+/**
+ * What `hook compact-check` answers the plugin's mod, one JSON line: `go`, or `skip` with the line that says why. The
+ * state a decision records (`CompactDecision.state`) is written here and never sent.
+ */
+export type CompactAnswer = { readonly kind: 'go' } | { readonly kind: 'skip'; readonly reason: string };
 
-function answer(runtime: CliRuntime, value: MidTurnAnswer | CompactDecision): ExitCode {
+const OFF: MidTurnAnswer = { kind: 'wait', nextAt: null };
+const GO: CompactAnswer = { kind: 'go' };
+
+function answer(runtime: CliRuntime, value: MidTurnAnswer | CompactAnswer): ExitCode {
   runtime.out.stdout(JSON.stringify(value));
   return EXIT.ok;
 }
@@ -132,10 +138,35 @@ export async function refreshMid(args: ParsedArgs, runtime: CliRuntime): Promise
 }
 
 /**
+ * One automatic compaction's answer (`decideCompact`), on the session's state and its handover as they are now. A
+ * compaction held back once for the refresh (T4119) records its ask for the handover before it is answered, so the
+ * turn's end asks for it and a second compaction is not held back again.
+ */
+async function compactAnswerOf(
+  runtime: CliRuntime,
+  scope: SessionScope,
+  facts: { readonly tokens: number; readonly window: number | undefined },
+): Promise<CompactAnswer> {
+  const store = new RefreshStore(runtime.files, scope.kit.paths);
+  const context = { settings: scope.config.refresh, command: KIT_NAME, now: new Date(runtime.clock.now()).toISOString() };
+  const handoverHash = handoverHashOf(await store.handover(scope.id));
+  const decision: CompactDecision = decideCompact(await store.state(scope.id), context, { ...facts, handoverHash });
+  if (decision.kind === 'go') {
+    return GO;
+  }
+  if (decision.state !== undefined) {
+    // Written before it is answered: a hold whose ask is not recorded would hold every compaction after it too.
+    await store.setState(scope.id, decision.state);
+  }
+  return { kind: 'skip', reason: decision.reason };
+}
+
+/**
  * Run by the plugin's mod before Claude Code compacts the conversation, at its threshold or for the summary it
- * computes ahead: `skip`, with the line that says why, while the session's handover is asked for or written and
- * its fresh start follows this turn, so the compaction waits until `refresh.compactCeilingTokens`
- * (`decideCompact`); else `go`, on any input it cannot read too. stdin: `{session_id, cwd, tokens, window}`.
+ * computes ahead: `skip`, with the line that says why, once per tab in favour of the refresh (T4119), and while the
+ * session's handover is asked for or written and its fresh start follows this turn, so the compaction waits until
+ * `refresh.compactCeilingTokens` (`decideCompact`, `compactAnswerOf`); else `go`, on any input it cannot read too.
+ * stdin: `{session_id, cwd, tokens, window}`.
  */
 export async function compactCheck(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -150,17 +181,17 @@ export async function compactCheck(args: ParsedArgs, runtime: CliRuntime): Promi
   if (tokens === undefined || window === undefined || scope === undefined) {
     return answer(runtime, GO);
   }
-  const store = new RefreshStore(runtime.files, scope.kit.paths);
-  return answer(runtime, decideCompact(await store.state(scope.id), { settings: scope.config.refresh, command: KIT_NAME }, { tokens, window }));
+  return answer(runtime, await compactAnswerOf(runtime, scope, { tokens, window }));
 }
 
 /**
  * Claude Code's classic PreCompact hook: `compactCheck`'s hold where the mod's never runs, on a host whose managed
  * mods seat one first that sends `session.compact` on past the user's mods (T2015). The same decision for a
  * compaction Claude Code runs on its own (trigger `auto`; a `/compact` the user typed goes), on the context
- * estimated from the transcript (`readContextEstimate`) and no window, which this hook is not told. A hold answers
- * `{decision: 'block', reason}`, a go prints nothing, both with exit 0: exit 2 blocks a compaction too, so this hook
- * never answers by a refusal. stdin: `{session_id, transcript_path, cwd, trigger}`.
+ * estimated from the transcript (`readContextEstimate`) and no window, which this hook is not told; a hold once for
+ * the refresh records its ask the same way (`compactAnswerOf`). A hold answers `{decision: 'block', reason}`, a go
+ * prints nothing, both with exit 0: exit 2 blocks a compaction too, so this hook never answers by a refusal. stdin:
+ * `{session_id, transcript_path, cwd, trigger}`.
  */
 export async function preCompact(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -176,8 +207,7 @@ export async function preCompact(args: ParsedArgs, runtime: CliRuntime): Promise
   // No readable transcript or no meter, no estimate: the compaction goes, since a refusal here would block it.
   const source = contextSourceIfTold(runtime);
   const tokens = source === undefined ? undefined : await readContextEstimate(source, runtime.files, transcript);
-  const state = await new RefreshStore(runtime.files, scope.kit.paths).state(scope.id);
-  const decision = tokens === undefined ? GO : decideCompact(state, { settings: scope.config.refresh, command: KIT_NAME }, { tokens, window: undefined });
+  const decision = tokens === undefined ? GO : await compactAnswerOf(runtime, scope, { tokens, window: undefined });
   if (decision.kind === 'skip') {
     writeReply(runtime, 'compact-start', { verdict: { kind: 'block', reason: decision.reason } });
   }

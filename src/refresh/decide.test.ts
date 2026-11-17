@@ -17,6 +17,8 @@ import {
   SMALLEST_MODEL_WINDOW,
   thousands,
   type AskContext,
+  type CompactDecision,
+  type CompactFacts,
   type DueFacts,
   type MidTurnFacts,
   type ReadyState,
@@ -547,51 +549,92 @@ describe('missingSections', () => {
 
 describe('decideCompact', () => {
   const window = 200_000;
+  const ASKED_HOLD = 'teamrig: the handover is asked for and the fresh start follows this turn, so compaction waits until 185k (now 170k)';
+
+  /** The facts at a compaction: its size, the window the mod was told, and no handover file yet unless given. */
+  function compactFacts(tokens: number, told: number | undefined = window, handoverHash: string | null = null): CompactFacts {
+    return { tokens, window: told, handoverHash };
+  }
+
+  /** The hold once for the refresh (T4119): the ask it records, with the marker that keeps it to one per tab. */
+  function heldOnce(tokens: number, task: string | null = null, handoverHash: string | null = null): CompactDecision {
+    return {
+      kind: 'skip',
+      reason: `teamrig: compaction is held back once for a context refresh (now ${thousands(tokens)}): the turn end asks for the handover and the fresh start follows it`,
+      state: { phase: 'asked', task, at: NOW, tokens, handoverHash, midTurn: true, compactHeld: true },
+    };
+  }
 
   it("skips Claude Code's own compaction under the ceiling while the handover is asked for or written", () => {
-    assert.deepEqual(decideCompact(ASKED, askContext(), { tokens: 170_000, window }), {
-      kind: 'skip',
-      reason: 'teamrig: the handover is asked for and the fresh start follows this turn, so compaction waits until 185k (now 170k)',
-    });
-    const written = decideCompact(READY, askContext(), { tokens: 184_999, window });
+    assert.deepEqual(decideCompact(ASKED, askContext(), compactFacts(170_000)), { kind: 'skip', reason: ASKED_HOLD });
+    const written = decideCompact(READY, askContext(), compactFacts(184_999));
     assert.equal(written.kind === 'skip' && written.reason.startsWith('teamrig: the handover is written and'), true);
   });
 
-  it('lets it go with no handover pending, so a session with no fresh start coming never runs out of room', () => {
+  it('holds it back once for the refresh with none pending, recording the ask the turn end makes (T4119)', () => {
     const refreshed: RefreshState = { phase: 'refreshed', task: null, at: BEFORE };
     const idle: RefreshState = { phase: 'idle', task: 'T12', at: BEFORE, tokens: 100_000, finished: 1 };
-    for (const state of [undefined, BOUNDARY, idle, refreshed]) {
-      assert.deepEqual(decideCompact(state, askContext(), { tokens: 170_000, window }), { kind: 'go' }, state?.phase);
+    for (const state of [undefined, idle, refreshed]) {
+      assert.deepEqual(decideCompact(state, askContext(), compactFacts(170_000)), heldOnce(170_000), state?.phase);
     }
+    assert.deepEqual(decideCompact(BOUNDARY, askContext(), compactFacts(170_000, window, 'h')), heldOnce(170_000, 'T12', 'h'), "a finished task is the ask's task");
+  });
+
+  it("never takes a fresh session's own start for a refresh: unmeasured, or under its growth floor, it goes", () => {
+    assert.deepEqual(decideCompact({ phase: 'refreshed', task: null, at: BEFORE, baseline: null }, askContext(), compactFacts(170_000)), { kind: 'go' });
+    const fresh: RefreshState = { phase: 'refreshed', task: null, at: BEFORE, baseline: 100_000 };
+    assert.deepEqual(decideCompact(fresh, askContext(), compactFacts(149_999)), { kind: 'go' }, 'under the growth floor');
+    assert.deepEqual(decideCompact(fresh, askContext(), compactFacts(150_000)), heldOnce(150_000), 'at it');
+  });
+
+  it('holds it back once past the ceiling for a handover announced whose restart never came (T4117)', () => {
+    const announced: RefreshState = { ...READY, tokens: 170_000, noticed: true };
+    assert.deepEqual(decideCompact(announced, askContext(), compactFacts(190_000, window, 'h')), heldOnce(190_000, null, 'h'));
+  });
+
+  it('never holds it back twice for one tab, so a session whose restart never comes still compacts', () => {
+    const announced: RefreshState = { ...READY, tokens: 170_000, noticed: true, compactHeld: true };
+    assert.deepEqual(decideCompact(announced, askContext(), compactFacts(190_000)), { kind: 'go' }, 'past the ceiling');
+    const held: RefreshState = { ...MID_TURN, compactHeld: true };
+    assert.deepEqual(decideCompact(held, askContext(), compactFacts(170_000)), { kind: 'skip', reason: ASKED_HOLD }, "under the ceiling, the ask's own hold");
+    assert.deepEqual(decideCompact(held, askContext(), compactFacts(185_000)), { kind: 'go' }, 'at the ceiling');
   });
 
   it('skips it while an ask a task end left standing is pending (T1666)', () => {
-    assert.deepEqual(decideCompact(boundaryOf(MID_TURN, 'T13', NOW), askContext(), { tokens: 170_000, window }), {
-      kind: 'skip',
-      reason: 'teamrig: the handover is asked for and the fresh start follows this turn, so compaction waits until 185k (now 170k)',
-    });
+    assert.deepEqual(decideCompact(boundaryOf(MID_TURN, 'T13', NOW), askContext(), compactFacts(170_000)), { kind: 'skip', reason: ASKED_HOLD });
   });
 
   it('lets it go at the ceiling, a prompt too long for the window too', () => {
-    assert.deepEqual(decideCompact(ASKED, askContext(), { tokens: 185_000, window }), { kind: 'go' });
-    assert.deepEqual(decideCompact(ASKED, askContext(), { tokens: 230_000, window }), { kind: 'go' });
+    assert.deepEqual(decideCompact(ASKED, askContext(), compactFacts(185_000)), { kind: 'go' });
+    assert.deepEqual(decideCompact(ASKED, askContext(), compactFacts(230_000)), { kind: 'go' });
   });
 
   it('lets it go with the stop off, the feature off, or a ceiling that leaves no room under the window', () => {
-    assert.deepEqual(decideCompact(ASKED, askContext({ ...SIZE_ONLY, compactCeilingTokens: 0 }), { tokens: 170_000, window }), { kind: 'go' });
-    assert.deepEqual(decideCompact(ASKED, askContext({ ...SIZE_ONLY, enabled: false }), { tokens: 170_000, window }), { kind: 'go' });
-    assert.deepEqual(decideCompact(ASKED, askContext({ ...SIZE_ONLY, compactCeilingTokens: 200_000 }), { tokens: 170_000, window }), { kind: 'go' });
+    for (const state of [ASKED, undefined]) {
+      assert.deepEqual(decideCompact(state, askContext({ ...SIZE_ONLY, compactCeilingTokens: 0 }), compactFacts(170_000)), { kind: 'go' });
+      assert.deepEqual(decideCompact(state, askContext({ ...SIZE_ONLY, enabled: false }), compactFacts(170_000)), { kind: 'go' });
+    }
+    assert.deepEqual(decideCompact(ASKED, askContext({ ...SIZE_ONLY, compactCeilingTokens: 200_000 }), compactFacts(170_000)), { kind: 'go' });
   });
 
   it('takes a window it is not told as the smallest model window, so only a ceiling under it holds', () => {
     assert.equal(SMALLEST_MODEL_WINDOW, 200_000);
-    assert.deepEqual(decideCompact(ASKED, askContext(), { tokens: 170_000, window: undefined }), {
-      kind: 'skip',
-      reason: 'teamrig: the handover is asked for and the fresh start follows this turn, so compaction waits until 185k (now 170k)',
-    });
+    assert.deepEqual(decideCompact(ASKED, askContext(), compactFacts(170_000, undefined)), { kind: 'skip', reason: ASKED_HOLD });
     const roomy = askContext({ ...SIZE_ONLY, compactCeilingTokens: 400_000 });
-    assert.equal(decideCompact(ASKED, roomy, { tokens: 300_000, window: 1_000_000 }).kind, 'skip', 'a told window holds up to its ceiling');
-    assert.deepEqual(decideCompact(ASKED, roomy, { tokens: 300_000, window: undefined }), { kind: 'go' }, 'the same window untold lets go');
+    assert.equal(decideCompact(ASKED, roomy, compactFacts(300_000, 1_000_000)).kind, 'skip', 'a told window holds up to its ceiling');
+    assert.deepEqual(decideCompact(ASKED, roomy, compactFacts(300_000, undefined)), { kind: 'go' }, 'the same window untold lets go');
+  });
+
+  it('keeps the marker on every ask and handover after the hold, until the fresh start', () => {
+    const held: RefreshState = { ...ASKED, compactHeld: true };
+    const again = decideMidTurn(held, askContext(), midTurnFacts(312_144));
+    assert.equal(again.kind === 'ask' && again.state.phase === 'asked' ? again.state.compactHeld : undefined, true, 'asked again within a turn');
+    const stop = decideStop({ ...held, midTurn: true }, stopContext(), facts({ tokens: 170_000 }));
+    assert.equal(stop.kind === 'block' && stop.state.phase === 'asked' ? stop.state.compactHeld : undefined, true, "the turn end's ask");
+    const boundary = boundaryOf(held, 'T13', NOW);
+    assert.equal(boundary.phase === 'boundary' ? boundary.ask?.compactHeld : undefined, true, 'a task end keeps the ask standing');
+    const ready = decideReady(held, '## State\n\n## Next steps\n', HANDOVER, NOW, CAP);
+    assert.equal(ready.kind === 'ready' && ready.state.phase === 'ready' ? ready.state.compactHeld : undefined, true, 'the handover written');
   });
 });
 
