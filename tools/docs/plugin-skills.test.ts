@@ -103,8 +103,9 @@ describe('the write-issue skill', () => {
     ]);
   });
 
-  it('keeps a design issue as talk: the design label, no status or assignee, its own sections, agreed by the maintainer, nothing sensitive', () => {
-    assert.ok(skill.includes('takes `design` and no status label or assignee'));
+  it('keeps a design issue as talk: the design label, no status, assigned only to the design assignees, its own sections, agreed by the maintainer, nothing sensitive', () => {
+    assert.ok(skill.includes('takes `design` and no status label: it is not work to take'));
+    assert.ok(skill.includes('`github.designAssignees`), else to no one'));
     for (const section of ['Question', 'Context', 'Options', 'Proposal', 'How it is agreed']) {
       assert.ok(skill.includes(`**${section}**`), section);
     }

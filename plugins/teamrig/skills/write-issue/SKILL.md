@@ -93,9 +93,9 @@ everyone, and the agent working for them, gives their side in comments, and no o
 maintainers mark it agreed. It replaces a discussion forum, so the talk stays beside the work it leads to.
 
 - **Label** it `design`, with no status label; assign it to the team's design assignees, if it names any (teamrig's
-  status push and `issue migrate` do so from `github.designAssignees`), else to no one.
-  teamrig makes the label where a repository lacks it
-  (`teamrig issue label <owner/name#n> --add design`), and its status push shows no status on a design issue.
+  status push and `issue migrate` do so from `github.designAssignees`), else to no one. teamrig makes the label
+  where a repository lacks it (`teamrig issue label <owner/name#n> --add design`), and its status push shows no
+  status on a design issue.
 - **Sections**, in place of section 3's: **Question** (what to decide, in one or two sentences), **Context** (what
   exists today, by path, and why it needs a decision now), **Options** (each with what it costs and what it gives
   up), **Proposal** (the opener's pick, if any), **Early steps** (what is cheap to do now and would cost far more
