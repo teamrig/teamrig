@@ -6707,7 +6707,12 @@ it; log <path>`, told once. One that died while its step ran also gets its step'
 record under its id at the time the death was seen, exit 1 (unless the ledger already has its end). From the
 cutoff on, `--detach` is REFUSED at once, as a plain step is. It is refused (exit 64) with `--pre-push`, whose push
 waits on the checks' result, and under a live host lock, where the parent step waits for it. `--detached-run` is set
-by `--detach` and the hand-over only.
+by `--detach` and the hand-over only. Before a detached run waits for its turn, it puts its command through the same
+Bash guards a session's typed `teamrig queue -- <command>` meets, bound to no session (a parked file names its parker,
+but the guards do not take its word for who asks), and is REFUSED on any refusal, with a `refusal` record in the
+ledger and `a teamrig guard refused its line: <the guard's reason>` as its end line. So a step a guard clears only for
+who runs it (a privileged command's review run, a lead's push to a protected branch) is refused from a detached run:
+run it in the foreground.
 
 Everything after `--` is the command, read as `teamrig test` reads it: one quoted word runs as a shell line, several
 run as one command with each word passed as is, and a word that is only `&&`, `||` or `;` is REFUSED (exit 64) before
@@ -8843,9 +8848,11 @@ each reason.
 ### teamrig hook pass-record-guard
 
 Before a Write, Edit, MultiEdit, NotebookEdit, Bash or PowerShell call, refuses one that would write a tree's pass
-record: a file tool naming a path in a `local-ci` folder, or a shell line naming `local-ci` as a word of its own. The
-Read and Grep tools stay open. See
-[Hooks and permissions](hooks.md#before-a-write-or-a-shell-command-the-pass-record-guard).
+record: a file tool naming a path in a `local-ci` folder, or a shell line naming `local-ci` as a word of its own. It
+also refuses a file tool's write of the delivery queue's own files (the parked and detached runs, the ledger, the host
+lock and its line, the pipeline freezes). The Read and Grep tools stay open. See
+[Hooks and permissions](hooks.md#before-a-write-or-a-shell-command-the-pass-record-guard) and
+[the delivery guard](hooks.md#before-a-file-write-the-delivery-guard).
 
 Flags: none.
 

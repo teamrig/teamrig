@@ -18,7 +18,7 @@ When the team's `hosts` does not list the host a hook line names (a team made af
 | `PreToolUse` on `Bash` and `PowerShell` | `hook db-write-guard` | Refuses a line that writes to a database by hand (a built-in SQL client, a database program or Node client module the team names, a data script the team names run with its apply flag), naming the counts or preview to show the owner first, unless `dbWriteGuard.writes` is `allow` ([the db-write guard](#before-a-shell-command-the-db-write-guard)) |
 | `PostToolUse` on `Bash`, `PowerShell`, `Read` and `Grep` | `hook secret-redact` | Replaces each secret a call's result holds before Claude and the transcript see it, and tells the session which kinds it held and the task it filed to rotate each ([the secret redactor](#after-a-tool-call-the-secret-redactor)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook exec-guard` | Refuses a privileged command's review run as another session or the owner, any `exec` call through a client that is no install of the plugin, or one changed after its build, every `owner note` or `owner next`, which act as the owner, a settings writer's `--yes` write, which changes a permission, every `hook` command, which takes its tab from its stdin, a bound tab's `start` or `inbox read` as another session, a line that changes `$CLAUDECODE`, a shell fed its commands from a pipe, a raw `gh` write on one of the team's repositories, and a raw read on one of their owners ([the exec guard](#before-a-shell-command-the-exec-guard)) |
-| `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
+| `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)), and a file tool's write of the delivery queue's own files ([the delivery guard](#before-a-file-write-the-delivery-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook install-guard` | Refuses a session's own write of teamrig's install in the kit home or a host's hook files, which every guard runs from ([the install guard](#before-a-write-or-a-shell-command-the-install-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
@@ -945,6 +945,23 @@ or route around it: the lead takes the change." For a hook file the writer is `t
 It has no setting and reads no team config, so a missing or broken config keeps it on. Like the pass-record guard it
 reads only the call: a script the session writes and starts still reaches the files, as sessions and the owner share
 one account.
+
+## Before a file write: the delivery guard
+
+The delivery queue runs and learns from its own files: the parked and detached runs under `<delivery dir>/detached/`,
+the ledger (`<delivery dir>/ledger.jsonl`), the host lock with its line and the files named after it, and the
+pipeline freezes beside it. Only the teamrig CLI writes them. The same hook, `hook pass-record-guard`, refuses a
+Write, Edit, MultiEdit or NotebookEdit call whose file is one of them, a relative path read from the call's folder and
+any spelling of the path (slashes, `.` and `..`, case). The reason: "teamrig delivery guard: this Write writes
+<path>, a file of the delivery queue. Only the teamrig CLI writes the queue's files (its parked and detached runs,
+the host lock and its line, the ledger, the pipeline freezes): the queue runs and learns from what they say. Use the
+commands that keep them (`teamrig queue`, `teamrig withdraw`, `teamrig pipeline`), and read a file with the Read
+tool. Do not retry this or route around it: a file that looks wrong goes to the lead." The hand-written `ledger.md`
+stays open, as do the Read and Grep tools. It reads only file tools' calls, so a shell call opens no team config.
+
+As the guard reads only the call, the queue checks again where it runs: before a parked step waits for its turn,
+`teamrig queue` puts its command through the same shell guards a typed line meets, bound to no session, and refuses
+the step on any refusal (see [teamrig queue](commands.md#teamrig-queue)).
 
 ## Before a write or a shell command: the service-role guard
 
