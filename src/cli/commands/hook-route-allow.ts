@@ -1,5 +1,4 @@
 import { toJsonlLine } from '../../core/jsonl.ts';
-import { passRecordGuardReply } from '../../hooks/pass-record-guard.ts';
 import { guardsPassed, preToolUseRouteOf, routeAllowOn, routeAllowRecord, routeAllowReply } from '../../hooks/route-allow.ts';
 import type { HookEvent, HookReply } from '../../ports/host/index.ts';
 import type { CommandTable } from '../../slash/plan.ts';
@@ -7,7 +6,7 @@ import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hookLogOf } from '../hook-logs.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { guardLoadOf, type GuardLoad } from './hook-guard-load.ts';
-import { dbWriteGuardReplyOf, execGuardReplyOf, installGuardReplyOf, packageGuardReplyOf, pushGuardReplyOf, secretGuardReplyOf, serviceRoleGuardReplyOf } from './hook-guard-outputs.ts';
+import { bashGuardAnswersOf } from './hook-guard-outputs.ts';
 import { envSession, readHookInput, writeReply } from './hook-input.ts';
 import { roleAllowReplyOf } from './hook-role-allow.ts';
 import { callRouteOf } from './hook-route-context.ts';
@@ -22,15 +21,7 @@ export interface RouteAllowDeps {
 
 /** True when every teamrig guard passed the call, with the same config load its own hook reads (Q7.1). */
 async function everyGuardPassed(runtime: CliRuntime, guard: GuardLoad, event: HookEvent): Promise<boolean> {
-  const answers = await Promise.all([
-    pushGuardReplyOf(runtime, guard, event),
-    packageGuardReplyOf(runtime, guard, event),
-    execGuardReplyOf(runtime, guard, event),
-    dbWriteGuardReplyOf(runtime, guard, event),
-    serviceRoleGuardReplyOf(runtime, guard, event),
-    installGuardReplyOf(runtime, event),
-  ]);
-  return guardsPassed([...answers, secretGuardReplyOf(runtime, guard, event), passRecordGuardReply(event)]);
+  return guardsPassed(await bashGuardAnswersOf(runtime, guard, event));
 }
 
 /**

@@ -12,6 +12,7 @@ import { githubReposOf } from '../../hooks/gh-write-refusals.ts';
 import { remoteReposOf } from '../../hooks/gh-writes.ts';
 import { installGuardReply, type GuardedPlace } from '../../hooks/install-guard.ts';
 import { packageGuardOf, packageGuardReply } from '../../hooks/package-guard.ts';
+import { passRecordGuardReply } from '../../hooks/pass-record-guard.ts';
 import { commitsOf, protectedBranchesOf, pushGuardReply, pushToProtectedOf, skipHooksOf, type PushClearance } from '../../hooks/push-guard.ts';
 import { secretGuardOf, secretGuardReply, secretPatternsOf } from '../../hooks/secret-guard.ts';
 import { serviceRoleGuardReply } from '../../hooks/service-role-guard.ts';
@@ -235,4 +236,21 @@ export function installGuardReplyOf(runtime: CliRuntime, event: HookEvent): Prom
     places: [install, ...hookFilePlacesOf(runtime)],
     canonical: (path) => runtime.worktrees.files.canonical(path),
   });
+}
+
+/**
+ * Every Bash guard's answer for one call, as plugins/teamrig/hooks/hooks.json runs them on PreToolUse Bash: push,
+ * package, exec, db-write, service-role, install, secret and pass-record. One list, so a check that must know they
+ * all passed (the route allow, a queued step's re-check) never misses a guard its hook runs.
+ */
+export async function bashGuardAnswersOf(runtime: CliRuntime, guard: GuardLoad, event: HookEvent): Promise<readonly (HookReply | undefined)[]> {
+  const answers = await Promise.all([
+    pushGuardReplyOf(runtime, guard, event),
+    packageGuardReplyOf(runtime, guard, event),
+    execGuardReplyOf(runtime, guard, event),
+    dbWriteGuardReplyOf(runtime, guard, event),
+    serviceRoleGuardReplyOf(runtime, guard, event),
+    installGuardReplyOf(runtime, event),
+  ]);
+  return [...answers, secretGuardReplyOf(runtime, guard, event), passRecordGuardReply(event)];
 }
