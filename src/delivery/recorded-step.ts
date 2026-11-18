@@ -187,12 +187,23 @@ export interface RefusalMark extends StepOwner {
  * mark's reason.
  */
 export async function recordRefusal(ports: RefusalRecordPorts, ledger: string, waits: WaitLog, mark: RefusalMark): Promise<string> {
+  return waits.last() === undefined ? mark.reason : await appendRefusal(ports, ledger, waits, mark);
+}
+
+/**
+ * Records a queued step that did not run whether or not it waited, as `recordRefusal` records one that did: a refusal
+ * that must leave a trace even at once, as a detached step a teamrig guard refuses before it waits (T4265). A step that
+ * never waited is recorded with no wait. Returns the reason to print, as recorded.
+ */
+export async function recordRefusalAlways(ports: RefusalRecordPorts, ledger: string, waits: WaitLog, mark: RefusalMark): Promise<string> {
+  return await appendRefusal(ports, ledger, waits, mark);
+}
+
+/** Appends a refusal record of `mark` with its waits so far (none when it never waited); returns the reason it records. */
+async function appendRefusal(ports: RefusalRecordPorts, ledger: string, waits: WaitLog, mark: RefusalMark): Promise<string> {
   const lastWait = waits.last();
-  if (lastWait === undefined) {
-    return mark.reason;
-  }
   const waited = waits.end();
-  const reason = MEMORY_CAUSES.has(lastWait.cause) ? await withHolders(mark.reason, ports.memory) : mark.reason;
+  const reason = lastWait !== undefined && MEMORY_CAUSES.has(lastWait.cause) ? await withHolders(mark.reason, ports.memory) : mark.reason;
   await appendRecord(ports.files, ledger, {
     type: 'refusal',
     id: ports.newId(),
@@ -205,7 +216,7 @@ export async function recordRefusal(ports: RefusalRecordPorts, ledger: string, w
     outcome: mark.outcome,
     reason,
     ...(Object.keys(waited.waits).length === 0 ? {} : { waits: waited.waits }),
-    lastWait,
+    ...(lastWait === undefined ? {} : { lastWait }),
     ...(waited.queueFreeMb === undefined ? {} : { queueFreeMb: waited.queueFreeMb }),
     endFreeMb: ports.memory.freeMb(),
   });

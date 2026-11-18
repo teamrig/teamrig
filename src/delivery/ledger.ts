@@ -123,6 +123,7 @@ export type RefusalOutcome = (typeof REFUSAL_OUTCOMES)[number];
 /**
  * A queued step that waited and then did not run, written once when its wait ends, so a refused step leaves a trace
  * beside the steps that ran: when it began to wait and ended, why it waited, and the host's free memory at both ends.
+ * A step a teamrig guard refused before it waited is recorded too, with no wait (T4265).
  */
 export interface RefusalRecord {
   readonly type: 'refusal';
@@ -145,8 +146,8 @@ export interface RefusalRecord {
   readonly reason: string;
   /** The ms of its wait by cause, each one that took time. */
   readonly waits?: WaitTotals;
-  /** The last reason it waited on. */
-  readonly lastWait: WaitTold;
+  /** The last reason it waited on; absent when it was refused before it waited. */
+  readonly lastWait?: WaitTold;
   /** The host's free memory when it began to wait, in MB. */
   readonly queueFreeMb?: number;
   /** The host's free memory when its wait ended, in MB. */
@@ -342,7 +343,9 @@ function toldField(record: JsonRecord, key: string): WaitTold | undefined {
 function refusalOf(record: JsonRecord): RefusalRecord | undefined {
   const [id, session, what, reason] = [stringField(record, 'id'), stringField(record, 'session'), stringField(record, 'what'), stringField(record, 'reason')];
   const [queuedAt, endedAt, outcome, lastWait] = [timeField(record, 'queuedAt'), timeField(record, 'endedAt'), record['outcome'], toldField(record, 'lastWait')];
-  if (id === undefined || session === undefined || what === undefined || reason === undefined || queuedAt === undefined || endedAt === undefined || !isRefusalOutcome(outcome) || lastWait === undefined) {
+  // A record with no last wait is a step refused before it waited; one with a last wait it cannot read is no refusal.
+  const badWait = record['lastWait'] !== undefined && lastWait === undefined;
+  if (id === undefined || session === undefined || what === undefined || reason === undefined || queuedAt === undefined || endedAt === undefined || !isRefusalOutcome(outcome) || badWait) {
     return undefined;
   }
   const [kit, waits, queueFreeMb, endFreeMb] = [stringField(record, 'kit'), waitsField(record), wholeField(record, 'queueFreeMb'), wholeField(record, 'endFreeMb')];
@@ -358,7 +361,7 @@ function refusalOf(record: JsonRecord): RefusalRecord | undefined {
     outcome,
     reason,
     ...(waits === undefined ? {} : { waits }),
-    lastWait,
+    ...(lastWait === undefined ? {} : { lastWait }),
     ...(queueFreeMb === undefined ? {} : { queueFreeMb }),
     ...(endFreeMb === undefined ? {} : { endFreeMb }),
   };

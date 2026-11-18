@@ -160,6 +160,11 @@ describe('parseLedger: refusals', () => {
     ];
     assert.deepEqual(parseLedger([...bad, refusal].map((record) => JSON.stringify(record)).join('\n')), [refusal]);
   });
+
+  it('reads a refusal with no last wait, a step refused before it waited (T4265)', () => {
+    const { lastWait, ...unwaited } = refusal;
+    assert.deepEqual([lastWait !== undefined, parseLedger(JSON.stringify({ ...unwaited, outcome: 'refused' }))], [true, [{ ...unwaited, outcome: 'refused' }]]);
+  });
 });
 
 describe('parseLedgerMd', () => {

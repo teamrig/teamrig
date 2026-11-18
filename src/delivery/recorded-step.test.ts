@@ -5,7 +5,7 @@ import { FakeClock } from '../testing/fake-clock.ts';
 import { BUSY_HOLDERS, BUSY_HOLDERS_TEXT, FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { FakeSteps } from '../testing/fake-steps.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { marksOfTaking, NOT_STARTED_EXIT, recordQueuedStep, recordRefusal, runRecorded, type RecordedStep, type StepRecordSetup } from './recorded-step.ts';
+import { marksOfTaking, NOT_STARTED_EXIT, recordQueuedStep, recordRefusal, recordRefusalAlways, runRecorded, type RecordedStep, type StepRecordSetup } from './recorded-step.ts';
 import type { WaitCause } from './wait-cause.ts';
 import { WaitLog } from './wait-log.ts';
 
@@ -240,6 +240,29 @@ describe('recordRefusal', () => {
     const { files, clock, memory, ports } = world(new FakeHostMemory().holds(BUSY_HOLDERS));
     assert.equal(await recordRefusal(ports, LEDGER, new WaitLog(clock, 9000), { session: 'po', kind: 'build', what: 'build', outcome: 'refused', reason: 'queue cutoff' }), 'queue cutoff');
     assert.deepEqual([files.get(LEDGER), memory.holderLooks], [undefined, 0]);
+  });
+});
+
+describe('recordRefusalAlways (T4265)', () => {
+  it('records a step refused before it waited, with no wait, and keeps its reason', async () => {
+    const { files, clock, memory, ports } = world(new FakeHostMemory(2500).holds(BUSY_HOLDERS));
+    const mark = { session: 'po', kind: 'build', what: 'push main', outcome: 'refused', reason: 'a teamrig guard refused its line' } as const;
+    assert.equal(await recordRefusalAlways(ports, LEDGER, new WaitLog(clock, 3100), mark), mark.reason);
+    assert.deepEqual(records(files), [
+      { type: 'refusal', id: 'step-1', session: 'po', what: 'push main', kind: 'build', kit: KIT_VERSION, queuedAt: '2030-01-08T10:00:00.000Z', endedAt: '2030-01-08T10:00:00.000Z', outcome: 'refused', reason: mark.reason, queueFreeMb: 3100, endFreeMb: 2500 },
+    ]);
+    assert.equal(memory.holderLooks, 0, 'a step that waited on no memory names no holders');
+  });
+
+  it('records a step that waited as recordRefusal does', async () => {
+    const [always, waited] = [world(new FakeHostMemory(2500)), world(new FakeHostMemory(2500))];
+    for (const [{ clock, ports }, record] of [[always, recordRefusalAlways], [waited, recordRefusal]] as const) {
+      const waits = new WaitLog(clock, 3100);
+      waits.tell({ cause: 'lock', text: 'the host lock: beta' });
+      clock.advance(30_000);
+      await record(ports, LEDGER, waits, { session: 'po', kind: 'build', what: 'build', outcome: 'timedOut', reason: 'host lock still held' });
+    }
+    assert.deepEqual(records(always.files), records(waited.files));
   });
 });
 
