@@ -7,6 +7,7 @@ import { KIT_INSTALL_ENTRIES, resolveKitHome } from '../../core/home.ts';
 import { checkClient, clientRootOf } from '../../exec/client-integrity.ts';
 import { ClientInstalls, ShellPathSearch } from '../../exec/client-launch.ts';
 import { dbWriteGuardOf, dbWriteGuardReply } from '../../hooks/db-write-guard.ts';
+import { deliveryWriteGuardReply, deliveryWritePlacesOf } from '../../hooks/delivery-write-guard.ts';
 import { execGuardReply, type TabIdentity } from '../../hooks/exec-guard.ts';
 import { githubReposOf } from '../../hooks/gh-write-refusals.ts';
 import { remoteReposOf } from '../../hooks/gh-writes.ts';
@@ -214,6 +215,19 @@ export function serviceRoleGuardReplyOf(runtime: CliRuntime, guard: GuardLoad, e
     readConfig: (path) => runtime.files.read(path),
     canonical: (path) => runtime.worktrees.files.canonical(path),
   });
+}
+
+/**
+ * The delivery write guard's reply (T4265): a refusal of a file tool writing one of the queue's own files; none when
+ * it lets the call go. Its places come from the team's delivery config, its defaults when the config did not load, so
+ * a broken config is no way around it; a team whose folders could not be opened has no places to guard.
+ */
+export function deliveryWriteGuardReplyOf(guard: GuardLoad | undefined, event: HookEvent): HookReply | undefined {
+  if (guard?.kit === undefined) {
+    return undefined;
+  }
+  const delivery = guard.load?.status === 'loaded' ? guard.load.config.delivery : { queue: {} };
+  return deliveryWriteGuardReply(event, deliveryWritePlacesOf(delivery, guard.kit.paths));
 }
 
 /**

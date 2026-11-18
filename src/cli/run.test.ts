@@ -13,7 +13,7 @@ import { quietWorld } from '../testing/quiet-world.ts';
 import { configChangedMeanwhile, hired } from '../testing/config-race.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import { ASK_REFUSED_NOTE } from '../hooks/permission.ts';
-import { APP, bash, CLAUDE_SESSION, CliHarness, CONFIG_PATH, contextOf, decisionOf, EVENTS_PATH, KIT, POINTER, reasonOf, SKILLS_DIR, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
+import { APP, bash, CLAUDE_SESSION, CliHarness, CONFIG_PATH, contextOf, decisionOf, EVENTS_PATH, KIT, POINTER, reasonOf, SKILLS_DIR, TEAM, TEAM_HOME, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { HOOKS_ONLY_HOST, hostTelling, NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import type { HostSource } from '../composition/host-ports.ts';
 import { codexUserHooks } from '../adapters/hosts/codex-cli/user-hooks.ts';
@@ -1004,6 +1004,16 @@ describe('runCli: hook pass-record-guard', () => {
     const kit = new CliHarness();
     assert.deepEqual(await kit.run(['hook', 'pass-record-guard'], { stdin: write(join(APP, 'notes.md')) }), { code: EXIT.ok, stdout: [], stderr: [] });
     assert.deepEqual(await kit.run(['hook', 'pass-record-guard'], { stdin: bash('git push origin topic') }), { code: EXIT.ok, stdout: [], stderr: [] });
+  });
+
+  it("refuses a file tool writing the team's delivery queue files, on a broken config too, and lets a shell line read them", async () => {
+    const parked = join(TEAM_HOME, 'state', 'deploys', 'detached', 'parked', 'a.json');
+    for (const kit of [new CliHarness(), new CliHarness('{ not json')]) {
+      assert.equal(decisionOf(await kit.run(['hook', 'pass-record-guard'], { stdin: write(parked) })), 'deny');
+    }
+    const kit = new CliHarness();
+    assert.deepEqual(await kit.run(['hook', 'pass-record-guard'], { stdin: write(join(TEAM_HOME, 'state', 'deploys', 'ledger.md')) }), { code: EXIT.ok, stdout: [], stderr: [] });
+    assert.deepEqual(await kit.run(['hook', 'pass-record-guard'], { stdin: bash(`tail ${parked}`) }), { code: EXIT.ok, stdout: [], stderr: [] });
   });
 
   it("prints nothing outside a team's projects or for input that is not a hook payload", async () => {

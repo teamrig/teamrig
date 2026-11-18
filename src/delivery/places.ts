@@ -58,6 +58,11 @@ export function detachedLogOf(config: Pick<DeliveryConfig, 'dir'>, paths: Pick<T
   return join(detachedDirOf(config, paths), `${id}.log`);
 }
 
+/** The host lock: `delivery.queue.lockPath`, a relative one in the team's folder; unset, the kit home's, one for the host. */
+export function hostLockOf(queue: Pick<DeliveryConfig['queue'], 'lockPath'>, paths: Pick<TeamPaths, 'home' | 'kitHome'>): string {
+  return queue.lockPath === undefined ? join(paths.kitHome, HOST_LOCK_FILE) : teamPlace(paths, queue.lockPath);
+}
+
 /**
  * Where the delivery files are: the ledgers, the deploy freezes and their lock, the pending merges, the review and
  * gate holds and the merges log in `delivery.dir` (default `<state>/deploys`); the host lock at
@@ -65,9 +70,8 @@ export function detachedLogOf(config: Pick<DeliveryConfig, 'dir'>, paths: Pick<T
  * it. A relative path is in the team's folder.
  */
 export function deliveryPlaces(config: DeliveryConfig, paths: TeamPaths): DeliveryPlaces {
-  const inTeam = (path: string): string => teamPlace(paths, path);
   const dir = deliveryDirOf(config, paths);
-  const hostLock = config.queue.lockPath === undefined ? join(paths.kitHome, HOST_LOCK_FILE) : inTeam(config.queue.lockPath);
+  const hostLock = hostLockOf(config.queue, paths);
   return {
     ledger: join(dir, LEDGER_FILE),
     ledgerMd: join(dir, LEDGER_MD_FILE),

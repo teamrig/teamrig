@@ -16,6 +16,7 @@ import { sentMessageOf } from '../../hooks/cold-send.ts';
 import { failedSendLine, failedSendOf } from '../../hooks/failed-send.ts';
 import { deliveredSendOf } from '../../hooks/route-reminder.ts';
 import { passRecordGuardReply } from '../../hooks/pass-record-guard.ts';
+import { writesAFile } from '../../hooks/delivery-write-guard.ts';
 import { JsonlHintLog } from '../../hooks/hint-log.ts';
 import { showsLiveTasks } from '../../hooks/live-tasks.ts';
 import { requirementsNoteOnce } from '../../hooks/requirements-note.ts';
@@ -74,6 +75,7 @@ import { promptSecretBlock } from './hook-prompt-secret.ts';
 import { guardLoadOf, hookTeam } from './hook-guard-load.ts';
 import {
   dbWriteGuardReplyOf,
+  deliveryWriteGuardReplyOf,
   execGuardReplyOf,
   installGuardReplyOf,
   packageGuardReplyOf,
@@ -169,14 +171,21 @@ export async function serviceRoleGuard(args: ParsedArgs, runtime: CliRuntime): P
   return EXIT.ok;
 }
 
-/** PreToolUse on Bash, PowerShell and the file-writing tools: refuses a session's own write of a tree's pass record. */
+/**
+ * PreToolUse on Bash, PowerShell and the file-writing tools: refuses a session's own write of a tree's pass record,
+ * and a file tool's write of the delivery queue's own files (T4265), files only teamrig's tools write. The delivery
+ * check rides this hook, already on the file tools, so an edit starts no extra hook process; only a file tool's call
+ * opens the team config.
+ */
 export async function passRecordGuard(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
   const { event } = await readHookInput(runtime);
   if (event === undefined || (await hookTeam(event.cwd, runtime)).kind === 'none') {
     return EXIT.ok;
   }
-  writeReply(runtime, 'tool-start', passRecordGuardReply(event));
+  const passRecord = passRecordGuardReply(event);
+  const reply = passRecord === undefined && writesAFile(event) ? deliveryWriteGuardReplyOf(await guardLoadOf(event.cwd, runtime), event) : passRecord;
+  writeReply(runtime, 'tool-start', reply);
   return EXIT.ok;
 }
 
