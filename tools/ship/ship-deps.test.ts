@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
@@ -113,6 +114,38 @@ describe('realShipDeps', () => {
     await assert.rejects(shipCommits(args, plan, deps), /^Error: REFUSED the plan's chunk "core: c" commits nothing/);
     assert.equal(repo.git('rev-parse', 'HEAD').trim(), start);
     assert.equal(repo.git('status', '--porcelain'), '');
+  });
+
+  it("rebases onto a main that moved and sets the plan's raise from main's version, in the repo's files", () => {
+    const manifest = (version: string): string => `{ "version": "${version}" }\n`;
+    const versionTs = (version: string): string => `export const KIT_VERSION = '${version}';\n`;
+    const MANIFEST = 'plugins/teamrig/.claude-plugin/plugin.json';
+    const VERSION_TS = 'src/core/version.ts';
+    const read = (path: string): string => readFileSync(join(repo.dir, path), 'utf8');
+    repo.write(MANIFEST, manifest('0.1.0'));
+    repo.write(VERSION_TS, versionTs('0.1.0'));
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', 'version');
+    // As in the spec above: the profile is read from origin's URL once, then origin moves to a bare repo here.
+    const deps = realShipDeps(repo.dir, null);
+    const origin = join(repo.outside, 'origin.git');
+    repo.git('init', '-q', '--bare', origin);
+    repo.git('config', 'core.hooksPath', join(repo.outside, 'no-hooks'));
+    repo.git('config', 'commit.gpgsign', 'false');
+    repo.git('remote', 'set-url', 'origin', origin);
+    repo.git('checkout', '-q', '-b', 'feat/change');
+    repo.write(MANIFEST, manifest('0.2.0'));
+    repo.write(VERSION_TS, versionTs('0.2.0'));
+    repo.git('commit', '-q', '-am', 'plugin: version 0.2.0');
+    repo.git('push', '-q', 'origin', 'HEAD:refs/heads/main');
+    repo.git('reset', '-q', '--hard', 'HEAD~1');
+    repo.write(MANIFEST, manifest('0.1.1'));
+    repo.write(VERSION_TS, versionTs('0.1.1'));
+
+    assert.equal(deps.sync().sets, '0.2.1');
+    // git's checkout may turn line ends to CRLF on Windows: the version is what the sync sets.
+    assert.equal(read(MANIFEST).trimEnd(), manifest('0.2.1').trimEnd());
+    assert.equal(read(VERSION_TS).trimEnd(), versionTs('0.2.1').trimEnd());
   });
 
   it("reads a head's work commits and its patch against origin's main", () => {
