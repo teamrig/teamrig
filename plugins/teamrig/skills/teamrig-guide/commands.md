@@ -6605,7 +6605,8 @@ memory (`endFreeMb`) and commit charge (`commitMb` of `commitLimitMb`) at the ki
 run leaves a `refusal` record instead: when it began to wait and ended, how (`outcome`: `timedOut`, `withdrawn`,
 `stopped` or `refused`), the line it printed (`reason`, which after a wait on host memory names the top three
 programs holding memory), its waits by cause, the last thing it waited on (`lastWait`), and the host's free memory at
-both ends (`queueFreeMb`, `endFreeMb`). Exit 0 when the command passed, 1 when it failed or was killed. REFUSED (exit 2) from
+both ends (`queueFreeMb`, `endFreeMb`); a detached step a teamrig guard refuses before it waits leaves one too, with
+no `lastWait`. Exit 0 when the command passed, 1 when it failed or was killed. REFUSED (exit 2) from
 `delivery.schedule.queueCutoffUtc` to midnight UTC, also when the wait for the lock ran past it, and when the lock
 (or, for a small step, the memory it needs) is still held after the wait. It is REFUSED too while a
 [pipeline freeze](#teamrig-pipeline-freeze) holds its `--kind`, looked at before `--detach` returns, before the lock

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CREDENTIAL_VARIABLES, dispatchedEnvOf, PARKED_VARIABLES, parkedEnvOf, withoutCredentials } from './child-env.ts';
+import { CREDENTIAL_VARIABLES, dispatchedEnvOf, PARKED_VARIABLES, parkedEnvOf, withoutCredentials, withoutSessionVariables } from './child-env.ts';
 
 const VALUE = 'not-a-real-credential';
 /** What a host port names: every variable it sets for a session, and those of them a parked step keeps. */
@@ -76,5 +76,13 @@ describe('dispatchedEnvOf (T4093)', () => {
   it("leaves the dispatcher's session variables out in any case, and those of a person's own step too: it parked none", () => {
     const dispatcher = { agent_run: '1', Agent_Socket: '/run/agent', PATH: '/dispatcher/bin' };
     assert.deepEqual(dispatchedEnvOf(dispatcher, { PATH: '/step/bin' }, ['AGENT_RUN', 'agent_socket']), { PATH: '/step/bin' });
+  });
+});
+
+describe('withoutSessionVariables (T4265)', () => {
+  it("leaves out teamrig's variables and the host session's in any case, keeping the rest", () => {
+    const session = Object.fromEntries(HOST_SESSION.map((name) => [name, VALUE]));
+    const env = { ...session, TEAMRIG_SESSION: 'alpha', teamrig_home: '/kit', agent_socket: VALUE, PATH: '/usr/bin', GH_TOKEN: VALUE };
+    assert.deepEqual(withoutSessionVariables(env, HOST_SESSION), { PATH: '/usr/bin', GH_TOKEN: VALUE });
   });
 });

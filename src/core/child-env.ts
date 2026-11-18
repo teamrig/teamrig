@@ -112,6 +112,16 @@ export function parkedEnvOf(env: Env, parkedSession: readonly string[]): Env {
 }
 
 /**
+ * `env` without teamrig's own variables and `hostSession`, the variables a host sets for a session (the host port's
+ * `childEnv.session`), names compared without case: nothing left in it names a session, so a check run with it binds
+ * to none (T4265).
+ */
+export function withoutSessionVariables(env: Env, hostSession: readonly string[]): Env {
+  const session = upperCased(hostSession);
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !isTeamrigVariable(name) && !session.has(name.toUpperCase())));
+}
+
+/**
  * The environment a parked step runs with: the dispatcher's, held in memory, with the step's parked variables over it.
  * The dispatcher's teamrig variables and `hostSession`, the variables a host sets for a session's own tools (the host
  * port's `childEnv.session`), are left out, so the step is never read as the session that started the dispatcher and

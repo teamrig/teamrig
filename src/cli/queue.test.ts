@@ -1244,6 +1244,33 @@ describe('teamrig queue --detached-run (T2227)', () => {
     assert.equal(kit.files.get(DETACHED_RECORD), undefined, 'a refused run ends its record too');
   });
 
+  for (const [label, words] of [
+    ['as words', ['git', 'push', '--force', 'origin', 'main']],
+    ['as one line its shell reads', ['git push --force origin main']],
+  ] as const) {
+    it(`refuses a parked line a session's Bash guard refuses, ${label}, before it waits, recording why and waking its session (T4265)`, async () => {
+      const { kit, steps } = harness();
+      const result = await kit.run(['queue', '--detached-run', DETACHED_ID, '--session', 'alpha', '--what', 'push main', '--', ...words], { steps });
+      const last = result.stdout.at(-1) ?? '';
+      assert.equal(result.code, EXIT.refused);
+      assert.match(last, /^REFUSED a teamrig guard refused its line: Force-pushing, mirroring or deleting a protected branch \(main, master\) is refused/);
+      assert.deepEqual([steps.ran, kit.files.get(LOCK)], [[], undefined], 'it neither ran nor took a share of the host');
+      const [record, ...more] = ledgerOf(kit);
+      assert.ok(isRecord(record));
+      assert.deepEqual([more, record['outcome'], record['what'], record['session'], record['reason']], [[], 'refused', 'push main', 'alpha', last.slice('REFUSED '.length)]);
+      assert.deepEqual(await alphaWakes(kit), [`alpha: queue ${DETACHED_ID} ended: push main: ${last}; log ${DETACHED_LOG}`]);
+    });
+  }
+
+  it("binds its guard check to no session, so the lead's push to main that a parked file names is refused (T4265)", async () => {
+    const { kit, steps } = harness({ ...TEAM, pushGuard: { pushToProtected: 'lead' } });
+    const argv = ['queue', '--detached-run', DETACHED_ID, '--session', 'lead', '--what', 'push main', '--', 'git', 'push', 'origin', 'main'];
+    const result = await kit.run(argv, { steps, env: { TEAMRIG_SESSION: 'lead' } });
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout.at(-1) ?? '', /^REFUSED a teamrig guard refused its line: .*this tab is not bound to a session of the team/);
+    assert.deepEqual(steps.ran, []);
+  });
+
   it('keeps its run record from its start, marked running with its ledger step once its step runs, and removes it before its end line (T2742, T2942)', async () => {
     const { kit, steps } = harness();
     const seen: unknown[] = [];

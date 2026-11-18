@@ -9,7 +9,7 @@ import { formatRunRecord, RUN_RECORD_FORMAT, runRecordPathOf, type DetachedRunRe
 import { deliveryPlaces, detachedDirOf, detachedLogOf } from '../../delivery/places.ts';
 import { passOf, PRE_PUSH_MAX_WAIT_MS, recordPass, type CheckedTree, type CleanTree } from '../../delivery/push-pass.ts';
 import { isStepKind, kindOfCommand, processRequest, STEP_KINDS, takesShipSlot, taskOfLabel, type LineRequest, type ProcessRequest, type StepKind } from '../../delivery/process-request.ts';
-import { recordRefusal, runRecorded, type RefusalMark, type StepOwner } from '../../delivery/recorded-step.ts';
+import { recordRefusal, recordRefusalAlways, runRecorded, type RefusalMark, type StepOwner } from '../../delivery/recorded-step.ts';
 import { treeFieldsOf, treeHeader, treeText, type RunTree } from '../../delivery/run-tree.ts';
 import { smallReserveOf } from '../../delivery/memory-gate.ts';
 import { stepNeedOf, type NeedAsk } from '../../delivery/step-need.ts';
@@ -22,6 +22,7 @@ import { errorMessage } from '../../core/guards.ts';
 import { parkedEnvOf, withoutCredentials } from '../../core/child-env.ts';
 import { PARKED_FORMAT } from '../../delivery/parked.ts';
 import { DISPATCH_SWITCH, dispatch, parkStep } from './queue-dispatch.ts';
+import { stepGuardRefusal } from './queue-step-guards.ts';
 import { ENV, type Env } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import { postLine } from '../../inbox/inbox.ts';
@@ -690,6 +691,11 @@ export async function queue(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     // Only the ticket carries the class for now: the ledger's start and refusal records keep the fields their readers take.
     const owner: StepOwner = { session, ...processRequest(line.kind, line.task, line.priority) };
     const waits = new WaitLog(runtime.clock, runtime.memory.freeMb());
+    // A parked step is a file anyone can write: its words meet the session's Bash guards again before it waits (T4265).
+    const guarded = detachedId === undefined ? undefined : await stepGuardRefusal(runtime, kit, words);
+    if (guarded !== undefined) {
+      throw new RefusedError(await recordRefusalAlways(runtime, places.ledger, waits, { ...owner, what, outcome: 'refused', reason: `a teamrig guard refused its line: ${guarded}` }));
+    }
     const need = await needOf(runtime, places.ledger, { session, what, kind: request.kind, small, ...(declaredMb === undefined ? {} : { declaredMb }) }, delivery.queue);
     const waiting = small ? 'waiting to share the host' : 'waiting for the host lock';
     const arrivedAt = firstArrival ?? runtime.clock.now();
