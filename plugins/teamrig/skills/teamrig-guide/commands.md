@@ -1805,6 +1805,20 @@ with or without candidates.
 
 Flags: none.
 
+Example:
+
+```sh
+teamrig issue similar acme/web#31
+```
+
+Output:
+
+```text
+SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.similarThreshold)
+0.71 acme/web#12 T388 Login fails after a password reset
+0.41 acme/web#27 T405 Reset email never arrives
+```
+
 ### teamrig issue intake
 
 Takes in a pull request from outside the team, named as `owner/name#number`, so each session that owns what it
@@ -1838,18 +1852,12 @@ Flags:
 Example:
 
 ```sh
-teamrig issue similar acme/web#31
-
 teamrig issue intake acme/web#7 --priority p2
 ```
 
 Output:
 
 ```text
-SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.similarThreshold)
-0.71 acme/web#12 T388 Login fails after a password reset
-0.41 acme/web#27 T405 Reset email never arrives
-
 ADDED T41 open, p2, owner guards, from lead | Best-fix and overlap review of outside PR acme/web#7 for guards
 ADDED T42 open, p2, owner docs, from lead | Best-fix and overlap review of outside PR acme/web#7 for docs
 ADDED T43 open, p2, owner security, from lead | Security review of outside PR acme/web#7
