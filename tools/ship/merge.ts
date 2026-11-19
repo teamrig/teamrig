@@ -7,7 +7,7 @@ import { ENV } from '../../src/core/home.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
-import { type ChangeReads, type ClearMerge, type ClearTaskMerge, approvedRebase, clearanceText, clearMergeFrom, clearTaskMergeFrom, repoChanges, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import { type ClearMerge, type ClearTaskMerge, approvedRebase, clearanceText, clearMergeFrom, clearTaskMergeFrom, originRepoChanges, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { type CatchUp, type CatchUpRequest, catchUp } from './catch-up.ts';
 import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
@@ -935,12 +935,7 @@ export function realMergeDeps(dir: string): MergeDeps {
   const git = (...gitArgs: string[]): string => runGit(gitArgs).trim();
   const kitReader = { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock };
   const profiles = readProfiles();
-  // Read the profile only when the GitHub answerer's clearance reads the repo.
-  const repo = (): ChangeReads => {
-    const { main, regenerated } = profileFor(profiles, slugOf(git('remote', 'get-url', 'origin')));
-    return repoChanges(runGit, main, regenerated);
-  };
-  const changes: ChangeReads = { changedPaths: (rev) => repo().changedPaths(rev), taskBranches: () => repo().taskBranches() };
+  const changes = originRepoChanges(runGit, profiles);
   return {
     git,
     profiles,

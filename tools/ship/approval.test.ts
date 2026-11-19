@@ -16,6 +16,7 @@ import {
   clearTaskMerge,
   clearTaskMergeFrom,
   mergeClearance,
+  originRepoChanges,
   overlapsOf,
   type ChangeReads,
   type MergeReads,
@@ -312,6 +313,35 @@ describe('taskBranchesOf: the local and origin branches named for a task', () =>
       { task: 'T5', ref: 'refs/remotes/origin/t5-fix' },
     ]);
     assert.deepEqual(asked, [['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/origin/']]);
+  });
+});
+
+describe("originRepoChanges: the clearance's repo reads, by the profile of the repo origin names", () => {
+  const fakeGit = (remote: string): { git: (args: readonly string[]) => string; asked: (readonly string[])[] } => {
+    const asked: (readonly string[])[] = [];
+    const answers: Readonly<Record<string, string>> = { remote: `${remote}\n`, 'for-each-ref': 'refs/heads/feat/t7-x\n', 'merge-base': 'base1\n', diff: 'src/a.ts\0' };
+    return { asked, git: (args) => { asked.push(args); return answers[args[0] ?? ''] ?? ''; } };
+  };
+
+  it('reads nothing until a read, then the remote once, and the profile main and regenerated folders after', () => {
+    const { git, asked } = fakeGit('https://github.com/GeneralA6/teamrig.git');
+    const profiles = readProfiles();
+    const { main, regenerated } = profileFor(profiles, 'GeneralA6/teamrig');
+    const reads = originRepoChanges(git, profiles);
+    assert.deepEqual(asked, []);
+
+    assert.deepEqual(reads.taskBranches(), [{ task: 'T7', ref: 'refs/heads/feat/t7-x' }]);
+    assert.deepEqual(reads.changedPaths('head1'), ['src/a.ts']);
+    assert.deepEqual(asked.filter((args) => args[0] === 'remote'), [['remote', 'get-url', 'origin']]);
+    assert.deepEqual(asked.find((args) => args[0] === 'merge-base'), ['merge-base', 'head1', `refs/remotes/origin/${main}`]);
+    const diff: readonly string[] = asked.find((args) => args[0] === 'diff') ?? [];
+    for (const folder of teamrigShipWritesOf(regenerated).generated) assert.ok(diff.some((arg) => arg.includes(folder)), `the diff leaves out ${folder}`);
+  });
+
+  it("refuses at the first read, not before, a repo repos.json lists no profile for", () => {
+    const { git } = fakeGit('https://github.com/someone/elsewhere.git');
+    const reads = originRepoChanges(git, readProfiles());
+    assert.throws(() => reads.taskBranches(), /no check list for someone\/elsewhere/);
   });
 });
 
