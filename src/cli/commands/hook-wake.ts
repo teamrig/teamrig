@@ -20,6 +20,7 @@ import { DayProbeStore } from '../../restore/day-probe-store.ts';
 import { LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath, loginRetryLine, type LoginRetryWhy } from '../../restore/login.ts';
 import { LoginStore } from '../../restore/login-store.ts';
 import { apiRetryLine, claimApiRetry } from '../../restore/api-error.ts';
+import { PromptMarks, promptMarksDir } from '../../restore/prompt-marks.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../../restore/registry.ts';
 import type { Task } from '../../register/fold.ts';
 import { unfinishedAfter, waitContext } from '../../register/waits.ts';
@@ -579,8 +580,12 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
   return wake(runtime, scope, { kind: 'wake', ids, text, toast: dayStartToast(verdict.moments, verdict.tasks, cost) });
 }
 
-/** Answers a wake, keeping its text first with the turn log on, so the prompt it submits is logged as teamrig's. */
+/**
+ * Answers a wake, marking its text first as teamrig's for the tab (#921), so the turn it starts is recorded as one
+ * teamrig started, and keeping it with the turn log on, so the prompt it submits is logged as teamrig's.
+ */
 async function wake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<ExitCode> {
+  await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome)).mark({ tab: scope.tab }, value.text, runtime.clock.now());
   if (scope.config.turnLog.enabled) {
     await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
   }
@@ -602,5 +607,6 @@ export async function wakeDropped(args: ParsedArgs, runtime: CliRuntime): Promis
   const reason = (request === undefined ? undefined : stringField(request.fields, 'reason')) ?? 'no reason given';
   await logWake(runtime.files, scope.kit.paths.wakeLog, { kind: 'dropped', at: runtime.clock.now(), session: scope.id, tab: scope.tab, reason });
   await new WakePrompts(runtime.files, scope.kit.paths.wake).forget(scope.id, scope.tab);
+  await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome)).forget({ tab: scope.tab });
   return EXIT.ok;
 }

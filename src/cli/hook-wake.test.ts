@@ -38,6 +38,7 @@ import { testPaths } from '../testing/host.ts';
 import { teamConfigOf, teamHomeOf, teamInboxOf } from '../testing/team-tree.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
+import { PromptMarks, promptMarksDir } from '../restore/prompt-marks.ts';
 
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
 const OTHER_TAB = '0123abcd-0000-4000-8000-0000000000b9';
@@ -156,7 +157,7 @@ describe('hook wake-check', () => {
     assert.deepEqual(answerOf(await check(kit)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'never twice for one task');
   });
 
-  it('keeps no wake prompt with turnLog off', async () => {
+  it("keeps no wake prompt with turnLog off, and marks it as teamrig's for its tab all the same (#921)", async () => {
     const kit = await teamWithAlphaTab({ ...TEAM, turnLog: { enabled: false } });
     await check(kit);
     await hand(kit, 'Fix the login', 'p1');
@@ -165,6 +166,7 @@ describe('hook wake-check', () => {
     const woke = answerOf(await check(kit));
     assert.ok(isRecord(woke) && woke['kind'] === 'wake', 'it woke');
     assert.equal(await keptPrompt(kit), undefined);
+    assert.equal(await new PromptMarks(kit.files, promptMarksDir(KIT)).read({ tab: ALPHA_TAB }), woke['text']);
   });
 
   it('never wakes for less urgent work by default, and wakes for p2 when wake.priority is 2, costed cold with no transcript', async () => {
@@ -1142,8 +1144,11 @@ describe('hook wake-dropped', () => {
     const kit = await teamWithAlphaTab();
     const prompts = new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake'));
     await prompts.remember('alpha', { tab: ALPHA_TAB, text: 'New work was handed to you.' });
+    const marks = new PromptMarks(kit.files, promptMarksDir(KIT));
+    await marks.mark({ tab: ALPHA_TAB }, 'New work was handed to you.', kit.clock.now());
     const dropped = await kit.run(['hook', 'wake-dropped'], { stdin: payload({ reason: 'blocked by a hook' }) });
     assert.equal(await keptPrompt(kit), undefined, 'a later typed prompt is never taken for it');
+    assert.equal(await marks.read({ tab: ALPHA_TAB }), undefined, 'nor recorded as teamrig\'s');
     assert.deepEqual(dropped, { code: 0, stdout: [], stderr: [] });
     await kit.run(['hook', 'wake-dropped'], { stdin: payload() });
     await kit.run(['hook', 'wake-dropped'], { stdin: payload({ reason: 'x' }, OTHER_TAB) });

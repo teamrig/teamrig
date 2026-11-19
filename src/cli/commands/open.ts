@@ -5,6 +5,7 @@ import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitC
 import { splitAddress } from '../../core/address.ts';
 import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
+import { errorMessage } from '../../core/guards.ts';
 import { samePath } from '../../core/paths.ts';
 import { HiringLog } from '../../hiring/log.ts';
 import { rehiredFrom, type RetireRecord } from '../../hiring/record.ts';
@@ -19,6 +20,7 @@ import { shellCommand } from '../../open/quote.ts';
 import { sessionCredentialFree, sessionEnv } from '../../open/session-env.ts';
 import type { RunOutcome } from '../../open/processes.ts';
 import { RefreshStore } from '../../refresh/store.ts';
+import { PromptMarks, promptMarksDir } from '../../restore/prompt-marks.ts';
 import { noRoomText } from '../../sessions/headroom.ts';
 import { closedOf, SessionLog, type CloseRecord } from '../../sessions/log.ts';
 import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals.ts';
@@ -411,6 +413,19 @@ export function effortFlag(value: string | undefined): EffortLevel | undefined {
   return value;
 }
 
+/**
+ * Marks the first prompt launch passes as teamrig's (#921), so the prompt hook records the turn it starts as one
+ * teamrig started, whichever prompt builder wrote it. A mark that cannot be written is said and the start goes on:
+ * the prompt then reads as the owner's, which only lets `meeting end` through as before.
+ */
+async function markFirstPrompt(runtime: CliRuntime, kit: Kit, key: { readonly team: string; readonly session: string }, prompt: string): Promise<void> {
+  try {
+    await new PromptMarks(runtime.files, promptMarksDir(kit.paths.kitHome)).mark(key, prompt, runtime.clock.now());
+  } catch (error) {
+    runtime.out.stderr(`WARN the first prompt was not marked as ${KIT_NAME}'s, so it reads as the owner's: ${errorMessage(error)}`);
+  }
+}
+
 /** Whether the automatic restart ended this session's Claude Code for launch to start again; takes its request if so. */
 async function restartTaken(store: RefreshStore, id: string): Promise<boolean> {
   const request = await store.restart(id);
@@ -537,6 +552,9 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     // The host spells its own flags: this start only says what the session is to be.
     const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
     const args = [...prefix, ...launcher.launchArgs(start)];
+    if (first !== undefined) {
+      await markFirstPrompt(runtime, kit, { team, session: id }, first);
+    }
     const startedAt = runtime.clock.now();
     const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
     if (!(await restartTaken(store, id))) {
