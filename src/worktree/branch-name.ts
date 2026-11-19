@@ -196,7 +196,7 @@ function patternMakes(pattern: string, branch: string): boolean {
   return places[branch.length] === 1;
 }
 
-/** A branch name with a retry suffix, `-2` to `-999`, and the name before it. */
+/** A branch name with a retry suffix, `-1` to `-999`, and the name before it. */
 const RETRY_SUFFIX = /^(.+)-[1-9]\d{0,2}$/;
 
 /** A team's branch patterns: `pattern`, then each branch type's own, each once. */
