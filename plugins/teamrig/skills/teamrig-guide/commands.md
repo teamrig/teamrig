@@ -1830,9 +1830,10 @@ listing its paths: is this the best fix, and does an open task of ours do the sa
 gets one task; the caller's own area is left to its reply. When it changes a guarded path (a review gate entry of
 class security, `[pushGuard.reviewPaths]`), or the read could not see every file (100 files or more, or a name left
 out as no plain path), the security reviewer (`[roles.securityReviewer]`, on this team or one above) gets a "Security
-review of outside PR" task too, in that reviewer's team, saying which. Last comes the caller's task, "Reply to outside PR <owner/name#number> once its reviews are in",
-planned after every review task, so the answer waits for each verdict; it lists the paths no area holds, for the
-caller to judge. Each task takes the priority, due date and goals given, as `teamrig add` does.
+review of outside PR" task too, in that reviewer's team, saying which. Last comes the caller's task, "Reply to
+outside PR <owner/name#number> once its reviews are in", planned after every review task, so the answer waits for
+each verdict; it lists the paths no area holds, for the caller to judge. Each task takes the priority, due date and
+goals given, as `teamrig add` does.
 
 It refuses, adding nothing, a caller not on the team, a target that is not `owner/name#number`, a repository not in
 `github.repos`, a missing `--priority`, and a pull request taken in already while its reply task is not dropped (drop
