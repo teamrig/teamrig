@@ -7,7 +7,10 @@ import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { samePath } from '../../core/paths.ts';
+import type { TimeZone } from '../../core/zone.ts';
 import { HiringLog } from '../../hiring/log.ts';
+import { meetingInTabOf, MeetingSchedule } from '../../meeting/schedule.ts';
+import { MEETING_LAPSE_MS, MeetingStore, phaseOf } from '../../meeting/state.ts';
 import { rehiredFrom, type RetireRecord } from '../../hiring/record.ts';
 import type { ResumeVerdict } from '../../hiring/rehire.ts';
 import { CLAUDE_SESSION_ID } from '../../inbox/marks.ts';
@@ -15,7 +18,7 @@ import { findProgram, type HostProgram } from '../../open/host-program.ts';
 import type { FocusOutcome } from '../../open/focus.ts';
 import { sessionStartOf } from '../../open/session-start.ts';
 import { openTab, type OpenOutcome } from '../../open/open-tab.ts';
-import { decodePrompt, defaultPrompt, encodePrompt, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../../open/prompt.ts';
+import { decodePrompt, defaultPrompt, encodePrompt, meetingOnNote, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../../open/prompt.ts';
 import { shellCommand } from '../../open/quote.ts';
 import { sessionCredentialFree, sessionEnv } from '../../open/session-env.ts';
 import type { RunOutcome } from '../../open/processes.ts';
@@ -236,8 +239,11 @@ export async function openSession(runtime: CliRuntime, kit: Kit, config: KitConf
   const resume = fresh ? undefined : await resumeOf(runtime, kit.paths, config, { id, project, from, reopen, asked, projectGiven: request.projectGiven === true });
   // Claude Code finds a session to resume only in the folder it ran in (T1408); a new one starts in the project.
   const folder = resume === undefined ? project : (closedIn?.folder ?? project);
-  const own = request.prompt ?? (handover === undefined ? firstPromptOf(team, id, from, resume, reopen) : refreshPrompt(team, id, handover));
-  const prompt = checkedPrompt(urgentFirstPrompt(request.urgent ?? [], own, teamZone(config, runtime), PROMPT_MAX));
+  const zone = teamZone(config, runtime);
+  const built = handover === undefined ? firstPromptOf(team, id, from, resume, reopen) : refreshPrompt(team, id, handover);
+  const meetingOn = request.prompt === undefined ? await meetingOnNoteOf(runtime, kit, roster, id, zone) : undefined;
+  const own = request.prompt ?? (meetingOn === undefined ? built : `${built} ${meetingOn}`);
+  const prompt = checkedPrompt(urgentFirstPrompt(request.urgent ?? [], own, zone, PROMPT_MAX));
   const what = `open ${name} (session ${id})`;
   // The lead opens whatever the room: it is the session that decides which others run. Its tab is held all the same.
   const admission = await admitTab(runtime, kit.paths, config, roster.ids, { session: id, anyRoom: id === roster.holderOf('lead') });
@@ -348,6 +354,23 @@ function startNoteOf(resume: string | undefined, reopen: ResumeVerdict | undefin
     return `, resuming Claude Code session ${resume}`;
   }
   return reopen?.kind === 'fresh' ? `, fresh (${reopen.detail})` : '';
+}
+
+/**
+ * The sentence teamrig's own first prompt ends with while a meeting with the owner is on in the session's tab (#921):
+ * a booked one it is met in, or the lead's daily one, until it lapses by itself. Undefined when none is on.
+ */
+async function meetingOnNoteOf(runtime: CliRuntime, kit: Kit, roster: Roster, id: string, zone: TimeZone): Promise<string | undefined> {
+  const now = runtime.clock.now();
+  const booked = meetingInTabOf((await new MeetingSchedule(runtime.files, kit.paths.meetings).read()).meetings, id, now);
+  if (booked !== undefined) {
+    return meetingOnNote(booked.id, zone.weekdayMinute(new Date(booked.changedAt + MEETING_LAPSE_MS)));
+  }
+  if (id !== roster.holderOf('lead')) {
+    return undefined;
+  }
+  const daily = phaseOf(await new MeetingStore(runtime.files, kit.paths.meeting).read(), now);
+  return daily.kind === 'open' ? meetingOnNote('the daily meeting', zone.weekdayMinute(new Date(Date.parse(daily.meeting.startedAt) + MEETING_LAPSE_MS))) : undefined;
 }
 
 /**

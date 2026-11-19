@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { identityOf } from '../host.ts';
 import { resetSummaryLine } from '../../budget/resets.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
@@ -13,6 +14,7 @@ import { agendaLines, agendaSince, askedDecisions } from '../../meeting/agenda.t
 import { answeredKeys, carriedKeys } from '../../meeting/carried.ts';
 import { mergeDigestLines, type MergeDigestInput, type MergeLogAt } from '../../meeting/merges.ts';
 import { decisionsByOwner, endNotice, type NoticeFacts } from '../../meeting/notices.ts';
+import { ownerInRefusal, ownerStillIn } from '../../meeting/owner-left.ts';
 import { MeetingSchedule } from '../../meeting/schedule.ts';
 import { SPOTLIGHT_LOG, spotlightHolderPath, spotlightLine, startSpotlight, type SpotlightPlace } from '../../meeting/spotlight.ts';
 import { MEETING_LAPSE_MS, MeetingStore, phaseOf, startingKindOf, stoppedAt, type Meeting, type MeetingPhase } from '../../meeting/state.ts';
@@ -328,12 +330,27 @@ async function withEventsSince(rolled: RolledTeam, since: number): Promise<Rolle
 }
 
 /**
+ * Refuses to end the open daily meeting while the owner is still in it (#921): the lead's turn was started by a prompt
+ * teamrig submitted and the owner prompted in the lead's tab under `meeting.ownerLeftMinutes` ago
+ * (src/meeting/owner-left.ts).
+ */
+async function refuseWhileOwnerIn(runtime: CliRuntime, mk: MeetingKit, meeting: Meeting): Promise<void> {
+  const tab = { team: mk.kit.paths.team, session: mk.lead, callerIsMet: true };
+  const minutes = await ownerStillIn(runtime.files, mk.kit.paths.kitHome, identityOf(runtime).sessionId, tab, mk.now, mk.config.meeting.ownerLeftMinutes);
+  if (minutes !== undefined) {
+    const endsAt = mk.zone.weekdayMinute(new Date(Date.parse(meeting.startedAt) + MEETING_LAPSE_MS));
+    throw new RefusedError(ownerInRefusal({ what: 'the daily meeting', where: 'this tab', minutes, endsAt, anyway: `${KIT_NAME} meeting end --owner-left` }));
+  }
+}
+
+/**
  * `meeting end`: closes the open meeting, or one that lapsed unended, and tells each session whose tasks the lead
  * updated during the meeting those updates (the decisions recorded) by one inbox line, in a team under the lead's
  * too (T1018); a session with none gets no line. Every card the agenda asked that got no answer (a Decided or a Later)
  * carries over (carried.ts): recorded on the meeting, the next agenda asks it first (T2775). `meeting end <id>` ends a
  * scheduled meeting instead (meetings.ts), and with no id, the meeting on in the caller's tab, the lead's daily one
- * first (T2985).
+ * first (T2985). While the owner is still in the open meeting, a turn teamrig started is refused, `--owner-left` ending
+ * it anyway (#921).
  */
 export async function meetingEnd(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   if (args.positionals.length > 0) {
@@ -352,6 +369,9 @@ export async function meetingEnd(args: ParsedArgs, runtime: CliRuntime): Promise
     throw new RefusedError(`no meeting is open; ${KIT_NAME} meeting start opens one`);
   }
   const { meeting } = phase;
+  if (phase.kind === 'open' && !args.switches.has('owner-left')) {
+    await refuseWhileOwnerIn(runtime, mk, meeting);
+  }
   const rollUp = await meetingRegisters(runtime, mk);
   const startedAt = Date.parse(meeting.startedAt);
   const own = await withEventsSince(rollUp.own, startedAt);

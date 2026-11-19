@@ -7,7 +7,7 @@ import type { JsonRecord } from '../core/guards.ts';
 import type { Rush } from '../budget/burst.ts';
 import { TimeZone } from '../core/zone.ts';
 import type { ScheduledMeeting } from '../meeting/schedule.ts';
-import { defaultPrompt, meetPrompt, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../open/prompt.ts';
+import { defaultPrompt, meetingOnNote, meetPrompt, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../open/prompt.ts';
 import { continuePrompt } from '../restore/plan.ts';
 import { PromptMarks, promptMarksDir } from '../restore/prompt-marks.ts';
 import { testTask } from '../testing/task.ts';
@@ -206,7 +206,7 @@ const BUILT: Readonly<Record<string, { readonly text: string; readonly via: Subm
   defaultPrompt: { text: defaultPrompt('app', 'alpha'), via: 'launch' },
   refreshPrompt: { text: refreshPrompt('app', 'alpha', '/kit/teams/app/handover/alpha.md'), via: 'launch' },
   rehirePrompt: { text: rehirePrompt('app', 'alpha', '/kit/teams/app/handover/alpha.md'), via: 'launch' },
-  reopenPrompt: { text: reopenPrompt('app', 'alpha'), via: 'launch' },
+  reopenPrompt: { text: `${reopenPrompt('app', 'alpha')} ${meetingOnNote('M1', 'Tue 01-08 14:00 UTC')}`, via: 'launch' },
   resumePrompt: { text: resumePrompt('app', 'alpha'), via: 'launch' },
   recoverPrompt: { text: recoverPrompt('app', 'alpha'), via: 'launch' },
   meetPrompt: { text: meetPrompt('app', 'alpha', 'the owner'), via: 'launch' },
