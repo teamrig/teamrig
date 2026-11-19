@@ -196,6 +196,9 @@ function patternMakes(pattern: string, branch: string): boolean {
   return places[branch.length] === 1;
 }
 
+/** A branch name with a retry suffix, `-2` to `-999`, and the name before it. */
+const RETRY_SUFFIX = /^(.+)-[1-9]\d{0,2}$/;
+
 /** A team's branch patterns: `pattern`, then each branch type's own, each once. */
 export function branchPatternsOf(branches: BranchesConfig): readonly string[] {
   return [...new Set([branches.pattern, ...Object.values(branches.typePatterns)])];
@@ -205,14 +208,17 @@ export function branchPatternsOf(branches: BranchesConfig): readonly string[] {
  * Why `branch` may not be made as a new branch, or undefined when it may (T1433): while `delivery.branches.enforce` is
  * on, its name must be one of the team's patterns makes, so a project never mixes branch styles. Only a new branch is
  * checked; branches already there keep their names, and every task-from-branch read stays owner.ts `branchTaskOf`,
- * whose rule is the one {@link branchPatternProblem} holds every pattern's `{id}` to.
+ * whose rule is the one {@link branchPatternProblem} holds every pattern's `{id}` to. A name a pattern makes plus a
+ * retry suffix (`-2`) passes too: a re-ship after a rebase goes out under a new name, and a pattern ending at `{id}` or
+ * `{issue}` has no `{slug}` to take the suffix in.
  */
 export function branchPatternRefusal(branch: string, branches: BranchesConfig): string | undefined {
   if (!branches.enforce) {
     return undefined;
   }
   const patterns = branchPatternsOf(branches);
-  if (patterns.some((pattern) => patternMakes(pattern, branch))) {
+  const retried = RETRY_SUFFIX.exec(branch)?.[1];
+  if (patterns.some((pattern) => patternMakes(pattern, branch) || (retried !== undefined && patternMakes(pattern, retried)))) {
     return undefined;
   }
   const sample = fill(branches.pattern, { type: branches.itemTypes.task, id: 't12', issue: '933', slug: 'parser', session: 'web' });
