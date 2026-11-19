@@ -482,7 +482,7 @@ How teamrig worktree add --task names a new branch, and so its worktree folder: 
 | `itemTypes` | [object](#deliverybranchesitemtypes) |  | Per item type, the branch type its branch takes; an item type left out keeps its default (task: feat, bug: fix). |
 | `classes` | map from string to string |  | Per work class (focus.classes), the branch type its tasks' branches take, in place of their item type's, such as chore for Improvements. |
 | `slugMax` | integer (8 to 100) | `40` | The slug, made from the task's title (lowercase words joined by -, task ids left out), is cut at a word to at most this many characters. |
-| `enforce` | boolean | `true` | teamrig worktree add refuses a new branch whose name matches neither pattern nor a typePatterns entry, naming them, so a project never mixes branch styles; false lets any branch name through. |
+| `enforce` | boolean | `true` | teamrig worktree add refuses a new branch whose name matches neither pattern nor a typePatterns entry, naming them, so a project never mixes branch styles; a git push of a task branch and a queued ship take such a name only when origin has the branch already. A retry suffix (-2) after a name a pattern makes passes too. false lets any branch name through. |
 
 ## `delivery.branches.itemTypes`
 

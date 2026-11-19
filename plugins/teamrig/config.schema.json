@@ -1104,7 +1104,7 @@
               "default": 40
             },
             "enforce": {
-              "description": "teamrig worktree add refuses a new branch whose name matches neither pattern nor a typePatterns entry, naming them, so a project never mixes branch styles; false lets any branch name through.",
+              "description": "teamrig worktree add refuses a new branch whose name matches neither pattern nor a typePatterns entry, naming them, so a project never mixes branch styles; a git push of a task branch and a queued ship take such a name only when origin has the branch already. A retry suffix (-2) after a name a pattern makes passes too. false lets any branch name through.",
               "type": "boolean",
               "default": true
             }
