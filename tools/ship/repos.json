@@ -1,6 +1,6 @@
 {
-  "GeneralA6/teamrig": {
-    "aliases": ["teamrig/teamrig"],
+  "teamrig/teamrig": {
+    "aliases": ["GeneralA6/teamrig"],
     "main": "main",
     "gate": "ci",
     "checks": [
@@ -28,8 +28,8 @@
     "pullSections": ["Reach", "Risks"],
     "release": { "head": "release-please--branches--main--components--teamrig", "changelog": "CHANGELOG.md" }
   },
-  "GeneralA6/teamrig-pane": {
-    "aliases": ["teamrig/teamrig-pane"],
+  "teamrig/teamrig-pane": {
+    "aliases": ["GeneralA6/teamrig-pane"],
     "main": "main",
     "gate": "ci",
     "checks": [

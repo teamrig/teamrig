@@ -215,7 +215,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("masks the shipped repos.json's release manifest, which a catch-up sets again, and needs it known to (T4298)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(
       shipWritesOf(regenerated, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_RELEASE_STAMPS).versionFiles.map((file) => file.path),
       [...TEAMRIG_VERSION_FILES, TEAMRIG_RELEASE_MANIFEST].map((file) => file.path),
@@ -224,7 +224,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("teamrigShipWritesOf, which the ship and the merge both read work by, knows the shipped repos.json's every path (T4298)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(teamrigShipWritesOf(regenerated), shipWritesOf(regenerated, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_RELEASE_STAMPS));
   });
 

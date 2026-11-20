@@ -47,7 +47,7 @@ describe('ship cli', () => {
     repo.init().write('a.txt', 'a\n');
     repo.git('add', '-A');
     repo.git('commit', '-q', '-m', 'a');
-    repo.git('remote', 'add', 'origin', 'https://github.com/GeneralA6/teamrig.git');
+    repo.git('remote', 'add', 'origin', 'https://github.com/teamrig/teamrig.git');
     const head = repo.git('rev-parse', 'HEAD').trim();
     const plan = repo.write('plan.json', JSON.stringify({ chunks: [{ files: ['a.txt'], subject: 'core: a', body: 'why a' }] }));
     const result = repo.run(CLI, [repo.dir, plan, 'refs/heads/no-such-base']);
