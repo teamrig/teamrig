@@ -492,7 +492,7 @@ once, where it stops coming back:
    No number, no change.
 2. Sort it: would a team building any other product hit it? If not (your domain, data or stack), it is your
    team's. If so, it is teamrig's: report it with its evidence as an
-   [issue on teamrig](https://github.com/GeneralA6/teamrig/issues) (a team that builds teamrig adds a task for
+   [issue on teamrig](https://github.com/teamrig/teamrig/issues) (a team that builds teamrig adds a task for
    the session that does), and make no local fix.
 3. Pick its form, the first that fits: a mechanism that catches it by itself (a check flag, a hook, a warning);
    else a skill, for a procedure (rule 13); else a rule line in the team's `rules.md`. A number in it is a
@@ -501,7 +501,7 @@ once, where it stops coming back:
    alone, tagged `stopgap T<id>` with the task that replaces it (rule 10); `teamrig check` flags it
    `STOPGAP-DONE` once that task is done.
 5. Confirm: once the fix is installed
-   ([updating the plugin](https://github.com/GeneralA6/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin)),
+   ([updating the plugin](https://github.com/teamrig/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin)),
    measure the same number the same way. If it did not fall, the lesson goes back to step 2 with the new numbers.
 
 The lead routes each lesson a session reports: it sorts it, sees that its task exists, and reads the confirming

@@ -77,7 +77,7 @@ describe('README.md', () => {
     const shipped = readCatalog(text).plugins;
     assert.ok(shipped.length > 0, `${MARKETPLACE} lists a plugin`);
     for (const plugin of shipped) assert.ok(lines.includes(`claude plugin install ${plugin.name}@${marketplace}`), plugin.name);
-    assert.ok(lines.includes('claude plugin marketplace add GeneralA6/teamrig-pane'), 'adds the teamrig-pane marketplace');
+    assert.ok(lines.includes('claude plugin marketplace add teamrig/teamrig-pane'), 'adds the teamrig-pane marketplace');
     assert.ok(lines.includes('claude plugin install teamrig-pane@teamrig-pane'), 'installs teamrig-pane');
   });
 
@@ -113,7 +113,7 @@ describe('README.md', () => {
   });
 
   it('links the task pane, teamrig-pane, and names its command', () => {
-    assert.ok(targets('link').includes('https://github.com/GeneralA6/teamrig-pane'));
+    assert.ok(targets('link').includes('https://github.com/teamrig/teamrig-pane'));
     assert.match(README, /\[teamrig-pane\]\([^)]+\) and run `\/teamrig-pane`/);
   });
 

@@ -1325,7 +1325,7 @@ comment on, rewrite and close them, and `teamrig issue links` links them as the 
 `teamrig issue similar` lists likely duplicates from the task list alone, `teamrig issue search` and
 `teamrig issue show` read the host's issues as they are now, and `teamrig issue open` opens one.
 Its old name, gh sync, is refused with this one (exit 64). Setup, tokens and every failure's fix:
-[GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md).
+[GitHub sync](https://github.com/teamrig/teamrig/blob/main/docs/github-sync.md).
 
 Access, per owner (the `acme` of `acme/web`): the token saved in the system's credential store as
 `teamrig-gh-<owner>` (lowercase), handed to `gh` as `GH_TOKEN` for that run only, never the `gh auth login` account;
@@ -1401,7 +1401,7 @@ On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by 
 owner while sessions work; a run by hand still works at any time.
 
 A run that writes also times each open issue's and pull request's wait for an answer of ours (the targets are in
-[GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md#answer-times)): at 75% of its target
+[GitHub sync](https://github.com/teamrig/teamrig/blob/main/docs/github-sync.md#answer-times)): at 75% of its target
 the session that answers it gets one unwoken inbox line from `github` (a `REMINDED` line), and past it `teamrig check`
 shows the lead GH-LATE. A preview times nothing.
 Pull requests: each run also reads every open pull request of each repository, and those changed since the last
