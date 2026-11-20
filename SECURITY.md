@@ -5,7 +5,7 @@
 Please report a vulnerability privately, never in a public issue, pull request or discussion:
 
 1. Open the repository's **Security** tab and choose **Report a vulnerability**
-   ([new private report](https://github.com/GeneralA6/teamrig/security/advisories/new)).
+   ([new private report](https://github.com/teamrig/teamrig/security/advisories/new)).
 2. Say what an attacker can do, the teamrig version (`teamrig --version`), the operating system, and the steps
    that show it. A proof of concept helps; keep it to what shows the flaw.
 
