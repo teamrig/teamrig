@@ -75,7 +75,7 @@ describe('parseMigrateRows', () => {
   });
 
   it('refuses a type other than bug or task, and a priority outside p1 to p3', () => {
-    assert.equal(refused(issueLine({ type: 'idea' })), 'line 1: T1: type is neither "bug" nor "task"');
+    assert.equal(refused(issueLine({ type: 'idea' })), 'line 1: T1: type is not one of bug, task, design');
     assert.equal(refused(issueLine({ priority: 'p4' })), 'line 1: T1: priority is not one of p1, p2, p3');
   });
 
@@ -126,6 +126,7 @@ describe('rowLabels', () => {
   it('labels a task an enhancement and a bug a bug, then the priority', () => {
     assert.deepEqual(rowLabels(issueRow()), ['enhancement', 'p2']);
     assert.deepEqual(rowLabels(issueRow({ type: 'bug', priority: 'p1' })), ['bug', 'p1']);
+    assert.deepEqual(rowLabels(issueRow({ type: 'design', priority: 'p3' })), ['design', 'p3']);
   });
 });
 
