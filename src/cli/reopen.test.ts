@@ -144,7 +144,7 @@ describe('opening a session teamrig closed', () => {
     assert.equal(resumedOf(gone.argv), undefined);
     assert.equal(projectOf(gone.argv), APP);
 
-    // --project wins over the folder it ran in: a session opened once in the wrong folder can move (GeneralA6/teamrig#819).
+    // --project wins over the folder it ran in: a session opened once in the wrong folder can move (teamrig/teamrig#819).
     const moved = await open(await inWorktree([APP, fix]), ['--project', APP]);
     assert.ok(ok(moved.result).stdout[0]?.endsWith(`, fresh (--project ${APP} is not ${fix}, the folder it ran in)`), moved.result.stdout[0]);
     assert.equal(resumedOf(moved.argv), undefined);

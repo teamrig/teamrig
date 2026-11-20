@@ -67,7 +67,7 @@ export async function blockStartOf(runtime: CliRuntime, kit: Kit, config: KitCon
   return { at: zone.weekdayMinute(new Date(now)), meetings, week, ...(resets === undefined ? {} : { resets }) };
 }
 
-/** The lead's resets line, or undefined when the grants cannot be read: the start note never throws (GeneralA6/teamrig#931). */
+/** The lead's resets line, or undefined when the grants cannot be read: the start note never throws (teamrig/teamrig#931). */
 function resetsLineOf(config: KitConfig, now: number, zone: TimeZone): string | undefined {
   try {
     return resetSummaryLine(config.budget.resets, now, zone, KIT_NAME);

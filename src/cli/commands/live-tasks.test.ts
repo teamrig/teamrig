@@ -6,7 +6,7 @@ import { openKit } from '../kit.ts';
 import { blockStartOf } from './live-tasks.ts';
 
 describe('blockStartOf', () => {
-  it("leaves out the lead's resets line when reading the grants throws, and still gives the start (GeneralA6/teamrig#931)", async () => {
+  it("leaves out the lead's resets line when reading the grants throws, and still gives the start (teamrig/teamrig#931)", async () => {
     const harness = new CliHarness();
     const runtime = harness.runtime();
     const kit = await openKit(runtime, 'app');

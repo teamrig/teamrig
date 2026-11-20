@@ -1332,7 +1332,7 @@ export class RegisterPolicy {
 
   /**
    * The spelling `focus.classes` gives `workClass` when it names one in another case, so `--class maintenance` is stored
-   * as `Maintenance` instead of costing a retry (GeneralA6/teamrig#845); else `workClass` as given, for checkFields to judge.
+   * as `Maintenance` instead of costing a retry (teamrig/teamrig#845); else `workClass` as given, for checkFields to judge.
    */
   private classSpelling(workClass: string | null): string | null {
     if (workClass === null || this.config.focus.classes.includes(workClass)) {

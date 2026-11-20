@@ -88,7 +88,7 @@ export const SECRET_TEXT_PATTERNS: readonly SecretPattern[] = [
     secretGroup: 1,
   },
   // After a colon, one of a few prose words followed by more words is a sentence going on ("api_key: to the vault"),
-  // not a value, so a register text in plain words is not refused (GeneralA6/teamrig#852); `=` is never prose. Any
+  // not a value, so a register text in plain words is not refused (teamrig/teamrig#852); `=` is never prose. Any
   // other word is a value, so a passphrase of plain words is caught. The words must go on in the same line: a word and
   // then a line break is a YAML or env value with the next key below it.
   {

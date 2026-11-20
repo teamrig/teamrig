@@ -83,7 +83,7 @@ class Gate {
 }
 
 describe('taskOfBranch', () => {
-  it('reads the task a branch is named after, after any folder part, as the worktree owner check does (GeneralA6/teamrig#1315)', () => {
+  it('reads the task a branch is named after, after any folder part, as the worktree owner check does (teamrig/teamrig#1315)', () => {
     assert.equal(taskOfBranch('t828-self-merge-gate'), 'T828');
     assert.equal(taskOfBranch('feature/t9-gate'), 'T9');
     assert.equal(taskOfBranch('feat/T12-x'), 'T12', 'an upper-case t, as delivery.branches may name it');
@@ -358,7 +358,7 @@ describe('reviewGateVerdict: what it refuses outright', () => {
     }
   });
 
-  it('holds fix-t12-thing as naming no task, and ties feat/t12-x and feat/T12-x to T12 (GeneralA6/teamrig#1315)', async () => {
+  it('holds fix-t12-thing as naming no task, and ties feat/t12-x and feat/T12-x to T12 (teamrig/teamrig#1315)', async () => {
     const gate = new Gate(['package-lock.json']);
     gate.tasks.set('T12', { owner: 'alpha', answer: null });
     assert.match((await gate.run({ branch: 'fix-t12-thing' })) ?? '', /^fix-t12-thing changes .* the branch names none: name it t<n>-… after your task$/);
