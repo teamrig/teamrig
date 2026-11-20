@@ -20,7 +20,7 @@ import { headingAnchors, type DocFile } from './doc-check.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const GUIDE = 'plugins/teamrig/skills/teamrig-guide';
-const BLOB = 'https://github.com/GeneralA6/teamrig/blob/main/';
+const BLOB = 'https://github.com/teamrig/teamrig/blob/main/';
 /** `teamrig help` and `teamrig version` are words `runCli` answers before the command table. */
 const HELP_COMMAND = 'help';
 const VERSION_COMMAND = 'version';
@@ -31,7 +31,7 @@ const FLAG_BULLET = /^- `--([a-z][a-z0-9-]*)/;
 const FENCE = /^\s*(`{3,})\s*([\w-]*)/;
 const INLINE_COMMAND = /`(teamrig [^`]+)`/g;
 const QUOTED = /"[^"]*"/g;
-const BLOB_LINK = /https:\/\/github\.com\/GeneralA6\/teamrig\/blob\/main\/([^)\s#]+)(?:#([^)\s]+))?/g;
+const BLOB_LINK = /https:\/\/github\.com\/teamrig\/teamrig\/blob\/main\/([^)\s#]+)(?:#([^)\s]+))?/g;
 const NO_EMOJI = /\p{Emoji_Presentation}|\u{FE0F}/u;
 
 function read(path: string): string {
