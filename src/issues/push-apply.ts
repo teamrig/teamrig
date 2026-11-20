@@ -84,7 +84,7 @@ async function sendChange(host: Labels & Assignees & IssueStore, change: IssueCh
     }
   }
   if (change.assign !== undefined) {
-    const assigned = await host.assign(change.target, [change.assign]);
+    const assigned = await host.assign(change.target, change.assign);
     if (assigned.kind === 'failed') {
       return assigned.reason;
     }

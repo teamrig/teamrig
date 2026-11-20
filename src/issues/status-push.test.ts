@@ -20,6 +20,7 @@ import {
   SESSION_PUSH,
   STATUS_LABELS,
   assigneeOf,
+  designAssigneesOf,
   pushAssignees,
   sessionLogins,
   VIEWER_UNREAD,
@@ -352,7 +353,7 @@ describe('planIssue (T3169)', () => {
     const who = pushAssignees(sessionLogins({ octocat: 'bravo' }), VIEWER_UNREAD);
     const verifying = holding('T1', 922, { owner: 'bravo', status: 'verifying' });
     const plan = planIssue(target, verifying, { state: 'open', labels: ['bug', 'status:open'], assignees: [] }, who);
-    assert.deepEqual(plan, { kind: 'change', change: { target, task: 'T1', status: 'verifying', add: ['status:in review'], remove: ['status:open'], close: undefined, assign: 'octocat' }, wantsViewer: false });
+    assert.deepEqual(plan, { kind: 'change', change: { target, task: 'T1', status: 'verifying', add: ['status:in review'], remove: ['status:open'], close: undefined, assign: ['octocat'] }, wantsViewer: false });
     assert.deepEqual(planPush(REPO, [testHostIssue(922, { labels: ['bug', 'status:open'] })], [verifying], undefined, who).changes, plan.kind === 'change' ? [plan.change] : []);
     const done = planIssue(target, holding('T1', 922, { status: 'done' }), { state: 'open', labels: ['status:in review'], assignees: [] });
     assert.deepEqual(done, { kind: 'change', change: { target, task: 'T1', status: 'done', add: [], remove: ['status:in review'], close: 'completed' }, wantsViewer: false });
@@ -364,7 +365,7 @@ describe('planIssue (T3169)', () => {
     const before = planIssue(target, unmapped, issue, pushAssignees(sessionLogins({}), VIEWER_UNREAD));
     assert.ok(before.kind === 'change' && before.wantsViewer && before.change.assign === undefined);
     const after = planIssue(target, unmapped, issue, pushAssignees(sessionLogins({}), viewerRead('sync-bot')));
-    assert.ok(after.kind === 'change' && !after.wantsViewer && after.change.assign === 'sync-bot');
+    assert.ok(after.kind === 'change' && !after.wantsViewer && after.change.assign?.join() === 'sync-bot');
   });
 
   it('leaves an issue showing its status unchanged, and a closed one whose task is active closed', () => {
@@ -450,8 +451,8 @@ describe('the assignee (T2999)', () => {
     assert.deepEqual(
       plan.changes.map((change) => [change.task, change.add, change.assign, changeWrites(change)]),
       [
-        ['T1', ['status:in progress'], 'octocat', 2],
-        ['T2', [], 'sync-bot', 1],
+        ['T1', ['status:in progress'], ['octocat'], 2],
+        ['T2', [], ['sync-bot'], 1],
         ['T3', ['status:claimed'], undefined, 1],
       ],
     );
@@ -492,6 +493,25 @@ describe('the assignee (T2999)', () => {
     const plan = planPush(REPO, issues, tasks, undefined, who);
     assert.equal(plan.unchanged, 1);
     assert.deepEqual(plan.changes.map(changeLine), ['LABEL acme/web#7 T1 open: take off status:open']);
+  });
+
+  it('assigns an open design issue no one is assigned to every design assignee, in one write, and keeps one a person assigned (#1491)', () => {
+    const issues = [testHostIssue(7, { labels: ['design', 'status:open'] }), testHostIssue(8, { labels: ['design'], assignees: ['someone'] }), testHostIssue(9), testHostIssue(10, { labels: ['design'] })];
+    const tasks = [holding('T1', 7, { owner: 'bravo' }), holding('T2', 8, { owner: 'bravo' }), holding('T3', 9, { owner: 'bravo', status: 'done' }), holding('T4', 10, { owner: 'alpha', status: 'in-progress' })];
+    const plan = planPush(REPO, issues, tasks, { writesPerRun: 50, closes: true }, { ...who, design: ['monalisa', 'hubot'] });
+    assert.deepEqual(plan.changes.map(changeLine), ['LABEL acme/web#7 T1 open: take off status:open, assign monalisa, hubot', 'CLOSE acme/web#9 T3 done: close as completed', 'ASSIGN acme/web#10 T4 in-progress: assign monalisa, hubot']);
+    assert.deepEqual(plan.changes.map(changeWrites), [2, 1, 1]);
+    assert.equal(plan.wantsViewer, false);
+  });
+
+  it('leaves a refused design assignee out, as the host spells the rest, and never stands the viewer in for it (#1491)', () => {
+    const read = { ...who, design: ['monalisa', 'Outsider', 'hubot'], refused: new Set(['outsider']), spelled: new Map([['monalisa', 'MonaLisa']]) };
+    assert.deepEqual(designAssigneesOf(read), ['MonaLisa', 'hubot']);
+    assert.equal(designAssigneesOf({ ...read, refused: new Set(['monalisa', 'outsider', 'hubot']) }), undefined);
+    assert.equal(designAssigneesOf(who), undefined);
+    const plan = planPush(REPO, [testHostIssue(7, { labels: ['design'] })], [holding('T1', 7, { owner: 'bravo', status: 'in-progress' })], undefined, { ...read, refused: new Set(['monalisa', 'outsider', 'hubot']) });
+    assert.equal(plan.unchanged, 1);
+    assert.deepEqual(plan.changes, []);
   });
 
   it('takes every status label off a goal, and still assigns it once scheduled (T3056)', () => {

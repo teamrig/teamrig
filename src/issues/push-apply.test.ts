@@ -27,7 +27,7 @@ async function push(host: FakeIssueHost, pushed: PushPlan): Promise<{ outcome: A
 describe('applyPush', () => {
   it('sends the assign as planned after the labels, reading no login (T4581)', async () => {
     const host = new FakeIssueHost().hasLabels('status:in progress').readsAssignee({ kind: 'failed', reason: 'read a login' });
-    const { outcome, lines } = await push(host, plan(change(7, { add: ['status:in progress'], assign: 'octocat' }), change(8, { assign: 'octocat' })));
+    const { outcome, lines } = await push(host, plan(change(7, { add: ['status:in progress'], assign: ['octocat'] }), change(8, { assign: ['octocat'] })));
     assert.deepEqual(outcome, { sent: 2, writes: 3, held: 0, failed: undefined });
     assert.deepEqual(lines, ['SET acme/web#7 T7 in-progress: add status:in progress, assign octocat', 'SET acme/web#8 T8 in-progress: assign octocat']);
     assert.deepEqual(
@@ -36,8 +36,16 @@ describe('applyPush', () => {
     );
   });
 
+  it('assigns every login of a change in one write (#1491)', async () => {
+    const host = new FakeIssueHost();
+    const { outcome, lines } = await push(host, plan(change(7, { assign: ['MonaLisa', 'hubot'] })));
+    assert.deepEqual(outcome, { sent: 1, writes: 1, held: 0, failed: undefined });
+    assert.deepEqual(lines, ['SET acme/web#7 T7 in-progress: assign MonaLisa, hubot']);
+    assert.deepEqual(host.calls.flatMap((call) => (call.kind === 'assign' ? [call.logins] : [])), [['MonaLisa', 'hubot']]);
+  });
+
   it('stops the repository at a failed assign', async () => {
-    const refused = await push(new FakeIssueHost().failsAssign('may not assign'), plan(change(7, { assign: 'octocat' }), change(8, { assign: 'octocat' })));
+    const refused = await push(new FakeIssueHost().failsAssign('may not assign'), plan(change(7, { assign: ['octocat'] }), change(8, { assign: ['octocat'] })));
     assert.deepEqual(refused.outcome, { sent: 0, writes: 0, held: 0, failed: 'may not assign' });
     assert.deepEqual(refused.lines, ['FAILED acme/web#7 T7: may not assign; the rest of acme/web waits for the next run']);
   });
@@ -117,7 +125,7 @@ describe('applyPush', () => {
   it('sends labels, an assign and a close with a tracker that is no code host (T4619)', async () => {
     const host = new FakeIssueHost().hasLabels('status:in progress');
     const lines: string[] = [];
-    const pushed = plan(change(7, { add: ['status:in progress'], assign: 'octocat' }), change(9, { status: 'dropped', close: 'not-planned' }));
+    const pushed = plan(change(7, { add: ['status:in progress'], assign: ['octocat'] }), change(9, { status: 'dropped', close: 'not-planned' }));
     const outcome = await applyPush(trackerOnly(host), pushed, (line) => lines.push(line));
     assert.deepEqual(outcome, { sent: 2, writes: 3, held: 0, failed: undefined });
     assert.deepEqual(

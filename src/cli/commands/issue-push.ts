@@ -64,6 +64,7 @@ export async function issuePush(args: ParsedArgs, runtime: CliRuntime): Promise<
       send,
       limits: SESSION_PUSH,
       logins: sessionLogins(config.github.owners),
+      design: config.github.designAssignees,
       told: new Set(),
       fields: await fieldRunOf(runtime, config, team.paths, team.register),
     },
@@ -90,6 +91,8 @@ export interface PushRun {
   readonly limits: PushLimits;
   /** Each session's GitHub login, so an unassigned issue is assigned (status-push.ts assigneeOf); else the login the sync runs as. */
   readonly logins: SessionLogins;
+  /** The logins an open design issue with no assignee is assigned to, `github.designAssignees` (status-push.ts designAssigneesOf). */
+  readonly design: readonly string[];
   /** The scopes whose ACCESS line was already printed, so each is printed once per command. */
   readonly told: Set<string>;
   /** The field push after the labels (T3406); undefined when github.fields.push is off. */
@@ -152,7 +155,7 @@ export async function pushRepos(run: PushRun, say: (line: string) => void): Prom
     };
     // Each status label is planned under the name the tracker holds it by, as the list above gave the issues' labels.
     const planFor = (who: PushAssignees, openPulls?: ReadonlySet<number>): PushPlan => planPush(repo, read.issues, tasks, limits, who, openPulls, (label) => run.host.labelName(label));
-    const assigned = await planAssigned(run.host, repo, planFor, pushAssignees(run.logins, VIEWER_UNREAD), readViewer, say);
+    const assigned = await planAssigned(run.host, repo, planFor, pushAssignees(run.logins, VIEWER_UNREAD, run.design), readViewer, say);
     if (assigned.kind === 'failed') {
       failures.push({ repo, reason: assigned.reason });
       continue;

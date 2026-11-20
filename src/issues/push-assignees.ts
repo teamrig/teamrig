@@ -7,7 +7,7 @@ export type AssignedPlan = { readonly kind: 'planned'; readonly plan: PushPlan; 
 /**
  * Plans a repository's push (`planOf`) with only logins the repository may assign (T4581). The plan budgets the run's
  * writes, so a login is asked about before the plan is kept: one the host refuses is passed over for the next in line
- * (status-push.ts assigneeOf) and planned again, so a refused assign takes none of the run's writes and the changes
+ * (status-push.ts assigneeOf), or left out of a design issue's (designAssigneesOf), and planned again, so a refused assign takes none of the run's writes and the changes
  * behind it go out, where sending it would cost nothing on the host and hold them every run. Each login is read once,
  * the deferred changes' too, as a refusal can move them into the run; a login is kept as the host spells it, since
  * GitHub drops an assign whose case is not the login's own. The login the sync runs as is read (`readViewer`) only
@@ -30,7 +30,7 @@ export async function planAssigned(
       who = { ...who, viewer: viewerRead(await readViewer()) };
       continue;
     }
-    const assigned = [...plan.changes, ...plan.deferred].flatMap((change) => (change.assign === undefined ? [] : [change.assign]));
+    const assigned = [...plan.changes, ...plan.deferred].flatMap((change) => change.assign ?? []);
     const unread = [...new Set(assigned)].filter((login) => !who.refused.has(login.toLowerCase()) && !who.spelled.has(login.toLowerCase()));
     if (unread.length === 0) {
       return { kind: 'planned', plan, who };
@@ -45,16 +45,25 @@ export async function planAssigned(
       }
       if (found.kind === 'missing') {
         refused.add(login.toLowerCase());
-        const left = assigned.filter((one) => one === login).length;
-        say(
-          `UNASSIGNED ${repo}: ${login} may not be assigned there (not a person with access to it); its ${left} issue(s) go to the next login in line, the one the sync runs as, or stay unassigned, at no write: map the owning session to a login that may under github.owners`,
-        );
+        say(unassignedLine(repo, login, assigned.filter((one) => one === login).length, who));
       } else {
         spelled.set(login.toLowerCase(), found.login);
       }
     }
     who = { ...who, refused, spelled };
   }
+}
+
+/**
+ * The UNASSIGNED line for a `login` the repository refused, planned for `left` issue(s): a design assignee's issues go
+ * without it, as no one stands in for it (status-push.ts designAssigneesOf); a session's go to the next login in line.
+ */
+function unassignedLine(repo: string, login: string, left: number, who: PushAssignees): string {
+  const head = `UNASSIGNED ${repo}: ${login} may not be assigned there (not a person with access to it); its ${left} issue(s)`;
+  if (who.design.some((one) => one.toLowerCase() === login.toLowerCase())) {
+    return `${head} go without it, at no write: name a login that may under github.designAssignees`;
+  }
+  return `${head} go to the next login in line, the one the sync runs as, or stay unassigned, at no write: map the owning session to a login that may under github.owners`;
 }
 
 /**
