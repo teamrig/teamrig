@@ -9,7 +9,7 @@ import { pathsIfKnown, transcriptsFolderIfKnown } from '../host.ts';
 import { autoRestartOf } from '../../config/refresh.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
-import { stringField } from '../../core/guards.ts';
+import { errorMessage, stringField } from '../../core/guards.ts';
 import { LockBusyError } from '../../core/lock.ts';
 import { MeetingStore, phaseOf } from '../../meeting/state.ts';
 import { restartMayAct } from '../../refresh/restart.ts';
@@ -582,10 +582,16 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
 
 /**
  * Answers a wake, marking its text first as teamrig's for the tab (#921), so the turn it starts is recorded as one
- * teamrig started, and keeping it with the turn log on, so the prompt it submits is logged as teamrig's.
+ * teamrig started, and keeping it with the turn log on, so the prompt it submits is logged as teamrig's. A mark that
+ * cannot be written is said and the wake goes on: it is logged already, and an unmarked prompt only reads as the
+ * owner's, which lets `meeting end` through as before.
  */
 async function wake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<ExitCode> {
-  await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome)).mark({ tab: scope.tab }, value.text, runtime.clock.now());
+  try {
+    await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome)).mark({ tab: scope.tab }, value.text, runtime.clock.now());
+  } catch (error) {
+    runtime.out.stderr(`WARN the wake was not marked as teamrig's, so its turn reads as the owner's: ${errorMessage(error)}`);
+  }
   if (scope.config.turnLog.enabled) {
     await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
   }
@@ -607,6 +613,9 @@ export async function wakeDropped(args: ParsedArgs, runtime: CliRuntime): Promis
   const reason = (request === undefined ? undefined : stringField(request.fields, 'reason')) ?? 'no reason given';
   await logWake(runtime.files, scope.kit.paths.wakeLog, { kind: 'dropped', at: runtime.clock.now(), session: scope.id, tab: scope.tab, reason });
   await new WakePrompts(runtime.files, scope.kit.paths.wake).forget(scope.id, scope.tab);
-  await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome)).forget({ tab: scope.tab });
+  // A mark left behind matches only this wake's exact text, which a typed prompt rarely repeats: say it, end cleanly.
+  await new PromptMarks(runtime.files, promptMarksDir(scope.kit.paths.kitHome))
+    .forget({ tab: scope.tab })
+    .catch((error: unknown) => runtime.out.stderr(`WARN the dropped wake's mark was not removed: ${errorMessage(error)}`));
   return EXIT.ok;
 }
