@@ -136,10 +136,19 @@ const SPEC = /\.test\.ts$/;
 const EXTENSION = /\.[^./]+$/;
 
 /**
- * The specs of the changed files, sorted, each once: a changed spec, and the `<stem>.test.ts` beside any other changed
- * file `<stem>.<ext>` (so `repos.json` brings `repos.test.ts`), each only when it exists in the tree.
+ * The folders whose specs `npm test` runs (package.json's `test` script). The plugin's own specs elsewhere are its
+ * mod's engine specs: they import `claude-code`, which only Claude Code's mod harness (`claude plugin test`) resolves,
+ * so plain `node --test` fails on them (T4694).
+ */
+export const NPM_TEST_ROOTS: readonly string[] = ['src/', 'tools/'];
+
+/**
+ * The specs of the changed files that `npm test` runs, sorted, each once: a changed spec, and the `<stem>.test.ts`
+ * beside any other changed file `<stem>.<ext>` (so `repos.json` brings `repos.test.ts`), each only when it exists in
+ * the tree and sits under one of {@link NPM_TEST_ROOTS}.
  */
 export function changedSpecs(changed: readonly string[], exists: (path: string) => boolean): string[] {
   const specs = changed.map((path) => (SPEC.test(path) ? path : path.replace(EXTENSION, '.test.ts')));
-  return [...new Set(specs.filter((path) => SPEC.test(path) && exists(path)))].sort();
+  const run = (path: string): boolean => SPEC.test(path) && NPM_TEST_ROOTS.some((root) => path.startsWith(root)) && exists(path);
+  return [...new Set(specs.filter(run))].sort();
 }

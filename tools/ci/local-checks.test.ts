@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isRecord } from '../lib/guards.ts';
-import { DEFAULT_BASE, changedSpecs, gateChanges, localChecks, prePushChecks, shortChecks } from './local-checks.ts';
+import { DEFAULT_BASE, NPM_TEST_ROOTS, changedSpecs, gateChanges, localChecks, prePushChecks, shortChecks } from './local-checks.ts';
 
 const read = (path: string): string => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -137,5 +137,18 @@ describe('changedSpecs (T3414)', () => {
 
   it('takes no spec for a file with none beside it, a deleted spec, or a name with no extension', () => {
     assert.deepEqual(changedSpecs(['src/b.ts', 'src/gone.test.ts', '.githooks/pre-push', 'docs/a.md', 'dir.v2/name'], exists), []);
+  });
+
+  it("leaves out the plugin's mod specs, which npm test does not run and plain node cannot load (T4694)", () => {
+    const withMod = new Set([...tree, 'plugins/teamrig/hooks/register.test.ts', 'plugins/teamrig/hooks/lead.test.ts']);
+    const found = changedSpecs(['plugins/teamrig/hooks/register.test.ts', 'plugins/teamrig/hooks/lead.ts', 'src/a.ts'], (path) => withMod.has(path));
+    assert.deepEqual(found, ['src/a.test.ts']);
+  });
+
+  it("names the same roots as npm test's spec globs", () => {
+    const test = npmScripts().get('test');
+    assert.ok(test !== undefined, 'package.json has no test script');
+    const globs = [...test.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(globs.sort(), NPM_TEST_ROOTS.map((root) => `${root}**/*.test.ts`).sort());
   });
 });

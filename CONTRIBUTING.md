@@ -221,9 +221,10 @@ dependency review, which reads GitHub's dependency graph ([Security checks](#sec
 - **Short checks** (off by default): when the repository's entry in `tools/ship/repos.json` says
   `"mergeChecks": "changed"`, which needs the `ci` gate, a push to any branch but `main` runs only the short checks:
   the scrub, the DCO sign-off, the size rule, the commit subjects, the typecheck and the specs beside the changed
-  files (`foo.ts` brings `foo.test.ts`, a changed spec runs itself). A change to the gate itself (`.githooks/`,
-  `.github/`, `tools/ci/`, `tools/ship/`, `src/push-guard/`, `package.json`, the lockfile or a `tsconfig*.json`) runs
-  every check instead. `tools/ship/ship.ts --merge` proves the tree the same way in place of the typecheck,
+  files (`foo.ts` brings `foo.test.ts`, a changed spec runs itself), only those under `src/` and `tools/` that
+  `npm test` runs: the plugin's mod specs run in `claude plugin test`, part of the full checks. A change to the gate
+  itself (`.githooks/`, `.github/`, `tools/ci/`, `tools/ship/`, `src/push-guard/`, `package.json`, the lockfile or a
+  `tsconfig*.json`) runs every check instead. `tools/ship/ship.ts --merge` proves the tree the same way in place of the typecheck,
   coverage gate and full run, then pushes and merges once the required CI checks pass, so the merge holds the ship
   slot only for those steps. A short pass is recorded apart (`local-ci/short/<tree>.json`), never taken for a full
   one; a full pass counts as a short one. A run without `--merge`, and every repository left at `"full"`, run every
