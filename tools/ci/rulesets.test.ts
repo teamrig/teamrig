@@ -99,11 +99,18 @@ describe('rulesets for main', () => {
     assert.deepEqual(review['bypass_actors'], PULL_REQUEST_BYPASS);
   });
 
-  it("CODEOWNERS makes the repository's owner the code owner of every path", () => {
+  // The repository belongs to an organisation, and GitHub takes a code owner only as a person (@login) or a team
+  // (@org/team): a bare organisation name owns nothing, so main review would have no code owner to ask.
+  it('CODEOWNERS names one code owner of every path: a person or a team of the organisation, never the organisation', () => {
     const slug = Object.keys(readRecord('tools/ship/repos.json')).find((name) => name.endsWith('/teamrig'));
     assert.ok(slug !== undefined, 'repos.json names this repository');
+    const org = slug.split('/')[0] ?? '';
     const owners = read('.github/CODEOWNERS').split(/\r?\n/).filter((line) => line !== '' && !line.startsWith('#'));
-    assert.deepEqual(owners, [`* @${slug.split('/')[0] ?? ''}`]);
+    assert.equal(owners.length, 1, 'one rule');
+    const owner = /^\* @([\w-]+(?:\/[\w-]+)?)$/.exec(owners[0] ?? '')?.[1];
+    assert.ok(owner !== undefined, `${owners[0] ?? ''} gives every path one owner`);
+    assert.notEqual(owner.toLowerCase(), org.toLowerCase(), 'the organisation alone is no code owner');
+    assert.ok(!owner.includes('/') || owner.startsWith(`${org}/`), `a team owner is a team of ${org}`);
   });
 });
 
