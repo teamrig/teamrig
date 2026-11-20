@@ -8,7 +8,7 @@ import { KIT_VERSION } from './version.ts';
  */
 
 /** The project's home, the link of the footer; a test holds it to the plugin manifest's `repository`. */
-export const STAMP_LINK = 'https://github.com/GeneralA6/teamrig';
+export const STAMP_LINK = 'https://github.com/teamrig/teamrig';
 
 /**
  * The hidden line that ends every footer. It is how a later write finds an earlier footer, whatever its version

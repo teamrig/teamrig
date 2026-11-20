@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/GeneralA6/teamrig/plugins/teamrig/config.schema.json",
+  "$id": "https://github.com/teamrig/teamrig/plugins/teamrig/config.schema.json",
   "title": "teamrig config",
   "description": "Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is required; every other key has a default. Unknown keys are kept as they are.",
   "type": "object",
