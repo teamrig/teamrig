@@ -19,9 +19,11 @@ import {
   openedWakeState,
   quietPriorityOf,
   taskListText,
+  FULL_GAP_LOAD,
   WAKE_TITLE_MAX,
   wakeContext,
   wakeCost,
+  wakeGapMs,
   wakePrompt,
   wakeRestOf,
   wakeToast,
@@ -47,8 +49,51 @@ function tasksOf(...tasks: Task[]): ReadonlyMap<string, Task> {
 }
 
 function input(tasks: ReadonlyMap<string, Task>, previous: WakeState | undefined, overrides: Partial<WakeInput> = {}): WakeInput {
-  return { tasks, elsewhere: NO_TASKS_ELSEWHERE, session: 'alpha', tab: TAB, now: NOW, zone: TimeZone.UTC, maxPriority: 1, parking: TEST_PARKING, batchMs: BATCH_MS, minGapMs: GAP_MS, previous, ...overrides };
+  return { tasks, elsewhere: NO_TASKS_ELSEWHERE, session: 'alpha', tab: TAB, now: NOW, zone: TimeZone.UTC, maxPriority: 1, parking: TEST_PARKING, batchMs: BATCH_MS, minGapMs: GAP_MS, maxGapMs: GAP_MS, previous, ...overrides };
 }
+
+describe('wakeGapMs (T4852)', () => {
+  const MAX_MS = 30 * MINUTE;
+  const due = (count: number): Task[] => Array.from({ length: count }, (_, i) => p1({ id: `T${i + 1}` }));
+
+  it('is the least gap for one task due, or none', () => {
+    assert.equal(wakeGapMs(due(1), GAP_MS, MAX_MS), GAP_MS);
+    assert.equal(wakeGapMs([], GAP_MS, MAX_MS), GAP_MS);
+  });
+
+  it('steps evenly to the most gap at FULL_GAP_LOAD tasks due, and stays there past it', () => {
+    assert.equal(FULL_GAP_LOAD, 5);
+    assert.equal(wakeGapMs(due(3), GAP_MS, MAX_MS), GAP_MS + (MAX_MS - GAP_MS) / 2);
+    assert.equal(wakeGapMs(due(FULL_GAP_LOAD), GAP_MS, MAX_MS), MAX_MS);
+    assert.equal(wakeGapMs(due(12), GAP_MS, MAX_MS), MAX_MS);
+  });
+
+  it('is the least gap when the most is below it', () => {
+    assert.equal(wakeGapMs(due(5), GAP_MS, GAP_MS - MINUTE), GAP_MS);
+  });
+
+  it('is none when a blocker is due, however much else is', () => {
+    assert.equal(wakeGapMs([...due(4), p1({ id: 'T9', priority: BLOCKER_PRIORITY_ID })], GAP_MS, MAX_MS), 0);
+  });
+});
+
+describe('decideWake gap by load (T4852)', () => {
+  const MAX_MS = 30 * MINUTE;
+  // A function, not a const: QUIET is declared below, and a describe body runs as the file loads.
+  const lastWoke = (): WakeState => ({ ...QUIET, lastWakeAt: NOW - MINUTE });
+  const many = tasksOf(...Array.from({ length: 5 }, (_, i) => p1({ id: `T${i + 1}` })));
+
+  it('holds one task the least gap and five the most', () => {
+    assert.deepEqual(decideWake(input(tasksOf(p1()), lastWoke(), { batchMs: 0, maxGapMs: MAX_MS })).verdict, { kind: 'later', at: NOW - MINUTE + GAP_MS, ids: ['T1'] });
+    const verdict = decideWake(input(many, lastWoke(), { batchMs: 0, maxGapMs: MAX_MS })).verdict;
+    assert.equal(verdict.kind === 'later' ? verdict.at : undefined, NOW - MINUTE + MAX_MS);
+  });
+
+  it('wakes for a blocker a minute after the last wake, inside a fresh gap', () => {
+    const blocker = p1({ id: 'T7', priority: BLOCKER_PRIORITY_ID });
+    assert.equal(decideWake(input(tasksOf(blocker), lastWoke(), { batchMs: 0, maxGapMs: MAX_MS })).verdict.kind, 'wake');
+  });
+});
 
 const QUIET: WakeState = { tab: TAB, known: [], pending: undefined, lastWakeAt: undefined, settled: NO_SETTLED_MOMENTS };
 
