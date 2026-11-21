@@ -6,13 +6,13 @@ import { sessionTitleOf, type TitleSource } from '../../names/title.ts';
 import { bindByEnv, bindByProcess, bindByTitle, bindHint, hintReason, processBoundNote, refreshedIn, type BindOutcome, type TeamRoster } from '../../hooks/bind.ts';
 import { firstHint, JsonlHintLog } from '../../hooks/hint-log.ts';
 import { injectFor } from '../../inbox/inject.ts';
-import { claudeProcessOf } from '../../refresh/restart.ts';
 import type { RefreshState } from '../../refresh/state.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { hookLogOf } from '../hook-logs.ts';
 import { transcriptsIfKept } from '../host.ts';
 import type { Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
+import { hostSessionAbove } from '../session-process.ts';
 import { loadTree } from '../tree.ts';
 import { inboxDepsOf } from './inbox.ts';
 
@@ -73,7 +73,7 @@ export async function bindTab(runtime: CliRuntime, kit: Kit, own: TeamRoster, cl
  */
 export async function bindAfterClear(runtime: CliRuntime, kit: Kit, roster: Roster, claudeSession: string): Promise<string | undefined> {
   try {
-    const pid = await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid);
+    const pid = await hostSessionAbove(runtime);
     if (pid === undefined) {
       return undefined;
     }

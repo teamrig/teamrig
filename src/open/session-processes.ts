@@ -100,6 +100,19 @@ export async function runsSession(processes: Pick<SessionProcesses, 'alive' | 'd
   return info !== undefined && isSessionProcess(info);
 }
 
+/** How far up from a hook its session's host program may be: a hook run through a shell has the shell between. */
+const SESSION_HOPS = 3;
+
+/**
+ * The session's host program that runs `pid`, which `isSessionProcess` tells: `pid` itself or one of its first
+ * parents, from one listing of every process (each look starts a PowerShell on Windows, and a slow hook is killed at
+ * its host's timeout); undefined when none is.
+ */
+export async function sessionProcessOf(processes: Pick<SessionProcesses, 'lineage'>, pid: number, isSessionProcess: SessionProcessCheck): Promise<number | undefined> {
+  const lineage = await processes.lineage(pid);
+  return lineage?.slice(0, SESSION_HOPS).find((process) => isSessionProcess(process))?.pid;
+}
+
 export interface SessionProcessesOptions {
   readonly platform?: NodeJS.Platform;
   readonly parentPid?: number;

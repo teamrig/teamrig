@@ -89,17 +89,6 @@ const CANCELLED: RestartResult = { kind: 'cancelled', why: 'the restart was canc
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */
 export const CLAIM_WAIT_MS = 10_000;
 
-/** How far up from a hook Claude Code may be: a hook run through a shell has the shell between. */
-const CLAUDE_HOPS = 3;
-
-/**
- * The Claude Code that runs `pid`: `pid` itself or one of its first parents, from one listing of every process (each
- * look starts a PowerShell on Windows, and a slow hook is killed at Claude Code's timeout); undefined when none is.
- */
-export async function claudeProcessOf(processes: SessionProcesses, pid: number): Promise<number | undefined> {
-  return (await processes.lineage(pid))?.slice(0, CLAUDE_HOPS).find(isClaudeProcess)?.pid;
-}
-
 /** The pending request this restart was started for; undefined once it was cancelled, taken or replaced. */
 async function pendingOf(deps: RestartDeps, plan: RestartPlan): Promise<RestartRequest | undefined> {
   const request = await deps.store.restart(plan.id);
