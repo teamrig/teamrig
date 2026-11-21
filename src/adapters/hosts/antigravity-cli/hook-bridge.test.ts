@@ -1,9 +1,34 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { hookBridge } from './hook-bridge.ts';
+import { DOCS_BUILT_HOOK_INPUTS } from './testing/hook-inputs.ts';
 import { toolCallShape } from './tool-call.ts';
 
 const bridge = hookBridge(toolCallShape('linux'));
+
+describe("Antigravity's hook bridge, given the event by the hook's command line (--host-event)", () => {
+  const { preToolUseShell, postToolUseShell } = DOCS_BUILT_HOOK_INPUTS;
+
+  it('reads the event the command line named from an input that names none', () => {
+    const event = bridge.parse(JSON.stringify(preToolUseShell.input), 'PreToolUse');
+    assert.equal(event?.name, 'tool-start');
+    assert.equal(event?.hostName, 'PreToolUse');
+    assert.equal(event?.call?.kind, 'shell');
+  });
+
+  it("takes the command line's event over a hookEventName in the input", () => {
+    const event = bridge.parse(JSON.stringify({ ...postToolUseShell.input, hookEventName: 'Stop' }), 'PostToolUse');
+    assert.equal(event?.name, 'tool-end');
+  });
+
+  it("reads no event from an input that does not fit the named event's shape, rather than act on a misread one", () => {
+    const noCall = Object.fromEntries(Object.entries(preToolUseShell.input).filter(([key]) => key !== 'toolCall'));
+    assert.equal(bridge.parse(JSON.stringify(noCall), 'PreToolUse'), undefined);
+    assert.equal(bridge.parse(JSON.stringify({ ...preToolUseShell.input, stepIdx: 'three' }), 'PreToolUse'), undefined);
+    assert.equal(bridge.parse(JSON.stringify(preToolUseShell.input), 'UserPromptSubmit'), undefined);
+    assert.equal(bridge.parse('[]', 'PreToolUse'), undefined);
+  });
+});
 
 describe("Antigravity's hook bridge", () => {
   it('returns undefined for invalid or non-object JSON', () => {
