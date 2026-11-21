@@ -159,8 +159,9 @@ function objectOf(input: string): JsonRecord | undefined {
 
 /**
  * The reading of agy's status input. The folder is `cwd`. agy has no named agents and no effort field (the model's
- * name carries the effort), so both stay undefined. `cost.total_usd` is a list-price estimate (it carries `estimated`), not
- * a bill, so it is not read as one. Context tokens wait for the live read: the docs name the totals' fields only as such.
+ * name carries the effort), so both stay undefined; the input names no version of agy, so the host version does too.
+ * `cost.total_usd` is a list-price estimate (it carries `estimated`), not a bill, so it is not read as one. Context
+ * tokens wait for the live read: the docs name the totals' fields only as such.
  */
 function parse(input: string): StatusReading | undefined {
   const status = objectOf(input);
@@ -173,6 +174,7 @@ function parse(input: string): StatusReading | undefined {
     agentName: undefined,
     model: told(status['model']),
     effort: undefined,
+    hostVersion: undefined,
     costUsd: undefined,
     contextUsedPct: finite(recordField(status, 'context_window')?.['used_percentage']),
     contextInputTokens: undefined,

@@ -125,7 +125,7 @@ The AI CLIs a session runs in.
 | `budget.model-share` | the share of each model and effort level | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.week-reading` | the week reading and the pace line | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.five-hour` | the five-hour forecast | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.status-line` | teamrig's status-line text | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: status-line port is not built yet |
+| `budget.status-line` | teamrig's status-line text | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `budget.helper-weight` | the weight of a helper | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.pools` | a budget pool per CLI and account, never added to another | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.windows` | the usage windows beside the week, each with its share used and its reset | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
