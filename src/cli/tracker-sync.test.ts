@@ -5,7 +5,18 @@ import { CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
 import { FakeGh, ghIssue } from '../testing/fake-gh.ts';
 import { FakeHttp } from '../testing/fake-http.ts';
-import { importConnectors } from './commands/tracker-sync.ts';
+import { TimeZone } from '../core/zone.ts';
+import { OWN_NUMBERS } from '../register/numbering.ts';
+import { RegisterPolicy } from '../register/policy.ts';
+import { NO_GOAL_RECORDS, NOTHING_ELSEWHERE, Register } from '../register/register.ts';
+import { JsonlEventLog } from '../register/store.ts';
+import { importRules } from '../sync/map.ts';
+import { testConfig } from '../testing/config.ts';
+import { FakeClock } from '../testing/fake-clock.ts';
+import { InlineMutex } from '../testing/inline-mutex.ts';
+import { MemoryFiles } from '../testing/memory-files.ts';
+import { importConnectors, syncTrackers, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import type { ConnectorLoader } from './issue-hosts.ts';
 import { EXIT } from './runtime.ts';
 
 const SEARCH = 'https://acme.atlassian.net/rest/api/3/search/jql';
@@ -43,6 +54,41 @@ describe('importConnectors', () => {
   it('names the import sources of the connectors map other than GitHub, and no other id', () => {
     assert.deepEqual(importConnectors({ connectors: { github: {}, jira: {}, someday: {} } }), ['jira']);
     assert.deepEqual(importConnectors({ connectors: {} }), []);
+  });
+});
+
+/** A writing run of the other trackers' import for a team reading ENG on Jira, whose connector adapters come from `load`. */
+function runWith(load: ConnectorLoader): TrackerSyncRun {
+  const config = testConfig({ connectors: { jira: JIRA } });
+  const register = new Register({
+    log: new JsonlEventLog(new MemoryFiles(), 'register/events.jsonl'),
+    mutex: new InlineMutex(),
+    numbering: OWN_NUMBERS,
+    elsewhere: NOTHING_ELSEWHERE,
+    goals: NO_GOAL_RECORDS,
+    clock: new FakeClock('2030-01-08T10:00:00.000Z'),
+    zone: TimeZone.UTC,
+    policy: new RegisterPolicy(config),
+    skills: { exists: async () => false },
+    autoArchive: true,
+  });
+  const runtime = { run: () => Promise.reject(new Error('no program runs here')), http: new FakeHttp(), credentials: savedToken(), env: {} };
+  return { runtime, config, register, rules: importRules(config), since: '2030-01-01', write: true, load };
+}
+
+describe('syncTrackers', () => {
+  it('fails only that connector when the loader refuses its adapter, and names why', async () => {
+    const lines: string[] = [];
+    const load: ConnectorLoader = (id) => Promise.resolve({ kind: 'refused', id, notices: ['it needs a name'] });
+    const end = await syncTrackers(runWith(load), (line) => lines.push(line));
+    const reason = 'the jira connector adapter gave no host: it needs a name';
+    assert.deepEqual(lines, [`FAILED the jira import: ${reason}; nothing of it was read or written`]);
+    assert.deepEqual(end, { ends: ['failed'], written: 0, added: [], failures: [{ repo: 'jira', reason }] });
+  });
+
+  it('lets an error it does not know end the run', async () => {
+    const load: ConnectorLoader = () => Promise.reject(new Error('disk gone'));
+    await assert.rejects(syncTrackers(runWith(load), () => undefined), /disk gone/);
   });
 });
 
@@ -88,6 +134,29 @@ describe('teamrig issue sync of another tracker', () => {
     assert.match(failed ?? '', /^FAILED acme\/eng: .*; its tasks stay as they are$/);
     assert.deepEqual(rest, ['PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira', NO_GITHUB]);
     assert.deepEqual(http.requests, []);
+  });
+
+  it('fails the project when Jira cannot list its issues, and runs on', async () => {
+    const http = new FakeHttp().answers('POST', SEARCH, 500, '{}');
+    const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
+    assert.equal(result.code, EXIT.failed, [...result.stdout, ...result.stderr].join('\n'));
+    const [access, failed, ...rest] = result.stdout;
+    assert.equal(access, ACCESS);
+    assert.match(failed ?? '', /^FAILED acme\/eng: .*; its tasks stay as they are$/);
+    assert.deepEqual(rest, ['PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira', NO_GITHUB]);
+  });
+
+  it('notes an item that reads as no issue, and names none left out when none is open', async () => {
+    const http = new FakeHttp().answers('POST', SEARCH, 200, JSON.stringify({ issues: [{ key: 'ENG-9' }] }));
+    const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [
+      ACCESS,
+      'NOTE acme/eng: 1 item(s) Jira listed did not read as issues of ENG and were left out',
+      'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
+      'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira',
+      NO_GITHUB,
+    ]);
   });
 
   it("refuses a Jira section the adapter refuses, and still runs GitHub's import", async () => {
