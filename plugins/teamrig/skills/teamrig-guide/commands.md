@@ -1340,14 +1340,13 @@ anything. Exit 1 when a
 repository could not be read (its tasks stay as they are, and the `FAILED` line says why), 2 when the
 register refused a step (a `SKIPPED` line each), else 0.
 
-Other trackers: the same run, before GitHub's, imports each other tracker the team wrote a `connectors.<id>` section
-for, today Jira (`connectors.jira.site` and `connectors.jira.projects`, read with the API token saved as
-`teamrig-jira-<site>`). Its tasks get that tracker's source and ref (`jira`, `jira:ENG-12`) and its own `PREVIEW` or
-`WROTE` line; only open and closed state, title, description and priority follow it, as on GitHub. Until Jira's
-trust rule ships, every Jira issue is left out (a `LEFT OUT` line names them by key), since Jira says neither who is
-inside nor who added a label. A section the connector refuses gets a `REFUSED` line, one it cannot read a `FAILED`
-line, and GitHub's import runs on either way; `TEAMRIG_CONNECTOR_JIRA=off` turns Jira's import off on a machine, and
-`--repo` reads that GitHub repository alone, no other tracker.
+Other trackers: the same run first imports each other tracker the team wrote a `connectors.<id>` section for; the
+connector's page names its keys and the saved token it reads. Its tasks get that tracker's id as their source and a
+`<id>:<key>` ref, and its own `PREVIEW` or `WROTE` line; only open and closed state, title, description and priority
+follow it, as for repositories. A tracker that cannot yet say who is inside has every issue left out (a `LEFT OUT`
+line names them by key) until its trust rule ships. A section the connector refuses gets a `REFUSED` line, one it
+cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
+tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
 
 On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by default), the team's
 `teamrig issue watch` runs `teamrig issue sync --auto` within a probe of a change on GitHub. A new issue so reaches its
