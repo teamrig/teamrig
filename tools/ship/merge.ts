@@ -674,8 +674,8 @@ export const MERGE_ATTEMPTS = 3;
 
 /**
  * `ship.ts merge` as a command. A merge waits in the queue behind other heavy steps, often past another merge, so a
- * head main moved past is caught up (catch-up.ts: rebased onto main as `<head>-N` when clean with the same diff,
- * pushed) and merged in its place; anything else main's move does is refused (T2809). Main may also move while a
+ * head main moved past is caught up (catch-up.ts: rebased onto main in place when clean with the same diff, pushed
+ * to the same branch and pull request with a lease) and merged; anything else main's move does is refused (T2809). Main may also move while a
  * catch-up's push runs its gate, as another merge whose share was set aside for its CI wait lands (T3336): that head
  * is caught up again on the new tip, which raises the plugin version again (T4131). Each move counts, at most
  * MERGE_ATTEMPTS in all. Merges of one repo land oldest first (landing-turn.ts), so the merges started before this one
@@ -685,7 +685,6 @@ export const MERGE_ATTEMPTS = 3;
  * goes again from its plan (T2696).
  */
 export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number> {
-  let stem: string | null = null;
   let current = args;
   const gate = args.release === null ? approvalGate(args, deps) : releaseGate(args.release, args, deps);
   let move: MainMove | null = null;
@@ -710,9 +709,8 @@ export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number
     }
     // The checkout has not changed since the run read it, and a catch-up that main moved past put it back.
     const head = current.head ?? checkedOutBranch(deps.git);
-    stem ??= head;
     const { main, regenerated } = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
-    const caught = deps.catchUp({ head, stem, tip: move.tip, main, regenerated });
+    const caught = deps.catchUp({ head, tip: move.tip, main, regenerated });
     if (caught.kind === 'refused') {
       deps.err(`REFUSED ${caught.reason}`);
       return 1;

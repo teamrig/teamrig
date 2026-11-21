@@ -34,3 +34,10 @@ test('never pushes main, master, the repo\'s own main or a detached HEAD', () =>
   }
   assert.throws(() => pushOwnBranch(gitWith('HEAD', ''), 'main'), /REFUSED the repo dir has a detached HEAD/);
 });
+
+test('leases on the sha the caller rebased from when it names one, without asking origin (T4907)', () => {
+  const git = gitWith('t629-one-hold', 'other00\trefs/heads/t629-one-hold');
+  pushOwnBranch(git, 'main', SHA);
+  assert.ok(!git.mock.calls.some((call) => call.arguments[0] === 'ls-remote'));
+  assert.deepEqual(git.mock.calls.at(-1)?.arguments, ['push', '--quiet', `--force-with-lease=refs/heads/t629-one-hold:${SHA}`, 'origin', 'HEAD:refs/heads/t629-one-hold']);
+});

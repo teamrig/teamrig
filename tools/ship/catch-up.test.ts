@@ -9,12 +9,11 @@ import { TEAMRIG_REGENERATION, listedPaths, regenerationFor, workPathspec } from
 import { profileFor, readProfiles } from './repos.ts';
 
 const HEAD = 't9-change';
-const NEXT = 't9-change-2';
 const SHA = 'abc1234def';
 const BASE = 'base000aaa';
 const TIP = 'moved00bbb';
 const REBASED = 'rebased0ccc';
-const REQUEST: CatchUpRequest = { head: HEAD, stem: HEAD, tip: TIP, main: 'main', regenerated: [] };
+const REQUEST: CatchUpRequest = { head: HEAD, tip: TIP, main: 'main', regenerated: [] };
 
 /** A repo with nothing regenerated writes no file and builds nothing. */
 const NO_REGENERATION = {
@@ -61,7 +60,7 @@ function fakeGit(fixture: Fixture = {}): { git: (...args: string[]) => string; c
     // The caught-up head sits on TIP, so it contains TIP and no later tip.
     [`merge-base HEAD ${fixture.movedTo ?? TIP}`]: TIP,
   };
-  let branch = fixture.checkedOut ?? HEAD;
+  const branch = fixture.checkedOut ?? HEAD;
   const git = (...args: string[]): string => {
     const key = args.join(' ');
     calls.push(key);
@@ -69,12 +68,8 @@ function fakeGit(fixture: Fixture = {}): { git: (...args: string[]) => string; c
     if (key === `rebase --quiet ${TIP}`) throw new Error('CONFLICT (content): Merge conflict in src/a.ts');
     if (key.startsWith('push ') && fixture.push !== undefined) throw fixture.push;
     if (key === 'rev-parse --abbrev-ref HEAD') return branch;
-    if (key.startsWith('switch ')) {
-      branch = args.at(-1) ?? branch;
-      return '';
-    }
-    // No branch by any new name yet, here or on origin; pushing or deleting one says nothing.
-    if (['branch --list ', 'ls-remote --heads origin ', 'push --quiet origin ', 'branch --quiet --delete --force '].some((prefix) => key.startsWith(prefix))) return '';
+    // Pushing or resetting the head says nothing.
+    if (key.startsWith('push --quiet ') || key.startsWith('reset --quiet --hard ')) return '';
     const answer = answers[key];
     if (answer === undefined) throw new Error(`unexpected git ${key}`);
     return answer;
@@ -91,31 +86,24 @@ test('the same change on a newer main has the same own diff; a changed line does
   assert.notEqual(ownDiff(moved.git, BASE, SHA), ownDiff(moved.git, TIP, REBASED), 'the same lines in another function are another change');
 });
 
-test('a head main moved past rebases cleanly onto its tip as <stem>-2, keeps its diff, and is pushed under that name (T2809)', () => {
+test('a head main moved past rebases cleanly onto its tip in place, keeps its diff, and is pushed to the same branch with a lease on its old sha (T2809, T4907)', () => {
   const { git, calls } = fakeGit();
   const log: string[] = [];
-  assert.deepEqual(catchUp({ ...NO_REGENERATION, git, log: (line) => log.push(line) }, REQUEST), { kind: 'rebased', head: NEXT, sha: REBASED });
-  assert.ok(calls.indexOf(`switch --quiet --create ${NEXT}`) < calls.indexOf(`rebase --quiet ${TIP}`), 'the pushed head itself is never rewritten');
-  assert.equal(calls.at(-1), `push --quiet origin HEAD:refs/heads/${NEXT}`);
-  assert.ok(!calls.some((call) => call.includes('--force')), 'a new name needs no force');
-  assert.deepEqual(log, [`main moved to moved00, which ${HEAD} abc1234 does not contain: rebased it cleanly with the same diff and pushed it as ${NEXT} rebased; merging that`]);
+  assert.deepEqual(catchUp({ ...NO_REGENERATION, git, log: (line) => log.push(line) }, REQUEST), { kind: 'rebased', head: HEAD, sha: REBASED });
+  assert.ok(!calls.some((call) => call.startsWith('switch') || call.startsWith('branch')), 'no new branch: the same pull request');
+  assert.equal(calls.at(-1), `push --quiet --force-with-lease=refs/heads/${HEAD}:${SHA} origin HEAD:refs/heads/${HEAD}`);
+  assert.deepEqual(log, [`main moved to moved00, which ${HEAD} abc1234 does not contain: rebased it cleanly with the same diff and pushed it to ${HEAD} rebased; merging that`]);
 });
 
-test('numbers a later head from the stem the merge began with', () => {
-  const { git, calls } = fakeGit();
-  catchUp({ ...NO_REGENERATION, git, log: () => undefined }, { ...REQUEST, stem: 't9' });
-  assert.ok(calls.includes('branch --list t9-2'));
-});
+/** The call that puts the head back as it was, after a rebase was tried. */
+const RESTORED = [`reset --quiet --hard ${SHA}`];
 
-/** The calls that put the repo dir back as it was, after a rebase as NEXT was tried. */
-const RESTORED = [`switch --quiet ${HEAD}`, `branch --quiet --delete --force ${NEXT}`];
-
-test('a conflicting rebase is aborted and refused, with the head checked out again and no new branch left', () => {
+test('a conflicting rebase is aborted and refused, with the head back on its sha', () => {
   const { git, calls } = fakeGit({ rebase: 'conflict' });
   const result = catchUp({ ...NO_REGENERATION, git, log: () => undefined }, REQUEST);
   assert.equal(result.kind, 'refused');
   assert.match(result.kind === 'refused' ? result.reason : '', /^main moved to moved00, which t9-change abc1234 does not contain, and rebasing it onto that tip conflicts: rebase it by hand/);
-  assert.deepEqual(calls.slice(-3), ['rebase --abort', ...RESTORED]);
+  assert.deepEqual(calls.slice(-2), ['rebase --abort', ...RESTORED]);
   assert.ok(!calls.some((call) => call.startsWith('push')));
 });
 
@@ -123,16 +111,16 @@ test('a clean rebase whose diff changed is refused and never pushed', () => {
   const { git, calls } = fakeGit({ diffOnTip: DIFF_ON_TIP.replace('+more', '+other') });
   const result = catchUp({ ...NO_REGENERATION, git, log: () => undefined }, REQUEST);
   assert.match(result.kind === 'refused' ? result.reason : '', /, and its diff changes when rebased onto that tip: rebase it by hand, check it/);
-  assert.deepEqual(calls.slice(-2), RESTORED);
+  assert.deepEqual(calls.slice(-1), RESTORED);
   assert.ok(!calls.some((call) => call.startsWith('push')));
 });
 
 test('a failed push is refused with its error, the repo dir back on the head', () => {
   const { git, calls } = fakeGit({ push: new Error('pre-push: the local gate failed') });
   const result = catchUp({ ...NO_REGENERATION, git, log: () => undefined }, REQUEST);
-  assert.match(result.kind === 'refused' ? result.reason : '', /, and pushing it rebased as t9-change-2 failed: pre-push: the local gate failed$/);
+  assert.match(result.kind === 'refused' ? result.reason : '', /, and pushing it rebased to t9-change failed: pre-push: the local gate failed$/);
   assert.ok(calls.includes(`merge-base HEAD ${TIP}`), 'main was read again and had not moved');
-  assert.deepEqual(calls.slice(-2), RESTORED);
+  assert.deepEqual(calls.slice(-1), RESTORED);
 });
 
 test('a failed push while main moved again comes back as moved, with the new tip, the repo dir back on the head (T4131)', () => {
@@ -142,13 +130,13 @@ test('a failed push while main moved again comes back as moved, with the new tip
   const result = catchUp({ ...NO_REGENERATION, git, log: (line) => log.push(line) }, REQUEST);
   assert.equal(result.kind, 'moved');
   assert.equal(result.kind === 'moved' ? result.tip : '', AGAIN);
-  assert.match(result.kind === 'moved' ? result.reason : '', /^t9-change abc1234 was caught up, and main moved again to again00 while it was pushed rebased as t9-change-2, and that push failed: pre-push: the plugin version 0\.2\.1 is already on main$/);
-  assert.ok(calls.indexOf(`merge-base HEAD ${AGAIN}`) < calls.indexOf(`switch --quiet ${HEAD}`), 'main is read against the caught-up head, before it is dropped');
-  assert.deepEqual(calls.slice(-2), RESTORED);
+  assert.match(result.kind === 'moved' ? result.reason : '', /^t9-change abc1234 was caught up, and main moved again to again00 while it was pushed rebased to t9-change, and that push failed: pre-push: the plugin version 0\.2\.1 is already on main$/);
+  assert.ok(calls.indexOf(`merge-base HEAD ${AGAIN}`) < calls.lastIndexOf(RESTORED[0] ?? ''), 'main is read against the caught-up head, before it is dropped');
+  assert.deepEqual(calls.slice(-1), RESTORED);
   assert.match(log.at(-1) ?? '', /: catching it up again$/);
 });
 
-test('a head not checked out, or a repo dir with uncommitted changes, is refused before any branch or rebase', () => {
+test('a head not checked out, or a repo dir with uncommitted changes, is refused before any rebase', () => {
   for (const [fixture, why] of [
     [{ checkedOut: 'other' }, /, and it is not checked out in the repo dir to be rebased there/],
     [{ status: ' M src/a.ts' }, /, and the repo dir has uncommitted changes/],
@@ -156,7 +144,7 @@ test('a head not checked out, or a repo dir with uncommitted changes, is refused
     const { git, calls } = fakeGit(fixture);
     const result = catchUp({ ...NO_REGENERATION, git, log: () => undefined }, REQUEST);
     assert.match(result.kind === 'refused' ? result.reason : '', why);
-    assert.ok(!calls.some((call) => call.startsWith('switch') || call.startsWith('rebase')));
+    assert.ok(!calls.some((call) => call.startsWith('reset') || call.startsWith('rebase')));
   }
 });
 
@@ -253,7 +241,7 @@ function movedPast(t: { after: (fn: () => void) => void }, work: Readonly<Record
   commitFiles(work, 'a: a changes (T9)');
   const sha = raise('0.1.1', 'plugin: version 0.1.1, a changes (T9)\n\nThe raise for a.');
   git('push', '-q', 'origin', HEAD);
-  const request: CatchUpRequest = { head: HEAD, stem: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
+  const request: CatchUpRequest = { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
   const log: string[] = [];
   const deps: CatchUpDeps = { git, log: (line) => log.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
   return { ...repo, base, tip, sha, request, deps, log };
@@ -264,10 +252,9 @@ test('a teamrig head main moved past drops its version and dist commits, replays
   const caught = catchUp(deps, request);
   assert.equal(caught.kind, 'rebased');
   const head = caught.kind === 'rebased' ? caught.head : '';
-  assert.equal(head, NEXT);
+  assert.equal(head, HEAD);
   assert.equal(git('rev-parse', 'HEAD'), caught.kind === 'rebased' ? caught.sha : '');
-  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${NEXT}`).split('\t')[0], git('rev-parse', 'HEAD'), 'pushed under the new name');
-  assert.equal(git('rev-parse', `refs/heads/${HEAD}`), sha, 'the pushed head itself is never rewritten');
+  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${HEAD}`).split('\t')[0], git('rev-parse', 'HEAD'), 'pushed to the same branch, so the same pull request');
   assert.deepEqual(git('log', '--format=%s', `${tip}..HEAD`).split('\n'), ['build: rebuild the plugin dist', 'plugin: version 0.2.1, a changes (T9)', 'a: a changes (T9)']);
   assert.match(git('log', '-1', '--format=%B', 'HEAD~1'), /^plugin: version 0\.2\.1, a changes \(T9\)\n\nThe raise for a\.\n\nSigned-off-by: t <t@example\.com>$/);
   assert.match(git('log', '-1', '--format=%B', 'HEAD'), /^build: rebuild the plugin dist\n\nCompiled from the commits above by npm run build\.\n\n(.+\n)*Co-Authored-By: /);
@@ -279,7 +266,7 @@ test('a teamrig head main moved past drops its version and dist commits, replays
   assert.equal(git('show', 'HEAD:plugins/teamrig/dist/b.js'), "// built\nexport const b = 1;", 'main\'s own dist stays');
   assert.equal(git('status', '--porcelain'), '');
   assert.equal(ownDiff(git, tip, 'HEAD', workPathspec(TEAMRIG_REGENERATION)), ownDiff(git, base, sha, workPathspec(TEAMRIG_REGENERATION)), 'the approved work, unchanged');
-  assert.deepEqual(log, [`main moved to ${tip.slice(0, 7)}, which ${HEAD} ${sha.slice(0, 7)} does not contain: replayed its work with the same diff, raised the version 0.1.1 again as 0.2.1, rebuilt the dist (1 file(s)), and pushed it as ${NEXT} ${git('rev-parse', 'HEAD').slice(0, 7)}; merging that`]);
+  assert.deepEqual(log, [`main moved to ${tip.slice(0, 7)}, which ${HEAD} ${sha.slice(0, 7)} does not contain: replayed its work with the same diff, raised the version 0.1.1 again as 0.2.1, rebuilt the dist (1 file(s)), and pushed it to ${HEAD} ${git('rev-parse', 'HEAD').slice(0, 7)}; merging that`]);
 });
 
 test('a teamrig head with no raise and no dist replays its work and makes nothing again (T2988)', (t) => {
@@ -290,11 +277,12 @@ test('a teamrig head with no raise and no dist replays its work and makes nothin
   const tip = raise('0.2.0', 'plugin: version 0.2.0');
   git('switch', '-q', '--create', HEAD, base);
   const sha = commitFiles({ 'tools/x.ts': 'export const x = 1;\n' }, 'tools: x');
+  git('push', '-q', 'origin', HEAD);
   const log: string[] = [];
-  const caught = catchUp({ git, log: (line) => log.push(line), ...NO_REGENERATION }, { head: HEAD, stem: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) });
+  const caught = catchUp({ git, log: (line) => log.push(line), ...NO_REGENERATION }, { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) });
   assert.equal(caught.kind, 'rebased');
   assert.deepEqual(git('log', '--format=%s', `${tip}..HEAD`).split('\n'), ['tools: x']);
-  assert.match(log[0] ?? '', new RegExp(`does not contain: replayed its work with the same diff, nothing to make again, and pushed it as ${NEXT} `));
+  assert.match(log[0] ?? '', new RegExp(`does not contain: replayed its work with the same diff, nothing to make again, and pushed it to ${HEAD} `));
   assert.notEqual(git('rev-parse', 'HEAD'), sha);
 });
 
@@ -319,12 +307,12 @@ test('a teamrig head caught up onto a main that tracks no dist drops its dist co
     writeText: (path, text) => writeFileSync(join(repo.dir, path), text),
     build: () => builds.push('build'),
   };
-  const caught = catchUp(deps, { head: HEAD, stem: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) });
+  const caught = catchUp(deps, { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) });
   assert.equal(caught.kind, 'rebased');
   assert.deepEqual(git('log', '--format=%s', `${tip}..HEAD`).split('\n'), ['a: a changes (T9)']);
   assert.deepEqual(builds, []);
   assert.equal(git('ls-files', '--', 'plugins/teamrig/dist'), '');
-  assert.match(log[0] ?? '', /replayed its work with the same diff, built no dist, as the tip tracks none, and pushed it as /);
+  assert.match(log[0] ?? '', /replayed its work with the same diff, built no dist, as the tip tracks none, and pushed it to t9-change /);
 });
 
 /** The repo dir as a refused catch-up must leave it: on the head, clean, and no new branch here or on origin. */
@@ -332,8 +320,9 @@ function assertRestored(git: (...args: string[]) => string, sha: string): void {
   assert.equal(git('rev-parse', '--abbrev-ref', 'HEAD'), HEAD);
   assert.equal(git('rev-parse', 'HEAD'), sha);
   assert.equal(git('status', '--porcelain', '--untracked-files=all'), '');
-  assert.equal(git('branch', '--list', NEXT), '');
-  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${NEXT}`), '');
+  assert.equal(git('branch', '--list', `${HEAD}-*`), '', 'no new branch here');
+  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${HEAD}-*`), '', 'no new branch on origin');
+  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${HEAD}`).split('\t')[0], sha, 'origin still holds the head as it was');
 }
 
 const reasonOf = (caught: ReturnType<typeof catchUp>): string => (caught.kind === 'refused' ? caught.reason : '');
@@ -349,8 +338,9 @@ function manifestChange(t: { after: (fn: () => void) => void }, change: (repo: R
   git('switch', '-q', '--create', HEAD, base);
   commitFiles({ 'tools/x.ts': 'export const x = 1;\n' }, 'tools: x');
   change(repo);
+  git('push', '-q', 'origin', HEAD);
   const sha = git('rev-parse', 'HEAD');
-  const request: CatchUpRequest = { head: HEAD, stem: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
+  const request: CatchUpRequest = { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
   const log: string[] = [];
   const deps: CatchUpDeps = { git, log: (line) => log.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
   return { ...repo, base, tip, sha, request, deps, log };
@@ -366,7 +356,7 @@ test("a release manifest the change set to its plugin version is set again to th
   assert.equal(readFileSync(join(dir, RELEASE), 'utf8'), release('0.2.0'), "main's plugin version");
   assert.equal(git('status', '--porcelain'), '');
   assert.equal(ownDiff(git, tip, 'HEAD', workPathspec(TEAMRIG_REGENERATION)), ownDiff(git, base, sha, workPathspec(TEAMRIG_REGENERATION)), 'the approved work, unchanged');
-  assert.match(log[0] ?? '', /: replayed its work with the same diff, set \.release-please-manifest\.json 0\.1\.0 again as 0\.2\.0, and pushed it as t9-change-2 /);
+  assert.match(log[0] ?? '', /: replayed its work with the same diff, set \.release-please-manifest\.json 0\.1\.0 again as 0\.2\.0, and pushed it to t9-change /);
 });
 
 test('a release manifest set beside a raise follows the raise made again, before the dist (T4298)', (t) => {
@@ -380,7 +370,7 @@ test('a release manifest set beside a raise follows the raise made again, before
   assert.equal(readFileSync(join(dir, RELEASE), 'utf8'), release('0.2.1'));
 });
 
-test('a release manifest set in the raise commit, or to another version than the plugin version, is refused before any branch (T4298)', (t) => {
+test('a release manifest set in the raise commit, or to another version than the plugin version, is refused before any rebase (T4298)', (t) => {
   for (const [change, why] of [
     [
       ({ commitFiles }: ReturnType<typeof teamrigRepo>) =>
@@ -402,7 +392,7 @@ test('a work commit that conflicts with main is aborted and refused, the repo di
   assertRestored(git, sha);
 });
 
-test('a commit that mixes work with the version files is refused before any branch (T2988)', (t) => {
+test('a commit that mixes work with the version files is refused before any rebase (T2988)', (t) => {
   const { git, request, deps, sha } = movedPast(t, { 'src/a.ts': 'export const a = 2;\n', [KIT]: "export const KIT_VERSION = '0.1.1';\n" });
   assert.match(reasonOf(catchUp(deps, request)), /, and its commit [0-9a-f]{9} changes the version files or the dist together with its work, so they cannot be made again apart: ship it again with its plan/);
   assertRestored(git, sha);
@@ -431,7 +421,7 @@ test('a failed push of a caught-up head is refused, the repo dir back on the hea
   const { git, request, deps, sha } = movedPast(t);
   git('remote', 'set-url', '--push', 'origin', join(tmpdir(), 'no-such-origin-t2988.git'));
   const caught = catchUp(deps, request);
-  assert.match(reasonOf(caught), /, and pushing it caught up as t9-change-2 failed: /);
+  assert.match(reasonOf(caught), /, and pushing it caught up to t9-change failed: /);
   git('config', '--unset', 'remote.origin.pushurl');
   assertRestored(git, sha);
 });
@@ -465,9 +455,9 @@ test('another merge landing the same version while the catch-up push runs its ga
 
   const second = catchUp(racing, { ...request, tip: first.kind === 'moved' ? first.tip : '' });
   assert.equal(second.kind, 'rebased');
-  assert.equal(second.kind === 'rebased' ? second.head : '', NEXT, 'the name the failed push never took');
+  assert.equal(second.kind === 'rebased' ? second.head : '', HEAD, 'the same branch, so the same pull request');
   assert.equal(git('merge-base', 'HEAD', landed), landed, 'on the other merge');
   assert.equal(readFileSync(join(dir, PLUGIN), 'utf8'), '{\n  "name": "teamrig",\n  "version": "0.2.2"\n}\n');
   assert.equal(readFileSync(join(dir, KIT), 'utf8'), "export const KIT_VERSION = '0.2.2';\n");
-  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${NEXT}`).split('\t')[0], git('rev-parse', 'HEAD'));
+  assert.equal(git('ls-remote', '--heads', 'origin', `refs/heads/${HEAD}`).split('\t')[0], git('rev-parse', 'HEAD'));
 });
