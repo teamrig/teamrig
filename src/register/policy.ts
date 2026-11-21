@@ -17,7 +17,7 @@ import { verdictIsCurrent, verdictReadOf, type SecurityVerdictPin } from './secu
 import { ITEM_TYPES, sizeProblem, type ApprovalVerdict, type ItemType, type TaskFieldName, type TaskFields, type TaskPrep } from './events.ts';
 import { droppedApproval, isRepark, taskNumber, type RegisterState, type Task } from './fold.ts';
 import { commitsNamed } from './head-sha.ts';
-import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID, FOLLOWUP_STATUSES, GITHUB_SOURCE, hasIssueOrReason, isIssueRef, isTopPriority, priorityText, SESSION_NAME, WAIT_STATUSES, type TaskStatus } from './model.ts';
+import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID, FOLLOWUP_STATUSES, GITHUB_SOURCE, hasIssueOrReason, IMPORT_SOURCES, isImportSource, isIssueRef, isTopPriority, priorityText, SESSION_NAME, WAIT_STATUSES, type ImportSource, type TaskStatus } from './model.ts';
 import { ITEM_TYPE_TRAITS, traitsOf } from './item-types.ts';
 import { waitsOnOwner } from './owner-waits.ts';
 import { asksReview, missedTaskIds, reviewGap, reviewGapText, reviewProblem, reviewTexts, type ProblemReview } from './review.ts';
@@ -34,11 +34,14 @@ export type Verdict<T> = { readonly ok: true; readonly value: T } | { readonly o
 /** The skill name that closes a task which produced no reusable procedure. */
 export const NO_SKILL = 'none';
 
-/** Who the GitHub import's events are written by; its tasks carry GITHUB_SOURCE (model.ts). */
-export const GITHUB_ACTOR = 'github';
+/**
+ * Who the GitHub import's events and lines are written by. Each import writes as its source (model.ts
+ * IMPORT_SOURCES), so this is GitHub's: the inbox lines issue sync posts are still GitHub's alone.
+ */
+export const GITHUB_ACTOR: ImportSource = GITHUB_SOURCE;
 
-/** The statuses the import sets on its own tasks: an issue's open state, or how it was closed. */
-export const GITHUB_STATUSES: readonly TaskStatus[] = ['open', 'done', 'dropped'];
+/** The statuses an import sets on its own tasks: an issue's open state, or how it was closed. */
+export const IMPORT_STATUSES: readonly TaskStatus[] = ['open', 'done', 'dropped'];
 
 /**
  * Fields the lead may change on a task someone else owns: who does it, how urgent, when, in what order and its size
@@ -285,8 +288,10 @@ function refuse<T>(error: string): Verdict<T> {
 /** Why a task's source is refused, or undefined when it is fine. */
 type SourceRule = (source: string) => string | undefined;
 
-/** The import's source rule: its tasks carry GITHUB_SOURCE, which it sets itself. */
-const importSource: SourceRule = (source) => (source === GITHUB_SOURCE ? undefined : `source ${source} is not ${GITHUB_SOURCE}`);
+/** An import's source rule: its tasks carry its own source, which it sets itself. */
+function importSource(expected: ImportSource): SourceRule {
+  return (source) => (source === expected ? undefined : `source ${source} is not ${expected}`);
+}
 
 export class RegisterPolicy {
   private readonly config: KitConfig;
@@ -1306,28 +1311,33 @@ export class RegisterPolicy {
   }
 
   /**
-   * A task for a GitHub issue. The import keys its tasks on their ref, so a second one for the same issue is
+   * A task for a tracker's issue, sourced by its tracker, whose ref starts with that tracker's prefix (a Jira sync
+   * never writes a `gh:` task). The import keys its tasks on their ref, so a second one for the same issue is
    * refused, and so is one for an issue a team task already links to in its ref (an issue the team opened for
    * its own task, issue migrate): that task tracks it. Two issues may share a title, so the duplicate-title rule
    * does not apply.
    */
-  importAdd(input: ImportInput, state: RegisterState): Verdict<TaskFields> {
-    const fields: TaskFields = { ...input, source: GITHUB_SOURCE, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null };
+  importAdd(source: ImportSource, input: ImportInput, state: RegisterState): Verdict<TaskFields> {
+    const prefix = IMPORT_SOURCES[source];
+    if (!input.ref.startsWith(prefix)) {
+      return refuse(`ref ${input.ref} is not a ${source} ref: it starts with ${prefix}`);
+    }
+    const fields: TaskFields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null };
     const holder = [...state.tasks.values()].find((task) => task.ref === input.ref);
     if (holder !== undefined) {
       return refuse(`${holder.id} already has ref ${input.ref}`);
     }
-    const problem = this.checkFields(fields, importSource);
+    const problem = this.checkFields(fields, importSource(source));
     return problem === undefined ? ok(fields) : refuse(problem);
   }
 
   /**
-   * A title, description or priority GitHub changed, on the import's own task only. A field the task already has
+   * A title, description or priority the tracker changed, on the import's own task only. A field the task already has
    * is left out, judged under the lock, so a sync that raced another changes nothing twice. A task whose line left
    * its description out is judged by its mark (description-cut.ts), or every sync would write the body again.
    */
-  importUpdate(task: Task, changes: ImportChanges, note: string): Verdict<UpdateChange> {
-    const notImported = this.notImported(task);
+  importUpdate(source: ImportSource, task: Task, changes: ImportChanges, note: string): Verdict<UpdateChange> {
+    const notImported = this.notImported(source, task);
     if (notImported !== undefined) {
       return refuse(notImported);
     }
@@ -1339,22 +1349,22 @@ export class RegisterPolicy {
     if (Object.keys(changed).length === 0) {
       return refuse('nothing to change');
     }
-    const problem = this.checkFields({ ...pickFields(task), ...changed }, importSource, { workClass: task.workClass }) ?? this.checkText('note', note);
+    const problem = this.checkFields({ ...pickFields(task), ...changed }, importSource(source), { workClass: task.workClass }) ?? this.checkText('note', note);
     return problem === undefined ? ok({ changes: changed, note }) : refuse(problem);
   }
 
   /**
-   * The one exception to "only the owner sets the status": the import opens, finishes or drops its own
-   * tasks as their issues open and close on GitHub. Any other task, and any other status, is refused.
-   * No skill comes from GitHub, so a done needs none; its evidence is the issue's url.
+   * The one exception to "only the owner sets the status": an import opens, finishes or drops its own
+   * tasks as their issues open and close on its tracker. Any other task, and any other status, is refused.
+   * No skill comes from a tracker, so a done needs none; its evidence is the issue's url.
    */
-  importStatus(task: Task, input: StatusInput): Verdict<StatusChange> {
-    const notImported = this.notImported(task);
+  importStatus(source: ImportSource, task: Task, input: StatusInput): Verdict<StatusChange> {
+    const notImported = this.notImported(source, task);
     if (notImported !== undefined) {
       return refuse(notImported);
     }
-    if (!GITHUB_STATUSES.includes(input.status)) {
-      return refuse(`the GitHub import sets only ${GITHUB_STATUSES.join(', ')}, not ${input.status}`);
+    if (!IMPORT_STATUSES.includes(input.status)) {
+      return refuse(`the ${source} import sets only ${IMPORT_STATUSES.join(', ')}, not ${input.status}`);
     }
     if (input.status === task.status) {
       return refuse(`${task.id} is already ${task.status}`);
@@ -1368,16 +1378,16 @@ export class RegisterPolicy {
     return problem === undefined ? ok({ status: input.status, note, evidence, skill: null }) : refuse(problem);
   }
 
-  /** Why the import may not change the task: it is not one the import added. */
-  private notImported(task: Task): string | undefined {
-    return task.source === GITHUB_SOURCE ? undefined : `${task.id} is not a GitHub task (source ${task.source}): the import changes only its own`;
+  /** Why this import may not change the task: it is not one this import added (another tracker's is not either). */
+  private notImported(source: ImportSource, task: Task): string | undefined {
+    return task.source === source ? undefined : `${task.id} is not a ${source} task (source ${task.source}): the ${source} import changes only its own`;
   }
 
-  /** A source added on this team: a session id, or the owner's marker; never the import's. */
+  /** A source added on this team: a session id, or the owner's marker; never an import's. */
   private teamSourceProblem(source: string): string | undefined {
     const { ownerSource } = this.config.register;
-    if (source === GITHUB_SOURCE) {
-      return `source ${GITHUB_SOURCE} is kept for the tasks teamrig issue sync imports`;
+    if (isImportSource(source)) {
+      return `source ${source} is kept for the tasks teamrig issue sync imports`;
     }
     return source === ownerSource || SESSION_NAME.test(source) ? undefined : `source ${source} is neither a session id nor ${ownerSource}`;
   }

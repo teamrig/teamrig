@@ -27,7 +27,7 @@ import { GITHUB_REPOS_HOST, type PullRequests, type ReviewPosts } from '../../is
 import type { HostPull } from '../../issues/pull.ts';
 import { sessionLogins } from '../../issues/status-push.ts';
 import type { Task } from '../../register/fold.ts';
-import { priorityText } from '../../register/model.ts';
+import { GITHUB_SOURCE, priorityText } from '../../register/model.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hostsOf, reposOf } from '../issue-hosts.ts';
@@ -172,7 +172,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     let end: RepoEnd = 'ok';
     let issueThreads: Thread[] = [];
     if (write) {
-      const outcomes = await applySteps(register, plan.steps);
+      const outcomes = await applySteps(register, GITHUB_SOURCE, plan.steps);
       // Against the tasks as written, so an issue the import just took is held by its new task.
       issueThreads = repoThreads(read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
       claimRead.set(repo, read.issues);

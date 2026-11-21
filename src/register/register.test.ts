@@ -533,12 +533,12 @@ describe('Register, the GitHub import', () => {
 
   it('writes its own tasks as github, under the lock, and keeps each issue to one task', async () => {
     const { files, register } = setup();
-    const { task, event } = written(await register.importAdd(ISSUE));
+    const { task, event } = written(await register.importAdd('github', ISSUE));
     assert.deepEqual([task.id, task.source, task.ref, task.owner, task.createdBy, event.by], ['T1', 'github', 'gh:acme/web#7', 'bravo', 'github', 'github']);
-    assert.equal(errorOf(await register.importAdd(ISSUE)), 'T1 already has ref gh:acme/web#7');
-    const renamed = written(await register.importUpdate('T1', { title: 'Fix the login', priority: 1 }, 'title changed on GitHub'));
+    assert.equal(errorOf(await register.importAdd('github', ISSUE)), 'T1 already has ref gh:acme/web#7');
+    const renamed = written(await register.importUpdate('github', 'T1', { title: 'Fix the login', priority: 1 }, 'title changed on GitHub'));
     assert.deepEqual([renamed.task.title, renamed.task.priority, renamed.event.by], ['Fix the login', 1, 'github']);
-    const closed = written(await register.importStatus('T1', { status: 'done', note: 'closed on GitHub as completed', evidence: URL }));
+    const closed = written(await register.importStatus('github', 'T1', { status: 'done', note: 'closed on GitHub as completed', evidence: URL }));
     assert.deepEqual([closed.task.status, closed.task.evidence, closed.task.skill, closed.event.by], ['done', URL, null, 'github']);
     assert.equal(readEvents(files.get(LOG) ?? '').events.length, 3);
   });
@@ -546,11 +546,20 @@ describe('Register, the GitHub import', () => {
   it('leaves a team task alone, and is no session that may write through the team path', async () => {
     const { files, register } = setup();
     written(await register.add('lead', { title: 'Ship login', description: 'what and why', owner: 'alpha', source: 'lead', priority: 1, ref: 'gh:acme/web#7' }));
-    assert.equal(errorOf(await register.importStatus('T1', { status: 'done', evidence: URL })), 'T1 is not a GitHub task (source lead): the import changes only its own');
-    assert.equal(errorOf(await register.importUpdate('T1', { title: 'Other' }, 'x')), 'T1 is not a GitHub task (source lead): the import changes only its own');
+    assert.equal(errorOf(await register.importStatus('github', 'T1', { status: 'done', evidence: URL })), 'T1 is not a github task (source lead): the github import changes only its own');
+    assert.equal(errorOf(await register.importUpdate('github', 'T1', { title: 'Other' }, 'x')), 'T1 is not a github task (source lead): the github import changes only its own');
     assert.match(errorOf(await register.setStatus('github', 'T1', { status: 'done', evidence: URL, skill: 'none' })), /github is not a session on this team/);
-    assert.match(errorOf(await register.importStatus('T9', { status: 'open' })), /T9/);
+    assert.match(errorOf(await register.importStatus('github', 'T9', { status: 'open' })), /T9/);
     assert.equal(readEvents(files.get(LOG) ?? '').events.length, 1);
+  });
+
+  it('writes a Jira task as jira, and the GitHub import cannot close it', async () => {
+    const { register } = setup();
+    const { task, event } = written(await register.importAdd('jira', { ...ISSUE, ref: 'jira:ENG-12' }));
+    assert.deepEqual([task.source, task.ref, task.createdBy, event.by], ['jira', 'jira:ENG-12', 'jira', 'jira']);
+    assert.equal(errorOf(await register.importStatus('github', task.id, { status: 'dropped' })), `${task.id} is not a github task (source jira): the github import changes only its own`);
+    const closed = written(await register.importStatus('jira', task.id, { status: 'dropped', note: 'closed on Jira' }));
+    assert.deepEqual([closed.task.status, closed.event.by], ['dropped', 'jira']);
   });
 });
 
@@ -579,7 +588,7 @@ describe('Register in a shared numbering (T1139)', () => {
     numbering.floor = 60;
     assert.equal(written(await register.addFromTeam('app/lead', { ...INPUT, title: 'Ship login', owner: 'lead', source: 'app/lead' })).task.id, 'T60');
     numbering.floor = 70;
-    assert.equal(written(await register.importAdd({ title: 'Fix login', description: null, owner: 'bravo', ref: 'gh:acme/web#7', priority: 1 })).task.id, 'T70');
+    assert.equal(written(await register.importAdd('github', { title: 'Fix login', description: null, owner: 'bravo', ref: 'gh:acme/web#7', priority: 1 })).task.id, 'T70');
     assert.equal(numbering.issued, 4);
   });
 

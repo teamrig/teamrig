@@ -45,7 +45,7 @@ describe('applySteps', () => {
       { kind: 'status', ref: 'gh:acme/web#7', id: 'T1', input: { status: 'done', note: 'closed on GitHub as completed', evidence: URL } },
     ];
     const writer = register();
-    assert.deepEqual((await applySteps(writer, steps)).map((outcome) => outcome.result), [
+    assert.deepEqual((await applySteps(writer, 'github', steps)).map((outcome) => outcome.result), [
       { ok: true, value: 'T1' },
       { ok: false, error: 'T1 already has ref gh:acme/web#7' },
       { ok: true, value: 'T1' },
