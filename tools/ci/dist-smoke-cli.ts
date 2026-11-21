@@ -5,6 +5,7 @@ import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_USAGE } from '../lib/exit.ts';
 import { createGit } from '../lib/git.ts';
 import { runMain } from '../lib/run-main.ts';
 import { isRecord, stringField } from '../lib/guards.ts';
+import { adapterFindings, builtAdapterSides } from './adapter-smoke.ts';
 import { launcherModeFinding, smokeDist, type Runner } from './dist-smoke.ts';
 import { spawnRun } from './spawn-run.ts';
 
@@ -41,8 +42,10 @@ async function main(): Promise<number> {
     if (mode !== undefined) {
       findings.push(mode);
     }
+    const adapters = await builtAdapterSides(PLUGIN_ROOT);
+    findings.push(...('finding' in adapters ? [adapters.finding] : await adapterFindings(adapters.sides)));
     if (findings.length === 0) {
-      console.log(`dist-smoke: the launcher and every hook run from the dist on ${process.platform}`);
+      console.log(`dist-smoke: the launcher, every hook and every adapter run from the dist on ${process.platform}`);
       return EXIT_CLEAN;
     }
     console.log(`dist-smoke: ${findings.length} problem(s) on ${process.platform}:`);
