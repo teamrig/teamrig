@@ -306,7 +306,7 @@ describe('GIT_MERGE rebase', () => {
       assert.deepEqual(stopped, {
         ok: false,
         reason:
-          'rebase onto origin/main stopped (conflicts in app.txt); aborted, the branch is as it was; to land it, rebase onto origin/main by hand, resolve those files and merge again, a branch already pushed for review under a new name, never force-pushed',
+          'rebase onto origin/main stopped (conflicts in app.txt); aborted, the branch is as it was; to land it, rebase onto origin/main by hand, resolve those files and merge again; a branch already pushed for review goes back to the same branch with --force-with-lease',
       });
       assert.equal(git.sha(repo.dir, 'HEAD'), mine);
       assert.equal(git.checkoutOf(repo.dir)?.branch, 'feat');
@@ -337,7 +337,7 @@ describe('rebaseStopReason', () => {
   it('names conflicting paths with a newline or ESC escaped, on the one line of the reason', () => {
     assert.equal(
       rebaseStopReason('origin/main', ['a\nb.txt', 'c\u001b[2J.txt'], 'git rebase failed', { ok: true }),
-      'rebase onto origin/main stopped (conflicts in a\\nb.txt, c\\x1b[2J.txt); aborted, the branch is as it was; to land it, rebase onto origin/main by hand, resolve those files and merge again, a branch already pushed for review under a new name, never force-pushed',
+      'rebase onto origin/main stopped (conflicts in a\\nb.txt, c\\x1b[2J.txt); aborted, the branch is as it was; to land it, rebase onto origin/main by hand, resolve those files and merge again; a branch already pushed for review goes back to the same branch with --force-with-lease',
     );
   });
 
