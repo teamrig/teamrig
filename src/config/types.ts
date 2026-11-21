@@ -1853,6 +1853,11 @@ export interface KitConfig {
    * spelt as ownerGates spells it.
    */
   readonly securityGates: readonly string[];
+  /**
+   * The hosts the team's sessions run on, each a shipped host adapter's id, unique (T4752): it says which hosts'
+   * files install. A session names its running host itself; the first one is only the fallback for a bare CLI run.
+   */
+  readonly hosts: readonly string[];
   /** The local rules kept although they conflict with a core rule, each with the side that wins (`rules keep`). */
   readonly ruleConflicts: readonly RuleConflict[];
   readonly messages: MessagesConfig;

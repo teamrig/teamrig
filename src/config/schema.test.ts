@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { HOST_ADAPTERS } from '../composition/adapters.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { NAME_PATTERN, RESERVED_NAMES } from '../core/ids.ts';
 import { MODEL_NAME_MAX_LENGTH, MODEL_NAME_PATTERN } from './launch.ts';
@@ -40,6 +41,7 @@ const EVERY_KEY = {
   leads: { bravo: ['charlie'] },
   team: { id: 'web', parent: 'app' },
   names: { alpha: 'captain' },
+  hosts: ['claude-code'],
   ruleConflicts: [{ file: '~/CLAUDE.md', text: 'Commit straight to main.', rule: 'worktrees', wins: 'local', reason: 'solo repo' }],
   dbWriteGuard: {
     writes: 'deny',
@@ -531,6 +533,15 @@ describe('config.schema.json', () => {
     assert.ok(typeof description === 'string');
     const listed = /a shared method \(([^)]*)\)/.exec(description)?.[1]?.split(', ') ?? [];
     assert.deepEqual(listed.toSorted(), [...SHARED_METHOD_NAMES].map((name) => name.toLowerCase()).toSorted());
+  });
+
+  it('takes the host ids teamrig ships an adapter for', async () => {
+    const hosts = nodeAt(await loadSchema(), 'hosts');
+    const items = hosts['items'];
+    assert.ok(isRecord(items));
+    assert.deepEqual(items['enum'], Object.keys(HOST_ADAPTERS));
+    assert.equal(hosts['uniqueItems'], true);
+    assert.equal(hosts['minItems'], 1);
   });
 
   it('takes the rule conflicts the parser takes', async () => {

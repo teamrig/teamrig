@@ -1,3 +1,4 @@
+import { HOST_ADAPTERS } from '../composition/adapters.ts';
 import { ADMISSION_MODES, isAdmissionMode } from '../delivery/admission.ts';
 import { ASSIGNED_SCOPES, isAssignedScope } from '../sync/scope.ts';
 import { CHANGE_SOURCE_IDS, isChangeSourceId } from '../changes/ids.ts';
@@ -47,6 +48,7 @@ import {
   DEFAULT_OPEN,
   DEFAULT_OWNER_GATES,
   DEFAULT_SECURITY_GATES,
+  DEFAULT_HOSTS,
   DEFAULT_COMMIT_GUARD,
   DEFAULT_DB_WRITE_GUARD,
   DEFAULT_SECRET_GUARD,
@@ -427,6 +429,39 @@ function readSecurityGates(read: ConfigReader, raw: JsonRecord, ownerGates: read
 }
 
 /**
+ * `hosts` (T4752): the hosts the team's sessions run on, each a shipped host adapter's id. An unknown id or a repeat
+ * is an issue and dropped, so the list kept is bounded by the shipped adapters; a list left empty takes the default,
+ * since a team runs on at least one host.
+ */
+function readHosts(read: ConfigReader, raw: JsonRecord): readonly string[] {
+  const shipped = Object.keys(HOST_ADAPTERS);
+  const seen = new Set<string>();
+  const hosts = read.list(
+    raw,
+    'hosts',
+    '',
+    DEFAULT_HOSTS,
+    (value, itemPath) => {
+      const host = read.stringItem(value, itemPath, oneOf(shipped));
+      if (host === undefined) {
+        return undefined;
+      }
+      if (seen.has(host)) {
+        read.report(itemPath, `"${host}" is listed twice`);
+        return undefined;
+      }
+      seen.add(host);
+      return host;
+    },
+  );
+  if (hosts.length === 0) {
+    read.report('hosts', 'expected at least one host');
+    return DEFAULT_HOSTS;
+  }
+  return hosts;
+}
+
+/**
  * `launch`: a model, an effort and a project folder for sessions on the team. A wrong field is reported and
  * left out, so the session starts on Claude Code's own choice (or, for the lead, the lead's default) for it,
  * and in the team's folder.
@@ -557,6 +592,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     leads,
     ownerGates,
     securityGates: readSecurityGates(read, raw, ownerGates),
+    hosts: readHosts(read, raw),
     ruleConflicts: read.list(
       raw,
       'ruleConflicts',
