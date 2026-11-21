@@ -24,12 +24,15 @@ interface Kit {
   readonly http: FakeHttp;
 }
 
-/** A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config names. */
-function kit(stamp: boolean = false, saved: boolean = true, issueType?: string): Kit {
+/**
+ * A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config
+ * names, `site` the site it names.
+ */
+function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string): Kit {
   const http = new FakeHttp();
   const credentials = saved ? new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token') : new FakeCredentials();
   const client = new JiraClient(http, credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
-  return { tracker: new JiraTracker(client, stamp, issueType), http };
+  return { tracker: new JiraTracker(client, stamp, { site, issueType }), http };
 }
 
 function parsedJson(text: string): unknown {
@@ -854,5 +857,39 @@ describe('what the Jira tracker does not do yet', () => {
     assert.deepEqual(await tracker.addBlockedBy(), failed(NOT_BUILT.links));
     assert.equal('fields' in tracker, false);
     assert.deepEqual(http.requests, []);
+  });
+});
+
+describe("the site the team's config names (T4912, security N1 of T4806)", () => {
+  const OTHER = 'other/eng';
+  const OTHER_SITE = '"other/eng" is on the site other, but connectors.jira.site names acme: a project of another site is not reached';
+
+  it('refuses every use of a project on another site, with no request sent', async () => {
+    const { tracker, http } = kit(false, true, undefined, 'acme');
+    const target = { repo: OTHER, number: 12 };
+    assert.deepEqual(await tracker.reach(OTHER, 'read'), { kind: 'unreachable', reason: OTHER_SITE });
+    assert.deepEqual(await tracker.list(OTHER, '2026-11-01'), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.watch(OTHER, new Map()), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.open({ repo: OTHER, title: 'A title', body: '', labels: [] }), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.labelExists(OTHER, 'p1'), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.createLabel(OTHER, { name: 'p1', color: 'ffffff', description: '' }), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.assigneeExists(OTHER, 'abc'), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.viewer(OTHER), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.assign(target, ['abc']), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.addLabels(target, []), failed(OTHER_SITE));
+    assert.deepEqual(await tracker.issueLabels(target), failed(OTHER_SITE));
+    assert.deepEqual(http.requests, []);
+  });
+
+  it('reaches a project on the named site as before', async () => {
+    const { tracker } = kit(false, true, undefined, 'acme');
+    assert.deepEqual(await tracker.reach(REPO, 'read'), { kind: 'reached', access: `acme: read with the API token saved as ${CREDENTIAL}`, scope: 'acme' });
+  });
+
+  it("lets a task's ref name its site while the config names none", async () => {
+    const credentials = new FakeCredentials().saves('teamrig-jira-other', 'someone@example.com:the-token');
+    const client = new JiraClient(new FakeHttp(), credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
+    const tracker = new JiraTracker(client, false);
+    assert.deepEqual(await tracker.reach(OTHER, 'read'), { kind: 'reached', access: 'other: read with the API token saved as teamrig-jira-other', scope: 'other' });
   });
 });

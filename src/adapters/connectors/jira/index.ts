@@ -13,5 +13,5 @@ import { JiraTracker } from './tracker.ts';
 export default defineConnector({
   declaration,
   parseConfig: parseJiraConfig,
-  create: (deps, config) => ({ tracker: new JiraTracker(new JiraClient(deps.http, deps.credentials, deps.scanner, sleep, Math.random), deps.stamp, config.issueType) }),
+  create: (deps, config) => ({ tracker: new JiraTracker(new JiraClient(deps.http, deps.credentials, deps.scanner, sleep, Math.random), deps.stamp, config) }),
 });
