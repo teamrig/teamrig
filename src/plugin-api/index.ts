@@ -87,6 +87,7 @@ export {
   type AskCall,
   type BackgroundMark,
   type CallUsage,
+  type ChildEnvironment,
   type CompactEntry,
   type ContinuedEntry,
   type EditCall,
