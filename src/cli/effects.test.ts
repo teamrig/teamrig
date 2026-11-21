@@ -152,6 +152,7 @@ const EXPECTED = {
   'worktree add': 'write',
   'worktree remove': 'write',
   test: 'write',
+  gh: 'write',
   'hook push-guard': 'internal',
   'hook package-guard': 'internal',
   'hook secret-guard': 'internal',

@@ -6450,6 +6450,42 @@ loads: none
 app: 2 commits pushed, not deployed (c1a2b3c4..d5e6f7a8)
 ```
 
+### teamrig gh
+
+Runs one call of the code host's own command-line tool with the key teamrig saved for the owner of the repository
+the call reaches, never the machine's own login for that tool, which may be another project's key. So a session
+reads an issue, a review or a workflow run of any repository its team has a key for, each on that owner's key,
+without signing the tool in or out.
+
+The owner comes from the call's words: `-R <owner>/<name>` (or `--repo`), an `api` path under `repos/`, `orgs/`
+or `users/`, a `repo` command's repository; else `GH_REPO`; else the folder's git remotes. The key is handed
+to the tool for that one run and never printed. No key saved for that owner prints the teamrig command that saves
+one; there is no fallback to the machine's login.
+
+REFUSED, before any key is read: a call that reaches more than one owner (one run uses one owner's key: name one
+repository with `-R`), or none teamrig can tell (a remote in a form it cannot read, such as an SSH alias); the
+`auth`, `config`, `alias` and `extension` groups and any alias or extension, which would change the tool or run
+code with the key; a `GH_HOST` other than the host the keys are for; and a write on one of the team's
+repositories, which names the teamrig command to run instead, as those check who may write there. The tool runs up
+to 60 s and 32 MB of output. Exit 0 when it did, 1 otherwise; when it says the key lacks a right or is no longer
+good, a line names the key and the command that saves a new one.
+
+Everything after `--` is the tool's own words.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig gh -- issue view 12 -R acme/app --json state,title
+```
+
+Output:
+
+```text
+{"state":"OPEN","title":"Ship the release"}
+```
+
 ### teamrig test
 
 Runs a test command in the shell and prints a few lines instead of all it printed, so a long test run costs the
