@@ -85,13 +85,19 @@ export interface SessionProcesses {
   feed(request: FeedRequest): Promise<FeedOutcome>;
 }
 
-/** Whether `pid` still runs Claude Code: a pid the system gave another program since does not count. */
-export async function runsClaude(processes: Pick<SessionProcesses, 'alive' | 'describe'>, pid: number | undefined): Promise<boolean> {
+/** Whether a process is a host's own program running a session, as a host's session launcher tells it (`isSessionProcess`). */
+export type SessionProcessCheck = (process: ProcessInfo) => boolean;
+
+/**
+ * Whether `pid` still runs a session's host program, which `isSessionProcess` tells: a pid the system gave another
+ * program since does not count.
+ */
+export async function runsSession(processes: Pick<SessionProcesses, 'alive' | 'describe'>, pid: number | undefined, isSessionProcess: SessionProcessCheck): Promise<boolean> {
   if (pid === undefined || !processes.alive(pid)) {
     return false;
   }
   const info = await processes.describe(pid);
-  return info !== undefined && isClaudeProcess(info);
+  return info !== undefined && isSessionProcess(info);
 }
 
 export interface SessionProcessesOptions {

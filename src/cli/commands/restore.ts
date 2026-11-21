@@ -13,7 +13,7 @@ import { teamWindowOf } from '../../open/terminals.ts';
 import { encodePrompt } from '../../open/prompt.ts';
 import { shellCommand } from '../../open/quote.ts';
 import { plainSessionEnv } from '../../open/session-env.ts';
-import { runsClaude, type EndOutcome } from '../../open/session-processes.ts';
+import type { EndOutcome } from '../../open/session-processes.ts';
 import { RestoreArchive, restoreArchiveDir } from '../../restore/archive.ts';
 import type { RestoreEntry } from '../../restore/entry.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../../restore/registry.ts';
@@ -25,6 +25,7 @@ import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../arg
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, transcriptsOf } from '../host.ts';
+import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
 import { claudeExit, claudeProgramOf, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
 
@@ -175,7 +176,7 @@ function roomWaitMsOf(teams: ReadonlyMap<string, TreeTeam>): number {
  */
 async function endSession(runtime: CliRuntime, entry: RestoreEntry): Promise<EndOutcome> {
   const { pid } = entry;
-  if (pid === undefined || !(await runsClaude(runtime.sessionProcesses, pid))) {
+  if (pid === undefined || !(await runsHostSession(runtime, pid))) {
     return { kind: 'gone' };
   }
   return runtime.sessionProcesses.end(pid, 'force');
@@ -202,7 +203,7 @@ async function restoreDepsOf(runtime: CliRuntime, terminal: TerminalChoice | und
     projectsDir,
     platform: runtime.platform,
     roomWaitMs: roomWaitMsOf(teams),
-    stillRunning: (entry) => runsClaude(runtime.sessionProcesses, entry.pid),
+    stillRunning: (entry) => runsHostSession(runtime, entry.pid),
     transcriptOf: (entry) => finder.find(entry),
     modifiedAt: (path) => runtime.files.modifiedAt(path),
     end: (entry) => endSession(runtime, entry),

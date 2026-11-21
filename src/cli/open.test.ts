@@ -7,7 +7,7 @@ import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, hostRunning, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -726,6 +726,23 @@ describe('teamrig launch', () => {
         const result = await kit.run(LAUNCH, { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' }, ...host });
         assert.deepEqual([result.code, processes.ran.length], [EXIT.ok, 1], name);
       }
+    });
+
+    it("is refused while it runs in the program of the host the run works in, which no other host takes for a session's", async () => {
+      const inDesk = (): Pick<RunOptions, 'sessionProcesses' | 'memory'> => ({
+        ...claudeRuns(6900),
+        sessionProcesses: new FakeSessionProcesses().add({ pid: 6900, parentPid: 1, name: 'agent-desk', commandLine: 'agent-desk' }),
+      });
+      const refused = new CliHarness(TEAM);
+      await recordStart(refused, 6900);
+      const none = new FakeProcesses();
+      const result = await refused.run(LAUNCH, { probe: ON_PATH, processes: none, env: { PATH: '/usr/local/bin' }, host: hostRunning('agent-desk'), ...inDesk() });
+      assert.deepEqual([result.code, result.stdout.at(-1), none.ran], [EXIT.refused, liveLine(6900), []]);
+      const started = new CliHarness(TEAM);
+      await recordStart(started, 6900);
+      const one = new FakeProcesses();
+      const elsewhere = await started.run(LAUNCH, { probe: ON_PATH, processes: one, env: { PATH: '/usr/local/bin' }, ...inDesk() });
+      assert.deepEqual([elsewhere.code, one.ran.length], [EXIT.ok, 1]);
     });
 
     it('is refused on a restart when another Claude Code took the session meanwhile', async () => {

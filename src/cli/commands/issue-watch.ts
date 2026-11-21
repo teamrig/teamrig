@@ -17,7 +17,6 @@ import {
   type WatchLease,
 } from '../../sync/watch.ts';
 import { GITHUB_REPOS_HOST, type WatchMarks } from '../../issues/host.ts';
-import { runsClaude } from '../../open/session-processes.ts';
 import { SessionRecordStore } from '../../sessions/record.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { fileLockOf } from '../file-locks.ts';
@@ -25,6 +24,7 @@ import { hostsOf } from '../issue-hosts.ts';
 import { openTeamKit, requireConfig, type Kit } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { CONNECTOR_OFF } from '../connector-off.ts';
+import { runsHostSession } from '../session-process.ts';
 import { githubOffBy } from './issue-sync-auto.ts';
 import { issueSync } from './issue-sync.ts';
 
@@ -201,7 +201,7 @@ async function beat(runtime: CliRuntime, kit: Kit, config: KitConfig): Promise<b
 async function anySessionRuns(runtime: CliRuntime, kit: Kit, config: KitConfig): Promise<boolean> {
   const records = await new SessionRecordStore(runtime.files, kit.paths).readEach(config.sessions);
   for (const record of records.values()) {
-    if (record !== undefined && (await runsClaude(runtime.sessionProcesses, record.claudePid))) {
+    if (record !== undefined && (await runsHostSession(runtime, record.claudePid))) {
       return true;
     }
   }

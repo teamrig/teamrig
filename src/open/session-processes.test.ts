@@ -20,8 +20,9 @@ import {
   parseWindowsListing,
   parseWindowsProcess,
   parseWindowsProcesses,
-  runsClaude,
+  runsSession,
   type ListedProcess,
+  type ProcessInfo,
 } from './session-processes.ts';
 
 describe('isClaudeProcess', () => {
@@ -35,10 +36,21 @@ describe('isClaudeProcess', () => {
   });
 });
 
-describe('runsClaude', () => {
-  it('tells a pid that still runs Claude Code from none, a gone one and one another program has since', async () => {
-    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'claude.exe', commandLine: '' }).add({ pid: 42, parentPid: 1, name: 'notepad.exe', commandLine: '' });
-    assert.deepEqual(await Promise.all([41, 42, 43, undefined].map((pid) => runsClaude(processes, pid))), [true, false, false, false]);
+describe('runsSession', () => {
+  it("tells a pid that still runs a session's host program from none, a gone one and one another program has since", async () => {
+    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'agent-desk', commandLine: '' }).add({ pid: 42, parentPid: 1, name: 'notepad.exe', commandLine: '' });
+    const asked: string[] = [];
+    const isSessionProcess = (info: ProcessInfo): boolean => {
+      asked.push(info.name);
+      return info.name === 'agent-desk';
+    };
+    assert.deepEqual(await Promise.all([41, 42, 43, undefined].map((pid) => runsSession(processes, pid, isSessionProcess))), [true, false, false, false]);
+    assert.deepEqual(asked, ['agent-desk', 'notepad.exe'], 'the host is asked of a running process alone');
+  });
+
+  it('knows no program itself: a process no host calls its own runs no session', async () => {
+    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'claude.exe', commandLine: '' });
+    assert.equal(await runsSession(processes, 41, () => false), false);
   });
 });
 

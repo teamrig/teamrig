@@ -7,7 +7,6 @@ import type { TimeZone } from '../core/zone.ts';
 import type { TranscriptReader } from '../ports/host/index.ts';
 import { RestartLog, type RestartRow } from '../refresh/restart-log.ts';
 import { RefreshStore } from '../refresh/store.ts';
-import { runsClaude, type SessionProcesses } from '../open/session-processes.ts';
 import { lastTurnAtOf, tabActivityOf } from '../sessions/idle.ts';
 import { REPLY_TAIL_BYTES } from '../turn-log/reply.ts';
 import type { UnownedWarning } from './unowned.ts';
@@ -42,16 +41,20 @@ async function quietSinceOf(reader: TranscriptReader | undefined, files: Files, 
   return activity === 'turn' || activity === 'call' ? undefined : Math.max(readyAt, lastTurnAtOf(reader, tail, cut) ?? readyAt);
 }
 
-type ClaudeProcesses = Pick<SessionProcesses, 'alive' | 'describe'>;
+/** Whether a recorded process still runs a session: its host's own program, not one the system gave its id since. */
+type SessionRuns = (pid: number) => Promise<boolean>;
 
-/** What the check reads a session's state from: the host's transcript reader (undefined: it keeps none teamrig reads), files and processes. */
+/**
+ * What the check reads a session's state from: the host's transcript reader (undefined: it keeps none teamrig reads),
+ * files, and whether a recorded process still runs a session.
+ */
 interface StalledSources {
   readonly reader: TranscriptReader | undefined;
   readonly files: Files;
-  readonly processes: ClaudeProcesses;
+  readonly sessionRuns: SessionRuns;
 }
 
-async function stalledOf({ reader, files, processes }: StalledSources, store: RefreshStore, log: RestartLog, session: string, now: number, waitMs: number): Promise<Stalled | undefined> {
+async function stalledOf({ reader, files, sessionRuns }: StalledSources, store: RefreshStore, log: RestartLog, session: string, now: number, waitMs: number): Promise<Stalled | undefined> {
   const state = await store.state(session);
   if (state?.phase !== 'ready' || !state.noticed || (await store.restart(session)) !== undefined || (await store.parked(session)) !== undefined) {
     return undefined;
@@ -63,7 +66,7 @@ async function stalledOf({ reader, files, processes }: StalledSources, store: Re
   }
   // A ready state outlives its tab (closed by a person, the idle pass or a reboot); with no Claude Code left, the next
   // start reads the handover, so nothing is stalled. Looked up last: it costs a process read.
-  if (state.claudePid !== null && !(await runsClaude(processes, state.claudePid))) {
+  if (state.claudePid !== null && !(await sessionRuns(state.claudePid))) {
     return undefined;
   }
   return { session, readyAt, quietSince, row: await log.lastRowOf(session) };
@@ -89,7 +92,7 @@ function rowText(row: RestartRow | undefined, zone: TimeZone): string {
 export async function restartStalledWarnings(
   reader: TranscriptReader | undefined,
   files: Files,
-  processes: ClaudeProcesses,
+  sessionRuns: SessionRuns,
   paths: Pick<TeamPaths, 'refresh' | 'handover' | 'team'>,
   config: Pick<KitConfig, 'refresh' | 'roles' | 'sessions'>,
   zone: TimeZone,
@@ -100,7 +103,7 @@ export async function restartStalledWarnings(
   const { restartDelaySeconds } = config.refresh;
   const waitMs = restartDelaySeconds * 1000 + STALLED_MARGIN_MINUTES * MS_PER_MINUTE;
   const covered = config.sessions.filter((session) => autoRestartOf(config, session));
-  const stalled = await Promise.all(covered.map((session) => stalledOf({ reader, files, processes }, store, log, session, now, waitMs)));
+  const stalled = await Promise.all(covered.map((session) => stalledOf({ reader, files, sessionRuns }, store, log, session, now, waitMs)));
   return stalled.flatMap((each) => {
     if (each === undefined) {
       return [];

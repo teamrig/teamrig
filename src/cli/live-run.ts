@@ -1,12 +1,12 @@
 import { treeOf } from '../delivery/processes.ts';
 import { KIT_NAME, type TeamPaths } from '../core/home.ts';
-import { runsClaude } from '../open/session-processes.ts';
 import { KIND_TAIL_BYTES, transcriptKindOf } from '../restore/transcript-kind.ts';
 import { measureSessions, runningPlaces } from '../sessions/measure.ts';
 import { SessionRecordStore, type SessionRecord } from '../sessions/record.ts';
 import { transcriptsIfKept } from './host.ts';
 import { backgroundJobSessionOf, isForkOf } from './same-session.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
+import { runsHostSession, type SessionProcessRuntime } from './session-process.ts';
 
 /** What telling a tab's own background job takes: its transcript's end, the host's reader of it, the process list. */
 type HandOffRuntime = Pick<CliRuntime, 'files' | 'sessionProcesses' | 'host' | 'env' | 'platform'>;
@@ -41,7 +41,7 @@ export interface LiveRun {
  * cannot list its processes; only a recorded process that still runs Claude Code costs that listing.
  */
 export async function liveRunOf(
-  runtime: Pick<CliRuntime, 'files' | 'sessionProcesses' | 'memory'>,
+  runtime: Pick<CliRuntime, 'files' | 'memory'> & SessionProcessRuntime,
   paths: Pick<TeamPaths, 'sessions'>,
   ids: readonly string[],
   id: string,
@@ -49,7 +49,7 @@ export async function liveRunOf(
 ): Promise<LiveRun | undefined> {
   const records = await new SessionRecordStore(runtime.files, paths).readEach(ids);
   const record = records.get(id);
-  if (record === undefined || record.claudePid === own || !(await runsClaude(runtime.sessionProcesses, record.claudePid))) {
+  if (record === undefined || record.claudePid === own || !(await runsHostSession(runtime, record.claudePid))) {
     return undefined;
   }
   const rows = await runtime.memory.processes();
