@@ -190,7 +190,9 @@ sequenceDiagram
   p1 turn chain would run on until the morning), whatever `wake.priority` says. While the owner's
   daily meeting is open the lead is not woken; the work waits for the first check after the meeting.
 - How often: each task wakes a session once. The first new task starts a batch of `wake.batchSeconds` (120 s), and
-  one wake names every task handed meanwhile; wakes of one session are at least `wake.minGapMinutes` (15) apart.
+  one wake names every task handed meanwhile; wakes of one session are at least
+  `wake.minGapMinutes` (15) apart for one task due, up to `wake.maxGapMinutes` (30) at five or more; a blocker waits
+  for no gap.
   Work that was there when the tab started, or before a `/clear`, is seen at its first prompt, as before. A closed
   session that `teamrig open` (or the idle pass) resumes counts that open as its wake: only work handed after it
   wakes it.
