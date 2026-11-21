@@ -6,7 +6,7 @@ import { resolveTeam } from "../../core/team.js";
 import { OwnPaths, tasksSearched, TeamFolders } from "../../hooks/lead-boundary.js";
 import { indexMarks } from "../../inbox/marks.js";
 import { JsonlEventLog } from "../../register/store.js";
-import { hooksOf, pathsIfKnown } from "../host.js";
+import { hooksOf, identityOf, pathsIfKnown } from "../host.js";
 import { openKit, rosterOf, teamFolders } from "../kit.js";
 import { inboxDepsOf } from "./inbox.js";
 /** A hook's stdin as JSON; undefined when it is not JSON, which every hook treats as nothing to do. */
@@ -37,13 +37,13 @@ export function writeReply(runtime, on, reply) {
 }
 /**
  * The team a session's hooks run for: `$TEAMRIG_TEAM`, else the nearest pointer above the folder the
- * session started in (the project folder the host names in the environment), then above `folder`, the one the hook
+ * session started in (the project folder the host tells the run), then above `folder`, the one the hook
  * event names, undefined when the input named none. That folder follows
  * a `cd`, so walking it first would let a tab that moved into another team's project read, and bind
  * to, that team's sessions. The push guard keeps `hookTeam`: a push belongs to the folder it runs in.
  */
 export function sessionTeam(folder, runtime) {
-    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime.env, [runtime.env[ENV.claudeProjectDir], folder, runtime.cwd]));
+    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [identityOf(runtime).projectDir, folder, runtime.cwd]));
 }
 /** `$TEAMRIG_SESSION` as Claude Code passed it to the hook; undefined when unset or blank. */
 export function envSession(runtime) {

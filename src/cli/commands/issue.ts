@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { ENV } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import type { KitConfig } from '../../config/types.ts';
-import { issueRef } from '../../github/map.ts';
+import { issueRef } from '../../sync/map.ts';
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from '../../issues/assign.ts';
 import { CLOSE_REASONS, hostKindOf, parseIssueTarget, targetText, type CloseReason, type HostKind, type IssueTarget } from '../../issues/host.ts';
 import { bareRef, refOf } from '../../issues/ref.ts';
@@ -15,6 +15,7 @@ import { RegisterPolicy } from '../../register/policy.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
 import { onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
 import { withDescriptions } from '../card-texts.ts';
+import { secretFilesOf } from '../host.ts';
 import { callerOf } from '../inputs.ts';
 import { hostsOf, type Hosts } from '../issue-hosts.ts';
 import { sessionIdOf } from '../kit.ts';
@@ -171,7 +172,7 @@ export async function issueEdit(args: ParsedArgs, runtime: CliRuntime): Promise<
  */
 async function bodyFileOf(given: string, runtime: CliRuntime, config: KitConfig): Promise<string> {
   const path = resolve(runtime.cwd, given);
-  if (secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform).paths.listed(path)) {
+  if (secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform, secretFilesOf(runtime)).paths.listed(path)) {
     throw new RefusedError(`--body-file names a file the secret guard keeps (secretGuard.paths): ${given} is never read or posted`);
   }
   const text = await runtime.files.read(path);

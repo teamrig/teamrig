@@ -1,5 +1,17 @@
-import { isUnsupported, type HookBridge, type HostPaths, type HostPermissions, type HostPorts, type StatusLine, type TranscriptReader, type UsageMeter } from '../ports/host/index.ts';
+import {
+  isUnsupported,
+  type HookBridge,
+  type HostPaths,
+  type HostPermissions,
+  type HostPlugin,
+  type HostPorts,
+  type SessionIdentity,
+  type StatusLine,
+  type TranscriptReader,
+  type UsageMeter,
+} from '../ports/host/index.ts';
 import type { ContextSource } from '../refresh/usage.ts';
+import type { HostSecretFiles } from '../secret-guard/rules.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
 /**
@@ -100,6 +112,36 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
   return paths;
 }
 
+/**
+ * Who tells the secret guard the hosts' own secret files in this run: every host adapter teamrig ships with, then
+ * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
+ * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
+ * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
+ * its folders adds none.
+ */
+export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecretFiles {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+    const { paths } = source(seen);
+    return isUnsupported(paths) ? [] : paths.secretFiles();
+  });
+  const once: readonly string[] = [...new Set(named)];
+  return { secretFiles: () => once };
+}
+
+/** What a host telling nothing of its sessions tells a run: no part of who it is. */
+const UNTOLD: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined };
+
+/**
+ * Who the run's host says this run is: the folder its session started in, how the host was started and the kind of
+ * session. It never refuses: on a host that tells nothing of its sessions each part is untold, and a caller goes on
+ * as in a run no session started, by the working folder and what its own input says.
+ */
+export function identityOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): SessionIdentity {
+  const { launcher } = hostOf(runtime);
+  return isUnsupported(launcher) ? UNTOLD : launcher.identity();
+}
+
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
 export function hostHomeOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
   return pathsOf(runtime).home(runtime.userHome);
@@ -126,4 +168,31 @@ export function permissionsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platfo
 export function permissionsIfKept(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostPermissions | undefined {
   const { permissions } = hostOf(runtime);
   return isUnsupported(permissions) ? undefined : permissions;
+}
+
+/** The run's plugin store. A host that keeps none refuses with its own reason, as `transcriptsOf` does. */
+export function pluginOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostPlugin {
+  const { plugin } = hostOf(runtime);
+  if (isUnsupported(plugin)) {
+    throw new RefusedError(plugin.notice);
+  }
+  return plugin;
+}
+
+/**
+ * The run's plugin store, or undefined on a host that keeps none: for a step that goes on without it, such as a
+ * session's PATH, which then has no cache folder to leave out.
+ */
+export function pluginIfKept(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostPlugin | undefined {
+  const { plugin } = hostOf(runtime);
+  return isUnsupported(plugin) ? undefined : plugin;
+}
+
+/**
+ * Whether a PATH folder is a plugin install's `bin` folder in the run's host's cache, for a session's PATH to leave
+ * out. A host that keeps no plugin store has none, so every folder stays.
+ */
+export function cacheBinOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): (folder: string) => boolean {
+  const plugin = pluginIfKept(runtime);
+  return plugin === undefined ? () => false : (folder) => plugin.isCacheBin(folder);
 }

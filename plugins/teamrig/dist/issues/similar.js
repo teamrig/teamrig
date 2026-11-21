@@ -1,4 +1,4 @@
-import { SECRET_BODY } from "../github/map.js";
+import { SECRET_BODY } from "../sync/map.js";
 import { ACTIVE_STATUSES, isIssueRef } from "../register/model.js";
 /**
  * Duplicate candidates for an issue, found without the issue host and without a model: TF-IDF over the words of the

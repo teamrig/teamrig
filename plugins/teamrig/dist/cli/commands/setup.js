@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { launchOf } from "../../config/launch.js";
 import { SHIPPED_CONFIG_FORMAT } from "../../config/migrate.js";
-import { ENV, KIT_NAME, resolveKitHome, teamConfigFile } from "../../core/home.js";
+import { KIT_NAME, resolveKitHome, teamConfigFile } from "../../core/home.js";
 import { describeRequirement } from "../../requirements/requirements.js";
 import { applyIgnore, ignoreLines, ignoreStep } from "../../setup/pointer-ignore.js";
 import { applySetupTask, setupTaskDryLines, setupTaskLines, setupTaskStep } from "../../setup/setup-task.js";
@@ -9,7 +9,7 @@ import { tabStatusLine } from "../../setup/tab-status-note.js";
 import { applyTeamSetup, planTeamSetup, teamSpecOf } from "../../setup/team-create.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { pointerTeam, resolveTeam } from "../../core/team.js";
-import { pathsIfKnown } from "../host.js";
+import { identityOf, pathsIfKnown } from "../host.js";
 import { openKit, requireConfig, teamFolders, teamProjectOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { teamRegister } from "../team-register.js";
@@ -17,9 +17,9 @@ import { loadTree } from "../tree.js";
 import { titleLeftToHooks } from "./hook-tab-status.js";
 /** The session that leads a team created without `--lead`. */
 export const DEFAULT_LEAD = 'lead';
-/** The project a command sets up: `--project`, else the folder Claude Code started in, else the current folder. */
+/** The project a command sets up: `--project`, else the folder the host says the session started in, else the current folder. */
 export async function projectOf(runtime, flag) {
-    const given = flag ?? runtime.env[ENV.claudeProjectDir]?.trim();
+    const given = flag ?? identityOf(runtime).projectDir;
     const project = resolve(runtime.cwd, given === undefined || given === '' ? '.' : given);
     if ((await runtime.probe.kind(project)) !== 'folder') {
         throw new RefusedError(`the project folder ${project} does not exist`);
@@ -42,7 +42,7 @@ export function sessionFoldersOf(runtime, config, flag, from) {
  * the caller's team, not that project's. Without --project, the caller's team. Undefined before one exists.
  */
 export async function setupTeamOf(runtime, asked) {
-    const found = asked === undefined ? await resolveTeam(runtime.files, runtime.env, teamFolders(runtime.env, [runtime.cwd])) : await pointerTeam(runtime.files, [asked]);
+    const found = asked === undefined ? await resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [runtime.cwd])) : await pointerTeam(runtime.files, [asked]);
     switch (found.kind) {
         case 'none':
             return undefined;

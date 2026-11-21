@@ -15,6 +15,7 @@ import { serviceRoleGuardReply } from "../../hooks/service-role-guard.js";
 import { approvedTaskOf } from "../../register/approval.js";
 import { JsonlEventLog } from "../../register/store.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
+import { secretFilesOf } from "../host.js";
 import { rosterOf } from "../kit.js";
 import { leadAboveOf } from "../tree.js";
 import { teamSessionOf } from "./hook-input.js";
@@ -127,7 +128,7 @@ export function secretGuardReplyOf(runtime, guard, event) {
     const config = secretGuardOf(guard.load);
     return secretGuardReply(event, {
         cwd: runtime.cwd,
-        rules: secretRulesOf(config, runtime.userHome, runtime.platform, secretPatternsOf(guard.load)),
+        rules: secretRulesOf(config, runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(guard.load)),
         secretReads: config.secretReads,
         writes: config.writes,
     });

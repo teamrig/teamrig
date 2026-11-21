@@ -4,6 +4,7 @@ import { EnvAssignments } from "../../secret-guard/env-assignments.js";
 import { ToolOutputRedactor } from "../../secret-guard/redactor.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { noPositionals } from "../args.js";
+import { secretFilesOf } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { guardLoadOf } from "./hook-guard-load.js";
 import { readHookInput, writeReply } from "./hook-input.js";
@@ -27,7 +28,7 @@ export async function secretRedact(args, runtime) {
     if (!config.redact || result === undefined || event === undefined) {
         return EXIT.ok;
     }
-    const rules = secretRulesOf(config, runtime.userHome, runtime.platform, secretPatternsOf(guard.load));
+    const rules = secretRulesOf(config, runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(guard.load));
     const redaction = new ToolOutputRedactor([rules.shapes, new EnvAssignments(rules.names)]).redact(result.response);
     if (redaction.classes.length === 0) {
         return EXIT.ok;

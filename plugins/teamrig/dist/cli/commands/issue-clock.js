@@ -1,19 +1,19 @@
 import { SecretScanner } from "../../core/secrets.js";
-import { formatClocks, issueThread, parseClocks, pullThread, remindersText, stepClocks } from "../../github/clock.js";
-import { issueOwner, issueRef } from "../../github/map.js";
+import { formatClocks, issueThread, parseClocks, pullThread, remindersText, stepClocks } from "../../sync/clock.js";
+import { issueOwner, issueRef } from "../../sync/map.js";
 import { postLine } from "../../inbox/inbox.js";
 import { GITHUB_ACTOR } from "../../register/policy.js";
 import { fileLockOf } from "../file-locks.js";
 import { teamZone } from "../kit.js";
 import { inboxDepsOf } from "./inbox.js";
 /**
- * The response clock's part of a sync that writes (T3028, github/clock.ts): from each repository it read, the open
+ * The response clock's part of a sync that writes (T3028, sync/clock.ts): from each repository it read, the open
  * threads (issues and pull requests) and who answers each, then the clocks kept in their own file under the sync's lock, and one unwoken inbox
  * line to each owner whose thread reached 75% of its answer target. GH-LATE at 100% is `check`'s (issue-clock-check.ts).
  */
 /**
  * The open issues of one repository read as threads: one a task tracks is held and answered by that task's owner, any
- * other by the import's owner rule. A post is ours by `ours`, the team's logins (github/clock.ts postIsOurs).
+ * other by the import's owner rule. A post is ours by `ours`, the team's logins (sync/clock.ts postIsOurs).
  */
 export function repoThreads(issues, tasks, rules, ours) {
     const holders = new Map();
@@ -30,8 +30,8 @@ export function repoThreads(issues, tasks, rules, ours) {
 }
 /**
  * The open pull requests of one repository read as `pull` threads, each once, answered by whom its news goes to: the
- * owner of the task one of our own branches names, else `watcher` (github/pull-news.ts pullRecipient). Give it the
- * open read's pull requests: only that read carries their posts (github/queries.ts).
+ * owner of the task one of our own branches names, else `watcher` (sync/pull-news.ts pullRecipient). Give it the
+ * open read's pull requests: only that read carries their posts (adapters/connectors/github/queries.ts).
  */
 export function pullThreads(pulls, recipientOf, ours) {
     const seen = new Set();

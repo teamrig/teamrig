@@ -15,7 +15,7 @@ import { TimeZone } from "../core/zone.js";
 import { JsonlRenameLog } from "../names/log.js";
 import { RefusedError } from "./runtime.js";
 import { fileLockOf } from "./file-locks.js";
-import { pathsIfKnown } from "./host.js";
+import { identityOf, pathsIfKnown } from "./host.js";
 /** The folder the reader's host loads a person's skills from: none for a reader with no host, or a host that tells no folder. */
 function hostSkillsOf(reader) {
     const { host, platform, env, userHome } = reader;
@@ -135,11 +135,12 @@ async function teamConfigOf(runtime, team, below) {
     });
 }
 /**
- * Where to look for a team pointer: the given folders in order, then the folder Claude Code started
- * the session in, so a command run from a subfolder or a temp folder still finds its team.
+ * Where to look for a team pointer: the given folders in order, then the folder the run's host says it started
+ * the session in, so a command run from a subfolder or a temp folder still finds its team. A host telling no such
+ * folder adds none.
  */
-export function teamFolders(env, first) {
-    return [...first, env[ENV.claudeProjectDir]].flatMap((folder) => (folder?.trim() ? [folder] : []));
+export function teamFolders(runtime, first) {
+    return [...first, identityOf(runtime).projectDir].flatMap((folder) => (folder?.trim() ? [folder] : []));
 }
 /** A command's team: `$TEAMRIG_TEAM`, else the nearest pointer. Without one the command refuses. */
 export async function findTeam(runtime) {
@@ -147,7 +148,7 @@ export async function findTeam(runtime) {
 }
 /** Where {@link findTeam} looks, refusing nothing: for a command that also answers a run with no team. */
 export function lookForTeam(runtime) {
-    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime.env, [runtime.cwd]));
+    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [runtime.cwd]));
 }
 /** The team a look found; with none, or with a pointer that names none, the command refuses. */
 export function foundTeamOf(found) {
@@ -162,11 +163,11 @@ export function foundTeamOf(found) {
 }
 /**
  * The team's project folder, where its CLAUDE.md and rule files sit: `team.project`, else the folder of its pointer
- * file; for a team named by `$TEAMRIG_TEAM` alone, the folder Claude Code started the session in, else the working folder.
+ * file; for a team named by `$TEAMRIG_TEAM` alone, the folder the host started the session in, else the working folder.
  */
 export async function projectFolder(runtime, config) {
     const { from } = await findTeam(runtime);
-    return teamProjectOf(config, from) ?? teamFolders(runtime.env, [])[0] ?? runtime.cwd;
+    return teamProjectOf(config, from) ?? teamFolders(runtime, [])[0] ?? runtime.cwd;
 }
 /**
  * The team's project folder by its config and the pointer it was found by (`FoundTeam.from`): `team.project`,

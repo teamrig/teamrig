@@ -1,4 +1,4 @@
-import { isUnsupported } from "../ports/host/index.js";
+import { isUnsupported, } from "../ports/host/index.js";
 import { RefusedError } from "./runtime.js";
 /**
  * The host ports of one run, built from the environment and platform that run sees: a command asks here, and words
@@ -88,6 +88,33 @@ export function pathsOf(runtime) {
     }
     return paths;
 }
+/**
+ * Who tells the secret guard the hosts' own secret files in this run: every host adapter teamrig ships with, then
+ * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
+ * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
+ * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
+ * its folders adds none.
+ */
+export function secretFilesOf(runtime) {
+    const seen = { env: runtime.env, platform: runtime.platform };
+    const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+        const { paths } = source(seen);
+        return isUnsupported(paths) ? [] : paths.secretFiles();
+    });
+    const once = [...new Set(named)];
+    return { secretFiles: () => once };
+}
+/** What a host telling nothing of its sessions tells a run: no part of who it is. */
+const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined };
+/**
+ * Who the run's host says this run is: the folder its session started in, how the host was started and the kind of
+ * session. It never refuses: on a host that tells nothing of its sessions each part is untold, and a caller goes on
+ * as in a run no session started, by the working folder and what its own input says.
+ */
+export function identityOf(runtime) {
+    const { launcher } = hostOf(runtime);
+    return isUnsupported(launcher) ? UNTOLD : launcher.identity();
+}
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
 export function hostHomeOf(runtime) {
     return pathsOf(runtime).home(runtime.userHome);
@@ -111,4 +138,28 @@ export function permissionsOf(runtime) {
 export function permissionsIfKept(runtime) {
     const { permissions } = hostOf(runtime);
     return isUnsupported(permissions) ? undefined : permissions;
+}
+/** The run's plugin store. A host that keeps none refuses with its own reason, as `transcriptsOf` does. */
+export function pluginOf(runtime) {
+    const { plugin } = hostOf(runtime);
+    if (isUnsupported(plugin)) {
+        throw new RefusedError(plugin.notice);
+    }
+    return plugin;
+}
+/**
+ * The run's plugin store, or undefined on a host that keeps none: for a step that goes on without it, such as a
+ * session's PATH, which then has no cache folder to leave out.
+ */
+export function pluginIfKept(runtime) {
+    const { plugin } = hostOf(runtime);
+    return isUnsupported(plugin) ? undefined : plugin;
+}
+/**
+ * Whether a PATH folder is a plugin install's `bin` folder in the run's host's cache, for a session's PATH to leave
+ * out. A host that keeps no plugin store has none, so every folder stays.
+ */
+export function cacheBinOf(runtime) {
+    const plugin = pluginIfKept(runtime);
+    return plugin === undefined ? () => false : (folder) => plugin.isCacheBin(folder);
 }

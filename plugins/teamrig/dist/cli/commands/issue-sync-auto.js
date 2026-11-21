@@ -1,14 +1,14 @@
 import { ENV } from "../../core/home.js";
 import { writableObject } from "../../core/jsonl.js";
 import { SecretScanner } from "../../core/secrets.js";
-import { activityLine, routesBySession } from "../../github/activity.js";
-import { addedLines, failureNews, finishState, formatSyncState, leftOutNews, parseSyncState, SYNC_STATE_FORMAT, } from "../../github/auto.js";
-import { issueChangeLine, issueRoutesBySession } from "../../github/issue-marks.js";
-import { issueRef } from "../../github/map.js";
-import { mentionCutLine, mentionLine, wakeRoutes } from "../../github/mention-route.js";
-import { pullNewsText } from "../../github/pull-news.js";
-import { ourLogins } from "../../github/trust.js";
-import { capAlerts, overCapLine, overCapPageText, securityLine, securityPageText, unpagedIssues, unpagedLine } from "../../github/security-alert.js";
+import { activityLine, routesBySession } from "../../sync/activity.js";
+import { addedLines, failureNews, finishState, formatSyncState, leftOutNews, parseSyncState, SYNC_STATE_FORMAT, } from "../../sync/auto.js";
+import { issueChangeLine, issueRoutesBySession } from "../../sync/issue-marks.js";
+import { issueRef } from "../../sync/map.js";
+import { mentionCutLine, mentionLine, wakeRoutes } from "../../sync/mention-route.js";
+import { pullNewsText } from "../../sync/pull-news.js";
+import { ourLogins } from "../../sync/trust.js";
+import { capAlerts, overCapLine, overCapPageText, securityLine, securityPageText, unpagedIssues, unpagedLine } from "../../sync/security-alert.js";
 import { errorMessage } from "../../core/guards.js";
 import { sendOwnerPage } from "../login-page.js";
 import { postLine } from "../../inbox/inbox.js";
@@ -16,7 +16,7 @@ import { GITHUB_ACTOR } from "../../register/policy.js";
 import { postUrgentLine } from "../urgent-line.js";
 import { inboxDepsOf } from "./inbox.js";
 import { fileLockOf } from "../file-locks.js";
-import { githubWatcher } from "../../github/watcher.js";
+import { githubWatcher } from "../../sync/watcher.js";
 /**
  * The automatic GitHub sync's report: `issue watch` (issue-watch.ts) runs `issue sync --auto` when GitHub changed,
  * and that run tells each owner's inbox the tasks it added, the lead's when the failing repositories change or an

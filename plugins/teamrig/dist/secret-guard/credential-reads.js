@@ -1,4 +1,4 @@
-import { SHIP_TOKEN, TOKEN_PREFIX } from "../github/tokens.js";
+import { SHIP_TOKEN, TOKEN_PREFIX } from "../issues/token-names.js";
 /**
  * The commands that read a credential out of the host's store, matched over a run's line (`<program> <args>`, the
  * program as the guards compare it, in lowercase). Each lookahead starts at the line's start, so a match costs time in

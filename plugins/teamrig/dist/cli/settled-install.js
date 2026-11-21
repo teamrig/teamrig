@@ -1,8 +1,9 @@
 import { join, posix } from 'node:path';
 import { isRecord, isStringArray } from "../core/guards.js";
 import { claudeConfigDir, KIT_NAME } from "../core/home.js";
-import { appliesTo, INSTALLED_PLUGINS_FILE, installsOf } from "../core/installed-plugins.js";
-import { newestNear, storeTimesOf } from "../core/plugin-store.js";
+import { appliesTo } from "../plugin-store/installs.js";
+import { newestNear, storeTimesOf } from "../plugin-store/store.js";
+import { pluginIfKept } from "./host.js";
 /**
  * How long the plugin store must stand still before the idle pass reopens a session (T1100): a tab that loads plugins
  * while an install is copied loads part of one and runs without teamrig's hooks (T561, T1002), and no one watches a
@@ -51,22 +52,26 @@ async function lackOf(files, install) {
 /**
  * Whether a session reopened now for `project` would load whole plugins: each teamrig install that applies to it has
  * its hooks file, the mod modules that file names and the CLI they run, and no part of the store an install writes
- * changed within REOPEN_SETTLE_MS (`storeTimesOf`: a copy names the new version before it ends). With no plugin list
- * there is no store to wait for (a plugin run from a folder); a list that does not read as Claude Code's is a store
- * mid-write.
+ * changed within REOPEN_SETTLE_MS (`storeTimesOf`: a copy names the new version before it ends). On a host that keeps
+ * no plugin store, or with no plugin list, there is no store to wait for (a plugin run from a folder); a list that
+ * does not read as the host's is a store mid-write.
  */
 export async function installStateOf(runtime, project) {
+    const plugin = pluginIfKept(runtime);
+    if (plugin === undefined) {
+        return SETTLED;
+    }
     const pluginsFolder = join(claudeConfigDir(runtime.env, runtime.userHome), 'plugins');
-    const text = await runtime.files.read(join(pluginsFolder, INSTALLED_PLUGINS_FILE));
+    const text = await runtime.files.read(join(pluginsFolder, plugin.listFile));
     if (text === undefined) {
         return SETTLED;
     }
-    const installs = installsOf(text)?.filter(({ install }) => appliesTo(install, project));
+    const installs = plugin.installs(text)?.filter((install) => appliesTo(install, project));
     if (installs === undefined) {
-        return { kind: 'unsettled', why: `${INSTALLED_PLUGINS_FILE} does not read as Claude Code's plugin list` };
+        return { kind: 'unsettled', why: `${plugin.listFile} does not read as the host's plugin list` };
     }
-    for (const { key, install } of installs) {
-        if (key.startsWith(`${KIT_NAME}@`)) {
+    for (const install of installs) {
+        if (install.plugin === KIT_NAME) {
             const lack = await lackOf(runtime.files, install);
             if (lack !== undefined) {
                 return { kind: 'unsettled', why: `${KIT_NAME} ${install.version} lacks ${lack}` };
@@ -74,7 +79,7 @@ export async function installStateOf(runtime, project) {
         }
     }
     const now = runtime.clock.now();
-    const changedAt = newestNear(await storeTimesOf(runtime.pluginStore, pluginsFolder, installs), now, REOPEN_SETTLE_MS);
+    const changedAt = newestNear(await storeTimesOf(runtime.pluginStore, [join(pluginsFolder, plugin.listFile), join(pluginsFolder, plugin.marketplacesFile)], installs), now, REOPEN_SETTLE_MS);
     if (changedAt === undefined) {
         return SETTLED;
     }

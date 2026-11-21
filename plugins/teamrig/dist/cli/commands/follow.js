@@ -1,6 +1,6 @@
 import { writableObject } from "../../core/jsonl.js";
-import { addFollow, dropFollow, followTarget, FOLLOWS_FORMAT, formatFollows, parseFollows } from "../../github/follows.js";
-import { issueRef } from "../../github/map.js";
+import { addFollow, dropFollow, followTarget, FOLLOWS_FORMAT, formatFollows, parseFollows } from "../../sync/follows.js";
+import { issueRef } from "../../sync/map.js";
 import { noPositionals, onePositional, UsageError } from "../args.js";
 import { fileLockOf } from "../file-locks.js";
 import { callerOf } from "../inputs.js";
@@ -9,7 +9,7 @@ import { EXIT, RefusedError } from "../runtime.js";
 /**
  * `follow <owner/name#n>`, `follow --list` and `unfollow <owner/name#n>`: the issues and pull requests a session
  * follows, whose activity the automatic sync tells it as it tells a task's owner the activity of its task's item
- * (github.activity). They are kept in one team file (github/follows.ts), changed under the sync's lock.
+ * (github.activity). They are kept in one team file (sync/follows.ts), changed under the sync's lock.
  */
 /** What a follow brings, in the line that confirms it. */
 const FOLLOW_REACH = 'its new comments, reviews, CI results, labels, closes and merges reach your inbox from the next sync';

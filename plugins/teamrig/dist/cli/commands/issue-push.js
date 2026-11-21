@@ -1,6 +1,6 @@
 import { ENV } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
-import { closedSince } from "../../github/sync.js";
+import { closedSince } from "../../sync/sync.js";
 import { GITHUB_REPOS_HOST, targetText } from "../../issues/host.js";
 import { applyPush } from "../../issues/push-apply.js";
 import { planAssigned, viewerOf } from "../../issues/push-assignees.js";

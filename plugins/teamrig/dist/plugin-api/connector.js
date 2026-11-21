@@ -2,6 +2,18 @@ import { isRecord, stringField } from "../core/guards.js";
 import { featuresOf, isConnectorKind } from "../features/registry.js";
 import { adapterEntry, declarationProblems } from "./declaration.js";
 import { isSupport } from "./support.js";
+/**
+ * How long one run of a connector's tool may take before the runner it is handed stops it: a page of a hundred
+ * issues takes seconds. A connector reads it to say, in a failure line, how long its tool got.
+ */
+export const CONNECTOR_RUN_TIMEOUT_MS = 60_000;
+/**
+ * The bytes one run of a connector's tool may print, stdout and stderr together, before that runner stops it and
+ * rejects with ProgramOutputCapError. The largest answer teamrig asks for is a page of a hundred issues, each body
+ * at most 65,536 characters (about 20 MB in the worst UTF-8); the cap sits above it, so text people post can never
+ * grow one run's memory without bound.
+ */
+export const CONNECTOR_RUN_MAX_BYTES = 32 * 1024 * 1024;
 /** The default export of a connector adapter's entry. */
 export function defineConnector(adapter) {
     return adapter;

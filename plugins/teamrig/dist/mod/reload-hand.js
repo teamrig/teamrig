@@ -8,12 +8,12 @@
  * either (an install still being copied), it runs /reload-plugins the way the person would. It runs at most one
  * reload per RELOAD_GAP_MS, waits as long after a refused one, and never runs two for the same installs.
  *
- * The mod runs inside Claude Code without Node, so this file imports nothing from Node, only the plugin list's and
- * the store's readers (`core/installed-plugins.ts`, `core/plugin-store.ts`), which import none either: they compile to
- * modules the mod imports as they are.
+ * The mod runs inside Claude Code without Node, so this file imports nothing from Node, only the store's readers
+ * (`plugin-store/installs.ts`, `plugin-store/store.ts`), which import none either: they compile to modules the mod
+ * imports as they are. The host's plugin port, which reads the plugin list, comes in with the host.
  */
-import { appliesTo, installsOf } from "../core/installed-plugins.js";
-import { newestNear, storeTimesOf } from "../core/plugin-store.js";
+import { appliesTo } from "../plugin-store/installs.js";
+import { newestNear, storeTimesOf } from "../plugin-store/store.js";
 /** How often the hand reads installed_plugins.json. */
 export const CHECK_MS = 15_000;
 /**
@@ -32,25 +32,26 @@ export function isReloadRecord(value) {
     return (isRecord(value) && typeof value['fingerprint'] === 'string' && typeof value['at'] === 'number' && Number.isFinite(value['at']));
 }
 /**
- * The installs that apply to a tab whose project root is `projectRoot`: every user-scope install and the project- and
- * local-scope ones for that project. Undefined for a text that is not installed_plugins.json's shape.
+ * The installs that apply to a tab whose project root is `projectRoot`: every install for every project and the ones
+ * for that project. Undefined for a text that is not the plugin list's shape.
  */
-function applyingInstalls(text, projectRoot) {
-    return installsOf(text)?.filter(({ install }) => appliesTo(install, projectRoot));
+function applyingInstalls(plugin, text, projectRoot) {
+    return plugin.installs(text)?.filter((install) => appliesTo(install, projectRoot));
 }
+/** The installs as one text: the record a reload keeps in the session reads alike across a mod's reload. */
 function fingerprintOf(installs) {
     return installs
-        .map(({ key, install }) => JSON.stringify([key, install.installPath, install.version, install.gitCommitSha]))
+        .map(({ key, installPath, version, revision }) => JSON.stringify([key, installPath, version, revision]))
         .sort()
         .join('\n');
 }
 /**
  * The installs that apply to a tab whose project root is `projectRoot`, each as its plugin, folder, version and
- * commit, sorted. Undefined for a text that is not installed_plugins.json's shape, so a file mid-write or of another
+ * revision, sorted. Undefined for a text that is not the plugin list's shape, so a file mid-write or of another
  * version reads as no change.
  */
-export function installedFingerprint(text, projectRoot) {
-    const installs = applyingInstalls(text, projectRoot);
+export function installedFingerprint(plugin, text, projectRoot) {
+    const installs = applyingInstalls(plugin, text, projectRoot);
     return installs === undefined ? undefined : fingerprintOf(installs);
 }
 function messageOf(error) {
@@ -130,7 +131,9 @@ export class ReloadHand {
             return { kind: 'held', until: this.heldFrom + RELOAD_GAP_MS };
         }
         // The store is read only when a reload is otherwise due.
-        const changedAt = newestNear(await storeTimesOf(this.host, this.host.pluginsFolder, look.installs), now, SETTLE_MS);
+        const { pluginsFolder, plugin } = this.host;
+        const lists = [`${pluginsFolder}/${plugin.listFile}`, `${pluginsFolder}/${plugin.marketplacesFile}`];
+        const changedAt = newestNear(await storeTimesOf(this.host, lists, look.installs), now, SETTLE_MS);
         if (changedAt !== undefined) {
             return { kind: 'installing', changedAt };
         }
@@ -170,7 +173,7 @@ export class ReloadHand {
             this.lastText = text;
             this.sameSince = now;
         }
-        const installs = applyingInstalls(text, await this.host.projectRoot());
+        const installs = applyingInstalls(this.host.plugin, text, await this.host.projectRoot());
         return installs === undefined ? undefined : { fingerprint: fingerprintOf(installs), installs };
     }
 }

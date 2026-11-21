@@ -5,7 +5,7 @@ import { openKit, teamFolders } from "../kit.js";
  * named none; it comes first, since the host may start the hook process somewhere else.
  */
 export function hookTeam(folder, runtime) {
-    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime.env, [folder, runtime.cwd]));
+    return resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [folder, runtime.cwd]));
 }
 /**
  * The config a guard hook reads for a call in `folder` (see `hookTeam`), or undefined outside a team's projects, where

@@ -42,7 +42,7 @@ export async function scanSetup(ports, at) {
         recorded: rules.recorded.length,
         settings: [
             ...(await scanSettings(ports.permissions, ports.files, at.paths.userSettings(at.userHome), at.settings, at.keep, at.secrets, usage.hooks)),
-            ...(await scanPluginHooks(ports.files, at, usage.hooks, at.secrets)),
+            ...(ports.plugin === undefined ? [] : await scanPluginHooks(ports.files, ports.plugin, at, usage.hooks, at.secrets)),
         ],
         usage,
         recent: await changedSince(ports.files, [...context.skills, ...context.agents], usage.since),

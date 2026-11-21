@@ -1,5 +1,4 @@
 import { loadConnector } from "../composition/loader.js";
-import { programOverGh } from "../github/gh-program.js";
 import { RefusedError } from "./runtime.js";
 /**
  * A host's connector adapter gave no host. The adapters ship with teamrig, so this is teamrig's own fault and never
@@ -17,8 +16,8 @@ export class HostAdapterError extends Error {
  * answer, so the run reads each owner's saved key once. `stamp` is the team's github.stamp: whether each text posted
  * ends with the made-with-teamrig footer.
  *
- * The adapter is handed the CLI's own gh runner as its program runner (github/gh-program.ts), so every run it makes
- * still passes that runner's rules. Both ports are asked of every adapter, as every command here was written for a
+ * The adapter is handed the run's program runner as it is, held to the two connector limits (plugin-api/connector.ts);
+ * which program it runs, and with which arguments, is the adapter's own rule to keep. Both ports are asked of every adapter, as every command here was written for a
  * host that is both; a tracker with no code host needs its commands to ask for the tracker alone first.
  */
 export async function hostsOf(kind, runtime, scanner, stamp, load = loadConnector) {
@@ -27,7 +26,7 @@ export async function hostsOf(kind, runtime, scanner, stamp, load = loadConnecto
         throw new HostAdapterError(kind, loaded.notices);
     }
     const { tracker, codeHost } = loaded.value.create({
-        run: programOverGh(runtime.gh, runtime.env),
+        run: runtime.run,
         http: runtime.http,
         credentials: runtime.credentials,
         env: runtime.env,

@@ -63,7 +63,7 @@ import { ownerBatchOf } from "../owner-batch.js";
 import { rollUp } from "../roll-up.js";
 import { splitUnowned } from "../unowned.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { addIssuePlan } from "../../github/issue-at-add.js";
+import { addIssuePlan } from "../../sync/issue-at-add.js";
 import { ADD_ISSUE_FLAGS, addIssueAskOf, addIssueHost, addWithIssue } from "./add-issue.js";
 import { loadTree, skillOwnersElsewhere } from "../tree.js";
 import { readBursts } from "../burst-reading.js";
@@ -190,7 +190,7 @@ export async function add(args, runtime) {
     return asked === undefined ? addHere(args, runtime, caller) : addToTeam(args, runtime, caller, asked);
 }
 /**
- * A task of the caller's own team, owned by `--owner`, else by the caller. Its issue flags (github/issue-at-add.ts)
+ * A task of the caller's own team, owned by `--owner`, else by the caller. Its issue flags (sync/issue-at-add.ts)
  * are judged first, so a refused one writes nothing; a local task is written with its reason as its ref, and a task
  * with its issue is written only once the issue opened, its ref pointing at it (add-issue.ts).
  */

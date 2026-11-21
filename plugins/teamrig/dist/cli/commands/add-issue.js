@@ -1,10 +1,10 @@
 import { ENV } from "../../core/home.js";
-import { issueRef } from "../../github/map.js";
+import { issueRef } from "../../sync/map.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
 import { hostsOf } from "../issue-hosts.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
-/** The flags of `add` that ask about the new task's issue (github/issue-at-add.ts). */
+/** The flags of `add` that ask about the new task's issue (sync/issue-at-add.ts). */
 export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local'];
 /** What an add asked about its issue: its issue flags, with the task's own ref, type and priority. */
 export function addIssueAskOf(flags, input) {

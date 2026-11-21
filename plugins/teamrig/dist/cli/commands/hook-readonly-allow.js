@@ -3,7 +3,7 @@ import { secretFindingsOf } from "../../hooks/secret-guard.js";
 import { newestSnapshotExports, UNREAD_SNAPSHOT } from "../../readonly-shell/snapshot.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { noPositionals } from "../args.js";
-import { pathsIfKnown } from "../host.js";
+import { pathsIfKnown, secretFilesOf } from "../host.js";
 import { openKit } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { readHookInput, sessionTeam, writeReply } from "./hook-input.js";
@@ -11,7 +11,7 @@ import { readHookInput, sessionTeam, writeReply } from "./hook-input.js";
 export async function readonlyCheckOf(runtime, config) {
     const snapshots = pathsIfKnown(runtime)?.shellSnapshots(runtime.userHome);
     const snapshot = snapshots === undefined ? UNREAD_SNAPSHOT : await newestSnapshotExports(runtime.files, snapshots);
-    const secrets = secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform, config.register.secretPatterns);
+    const secrets = secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform, secretFilesOf(runtime), config.register.secretPatterns);
     return {
         rules: readonlyRulesOf(config.readonlyShell, runtime.env, snapshot),
         printsSecret: (event) => secretFindingsOf(event, runtime.cwd, secrets).length > 0,

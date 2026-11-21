@@ -34,7 +34,7 @@ export async function refuseAnotherTabSession(args, runtime) {
     if (named === undefined || claudeSession === undefined || claudeSession === '') {
         return;
     }
-    const found = await resolveTeam(runtime.files, runtime.env, teamFolders(runtime.env, [runtime.cwd]));
+    const found = await resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [runtime.cwd]));
     if (found.kind !== 'team') {
         return;
     }

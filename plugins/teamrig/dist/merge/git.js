@@ -253,5 +253,6 @@ export const GIT_MERGE = {
     checkout: (dir, branch) => refusedAsOption(branch, 'git checkout') ?? outcome(runGit(dir, ['checkout', branch, '--']), 'git checkout'),
     fastForward: (dir, to) => outcome(runGit(dir, ['merge', '--ff-only', '--end-of-options', to], LONG_TIMEOUT_MS), 'git merge --ff-only'),
     resetTo: (dir, to) => refusedAsOption(to, 'git reset --keep') ?? outcome(runGit(dir, ['reset', '--keep', to, '--'], LONG_TIMEOUT_MS), 'git reset --keep'),
+    detachAt: (dir, ref) => refusedAsOption(ref, 'git switch --detach') ?? outcome(runGit(dir, ['switch', '--detach', ref], LONG_TIMEOUT_MS), 'git switch --detach'),
     sshCommand: (dir) => queryLine(dir, ['config', '--get', 'core.sshCommand']),
 };

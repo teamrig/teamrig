@@ -1,6 +1,6 @@
 import { parseIssueTarget, targetText } from "../../issues/host.js";
 import { printable } from "../../core/printable.js";
-import { pullConflicts } from "../../github/pull-conflicts.js";
+import { pullConflicts } from "../../sync/pull-conflicts.js";
 import { onePositional } from "../args.js";
 import { EXIT, RefusedError } from "../runtime.js";
 /** A commit id as the report prints it. */

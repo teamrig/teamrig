@@ -21,7 +21,7 @@ import { noRoomText } from "../../sessions/headroom.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
-import { transcriptsOf } from "../host.js";
+import { cacheBinOf, transcriptsOf } from "../host.js";
 import { loadTree } from "../tree.js";
 import { claudeExit, claudeProgramOf, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
 /** The title of the tab `restore check` opens for the restore. */
@@ -303,7 +303,7 @@ export async function restoreResume(args, runtime) {
     const effort = effortFlag(args.flags.get('effort'));
     const encoded = args.flags.get('encoded-prompt');
     const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
-    const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform);
+    const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime));
     const { command, prefix } = await claudeProgramOf(runtime, env);
     runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
     const claudeArgs = [...prefix, '--resume', claudeSession, ...(effort === undefined ? [] : ['--effort', effort]), ...(prompt === undefined ? [] : [prompt])];

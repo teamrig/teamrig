@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { withStampFooter } from '../core/stamp.ts';
-import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueRead, isIssueUnassign, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../github/gh.ts';
+import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueRead, isIssueUnassign, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
 import { areaLabelSpec } from '../issues/managed-labels.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
@@ -408,7 +408,8 @@ describe('teamrig issue edit', () => {
   it('refuses, before reading it, a file the secret guard keeps, naming the flag and never the text', async () => {
     const kit = new CliHarness(GITHUB_TEAM);
     const gh = new FakeGh();
-    for (const given of ['.env', join('deploy', 'id_rsa')]) {
+    // The last one is a file of the host's own, which the run's host names (`HostPaths.secretFiles`).
+    for (const given of ['.env', join('deploy', 'id_rsa'), join('.claude', 'settings.local.json')]) {
       const result = await kit.run(['issue', 'edit', 'acme/web#7', '--body-file', given], { ...AS_LEAD, gh });
       const printed = [...result.stdout, ...result.stderr].join('\n');
       assert.equal(result.code, EXIT.refused, printed);

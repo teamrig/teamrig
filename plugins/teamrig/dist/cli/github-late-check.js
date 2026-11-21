@@ -1,4 +1,4 @@
-import { dueAt, isLate, lateGroupText, newestLate, parseClocks } from "../github/clock.js";
+import { dueAt, isLate, lateGroupText, newestLate, parseClocks } from "../sync/clock.js";
 import { parseUnownedNotices, UNOWNED_SEEN_REFRESH_MS } from "./unowned-notices.js";
 const KEY_WORD = 'gh-late';
 /**

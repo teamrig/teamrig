@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { ENV } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
-import { issueRef } from "../../github/map.js";
+import { issueRef } from "../../sync/map.js";
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from "../../issues/assign.js";
 import { CLOSE_REASONS, hostKindOf, parseIssueTarget, targetText } from "../../issues/host.js";
 import { bareRef, refOf } from "../../issues/ref.js";
@@ -13,6 +13,7 @@ import { RegisterPolicy } from "../../register/policy.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { onePositional, requiredFlag } from "../args.js";
 import { withDescriptions } from "../card-texts.js";
+import { secretFilesOf } from "../host.js";
 import { callerOf } from "../inputs.js";
 import { hostsOf } from "../issue-hosts.js";
 import { sessionIdOf } from "../kit.js";
@@ -160,7 +161,7 @@ export async function issueEdit(args, runtime) {
  */
 async function bodyFileOf(given, runtime, config) {
     const path = resolve(runtime.cwd, given);
-    if (secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform).paths.listed(path)) {
+    if (secretRulesOf(config.secretGuard, runtime.userHome, runtime.platform, secretFilesOf(runtime)).paths.listed(path)) {
         throw new RefusedError(`--body-file names a file the secret guard keeps (secretGuard.paths): ${given} is never read or posted`);
     }
     const text = await runtime.files.read(path);

@@ -4,12 +4,12 @@ import { ID_PATTERN, ID_RULE } from "../../core/ids.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { KIT_VERSION } from "../../core/version.js";
-import { GITHUB_CONNECTOR } from "../../github/connector.js";
 import { lineHash } from "../../inbox/line-hash.js";
 import { indexMarks } from "../../inbox/marks.js";
 import { InboxDir, JsonlMarkLog } from "../../inbox/store.js";
 import { unreadOf } from "../../inbox/unread.js";
 import { answerOf, checkInterfaceRange, DOCUMENTS, inboxBody, isDocumentName, parseInterfaceVersion, revisionText, tasksBody, unchangedAnswer, } from "../../interface/index.js";
+import { DOCUMENT_CONNECTORS } from "../../composition/document-connectors.js";
 import { layoutPaths } from "../../register/layout.js";
 import { TASK_ID } from "../../register/model.js";
 import { UsageError } from "../args.js";
@@ -26,8 +26,6 @@ import { meetingsSource } from "./read-meetings.js";
 import { planSource } from "./read-plan.js";
 import { selfOf, sessionsSource } from "./read-sessions.js";
 import { configProblemsOf, once, skippedOf, stampsOf, workingSetOf } from "./read-source.js";
-/** The trackers a document names a ref or a source by; a second one is one more entry here. */
-const CONNECTORS = [GITHUB_CONNECTOR];
 /** How far back `inbox` serves the lines already read, when `--since` names no other reach. */
 const READ_LINES_HOURS = 24;
 const HOUR_MS = 3_600_000;
@@ -45,8 +43,8 @@ const SOURCES = {
     config: configSource,
     plan: planSource,
     goals: goalsSource,
-    history: historySource(CONNECTORS),
-    stats: statsSource(CONNECTORS),
+    history: historySource(DOCUMENT_CONNECTORS),
+    stats: statsSource(DOCUMENT_CONNECTORS),
 };
 /** The documents a run with no team is still answered: what a setup screen reads before there is a team to read. */
 const TEAMLESS = {
@@ -311,8 +309,8 @@ function tasksSource(scope) {
                 tasks: register.tasks.values(),
                 owner: scope.owner,
                 shapes: new SecretScanner(config.register.secretPatterns),
-                connectors: CONNECTORS,
-                names: { owner: config.register.ownerSource, connectors: CONNECTORS, nameOf: (session) => roster.nameOf(session) },
+                connectors: DOCUMENT_CONNECTORS,
+                names: { owner: config.register.ownerSource, connectors: DOCUMENT_CONNECTORS, nameOf: (session) => roster.nameOf(session) },
             });
             return { body, problems: register.problems };
         },
@@ -358,7 +356,7 @@ function inboxSource(scope) {
                 unread: mark === null ? null : unreadOf(session, lines, mark, lineHash).lines.length,
                 readSince: runtime.clock.now() - scope.sinceHours * HOUR_MS,
                 keyOf: lineHash,
-                connectors: CONNECTORS,
+                connectors: DOCUMENT_CONNECTORS,
                 shapes: new SecretScanner(config.register.secretPatterns),
             });
             return { body, problems: skippedOf(kit.paths, kit.paths.inboxMarks, log) };

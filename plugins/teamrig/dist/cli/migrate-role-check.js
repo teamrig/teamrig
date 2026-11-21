@@ -2,7 +2,7 @@ import { relative, resolve, sep } from 'node:path';
 import { taskFolder, tasksFolder } from "../core/home.js";
 import { isAtOrBelow, samePath } from "../core/paths.js";
 import { SecretScanner } from "../core/secrets.js";
-import { parseMigrateRows } from "../github/migrate.js";
+import { parseMigrateRows } from "../sync/migrate.js";
 import { TASK_ID } from "../register/model.js";
 /**
  * The rows file a role's `issue migrate` runs on, when it sits in one task folder of the holder's team (T4606):

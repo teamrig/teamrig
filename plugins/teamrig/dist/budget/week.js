@@ -170,7 +170,7 @@ function teamAllowancePct(input, pool, wPerPct) {
 export function readWeek(input) {
     const { budget, now, statusUse, states, period, calibration, readings, extra } = input;
     const reset = period?.end;
-    const window = period === undefined ? undefined : weekWindow(period.end, budget.paceEndHoursBeforeReset, period.start);
+    const window = period === undefined ? undefined : weekWindow(period.end, budget.paceEndHoursBeforeReset, period.start, period.startPct);
     const dayStart = now - (now % MS_PER_DAY);
     const todayFrom = window === undefined ? dayStart : Math.max(dayStart, window.start);
     const todayW = wSince(states, todayFrom, now);

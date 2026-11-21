@@ -4,6 +4,7 @@
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
 import { PERMISSIONS_CONTRACT } from "./host/permissions.js";
+import { PLUGIN_CONTRACT } from "./host/plugin.js";
 import { STATUS_LINE_CONTRACT } from "./host/status-line.js";
 import { TRANSCRIPT_CONTRACT } from "./host/transcript.js";
 import { USAGE_CONTRACT } from "./host/usage.js";
@@ -18,6 +19,7 @@ export { nothingTranscripts, TRANSCRIPT_CONTRACT, yesTranscripts } from "./host/
 export { nothingUsage, USAGE_CONTRACT, yesUsage } from "./host/usage.js";
 export { nothingStatusLine, STATUS_LINE_CONTRACT, yesStatusLine } from "./host/status-line.js";
 export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions } from "./host/permissions.js";
+export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin } from "./host/plugin.js";
 /**
  * Every contract of the kit. A port's contract lives in its own file, under `host/`, `connector/` or `terminal/`,
  * and is listed here with one `entryOf(...)` line at the end, so two changes adding contracts never touch the same
@@ -29,4 +31,5 @@ export const CONTRACTS = [
     entryOf(USAGE_CONTRACT),
     entryOf(STATUS_LINE_CONTRACT),
     entryOf(PERMISSIONS_CONTRACT),
+    entryOf(PLUGIN_CONTRACT),
 ];

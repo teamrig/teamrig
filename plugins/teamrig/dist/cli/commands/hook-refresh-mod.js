@@ -1,14 +1,14 @@
 import { claudeProjectsDir, findTranscript } from "../../budget/discover.js";
 import { sessionRefreshOf } from "../../config/refresh.js";
 import { isNonNegativeInteger } from "../../core/guards.js";
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { inBookedMeeting, MeetingSchedule } from "../../meeting/schedule.js";
 import { inMeeting, MeetingStore } from "../../meeting/state.js";
 import { decideCompact, decideMidTurn, handoverHashOf } from "../../refresh/decide.js";
 import { readRunningWork } from "../../refresh/running.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { readContextEstimate } from "../../refresh/usage.js";
-import { contextSourceIfTold, transcriptsIfKept } from "../host.js";
+import { contextSourceIfTold, identityOf, transcriptsIfKept } from "../host.js";
 import { noPositionals } from "../args.js";
 import { EXIT } from "../runtime.js";
 import { hookScopeOf, readHookInput, readModRequest, writeReply } from "./hook-input.js";
@@ -54,7 +54,7 @@ async function transcriptOf(runtime, origin) {
     if (origin.session === undefined) {
         return undefined;
     }
-    const project = runtime.env[ENV.claudeProjectDir] ?? origin.cwd;
+    const project = identityOf(runtime).projectDir ?? origin.cwd;
     return findTranscript(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project, origin.session);
 }
 function askContextOf(runtime, scope, store) {

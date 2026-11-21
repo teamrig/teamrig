@@ -20,25 +20,30 @@ export function resolveReset(now, fromStatus, configured) {
     }
     return configured === undefined ? undefined : nextConfiguredReset(now, configured);
 }
-/** The span from `start` (by default the week before) to `reset`, its pace line ending `paceEndHoursBeforeReset` hours before the reset. */
-export function weekWindow(reset, paceEndHoursBeforeReset, start = reset - MS_PER_WEEK) {
-    return { start, reset, paceEnd: Math.max(start, reset - paceEndHoursBeforeReset * MS_PER_HOUR) };
+/**
+ * The span from `start` (by default the week before) to `reset`, its use at `startPct` there, its pace line ending
+ * `paceEndHoursBeforeReset` hours before the reset.
+ */
+export function weekWindow(reset, paceEndHoursBeforeReset, start = reset - MS_PER_WEEK, startPct = 0) {
+    return { start, startPct, reset, paceEnd: Math.max(start, reset - paceEndHoursBeforeReset * MS_PER_HOUR) };
 }
 /**
- * Where the pace line stands at `at`: 0 at the week's start, rising with the active time (`profile`) to the target at
- * the pace end, then flat; so it stays flat through the hours the team sleeps. A pace span with no active time rises
- * evenly with clock time instead.
+ * Where the pace line stands at `at`: the week's use at its start (`startPct`, at most the target), rising with the
+ * active time (`profile`) to the target at the pace end, then flat; so it stays flat through the hours the team sleeps.
+ * A pace span with no active time rises evenly with clock time instead.
  */
 export function paceLinePct(window, targetPct, at, profile) {
     const span = window.paceEnd - window.start;
     if (span <= 0 || at >= window.paceEnd) {
         return targetPct;
     }
+    const fromPct = Math.min(window.startPct, targetPct);
     if (at <= window.start) {
-        return 0;
+        return fromPct;
     }
     const active = profile.activeMs(window.start, window.paceEnd);
-    return active > 0 ? (targetPct * profile.activeMs(window.start, at)) / active : (targetPct * (at - window.start)) / span;
+    const share = active > 0 ? profile.activeMs(window.start, at) / active : (at - window.start) / span;
+    return fromPct + (targetPct - fromPct) * share;
 }
 /**
  * Where the pace line of the week resetting at `reset` stands at `now`, its active time from the budget's quiet hours:

@@ -4,12 +4,13 @@ import { noticeOf } from "../../refresh/decide.js";
 import { claudeProcessOf, restartMayAct } from "../../refresh/restart.js";
 import { parkRulesOf } from "../../register/park.js";
 import { startableTasks } from "../../wake/day-start.js";
+import { identityOf } from "../host.js";
 import { teamZone } from "../kit.js";
 import { teamRegister } from "../team-register.js";
 /** The restart's target; undefined when the event names no session, no transcript or no folder. */
 export function restartTargetOf(runtime, event) {
     const { session, transcript, cwd, effort } = event;
-    const project = runtime.env[ENV.claudeProjectDir] ?? cwd;
+    const project = identityOf(runtime).projectDir ?? cwd;
     if (session === undefined || transcript === undefined || project === undefined) {
         return undefined;
     }
@@ -77,7 +78,7 @@ async function armFromTab(runtime, store, scope, tab) {
     const { team, id, cwd } = scope;
     // Looked up on this rare path only: each look at a process starts a PowerShell on Windows.
     const claude = await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid);
-    const project = runtime.env[ENV.claudeProjectDir] ?? tab.cwd ?? cwd;
+    const project = identityOf(runtime).projectDir ?? tab.cwd ?? cwd;
     if (claude !== undefined && project !== undefined) {
         const at = new Date(runtime.clock.now()).toISOString();
         await store.setRestart(id, { ...tab, phase: 'pending', at, pid: claude });

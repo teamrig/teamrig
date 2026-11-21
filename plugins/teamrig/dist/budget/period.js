@@ -4,9 +4,11 @@ import { MS_PER_HOUR, MS_PER_WEEK } from "../core/time.js";
 import { resolveReset } from "./pace.js";
 /**
  * The format of the period file this code reads and writes; a file in another format or damaged reads as none,
- * and one in a newer format refuses a write.
+ * and one in a newer format refuses a write. Format 2 added `startPct` (T4864); a format 1 file still reads, its pace
+ * line from 0 as it always was, so an install keeps the period it found.
  */
-export const PERIOD_FORMAT = 1;
+export const PERIOD_FORMAT = 2;
+const PERIOD_FORMAT_BEFORE_START_PCT = 1;
 /**
  * A drop in the week's use this large, its reset time unchanged, is a reset of the use inside the week: use only
  * grows otherwise, and two sessions' readings of one moment differ by less.
@@ -32,8 +34,10 @@ export function sightOf(budget, use, now, metered) {
     }
     return metered === undefined ? { end, use } : { end, use, metered };
 }
+/** A period opened from `use`; a reset inside the week starts its pace line at that use (`Period.startPct`). */
 function opened(start, end, kind, use) {
-    return { start, end, kind, lastPct: use?.usedPct ?? 0, lastAt: use?.at ?? start };
+    const lastPct = use?.usedPct ?? 0;
+    return { start, end, kind, startPct: kind === 'reset' ? lastPct : 0, lastPct, lastAt: use?.at ?? start };
 }
 /**
  * The period after what is seen, from the one stored:
@@ -113,24 +117,37 @@ function isKind(value) {
 /** A period file's content; undefined when it is damaged or in another format, which starts the period over. */
 export function parsePeriod(text) {
     const record = parseObject(text.trim());
-    if (record === undefined || record[VERSION_FIELD] !== PERIOD_FORMAT) {
+    if (record === undefined) {
         return undefined;
     }
+    const format = record[VERSION_FIELD];
+    if (format !== PERIOD_FORMAT && format !== PERIOD_FORMAT_BEFORE_START_PCT) {
+        return undefined;
+    }
+    const startPct = format === PERIOD_FORMAT_BEFORE_START_PCT ? 0 : numberField(record, 'startPct');
     const start = numberField(record, 'start');
     const end = numberField(record, 'end');
     const lastPct = numberField(record, 'lastPct');
     const lastAt = numberField(record, 'lastAt');
     const kind = record['kind'];
-    if (start === undefined || end === undefined || lastPct === undefined || lastAt === undefined || !isKind(kind) || start >= end) {
+    if (start === undefined || end === undefined || startPct === undefined || lastPct === undefined || lastAt === undefined || !isKind(kind) || start >= end) {
         return undefined;
     }
-    return { start, end, kind, lastPct, lastAt };
+    return { start, end, kind, startPct, lastPct, lastAt };
 }
 export function formatPeriod(period) {
-    return toJsonlLine({ [VERSION_FIELD]: PERIOD_FORMAT, start: period.start, end: period.end, kind: period.kind, lastPct: period.lastPct, lastAt: period.lastAt });
+    return toJsonlLine({
+        [VERSION_FIELD]: PERIOD_FORMAT,
+        start: period.start,
+        end: period.end,
+        kind: period.kind,
+        startPct: period.startPct,
+        lastPct: period.lastPct,
+        lastAt: period.lastAt,
+    });
 }
 function samePeriod(a, b) {
-    return a !== undefined && a.start === b.start && a.end === b.end && a.kind === b.kind && a.lastPct === b.lastPct && a.lastAt === b.lastAt;
+    return (a !== undefined && a.start === b.start && a.end === b.end && a.kind === b.kind && a.startPct === b.startPct && a.lastPct === b.lastPct && a.lastAt === b.lastAt);
 }
 /**
  * The team's period file, which every reader of the week that logs the meter's crossings (the budget hooks, `budget`,

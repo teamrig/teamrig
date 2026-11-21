@@ -14,10 +14,8 @@
  */
 import { join } from 'node:path';
 import { isRecord } from "../core/guards.js";
-import { INSTALLED_PLUGINS_FILE } from "../core/installed-plugins.js";
-import { KNOWN_MARKETPLACES_FILE } from "../core/plugin-store.js";
 import { compareVersions, parseVersion } from "../core/release-version.js";
-import { MARKETPLACE_FILE, marketplaceSourceOf, pluginFilePath, pluginFolderOf, pluginVersionOf, trackedInstallsOf, } from "./sources.js";
+import { MARKETPLACE_FILE, pluginFilePath, pluginFolderOf, pluginVersionOf, trackedInstallsOf } from "./sources.js";
 /** How often the network is asked at most, across every tab of the machine. */
 export const CHECK_EVERY_MS = 6 * 60 * 60_000;
 const STATE_FILE = 'check.json';
@@ -111,8 +109,9 @@ export class UpdateCheck {
         await this.save({ ...state, dismissed: { ...state.dismissed, [plugin]: version } });
     }
     async installs() {
-        const text = await this.deps.files.read(join(this.deps.paths.pluginsFolder, INSTALLED_PLUGINS_FILE));
-        return text === undefined ? [] : trackedInstallsOf(text);
+        const { plugin } = this.deps;
+        const text = await this.deps.files.read(join(this.deps.paths.pluginsFolder, plugin.listFile));
+        return trackedInstallsOf((text === undefined ? undefined : plugin.installs(text)) ?? []);
     }
     async state() {
         return parseCheckState(await this.deps.files.read(this.stateFile));
@@ -123,10 +122,10 @@ export class UpdateCheck {
     async refresh(installs, before, now) {
         // The claim: a tab that looks while this one asks reads a fresh check and asks nothing.
         await this.save({ ...before, checkedAt: now });
-        const known = (await this.deps.files.read(join(this.deps.paths.pluginsFolder, KNOWN_MARKETPLACES_FILE))) ?? '';
+        const known = (await this.deps.files.read(join(this.deps.paths.pluginsFolder, this.deps.plugin.marketplacesFile))) ?? '';
         const published = { ...before.published };
         for (const marketplace of [...new Set(installs.map((install) => install.marketplace))]) {
-            const source = marketplaceSourceOf(known, marketplace);
+            const source = this.deps.plugin.marketplaceSource(known, marketplace);
             const plugins = installs.filter((install) => install.marketplace === marketplace).map((install) => install.plugin);
             const found = source === undefined ? undefined : await this.publishedBy(marketplace, source, plugins, before.published[marketplace]);
             if (found !== undefined) {

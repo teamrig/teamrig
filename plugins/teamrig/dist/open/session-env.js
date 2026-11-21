@@ -1,6 +1,5 @@
 import { CLAUDE_LOGIN_VARIABLES, CLAUDE_SESSION_VARIABLES, withoutCredentials } from "../core/child-env.js";
 import { ENV } from "../core/home.js";
-import { isPluginCacheBin } from "../core/installed-plugins.js";
 import { envKey, pathList } from "../core/path-search.js";
 /** Variables that make Claude Code a teamrig session: its id, its team, and that `launch` runs it. */
 const TEAMRIG_SESSION_VARIABLES = [ENV.session, ENV.team, ENV.launched];
@@ -8,12 +7,12 @@ function withoutVariables(env, names) {
     return Object.fromEntries(Object.entries(env).filter(([name]) => !names.includes(name.toUpperCase())));
 }
 /**
- * PATH without Claude Code's plugin `bin` folders (isPluginCacheBin). The opener's PATH holds those of the plugin
- * versions its own session started with. Claude Code adds a session's own at the end of its Bash tool's PATH, and adds
- * them again after a plugin update and /reload-plugins, so an inherited one would sit ahead of them and keep every Bash
- * call in the new session on the opener's version for the life of its process (T494). Every other entry stays as it was.
+ * PATH without the host's plugin `bin` folders (isCacheBin). The opener's PATH holds those of the plugin versions its
+ * own session started with. Claude Code adds a session's own at the end of its Bash tool's PATH, and adds them again
+ * after a plugin update and /reload-plugins, so an inherited one would sit ahead of them and keep every Bash call in
+ * the new session on the opener's version for the life of its process (T494). Every other entry stays as it was.
  */
-function withoutPluginBins(env, platform) {
+function withoutPluginBins(env, platform, isCacheBin) {
     const key = envKey(env, 'PATH', platform);
     const value = key === undefined ? undefined : env[key];
     if (key === undefined || value === undefined) {
@@ -21,7 +20,7 @@ function withoutPluginBins(env, platform) {
     }
     const delimiter = platform === 'win32' ? ';' : ':';
     // pathList reads one entry the way a PATH search does (trimmed, unquoted); the kept entries keep their own spelling.
-    const kept = value.split(delimiter).filter((entry) => !pathList(entry, delimiter).some(isPluginCacheBin));
+    const kept = value.split(delimiter).filter((entry) => !pathList(entry, delimiter).some(isCacheBin));
     return { ...env, [key]: kept.join(delimiter) };
 }
 /**
@@ -29,9 +28,9 @@ function withoutPluginBins(env, platform) {
  * command in it knows who it is, and the opener's own Claude Code session variables and plugin
  * `bin` folders left out.
  */
-export function sessionEnv(env, identity, platform) {
+export function sessionEnv(env, identity, platform, isCacheBin) {
     return {
-        ...withoutVariables(withoutPluginBins(env, platform), CLAUDE_SESSION_VARIABLES),
+        ...withoutVariables(withoutPluginBins(env, platform, isCacheBin), CLAUDE_SESSION_VARIABLES),
         [ENV.session]: identity.id,
         [ENV.team]: identity.team,
         ...(identity.home === undefined ? {} : { [ENV.home]: identity.home }),
@@ -50,9 +49,9 @@ export function sessionCredentialFree(env, pass) {
  * teamrig session, so the resumed session is not taken for the opener, nor its plugin `bin` folders; the kit home set
  * when it is not the default.
  */
-export function plainSessionEnv(env, home, platform) {
+export function plainSessionEnv(env, home, platform, isCacheBin) {
     return {
-        ...withoutVariables(withoutPluginBins(env, platform), [...CLAUDE_SESSION_VARIABLES, ...TEAMRIG_SESSION_VARIABLES]),
+        ...withoutVariables(withoutPluginBins(env, platform, isCacheBin), [...CLAUDE_SESSION_VARIABLES, ...TEAMRIG_SESSION_VARIABLES]),
         ...(home === undefined ? {} : { [ENV.home]: home }),
     };
 }

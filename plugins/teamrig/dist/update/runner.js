@@ -26,15 +26,11 @@ export function hookGit(hooks, env) {
     };
 }
 /**
- * Updates `plugin` from `marketplace` the way `/plugin` does: the marketplace first, so Claude Code sees the newest
- * version, then the plugin. The tab runs the new version once it reloads its plugins.
+ * Updates `plugin` from `marketplace` by the steps the host's plugin port names (`updateSteps`), each run in order
+ * until one fails. The tab runs the new version once it reloads its plugins.
  */
 export async function applyUpdate(deps, plugin, marketplace) {
-    const steps = [
-        ['plugin', 'marketplace', 'update', marketplace],
-        ['plugin', 'update', `${plugin}@${marketplace}`],
-    ];
-    for (const step of steps) {
+    for (const step of deps.plugin.updateSteps(plugin, marketplace)) {
         const lines = [];
         const end = await deps.hooks.run({
             argv: [deps.claude.command, ...deps.claude.prefix, ...step],

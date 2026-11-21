@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { text } from 'node:stream/consumers';
 import { nodeTranscriptSource } from "../budget/discover.js";
-import { HOST_PROGRAM_TIMEOUT_MS, loadHostPorts } from "../composition/host-ports.js";
+import { HOST_PROGRAM_TIMEOUT_MS, loadHostPorts, loadShippedHosts } from "../composition/host-ports.js";
 import { nodeFileBytes } from "../core/file-bytes.js";
 import { nodeFiles } from "../core/files.js";
 import { GIT_TREES } from "../delivery/git-tree.js";
@@ -12,15 +12,15 @@ import { launchingShellsOf, nodeEvery, starterWatch } from "../delivery/starter-
 import { nodeStepRunner } from "../delivery/steps.js";
 import { realSleep, systemClock } from "../core/lock.js";
 import { NODE_PATH_PROBE } from "../core/path-probe.js";
-import { NODE_STORE_FOLDERS } from "../core/node-store-folders.js";
+import { NODE_STORE_FOLDERS } from "../plugin-store/node-folders.js";
 import { chatWebhook } from "../core/webhook.js";
 import { CREDENTIAL_TIMEOUT_MS, systemCredentials } from "../core/credentials.js";
 import { nodeHttpClient } from "../core/http.js";
 import { nodeProgramRunner } from "../core/program-runner.js";
 import { GIT_CHECKOUT } from "../exec/binding.js";
 import { nodeExecSpawner } from "../exec/runner.js";
-import { nodeGhRunner } from "../github/gh.js";
-import { GIT_PULLS } from "../github/pull-conflicts.js";
+import { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS } from "../plugin-api/index.js";
+import { GIT_PULLS } from "../sync/pull-conflicts.js";
 import { GIT_MERGE } from "../merge/git.js";
 import { nodeProcesses } from "../open/processes.js";
 import { nodeSessionProcesses } from "../open/session-processes.js";
@@ -68,6 +68,7 @@ export async function runWithNode(argv, entry) {
     const cmdShimLine = process.env[CMD_SHIM_LINE_ENV];
     delete process.env[CMD_SHIM_LINE_ENV];
     const sessionProcesses = nodeSessionProcesses();
+    const hostPrograms = nodeProgramRunner(HOST_PROGRAM_TIMEOUT_MS);
     return runCli(argv, {
         env: process.env,
         userHome: homedir(),
@@ -84,7 +85,8 @@ export async function runWithNode(argv, entry) {
         secretsGit: gitSecrets(process.env),
         out: entry.out,
         platform: process.platform,
-        host: await loadHostPorts(nodeProgramRunner(HOST_PROGRAM_TIMEOUT_MS)),
+        host: await loadHostPorts(hostPrograms),
+        shippedHosts: await loadShippedHosts(hostPrograms),
         processes: nodeProcesses(),
         sessionProcesses,
         starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, nodeEvery),
@@ -92,7 +94,7 @@ export async function runWithNode(argv, entry) {
         steps: nodeStepRunner(process.platform),
         memory: nodeHostMemory(process.platform),
         cpu: nodeHostCpu(),
-        gh: nodeGhRunner(),
+        run: nodeProgramRunner(CONNECTOR_RUN_TIMEOUT_MS, CONNECTOR_RUN_MAX_BYTES),
         credentials: systemCredentials(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)),
         http: nodeHttpClient(),
         probe: NODE_PATH_PROBE,

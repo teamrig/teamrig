@@ -14,7 +14,7 @@ import { TURN_TAIL_BYTES, turnErrorOf } from "../../restore/turn-error.js";
 import { LAUNCHER_SCRIPT, launcherPath } from "../../statusline/launcher.js";
 import { noPositionals } from "../args.js";
 import { fileLockOf } from "../file-locks.js";
-import { transcriptsIfKept } from "../host.js";
+import { identityOf, transcriptsIfKept } from "../host.js";
 import { loginPageLogLine, loginPageOf, sendLoginPage } from "../login-page.js";
 import { EXIT } from "../runtime.js";
 import { readHookInput } from "./hook-input.js";
@@ -195,14 +195,15 @@ export async function trackRestore(hook, runtime) {
     if (claudeSession === undefined || reported === undefined) {
         return;
     }
+    const told = identityOf(runtime);
     const facts = {
         claudeSession,
         at: runtime.clock.now(),
         // The folder the session started in, which stays put through a `cd` or a worktree: the one to resume from.
-        projectDir: present(runtime.env[ENV.claudeProjectDir]) ?? present(hook.cwd),
+        projectDir: told.projectDir ?? present(hook.cwd),
         transcriptPath: present(hook.transcript),
-        entrypoint: present(runtime.env[ENV.claudeEntrypoint]),
-        sessionKind: present(runtime.env[ENV.claudeSessionKind]),
+        entrypoint: told.startedAs,
+        sessionKind: told.sessionKind,
         // Claude Code starts its hooks itself (exec form, no shell), so the hook's parent is the session's Claude Code.
         pid: runtime.sessionProcesses.parentPid,
         team: envId(runtime, ENV.team),

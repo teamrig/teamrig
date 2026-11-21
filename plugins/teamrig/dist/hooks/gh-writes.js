@@ -1,4 +1,4 @@
-import { githubRepoOf } from "../github/pull-conflicts.js";
+import { githubRepoOf } from "../sync/pull-conflicts.js";
 const setOf = (...words) => new Set(words);
 /** The commands of each group that only read GitHub; a checkout, clone or download writes only on this machine. */
 export const GH_READS = new Map([

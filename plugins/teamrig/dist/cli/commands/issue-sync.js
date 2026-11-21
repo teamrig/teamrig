@@ -1,17 +1,17 @@
 import { ENV, KIT_NAME } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
-import { activityRoutes } from "../../github/activity.js";
-import { addedTasks } from "../../github/auto.js";
-import { followersOf, parseFollows } from "../../github/follows.js";
-import { issueMarkStep } from "../../github/issue-marks.js";
-import { importRules, issueOwner, issueRef } from "../../github/map.js";
-import { importedTasks, linkedRefs, planSync, refHolders } from "../../github/plan.js";
-import { withCiExcerpts } from "../../github/ci-excerpt.js";
-import { firstMentionWatch, mentionItems, mentionReadSince, mentionStep, mentionTime, } from "../../github/mention-route.js";
-import { securityIssues } from "../../github/security-alert.js";
-import { eventsByRecipient, pullEvents, pullListeners, pullNewsText, pullRecipient } from "../../github/pull-news.js";
-import { ourLogins } from "../../github/trust.js";
-import { applySteps, closedSince } from "../../github/sync.js";
+import { activityRoutes } from "../../sync/activity.js";
+import { addedTasks } from "../../sync/auto.js";
+import { followersOf, parseFollows } from "../../sync/follows.js";
+import { issueMarkStep } from "../../sync/issue-marks.js";
+import { importRules, issueOwner, issueRef } from "../../sync/map.js";
+import { importedTasks, linkedRefs, planSync, refHolders } from "../../sync/plan.js";
+import { withCiExcerpts } from "../../sync/ci-excerpt.js";
+import { firstMentionWatch, mentionItems, mentionReadSince, mentionStep, mentionTime, } from "../../sync/mention-route.js";
+import { securityIssues } from "../../sync/security-alert.js";
+import { eventsByRecipient, pullEvents, pullListeners, pullNewsText, pullRecipient } from "../../sync/pull-news.js";
+import { ourLogins } from "../../sync/trust.js";
+import { applySteps, closedSince } from "../../sync/sync.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
 import { sessionLogins } from "../../issues/status-push.js";
 import { priorityText } from "../../register/model.js";
@@ -27,7 +27,7 @@ import { fieldRunOf } from "./issue-field-push.js";
 import { reserveHour, settleHour } from "./issue-push-hour.js";
 import { issuePush, pushEndLine, pushRepos } from "./issue-push.js";
 import { GITHUB_OFF, githubOff, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
-import { githubWatcher } from "../../github/watcher.js";
+import { githubWatcher } from "../../sync/watcher.js";
 /** The rows of steps a repository prints; the rest are counted. */
 export const SHOWN_STEPS = 10;
 /** The left-out issue numbers a repository's LEFT OUT line names; the rest are counted. */
@@ -40,7 +40,7 @@ export const SHOWN_LEFT_OUT = 20;
  * instead. A sync only lists issues, and the
  * register's import writes (register.ts) touch only the tasks it added, as `github`. Without `--yes` it
  * shows what it would write and writes nothing. Either way a LEFT OUT line names, by number only, the open
- * issues of a repository that the trust rule kept out (github/trust.ts). `--auto`, which the watch runs when GitHub changed (issue-watch.ts), writes as
+ * issues of a repository that the trust rule kept out (sync/trust.ts). `--auto`, which the watch runs when GitHub changed (issue-watch.ts), writes as
  * `--yes` does and tells each owner's inbox its new tasks, and the lead's when the failing repositories change or
  * an issue is newly left out. Each repository's pull requests are read too and compared with what the last
  * `--auto` read of them (pull-news.ts): a PULL NEWS line per session names what happened since, but only `--auto`

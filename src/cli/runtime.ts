@@ -14,10 +14,10 @@ import type { ChatWebhook } from '../core/webhook.ts';
 import type { ExecPorts } from '../exec/ports.ts';
 import type { Clock, Sleep } from '../core/lock.ts';
 import type { PathProbe } from '../core/path-probe.ts';
-import type { StoreFolders } from '../core/plugin-store.ts';
+import type { StoreFolders } from '../plugin-store/store.ts';
 import type { CredentialStore } from '../core/credentials.ts';
-import type { GhRunner } from '../github/gh.ts';
-import type { PullGit } from '../github/pull-conflicts.ts';
+import type { ProgramRunner } from '../core/program-runner.ts';
+import type { PullGit } from '../sync/pull-conflicts.ts';
 import type { MergeGit } from '../merge/git.ts';
 import type { RequirementsCheck } from '../requirements/requirements.ts';
 import type { HookRunner } from '../deploy/hooks.ts';
@@ -71,6 +71,11 @@ export interface CliRuntime {
   readonly platform: NodeJS.Platform;
   /** The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts). */
   readonly host: HostSource;
+  /**
+   * Every host adapter teamrig ships with, the one the run works in among them: for what holds on a machine whatever
+   * host runs the session, the hosts' own secret files (`secretFilesOf`, host.ts).
+   */
+  readonly shippedHosts: readonly HostSource[];
   /** Terminal launchers and Claude Code, for `teamrig open` and `teamrig launch`. */
   readonly processes: Processes;
   /** The running session's Claude Code process and its tab, which the automatic context refresh ends. */
@@ -85,8 +90,8 @@ export interface CliRuntime {
   readonly cpu: HostCpu;
   /** The processes that started this one, so a queued step whose launching shell was ended stops too. */
   readonly starters: StarterWatch;
-  /** The GitHub CLI, for `teamrig issue sync`; it runs reads only (github/gh.ts). */
-  readonly gh: GhRunner;
+  /** Runs the command-line tool of a connector adapter, such as `gh`, each run held to the two connector limits of time and output (plugin-api/connector.ts). */
+  readonly run: ProgramRunner;
   /** The system's saved secrets, where `teamrig issue sync` finds each owner's read-only GitHub token; only ever read. */
   readonly credentials: CredentialStore;
   /** The API of an outside tool a connector adapter reaches with no command line (plugin-api/connector.ts): https only. */

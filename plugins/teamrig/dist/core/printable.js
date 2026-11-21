@@ -32,6 +32,10 @@ function escapeOf(mark) {
 export function printable(text) {
     return text.replace(UNPRINTABLE, escapeOf);
 }
+/** Text from outside on one plain line: control and format characters (escapes, bidi overrides) become spaces. */
+export function plainLine(text) {
+    return text.replace(/[\p{Cc}\p{Cf}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+}
 /** Whether `text` holds a control character or bidi format mark, which `printable` would escape. */
 export function hasUnprintable(text) {
     return printable(text) !== text;

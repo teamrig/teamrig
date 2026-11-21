@@ -6,6 +6,7 @@ import { pushRanges, rangeArgs } from "../../secret-guard/push-range.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { MAX_TAG_DEPTH } from "../../secret-guard/secrets-git.js";
 import { UsageError, noPositionals, onePositional } from "../args.js";
+import { secretFilesOf } from "../host.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { guardLoadOf } from "./hook-guard-load.js";
 /** The tail of every refusal: a fix in the repo does not take back a copy that already left it. */
@@ -93,7 +94,7 @@ function repoRoot(runtime) {
  */
 async function scannerOf(runtime, root) {
     const load = (await guardLoadOf(undefined, runtime))?.load;
-    const rules = secretRulesOf(secretGuardOf(load), runtime.userHome, runtime.platform, secretPatternsOf(load));
+    const rules = secretRulesOf(secretGuardOf(load), runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(load));
     const git = runtime.secretsGit;
     return new CommitScanner(rules.shapes, rules.paths, root, (revision, path) => git.blob(runtime.cwd, revision, path));
 }

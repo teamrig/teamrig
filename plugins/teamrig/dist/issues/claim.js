@@ -1,8 +1,8 @@
 import { isRecord } from "../core/guards.js";
 import { parseObject, toJsonlLine, VERSION_FIELD } from "../core/jsonl.js";
 import { DESIGN_LABEL } from "./design-label.js";
-import { isLogin } from "../github/gh.js";
-import { isInsider, issueTrust } from "../github/trust.js";
+import { isLogin } from "./login.js";
+import { isInsider, issueTrust } from "../sync/trust.js";
 /**
  * A contributor claims an open issue by a comment, and code assigns them (T3021 design, section 1). This file holds
  * the decisions only: which comment is a claim, which claims a sync makes, and which run out. It reads and writes

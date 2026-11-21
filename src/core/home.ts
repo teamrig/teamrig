@@ -24,8 +24,6 @@ export const ENV = {
    * a `teamrig queue` among them, such as a git hook's checks, runs at once under that lock instead of waiting on its parent.
    */
   hostLock: 'TEAMRIG_HOST_LOCK',
-  /** The folder Claude Code started the session in; hooks and tool commands inherit it. */
-  claudeProjectDir: 'CLAUDE_PROJECT_DIR',
   /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
   claudeConfigDir: 'CLAUDE_CONFIG_DIR',
   /** The session `teamrig launch` runs Claude Code for: it starts Claude Code again after an automatic restart. */
@@ -36,10 +34,6 @@ export const ENV = {
   effortLevel: 'CLAUDE_CODE_EFFORT_LEVEL',
   /** At 1, Claude Code picks a helper's model over every per-call Agent `model`; `doctor` warns when set. */
   subagentModelForce: 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
-  /** How Claude Code was started: `cli` for a terminal tab, the only kind the restore after a reboot reopens. */
-  claudeEntrypoint: 'CLAUDE_CODE_ENTRYPOINT',
-  /** `bg` for a background session, which the restore after a reboot never reopens. */
-  claudeSessionKind: 'CLAUDE_CODE_SESSION_KIND',
   /** Set (`1`), Claude Code stops writing the terminal tab's title and leaves it to hooks: tab status needs it. */
   claudeTitleOff: 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
   /**
@@ -199,21 +193,21 @@ export interface TeamPaths {
   readonly warn: string;
   /** The full output of each `teamrig test` run, `test-<session>-<n>.log` each. */
   readonly logs: string;
-  /** The automatic GitHub sync's last start, finish and failing repositories (github/auto.ts). */
+  /** The automatic GitHub sync's last start, finish and failing repositories (sync/auto.ts). */
   readonly githubSync: string;
-  /** The end of each failed CI job's log of a session's own pull request, one `<owner>-<name>-<number>.md` per pull request (github/ci-excerpt.ts). */
+  /** The end of each failed CI job's log of a session's own pull request, one `<owner>-<name>-<number>.md` per pull request (sync/ci-excerpt.ts). */
   readonly githubCi: string;
   /** Held while a sync records its finish. */
   readonly githubSyncLock: string;
   /** The automatic status push's writes per minute over the last hour (issues/push-hour.ts). */
   readonly githubPushHour: string;
-  /** The response clock of each GitHub thread waiting on an answer of ours (github/clock.ts). */
+  /** The response clock of each GitHub thread waiting on an answer of ours (sync/clock.ts). */
   readonly githubClocks: string;
-  /** The lease of the team's one `issue watch`: its pid and last beat (github/watch.ts). */
+  /** The lease of the team's one `issue watch`: its pid and last beat (sync/watch.ts). */
   readonly githubWatch: string;
   /** Held while a hook claims the watch or the watch claims, renews or drops its lease. */
   readonly githubWatchLock: string;
-  /** The issues and pull requests each session follows (github/follows.ts). */
+  /** The issues and pull requests each session follows (sync/follows.ts). */
   readonly githubFollows: string;
   /** The issue claims the sync made, the only assignees it may ever take off (issues/claim.ts). */
   readonly githubClaims: string;

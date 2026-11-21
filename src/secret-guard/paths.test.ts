@@ -5,12 +5,14 @@ import { generateKeyPairSync } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TempRepo } from '../../tools/lib/temp-repo.ts';
+import { testPaths } from '../testing/host.ts';
 import { DEFAULT_SECRET_PATHS, normalisePath, SecretPaths, wordPath, type WordPlace, type WordReading } from './paths.ts';
 import { PUBLIC_KEY_MAX_BYTES, readKeyText } from './public-key.ts';
 
 const HOME = 'C:/u';
 const REPO = 'C:/work/app';
-const secrets = new SecretPaths([...DEFAULT_SECRET_PATHS, 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'], HOME, true);
+/** The list a run on the shipped host reads (`secretRulesOf`): the defaults, the host's own secret files, then a team's globs. */
+const secrets = new SecretPaths([...DEFAULT_SECRET_PATHS, ...testPaths().secretFiles(), 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'], HOME, true);
 /** A bash word, whose wildcards never reach a leading dot, and a word whose wildcards do (PowerShell, a script's glob). */
 const BASH_WORD: WordReading = { dotfiles: false, sets: 'bash' };
 const ANY_WORD: WordReading = { dotfiles: true, sets: 'bash' };
@@ -69,11 +71,45 @@ describe('SecretPaths.listed', () => {
       `${REPO}/.claude/settings.json`,
       `${HOME}/.claude/settings.json`,
       `${HOME}/.claude/projects/app/history.jsonl`,
+      `${REPO}/data/history.jsonl`,
+      `${REPO}/docs/credentials.json`,
       `${REPO}/.bash_history`,
       `${REPO}/src/env.ts`,
       `${REPO}/keys.ts`,
     ];
     assert.deepEqual(readable.filter((path) => secrets.listed(path)), []);
+  });
+
+  it("lists the shipped host's secret files in the folder its variable moves its own to, read as that folder alone", () => {
+    const movedTo = (value: string, platform: NodeJS.Platform, home: string): SecretPaths =>
+      new SecretPaths([...DEFAULT_SECRET_PATHS, ...testPaths({ CLAUDE_CONFIG_DIR: value }, platform).secretFiles()], home, platform === 'win32');
+    const windows = movedTo('D:\\agents\\cfg [1]', 'win32', HOME);
+    assert.deepEqual(['D:/agents/cfg [1]/history.jsonl', 'd:/agents/CFG [1]/.credentials.json', `${HOME}/.claude/history.jsonl`].filter((path) => !windows.listed(path)), []);
+    assert.deepEqual(['D:/agents/cfg 1/history.jsonl', 'D:/agents/history.jsonl', 'E:/agents/cfg [1]/history.jsonl'].filter((path) => windows.listed(path)), []);
+    const noDrive = movedTo('\\agents\\cfg', 'win32', HOME);
+    assert.deepEqual(['C:/agents/cfg/history.jsonl', 'D:/agents/cfg/history.jsonl'].filter((path) => !noDrive.listed(path)), []);
+    assert.deepEqual(['C:/agents/history.jsonl', 'C:/work/agents/cfg/history.jsonl'].filter((path) => noDrive.listed(path)), []);
+    const share = movedTo('\\\\nas\\team\\cfg', 'win32', HOME);
+    assert.equal(share.listed(normalisePath('\\\\NAS\\team\\cfg\\.credentials.json')), true);
+    assert.equal(share.listed('C:/nas/team/cfg/.credentials.json'), false);
+    const linux = movedTo('/srv/cfg*', 'linux', '/u');
+    assert.deepEqual(['/srv/cfg*/history.jsonl', '/srv/cfg*/.credentials.json', '/u/.claude/history.jsonl'].filter((path) => !linux.listed(path)), []);
+    assert.deepEqual(['/srv/cfg2/history.jsonl', '/srv/CFG*/history.jsonl', '/work/srv/cfg*/history.jsonl'].filter((path) => linux.listed(path)), []);
+  });
+
+  it("lists the shipped host's login in a folder named like its own at any depth, and in no other folder", () => {
+    const listed = [`${HOME}/.claude-work/.credentials.json`, `${HOME}/.claude2/.credentials.json`, `${REPO}/.Claude-Old/.credentials.json`, 'D:/accounts/.claude.bak/.credentials.json'];
+    assert.deepEqual(listed.filter((path) => !secrets.listed(path)), []);
+    const readable = [
+      `${REPO}/.credentials.json`,
+      `${REPO}/vendor/agent/.credentials.json`,
+      `${REPO}/claude-work/.credentials.json`,
+      `${HOME}/.claude-work/credentials.json`,
+      `${HOME}/.claude-work/history.jsonl`,
+      `${HOME}/.claude-work/app/.credentials.json`,
+    ];
+    assert.deepEqual(readable.filter((path) => secrets.listed(path)), []);
+    assert.equal(new SecretPaths(testPaths().secretFiles(), '/u', false).listed('/u/.Claude-work/.credentials.json'), false, 'a name in another case is another folder where case counts');
   });
 
   it('lets a later !glob keep a default readable, and reads Windows paths in any case', () => {
@@ -129,6 +165,13 @@ describe('SecretPaths.mayName', () => {
     assert.equal(secrets.mayName(`${REPO}/*.ts`, ANY_WORD), false, '*.ts fits .env.* only as .env.ts');
     assert.equal(secrets.mayName(`${REPO}/*.json`, ANY_WORD), false);
     assert.equal(secrets.mayName(`${REPO}/src/*.txt`, ANY_WORD), false);
+  });
+
+  it("counts a word whose wildcard is in the folder's name as naming the shipped host's login, and no word of *.json files in another folder", () => {
+    assert.equal(secrets.mayName(`${HOME}/.claude-w*/.credentials.json`, BASH_WORD), true);
+    assert.equal(secrets.mayName(`${HOME}/.claude?/.credentials.json`, BASH_WORD), true);
+    assert.equal(secrets.mayName(`${REPO}/vendor/agent/*.json`, ANY_WORD), false);
+    assert.equal(secrets.mayName(`${REPO}/src/*.json`, ANY_WORD), false);
   });
 
   it('reads a ripgrep set as reaching a slash, and a negated one as fitting it (T2357)', () => {

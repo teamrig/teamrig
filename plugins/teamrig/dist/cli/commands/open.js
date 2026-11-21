@@ -22,6 +22,7 @@ import { urgentFirstPrompt } from "../../wake/asks.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
+import { cacheBinOf } from "../host.js";
 import { liveRunOf, liveRunText } from "../live-run.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { launchListing } from "../skill-listing.js";
@@ -397,7 +398,7 @@ export async function launch(args, runtime) {
     const prompt = launchPrompt(args, team, id);
     const resume = resumeFlag(args.flags.get('resume'));
     const effort = effortFlag(args.flags.get('effort'));
-    const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform), [ENV.launched]: id };
+    const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform, cacheBinOf(runtime)), [ENV.launched]: id };
     const sessionRuntime = { ...runtime, env };
     const kit = await openKit(sessionRuntime, team);
     const config = requireConfig(kit, sessionRuntime, 'read');
