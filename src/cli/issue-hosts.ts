@@ -2,7 +2,7 @@ import { loadConnector, type Load } from '../composition/loader.ts';
 import type { KitConfig } from '../config/types.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import type { CodeHost, HostKind, Tracker } from '../issues/host.ts';
-import type { ConnectorAdapter, ConnectorPorts, JsonRecord } from '../plugin-api/index.ts';
+import type { ConnectorAdapter, ConnectorPorts, JsonRecord, RefCodec } from '../plugin-api/index.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
 /** The two ports a command reaches a host through: where its issues live, and where its pull requests and files do. */
@@ -88,7 +88,34 @@ export async function trackerOf(
   return tracker;
 }
 
-/** The ports the adapter of `id` builds from its section of the team config, the shared step of hostsOf and trackerOf. */
+/** What an import of a tracker other than GitHub reads it through: the tracker, the places its config names, and its refs. */
+export interface TrackerPorts {
+  readonly tracker: Tracker;
+  readonly targets: readonly string[];
+  readonly refs: RefCodec;
+}
+
+/**
+ * The tracker of the connector `id` with the places its section names and its issue refs, built as trackerOf builds
+ * the tracker: for the import of a tracker whose refs and places core does not know (Jira). An adapter that builds no
+ * tracker or gives no refs fails the command, as for hostsOf; one that names no place gives an empty list.
+ */
+export async function trackerPortsOf(
+  id: string,
+  runtime: HostRuntime,
+  scanner: SecretScanner,
+  stamp: boolean,
+  sections: ConnectorSections,
+  load: ConnectorLoader = loadConnector,
+): Promise<TrackerPorts> {
+  const { tracker, targets, refs } = await portsOf(id, runtime, scanner, stamp, sections, load);
+  if (tracker === undefined || refs === undefined) {
+    throw new HostAdapterError(id, [...(tracker === undefined ? ['it builds no tracker'] : []), ...(refs === undefined ? ['it gives no issue refs'] : [])]);
+  }
+  return { tracker, targets: targets ?? [], refs };
+}
+
+/** The ports the adapter of `id` builds from its section of the team config, the shared step of hostsOf, trackerOf and trackerPortsOf. */
 async function portsOf(
   id: string,
   runtime: HostRuntime,

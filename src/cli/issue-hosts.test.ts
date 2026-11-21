@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { loadConnector } from '../composition/loader.ts';
 import { SecretScanner } from '../core/secrets.ts';
 import { GITHUB_REPOS_HOST } from '../issues/host.ts';
-import type { ConfigReport, ConnectorDeps, ConnectorPorts, JsonRecord, ProgramRunner } from '../plugin-api/index.ts';
+import type { ConfigReport, ConnectorDeps, ConnectorPorts, JsonRecord, ProgramRunner, RefCodec } from '../plugin-api/index.ts';
 import { FakeCredentials, TEST_OWNERS } from '../testing/fake-credentials.ts';
 import { FakeGh } from '../testing/fake-gh.ts';
 import { FakeHttp } from '../testing/fake-http.ts';
@@ -14,7 +14,7 @@ import { connectorDeclarationData } from '../testing/manifests.ts';
 import { programOverGh } from '../testing/program-over-gh.ts';
 import { SRC_DIR, sourcesUnder, underSrc } from '../testing/source-files.ts';
 import { codeHostOnly, trackerOnly } from '../testing/split-hosts.ts';
-import { hostsOf, reposOf, sectionOf, trackerOf, type ConnectorLoader, type HostRuntime } from './issue-hosts.ts';
+import { hostsOf, reposOf, sectionOf, trackerOf, trackerPortsOf, type ConnectorLoader, type HostRuntime } from './issue-hosts.ts';
 import { RefusedError } from './runtime.ts';
 
 const OWN_ENV = { HOME: '/own' };
@@ -206,6 +206,37 @@ describe('trackerOf', () => {
   });
 });
 
+/** Issue refs that name no issue: trackerPortsOf only hands them on. */
+const NO_REFS: RefCodec = { refOf: () => undefined, parseRef: () => undefined, pageOf: () => undefined };
+
+describe('trackerPortsOf', () => {
+  it('gives the tracker, the places and the refs the adapter builds (T4912)', async () => {
+    const { tracker } = bothPorts();
+    const got = await trackerPortsOf(JIRA, runtimeWith(), new SecretScanner(), true, {}, serving({ tracker, targets: ['acme.atlassian.net/eng'], refs: NO_REFS }).load);
+    assert.deepEqual(got, { tracker, targets: ['acme.atlassian.net/eng'], refs: NO_REFS });
+  });
+
+  it('gives no place when the adapter names none (T4912)', async () => {
+    const { tracker } = bothPorts();
+    const got = await trackerPortsOf(JIRA, runtimeWith(), new SecretScanner(), true, {}, serving({ tracker, refs: NO_REFS }).load);
+    assert.deepEqual(got.targets, []);
+  });
+
+  it('fails, naming each missing port, when the adapter builds no tracker and gives no refs (T4912)', async () => {
+    const { codeHost } = bothPorts();
+    await assert.rejects(trackerPortsOf(JIRA, runtimeWith(), new SecretScanner(), true, {}, serving({ codeHost }).load), {
+      name: 'HostAdapterError',
+      message: 'the jira connector adapter gave no host: it builds no tracker; it gives no issue refs',
+    });
+  });
+
+  it('loads the Jira adapter teamrig ships, its places from its section (T4912)', async () => {
+    const got = await trackerPortsOf(JIRA, runtimeWith(), new SecretScanner(), true, { jira: { site: 'acme', projects: ['ENG'] } });
+    assert.equal(got.tracker.name, 'Jira');
+    assert.equal(got.targets.length, 1);
+  });
+});
+
 describe('sectionOf', () => {
   it("gives the section written under an id, and an empty one for an id the team wrote none under (T4766)", () => {
     const own = { site: 'acme' };
@@ -248,7 +279,7 @@ describe('reposOf', () => {
 const GITHUB_ADAPTER = 'adapters/connectors/github/index.ts';
 const GITHUB_HOST_CLASS = 'GitHubIssueHost';
 /** The calls that build a connector's ports from its id. */
-const PORT_BUILDERS: ReadonlySet<string> = new Set(['hostsOf', 'trackerOf']);
+const PORT_BUILDERS: ReadonlySet<string> = new Set(['hostsOf', 'trackerOf', 'trackerPortsOf']);
 
 /** One place a source names a host, with its 1-based line. */
 interface HostNaming {
