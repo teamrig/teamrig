@@ -102,6 +102,7 @@ test('the real renamed.ts parses to exactly the renamed commands the CLI refuses
 test('parses CRLF text and quoted names; refuses a line that is not old to new, a missing or an unclosed block', () => {
   const quoted = renamedText([["'deploy-x'", 'deploy-status']], '\r\n');
   assert.deepEqual(parseRenamedCommands(quoted), { ok: true, commands: new Map([['deploy-x', 'deploy-status']]) });
+  assert.deepEqual(parseRenamedCommands(renamedText([["'gh sync'", 'issue sync']])), { ok: true, commands: new Map([['gh sync', 'issue sync']]) });
   assert.deepEqual(parseRenamedCommands(renamedText([['heavy', 'Queue']])), {
     ok: false,
     reason: `line 4 of ${RENAMED_FILE} is not "old: 'new',": heavy: 'Queue',`,

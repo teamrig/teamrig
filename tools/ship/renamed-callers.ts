@@ -24,7 +24,8 @@ export type RenamedRead = { ok: true; commands: Map<string, string> } | { ok: fa
 
 const COMMANDS_OPEN = /^\s*commands: \{$/;
 const COMMANDS_CLOSE = /^\s*\},?$/;
-const COMMAND_ENTRY = /^\s*'?([a-z][a-z0-9-]*)'?: '([a-z][a-z0-9-]*)',?$/;
+/** `old: 'new',`, either name one word or two (`'gh sync': 'issue sync',`). */
+const COMMAND_ENTRY = /^\s*'?([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)?)'?: '([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)?)',?$/;
 
 /** The `commands` block of renamed.ts's text, old name to new; any line that is not `old: 'new',` is refused, never guessed. */
 export function parseRenamedCommands(text: string): RenamedRead {
