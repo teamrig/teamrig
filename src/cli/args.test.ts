@@ -56,6 +56,19 @@ describe('parseArgs', () => {
     assert.equal(usageMessage(() => parseArgs([], COMMANDS)), 'no command given');
   });
 
+  it('reads --host-event on a hook command apart from its flags, and refuses it on any other (T4752)', () => {
+    const hooks: CommandFlags = { ...COMMANDS, 'hook stop': [] };
+    const args = parseArgs(['hook', 'stop', '--host-event', 'Stop'], hooks);
+    assert.equal(args.command, 'hook stop');
+    assert.equal(args.hostEvent, 'Stop');
+    assert.deepEqual([...args.flags], []);
+    assert.equal(args.common.size, 0);
+    assert.equal(parseArgs(['hook', 'stop'], hooks).hostEvent, undefined);
+    assert.equal(usageMessage(() => parseArgs(['show', '--host-event', 'Stop'], hooks)), 'show takes no --host-event');
+    assert.equal(usageMessage(() => parseArgs(['hook', 'stop', '--host-event'], hooks)), '--host-event needs a value');
+    assert.equal(usageMessage(() => parseArgs(['hook', 'stop', '--host-event', 'Stop', '--host-event', 'Stop'], hooks)), '--host-event is given twice');
+  });
+
   it('refuses a flag the command does not take, so a typo never means nothing', () => {
     assert.equal(usageMessage(() => parseArgs(['add', '--titel', 'x'], COMMANDS)), 'add takes no --titel');
     assert.equal(usageMessage(() => parseArgs(['show', 'T1', '--priority', 'p2'], COMMANDS)), 'show takes no --priority');

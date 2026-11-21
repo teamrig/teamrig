@@ -136,6 +136,8 @@ export interface CliRuntime {
   readonly configFormat?: ConfigFormat;
   /** When a hook's every file lock wait gives up (hook-timeouts.ts); runCli sets it for a `hook` command. */
   readonly lockDeadline?: number | undefined;
+  /** The event a hook's `--host-event` named, for a host whose hook input names none; runCli sets it for a `hook` command. */
+  readonly hostEvent?: string | undefined;
   /** cmd.exe's whole command line, which the `teamrig.cmd` shim passes, for the arguments cmd cut at a line break (cmd-shim.ts). */
   readonly cmdShimLine?: string | undefined;
   /** All of stdin, for hooks, which Claude Code feeds one JSON object. */

@@ -30,8 +30,8 @@ export interface HookInput {
   readonly event: HookEvent | undefined;
 }
 
-export async function readHookInput(runtime: Pick<CliRuntime, 'readStdin' | 'host' | 'env' | 'platform'>): Promise<HookInput> {
-  return { event: hooksOf(runtime).parse(await runtime.readStdin()) };
+export async function readHookInput(runtime: Pick<CliRuntime, 'readStdin' | 'host' | 'env' | 'platform' | 'hostEvent'>): Promise<HookInput> {
+  return { event: hooksOf(runtime).parse(await runtime.readStdin(), runtime.hostEvent) };
 }
 
 /**
@@ -45,10 +45,10 @@ export interface ModRequest {
 }
 
 /** The mod's request on standard input; undefined when it is no JSON record, which every command treats as nothing asked. */
-export async function readModRequest(runtime: Pick<CliRuntime, 'readStdin' | 'host' | 'env' | 'platform'>): Promise<ModRequest | undefined> {
+export async function readModRequest(runtime: Pick<CliRuntime, 'readStdin' | 'host' | 'env' | 'platform' | 'hostEvent'>): Promise<ModRequest | undefined> {
   const raw = await runtime.readStdin();
   const fields = parseJson(raw);
-  const event = hooksOf(runtime).parse(raw);
+  const event = hooksOf(runtime).parse(raw, runtime.hostEvent);
   return isRecord(fields) && event !== undefined ? { event, fields } : undefined;
 }
 

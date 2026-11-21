@@ -1301,7 +1301,8 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     }
     const command = await spec.load();
     const lockDeadline = hookLockDeadline(args.command, runtime.clock.now());
-    return await command(args, lockDeadline === undefined ? runtime : { ...runtime, lockDeadline });
+    const hookRuntime = lockDeadline === undefined ? runtime : { ...runtime, lockDeadline };
+    return await command(args, args.hostEvent === undefined ? hookRuntime : { ...hookRuntime, hostEvent: args.hostEvent });
   } catch (error) {
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));

@@ -139,13 +139,23 @@ export const GUARD_HOOKS: ReadonlySet<string> = new Set([
   'picker-guard',
 ]);
 
+/** The flag a host whose hook input names no event writes after the hook (args.ts `HOST_EVENT_FLAG`, not imported: see above). */
+const HOST_EVENT_FLAG = '--host-event';
+/** A host's hook event name as its hooks file writes it: letters only, such as `PreToolUse`. */
+const HOST_EVENT_WORD = /^[A-Za-z]+$/u;
+
 /**
- * Whether `argv` is `hook <name>` for a guard hook and nothing else. The guard entry loads the whole CLI, so any other
- * words would run a CLI command no guard reads as one (`node <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
+ * Whether `argv` is `hook <name>` for a guard hook, with at most `--host-event <event>` after it, and nothing else. The
+ * guard entry loads the whole CLI, so any other words would run a CLI command no guard reads as one
+ * (`node <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
  */
 export function isHookArgv(argv: readonly string[]): boolean {
-  const [group, name] = argv;
-  return argv.length === 2 && group === 'hook' && name !== undefined && GUARD_HOOKS.has(name);
+  const [group, name, flag, event] = argv;
+  const guardHook = group === 'hook' && name !== undefined && GUARD_HOOKS.has(name);
+  if (argv.length === 2) {
+    return guardHook;
+  }
+  return guardHook && argv.length === 4 && flag === HOST_EVENT_FLAG && event !== undefined && HOST_EVENT_WORD.test(event);
 }
 
 /**
