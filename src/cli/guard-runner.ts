@@ -139,23 +139,42 @@ export const GUARD_HOOKS: ReadonlySet<string> = new Set([
   'picker-guard',
 ]);
 
+/** The flag naming the host a hook line runs in (args.ts `HOST_FLAG`, not imported: see above). */
+const HOST_FLAG = '--host';
+/** A host's adapter id as hooks lines write it: lowercase words joined by hyphens, such as `claude-code`. */
+const HOST_ID_WORD = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 /** The flag a host whose hook input names no event writes after the hook (args.ts `HOST_EVENT_FLAG`, not imported: see above). */
 const HOST_EVENT_FLAG = '--host-event';
 /** A host's hook event name as its hooks file writes it: letters only, such as `PreToolUse`. */
 const HOST_EVENT_WORD = /^[A-Za-z]+$/u;
 
+/** The flags a hook line may carry after the guard's name, each with the shape its value must have. */
+const HOOK_FLAGS: ReadonlyMap<string, RegExp> = new Map([
+  [HOST_FLAG, HOST_ID_WORD],
+  [HOST_EVENT_FLAG, HOST_EVENT_WORD],
+]);
+
 /**
- * Whether `argv` is `hook <name>` for a guard hook, with at most `--host-event <event>` after it, and nothing else. The
- * guard entry loads the whole CLI, so any other words would run a CLI command no guard reads as one
- * (`node <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
+ * Whether `argv` is `hook <name>` for a guard hook, with at most `--host <id>` and `--host-event <event>` after it,
+ * each once and in either order, and nothing else. The guard entry loads the whole CLI, so any other words would run a
+ * CLI command no guard reads as one (`node <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
  */
 export function isHookArgv(argv: readonly string[]): boolean {
-  const [group, name, flag, event] = argv;
-  const guardHook = group === 'hook' && name !== undefined && GUARD_HOOKS.has(name);
-  if (argv.length === 2) {
-    return guardHook;
+  const [group, name, ...rest] = argv;
+  if (group !== 'hook' || name === undefined || !GUARD_HOOKS.has(name) || rest.length % 2 !== 0) {
+    return false;
   }
-  return guardHook && argv.length === 4 && flag === HOST_EVENT_FLAG && event !== undefined && HOST_EVENT_WORD.test(event);
+  const seen = new Set<string>();
+  for (let index = 0; index < rest.length; index += 2) {
+    const flag = rest[index] ?? '';
+    const shape = HOOK_FLAGS.get(flag);
+    const value = rest[index + 1] ?? '';
+    if (shape === undefined || seen.has(flag) || !shape.test(value)) {
+      return false;
+    }
+    seen.add(flag);
+  }
+  return true;
 }
 
 /**
