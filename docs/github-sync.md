@@ -150,6 +150,11 @@ repositories are read on. A `LEFT OUT` line names, by number only, the open issu
 that no one accepted yet (at most 20, then how many more); their text is never printed. `teamrig issue sync --repo
 acme/web` reads one repository only.
 
+The same run first imports any other tracker your team config has a `connectors` section for: today Jira's projects
+(`connectors.jira`), each with its own `ACCESS`, `REPO` and `PREVIEW` lines and tasks of source `jira`. Until Jira's
+trust rule ships, every Jira issue is left out, so it adds no task yet. A Jira section that is wrong or cannot be read
+gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub alone.
+
 ## Then it runs on its own
 
 Once the repositories are listed, nobody needs to run it. When a session of the team starts or ends a turn, its hook

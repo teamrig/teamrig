@@ -800,7 +800,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       sends the status push's labels, assignees, fields and types too (a close it plans is held for --push --yes,
       printed HELD), and assigns an outside person who claims an open issue by a /take comment,
       taking the assignee off after 7 days with no linked pull request,
-      its writes lowered so an hour of runs sends at most 250
+      its writes lowered so an hour of runs sends at most 250; first it imports each other tracker
+      with a connectors.<id> section (Jira: connectors.jira.projects) the same way, as that tracker's
+      source, read-only; --repo reads that GitHub repository alone
   issue watch   the team's one watch on github.repos, started hidden by the hooks: every
       github.probeSeconds (60 by default; 0 runs none) it asks GitHub whether each repository's issues,
       pull requests or Actions runs changed, a conditional read that costs no rate limit when nothing
