@@ -5,6 +5,7 @@ import { SHELL_RECHECK_MS } from '../open/end-tab.ts';
 import type { ProcessInfo } from '../open/session-processes.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
+import { testSessionProcess } from '../testing/host.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { RestoreRegistry, restoreSessionsDir } from '../restore/registry.ts';
@@ -114,6 +115,7 @@ class World {
       asks: this.asks,
       restore: new RestoreRegistry(this.files, restoreSessionsDir(join('/', 'kit'))),
       processes: this.processes,
+      isSessionProcess: testSessionProcess,
       clock: this.clock,
       sleep: async (ms) => {
         this.sleeps += 1;
@@ -355,6 +357,15 @@ describe('runRestart', () => {
     const node: ProcessInfo = { ...CLAUDE, name: 'node.exe', commandLine: 'node C:\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js' };
     const script = await new World({ running: [node] }).arm();
     assert.equal((await runRestart(script.deps, PLAN)).kind, 'restarted');
+  });
+
+  it("ends the program the hosts call a session's, whatever its name, and none that no host does", async () => {
+    const desk: ProcessInfo = { ...CLAUDE, name: 'agent-desk', commandLine: 'agent-desk' };
+    const told = await new World({ running: [desk] }).arm();
+    assert.equal((await runRestart({ ...told.deps, isSessionProcess: (process) => process.name === desk.name }, PLAN)).kind, 'restarted');
+    const untold = await new World({ running: [desk] }).arm();
+    assert.deepEqual(await runRestart(untold.deps, PLAN), { kind: 'failed', why: 'process 4100 is agent-desk, not Claude Code' });
+    assert.deepEqual(untold.processes.ends, []);
   });
 
   it('cancels when its Claude Code has already ended', async () => {

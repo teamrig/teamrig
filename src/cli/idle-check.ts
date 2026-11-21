@@ -8,7 +8,7 @@ import type { TimeZone } from '../core/zone.ts';
 import { resumeVerdict } from '../hiring/rehire.ts';
 import { bookedMeetingOf, MeetingSchedule, type ScheduledMeeting } from '../meeting/schedule.ts';
 import { workCutOffBy, type TabEnder } from '../open/end-tab.ts';
-import { isClaudeProcess, type ProcessInfo } from '../open/session-processes.ts';
+import type { ProcessInfo } from '../open/session-processes.ts';
 import { readRunningWork } from '../refresh/running.ts';
 import { RefreshStore } from '../refresh/store.ts';
 import type { Task } from '../register/fold.ts';
@@ -26,7 +26,7 @@ import { asksNowOf, urgentLinesText, WakeAsks, type WakeAsk } from '../wake/asks
 import { startableTasks } from '../wake/day-start.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { measureTranscript, type LastSession } from './commands/rehire.ts';
-import { transcriptsIfKept } from './host.ts';
+import { sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
 import { teamZone, type Kit } from './kit.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 import { teamRegister } from './team-register.ts';
@@ -272,7 +272,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
     return keep(`could not be resumed once closed (${resume.detail}); retire it with its handover instead`);
   }
   const claude = await runtime.sessionProcesses.describe(record.claudePid);
-  if (claude === undefined || !isClaudeProcess(claude)) {
+  if (claude === undefined || !sessionProcessCheckOf(runtime)(claude)) {
     return keep(notRunning);
   }
   const cutOff = await workCutOffBy(enderOf(runtime), claude);

@@ -11,7 +11,6 @@ import { FakeSweepHost } from '../testing/fake-sweep-host.ts';
 import { FakeWindowsPowerShell } from '../testing/fake-windows-powershell.ts';
 import {
   EXEC_STUB_MS,
-  isClaudeProcess,
   lineageOf,
   nodeSessionProcesses,
   parsePosixChildren,
@@ -25,17 +24,6 @@ import {
   type ListedProcess,
   type ProcessInfo,
 } from './session-processes.ts';
-
-describe('isClaudeProcess', () => {
-  it('knows Claude Code by its binary, or by Node.js running its script', () => {
-    const info = (name: string, commandLine: string) => ({ pid: 1, parentPid: 0, name, commandLine });
-    assert.equal(isClaudeProcess(info('claude.exe', '')), true);
-    assert.equal(isClaudeProcess(info('Claude', '')), true);
-    assert.equal(isClaudeProcess(info('node', 'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js')), true);
-    assert.equal(isClaudeProcess(info('node.exe', 'node C:/tools/build.js')), false);
-    assert.equal(isClaudeProcess(info('claude-helper', '')), false);
-  });
-});
 
 describe('runsSession', () => {
   it("tells a pid that still runs a session's host program from none, a gone one and one another program has since", async () => {

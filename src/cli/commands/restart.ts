@@ -12,7 +12,7 @@ import { RestartLog, type RestartRecord } from '../../refresh/restart-log.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { RestoreRegistry, restoreSessionsDir } from '../../restore/registry.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
-import { transcriptsOf } from '../host.ts';
+import { sessionProcessCheckOf, transcriptsOf } from '../host.ts';
 import { openKit, reloadTeamConfig, requireConfig, rosterOf } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { inboxDepsOf } from './inbox.ts';
@@ -92,6 +92,7 @@ export async function restart(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
       platform: runtime.platform,
       asks: new ClearAsks(runtime.files, clearAskDir(kit.paths.kitHome)),
       restore: new RestoreRegistry(runtime.files, restoreSessionsDir(kit.paths.kitHome)),
+      isSessionProcess: sessionProcessCheckOf(runtime),
       openTab: async () => {
         // A restart is never typed by a person: its tab keeps the focus where the owner left it (T2510).
         const tab: SessionTab = { team, id, name, project, prompt: refreshPrompt(team, id, store.handoverPath(id)), terminal: config.open.terminal, teamWindow: config.open.teamWindow, focus: 'keep' };
