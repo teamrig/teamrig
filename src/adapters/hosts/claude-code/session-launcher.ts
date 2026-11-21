@@ -2,6 +2,7 @@ import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
 import { launchArgs, PROGRAM } from './launch-args.ts';
+import { backgroundJobSession, isForkOf } from './session-command-lines.ts';
 import { isSessionProcess } from './session-process.ts';
 import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './session-variables.ts';
 
@@ -32,5 +33,7 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
       forcedEffort: told(env, EFFORT_LEVEL),
     }),
     isSessionProcess,
+    isForkOf,
+    backgroundJobSession,
   };
 }

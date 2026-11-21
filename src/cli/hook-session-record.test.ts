@@ -6,7 +6,7 @@ import { isRecord } from '../core/guards.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { NO_PATHS_HOST } from '../testing/host.ts';
+import { hostReadingLines, NO_PATHS_HOST } from '../testing/host.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { APP, CLAUDE_SESSION, CliHarness, contextOf, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
 
@@ -145,6 +145,17 @@ describe('the SessionStart hook of a session that runs in another Claude Code', 
     assert.equal(noticeOf(other), STOP);
     const plain = await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('startup'), ...host(true, 1, '/x/claude --fork-session') });
     assert.equal(noticeOf(plain), STOP);
+  });
+
+  it("takes a fork the running host spells by its own flag as the same session, and stops it under a host that reads none", async () => {
+    const BRANCH = 'agent-desk --branch-from c0';
+    const ownHost = hostReadingLines({ isForkOf: (commandLine, session) => commandLine === `agent-desk --branch-from ${session}` });
+    const kit = new CliHarness(TEAM);
+    await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', LIVE);
+    const own = await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('clear', CLEARED), host: ownHost, ...host(true, 1, BRANCH) });
+    assert.equal(noticeOf(own), undefined);
+    const shipped = await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('clear', CLEARED), ...host(true, 1, BRANCH) });
+    assert.equal(noticeOf(shipped), STOP);
   });
 
   describe('a background job', () => {

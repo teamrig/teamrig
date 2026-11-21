@@ -95,6 +95,15 @@ export function hostStarting(program: string, launchArgs: SessionLauncher['launc
   return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), program, launchArgs } });
 }
 
+/**
+ * The shipped host, reading a session's command line with `lines` where given and its own readers elsewhere: for a
+ * spec of a reader that must ask the host which process is a session's fork or background job and know no host's
+ * flag itself.
+ */
+export function hostReadingLines(lines: Partial<Pick<SessionLauncher, 'isForkOf' | 'backgroundJobSession'>>): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), ...lines } });
+}
+
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
 export const NO_MARK_HOST: HostSource = hostNaming({ marks: [], identity: [] });
 

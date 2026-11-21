@@ -229,6 +229,27 @@ export function sessionProcessCheckOf(runtime: Pick<CliRuntime, 'host' | 'shippe
   return (process) => launchers.some((launcher) => launcher.isSessionProcess(process));
 }
 
+/** What a session's process tells of it by its command line, as any shipped host or the running host reads it. */
+export interface SessionCommandLines {
+  /** Whether a process with `commandLine` is a fork of session `session`; false for a command line the system kept back. */
+  isForkOf(commandLine: string | undefined, session: string): boolean;
+  /** The session a background job runs as, from its lineage; undefined when no host's background run started it. */
+  backgroundJobSession(lineage: readonly RunningProgram[]): string | undefined;
+}
+
+/**
+ * The readers of a session's command line, as any host adapter teamrig ships with or the running host reads it: the
+ * same union as `sessionProcessCheckOf`, since a session on the machine runs whichever host's program it is. A host
+ * that tells nothing of its sessions reads none, so with no host that does, no command line is a fork or a job's.
+ */
+export function sessionCommandLinesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): SessionCommandLines {
+  const launchers = launchersOf(runtime);
+  return {
+    isForkOf: (commandLine, session) => commandLine !== undefined && launchers.some((launcher) => launcher.isForkOf(commandLine, session)),
+    backgroundJobSession: (lineage) => launchers.map((launcher) => launcher.backgroundJobSession(lineage)).find((session) => session !== undefined),
+  };
+}
+
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
 export function hostHomeOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
   return pathsOf(runtime).home(runtime.userHome);

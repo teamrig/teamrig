@@ -3,13 +3,15 @@ import { KIT_NAME, type TeamPaths } from '../core/home.ts';
 import { KIND_TAIL_BYTES, transcriptKindOf } from '../restore/transcript-kind.ts';
 import { measureSessions, runningPlaces } from '../sessions/measure.ts';
 import { SessionRecordStore, type SessionRecord } from '../sessions/record.ts';
-import { transcriptsIfKept } from './host.ts';
-import { backgroundJobSessionOf, isForkOf } from './same-session.ts';
+import { sessionCommandLinesOf, transcriptsIfKept } from './host.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 import { runsHostSession, type SessionProcessRuntime } from './session-process.ts';
 
-/** What telling a tab's own background job takes: its transcript's end, the host's reader of it, the process list. */
-type HandOffRuntime = Pick<CliRuntime, 'files' | 'sessionProcesses' | 'host' | 'env' | 'platform'>;
+/**
+ * What telling a tab's own fork or background job takes: its transcript's end, the host's reader of it, the process
+ * list, and the hosts' readers of a session's command line.
+ */
+type HandOffRuntime = Pick<CliRuntime, 'files' | 'sessionProcesses' | 'host' | 'shippedHosts' | 'env' | 'platform'>;
 
 /**
  * Session `id`'s start record while its Claude Code runs now, of a team whose sessions are `ids`; undefined when it runs
@@ -74,7 +76,7 @@ export async function isLiveRunOwn(runtime: HandOffRuntime, live: LiveRun, pid: 
   if (live.tree.has(pid)) {
     return true;
   }
-  if (isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.claudeSession)) {
+  if (sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.claudeSession)) {
     return true;
   }
   return isHandedOffJob(runtime, live, pid);
@@ -101,5 +103,5 @@ export async function isHandedOffJob(runtime: HandOffRuntime, live: LiveRun, pid
     return false;
   }
   const lineage = await runtime.sessionProcesses.lineage(pid);
-  return lineage !== undefined && backgroundJobSessionOf(lineage) === handedTo;
+  return lineage !== undefined && sessionCommandLinesOf(runtime).backgroundJobSession(lineage) === handedTo;
 }

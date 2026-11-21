@@ -1,7 +1,8 @@
 /**
  * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
- * host says a run is, what a child inherits of a session, which process runs one, and the program and arguments that
- * start or resume one; a wake joins it as it moves out of the core.
+ * host says a run is, what a child inherits of a session, which process runs one and what its command line says (a
+ * fork, a background job), and the program and arguments that start or resume one; a wake joins it as it moves out
+ * of the core.
  */
 
 /**
@@ -127,4 +128,16 @@ export interface SessionLauncher {
    * under; a process id the system gave another program since must not pass.
    */
   isSessionProcess(process: RunningProgram): boolean;
+  /**
+   * Whether a process with `commandLine` is a fork of the host's session `session`: a new session the host starts
+   * from that one's conversation (as Claude Code runs a /clear), outside its tab's process tree. teamrig takes such
+   * a fork for the session itself, not a second run of it. An empty command line is none.
+   */
+  isForkOf(commandLine: string, session: string): boolean;
+  /**
+   * The host's id of the session a background job runs as, from the job's `lineage` (its process first, then the
+   * processes that started it); undefined when no background run of the host started it, or it names no session.
+   * teamrig tells by it the job a tab handed its conversation to, which may no longer be in the tab's tree.
+   */
+  backgroundJobSession(lineage: readonly RunningProgram[]): string | undefined;
 }

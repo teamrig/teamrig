@@ -7,7 +7,7 @@ import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { shippedModels } from '../testing/shipped-models.ts';
 import { shippedSteps } from '../testing/shipped-steps.ts';
@@ -31,6 +31,7 @@ import {
   pathsIfKnown,
   pathsOf,
   secretFilesOf,
+  sessionCommandLinesOf,
   sessionProcessCheckOf,
   sessionVariablesOf,
   stepsIfKnown,
@@ -347,7 +348,7 @@ describe('identityOf', () => {
       const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
       const childEnv = { session: [], parked: [], login: [] };
       const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
-      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false } };
+      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       ...UNTOLD,
@@ -487,6 +488,43 @@ describe('sessionProcessCheckOf', () => {
     assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(alone), [false, true, false]);
     const none = sessionProcessCheckOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
     assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(none), [false, false, false]);
+  });
+});
+
+describe('sessionCommandLinesOf', () => {
+  const SHIPPED_FORK = 'claude --resume c0 --fork-session';
+  const OWN_FORK = 'agent-desk --branch-from c0';
+  const PLAIN = 'claude --resume c0';
+  const JOB = { name: 'node', commandLine: 'node job.js' };
+  const SHIPPED_JOB = [JOB, { name: 'claude', commandLine: 'claude bg-pty-host --bg-pty-host sock 80 24 --session-id c0 -- node job.js' }];
+  const OWN_JOB = [JOB, { name: 'agent-desk', commandLine: 'agent-desk job-host --as c1' }];
+  const OWN_JOB_HOST = 'agent-desk job-host --as ';
+  /** A host reading forks and jobs by flags of its own, as no shipped adapter spells them. */
+  const OWN_LINES = hostReadingLines({
+    isForkOf: (commandLine, session) => commandLine === `agent-desk --branch-from ${session}`,
+    backgroundJobSession: ([, starter]) => (starter?.commandLine.startsWith(OWN_JOB_HOST) === true ? starter.commandLine.slice(OWN_JOB_HOST.length) : undefined),
+  });
+
+  it("reads a shipped host's fork and background job whatever host the run works in", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      const lines = sessionCommandLinesOf({ host, shippedHosts, env: {}, platform });
+      assert.deepEqual([SHIPPED_FORK, OWN_FORK, PLAIN, undefined].map((line) => lines.isForkOf(line, 'c0')), [true, false, false, false], name);
+      assert.deepEqual([lines.backgroundJobSession(SHIPPED_JOB), lines.backgroundJobSession(OWN_JOB)], ['c0', undefined], name);
+    }
+  });
+
+  it("adds the running host's own reading, and takes none of the shipped ones away", () => {
+    const { shippedHosts, platform } = quietWorld();
+    const lines = sessionCommandLinesOf({ host: OWN_LINES, shippedHosts, env: {}, platform });
+    assert.deepEqual([SHIPPED_FORK, OWN_FORK, PLAIN].map((line) => lines.isForkOf(line, 'c0')), [true, true, false]);
+    assert.deepEqual([lines.backgroundJobSession(SHIPPED_JOB), lines.backgroundJobSession(OWN_JOB)], ['c0', 'c1']);
+  });
+
+  it('reads no fork or job where no host tells of its sessions', () => {
+    const lines = sessionCommandLinesOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
+    assert.deepEqual([SHIPPED_FORK, OWN_FORK].map((line) => lines.isForkOf(line, 'c0')), [false, false]);
+    assert.equal(lines.backgroundJobSession(SHIPPED_JOB), undefined);
   });
 });
 
