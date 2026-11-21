@@ -11,8 +11,8 @@ import type { Chunk } from './ship-plan.ts';
  * So the ship takes back its own commits itself: the newest commits of the branch, only while they are the plan's
  * first chunks in order (by subject, any version named in it aside, and only files the chunk lists), optionally
  * followed by the dist commit. A soft reset keeps every change in the working tree, including a fix made after
- * the failure, so nothing is lost. Commits already pushed are refused instead: a pushed branch is never rewritten
- * (the lead's ruling of 11-06), it is reshipped under a new name.
+ * the failure, so nothing is lost. Commits already pushed are taken back too: the ship's push (push.ts) replaces
+ * them on the same branch and pull request with a lease (the owner's rule of 11-21: a rebase never opens a new branch).
  */
 
 export interface RerunDeps {
@@ -72,18 +72,6 @@ function branchCommits(git: RerunDeps['git'], base: string): BranchCommit[] {
   }));
 }
 
-/** Whether origin's `branch` holds the commit `sha`. */
-function isPushed(git: RerunDeps['git'], branch: string, sha: string): boolean {
-  const [tip = ''] = git('ls-remote', '--heads', 'origin', `refs/heads/${branch}`).split('\t');
-  if (tip === '') return false;
-  try {
-    return git('merge-base', sha, tip) === sha;
-  } catch {
-    // origin's tip is a commit this clone lacks, so it may hold the commit: treat it as pushed.
-    return true;
-  }
-}
-
 /** Takes back the commits an earlier run of `chunks` made on the checked-out branch; returns how many. */
 export function takeBackEarlierRun(deps: RerunDeps, chunks: readonly Chunk[], base: string): number {
   const { git } = deps;
@@ -92,13 +80,6 @@ export function takeBackEarlierRun(deps: RerunDeps, chunks: readonly Chunk[], ba
   const taken = commits.slice(commits.length - count);
   const [first] = taken;
   if (first === undefined) return 0;
-  const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
-  if (isPushed(git, branch, first.sha)) {
-    throw new Error(
-      `REFUSED ${count} commit(s) an earlier run of this plan made are on origin/${branch}, and a pushed branch is never rewritten: ` +
-        `ship the change under a new branch name (git branch -m ${branch} ${branch}-b), then ship again`,
-    );
-  }
   git('reset', '--quiet', '--soft', `${first.sha}~1`);
   git('restore', '--staged', '--', ...new Set(taken.flatMap((commit) => (isDist(commit) ? [DIST] : commit.files))));
   deps.log(`took back ${count} commit(s) an earlier run of this plan made (${taken.map((commit) => commit.sha.slice(0, 7)).join(', ')}): the plan commits them again`);

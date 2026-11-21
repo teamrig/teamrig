@@ -7,7 +7,7 @@ import { type Version, type VersionFile, bumpKindOf, bumped, formatVersion, vers
  * hour), main moved past it and the ship was refused after the whole wait. A place on the host does not keep
  * main still: heavy steps share the host (`maxHeavyParallel`), so another ship can merge while this one runs its
  * checks, and merge.ts looks at main again before it merges; when main moved, the ship runs this sync again
- * under a new branch name (ship-commits.ts).
+ * on the same branch (ship-commits.ts).
  *
  * The change's version raise is uncommitted, in the plan's last chunk (SKILL.md): it is set aside, the branch
  * and the plan's other uncommitted files are moved onto main, and the same raise (patch, minor or major) is
