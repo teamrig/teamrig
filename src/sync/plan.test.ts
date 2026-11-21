@@ -295,6 +295,14 @@ describe('a sync per tracker', () => {
     ]);
   });
 
+  it('closes a task with no evidence when the tracker gives its issue no page', () => {
+    const pageless: ImportTracker = { ...JIRA, pageOf: () => undefined };
+    const tasks = importedTasks([jiraImported('T1', 1)], 'jira');
+    assert.deepEqual(planSync([jiraIssue(1, { state: 'closed', stateReason: 'COMPLETED' })], tasks, RULES, pageless).steps, [
+      { kind: 'status', ref: 'jira:ENG-1', id: 'T1', input: { status: 'done', note: 'closed on Jira as completed' } },
+    ]);
+  });
+
   it("neither writes nor counts an issue at a place the tracker's config does not name", () => {
     assert.deepEqual(planSync([issue(1), jiraIssue(2)], new Map(), RULES, JIRA), {
       steps: [{ kind: 'add', ref: 'jira:ENG-2', input: { title: 'Issue 2', description: null, owner: 'lead', ref: 'jira:ENG-2', priority: 2 } }],

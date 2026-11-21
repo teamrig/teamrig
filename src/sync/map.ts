@@ -18,9 +18,9 @@ export interface ImportTracker {
   readonly refOf: (target: IssueTarget) => string | undefined;
   /**
    * The issue's page, built by teamrig from the target, never the address the tracker's answer sent: the sync writes
-   * it as a closed issue's evidence.
+   * it as a closed issue's evidence; undefined when the tracker's config gives no page (the close then has none).
    */
-  readonly pageOf: (target: IssueTarget) => string;
+  readonly pageOf: (target: IssueTarget) => string | undefined;
 }
 
 /**

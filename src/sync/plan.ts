@@ -165,8 +165,13 @@ function statusChange(task: Task, wanted: IssueTask, issue: HostIssue, tracker: 
   switch (wanted.outcome) {
     case 'open':
       return ACTIVE_STATUSES.includes(task.status) || !changedSince(issue, task.statusAt) ? undefined : { status: 'open', note: `open on ${tracker.name}, changed there since this task closed` };
-    case 'done':
-      return task.status === 'done' ? undefined : { status: 'done', note: closedNote(issue.stateReason, tracker.name), evidence: tracker.pageOf(issue) };
+    case 'done': {
+      if (task.status === 'done') {
+        return undefined;
+      }
+      const page = tracker.pageOf(issue);
+      return { status: 'done', note: closedNote(issue.stateReason, tracker.name), ...(page === undefined ? {} : { evidence: page }) };
+    }
     case 'dropped':
       return task.status === 'dropped' ? undefined : { status: 'dropped', note: closedNote(issue.stateReason, tracker.name) };
   }
