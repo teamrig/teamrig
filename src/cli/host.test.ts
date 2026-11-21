@@ -9,6 +9,7 @@ import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { HOOKS_ONLY_HOST, hostNaming, hostRunning, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
 import { join } from 'node:path';
 import {
   childEnvOf,
@@ -18,6 +19,7 @@ import {
   hostHomeOf,
   hostOf,
   identityOf,
+  modelsIfKnown,
   pathsIfKnown,
   pathsOf,
   secretFilesOf,
@@ -73,6 +75,15 @@ describe('transcriptsIfKept', () => {
     const world = quietWorld();
     assert.deepEqual(transcriptsIfKept({ host: world.host, env: {}, platform: world.platform })?.entry('not a transcript line'), { kind: 'unread', reason: 'damaged' });
     assert.equal(transcriptsIfKept({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('modelsIfKnown', () => {
+  it('gives the models of a host that knows them, and nothing for a host that knows none', () => {
+    const world = quietWorld();
+    const known = modelsIfKnown({ host: world.host, env: {}, platform: world.platform });
+    assert.equal(known?.defaultName, shippedModels().defaultName);
+    assert.equal(modelsIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
   });
 });
 

@@ -2,6 +2,7 @@ import {
   isUnsupported,
   type ChildEnvironment,
   type HookBridge,
+  type HostModels,
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
@@ -247,6 +248,15 @@ export function pluginOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>)
 export function pluginIfKept(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostPlugin | undefined {
   const { plugin } = hostOf(runtime);
   return isUnsupported(plugin) ? undefined : plugin;
+}
+
+/**
+ * The run's host's models, or undefined on a host that knows none: for a check that goes on without them, such as the
+ * model notices, which then have no step to name.
+ */
+export function modelsIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostModels | undefined {
+  const { models } = hostOf(runtime);
+  return isUnsupported(models) ? undefined : models;
 }
 
 /**

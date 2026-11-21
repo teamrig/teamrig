@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { HostSource } from '../composition/host-ports.ts';
 import { isRecord } from '../core/guards.ts';
-import { HOOKS_ONLY_HOST } from '../testing/host.ts';
+import { unsupported } from '../ports/host/index.ts';
+import { HOOKS_ONLY_HOST, SHIPPED_HOST } from '../testing/host.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { APP, CLAUDE_SESSION, CliHarness, contextOf, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 
@@ -102,13 +103,23 @@ ${ALPHA_SWITCHED.replace('app-alpha', 'app-lead').replace('claude-fable-5-1 to',
   });
 
   it('tells no switch on a host that keeps no transcript, and still tells the effort', async () => {
-    const bare: HostSource = HOOKS_ONLY_HOST;
+    const noTranscripts: HostSource = (given) => ({ ...SHIPPED_HOST(given), transcripts: unsupported('no transcript is kept') });
     const kit = new CliHarness();
     await kit.files.write(TRANSCRIPT, switchedTranscript());
-    const stop = async (session: string, stdin: string): Promise<CliResult> => kit.run(['hook', 'stop'], { stdin, env: { TEAMRIG_SESSION: session }, host: bare });
+    const stop = async (session: string, stdin: string): Promise<CliResult> => kit.run(['hook', 'stop'], { stdin, env: { TEAMRIG_SESSION: session }, host: noTranscripts });
     assert.deepEqual((await stop('alpha', stopPayload())).stdout, []);
     assert.equal(noticeOf(await stop('lead', stopPayload('high'))), LEAD_AT_HIGH);
     assert.equal(noticeOf(await stopAs(kit, 'alpha', stopPayload())), ALPHA_SWITCHED, 'the shipped host reads the switch');
+  });
+
+  it('tells nothing on a host that knows no models: a line would name no step to take', async () => {
+    const kit = new CliHarness();
+    await kit.files.write(TRANSCRIPT, switchedTranscript());
+    const stop = async (session: string, stdin: string): Promise<CliResult> => kit.run(['hook', 'stop'], { stdin, env: { TEAMRIG_SESSION: session }, host: HOOKS_ONLY_HOST });
+    assert.deepEqual((await stop('alpha', stopPayload())).stdout, []);
+    assert.deepEqual((await stop('lead', stopPayload('high'))).stdout, []);
+    const started = await kit.run(['hook', 'session-start'], { stdin: start('claude-sonnet-5'), env: { TEAMRIG_SESSION: 'lead' }, host: HOOKS_ONLY_HOST });
+    assert.equal(noticeOf(started), undefined, 'nor the model at a start');
   });
 
   it('shows nothing it cannot record, and nothing for an unknown session', async () => {

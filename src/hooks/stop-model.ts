@@ -1,6 +1,6 @@
 import type { LaunchConfig } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
-import type { TranscriptReader } from '../ports/host/index.ts';
+import type { HostModels, TranscriptReader } from '../ports/host/index.ts';
 import { modelCheckLine } from './model-check.ts';
 import { fallbackLine, readLastFallback } from './model-fallback.ts';
 import type { ModelNoticeStore } from './model-notices.ts';
@@ -26,14 +26,14 @@ interface Notice {
   readonly line: string;
 }
 
-function effortNotice(input: StopModelInput): Notice | undefined {
-  const line = modelCheckLine(input.name, input.launch, { model: undefined, effort: input.effort });
+function effortNotice(models: HostModels, input: StopModelInput): Notice | undefined {
+  const line = modelCheckLine(models, input.name, input.launch, { model: undefined, effort: input.effort });
   return line === undefined ? undefined : { key: `effort:${input.effort ?? ''}`, line };
 }
 
-async function fallbackNotice(reader: TranscriptReader | undefined, files: Files, input: StopModelInput): Promise<Notice | undefined> {
+async function fallbackNotice(reader: TranscriptReader | undefined, models: HostModels, files: Files, input: StopModelInput): Promise<Notice | undefined> {
   const fallback = reader === undefined || input.transcript === undefined ? undefined : await readLastFallback(reader, files, input.transcript);
-  return fallback === undefined ? undefined : { key: `fallback:${fallback.id}`, line: fallbackLine(input.name, fallback, input.launch.model) };
+  return fallback === undefined ? undefined : { key: `fallback:${fallback.id}`, line: fallbackLine(models, input.name, fallback, input.launch.model) };
 }
 
 function isNotice(notice: Notice | undefined): notice is Notice {
@@ -45,10 +45,20 @@ function isNotice(notice: Notice | undefined): notice is Notice {
  * than its `launch` entry (SessionStart has no effort level it can trust), and that the host
  * switched its model after a safeguard stop. Each shows once per host session, recorded before
  * it is returned, so a store that cannot be written shows nothing rather than the same line at every stop.
- * With no `reader` (the host keeps no transcript teamrig can read) no switch is known: only the effort shows.
+ * With no `reader` (the host keeps no transcript teamrig can read) no switch is known: only the effort shows. With
+ * no `models` (the host knows no model names or switch steps) nothing shows: a line would name no step to take.
  */
-export async function stopModelNotices(reader: TranscriptReader | undefined, files: Files, store: ModelNoticeStore, input: StopModelInput): Promise<readonly string[]> {
-  const found = [effortNotice(input), await fallbackNotice(reader, files, input)].filter(isNotice);
+export async function stopModelNotices(
+  reader: TranscriptReader | undefined,
+  models: HostModels | undefined,
+  files: Files,
+  store: ModelNoticeStore,
+  input: StopModelInput,
+): Promise<readonly string[]> {
+  if (models === undefined) {
+    return [];
+  }
+  const found = [effortNotice(models, input), await fallbackNotice(reader, models, files, input)].filter(isNotice);
   if (found.length === 0) {
     return [];
   }

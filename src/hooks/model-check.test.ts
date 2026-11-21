@@ -1,14 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LaunchConfig } from '../config/types.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
 import { modelCheckLine, type RunningSettings } from './model-check.ts';
 
+const MODELS = shippedModels();
 const LEAD: LaunchConfig = { model: 'best', effort: 'xhigh' };
 const FABLE = 'claude-fable-5';
 const OPUS = 'claude-opus-5-5';
 
 function check(wanted: LaunchConfig, running: Partial<RunningSettings>): string | undefined {
-  return modelCheckLine('lead', wanted, { model: undefined, effort: undefined, ...running });
+  return modelCheckLine(MODELS, 'lead', wanted, { model: undefined, effort: undefined, ...running });
 }
 
 describe('modelCheckLine', () => {
