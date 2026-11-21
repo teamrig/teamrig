@@ -15,7 +15,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { homeCloseOf, SessionLog } from '../../sessions/log.ts';
 import { onePositional, requiredFlag, UsageError, type Flags, type ParsedArgs } from '../args.ts';
 import { readBursts } from '../burst-reading.ts';
-import { leadLaunchOf } from '../host.ts';
+import { launchHostOf, leadLaunchOf } from '../host.ts';
 import { headroomOf } from '../headroom.ts';
 import { callerOf } from '../inputs.ts';
 import { checkedNextConfig, configFileJson, configLockOf, findTeam, openKit, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
@@ -197,7 +197,7 @@ export async function hire(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
     const { records, skipped } = await log.read();
     const active = activeHires(records);
     const request = args.switches.has('burst') ? await burstRequestOf(runtime, kit, config, asked, active) : asked;
-    const plan = planHire(await configFileJson(runtime, load.path), config, request, leadLaunchOf(runtime));
+    const plan = planHire(await configFileJson(runtime, load.path), config, request, launchHostOf(runtime));
     if (!plan.ok) {
       throw new RefusedError(plan.problem);
     }

@@ -18,9 +18,11 @@ import {
   hostHomeIfKnown,
   hostHomeOf,
   hostOf,
+  identityOf,
+  launchHostFrom,
+  launchHostOf,
   leadLaunchFrom,
   leadLaunchOf,
-  identityOf,
   modelsIfKnown,
   pathsIfKnown,
   pathsOf,
@@ -100,6 +102,24 @@ describe('leadLaunchOf', () => {
   it("keeps the model but drops an effort that is no level on teamrig's scale", () => {
     const models = { ...shippedModels(), leadDefault: { model: 'model-one', effort: 'turbo' } };
     assert.deepEqual(leadLaunchFrom(models), { model: 'model-one' });
+  });
+});
+
+describe('launchHostOf', () => {
+  it("gives the host's lead default and its check of a model name", () => {
+    const world = quietWorld();
+    const host = launchHostOf({ host: world.host, env: {}, platform: world.platform });
+    assert.deepEqual(host.leadDefault, leadLaunchFrom(shippedModels()));
+    assert.equal(host.modelProblem('gpt-5'), shippedModels().problemOf('gpt-5'));
+    assert.notEqual(host.modelProblem('gpt-5'), undefined);
+    assert.equal(host.modelProblem('opus'), undefined);
+  });
+
+  it('takes any model name and gives no lead default on a host that knows no models', () => {
+    const host = launchHostOf({ host: bare, env: {}, platform: 'linux' });
+    assert.deepEqual(host.leadDefault, {});
+    assert.equal(host.modelProblem('gpt-5'), undefined);
+    assert.deepEqual(launchHostFrom(undefined).leadDefault, {});
   });
 });
 

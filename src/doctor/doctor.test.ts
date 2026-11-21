@@ -345,6 +345,13 @@ describe('doctorFindings of launch entries', () => {
     ]);
   });
 
+  it("flags a session whose model the host does not run, ahead of a missing effort, with the key to fix", () => {
+    const launches = [{ id: 'alpha', launch: { model: 'gpt-5' }, modelProblem: 'not a model this host runs' }];
+    assert.deepEqual(lines(input({ launches })), [
+      'WARN launch-model app-alpha (session alpha) launches on model gpt-5, which this host does not run (not a model this host runs): `open` refuses it until launch.alpha.model is fixed in the team config',
+    ]);
+  });
+
   it('names a renamed session by its current name', () => {
     const renames = [renameOf('alpha', 'app-alpha', 'scout')];
     const [line] = lines(input({ renames, launches: launchesOf({ alpha: { model: 'haiku' } }) }));

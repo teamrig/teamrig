@@ -2983,7 +2983,7 @@ Flags:
 - `--scope "<its job>"`: its job; required.
 - `--reason "<why>"`: why it is needed; required.
 - `--name <name>`: its display and Claude Code session name.
-- `--model <model>`: the model it starts on; the lead's own by default.
+- `--model <model>`: the model it starts on; the lead's own by default. A name the host does not run is refused.
 - `--effort <level>`: the effort it starts at; the lead's own by default.
 - `--review <YYYY-MM-DD>`: its review day, or the new one of a hired session kept.
 - `--approved-by "<who>"`: who approved it; needed under `hiring.policy` `owner`.
@@ -4564,7 +4564,7 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `system`), `rename-log`, `inbox-orphan`, `inbox-unread`, `rules-long`, `lead-start`, `context-size`,
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
-session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-effort`,
+session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
 `allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`.
 
 `context-size` weighs, in characters (about 4 per token), the user's CLAUDE.md with the project folder's and each
@@ -4586,9 +4586,11 @@ Claude Code settings (`settings.json` in Claude Code's folder) or the project's 
 `.claude/settings.local.json`), with its value and the file: `CLAUDE_CODE_EFFORT_LEVEL` beats every `--effort` (the
 config's `launch` efforts among them), `/effort` and per-call Agent effort; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1
 beats every per-call Agent model. `settings-json` is one of those files that is not a JSON object, so its block went
-unchecked. `launch-effort` is a session whose `launch` entry names a model but no effort: it starts at that model's
-default effort (medium on Opus, Sonnet and Haiku 5.5), so set `launch.<id>.effort`. The lead's unset effort takes the
-lead's default, so the lead is not flagged.
+unchecked. `launch-model` is a session whose `launch` model this host does not run: the config takes any model
+name, so a team config loads on every host, and the host's own check runs where the name is used, so `open` refuses
+to start that session and `hire --model` refuses the name. `launch-effort` is a session whose `launch` entry names a
+model but no effort: it starts at that model's default effort (medium on Opus, Sonnet and Haiku 5.5), so set
+`launch.<id>.effort`. The lead's unset effort takes the lead's default, so the lead is not flagged.
 
 ```text
 WARN launch-effort shop-web (session web) launches on model opus with no effort, so it runs at that model's default effort (medium on Opus, Sonnet and Haiku 5.5): set launch.web.effort in the team config

@@ -590,6 +590,15 @@ describe('teamrig launch', () => {
     assert.deepEqual(processes.ran[0]?.args, ['--model', 'sonnet', '--effort', 'max', '--name', 'app-alpha']);
   });
 
+  it('refuses a configured model the host does not run, before starting it, and names the key to fix', async () => {
+    const processes = new FakeProcesses();
+    const kit = new CliHarness({ ...TEAM, launch: { alpha: { model: 'gpt-5', effort: 'high' } } });
+    const result = await kit.run(LAUNCH, { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout.join('\n'), /^REFUSED launch\.alpha\.model gpt-5: .*; fix it in the team config, or `teamrig doctor` lists each/);
+    assert.deepEqual(processes.ran, []);
+  });
+
   it('starts the lead on Opus at xhigh effort, and any session on its configured model and effort', async () => {
     const lead = new FakeProcesses();
     const result = await new CliHarness(TEAM).run(['launch', 'lead', '--team', 'app', '--project', APP], { probe: ON_PATH, processes: lead, env: { PATH: '/usr/local/bin' } });

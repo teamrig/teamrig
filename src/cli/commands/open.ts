@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { describeLaunch, launchOf } from '../../config/launch.ts';
+import { describeLaunch, launchModelProblem, launchOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
@@ -25,7 +25,7 @@ import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
-import { cacheBinOf, childEnvOf, leadLaunchOf } from '../host.ts';
+import { cacheBinOf, childEnvOf, launchHostOf } from '../host.ts';
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
 import { liveRunOf, liveRunText } from '../live-run.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -260,7 +260,7 @@ export async function openSession(runtime: CliRuntime, kit: Kit, config: KitConf
   // teamrig's own first prompt has a resumed session read its list; a --prompt one may not, so its wake check decides.
   const unnoted = resume !== undefined && request.prompt === undefined ? await noteResumedTab(runtime, kit, config, id, resume) : undefined;
   const wakeNote = unnoted === undefined ? '' : `; its wake state was not written, so its tab may wake once more for work it reads now: ${unnoted}`;
-  return { kind: 'opened', line: `OPENED ${name} (session ${id}) in a new ${TERMINAL_LABELS[outcome.terminal]} in ${folder}, on ${describeLaunch(launchOf(config, id, leadLaunchOf(runtime)))}${startNoteOf(resume, reopen)}${wakeNote}` };
+  return { kind: 'opened', line: `OPENED ${name} (session ${id}) in a new ${TERMINAL_LABELS[outcome.terminal]} in ${folder}, on ${describeLaunch(launchOf(config, id, launchHostOf(runtime).leadDefault))}${startNoteOf(resume, reopen)}${wakeNote}` };
 }
 
 /** A closed session's reopen while its refresh is ready: fresh, so its start takes the handover (T2354). */
@@ -511,8 +511,15 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   }
   const { command, prefix } = await claudeProgramOf(runtime, claudeEnv);
   const name = roster.nameOf(id) ?? id;
-  const leadDefault = leadLaunchOf(runtime);
+  const host = launchHostOf(runtime);
+  const { leadDefault } = host;
   let settings = effort === undefined ? launchOf(config, id, leadDefault) : { ...launchOf(config, id, leadDefault), effort };
+  // The config takes any model name, so a model this host does not run (another provider's) is refused here, before
+  // the host starts and fails on it.
+  const modelProblem = launchModelProblem(settings, host);
+  if (modelProblem !== undefined) {
+    throw new RefusedError(`launch.${id}.model ${settings.model ?? ''}: ${modelProblem}; fix it in the team config, or \`${KIT_NAME} doctor\` lists each`);
+  }
   const resumed = resume === undefined ? '' : `, resuming Claude Code session ${resume}`;
   let listing = await launchListing(sessionRuntime, kit, config, roster, id);
   runtime.out.stdout(`Starting Claude Code as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);

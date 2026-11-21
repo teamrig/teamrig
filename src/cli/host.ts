@@ -15,6 +15,7 @@ import {
   type TranscriptReader,
   type UsageMeter,
 } from '../ports/host/index.ts';
+import type { LaunchHost } from '../config/launch.ts';
 import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
 import type { ContextSource } from '../refresh/usage.ts';
 import type { HostSecretFiles } from '../secret-guard/rules.ts';
@@ -275,6 +276,16 @@ export function leadLaunchFrom(models: HostModels | undefined): LaunchConfig {
 /** The run's host's lead default (`leadLaunchFrom`). */
 export function leadLaunchOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): LaunchConfig {
   return leadLaunchFrom(modelsIfKnown(runtime));
+}
+
+/** What a launch takes from these models: the lead default and their check of a model name; any name without them. */
+export function launchHostFrom(models: HostModels | undefined): LaunchHost {
+  return { leadDefault: leadLaunchFrom(models), modelProblem: models === undefined ? () => undefined : (model) => models.problemOf(model) };
+}
+
+/** What a launch takes from the run's host (`launchHostFrom`). */
+export function launchHostOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): LaunchHost {
+  return launchHostFrom(modelsIfKnown(runtime));
 }
 
 /**

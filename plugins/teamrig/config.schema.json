@@ -2062,10 +2062,9 @@
         "properties": {
           "model": {
             "description": "A Claude Code model alias or a full model id such as claude-opus-5-5. best is Fable where the account has it, else Opus; default leaves the model to Claude Code.",
-            "anyOf": [
-              { "enum": ["default", "best", "fable", "opus", "sonnet", "haiku", "opusplan", "fable[1m]", "opus[1m]", "sonnet[1m]", "opusplan[1m]"] },
-              { "type": "string", "pattern": "^claude-[a-z0-9]+(?:[.@-][a-z0-9]+)*(?:\\[1m\\])?$", "maxLength": 100 }
-            ]
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._@:/-]*(?:\\[[a-z0-9]+\\])?$",
+            "maxLength": 100
           },
           "effort": {
             "description": "The effort level; a model that lacks it runs at the highest level it has below it. An /effort the user types in the session's tab is written here.",
