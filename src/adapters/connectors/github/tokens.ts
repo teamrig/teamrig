@@ -61,8 +61,13 @@ export class RepoTokens {
   }
 
   /** The access to `repo` through its owner's saved token, or the error that stops the command when there is none to use. */
-  async accessFor(repo: string): Promise<RepoAccess | NoAccessError> {
-    const owner = repoOwner(repo);
+  accessFor(repo: string): Promise<RepoAccess | NoAccessError> {
+    return this.accessForOwner(repoOwner(repo));
+  }
+
+  /** The access to every repository of `owner` (any case) through its saved token, or the error that stops the command when there is none to use. */
+  async accessForOwner(name: string): Promise<RepoAccess | NoAccessError> {
+    const owner = name.toLowerCase();
     const credential = tokenName(owner);
     const save = this.store.saveCommand(credential);
     const read = await this.readOnce(credential);
