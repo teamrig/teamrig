@@ -1,5 +1,5 @@
 import { basename, dirname, join, posix, win32 } from 'node:path';
-import type { HostDeps, HostPaths } from '../../../plugin-api/index.ts';
+import { movedFolderSecrets, type HostDeps, type HostPaths } from '../../../plugin-api/index.ts';
 
 /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
 const CONFIG_DIR = 'CLAUDE_CONFIG_DIR';
@@ -31,36 +31,6 @@ const SECRET_FILES: readonly string[] = [
   `**/${PROJECT_DIR}/settings.local.json`,
   `**/${PROJECT_DIR}*/.credentials.json`,
 ];
-
-/**
- * `folder`, an absolute path on `platform`, as a glob of the secret guard that fits that folder: forward slashes, `.`
- * and `..` resolved, no slash at its end, and each wildcard character of its name made a one-character set, which
- * fits that character alone. A Windows path rooted with no drive is on the drive the session works on, which is not
- * known here, so its glob fits the folder on any drive; one on a network share names its place whole.
- */
-function folderGlob(folder: string, platform: HostDeps['platform']): string {
-  const slashed = folder.replaceAll('\\', '/');
-  const literal = posix
-    .normalize(slashed)
-    .replace(/\/+$/, '')
-    .replace(/[*?[]/g, (char) => `[${char}]`);
-  const onSomeDrive = platform === 'win32' && !/^[A-Za-z]:/.test(literal) && !slashed.startsWith('//');
-  return onSomeDrive ? `?:${literal}` : literal;
-}
-
-/**
- * The secret files of Claude Code's own folder where `CLAUDE_CONFIG_DIR` moved it: the guard keeps them there as it
- * does at the default place. None for a value that is no absolute path on `platform`: the folder it names hangs on
- * where the session started, which is not known here.
- */
-function movedSecretFiles(env: HostDeps['env'], platform: HostDeps['platform']): readonly string[] {
-  const moved = setIn(env, CONFIG_DIR);
-  if (moved === undefined || !(platform === 'win32' ? win32 : posix).isAbsolute(moved)) {
-    return [];
-  }
-  const folder = folderGlob(moved, platform);
-  return OWN_FOLDER_SECRETS.map((name) => `${folder}/${name}`);
-}
 
 /** Claude Code's folder name for a project: its path with every character but a letter or digit made `-`. */
 function projectSlug(project: string): string {
@@ -125,6 +95,6 @@ export function hostPaths(env: HostDeps['env'], platform: HostDeps['platform']):
     planFile: (userHome, slug) => join(home(userHome), 'plans', `${slug}.md`),
     shellSnapshots: (userHome) => join(home(userHome), 'shell-snapshots'),
     // The default place stays named when the folder is moved: the files of an earlier run may still be there.
-    secretFiles: () => [...SECRET_FILES, ...movedSecretFiles(env, platform)],
+    secretFiles: () => [...SECRET_FILES, ...movedFolderSecrets(env[CONFIG_DIR], OWN_FOLDER_SECRETS, platform)],
   };
 }
