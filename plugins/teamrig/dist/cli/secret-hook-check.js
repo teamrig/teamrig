@@ -1,25 +1,12 @@
-import { basename, dirname, join } from 'node:path';
 import { teamPlace } from "../delivery/places.js";
 import { KIT_NAME } from "../core/home.js";
+import { hookScriptsDir, missingHookLines } from "../git-hooks/hook-lines.js";
 /** The hooks every repository the team merges into runs the secret scan in, in the order git runs them. */
 export const SECRET_HOOKS = [
-    { hook: 'pre-commit', sub: 'staged', line: `${KIT_NAME} secrets staged || exit 1` },
-    { hook: 'commit-msg', sub: 'message', line: `${KIT_NAME} secrets message "$1" || exit 1` },
-    { hook: 'pre-push', sub: 'pushed', line: `${KIT_NAME} secrets pushed "$1" || exit 1` },
+    { hook: 'pre-commit', command: 'secrets', sub: 'staged', line: `${KIT_NAME} secrets staged || exit 1` },
+    { hook: 'commit-msg', command: 'secrets', sub: 'message', line: `${KIT_NAME} secrets message "$1" || exit 1` },
+    { hook: 'pre-push', command: 'secrets', sub: 'pushed', line: `${KIT_NAME} secrets pushed "$1" || exit 1` },
 ];
-/**
- * Whether a line of a hook script, other than a comment line, calls its `secrets` subcommand: through the `teamrig`
- * command, or `src/cli/main.ts` in teamrig's own repository, which runs its source.
- */
-export function callsSecretScan(script, hook) {
-    const call = new RegExp(`(?:\\b${KIT_NAME}|cli/main\\.ts)\\s+secrets\\s+${hook.sub}\\b`);
-    return script.split('\n').some((line) => !line.trimStart().startsWith('#') && call.test(line));
-}
-/** The folder holding the hook scripts a person writes: husky points git at `.husky/_`, whose hooks run `.husky/<hook>`. */
-export function hookScriptsDir(hooksDir) {
-    const parent = dirname(hooksDir);
-    return basename(hooksDir) === '_' && basename(parent) === '.husky' ? parent : hooksDir;
-}
 function warning(name, text) {
     return { key: `secret-hook ${name}`, source: 'the secret hook check [delivery.repos]', text: `SECRET-HOOK ${name} ${text}` };
 }
@@ -30,12 +17,7 @@ async function repoWarning(files, git, name, main) {
         return warning(name, `(${main}): git reads no repository there, so its hooks could not be checked for the secret scan`);
     }
     const scripts = hookScriptsDir(hooksDir);
-    const missing = [];
-    for (const hook of SECRET_HOOKS) {
-        if (!callsSecretScan((await files.read(join(scripts, hook.hook))) ?? '', hook)) {
-            missing.push(hook);
-        }
-    }
+    const missing = await missingHookLines(files, scripts, SECRET_HOOKS);
     if (missing.length === 0) {
         return undefined;
     }

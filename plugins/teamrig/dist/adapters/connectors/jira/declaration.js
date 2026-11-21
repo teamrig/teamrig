@@ -1,3 +1,4 @@
+import { CONFIG_KEYS } from "./config.js";
 /**
  * What the Jira Cloud connector says of itself. A row says what this adapter does today, not what Jira could do: a
  * method not built yet is unsupported, with the line its call answers. No row holds a proof until a run on a real
@@ -25,11 +26,12 @@ export const declaration = {
     name: 'Jira',
     kinds: ['tracker'],
     refPrefix: 'jira:',
+    configKeys: CONFIG_KEYS,
     manifest: {
         'tracker.issue-import': partial("a description's formatting, and the reporter's tie to the project", 'a Jira description is read as plain text, and Jira names no tie between a reporter and the project: every issue is read as an outsider\'s'),
         'tracker.accept-label': unsupported('the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue'),
         'tracker.watch': partial('a free look for a change', 'each look for a change is one Jira search, which counts against the site\'s rate limit'),
-        'tracker.issue-open': partial('Markdown, and a chosen issue type', "an issue opens in Jira as a Task, or as the project's first type that is no sub-task when it has no Task, its body as plain paragraphs: its Markdown marks show as typed"),
+        'tracker.issue-open': partial('Markdown, and a type chosen for one issue', "an issue opens in Jira as the type the team's connectors.jira.issueType names, without it as a Task, or as the project's first type that is no sub-task when it has no Task, its body as plain paragraphs: its Markdown marks show as typed"),
         'tracker.comment': partial('Markdown', 'a comment is posted to Jira as plain paragraphs: its Markdown marks show as typed'),
         'tracker.edit-body': partial('Markdown', 'a description is written to Jira as plain paragraphs: its Markdown marks show as typed'),
         'tracker.close': partial("a link from a duplicate to its original, and a reason the project's workflow has no name for", 'a Jira issue closes by a transition to a closed status: its reason is kept when the workflow has a status or a resolution named for it, and a duplicate gets no link to its original'),

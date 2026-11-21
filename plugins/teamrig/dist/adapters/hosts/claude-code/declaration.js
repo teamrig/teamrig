@@ -1,3 +1,4 @@
+import { SESSION_VARIABLES } from "./session-variables.js";
 /**
  * What teamrig does on Claude Code today: every feature but the two below. No row carries a proof yet: a proof is the
  * record of a live run on the operating system it names, added when that run is made, so until then the parity page
@@ -21,6 +22,7 @@ export const declaration = {
     apiVersion: '0.1.0',
     id: 'claude-code',
     name: 'Claude Code',
+    sessionVariables: SESSION_VARIABLES,
     manifest: {
         'rules.session-start': SUPPORTED,
         'rules.instruction-files': SUPPORTED,

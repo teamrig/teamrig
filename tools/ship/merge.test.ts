@@ -599,6 +599,7 @@ function withMergeQueue(rest: Gh, enqueued: string[][]): Gh {
 const RELEASE = 'release-please--branches--main';
 
 /** The head a catch-up pushes: BRANCH rebased onto MOVED. */
+/** The head the fake catch-up answers: merge.ts merges whatever head it names (catch-up.ts keeps the name, T4907). */
 const NEXT = 't9-change-2';
 const REBASED = 'rebased0ccc';
 const CAUGHT_UP: CatchUp = { kind: 'rebased', head: NEXT, sha: REBASED };
@@ -957,13 +958,13 @@ test('a drift check whose fetch lost a race keeps the merge a success: retried o
   assert.equal(twice.sweep.mock.callCount(), 1, 'a landed merge sweeps its head as usual');
 });
 
-test('a head main moved past while the merge waited is caught up as a new branch and that branch merges (T2809)', async () => {
+test('a head main moved past while the merge waited is caught up and the head catch-up names merges (T2809)', async () => {
   const { deps, out, err, catchUp, sweep, gitCalls } = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP] });
   assert.equal(await runMerge(ARGS, deps), 0);
   assert.deepEqual(err, []);
   assert.deepEqual(
     catchUp.mock.calls.map(call => call.arguments[0]),
-    [{ head: BRANCH, stem: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] }],
+    [{ head: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] }],
   );
   assert.ok(gitCalls.includes(`fetch --quiet origin ${NEXT} main`), 'the second run reads the new head as pushed');
   assert.equal(out.at(-1), 'MERGED #3 into main, now at main999');
@@ -1007,22 +1008,19 @@ test('a head refused clearance is never caught up, even when main moved past it'
 test('without --head the caught-up head is the branch checked out; a ship merge gets the move back and catches nothing up', async () => {
   const checkedOut = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP] });
   assert.equal(await runMerge({ ...ARGS, head: null }, checkedOut.deps), 0);
-  assert.deepEqual(checkedOut.catchUp.mock.calls[0]?.arguments[0], { head: BRANCH, stem: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] });
+  assert.deepEqual(checkedOut.catchUp.mock.calls[0]?.arguments[0], { head: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] });
 
   const shipped = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP] });
   assert.equal((await mergeBranch(['C:/repo', '--head', BRANCH], () => shipped.deps)).kind, 'moved');
   assert.equal(shipped.catchUp.mock.callCount(), 0);
 });
 
-test(`main moving past ${MERGE_ATTEMPTS} heads in one merge is refused, each new head numbered from the first`, async () => {
+test(`main moving past ${MERGE_ATTEMPTS} heads in one merge is refused, each caught-up head caught up again`, async () => {
   const { deps, err, catchUp, sweep } = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP], rebasedBehind: true });
   assert.equal(await runMerge(ARGS, deps), 1);
   assert.deepEqual(
-    catchUp.mock.calls.map(call => [call.arguments[0].head, call.arguments[0].stem]),
-    [
-      [BRANCH, BRANCH],
-      [NEXT, BRANCH],
-    ],
+    catchUp.mock.calls.map(call => call.arguments[0].head),
+    [BRANCH, NEXT],
   );
   assert.deepEqual(err, [`REFUSED main moved to moved00, which ${NEXT} rebased does not contain: rebase ${NEXT} onto origin/main, push it and run merge again (main moved ${MERGE_ATTEMPTS} times during this merge)`]);
   assert.equal(sweep.mock.callCount(), 0);
@@ -1100,8 +1098,8 @@ test('a head whose catch-up push lost to a merge landing meanwhile is caught up 
   assert.deepEqual(
     catchUp.mock.calls.map(call => call.arguments[0]),
     [
-      { head: BRANCH, stem: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] },
-      { head: BRANCH, stem: BRANCH, tip: AGAIN, main: 'main', regenerated: ['out/'] },
+      { head: BRANCH, tip: MOVED, main: 'main', regenerated: ['out/'] },
+      { head: BRANCH, tip: AGAIN, main: 'main', regenerated: ['out/'] },
     ],
   );
   assert.equal(out.at(-1), 'MERGED #3 into main, now at main999');

@@ -17,7 +17,7 @@ export function declarationProblems(side, value) {
         ...manifestProblems(side, value['manifest']),
     ];
 }
-/** The entry when `value` has the shape `defineHost`, `defineConnector` and `defineTerminal` return: a declaration and a `create` function. */
-export function adapterEntry(value) {
-    return isRecord(value) && typeof value['create'] === 'function' ? { declaration: value['declaration'] } : undefined;
+/** The entry when `value` has the shape `defineHost`, `defineConnector` or `defineTerminal` returns: a declaration and the function `needs` names. */
+export function adapterEntry(value, needs) {
+    return isRecord(value) && typeof value[needs] === 'function' ? { declaration: value['declaration'] } : undefined;
 }

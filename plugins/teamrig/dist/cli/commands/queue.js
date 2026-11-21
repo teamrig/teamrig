@@ -25,6 +25,7 @@ import { TASK_ID } from "../../register/model.js";
 import { commandLine } from "../../test-run/shell.js";
 import { requiredFlag, UsageError } from "../args.js";
 import { hostLockOf, logLineOf, teamAdmissionOf } from "../delivery-ports.js";
+import { identityOf } from "../host.js";
 import { sessionRef, shellWordsOf } from "../inputs.js";
 import { openTeamKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { parentLockOf } from "../parent-lock.js";
@@ -384,7 +385,7 @@ async function sessionOf(args, runtime, kit, roster, parent) {
     if (named !== undefined) {
         return sessionIdOf(roster, sessionRef('--session', named));
     }
-    const found = parent?.session ?? (await markedSessionOf(runtime, kit, roster, runtime.env[ENV.claudeSession]?.trim() ?? null));
+    const found = parent?.session ?? (await markedSessionOf(runtime, kit, roster, identityOf(runtime).sessionId ?? null));
     if (found === undefined) {
         throw new UsageError(`--session (or $${ENV.session}) is required outside a tab bound to a session`);
     }

@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from './migrate.ts';
-import { GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
+import { ADAPTER_ID } from '../plugin-api/index.ts';
+import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
 import { parseConfig } from './parse.ts';
 import { CONFIG_VERSION, type AccountBudget, type BudgetConfig } from './types.ts';
 import type { ConfigIssue } from './reader.ts';
@@ -328,12 +329,21 @@ describe('parseConfig', () => {
   });
 
   it('reads wake, on for p1 by default, and refuses a priority under 1 or waits past their bounds', () => {
-    assert.deepEqual(parseConfig(ROSTER).config.wake, { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15 });
-    const own = { enabled: false, priority: 2, batchSeconds: 0, minGapMinutes: 0 };
+    assert.deepEqual(parseConfig(ROSTER).config.wake, { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15, maxGapMinutes: 30 });
+    const own = { enabled: false, priority: 2, batchSeconds: 0, minGapMinutes: 0, maxGapMinutes: 0 };
     assert.deepEqual(parseConfig({ ...ROSTER, wake: own }).config.wake, own);
-    const { config, issues } = parseConfig({ ...ROSTER, wake: { priority: 0, batchSeconds: 3601, minGapMinutes: 1441 } });
-    assert.deepEqual(paths(issues), ['wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes']);
+    const { config, issues } = parseConfig({ ...ROSTER, wake: { priority: 0, batchSeconds: 3601, minGapMinutes: 1441, maxGapMinutes: 1441 } });
+    assert.deepEqual(paths(issues), ['wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes', 'wake.maxGapMinutes']);
     assert.deepEqual(config.wake, DEFAULT_WAKE);
+  });
+
+  it('reads wake.maxGapMinutes, at least the least gap, and reads one below it as the least (T4852)', () => {
+    assert.equal(parseConfig({ ...ROSTER, wake: { minGapMinutes: 10, maxGapMinutes: 45 } }).config.wake.maxGapMinutes, 45);
+    assert.equal(parseConfig({ ...ROSTER, wake: { minGapMinutes: 40 } }).config.wake.maxGapMinutes, 40, 'a least gap past the default most keeps one gap');
+    const { config, issues } = parseConfig({ ...ROSTER, wake: { minGapMinutes: 20, maxGapMinutes: 10 } });
+    assert.deepEqual(paths(issues), ['wake.maxGapMinutes']);
+    assert.match(issues[0]?.message ?? '', /less than wake\.minGapMinutes \(20\); read as 20/);
+    assert.equal(config.wake.maxGapMinutes, 20);
   });
 
   it('reads meeting.panel.enabled, on by default, and refuses a value that is not a boolean (T2512)', () => {
@@ -647,6 +657,40 @@ describe('parseConfig', () => {
     assert.equal(Object.keys(parseConfig({ ...ROSTER, serviceRoles: Object.fromEntries(Object.entries(many).slice(0, 16)) }).config.serviceRoles).length, 16);
   });
 
+  it('reads no connector section by default', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.connectors, {});
+  });
+
+  it('keeps each connector section as written, reading no key inside it (T4766)', () => {
+    const connectors = { tracker2: { site: 'acme', nested: { depth: [1, 'two'] } }, 'code-host': {} };
+    const { config, issues } = parseConfig({ ...ROSTER, connectors });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.connectors, connectors);
+  });
+
+  it('fails the load on a connector id no adapter could declare or a section that is no object, and leaves it out (T4766)', () => {
+    const parsed = parseConfig({ ...ROSTER, connectors: { 'Code Host': {}, 'tracker-': {}, listed: ['site'], named: 'acme', kept: { site: 'acme' } } });
+    assert.deepEqual(paths(parsed.issues), ['connectors.Code Host', 'connectors.tracker-', 'connectors.listed', 'connectors.named']);
+    assert.match(parsed.issues[0]?.message ?? '', /expected a connector id: lower-case words joined by -/);
+    assert.deepEqual(parsed.config.connectors, { kept: { site: 'acme' } });
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, connectors: 'acme' }).issues), ['connectors']);
+  });
+
+  it('refuses more connector sections than the limit', () => {
+    const many = Object.fromEntries(Array.from({ length: CONNECTOR_LIMITS.maxConnectors + 1 }, (_, index) => [`c${index}`, {}]));
+    const parsed = parseConfig({ ...ROSTER, connectors: many });
+    assert.deepEqual(paths(parsed.issues), ['connectors']);
+    assert.match(parsed.issues[0]?.message ?? '', /names 17 connectors; at most 16/);
+    assert.deepEqual(parsed.config.connectors, {});
+    const atLimit = Object.fromEntries(Object.entries(many).slice(0, CONNECTOR_LIMITS.maxConnectors));
+    assert.equal(Object.keys(parseConfig({ ...ROSTER, connectors: atLimit }).config.connectors).length, CONNECTOR_LIMITS.maxConnectors);
+  });
+
+  it('takes as a connector id exactly what an adapter may declare as its id', () => {
+    assert.equal(CONNECTOR_LIMITS.idPattern.source, ADAPTER_ID.source);
+    assert.equal(CONNECTOR_LIMITS.idPattern.flags, ADAPTER_ID.flags);
+  });
+
   it('reads each area label\'s session with the label in lowercase, in the config\'s order', () => {
     const { config, issues } = parseConfig({ ...ROSTER, github: { areaOwners: { 'Area:CLI': 'bravo', 'area:docs': 'alpha', bug: 'bravo' } } });
     assert.deepEqual(issues, []);
@@ -745,11 +789,17 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(issues), ['contextFiles.maxMemoryIndexChars']);
   });
 
+  it('refuses a blocker allowance under an hour and keeps the default (T4329)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, register: { check: { blockerOpenAfterHours: 0 } } });
+    assert.equal(config.register.check.blockerOpenAfterHours, 4);
+    assert.deepEqual(paths(issues), ['register.check.blockerOpenAfterHours']);
+  });
+
   it('keeps valid overrides', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,
       roles: { lead: 'alpha', deliveryOwner: 'bravo', securityReviewer: 'bravo' },
-      register: { priorities: [{ id: 1, name: 'now' }], goalPattern: '^G\\d+$', requireNoteOn: ['waiting'], check: { prioritySkipAfterHours: 12, maxSelfMadePerDay: 0, goalProgressDays: 2, overSizeMultiple: 1.5 } },
+      register: { priorities: [{ id: 1, name: 'now' }], goalPattern: '^G\\d+$', requireNoteOn: ['waiting'], check: { prioritySkipAfterHours: 12, blockerOpenAfterHours: 2, maxSelfMadePerDay: 0, goalProgressDays: 2, overSizeMultiple: 1.5 } },
       delivery: { schedule: { queueCutoffUtc: '22:30' } },
       budget: { enabled: true, targetPct: 95 },
       paths: { inbox: '/srv/team/inbox' },
@@ -763,6 +813,7 @@ describe('parseConfig', () => {
       staleAfterHours: 72,
       notPickedUpAfterHours: 24,
       prioritySkipAfterHours: 12,
+      blockerOpenAfterHours: 2,
       maxSelfMadePerDay: 0,
       goalProgressDays: 2,
       overSizeMultiple: 1.5,

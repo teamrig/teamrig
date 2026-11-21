@@ -1,4 +1,4 @@
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
 import { changedIssues, planLinks } from "../../issues/links.js";
@@ -7,7 +7,8 @@ import { hostsOf, reposOf } from "../issue-hosts.js";
 import { openTeamKit, requireConfig } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { teamRegister } from "../team-register.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 import { shown } from "./issue-sync.js";
 /**
  * `issue links [--repo <owner/name>] [--yes]`: puts the task tree on the GitHub issues of the team's `github.repos`.
@@ -23,8 +24,9 @@ export async function issueLinks(args, runtime) {
     const kit = await openTeamKit(runtime);
     const config = requireConfig(kit, runtime, 'read');
     const say = (line) => runtime.out.stdout(line);
-    if (githubOff(runtime.env)) {
-        say(`OFF ${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine; nothing was read or written`);
+    const offBy = githubOffBy(runtime.env);
+    if (offBy !== undefined) {
+        say(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was read or written`);
         return EXIT.ok;
     }
     if (config.github.repos.length === 0) {
@@ -33,7 +35,7 @@ export async function issueLinks(args, runtime) {
     }
     const tasks = (await teamRegister(runtime, kit.paths, config).snapshot()).state.tasks;
     // github.repos is GitHub's list, so every repository it names is GitHub's; the links are its tracker's.
-    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp)).tracker;
+    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors)).tracker;
     const told = new Set();
     let failed = false;
     let added = 0;

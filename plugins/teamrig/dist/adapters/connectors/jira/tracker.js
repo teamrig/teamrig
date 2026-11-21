@@ -1,7 +1,7 @@
 import { isClaim, isRecord, isStringArray, recordField, stampCredit, stringField, } from "../../../plugin-api/index.js";
 import { adfText, textAdf } from "./adf.js";
 import { NOT_BUILT } from "./declaration.js";
-import { openingType } from "./issue-type.js";
+import { openableNames, openingType } from "./issue-type.js";
 import { stateReasonOf } from "./resolution.js";
 import { browseUrl, credentialName, issueKey, issueNumber, parseProject, projectProblem } from "./site.js";
 import { closingStep, isDoneStatus } from "./transitions.js";
@@ -173,15 +173,30 @@ function readComment(value, since) {
 function labelProblem(label) {
     return label === '' || /\s/.test(label) ? `${JSON.stringify(label)} cannot be a Jira label: one holds no space` : undefined;
 }
+/** The issue types a no-such-type line names; the rest are counted, so a project with many cannot flood the line. */
+export const LISTED_TYPES = 10;
+/**
+ * What an open answers when the project has no type of the name the team's config asks for: the ones it has, to pick
+ * from. The names are Jira's words, so `has` comes already made plain lines (JiraClient.plainLine).
+ */
+function noSuchType(project, wanted, has) {
+    const more = has.length - LISTED_TYPES;
+    const listed = has.slice(0, LISTED_TYPES).join(', ');
+    const names = has.length === 0 ? 'none' : more > 0 ? `${listed} and ${more} more` : listed;
+    return `${project.key} has no issue type ${JSON.stringify(wanted)} the sign-in may open an issue as (it has ${names}): name one of them in connectors.jira.issueType`;
+}
 export class JiraTracker {
     name = 'Jira';
     client;
     stamp;
     /** The id of the type a new issue opens as, by project (`<site>/<KEY>`). */
     openingTypes = new Map();
-    constructor(client, stamp) {
+    /** The type the team's config names for a new issue (`connectors.jira.issueType`), or undefined for the tracker's own pick. */
+    issueType;
+    constructor(client, stamp, issueType) {
         this.client = client;
         this.stamp = stamp;
+        this.issueType = issueType;
     }
     /** Reached with the site's saved sign-in only; the scope is the site, as one sign-in serves all its projects. */
     async reach(repo, use) {
@@ -555,9 +570,9 @@ export class JiraTracker {
         if (answer.kind !== 'ok') {
             return answer.kind === 'missing' ? failed(this.noProject(project)) : answer;
         }
-        const id = openingType(answer.body);
+        const id = openingType(answer.body, this.issueType);
         if (id === undefined) {
-            return failed(`Jira names no issue type the sign-in may open an issue of ${project.key} as`);
+            return failed(this.issueType === undefined ? `Jira names no issue type the sign-in may open an issue of ${project.key} as` : noSuchType(project, this.issueType, openableNames(answer.body).map((name) => this.client.plainLine(name))));
         }
         this.openingTypes.set(name, id);
         return { kind: 'type', id };

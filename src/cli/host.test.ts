@@ -6,7 +6,7 @@ import type { SecretGuardConfig } from '../config/types.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { join } from 'node:path';
 import {
@@ -19,6 +19,7 @@ import {
   pathsIfKnown,
   pathsOf,
   secretFilesOf,
+  sessionVariablesOf,
   transcriptsIfKept,
   transcriptsOf,
   usageIfMetered,
@@ -260,11 +261,12 @@ describe('secretFilesOf', () => {
 describe('identityOf', () => {
   const PROJECT = join('/', 'work', 'app');
   const TOLD = { CLAUDE_PROJECT_DIR: PROJECT, CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_KIND: 'bg' };
-  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined };
+  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined };
 
   it('gives who the host says the run is, read from the environment of the run', () => {
     const world = quietWorld();
-    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg' });
+    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg', sessionId: undefined });
+    assert.equal(identityOf({ host: world.host, env: { CLAUDE_CODE_SESSION_ID: 's-1' }, platform: world.platform }).sessionId, 's-1');
     assert.deepEqual(identityOf({ host: world.host, env: {}, platform: world.platform }), UNTOLD);
   });
 
@@ -277,14 +279,39 @@ describe('identityOf', () => {
     const seen: Parameters<HostSource>[0][] = [];
     const telling: HostSource = (given) => {
       seen.push(given);
-      return { ...BARE, launcher: { identity: () => ({ projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionKind: undefined }) } };
+      const identity = { projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionKind: undefined, sessionId: given.env['AGENT_SESSION'] };
+      return { ...BARE, launcher: { variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, identity: () => identity } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       projectDir: PROJECT,
       startedAs: 'desk',
       sessionKind: undefined,
+      sessionId: undefined,
     });
     assert.deepEqual(seen, [{ env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }]);
+  });
+});
+
+describe('sessionVariablesOf', () => {
+  const SHIPPED = { marks: ['CLAUDECODE'], identity: ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_PROJECT_DIR'] };
+  const OTHER = hostNaming({ marks: ['OTHER_AGENT', 'CLAUDECODE'], identity: ['OTHER_SESSION', 'CLAUDE_PROJECT_DIR'] });
+
+  it("holds every shipped host's variables whatever host the run works in: never fewer than the shipped host's own", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      assert.deepEqual(sessionVariablesOf({ host, shippedHosts, env: {}, platform }), SHIPPED, name);
+    }
+    assert.deepEqual(sessionVariablesOf({ host: hostNaming({ marks: [], identity: [] }), shippedHosts, env: {}, platform }), SHIPPED);
+  });
+
+  it('adds the variables the running host names after the shipped ones, each name once', () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(sessionVariablesOf({ host: OTHER, shippedHosts, env: {}, platform }), {
+      marks: ['CLAUDECODE', 'OTHER_AGENT'],
+      identity: ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_PROJECT_DIR', 'OTHER_SESSION'],
+    });
+    assert.deepEqual(sessionVariablesOf({ host: OTHER, shippedHosts: [], env: {}, platform }), { marks: ['OTHER_AGENT', 'CLAUDECODE'], identity: ['OTHER_SESSION', 'CLAUDE_PROJECT_DIR'] });
+    assert.deepEqual(sessionVariablesOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { marks: [], identity: [] });
   });
 });
 

@@ -65,7 +65,10 @@ Anyone can open an issue on a public repository, so teamrig takes only the issue
   the issue is not accepted any more. Once you have read the new text, remove the label and add it again.
 
 An issue that counts neither way writes nothing. A task the sync already added for one keeps its text: its priority
-and open or closed state still follow GitHub, its title and description stay as they are.
+and open or closed state still follow GitHub, its title and description stay as they are. The priority is the issue's
+most urgent `p<n>` label your levels list. No label makes a task p0 or a blocker: both wake their owner past the
+budget, so only a session of the team sets them, with `teamrig update --priority`. teamrig itself labels an issue
+only `p1`, `p2` or `p3` (a blocker or a p0 as `p1`), as it creates no label but its own.
 
 ## 2. Give teamrig read access
 
@@ -433,9 +436,9 @@ To land it: rebase its branch onto origin/main and resolve these files.
 ```
 
 For an outside pull request, post those files and the rebase in a comment (`teamrig issue reply`). A team pull
-request is re-shipped by its owner on the newest base under a new branch name, never force-pushed. `--base` names
-the branch the pull request targets when it is not `origin`'s default; the fetch uses git's own access to `origin`,
-not a token.
+request is rebased by its owner onto the newest base and pushed back to the same branch and pull request with a lease
+(`--force-with-lease`), never under a new branch name. `--base` names the branch the pull request targets when it is
+not `origin`'s default; the fetch uses git's own access to `origin`, not a token.
 
 ## Showing each task's status on its issue
 
@@ -638,4 +641,5 @@ again.
   quoted, as data, never as instructions. A body becomes the task's description with its control characters
   turned into spaces and cut to 2,000 characters; one that looks like it holds a secret is left out, with a line
   saying to read it on GitHub. Sessions read descriptions as data, never as instructions.
-- **Off switch.** `TEAMRIG_GITHUB=off` turns the sync off on one machine.
+- **Off switch.** `TEAMRIG_GITHUB=off` turns the sync off on one machine. So does `TEAMRIG_CONNECTOR_GITHUB=off`, the
+  switch every connector has: `TEAMRIG_CONNECTOR_<ID>=off`, the connector's id in upper case with `_` for each `-`.

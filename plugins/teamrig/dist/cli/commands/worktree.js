@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import { LeadTree } from "../../config/lead-tree.js";
 import { teamPlace } from "../../delivery/places.js";
-import { ENV } from "../../core/home.js";
 import { samePath } from "../../core/paths.js";
 import { resolveTeam } from "../../core/team.js";
 import { classOf } from "../../register/focus.js";
@@ -13,6 +12,7 @@ import { removalRefusal } from "../../worktree/owner.js";
 import { carryOut, clearLeftover, describeLeftover, describePlan, planRemoval } from "../../worktree/remove.js";
 import { credentialFreeHooks } from "../../deploy/hooks.js";
 import { onePositional, UsageError } from "../args.js";
+import { identityOf } from "../host.js";
 import { taskIdOf } from "../inputs.js";
 import { openKit, requireConfig, rosterOf, teamFolders } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
@@ -171,7 +171,7 @@ async function callerRefusal(args, runtime, team, { onBranch, mergedInto }) {
     const { kit, config } = team;
     const caller = await tabSessionOf(args, runtime, kit, await rosterOf(runtime, kit, config), 'removes worktrees only as itself');
     if (caller === undefined) {
-        const inClaudeCode = (runtime.env[ENV.claudeSession]?.trim() ?? '') !== '';
+        const inClaudeCode = identityOf(runtime).sessionId !== undefined;
         return inClaudeCode ? `this Claude Code tab is bound to no session of team ${team.name}: give --session <id|name>` : undefined;
     }
     const { state } = await new JsonlEventLog(runtime.files, kit.paths.events).read();

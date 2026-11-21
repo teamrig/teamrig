@@ -2,7 +2,7 @@ import { claudeProjectsDir, lastWriteOf } from "../../budget/discover.js";
 import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { NAME_RULE } from "../../core/ids.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { SecretScanner } from "../../core/secrets.js";
@@ -12,16 +12,17 @@ import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLi
 import { lineHash } from "../../inbox/line-hash.js";
 import { boundElsewhereOf, CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf } from "../../inbox/marks.js";
 import { reachOf } from "../../inbox/reach.js";
-import { actorsOf, rightNowNamedIn } from "../../inbox/right-now.js";
+import { actorsOf, blockerNamedIn } from "../../inbox/blocker-named.js";
 import { routeReminderOf } from "../../inbox/route.js";
 import { InboxDir, JsonlMarkLog } from "../../inbox/store.js";
 import { WAKE_AT_ONCE, WAKE_NOW, wakeByOf, wakeRefusal, wakesLine } from "../../inbox/wake-now.js";
 import { WakeAsks } from "../../wake/asks.js";
 import { wakeCost } from "../../wake/decide.js";
+import { refuseUnlessPerson, runBy, untoldRefusal } from "../agent-run.js";
 import { noPositionals, requiredFlag, UsageError } from "../args.js";
-import { underClaudeCode } from "../claude-code-env.js";
 import { closedByTeamrig, closedTimedWakeLine, closedWakeLine, wakeClosedSession } from "../closed-wake.js";
 import { hookLogOf } from "../hook-logs.js";
+import { identityOf } from "../host.js";
 import { callerOf, instantOf, sessionRef } from "../inputs.js";
 import { findTeam, openKit, openTeamKit, pastOrPresentIdOf, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
@@ -36,21 +37,21 @@ export function inboxDepsOf(runtime, paths) {
         shown: new JsonlMarkLog(hookLogOf(runtime, paths, 'inbox-shown')),
     };
 }
-/** The Claude Code session running the command, so the reminder hook can follow it; null outside one. */
-function claudeSessionOf(env) {
-    const id = env[ENV.claudeSession];
+/** The host's session running the command, as its host tells it, so the reminder hook can follow it; null outside one. */
+function claudeSessionOf(runtime) {
+    const id = identityOf(runtime).sessionId;
     return id !== undefined && CLAUDE_SESSION_ID.test(id) ? id : null;
 }
-/** Why a tool call's `inbox read` may not make its tab, the `bound` session, the `area` session. */
-export function rebindRefusal(bound, area) {
+/** Why a tool call's `inbox read` may not make its tab, the `bound` session, the `area` session: `mark` is the variable that says an agent runs it. */
+export function rebindRefusal(bound, area, mark) {
     return (`${KIT_NAME} inbox read --session ${area} would make this tab, the ${bound} session, the ${area} session: a tab keeps the session it was bound to, ` +
-        `which the guards read as who runs a command, so a tool call, a script or a hook (${ENV.claudeCode} is set) cannot move it. Read ${bound}'s inbox here; ` +
+        `which the guards read as who runs a command, so a tool call, a script or a hook (${mark} is set) cannot move it. Read ${bound}'s inbox here; ` +
         `to move the tab, the person types /${KIT_NAME} inbox read --session ${area} in it, or ${area} runs in its own tab.`);
 }
 /**
  * `inbox read`: prints the caller's unread lines, but those the prompt hook showed this Claude Code
  * session, and marks them all read; then, when the caller holds verifying tasks, its verify queue in one line.
- * Where Claude Code set CLAUDECODE, it refuses to move a tab already bound to another session of the roster.
+ * In any run but the person's own (`runBy`), it refuses to move a tab already bound to another session of the roster.
  */
 export async function read(args, runtime) {
     noPositionals(args);
@@ -59,13 +60,16 @@ export async function read(args, runtime) {
     const config = requireConfig(kit, runtime, 'read');
     const roster = await rosterOf(runtime, kit, config);
     const area = sessionIdOf(roster, caller);
-    const claudeSession = claudeSessionOf(runtime.env);
+    const claudeSession = claudeSessionOf(runtime);
     const deps = inboxDepsOf(runtime, kit.paths);
     // Bind once (T3081): the person may move a tab, by /teamrig or in a terminal; a tool call, a script or a hook may not.
-    if (underClaudeCode(runtime)) {
+    // On a host that tells no agent's run from the person's, the tab stays where it is bound too.
+    const by = runBy(runtime);
+    if (by.kind !== 'person') {
         const bound = boundElsewhereOf((await deps.marks.read()).marks, claudeSession, area, (id) => roster.ids.includes(id));
         if (bound !== undefined) {
-            throw new RefusedError(rebindRefusal(bound, area));
+            const moving = `${KIT_NAME} inbox read --session ${area} in this tab, the ${bound} session, which it would make the ${area} session,`;
+            throw new RefusedError(by.kind === 'agent' ? rebindRefusal(bound, area, by.mark) : untoldRefusal(moving, by.notice));
         }
     }
     const now = new Date(runtime.clock.now());
@@ -234,16 +238,14 @@ const HOST_ROLE_WORDS = ['owner', 'lead'];
  * no session of the team, so the line names the job as its sender. It posts to sessions of the team by id or name
  * only, wakes no one (the line waits for the session's next prompt) and takes no `--session`; the line itself meets
  * the inbox's rules as any other, and a `--to` that names no session is refused as `inbox add` refuses it. It is
- * refused where Claude Code runs it, so an agent's tool call cannot post as a job, and for a job named as a role or
- * a session of the team, so the line never reads as that sender's.
+ * refused in any run a host's agent started or may have (`runBy`), so an agent's tool call cannot post as a job, and
+ * for a job named as a role or a session of the team, so the line never reads as that sender's.
  */
 async function addFromHost(args, runtime, from) {
     if (!HOST_SENDER.test(from)) {
         throw new UsageError(`--from takes host:<job>, the job ${NAME_RULE}, not "${from}"`);
     }
-    if (underClaudeCode(runtime)) {
-        throw new RefusedError(`--from ${from} is for a job the host runs on a schedule, so it is refused where Claude Code runs it (${ENV.claudeCode} is set: an agent's tool call, a script it runs or a hook); a session posts as itself without --from`);
-    }
+    refuseUnlessPerson(runtime, `${KIT_NAME} inbox add --from ${from}`, (mark) => `--from ${from} is for a job the host runs on a schedule, so it is refused where Claude Code runs it (${mark} is set: an agent's tool call, a script it runs or a hook); a session posts as itself without --from`);
     if (args.flags.get('session') !== undefined) {
         throw new UsageError(`--from ${from} is for a job that runs as no session: drop --session, or post as the session without --from`);
     }
@@ -399,18 +401,20 @@ function wakeWhenOf(wake, wakeBy, now, zone) {
     return wakeByOf(at, now, zone);
 }
 /**
- * The wake a line sent with neither `--wake now` nor `--wake-by` takes (T4414): `--wake now` when it names unfinished
- * right-now work of the sender's tree ({@link rightNowNamedIn}), since such work never waits for a prompt; none
- * otherwise. A line to many sessions wakes only those of them who act on the work now ({@link actorsOf}, T4431): a p0
- * named to the whole team must not wake every tab, and none of them when no receiver acts on it. That narrowed wake
+ * The wake a line sent with neither `--wake now` nor `--wake-by` takes (T4414): `--wake now` when it names an
+ * unfinished blocker of the sender's tree ({@link blockerNamedIn}), since a blocker never waits for a prompt; none
+ * otherwise. A line naming p0 work posts with no wake (T4329): p0 is worked next, not dropped everything for, so the
+ * sender asks for a wake when one is needed. A line to many sessions wakes only those of them who act on the blocker
+ * now ({@link actorsOf}, T4431): a blocker named to the whole team must not wake every tab, and none of them when no
+ * receiver acts on it. That narrowed wake
  * is a targeted one, so the group gate does not apply to it. Where `--wake now` would be refused (a group from a
  * session that leads no one, another team from a member), the line still posts, with no wake and a note saying why:
  * the sender never asked for one.
  */
-async function rightNowWakeOf(reads, team, text, recipients, group, refusalOf) {
+async function blockerWakeOf(reads, team, text, recipients, group, refusalOf) {
     const loaded = await reads.treeRegisters();
     const registers = loaded?.map(({ team: holder, snapshot }) => ({ team: holder, tasks: snapshot.state.tasks }));
-    const held = registers === undefined ? undefined : rightNowNamedIn(text, registers, team);
+    const held = registers === undefined ? undefined : blockerNamedIn(text, registers, team);
     if (registers === undefined || held === undefined) {
         return { when: undefined, note: undefined, woken: [] };
     }
@@ -455,9 +459,9 @@ const TO_FORMS = 'a session id or name, <team>/<id>, all, leads, group:<leader>,
  * its prompt within about 3 minutes (`wake.batchSeconds`), and says what that costs; `--wake-by <time>` (T1148) wakes
  * it at that time instead, and only if it has not seen the line by then. A group is woken only by a leader, another
  * team only by a team lead (a team below its own, any team's lead, a role holder its config names), else nothing is
- * posted. A line with neither flag that names unfinished right-now work wakes as `--wake now` where that gate lets it,
- * and posts with no wake where it does not (T4414); a line to many sessions wakes only those of them who act on that
- * work now, its owner and the owners of what it waits on (T4431).
+ * posted. A line with neither flag that names an unfinished blocker wakes as `--wake now` where that gate lets it, and
+ * posts with no wake where it does not (T4414, T4329; a p0 named alone wakes no one); a line to many sessions wakes
+ * only those of them who act on that blocker now, its owner and the owners of what it waits on (T4431).
  */
 export async function add(args, runtime) {
     noPositionals(args);
@@ -497,7 +501,7 @@ export async function add(args, runtime) {
             throw new RefusedError(refusal);
         }
     }
-    const { when, note, woken } = asked === undefined ? await rightNowWakeOf(reads, team, text, recipients, group, refusalOf) : { when: asked, note: undefined, woken: recipients };
+    const { when, note, woken } = asked === undefined ? await blockerWakeOf(reads, team, text, recipients, group, refusalOf) : { when: asked, note: undefined, woken: recipients };
     const secrets = new SecretScanner([
         ...config.register.secretPatterns,
         ...recipients.filter((recipient) => recipient.crossing).flatMap((recipient) => recipient.config.register.secretPatterns),

@@ -1,4 +1,3 @@
-import { ENV } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { closedSince } from "../../sync/sync.js";
 import { GITHUB_REPOS_HOST, targetText } from "../../issues/host.js";
@@ -11,7 +10,8 @@ import { callerOf } from "../inputs.js";
 import { hostsOf, reposOf } from "../issue-hosts.js";
 import { sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 import { fieldRunOf, pushFields } from "./issue-field-push.js";
 import { openTeam } from "./register-team.js";
 /** The change rows a repository prints; the rest are counted. */
@@ -39,8 +39,9 @@ export async function issuePush(args, runtime) {
         }
     }
     const say = (line) => runtime.out.stdout(line);
-    if (githubOff(runtime.env)) {
-        say(`OFF ${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine; nothing was read or written`);
+    const offBy = githubOffBy(runtime.env);
+    if (offBy !== undefined) {
+        say(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was read or written`);
         return EXIT.ok;
     }
     if (config.github.repos.length === 0) {
@@ -48,7 +49,7 @@ export async function issuePush(args, runtime) {
         return EXIT.ok;
     }
     // github.repos is GitHub's list, so every repository it names is GitHub's, which is its tracker and its code host.
-    const hosts = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp);
+    const hosts = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors);
     const totals = await pushRepos({
         host: hosts.tracker,
         pulls: hosts.codeHost,

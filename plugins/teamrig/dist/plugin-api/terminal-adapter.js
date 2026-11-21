@@ -11,7 +11,7 @@ export function isTerminalDeclaration(value) {
 }
 /** What stops `value` from being a terminal adapter's entry; empty when it is one. */
 export function terminalAdapterProblems(value) {
-    const entry = adapterEntry(value);
+    const entry = adapterEntry(value, 'create');
     return entry === undefined ? ['its entry is not made by defineTerminal: it needs a declaration and a create function'] : terminalDeclarationProblems(entry.declaration);
 }
 export function isTerminalAdapter(value) {

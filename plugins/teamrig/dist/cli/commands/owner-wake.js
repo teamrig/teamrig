@@ -9,7 +9,7 @@ import { EXIT, RefusedError } from "../runtime.js";
 import { tabFocusOf } from "../tab-focus.js";
 import { postAtOnce } from "../urgent-line.js";
 import { openSession, printOpenResult, terminalFlag } from "./open.js";
-import { namesOf, refuseUnderClaudeCode } from "./owner.js";
+import { namesOf, refuseUnlessOwner } from "./owner.js";
 import { teamOf } from "./register-team.js";
 import { sessionProjectOf } from "./setup.js";
 const SECOND_MS = 1000;
@@ -23,11 +23,12 @@ export function ownerWakeLine(owner, id) {
  * once to work its list; while that ask still waits, nothing more is posted (postAtOnce). A tab in a turn, at a tool
  * call or with a decision put to the person is refused with nothing posted: it reads its list once the step ends, and
  * a question waits on the person in that tab. A session that does not run opens in a new tab as `open` opens it,
- * refused when the host has no room. Refused when wake.enabled is false on a running session's team, and under
- * CLAUDECODE. The owner is above every team, so a session of any team of the tree may be woken.
+ * refused when the host has no room. Refused when wake.enabled is false on a running session's team, and in any run
+ * but the person's own (refuseUnlessOwner). The owner is above every team, so a session of any team of the tree may
+ * be woken.
  */
 export async function ownerWake(args, runtime) {
-    refuseUnderClaudeCode(runtime, 'wake');
+    refuseUnlessOwner(runtime, 'wake');
     const typed = onePositional(args, '[team/]id|name');
     const address = splitAddress(typed);
     if (address === undefined) {

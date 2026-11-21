@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { issueRef } from "../../sync/map.js";
 import { countsLine, parseMigrateRows, planMigration, previewMarkdown, replacedRefNote } from "../../sync/migrate.js";
@@ -10,7 +10,8 @@ import { callerOf } from "../inputs.js";
 import { hostsOf } from "../issue-hosts.js";
 import { sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 import { reportRotation } from "./register.js";
 import { openTeam } from "./register-team.js";
 /** The ids of live tasks with no row a run names on its NO ROW line; the rest are counted. */
@@ -37,8 +38,9 @@ export async function issueMigrate(args, runtime) {
         throw new RefusedError(notOnTeam);
     }
     const say = (line) => runtime.out.stdout(line);
-    if (write && githubOff(runtime.env)) {
-        say(`OFF ${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine; no issue was opened`);
+    const offBy = write ? githubOffBy(runtime.env) : undefined;
+    if (offBy !== undefined) {
+        say(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; no issue was opened`);
         return EXIT.ok;
     }
     const scanner = new SecretScanner(team.config.register.secretPatterns);
@@ -93,7 +95,7 @@ function planLines(plan) {
 async function openIssues(runtime, team, by, creates, scanner) {
     const say = (line) => runtime.out.stdout(line);
     // planMigration plans issues only for github.repos, GitHub's list, so every one opens on GitHub's tracker.
-    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, team.config.github.stamp)).tracker;
+    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, team.config.github.stamp, team.config.connectors)).tracker;
     const told = new Set();
     let opened = 0;
     const stopped = (id) => `STOPPED at ${id} after opening ${opened} issue(s); fix the cause and rerun: tasks holding their issue are skipped`;

@@ -81,40 +81,61 @@ function isValue(word) {
 }
 /** `git push`'s short options; a cluster of them is one word. */
 const PUSH_FLAGS = new Set(['u', 'q']);
-/** `git push`'s long options. */
-const PUSH_LONG_FLAGS = new Set(['--set-upstream', '--quiet']);
+/**
+ * `git push`'s long options. The two lease options are the owner's rule of 11-21 (T4908): a rebased branch goes back
+ * to the same branch and pull request, so git forces it only while the remote branch is where the session last saw
+ * it; `--force`, `-f` and a `+` refspec, which overwrite whatever is there, stay out.
+ */
+const PUSH_LONG_FLAGS = new Set(['--set-upstream', '--quiet', '--force-with-lease', '--force-if-includes']);
+/** The lease option that names its ref: `--force-with-lease=<ref>[:<expect>]`. */
+const LEASE_OPTION = '--force-with-lease';
+/** A lease's expected commit: an object name, never a revision expression git would resolve at push time. */
+const OBJECT_NAME = /^[0-9a-f]{4,64}$/i;
 /** A remote name: no URL, path or transport such as `ext::`. */
 const REMOTE_NAME = /^[\w.-]+$/;
 /** A branch name: no refspec (`:`, `+`), no `refs/` path, no range; checked further in {@link isOwnBranch}. */
 const BRANCH_NAME = /^[\w./-]+$/;
 /**
- * C5: `git push [-u|--set-upstream] [-q|--quiet] <remote> <branch>`, the remote one the repository names, the branch
- * one of a task the caller owns (`t<id>-...`, or `feat/t<id>-...` with the id starting a part: owner.ts `branchTaskOf`)
- * and no protected branch, and git's config pushing it to the remote
- * branch of its own name (else a protected branch could be where it lands).
+ * C5: `git push [-u|--set-upstream] [-q|--quiet] [--force-with-lease[=<branch>[:<sha>]]] [--force-if-includes]
+ * <remote> <branch>`, the remote one the repository names, the branch one of a task the caller owns (`t<id>-...`, or
+ * `feat/t<id>-...` with the id starting a part: owner.ts `branchTaskOf`) and no protected branch, a lease naming only
+ * that same branch, and git's config pushing it to the remote branch of its own name (else a protected branch could
+ * be where it lands).
  */
 export async function matchesGitPush(words, context) {
     const line = gitLineOf(words, 'push');
     if (line === undefined) {
         return false;
     }
-    const options = line.args.filter((word) => word.startsWith('-'));
-    if (!options.every(isPushOption)) {
-        return false;
-    }
     const [remote, branch, ...more] = line.args.filter((word) => !word.startsWith('-'));
     const task = branch === undefined ? undefined : taskBranchOf(branch, context.protectedBranches);
-    if (remote === undefined || task === undefined || more.length > 0 || !REMOTE_NAME.test(remote)) {
+    if (remote === undefined || branch === undefined || task === undefined || more.length > 0 || !REMOTE_NAME.test(remote)) {
+        return false;
+    }
+    if (!line.args.filter((word) => word.startsWith('-')).every((word) => isPushOption(word, branch))) {
         return false;
     }
     return (await context.ownsTask(task)) && (await context.isRemote(line.folders, remote)) && context.pushesToSameName(line.folders, remote);
 }
-function isPushOption(word) {
+function isPushOption(word, branch) {
+    if (word.startsWith(`${LEASE_OPTION}=`)) {
+        return leasesOnly(word.slice(LEASE_OPTION.length + 1), branch);
+    }
     if (word.startsWith('--')) {
         return PUSH_LONG_FLAGS.has(word);
     }
     const letters = [...word.slice(1)];
     return letters.length > 0 && letters.every((letter) => PUSH_FLAGS.has(letter));
+}
+/**
+ * True when a lease's `<ref>[:<expect>]` names the pushed branch itself (or its `refs/heads/` path) and expects an
+ * object name, or nothing (the branch must not exist yet): a lease on another ref would leave the pushed one unleased.
+ */
+function leasesOnly(lease, branch) {
+    const colon = lease.indexOf(':');
+    const ref = colon === -1 ? lease : lease.slice(0, colon);
+    const expect = colon === -1 ? '' : lease.slice(colon + 1);
+    return (ref === branch || ref === `refs/heads/${branch}`) && (expect === '' || OBJECT_NAME.test(expect));
 }
 /** The task of a plain task branch (`t<id>-...`, `feat/t<id>-...`) that is no protected branch, whatever its case; else undefined. */
 export function taskBranchOf(branch, protectedBranches) {

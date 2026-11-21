@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { ENV, KIT_NAME } from '../../core/home.ts';
+import { KIT_NAME } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import { issueRef } from '../../sync/map.ts';
 import { countsLine, parseMigrateRows, planMigration, previewMarkdown, replacedRefNote, type MigrateCreate, type MigratePlan, type MigrateRow, type RefJudge } from '../../sync/migrate.ts';
@@ -10,7 +10,8 @@ import { callerOf } from '../inputs.ts';
 import { hostsOf } from '../issue-hosts.ts';
 import { sessionIdOf } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { GITHUB_OFF, githubOff } from './issue-sync-auto.ts';
+import { CONNECTOR_OFF } from '../connector-off.ts';
+import { githubOffBy } from './issue-sync-auto.ts';
 import { reportRotation } from './register.ts';
 import { openTeam, type Team } from './register-team.ts';
 
@@ -39,8 +40,9 @@ export async function issueMigrate(args: ParsedArgs, runtime: CliRuntime): Promi
     throw new RefusedError(notOnTeam);
   }
   const say = (line: string): void => runtime.out.stdout(line);
-  if (write && githubOff(runtime.env)) {
-    say(`OFF ${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine; no issue was opened`);
+  const offBy = write ? githubOffBy(runtime.env) : undefined;
+  if (offBy !== undefined) {
+    say(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; no issue was opened`);
     return EXIT.ok;
   }
   const scanner = new SecretScanner(team.config.register.secretPatterns);
@@ -99,7 +101,7 @@ function planLines(plan: MigratePlan): string[] {
 async function openIssues(runtime: CliRuntime, team: Team, by: string, creates: readonly MigrateCreate[], scanner: SecretScanner): Promise<ExitCode> {
   const say = (line: string): void => runtime.out.stdout(line);
   // planMigration plans issues only for github.repos, GitHub's list, so every one opens on GitHub's tracker.
-  const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, team.config.github.stamp)).tracker;
+  const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, team.config.github.stamp, team.config.connectors)).tracker;
   const told = new Set<string>();
   let opened = 0;
   const stopped = (id: string): string => `STOPPED at ${id} after opening ${opened} issue(s); fix the cause and rerun: tasks holding their issue are skipped`;

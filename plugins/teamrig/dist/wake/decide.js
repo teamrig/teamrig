@@ -9,6 +9,7 @@ import { isCold } from "../hooks/cold-send.js";
 import { answerTo } from "../register/approval.js";
 import { waitsLetGoOn } from "../register/can-move.js";
 import { taskNumber } from "../register/fold.js";
+import { BLOCKER_PRIORITY_ID, priorityText } from "../register/model.js";
 import { wouldPark } from "../register/park.js";
 import { neededIds } from "../register/tree.js";
 import { unfinishedAfter, waitContext } from "../register/waits.js";
@@ -19,7 +20,8 @@ import { unfinishedAfter, waitContext } from "../register/waits.js";
  * someone else or by the clock since the session last touched it (handed to it, raised,
  * reopened, freed by another's finish, its waits cleared, or an approval it waits on answered). Each task wakes a
  * session once, tasks handed together wake it once (`wake.batchSeconds`), and wakes of one session are
- * `wake.minGapMinutes` apart. The plugin's mod asks `hook wake-check` while no turn runs and submits the prompt. A
+ * `wake.minGapMinutes` to `wake.maxGapMinutes` apart, by how much waits ({@link wakeGapMs}). The plugin's mod asks
+ * `hook wake-check` while no turn runs and submits the prompt. A
  * parked task (src/register/park.ts) wakes nothing: `list` leaves it out, so a wake would send the session to work it
  * cannot find, and a task no owner touched stays news for ever. An event on it ends the parking, and with it the silence.
  */
@@ -135,6 +137,22 @@ export function isNews(task, session, tasks, elsewhere, zone) {
     });
 }
 export const NO_SETTLED_MOMENTS = { dayStart: undefined, burst: undefined, poke: undefined };
+/** How many tasks due stretch the gap between wakes to its most: the number a wake names. */
+export const FULL_GAP_LOAD = WAKE_LIST_MAX;
+/**
+ * The gap after a session's last wake before the next, for the tasks due: none when one is a blocker, which never
+ * waits (T4329); else from `minGapMs` for one task up to `maxGapMs` at {@link FULL_GAP_LOAD}, in even steps. A wake
+ * is a turn priced in the week's usage, not in time (T4852), so a session with much waiting takes it in
+ * fewer, fuller wakes, while a lone urgent task waits only the least gap.
+ */
+export function wakeGapMs(due, minGapMs, maxGapMs) {
+    if (due.some((task) => task.priority === BLOCKER_PRIORITY_ID)) {
+        return 0;
+    }
+    const load = Math.min(Math.max(due.length, 1), FULL_GAP_LOAD);
+    const span = Math.max(maxGapMs - minGapMs, 0);
+    return minGapMs + Math.round((span * (load - 1)) / (FULL_GAP_LOAD - 1));
+}
 /** Most urgent first, then oldest. */
 export function byUrgency(a, b) {
     return a.priority - b.priority || taskNumber(a.id) - taskNumber(b.id);
@@ -147,7 +165,7 @@ export function worthyTasksOf(input) {
 /**
  * The wake state of a tab teamrig opened on a Claude Code session it resumed: its first prompt has the session read
  * its list, so the open counts as its wake. What could wake it now is known, so only work handed after the open wakes
- * it, and the open is its last wake for `wake.minGapMinutes`. A resumed tab keeps the id it had before its close, so
+ * it, and the open is its last wake for the gap ({@link wakeGapMs}). A resumed tab keeps the id it had before its close, so
  * without this the check went on from the state before the close and woke it again for the work it reads (T1616).
  */
 export function openedWakeState(opened) {
@@ -176,7 +194,7 @@ export function decideWake(input) {
         return { verdict: none, state: { tab, known, pending: undefined, lastWakeAt: previous.lastWakeAt, settled } };
     }
     const since = kept.length > 0 && previous.pending !== undefined ? previous.pending.since : now;
-    const gapEnd = previous.lastWakeAt === undefined ? Number.NEGATIVE_INFINITY : previous.lastWakeAt + input.minGapMs;
+    const gapEnd = previous.lastWakeAt === undefined ? Number.NEGATIVE_INFINITY : previous.lastWakeAt + wakeGapMs(due, input.minGapMs, input.maxGapMs);
     const at = Math.max(since + input.batchMs, gapEnd);
     const ids = due.map((task) => task.id);
     if (now < at) {
@@ -262,13 +280,13 @@ export function taskListText(tasks) {
  */
 function taskTag(task) {
     if (!goesOnByWaits(task.status)) {
-        return `p${task.priority}`;
+        return priorityText(task.priority);
     }
     if (task.decided !== null) {
-        return `p${task.priority}, ${task.status}: ${task.decided.by} recorded the owner's decision`;
+        return `${priorityText(task.priority)}, ${task.status}: ${task.decided.by} recorded the owner's decision`;
     }
     const answer = task.waits.map((reason) => answerTo(task, reason)).find((found) => found !== undefined);
-    return `p${task.priority}, ${task.status}: ${answer === undefined ? 'every wait cleared' : `${answer.by} ${answer.verdict} it`}`;
+    return `${priorityText(task.priority)}, ${task.status}: ${answer === undefined ? 'every wait cleared' : `${answer.by} ${answer.verdict} it`}`;
 }
 /** The prompt the session reads, under the plugin's name. */
 export function wakePrompt(session, tasks, cost) {

@@ -15,7 +15,8 @@ import { serviceRoleGuardReply } from "../../hooks/service-role-guard.js";
 import { approvedTaskOf } from "../../register/approval.js";
 import { JsonlEventLog } from "../../register/store.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
-import { secretFilesOf } from "../host.js";
+import { runBy } from "../agent-run.js";
+import { secretFilesOf, sessionVariablesOf } from "../host.js";
 import { rosterOf } from "../kit.js";
 import { leadAboveOf } from "../tree.js";
 import { teamSessionOf } from "./hook-input.js";
@@ -164,7 +165,10 @@ async function tabIdentityOf(runtime, kit, hostSession) {
  * none when it lets the call go.
  */
 export function execGuardReplyOf(runtime, guard, event) {
+    const by = runBy(runtime);
     return execGuardReply(event, {
+        sessionVariables: sessionVariablesOf(runtime),
+        agentMark: by.kind === 'agent' ? by.mark : undefined,
         cwd: runtime.cwd,
         home: runtime.userHome,
         identity: () => tabIdentityOf(runtime, guard.kit, event.session ?? null),

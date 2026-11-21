@@ -499,30 +499,24 @@ const MOVED: MergeExit = { kind: 'moved', tip: TIP, reason: 'main moved to fedcb
 const VERSION_AND_DIST = `plugins/teamrig/.claude-plugin/plugin.json\nsrc/core/version.ts\n${DIST}/a.js\n`;
 
 /** git's answers for a move of main to TIP: the branch changed `ours` since it left main, main changed `theirs`. */
-function moveAnswers(ours: string, theirs: string, taken: readonly string[] = []): Record<string, string> {
-  const answers: Record<string, string> = {
+function moveAnswers(ours: string, theirs: string): Record<string, string> {
+  return {
     [`merge-base HEAD ${TIP}`]: 'base111\n',
     'diff --name-only --no-renames base111 HEAD': ours,
     [`diff --name-only --no-renames base111 ${TIP}`]: theirs,
     'rev-parse --abbrev-ref HEAD': 't827-ship-tool\n',
   };
-  for (let n = 2; n <= 5; n++) {
-    const name = `t827-ship-tool-${n}`;
-    answers[`branch --list ${name}`] = taken.includes(`local ${name}`) ? `  ${name}\n` : '';
-    answers[`ls-remote --heads origin refs/heads/${name}`] = taken.includes(`origin ${name}`) ? `abc\trefs/heads/${name}\n` : '';
-  }
-  return answers;
 }
 
-test('when main moved past the branch touching other files, renames the branch and ships again from the start (T2696)', async () => {
+test('when main moved past the branch touching other files, ships again from the start on the same branch (T2696, T4907)', async () => {
   const { deps, events, logs } = fake({
     mergeExits: [MOVED, { kind: 'done', code: 0 }],
     answers: moveAnswers(`src/a.ts\n${VERSION_AND_DIST}`, `src/other.ts\n${VERSION_AND_DIST}`),
   });
   assert.equal(await shipCommits({ ...ARGS, merge: true }, CHUNKS, deps), 0);
-  const rename = events.indexOf('git branch -m t827-ship-tool-2');
-  assert.ok(rename > events.indexOf('merge t827-ship-tool'));
-  const again = events.slice(rename + 1);
+  assert.ok(!events.some((event) => event.startsWith('git branch') || event.startsWith('git switch')), 'no new branch: the same pull request');
+  const firstMerge = events.indexOf('merge t827-ship-tool');
+  const again = events.slice(events.indexOf('take back 2 chunk(s) since origin/main', firstMerge));
   assert.deepEqual(again.slice(0, 5), [
     'take back 2 chunk(s) since origin/main',
     'sync',
@@ -532,16 +526,7 @@ test('when main moved past the branch touching other files, renames the branch a
   ]);
   assert.deepEqual(again.slice(-2), ['push', 'merge t827-ship-tool']);
   assert.equal(events.filter((event) => event === 'sync').length, 2);
-  assert.ok(logs.includes('\nmain moved to fedcba9, touching no file this change touches: shipping again as t827-ship-tool-2'));
-});
-
-test('the new branch name skips one taken here or on origin', async () => {
-  const { deps, events } = fake({
-    mergeExits: [MOVED, { kind: 'done', code: 0 }],
-    answers: moveAnswers('src/a.ts\n', 'src/other.ts\n', ['local t827-ship-tool-2', 'origin t827-ship-tool-3']),
-  });
-  assert.equal(await shipCommits({ ...ARGS, merge: true }, CHUNKS, deps), 0);
-  assert.deepEqual(events.filter((event) => event.startsWith('git branch -m')), ['git branch -m t827-ship-tool-4']);
+  assert.ok(logs.includes('\nmain moved to fedcba9, touching no file this change touches: shipping again on the same branch'));
 });
 
 test('a move of main that changed a file this change changes is refused, naming the files, with no second run', async () => {
@@ -551,21 +536,21 @@ test('a move of main that changed a file this change changes is refused, naming 
   });
   await assert.rejects(
     shipCommits({ ...ARGS, merge: true }, CHUNKS, deps),
-    /^Error: REFUSED main moved to fedcba9 and changed src\/b\.ts, src\/a\.ts, which this change changes too: rebase onto origin\/main by hand, then ship again under a new branch name$/,
+    /^Error: REFUSED main moved to fedcba9 and changed src\/b\.ts, src\/a\.ts, which this change changes too: rebase onto origin\/main by hand, then ship again on the same branch$/,
   );
   assert.ok(!events.some((event) => event.startsWith('git branch -m')));
   assert.equal(events.filter((event) => event.startsWith('merge ')).length, 1);
 });
 
-test(`gives up after ${SHIP_ATTEMPTS} runs when main keeps moving, keeping the first branch name as the stem`, async () => {
+test(`gives up after ${SHIP_ATTEMPTS} runs when main keeps moving, all on the same branch`, async () => {
   const { deps, events } = fake({ mergeExits: [MOVED], answers: moveAnswers('src/a.ts\n', 'src/other.ts\n') });
   await assert.rejects(
     shipCommits({ ...ARGS, merge: true }, CHUNKS, deps),
     new RegExp(`^Error: REFUSED main moved past the branch ${SHIP_ATTEMPTS} times during this ship, last to fedcba9: ship again$`),
   );
   assert.equal(events.filter((event) => event.startsWith('merge ')).length, SHIP_ATTEMPTS);
-  assert.equal(events.filter((event) => event.startsWith('git branch -m')).length, SHIP_ATTEMPTS - 1);
-  assert.equal(events.filter((event) => event === 'git rev-parse --abbrev-ref HEAD').length, 1);
+  assert.ok(!events.some((event) => event.startsWith('git branch')));
+  assert.equal(events.filter((event) => event === 'push').length, SHIP_ATTEMPTS);
 });
 
 const FAILED_GATE: GateVerdict = { passed: false, reason: 'plugin version gate failed on tree tree000' };
@@ -578,8 +563,8 @@ test('with --merge, local checks that fail on a branch main moved past ship agai
   });
   await assert.rejects(shipCommits({ ...ARGS, merge: true }, CHUNKS, deps), /^Error: REFUSED plugin version gate failed on tree tree000$/);
   assert.ok(logs.includes('\nlocal checks: plugin version gate failed on tree tree000, and origin/main moved to fedcba9, which the branch does not contain'));
-  const rename = events.indexOf('git branch -m t827-ship-tool-2');
-  assert.ok(rename > events.indexOf('look at main'));
+  assert.ok(!events.some((event) => event.startsWith('git branch')));
+  assert.ok(events.lastIndexOf('sync') > events.indexOf('look at main'), 'the second run syncs after main is looked at');
   assert.equal(events.filter((event) => event === 'sync').length, 2);
   assert.equal(events.filter((event) => event === 'look at main').length, 2);
   assert.ok(!events.includes('push'));

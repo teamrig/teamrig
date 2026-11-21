@@ -9,6 +9,7 @@ import {
   type HookReply,
   type HostPaths,
   type SessionIdentity,
+  type SessionVariables,
   type ShellCall,
 } from '../ports/host/index.ts';
 import { hostDeps } from './adapter-deps.ts';
@@ -31,6 +32,13 @@ export const HOOKS_ONLY_HOST: HostSource = (given) => {
 };
 
 /**
+ * A bare host (`bareHost`) whose sessions are still told: the shipped host's session launcher, and no other port.
+ * For a spec of an act kept for the person on a host lacking the rest: on a wholly bare host no agent's run is told
+ * from theirs, so the act is refused before it reaches what the spec is about.
+ */
+export const SESSIONS_ONLY_HOST: HostSource = (given) => ({ ...bareHost(), launcher: SHIPPED_HOST(given).launcher });
+
+/**
  * The shipped host, telling none of its folders: every other port is the shipped one. For a spec of what a run does
  * with no place of the host known, while its hooks, transcript and usage are still read.
  */
@@ -47,8 +55,27 @@ export const NO_SESSION_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given),
  * ask the host who the run is and read no variable of a host itself.
  */
 export function hostTelling(identity: Partial<SessionIdentity>): HostSource {
-  const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { identity: () => told } });
+  const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables: testSessionVariables(), identity: () => told } });
+}
+
+/**
+ * The shipped host, its sessions told by `variables` in place of its own and every run said to be `identity`, each
+ * part untold unless given: for a spec of a run on a host that names marks of its own, or none.
+ */
+export function hostNaming(variables: SessionVariables, identity: Partial<SessionIdentity> = {}): HostSource {
+  const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables, identity: () => told } });
+}
+
+/** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
+export const NO_MARK_HOST: HostSource = hostNaming({ marks: [], identity: [] });
+
+/** The session variables the shipped host hands a run: the ones its declaration names. */
+export function testSessionVariables(): SessionVariables {
+  const { launcher } = SHIPPED_HOST({ env: {}, platform: 'linux' });
+  if (isUnsupported(launcher)) throw new Error(`the shipped host tells nothing of its sessions: ${launcher.notice}`);
+  return launcher.variables;
 }
 
 /** The shipped host's paths in the environment `env` on `platform`: where a spec's files are, as a run would be told them. */

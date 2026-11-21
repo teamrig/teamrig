@@ -1,9 +1,9 @@
-import { ENV } from "../../core/home.js";
 import { issueRef } from "../../sync/map.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
 import { hostsOf } from "../issue-hosts.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 /** The flags of `add` that ask about the new task's issue (sync/issue-at-add.ts). */
 export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local'];
 /** What an add asked about its issue: its issue flags, with the task's own ref, type and priority. */
@@ -20,11 +20,13 @@ export function addIssueAskOf(flags, input) {
 }
 /**
  * The tracker a new task's issue opens on: GitHub's (the issue's repository is one of github.repos), with the token
- * saved for the repository's owner, or none while GitHub is off here. stamp is the team's github.stamp: whether the
- * issue's body ends with the made-with-teamrig footer.
+ * saved for the repository's owner, or the switch that turns GitHub off here. stamp is the team's github.stamp: whether the
+ * issue's body ends with the made-with-teamrig footer; sections is the team's connectors map, of which the tracker's
+ * connector reads its own section.
  */
-export async function addIssueHost(runtime, scanner, stamp) {
-    return githubOff(runtime.env) ? undefined : (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, stamp)).tracker;
+export async function addIssueHost(runtime, scanner, stamp, sections) {
+    const offBy = githubOffBy(runtime.env);
+    return offBy === undefined ? (await hostsOf(GITHUB_REPOS_HOST, runtime, scanner, stamp, sections)).tracker : { offBy };
 }
 /**
  * Adds a task with its issue, all or nothing: the add is judged, the issue opened, then the task written with its ref
@@ -37,8 +39,8 @@ export async function addWithIssue(say, register, host, by, input, draft) {
     if (!judged.ok) {
         throw new RefusedError(judged.error);
     }
-    if (host === undefined) {
-        throw new RefusedError(`${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine, so the new task's issue cannot open and nothing is written: turn GitHub on, or add the task with --local <reason>`);
+    if ('offBy' in host) {
+        throw new RefusedError(`${host.offBy}=${CONNECTOR_OFF} turns GitHub off on this machine, so the new task's issue cannot open and nothing is written: turn GitHub on, or add the task with --local <reason>`);
     }
     const reach = await host.reach(draft.repo, 'open');
     const opened = reach.kind === 'unreachable' ? { kind: 'failed', reason: reach.reason } : await host.open(draft);

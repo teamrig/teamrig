@@ -1,3 +1,4 @@
+import type { JsonRecord } from '../core/guards.ts';
 import type { TaskStatus } from '../register/model.ts';
 import type { ItemType } from '../register/events.ts';
 import type { CoreRuleKey } from '../rules/keys.ts';
@@ -49,6 +50,8 @@ export interface RegisterCheckConfig {
   readonly staleAfterHours: number;
   /** An open task its owner has not touched this long after assignment is NOT-PICKED-UP. */
   readonly notPickedUpAfterHours: number;
+  /** A blocker still unfixed (open, in progress or waiting) this long after it became one is BLOCKER-OPEN (T4329). */
+  readonly blockerOpenAfterHours: number;
   /** A session's in-progress task outranked this long by its own open task, on band and score, is a PRIORITY-SKIP. */
   readonly prioritySkipAfterHours: number;
   /**
@@ -665,8 +668,13 @@ export interface WakeConfig {
   readonly priority: number;
   /** How long a wake waits after the first new task it is for, so tasks handed together wake the session once. */
   readonly batchSeconds: number;
-  /** The least time between two wakes of one session; work handed meanwhile waits and wakes it once. */
+  /**
+   * The least time between two wakes of one session, for one task due; work handed meanwhile waits and wakes it once.
+   * A blocker skips it.
+   */
   readonly minGapMinutes: number;
+  /** The gap once five tasks or more are due, stepped evenly from `minGapMinutes`; read as that when it is less. */
+  readonly maxGapMinutes: number;
   /**
    * The day's start (`HH:MM` UTC, outside the budget's quiet hours): from then each session with work it can start,
    * of any priority, that has had no turn since gets one wake that day, and a burst wakes its sessions the same way
@@ -1824,6 +1832,12 @@ export interface KitConfig {
   readonly github: GithubConfig;
   /** Each service role by name: the teamrig commands it holds and the sessions that hold it (T2984). */
   readonly serviceRoles: Readonly<Record<string, ServiceRoleConfig>>;
+  /**
+   * Each connector's own section, by the connector's id, as the file holds it. The load checks only that each is an
+   * object under an id: the keys inside are the connector's, read and checked by its adapter when a command reaches
+   * it (plugin-api/connector.ts), so the core never learns a connector's settings.
+   */
+  readonly connectors: Readonly<Record<string, JsonRecord>>;
   readonly alerts: AlertsConfig;
   readonly decisions: DecisionsConfig;
   /**

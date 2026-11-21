@@ -3,6 +3,7 @@ import { ENV, KIT_NAME } from '../core/home.ts';
 import { TEAM_POINTER } from '../core/team.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import { isSettingsWriter, settingsWriteRefusal, WRITE_SWITCH } from '../core/settings-writers.ts';
+import { refuseUnlessPerson } from './agent-run.ts';
 import { cutLineMessage, shimArgs } from './cmd-shim.ts';
 import { QUEUE_FLAGS, QUEUE_SWITCHES } from './commands/queue-args.ts';
 import { CommandHelp } from './help.ts';
@@ -202,7 +203,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   open: { effect: 'write', flags: ['prompt', 'terminal', 'project'], switches: ['resume'], load: async () => (await openCommands()).open },
   meet: { effect: 'write', flags: ['session', 'terminal', 'project'], switches: ['cards'], load: async () => (await meetCommands()).meet },
   // No --session: the owner's actions are always written as register.ownerSource; a hook refuses them from an agent's
-  // tool call (src/hooks/exec-guard.ts), and their writes refuse themselves under CLAUDECODE (commands/owner.ts).
+  // tool call (src/hooks/exec-guard.ts), and their writes refuse themselves in an agent's run (commands/owner.ts).
   'owner note': { effect: 'write', flags: ['text'], load: async () => (await ownerCommands()).ownerNote },
   'owner next': { effect: 'write', flags: [], switches: ['preview'], load: async () => (await ownerCommands()).ownerNext },
   'owner wake': { effect: 'write', flags: ['terminal', 'project'], load: async () => (await ownerWakeCommands()).ownerWake },
@@ -501,9 +502,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       the batch asked, as a meeting start does; in a tree of teams the root lead's batch holds every
       team's waits under it, and a child team's decisions prints its own and its teams' waits, naming
       that lead
-  add --title "<one line>" --description "<what and why>" --priority p<n> [--ref <where it was asked>]
+  add --title "<one line>" --description "<what and why>" --priority p<n>|blocker [--ref <where it was asked>]
       [--owner <session>] [--source <session>|<owner source>] [--due <date>] [--goals a,b|none]
       [--week <date>] [--after T5,T6] [--size <pct>] [--type task|bug] [--critical] [--class <name>]
+      --priority: p0 (urgent, right now), a level of register.priorities, or blocker, above p0: its owner
+      drops everything and fixes it now; a blocker says why in its description and comes after no task
       --description: what the task is and why, in plain words for a person (newlines kept, at most 2,000
       characters), needed unless register.requireDescription is off; show prints it under the title
       --after: the tasks to finish before this one starts; its line shows "after T5"
@@ -523,7 +526,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       --local: why the task gets no issue, written as its ref "local: <why>"; a security hole is always added
       with --local; while github.issueAtAdd is set, an add gives --issue or --local (or a --ref to an issue),
       else it is refused
-  add --team <team> [--owner <s>] [--source owner] --title .. --description .. --priority p<n> [...]   asks a team of your tree for work
+  add --team <team> [--owner <s>] [--source owner] --title .. --description .. --priority p<n>|blocker [...]   asks a team of your tree for work
       --source owner: the lead of a team above <team> relays the owner's order, sourced owner there
   set <id> --status open|in-progress|verifying|waiting|done|dropped [--note "<what/why>"] [--evidence <proof>]
       [--skill <name>|none] [--followups T<id>,...|none] [--waits decision:<who>,approval:<who>,task:T<id>,time:<date>|none]
@@ -578,7 +581,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       a critical one (--critical, or an owner in criticalOwners) --harden "<past the direct guard>" too;
       each part at least 3 words besides task ids, kept across sets; tasks a missed part names join
       --followups; verifying and done need every part (requireOn; mode refuse, warn or off)
-  update <id> [--title ..] [--description ..|none] [--owner ..] [--priority ..] [--ref ..|none]
+  update <id> [--title ..] [--description ..|none] [--owner ..] [--priority p<n>|blocker] [--ref ..|none]
       [--due <date>|none] [--goals a,b|none] [--week <date>|none] [--after T5,T6|none] [--size <pct>|none]
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
       [--prepares <goal>:<slice>|none] [--note ..]
@@ -675,9 +678,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       that costs; a group only from a leader, another team only from a team lead: a team below its
       own, any team's lead, or a session its config names in roles; a receiver teamrig closed has
       its reopen started at once when the host has room (REOPENS), else CLOSED says why; a line
-      with neither flag that names unfinished p0 (or more urgent) work by id wakes as --wake now,
-      or posts with no wake where that gate refuses it, and a NOTE says which; to many receivers it
-      wakes only the work's owner and the owners of work it waits on, the rest read it at their prompt
+      with neither flag that names an unfinished blocker by id wakes as --wake now, or posts with
+      no wake where that gate refuses it, and a NOTE says which; one naming p0 work does not; to
+      many receivers it wakes only the blocker's owner and the owners of work it waits on, the rest
+      read it at their prompt
       --wake-by <time>: wakes each receiver at that time instead, only if it has not seen the line by
       then and its tab is idle; the same gate
       --from host:<job>: a line from a host scheduled job, which runs as no session: no --session,
@@ -1175,11 +1179,13 @@ export const HELP: ReadonlySet<string> = new Set(['help', '--help', '-h']);
 /** The words that print the version; the LLM guide documents them as `teamrig version`. */
 export const VERSION: ReadonlySet<string> = new Set(['version', '--version', '-v']);
 
-/** Refuses a settings writer's write where Claude Code set CLAUDECODE (src/core/settings-writers.ts); its preview runs. */
+/**
+ * Refuses a settings writer's write unless the person runs it (src/core/settings-writers.ts): an agent's run by its
+ * host's mark, and any run on a host that tells none from the person's. Its preview runs.
+ */
 function refuseSettingsWrite(command: string, switches: ReadonlySet<string>, runtime: CliRuntime): void {
-  const claudeCode = runtime.env[ENV.claudeCode];
-  if (claudeCode !== undefined && claudeCode !== '' && switches.has(WRITE_SWITCH) && isSettingsWriter(command)) {
-    throw new RefusedError(settingsWriteRefusal(command));
+  if (switches.has(WRITE_SWITCH) && isSettingsWriter(command)) {
+    refuseUnlessPerson(runtime, `\`${KIT_NAME} ${command} --${WRITE_SWITCH}\``, (mark) => settingsWriteRefusal(command, mark));
   }
 }
 

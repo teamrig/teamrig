@@ -138,13 +138,14 @@ export class JiraClient {
             return failed(`Jira answered ${status}, a redirect, which teamrig does not follow`);
         }
         const said = firstError(body);
-        return failed(said === undefined ? `Jira answered ${status}` : `Jira answered ${status}: ${this.line(said)}`);
+        return failed(said === undefined ? `Jira answered ${status}` : `Jira answered ${status}: ${this.plainLine(said)}`);
     }
     /**
      * Jira's words as one plain line: control characters and line ends to spaces, any secret shape redacted, then cut
-     * short. Redacted first: a cut through a secret would leave a start too short to match its shape.
+     * short. Redacted first: a cut through a secret would leave a start too short to match its shape. Any of Jira's
+     * text a failure line quotes goes through it.
      */
-    line(text) {
+    plainLine(text) {
         const plain = this.scanner.redact(text.replace(CONTROLS, ' ').trim());
         return plain.length > MAX_ERROR_TEXT ? `${plain.slice(0, MAX_ERROR_TEXT)}...` : plain;
     }

@@ -14,11 +14,32 @@ export const CONNECTOR_RUN_TIMEOUT_MS = 60_000;
  * grow one run's memory without bound.
  */
 export const CONNECTOR_RUN_MAX_BYTES = 32 * 1024 * 1024;
+/** What a section key the declaration does not list is reported as. */
+function strayKeyProblem(declaration) {
+    const known = Object.keys(declaration.configKeys);
+    return `is no key of the ${declaration.name} connector; it takes ${known.length === 0 ? 'none' : known.join(', ')}`;
+}
 /** The default export of a connector adapter's entry. */
-export function defineConnector(adapter) {
-    return adapter;
+export function defineConnector(spec) {
+    const { declaration } = spec;
+    return {
+        declaration,
+        configure: (section, report) => {
+            for (const key of Object.keys(section)) {
+                if (!Object.hasOwn(declaration.configKeys, key)) {
+                    report(key, strayKeyProblem(declaration));
+                }
+            }
+            const config = spec.parseConfig(section, report);
+            return (deps) => spec.create(deps, config);
+        },
+    };
 }
 const REF_PREFIX = /^[a-z][a-z0-9-]*:$/;
+const CONFIG_KEY = /^[a-z][a-zA-Z0-9]*$/;
+function isConfigKeys(value) {
+    return isRecord(value) && Object.entries(value).every(([key, holds]) => CONFIG_KEY.test(key) && typeof holds === 'string' && holds.trim() !== '' && !holds.includes('\n'));
+}
 function kindsOf(declaration) {
     const kinds = declaration['kinds'];
     if (!Array.isArray(kinds) || kinds.length === 0 || new Set(kinds).size !== kinds.length) {
@@ -48,6 +69,7 @@ export function connectorDeclarationProblems(value) {
         ...shared,
         ...(kinds === undefined ? ['its kinds must list tracker, codehost or both, each once'] : strayKindProblems(kinds, value['manifest'])),
         ...(refPrefix !== undefined && REF_PREFIX.test(refPrefix) ? [] : ['its refPrefix must be a lower-case word ending in a colon']),
+        ...(isConfigKeys(value['configKeys']) ? [] : ['its configKeys must name each config key in camelCase beside one line on what it holds']),
     ];
 }
 export function isConnectorDeclaration(value) {
@@ -55,8 +77,8 @@ export function isConnectorDeclaration(value) {
 }
 /** What stops `value` from being a connector adapter's entry; empty when it is one. */
 export function connectorAdapterProblems(value) {
-    const entry = adapterEntry(value);
-    return entry === undefined ? ['its entry is not made by defineConnector: it needs a declaration and a create function'] : connectorDeclarationProblems(entry.declaration);
+    const entry = adapterEntry(value, 'configure');
+    return entry === undefined ? ['its entry is not made by defineConnector: it needs a declaration and a configure function'] : connectorDeclarationProblems(entry.declaration);
 }
 export function isConnectorAdapter(value) {
     return connectorAdapterProblems(value).length === 0;

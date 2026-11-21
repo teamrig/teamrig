@@ -1,4 +1,4 @@
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { activityRoutes } from "../../sync/activity.js";
 import { addedTasks } from "../../sync/auto.js";
@@ -26,7 +26,8 @@ import { pullThreads, recordClocks, repoThreads } from "./issue-clock.js";
 import { fieldRunOf } from "./issue-field-push.js";
 import { reserveHour, settleHour } from "./issue-push-hour.js";
 import { issuePush, pushEndLine, pushRepos } from "./issue-push.js";
-import { GITHUB_OFF, githubOff, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
 import { githubWatcher } from "../../sync/watcher.js";
 /** The rows of steps a repository prints; the rest are counted. */
 export const SHOWN_STEPS = 10;
@@ -62,8 +63,9 @@ export async function issueSync(args, runtime) {
     const kit = await openTeamKit(runtime);
     const config = requireConfig(kit, runtime, write ? 'write' : 'read');
     const say = (line) => runtime.out.stdout(line);
-    if (githubOff(runtime.env)) {
-        say(`OFF ${ENV.github}=${GITHUB_OFF} turns the GitHub import off on this machine; nothing was read or written`);
+    const offBy = githubOffBy(runtime.env);
+    if (offBy !== undefined) {
+        say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing was read or written`);
         return EXIT.ok;
     }
     if (config.github.repos.length === 0) {
@@ -79,7 +81,7 @@ export async function issueSync(args, runtime) {
     const claimRead = new Map();
     // github.repos is GitHub's list, so every repository it names is GitHub's: its issues on the tracker (host), its
     // pull requests, checks, posts and label file on the code host.
-    const { tracker: host, codeHost } = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp);
+    const { tracker: host, codeHost } = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors);
     const told = new Set();
     const ends = [];
     const added = [];

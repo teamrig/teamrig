@@ -10,6 +10,8 @@ import { pullNewsText } from "../../sync/pull-news.js";
 import { ourLogins } from "../../sync/trust.js";
 import { capAlerts, overCapLine, overCapPageText, securityLine, securityPageText, unpagedIssues, unpagedLine } from "../../sync/security-alert.js";
 import { errorMessage } from "../../core/guards.js";
+import { GITHUB_REPOS_HOST } from "../../issues/host.js";
+import { connectorOffBy } from "../connector-off.js";
 import { sendOwnerPage } from "../login-page.js";
 import { postLine } from "../../inbox/inbox.js";
 import { GITHUB_ACTOR } from "../../register/policy.js";
@@ -22,10 +24,12 @@ import { githubWatcher } from "../../sync/watcher.js";
  * and that run tells each owner's inbox the tasks it added, the lead's when the failing repositories change or an
  * outsider's issue is newly left out, and each session the pull request news of its share (pull-news.ts).
  */
-/** `TEAMRIG_GITHUB=off` turns the import off on this machine, whatever the team config says. */
-export const GITHUB_OFF = 'off';
-export function githubOff(env) {
-    return env[ENV.github]?.trim().toLowerCase() === GITHUB_OFF;
+/**
+ * The variable that turns the import off on this machine, whatever the team config says, for an OFF line to name, or
+ * undefined while it is on: its first switch, or the one every connector has (connector-off.ts).
+ */
+export function githubOffBy(env) {
+    return connectorOffBy(env, GITHUB_REPOS_HOST, [ENV.github]);
 }
 /** The lock around the sync state file, held while a finishing sync records its end. */
 function stateLock(runtime, kit, config, waitMs) {

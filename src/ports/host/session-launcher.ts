@@ -21,9 +21,34 @@ export interface SessionIdentity {
   readonly startedAs: string | undefined;
   /** The session's kind in the host's own word, kept as told for the same record; undefined when it tells none. */
   readonly sessionKind: string | undefined;
+  /**
+   * The host's own id of the session this run belongs to, which a tab's binding to a session of the team is kept
+   * by; undefined when the host tells none, as in the person's own shell.
+   */
+  readonly sessionId: string | undefined;
+}
+
+/**
+ * The environment variables a host tells a run about its session by, each by its name. They are names and no
+ * reading, as teamrig holds the variables of every host it ships with on a machine, whatever host runs the session.
+ */
+export interface SessionVariables {
+  /**
+   * The marks of an agent's run: each is set, to any value, in what the host's agent runs (its tools, what they run,
+   * its hooks) and in nothing the person starts themselves. teamrig tells an agent's run from the person's own by
+   * them, so a host names one at least.
+   */
+  readonly marks: readonly string[];
+  /**
+   * The other variables that say who the session is, such as its id and the folder it started in. A command line
+   * that changes one of them, or a mark, would run a command as someone else, so the exec guard holds them all.
+   */
+  readonly identity: readonly string[];
 }
 
 export interface SessionLauncher {
+  /** The variables the host tells a run about its session by, the ones its declaration names. */
+  readonly variables: SessionVariables;
   /** Who the host says this run is, in the environment the port was built for. */
   identity(): SessionIdentity;
 }

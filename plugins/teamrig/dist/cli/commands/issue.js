@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { ENV } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { issueRef } from "../../sync/map.js";
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from "../../issues/assign.js";
@@ -18,7 +17,8 @@ import { callerOf } from "../inputs.js";
 import { hostsOf } from "../issue-hosts.js";
 import { sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 import { set } from "./register.js";
 import { openTeam } from "./register-team.js";
 /**
@@ -394,9 +394,10 @@ async function hostsAfter(checked, runtime, posted) {
     if (refused !== undefined) {
         throw new RefusedError(refused);
     }
-    if (githubOff(runtime.env)) {
-        runtime.out.stdout(`OFF ${ENV.github}=${GITHUB_OFF} turns GitHub off on this machine; nothing was written`);
+    const offBy = githubOffBy(runtime.env);
+    if (offBy !== undefined) {
+        runtime.out.stdout(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was written`);
         return undefined;
     }
-    return hostsOf(kind, runtime, scanner, config.github.stamp);
+    return hostsOf(kind, runtime, scanner, config.github.stamp, config.connectors);
 }

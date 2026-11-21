@@ -15,7 +15,7 @@ import { CORE_RULE_KEYS, isCoreRuleKey } from "../rules/keys.js";
 import { isNeedKind, NEED_KINDS } from "../tabs/need-kind.js";
 import { DEFAULT_ALERTS, DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_COMMITS, DEFAULT_CONTEXT_FILES, DEFAULT_FREEZES, DEFAULT_DECISIONS, DEFAULT_DELIVERY_WAIT, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_PASS_ENV, DEFAULT_GITHUB, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_EXEC, DEFAULT_LOCK, DEFAULT_LEAD_BOUNDARY, DEFAULT_TURN_LOG, DEFAULT_NEEDS_YOU, DEFAULT_MEETING_NOTICES, DEFAULT_LOOPS, DEFAULT_MERGE_REMOTE, DEFAULT_MESSAGES, DEFAULT_HEADROOM, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_OWNER_GATES, DEFAULT_SECURITY_GATES, DEFAULT_COMMIT_GUARD, DEFAULT_DB_WRITE_GUARD, DEFAULT_SECRET_GUARD, DEFAULT_PACKAGE_GUARD, DEFAULT_PERMISSIONS, DEFAULT_PROMPTS, DEFAULT_PUSH_GUARD, DEFAULT_READONLY_SHELL, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_SCALE_OUT, DEFAULT_SESSION_SHARE, DEFAULT_SKILLS, DEFAULT_STATUS_LINE, DEFAULT_FOCUS, DEFAULT_TESTS, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_BRANCHES, DEFAULT_MEETING, QUEUE_TTL_MARGIN_MINUTES, } from "./defaults.js";
 import { isEffort, isModel } from "./launch.js";
-import { APPLY_FLAG_PATTERN, BUDGET_ACCOUNT_MAX_LENGTH, CLIENT_RECEIVER_PATTERN, CONFIG_LIMITS, DB_PROGRAM_NAME_PATTERN, DB_WRITE_ENTRYPOINT_LIMITS, DB_WRITE_NAME_LIMITS, GITHUB_LABEL_MAX_LENGTH, ISSUE_FIELD_NAME_MAX_LENGTH, MEETING_COLOUR_PATTERN, MEETING_HELD_TEXT_MAX_LENGTH, NODE_MODULE_PATTERN, REVIEW_PATH_LIMITS, RULE_CONFLICT_LIMITS, SERVICE_ROLE_LIMITS, } from "./limits.js";
+import { APPLY_FLAG_PATTERN, BUDGET_ACCOUNT_MAX_LENGTH, CLIENT_RECEIVER_PATTERN, CONNECTOR_LIMITS, CONFIG_LIMITS, DB_PROGRAM_NAME_PATTERN, DB_WRITE_ENTRYPOINT_LIMITS, DB_WRITE_NAME_LIMITS, GITHUB_LABEL_MAX_LENGTH, ISSUE_FIELD_NAME_MAX_LENGTH, MEETING_COLOUR_PATTERN, MEETING_HELD_TEXT_MAX_LENGTH, NODE_MODULE_PATTERN, REVIEW_PATH_LIMITS, RULE_CONFLICT_LIMITS, SERVICE_ROLE_LIMITS, } from "./limits.js";
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from "./migrate.js";
 import { ConfigReader, describe, isValidRegex, shortLine } from "./reader.js";
 import { AUTO_RESTART_LEAD, AD_HOC_RUNNERS, PACKAGE_INSTALLS, BURST_POLICIES, CONFLICT_WINNERS, DB_CLIENT_VOCABULARIES, DB_PROGRAM_SHAPES, DB_WRITES, ESCALATIONS, GOALS_MODES, isDbClientVocabulary, isDbProgramShape, isDbWrites, HIRING_POLICIES, isAdHocRunners, isPackageInstalls, isBurstPolicy, isCommitGate, isConflictWinner, isEffortLevel, isEscalation, isGoalsMode, isHiringPolicy, isOverAction, isHookAsks, isIdleLeaderKeep, isIdleMode, isOtherAreaListing, isPushToProtected, isReviewClass, isReviewPathMode, isRouteAllow, isSecretReads, isSecretWrites, isSkipHooks, isTerminalChoice, isExpiringResetKind, isResetKind, isReviewMode, isVerifyGate, isWeekday, RESET_KINDS, HOOK_ASKS, IDLE_LEADER_KEEPS, IDLE_MODES, OTHER_AREA_LISTINGS, OVER_ACTIONS, PUSH_TO_PROTECTED, REVIEW_CLASSES, REVIEW_PATH_MODES, ROUTE_ALLOWS, SECRET_READS, SECRET_WRITES, SKIP_HOOKS, TERMINALS, REVIEW_MODES, VERIFY_GATES, WEEKDAYS, isWipMode, WIP_MODES, } from "./types.js";
@@ -338,6 +338,7 @@ export function parseConfig(raw, above) {
         },
         github: parseGithub(read, read.section(raw, 'github', ''), sessions),
         serviceRoles: parseServiceRoles(read, read.section(raw, 'serviceRoles', ''), sessions),
+        connectors: parseConnectors(read, read.section(raw, 'connectors', '')),
         alerts: parseAlerts(read, read.section(raw, 'alerts', '')),
         decisions: {
             batchTimesUtc: read.stringList(decisions, 'batchTimesUtc', 'decisions', DEFAULT_DECISIONS.batchTimesUtc, isUtcTime, CONFIG_LIMITS.decisionBatchTimes.maxItems),
@@ -436,16 +437,20 @@ function isInQuietHours(time, quiet) {
     return minute !== undefined && start !== undefined && end !== undefined && isMinuteInSpan(minute, start, end);
 }
 /**
- * `wake`: a priority as the register numbers them, both waits bounded to a day at most, and a day start outside
- * the budget's quiet hours, where it would wake no one.
+ * `wake`: a priority as the register numbers them, the waits bounded to a day at most, a most gap no less than the
+ * least (else read as it), and a day start outside the budget's quiet hours, where it would wake no one.
  */
 function parseWake(read, raw, quietHours) {
-    const wake = {
-        enabled: read.boolean(raw, 'enabled', 'wake', DEFAULT_WAKE.enabled),
-        priority: read.integer(raw, 'priority', 'wake', DEFAULT_WAKE.priority, CONFIG_LIMITS.wakePriority),
-        batchSeconds: read.integer(raw, 'batchSeconds', 'wake', DEFAULT_WAKE.batchSeconds, CONFIG_LIMITS.wakeBatchSeconds),
-        minGapMinutes: read.integer(raw, 'minGapMinutes', 'wake', DEFAULT_WAKE.minGapMinutes, CONFIG_LIMITS.wakeMinGapMinutes),
-    };
+    const enabled = read.boolean(raw, 'enabled', 'wake', DEFAULT_WAKE.enabled);
+    const priority = read.integer(raw, 'priority', 'wake', DEFAULT_WAKE.priority, CONFIG_LIMITS.wakePriority);
+    const batchSeconds = read.integer(raw, 'batchSeconds', 'wake', DEFAULT_WAKE.batchSeconds, CONFIG_LIMITS.wakeBatchSeconds);
+    const minGapMinutes = read.integer(raw, 'minGapMinutes', 'wake', DEFAULT_WAKE.minGapMinutes, CONFIG_LIMITS.wakeMinGapMinutes);
+    // A team that raised only the least gap past the default most keeps one fixed gap, as before the most existed.
+    const maxGapMinutes = read.integer(raw, 'maxGapMinutes', 'wake', Math.max(DEFAULT_WAKE.maxGapMinutes, minGapMinutes), CONFIG_LIMITS.wakeMaxGapMinutes);
+    if (maxGapMinutes < minGapMinutes) {
+        read.report('wake.maxGapMinutes', `is less than wake.minGapMinutes (${minGapMinutes}); read as ${minGapMinutes}`);
+    }
+    const wake = { enabled, priority, batchSeconds, minGapMinutes, maxGapMinutes: Math.max(maxGapMinutes, minGapMinutes) };
     const dayStartUtc = read.optionalString(raw, 'dayStartUtc', 'wake', isUtcTime);
     if (dayStartUtc === undefined) {
         return wake;
@@ -630,6 +635,31 @@ function parseServiceRoles(read, raw, sessions) {
         }
     }
     return roles;
+}
+/**
+ * `connectors`: each connector's section under its id, kept as written. Only the shape is checked here (an id an
+ * adapter could declare, an object under it), since the keys are the connector's own and its adapter reports a wrong
+ * one when a command reaches it; a section under a bad id or of another type is an issue and is left out.
+ */
+function parseConnectors(read, raw) {
+    const ids = Object.keys(raw);
+    if (ids.length > CONNECTOR_LIMITS.maxConnectors) {
+        read.report('connectors', `names ${ids.length} connectors; at most ${CONNECTOR_LIMITS.maxConnectors}`);
+        return {};
+    }
+    const connectors = {};
+    for (const id of ids) {
+        const path = `connectors.${id}`;
+        if (!CONNECTOR_LIMITS.idPattern.test(id)) {
+            read.report(path, 'expected a connector id: lower-case words joined by -');
+            continue;
+        }
+        const section = read.objectItem(raw[id], path);
+        if (section !== undefined) {
+            connectors[id] = section;
+        }
+    }
+    return connectors;
 }
 /** A role's commands: a non-empty list of names from the table, each once; undefined when any is wrong. */
 function readServiceCommands(read, entry, path) {
@@ -1254,6 +1284,7 @@ function parseRegister(read, raw) {
         check: {
             staleAfterHours: read.integer(check, 'staleAfterHours', `${path}.check`, defaults.check.staleAfterHours, { min: 1 }),
             notPickedUpAfterHours: read.integer(check, 'notPickedUpAfterHours', `${path}.check`, defaults.check.notPickedUpAfterHours, { min: 1 }),
+            blockerOpenAfterHours: read.integer(check, 'blockerOpenAfterHours', `${path}.check`, defaults.check.blockerOpenAfterHours, { min: 1 }),
             prioritySkipAfterHours: read.integer(check, 'prioritySkipAfterHours', `${path}.check`, defaults.check.prioritySkipAfterHours, { min: 1 }),
             maxSelfMadePerDay: read.integer(check, 'maxSelfMadePerDay', `${path}.check`, defaults.check.maxSelfMadePerDay, CONFIG_LIMITS.maxSelfMadePerDay),
             goalProgressDays: read.integer(check, 'goalProgressDays', `${path}.check`, defaults.check.goalProgressDays, CONFIG_LIMITS.goalProgressDays),

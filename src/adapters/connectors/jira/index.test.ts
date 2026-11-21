@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { connectorAdapterProblems, stampCredit, type ConnectorPorts } from '../../../plugin-api/index.ts';
-import { connectorDeps } from '../../../testing/adapter-deps.ts';
+import { connectorDeps, portsOf } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
 import { textAdf } from './adf.ts';
@@ -22,7 +22,7 @@ interface Kit {
 function kit(stamp: boolean = true, saved: boolean = true): Kit {
   const http = new FakeHttp();
   const credentials = saved ? new FakeCredentials().saves('teamrig-jira-acme', 'someone@example.com:the-token') : new FakeCredentials();
-  return { ports: adapter.create(connectorDeps({ http, credentials, stamp })), http };
+  return { ports: portsOf(adapter, connectorDeps({ http, credentials, stamp })), http };
 }
 
 /** The tracker of `ports`; the spec fails when the adapter built none. */
@@ -51,6 +51,29 @@ describe('the Jira adapter', () => {
     const { ports } = kit();
     assert.deepEqual(Object.keys(ports), ['tracker']);
     assert.ok(ports.tracker instanceof JiraTracker);
+  });
+
+  it("reads its section of the team config: the issue type it names reaches the tracker (T4766)", async () => {
+    const http = new FakeHttp();
+    const credentials = new FakeCredentials().saves('teamrig-jira-acme', 'someone@example.com:the-token');
+    const ports = portsOf(adapter, connectorDeps({ http, credentials, stamp: false }), { site: 'acme', projects: ['ENG'], issueType: 'Bug' });
+    http.answers('GET', `${API}/issue/createmeta/ENG/issuetypes`, 200, '{"issueTypes":[{"id":"1","name":"Task"},{"id":"2","name":"Bug"}]}').answers('POST', `${API}/issue`, 201, '{"key":"ENG-3"}');
+    assert.deepEqual(await trackerOf(ports).open({ repo: REPO, title: 'A title', body: '', labels: [] }), { kind: 'opened', target: { repo: REPO, number: 3 } });
+    const posted = http.requests.at(-1);
+    if (posted === undefined || !('body' in posted) || posted.body === undefined) {
+      assert.fail('the issue was not posted');
+    }
+    const body: unknown = JSON.parse(posted.body);
+    assert.deepEqual(body, { fields: { project: { key: 'ENG' }, summary: 'A title', issuetype: { id: '2' } } });
+  });
+
+  it('reports a key of its section it does not take, and one it cannot read, each by its name (T4766)', () => {
+    const problems: string[] = [];
+    adapter.configure({ site: 'acme.atlassian.net', board: 7 }, (key, problem) => problems.push(`${key} ${problem}`));
+    assert.deepEqual(problems, [
+      `board is no key of the ${declaration.name} connector; it takes site, projects, issueType`,
+      'site must be the site\'s name, the part before .atlassian.net (acme for acme.atlassian.net), not "acme.atlassian.net"',
+    ]);
   });
 
   it('reaches Jira through the HTTP client and the credential store it is handed', async () => {

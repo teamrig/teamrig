@@ -47,10 +47,12 @@ export const DEFAULT_REGISTER = {
      * 3 at the median and 9 at the 90th percentile; the two days past 10 (36 and 19) were the run that raised the question.
      * goalProgressDays: a working day that moves no planned task is the drift to catch the next morning.
      * overSizeMultiple: the old register flagged a task whose cost passed twice its estimate (T327).
+     * blockerOpenAfterHours: a blocker is fixed now, so half a working day unfixed is the time to ask why (T4329).
      */
     check: {
         staleAfterHours: 72,
         notPickedUpAfterHours: 24,
+        blockerOpenAfterHours: 4,
         prioritySkipAfterHours: 24,
         maxSelfMadePerDay: 10,
         goalProgressDays: 1,
@@ -208,7 +210,7 @@ export const DEFAULT_MEETING_NOTICES = {
  * caps a session at 4 an hour however much is handed. No day start: waking every session each morning costs up to
  * 210k W each, so a team opts in with `wake.dayStartUtc`.
  */
-export const DEFAULT_WAKE = { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15 };
+export const DEFAULT_WAKE = { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15, maxGapMinutes: 30 };
 /**
  * The agenda panel is on: it shows only in the lead's tab while a meeting is open, so it costs no other tab anything.
  * The spotlight is on too, by the owner's call (T2523): it keeps the owner's eye on the meeting, lets every click

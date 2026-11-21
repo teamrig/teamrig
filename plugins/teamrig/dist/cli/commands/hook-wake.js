@@ -317,6 +317,7 @@ async function decide(runtime, scope, store, fresh, login) {
             parking: parkRulesOf(config),
             batchMs,
             minGapMs: config.wake.minGapMinutes * MINUTE_MS,
+            maxGapMs: config.wake.maxGapMinutes * MINUTE_MS,
             previous: await store.read(id),
         });
         const handed = decision.verdict.kind === 'wake' || asked.kind === 'wake';

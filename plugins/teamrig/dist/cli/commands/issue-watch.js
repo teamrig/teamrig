@@ -10,7 +10,8 @@ import { fileLockOf } from "../file-locks.js";
 import { hostsOf } from "../issue-hosts.js";
 import { openTeamKit, requireConfig } from "../kit.js";
 import { EXIT } from "../runtime.js";
-import { GITHUB_OFF, githubOff } from "./issue-sync-auto.js";
+import { CONNECTOR_OFF } from "../connector-off.js";
+import { githubOffBy } from "./issue-sync-auto.js";
 import { issueSync } from "./issue-sync.js";
 /**
  * `issue watch`: the team's one watch on its GitHub repositories, started hidden by the hooks (`ensureWatch`). Every
@@ -25,8 +26,9 @@ const HOUR_MS = 3_600_000;
 const AUTO_SYNC = { command: 'issue sync', positionals: [], flags: new Map(), switches: new Set(['auto']), rest: [], help: false, common: new Map() };
 /** Why no watch runs for this config and machine, or undefined when one should. */
 export function watchOffReason(config, env) {
-    if (githubOff(env)) {
-        return `${ENV.github}=${GITHUB_OFF} turns the GitHub import off on this machine`;
+    const offBy = githubOffBy(env);
+    if (offBy !== undefined) {
+        return `${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine`;
     }
     if (config.github.repos.length === 0) {
         return 'no repository is listed under github.repos';
@@ -183,7 +185,7 @@ async function anySessionRuns(runtime, kit, config) {
 /** Probes every repository: changed when any did (with the marks to keep once synced), else failed when one failed. */
 async function probeRound(runtime, config, marks) {
     // The probe goes over github.repos, GitHub's list, and asks its tracker.
-    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp)).tracker;
+    const host = (await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors)).tracker;
     const pending = new Map();
     let failed = false;
     for (const repo of config.github.repos) {

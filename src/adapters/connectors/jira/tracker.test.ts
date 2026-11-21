@@ -6,7 +6,7 @@ import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
 import { JiraClient } from './client.ts';
 import { NOT_BUILT } from './declaration.ts';
-import { COMMENT_PAGE, JiraTracker, MAX_PAGES, PAGE_SIZE } from './tracker.ts';
+import { COMMENT_PAGE, JiraTracker, LISTED_TYPES, MAX_PAGES, PAGE_SIZE } from './tracker.ts';
 
 const API = 'https://acme.atlassian.net/rest/api/3';
 const SEARCH = `${API}/search/jql`;
@@ -24,12 +24,12 @@ interface Kit {
   readonly http: FakeHttp;
 }
 
-/** A tracker of site `acme`, its credential saved unless `saved` is false. */
-function kit(stamp: boolean = false, saved: boolean = true): Kit {
+/** A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config names. */
+function kit(stamp: boolean = false, saved: boolean = true, issueType?: string): Kit {
   const http = new FakeHttp();
   const credentials = saved ? new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token') : new FakeCredentials();
   const client = new JiraClient(http, credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
-  return { tracker: new JiraTracker(client, stamp), http };
+  return { tracker: new JiraTracker(client, stamp, issueType), http };
 }
 
 function parsedJson(text: string): unknown {
@@ -795,6 +795,39 @@ describe('opening a Jira issue (T4754)', () => {
     assert.deepEqual(await tracker.open(BARE), NO_PROJECT);
     assert.deepEqual(await tracker.open(BARE), failed('Jira names no issue type the sign-in may open an issue of ENG as'));
     assert.equal(http.requests.length, 2);
+  });
+
+  it("opens the issue as the type the team's config names, and opens none when the project lacks it, naming those it has (T4766)", async () => {
+    const named = kit(false, true, 'epic');
+    named.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('POST', CREATE, 201, OPENED);
+    assert.deepEqual(await named.tracker.open(BARE), { kind: 'opened', target: { repo: REPO, number: 24 } });
+    assert.deepEqual(sent(named.http), [
+      ['GET', '/issue/createmeta/ENG/issuetypes'],
+      ['POST', '/issue', { fields: { ...BARE_FIELDS, issuetype: { id: '10000' } } }],
+    ]);
+
+    const lacking = kit(false, true, 'Bug');
+    lacking.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('GET', TYPES, 200, '{"issueTypes":[]}');
+    assert.deepEqual(
+      await lacking.tracker.open(BARE),
+      failed('ENG has no issue type "Bug" the sign-in may open an issue as (it has Epic, Task): name one of them in connectors.jira.issueType'),
+    );
+    assert.deepEqual(
+      await lacking.tracker.open(BARE),
+      failed('ENG has no issue type "Bug" the sign-in may open an issue as (it has none): name one of them in connectors.jira.issueType'),
+    );
+    assert.equal(lacking.http.requests.length, 2);
+  });
+
+  it("makes Jira's type names plain lines and lists at most LISTED_TYPES of them when the named type is missing", async () => {
+    const lacking = kit(false, true, 'Bug');
+    const many = Array.from({ length: LISTED_TYPES + 3 }, (_, at) => ({ id: `${20000 + at}`, name: at === 0 ? 'Ta\nsk\u0007' : `T${at}` }));
+    lacking.http.answers('GET', TYPES, 200, JSON.stringify({ issueTypes: many }));
+    const listed = ['Ta sk', ...Array.from({ length: LISTED_TYPES - 1 }, (_, at) => `T${at + 1}`)].join(', ');
+    assert.deepEqual(
+      await lacking.tracker.open(BARE),
+      failed(`ENG has no issue type "Bug" the sign-in may open an issue as (it has ${listed} and 3 more): name one of them in connectors.jira.issueType`),
+    );
   });
 
   it('passes on why Jira opened none, and fails on an answer that names no issue of the project', async () => {

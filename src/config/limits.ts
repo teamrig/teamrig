@@ -63,6 +63,7 @@ export const CONFIG_LIMITS = {
   wakePriority: { min: 1, max: 99 },
   wakeBatchSeconds: { min: 0, max: 3600 },
   wakeMinGapMinutes: { min: 0, max: 1440 },
+  wakeMaxGapMinutes: { min: 0, max: 1440 },
   maxFailureChars: { min: 500, max: 50_000 },
   githubRepos: { maxItems: 20, maxLength: 140 },
   issueTypeNames: { maxItems: 5, maxLength: 100 },
@@ -202,6 +203,16 @@ export const ISSUE_FIELD_NAME_MAX_LENGTH = 100;
 export const SERVICE_ROLE_LIMITS = {
   maxRoles: 16,
   namePattern: /^[a-z][a-z0-9-]{0,31}$/,
+} as const;
+
+/**
+ * Bounds on `connectors`: how many connectors a team gives a section, and the shape of a connector's id. The id is
+ * the one a connector adapter declares, so the pattern is the plugin API's (plugin-api/declaration.ts), written again
+ * here because the config reads nothing of that API; a spec holds the two equal.
+ */
+export const CONNECTOR_LIMITS = {
+  maxConnectors: 16,
+  idPattern: /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/,
 } as const;
 
 /** Bounds on the fields of one review gate entry (`pushGuard.reviewPaths`). */

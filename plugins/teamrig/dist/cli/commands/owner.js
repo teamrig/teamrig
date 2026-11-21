@@ -1,7 +1,7 @@
 import { formatAddress } from "../../core/address.js";
-import { ENV, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
+import { refuseUnlessPerson } from "../agent-run.js";
 import { onePositional } from "../args.js";
-import { underClaudeCode } from "../claude-code-env.js";
 import { taskRefOf } from "../inputs.js";
 import { findTeam, openKit } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
@@ -17,16 +17,15 @@ export function namesOf(label) {
 /** The pane button that runs each owner action. */
 const BUTTON = { note: 'Note', next: 'Next', wake: 'Wake' };
 /**
- * Refuses an owner action (note, next, wake) where Claude Code set CLAUDECODE: an agent's tool call, a script one
- * runs, a hook command (T1780). The exec guard reads only the tool call's own line, so a script the agent writes slips past it; this
- * refusal holds there too. The pane's buttons and a typed `/teamrig owner ..` run through the plugin's mod with Claude
- * Code's own environment, which lacks the variable, so the owner's routes still write. A script that unsets it still
- * passes: every session runs as the same OS user as the owner.
+ * Refuses an owner action (note, next, wake) in any run but the person's own (`runBy`): where a host set its mark,
+ * which is an agent's tool call, a script one runs or a hook command (T1780), and on a host that names no mark. The
+ * exec guard reads only the tool call's own line, so a script the agent writes slips past it; this refusal holds
+ * there too. The pane's buttons and a typed `/teamrig owner ..` run through the plugin's mod with the host's own
+ * environment, which lacks the mark, so the owner's routes still write. A script that unsets it still passes: every
+ * session runs as the same OS user as the owner.
  */
-export function refuseUnderClaudeCode(runtime, command) {
-    if (underClaudeCode(runtime)) {
-        throw new RefusedError(`${KIT_NAME} owner ${command} acts as the owner, so it is refused where Claude Code runs it (${ENV.claudeCode} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`);
-    }
+export function refuseUnlessOwner(runtime, command) {
+    refuseUnlessPerson(runtime, `${KIT_NAME} owner ${command}`, (mark) => `${KIT_NAME} owner ${command} acts as the owner, so it is refused where Claude Code runs it (${mark} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`);
 }
 /** The team holding the task `text` names: the caller's own for `T12`, another team of the tree for `web/T12`. */
 async function targetOf(runtime, text, access) {
@@ -70,10 +69,11 @@ export function ownerNextPreviewLine(owner, lead, { task, moves }, names) {
 /**
  * `owner note <[team/]T<id>> --text ".."`: the owner's free text on a task, pressed in the pane (T1298). It is kept in
  * the task's history as the owner's (register.ownerSource), never as a session's, and sent to the task's session as an
- * inbox line that wakes it only while the task is in progress. Refused on a done or dropped task, and under CLAUDECODE.
+ * inbox line that wakes it only while the task is in progress. Refused on a done or dropped task, and in any run but
+ * the person's own (refuseUnlessOwner).
  */
 export async function ownerNote(args, runtime) {
-    refuseUnderClaudeCode(runtime, 'note');
+    refuseUnlessOwner(runtime, 'note');
     const target = await targetOf(runtime, onePositional(args, '[team/]T<id>'), 'write');
     const { team, names } = target;
     const owner = team.config.register.ownerSource;
@@ -98,12 +98,12 @@ export async function ownerNote(args, runtime) {
  * above every other task on its session's list (moving that session's earlier pin), wakes the session to start it once
  * the step in hand is done, and tells the team's lead without a wake. `--preview` prints what it would do and writes
  * nothing, for the pane's confirm step. Refused on a done, dropped or in-progress task, or one the owner put next already,
- * and, but for `--preview`, under CLAUDECODE.
+ * and, but for `--preview`, where the host does not say the person runs it (`refuseUnlessPerson`).
  */
 export async function ownerNext(args, runtime) {
     const preview = args.switches.has('preview');
     if (!preview) {
-        refuseUnderClaudeCode(runtime, 'next');
+        refuseUnlessOwner(runtime, 'next');
     }
     const target = await targetOf(runtime, onePositional(args, '[team/]T<id>'), preview ? 'read' : 'write');
     const { team, names } = target;

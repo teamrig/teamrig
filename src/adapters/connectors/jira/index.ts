@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { defineConnector } from '../../../plugin-api/index.ts';
 import { JiraClient } from './client.ts';
+import { parseJiraConfig } from './config.ts';
 import { declaration } from './declaration.ts';
 import { JiraTracker } from './tracker.ts';
 
@@ -11,5 +12,6 @@ import { JiraTracker } from './tracker.ts';
  */
 export default defineConnector({
   declaration,
-  create: (deps) => ({ tracker: new JiraTracker(new JiraClient(deps.http, deps.credentials, deps.scanner, sleep, Math.random), deps.stamp) }),
+  parseConfig: parseJiraConfig,
+  create: (deps, config) => ({ tracker: new JiraTracker(new JiraClient(deps.http, deps.credentials, deps.scanner, sleep, Math.random), deps.stamp, config.issueType) }),
 });
