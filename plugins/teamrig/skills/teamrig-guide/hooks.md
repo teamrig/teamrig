@@ -461,8 +461,8 @@ allow, in a mode that asks, or a check of its own that always asks): `hook promp
   `teamrig worktree remove` (no `--base`), a register or inbox command (`start`, `add`, `set`, `list`, `inbox`...), a
   `git commit` with its hooks running (only `-a -s -q -m -F` and paths), or a `git push [-u] [-q] <remote> <branch>`
   of a task branch you own (`t<id>-...`) to a remote the repository names, never a protected branch, and only while
-  git pushes it to the remote branch of its own name. A rebased branch goes back to that same branch and pull request
-  this way too: `--force-with-lease` (alone, or `=<that branch>[:<object name>]`) and `--force-if-includes` are taken,
+  git pushes it to the remote branch of its own name. A rebased branch goes back to that same branch, so its review
+  updates, this way too: `--force-with-lease` (alone, or `=<that branch>[:<object name>]`) and `--force-if-includes` are taken,
   never `-f`, `--force` or a `+` refspec, nor a lease on another ref. Where git would send it elsewhere,
   a `remote.<name>.push` refspec, or a `push.default` of a `remote.<name>.push` refspec, or a `push.default` of
   `upstream` or `tracking` (which sends it to its upstream, `origin/main` for a branch cut from it), keeps the
