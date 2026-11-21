@@ -32,7 +32,7 @@ import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hostsOf, reposOf } from '../issue-hosts.ts';
 import { openTeamKit, requireConfig } from '../kit.ts';
-import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { teamRegister } from '../team-register.ts';
 import type { Thread } from '../../sync/clock.ts';
 import type { HostIssue } from '../../issues/issue.ts';
@@ -43,7 +43,8 @@ import { reserveHour, settleHour } from './issue-push-hour.ts';
 import { issuePush, pushEndLine, pushRepos } from './issue-push.ts';
 import { CONNECTOR_OFF } from '../connector-off.ts';
 import { githubOffBy, readSyncState, reportAutoSync } from './issue-sync-auto.ts';
-import { leftOutLines, previewLines, refusedReason, resultLines, type RepoEnd } from './issue-sync-lines.ts';
+import { leftOutLines, previewLines, refusedReason, resultLines, syncExit, type RepoEnd } from './issue-sync-lines.ts';
+import { NO_TRACKER_SYNC, syncTrackers } from './tracker-sync.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
 
 /**
@@ -60,8 +61,11 @@ import { githubWatcher } from '../../sync/watcher.ts';
  * `--auto` read of them (pull-news.ts): a PULL NEWS line per session names what happened since, but only `--auto`
  * keeps what it read and tells each session's inbox, so a run by hand changes nothing there. `--auto` also reads each
  * repository's posts changed since its last read and routes each new mention of one of ours to a session
- * (mention-route.ts); a run by hand reads none. Exit 1 when a repository could not be read (its tasks stay as they are,
- * and its pull request and mention watches), 2 when the register refused a step, else 0.
+ * (mention-route.ts); a run by hand reads none. First, unless `--repo` is given, it imports the issues of every other
+ * tracker the team's `connectors` map names (tracker-sync.ts, Jira), each written as its own source, even when GitHub's
+ * import is off; their failures and added tasks join GitHub's for `--auto`'s report. Exit 1 when a repository or
+ * another tracker's place could not be read (its tasks stay as they are, and its pull request and mention watches), 2
+ * when the register refused a step or another tracker's section, else 0.
  */
 export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -76,19 +80,21 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   const kit = await openTeamKit(runtime);
   const config = requireConfig(kit, runtime, write ? 'write' : 'read');
   const say = (line: string): void => runtime.out.stdout(line);
-  const offBy = githubOffBy(runtime.env);
-  if (offBy !== undefined) {
-    say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing was read or written`);
-    return EXIT.ok;
-  }
-  if (config.github.repos.length === 0) {
-    say('OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing was read or written');
-    return EXIT.ok;
-  }
   const register = teamRegister(runtime, kit.paths, config);
   const rules = importRules(config);
   const started = runtime.clock.now();
   const since = closedSince(new Date(started), config.github.closedDays);
+  // --repo names one GitHub repository, so a run given it reads no other tracker.
+  const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, write }, say);
+  const offBy = githubOffBy(runtime.env);
+  if (offBy !== undefined) {
+    say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing of it was read or written`);
+    return syncExit(others.ends);
+  }
+  if (config.github.repos.length === 0) {
+    say('OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written');
+    return syncExit(others.ends);
+  }
   const pushing = auto && config.github.statusPush;
   /** The issues of each repository read, for the claim pass, which writes to GitHub only when the run pushes. */
   const claimRead = new Map<string, readonly HostIssue[]>();
@@ -96,9 +102,9 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   // pull requests, checks, posts and label file on the code host.
   const { tracker: host, codeHost } = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors);
   const told = new Set<string>();
-  const ends: RepoEnd[] = [];
-  const added: AddedTask[] = [];
-  const failures: RepoFailure[] = [];
+  const ends: RepoEnd[] = [...others.ends];
+  const added: AddedTask[] = [...others.added];
+  const failures: RepoFailure[] = [...others.failures];
   const leftOut = new Map<string, readonly number[]>();
   const unread = new Set<string>();
   const last = await readSyncState(runtime, kit);
@@ -284,7 +290,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
       ? `WROTE ${written} change(s) to the task list as ${GITHUB_ACTOR}${pushing ? '' : '; GitHub was only read'}`
       : `PREVIEW nothing was written; ${KIT_NAME} issue sync --yes writes the above as ${GITHUB_ACTOR}`,
   );
-  return ends.includes('failed') ? EXIT.failed : ends.includes('refused') ? EXIT.refused : EXIT.ok;
+  return syncExit(ends);
 }
 
 /** One repository's pull request read: the lines it prints, and why it failed or what it read and the events since the last read. */

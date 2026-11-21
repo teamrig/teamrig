@@ -166,13 +166,13 @@ describe('teamrig issue sync', () => {
   it('reads nothing when the machine or the team has it off', async () => {
     const gh = twoIssues();
     assert.deepEqual(await expectRun(new CliHarness(GITHUB_TEAM), ['issue', 'sync', '--yes'], gh, EXIT.ok, { TEAMRIG_GITHUB: ' OFF ' }), [
-      'OFF TEAMRIG_GITHUB=off turns the GitHub import off on this machine; nothing was read or written',
+      'OFF TEAMRIG_GITHUB=off turns the GitHub import off on this machine; nothing of it was read or written',
     ]);
     assert.deepEqual(await expectRun(new CliHarness(GITHUB_TEAM), ['issue', 'sync', '--yes'], gh, EXIT.ok, { TEAMRIG_CONNECTOR_GITHUB: 'off' }), [
-      'OFF TEAMRIG_CONNECTOR_GITHUB=off turns the GitHub import off on this machine; nothing was read or written',
+      'OFF TEAMRIG_CONNECTOR_GITHUB=off turns the GitHub import off on this machine; nothing of it was read or written',
     ]);
     assert.deepEqual(await expectRun(new CliHarness(), ['issue', 'sync', '--repo', 'acme/web'], gh, EXIT.ok), [
-      'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing was read or written',
+      'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written',
     ]);
     assert.equal(gh.ran.length, 0);
   });

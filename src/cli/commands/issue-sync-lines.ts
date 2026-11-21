@@ -1,9 +1,15 @@
 import { priorityText } from '../../register/model.ts';
 import type { SyncPlan, SyncStep } from '../../sync/plan.ts';
 import type { StepOutcome } from '../../sync/sync.ts';
+import { EXIT, type ExitCode } from '../runtime.ts';
 
 /** How the sync of one repository ended, for the exit code. */
 export type RepoEnd = 'ok' | 'failed' | 'refused';
+
+/** A sync's exit: failed when a place could not be read, else refused when the register refused a step, else ok. */
+export function syncExit(ends: readonly RepoEnd[]): ExitCode {
+  return ends.includes('failed') ? EXIT.failed : ends.includes('refused') ? EXIT.refused : EXIT.ok;
+}
 
 /** The rows of steps a repository prints; the rest are counted. */
 export const SHOWN_STEPS = 10;
