@@ -93,7 +93,7 @@ describe('judgeGuard', () => {
       const verdict = judgeGuard('secret-guard', { kind: 'answered', code, stdout: [DENY] });
       assert.equal(verdict.exitCode, 2);
       assert.equal(verdict.stdout, '');
-      assert.match(verdict.stderr, new RegExp(`^teamrig blocked this call: its secret-guard guard ended with exit ${code}, and a guard that cannot answer must not let a call through\\. Fix: run \`claude plugin update teamrig@teamrig\``));
+      assert.match(verdict.stderr, new RegExp(`^teamrig blocked this call: its secret-guard guard ended with exit ${code}, and a guard that cannot answer must not let a call through\\. Fix: update the teamrig plugin and restart the session; if that does not clear it, tell your lead\\.\\n$`));
     }
   });
 

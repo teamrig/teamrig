@@ -1949,7 +1949,7 @@ guard entry is no second way into the CLI's commands.
 The model then reads `teamrig blocked this call: its <hook> guard <what went wrong>, and a guard that cannot answer
 must not let a call through. Fix: ...` ([errors](errors.md#a-blocked-tool-call)). So a broken install blocks every
 call those guards see (shell lines, reads, searches, edits, sends, helper launches and the question picker) until
-`claude plugin update teamrig@teamrig` and a restart of the session. `hook readonly-allow`, `hook route-allow` and
+an update of the teamrig plugin and a restart of the session. `hook readonly-allow`, `hook route-allow` and
 `hook tab-status` run through the plain CLI: when an allow fails, the call gets Claude Code's own check, and tab
 status never answers for a call.
 
