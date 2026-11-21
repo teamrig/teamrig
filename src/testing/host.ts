@@ -86,6 +86,15 @@ export function hostRunning(program: string): HostSource {
   return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), isSessionProcess: (process) => process.name === program } });
 }
 
+/**
+ * The shipped host, its sessions started by the program named `program` with the arguments `launchArgs` spells, the
+ * shipped host's own unless given: for a spec of a command that must ask the host what starts a session and know no
+ * host's program or flag itself.
+ */
+export function hostStarting(program: string, launchArgs: SessionLauncher['launchArgs'] = shippedLauncher().launchArgs): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), program, launchArgs } });
+}
+
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
 export const NO_MARK_HOST: HostSource = hostNaming({ marks: [], identity: [] });
 

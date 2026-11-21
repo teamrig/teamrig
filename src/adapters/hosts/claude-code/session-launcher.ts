@@ -1,6 +1,7 @@
 import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
+import { launchArgs, PROGRAM } from './launch-args.ts';
 import { isSessionProcess } from './session-process.ts';
 import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './session-variables.ts';
 
@@ -19,6 +20,8 @@ function told(env: HostDeps['env'], name: string): string | undefined {
 export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
   return {
     programName: declaration.name,
+    program: PROGRAM,
+    launchArgs,
     variables: SESSION_VARIABLES,
     childEnv: CHILD_ENVIRONMENT,
     identity: () => ({

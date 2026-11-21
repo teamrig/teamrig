@@ -164,6 +164,28 @@ export function sessionVariablesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHo
   };
 }
 
+/**
+ * The running host's session launcher, for a command that starts or resumes a session: the session it starts is one
+ * of the host the run works in, whatever other host's sessions the machine holds. A host that tells nothing of its
+ * sessions refuses with its own reason, as `transcriptsOf` does.
+ */
+export function launcherOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): SessionLauncher {
+  const { launcher } = hostOf(runtime);
+  if (isUnsupported(launcher)) {
+    throw new RefusedError(launcher.notice);
+  }
+  return launcher;
+}
+
+/**
+ * The running host's session launcher, or undefined on a host that tells nothing of its sessions: for a caller that
+ * goes on without the host's program, such as a hook that must never answer by a refusal.
+ */
+export function launcherIfTold(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): SessionLauncher | undefined {
+  const { launcher } = hostOf(runtime);
+  return isUnsupported(launcher) ? undefined : launcher;
+}
+
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly SessionLauncher[] {
   const seen = { env: runtime.env, platform: runtime.platform };

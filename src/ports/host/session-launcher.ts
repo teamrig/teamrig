@@ -1,7 +1,7 @@
 /**
  * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
- * host says a run is, what a child inherits of a session and which process runs one; a launch, a resume and a wake
- * join it as each moves out of the core.
+ * host says a run is, what a child inherits of a session, which process runs one, and the program and arguments that
+ * start or resume one; a wake joins it as it moves out of the core.
  */
 
 /**
@@ -80,12 +80,41 @@ export interface RunningProgram {
   readonly commandLine: string;
 }
 
+/**
+ * How a session of the host is to start, each part in teamrig's own terms: the host spells it its own way. A part
+ * left undefined is the host's to pick.
+ */
+export interface SessionStart {
+  /** The name the host shows the session under. */
+  readonly name: string | undefined;
+  /** The model the session runs on; undefined keeps the host's own default. */
+  readonly model: string | undefined;
+  /** The effort it works at; undefined keeps the host's own. */
+  readonly effort: string | undefined;
+  /** The host's id of an earlier session to go on in; undefined starts a new one. */
+  readonly resume: string | undefined;
+  /** A file of the host's settings to load over the person's own for this session; undefined loads none. */
+  readonly settingsFile: string | undefined;
+  /** The first prompt, sent as the session starts; undefined waits for the person. */
+  readonly prompt: string | undefined;
+}
+
 export interface SessionLauncher {
   /**
    * The host program's name as people know it, such as `Claude Code`: what a commit stamp names. The core sees no
-   * adapter's declaration, so the port carries the name itself.
+   * adapter's declaration, so the port carries the name itself. `program` is its file name.
    */
   readonly programName: string;
+  /**
+   * The file name of the host's own program as a shell finds it on PATH, with no folder and no extension. teamrig
+   * looks for it there itself, the way it finds any program, and starts it with `launchArgs`.
+   */
+  readonly program: string;
+  /**
+   * The arguments that start the host's program in a session as `start` says, to follow the program itself. Each
+   * is handed to the program as it is, through no shell.
+   */
+  launchArgs(start: SessionStart): readonly string[];
   /** The variables the host tells a run about its session by, the ones its declaration names. */
   readonly variables: SessionVariables;
   /** The variables the host sets for a session, by what a new session or a queued step may inherit of them. */
