@@ -668,8 +668,13 @@ export interface WakeConfig {
   readonly priority: number;
   /** How long a wake waits after the first new task it is for, so tasks handed together wake the session once. */
   readonly batchSeconds: number;
-  /** The least time between two wakes of one session; work handed meanwhile waits and wakes it once. */
+  /**
+   * The least time between two wakes of one session, for one task due; work handed meanwhile waits and wakes it once.
+   * A blocker skips it.
+   */
   readonly minGapMinutes: number;
+  /** The gap once five tasks or more are due, stepped evenly from `minGapMinutes`; read as that when it is less. */
+  readonly maxGapMinutes: number;
   /**
    * The day's start (`HH:MM` UTC, outside the budget's quiet hours): from then each session with work it can start,
    * of any priority, that has had no turn since gets one wake that day, and a burst wakes its sessions the same way

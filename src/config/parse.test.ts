@@ -329,12 +329,21 @@ describe('parseConfig', () => {
   });
 
   it('reads wake, on for p1 by default, and refuses a priority under 1 or waits past their bounds', () => {
-    assert.deepEqual(parseConfig(ROSTER).config.wake, { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15 });
-    const own = { enabled: false, priority: 2, batchSeconds: 0, minGapMinutes: 0 };
+    assert.deepEqual(parseConfig(ROSTER).config.wake, { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15, maxGapMinutes: 30 });
+    const own = { enabled: false, priority: 2, batchSeconds: 0, minGapMinutes: 0, maxGapMinutes: 0 };
     assert.deepEqual(parseConfig({ ...ROSTER, wake: own }).config.wake, own);
-    const { config, issues } = parseConfig({ ...ROSTER, wake: { priority: 0, batchSeconds: 3601, minGapMinutes: 1441 } });
-    assert.deepEqual(paths(issues), ['wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes']);
+    const { config, issues } = parseConfig({ ...ROSTER, wake: { priority: 0, batchSeconds: 3601, minGapMinutes: 1441, maxGapMinutes: 1441 } });
+    assert.deepEqual(paths(issues), ['wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes', 'wake.maxGapMinutes']);
     assert.deepEqual(config.wake, DEFAULT_WAKE);
+  });
+
+  it('reads wake.maxGapMinutes, at least the least gap, and reads one below it as the least (T4852)', () => {
+    assert.equal(parseConfig({ ...ROSTER, wake: { minGapMinutes: 10, maxGapMinutes: 45 } }).config.wake.maxGapMinutes, 45);
+    assert.equal(parseConfig({ ...ROSTER, wake: { minGapMinutes: 40 } }).config.wake.maxGapMinutes, 40, 'a least gap past the default most keeps one gap');
+    const { config, issues } = parseConfig({ ...ROSTER, wake: { minGapMinutes: 20, maxGapMinutes: 10 } });
+    assert.deepEqual(paths(issues), ['wake.maxGapMinutes']);
+    assert.match(issues[0]?.message ?? '', /less than wake\.minGapMinutes \(20\); read as 20/);
+    assert.equal(config.wake.maxGapMinutes, 20);
   });
 
   it('reads meeting.panel.enabled, on by default, and refuses a value that is not a boolean (T2512)', () => {

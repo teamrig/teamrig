@@ -716,16 +716,20 @@ function isInQuietHours(time: string, quiet: QuietHours): boolean {
 }
 
 /**
- * `wake`: a priority as the register numbers them, both waits bounded to a day at most, and a day start outside
- * the budget's quiet hours, where it would wake no one.
+ * `wake`: a priority as the register numbers them, the waits bounded to a day at most, a most gap no less than the
+ * least (else read as it), and a day start outside the budget's quiet hours, where it would wake no one.
  */
 function parseWake(read: ConfigReader, raw: JsonRecord, quietHours: QuietHours | undefined): WakeConfig {
-  const wake: WakeConfig = {
-    enabled: read.boolean(raw, 'enabled', 'wake', DEFAULT_WAKE.enabled),
-    priority: read.integer(raw, 'priority', 'wake', DEFAULT_WAKE.priority, CONFIG_LIMITS.wakePriority),
-    batchSeconds: read.integer(raw, 'batchSeconds', 'wake', DEFAULT_WAKE.batchSeconds, CONFIG_LIMITS.wakeBatchSeconds),
-    minGapMinutes: read.integer(raw, 'minGapMinutes', 'wake', DEFAULT_WAKE.minGapMinutes, CONFIG_LIMITS.wakeMinGapMinutes),
-  };
+  const enabled = read.boolean(raw, 'enabled', 'wake', DEFAULT_WAKE.enabled);
+  const priority = read.integer(raw, 'priority', 'wake', DEFAULT_WAKE.priority, CONFIG_LIMITS.wakePriority);
+  const batchSeconds = read.integer(raw, 'batchSeconds', 'wake', DEFAULT_WAKE.batchSeconds, CONFIG_LIMITS.wakeBatchSeconds);
+  const minGapMinutes = read.integer(raw, 'minGapMinutes', 'wake', DEFAULT_WAKE.minGapMinutes, CONFIG_LIMITS.wakeMinGapMinutes);
+  // A team that raised only the least gap past the default most keeps one fixed gap, as before the most existed.
+  const maxGapMinutes = read.integer(raw, 'maxGapMinutes', 'wake', Math.max(DEFAULT_WAKE.maxGapMinutes, minGapMinutes), CONFIG_LIMITS.wakeMaxGapMinutes);
+  if (maxGapMinutes < minGapMinutes) {
+    read.report('wake.maxGapMinutes', `is less than wake.minGapMinutes (${minGapMinutes}); read as ${minGapMinutes}`);
+  }
+  const wake: WakeConfig = { enabled, priority, batchSeconds, minGapMinutes, maxGapMinutes: Math.max(maxGapMinutes, minGapMinutes) };
   const dayStartUtc = read.optionalString(raw, 'dayStartUtc', 'wake', isUtcTime);
   if (dayStartUtc === undefined) {
     return wake;

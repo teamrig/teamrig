@@ -282,7 +282,7 @@ export const DEFAULT_MEETING_NOTICES: MeetingNoticesConfig = {
  * caps a session at 4 an hour however much is handed. No day start: waking every session each morning costs up to
  * 210k W each, so a team opts in with `wake.dayStartUtc`.
  */
-export const DEFAULT_WAKE: WakeConfig = { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15 };
+export const DEFAULT_WAKE: WakeConfig = { enabled: true, priority: 1, batchSeconds: 120, minGapMinutes: 15, maxGapMinutes: 30 };
 
 /**
  * The agenda panel is on: it shows only in the lead's tab while a meeting is open, so it costs no other tab anything.

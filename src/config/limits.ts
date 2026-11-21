@@ -63,6 +63,7 @@ export const CONFIG_LIMITS = {
   wakePriority: { min: 1, max: 99 },
   wakeBatchSeconds: { min: 0, max: 3600 },
   wakeMinGapMinutes: { min: 0, max: 1440 },
+  wakeMaxGapMinutes: { min: 0, max: 1440 },
   maxFailureChars: { min: 500, max: 50_000 },
   githubRepos: { maxItems: 20, maxLength: 140 },
   issueTypeNames: { maxItems: 5, maxLength: 100 },

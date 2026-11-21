@@ -28,7 +28,7 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'delivery.stablePeriods.assumedDeployMinutes', 'delivery.stablePeriods.minMinutes', 'delivery.wait.pollSeconds',
   'delivery.wait.maxMinutes', 'delivery.schedule.resetBlackoutHours', 'delivery.schedule.queueCutoffUtc',
   'loops.chainNudgeAt',
-  'wake.enabled', 'wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes', 'wake.dayStartUtc',
+  'wake.enabled', 'wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes', 'wake.maxGapMinutes', 'wake.dayStartUtc',
   'tests.maxFailureChars',
   'github.repos', 'github.watcher', 'github.closedDays', 'github.probeSeconds', 'github.similarThreshold', 'github.acceptLabel',
   'decisions.batchTimesUtc', 'decisions.batchAt',
