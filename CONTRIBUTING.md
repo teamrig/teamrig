@@ -392,11 +392,14 @@ as how teamrig works today.
   `src/package-guard/`, `src/permissions/`) also gets a security review.
 - **Rules on `main`**: `.github/rulesets/` holds the repository's rulesets, the three for `main` and the three for
   releases, imported under Settings, Rules, Rulesets. `main` lets no one push, force-push or delete it and takes a
-  change only through a pull request, landed by the rebasing merge queue; `main checks` lands it only once its
+  change only through a pull request, landed by the rebasing merge queue, which tests it on the newest `main` with
+  those queued ahead of it, so no branch is updated by hand (teamrig's `"queue": true` in `tools/ship/repos.json`
+  makes the ship tool's merge enqueue it); `main checks` lands it only once its
   `every check passed` check from GitHub Actions passed, on a linear history; `main review` asks a code owner to
   approve the last push. The maintainer and the `teamrig-release` App, which merges the release pull request, may
   skip `main` and `main review` through a pull request only; no one skips `main checks`, since a bypass skips every
-  rule of its ruleset. `tools/ci/rulesets.test.ts` holds them to `ci.yml` and `.github/CODEOWNERS`.
+  rule of its ruleset. `tools/ci/rulesets.test.ts` holds them to `ci.yml`, `.github/CODEOWNERS` and
+  `tools/ship/repos.json`.
 - **Rules on releases**: the `release` and `preview` branches, which installs read, and a `v<version>` tag, which an
   install can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
   deploy key, the rulesets' one bypass actor, whose private half is a secret of the `release` environment, which only

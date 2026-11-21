@@ -23,6 +23,7 @@
     "flaky": ["test (ubuntu-latest, node 22)", "test (windows-latest, node 22)", "test (macos-latest, node 22)"],
     "conditional": ["test (windows-latest, node 22)", "test (macos-latest, node 22)"],
     "mergeChecks": "changed",
+    "queue": true,
     "pullSections": ["Reach", "Risks"],
     "release": { "head": "release-please--branches--main--components--teamrig", "changelog": "CHANGELOG.md" }
   },

@@ -86,6 +86,17 @@ describe('rulesets for main', () => {
     assert.deepEqual(required['required_status_checks'], [{ context: summary, integration_id: GITHUB_ACTIONS }]);
   });
 
+  it("the merge queue's groups run ci.yml, land without waiting for company, and the ship tool enqueues teamrig's pull requests", () => {
+    const queue = rulesOf(main).get('merge_queue') ?? {};
+    assert.equal(queue['grouping_strategy'], 'ALLGREEN', 'every entry of a group passed the required check');
+    assert.equal(queue['min_entries_to_merge_wait_minutes'], 0, 'a lone pull request lands without waiting for company');
+    assert.match(read('.github/workflows/ci.yml'), /^ {2}merge_group:\n {4}types: \[checks_requested\]$/m, 'ci.yml runs on each queue group');
+    const repos = readRecord('tools/ship/repos.json');
+    const slug = Object.keys(repos).find((name) => name.endsWith('/teamrig'));
+    assert.ok(slug !== undefined, 'repos.json names this repository');
+    assert.equal(recordField(repos, slug)?.['queue'], true, 'a direct merge fails once the queue is required');
+  });
+
   it('main review asks a code owner to approve the last push, which only the maintainer and the release App bypass', () => {
     const rules = rulesOf(review);
     assert.deepEqual([...rules.keys()], ['pull_request']);

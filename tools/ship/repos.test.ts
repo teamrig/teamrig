@@ -111,9 +111,12 @@ test('reads whether main merges through GitHub\'s merge queue, false when not li
   assert.throws(() => parseProfiles(entry('local', 'true')), /O\/R "queue": true needs the "ci" gate/);
 });
 
-test('the shipped repos.json merges no repo through the merge queue until main\'s ruleset turns the queue on (T3386)', () => {
+test('the shipped repos.json merges a repo through the merge queue only when its main\'s ruleset turns the queue on: teamrig\'s does, teamrig-pane\'s not yet (T3386, T4894)', () => {
   const profiles = readProfiles();
-  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, false, slug);
+  const rulesetText = readFileSync(new URL('../../.github/rulesets/main.json', import.meta.url), 'utf8');
+  const teamrigQueues = /"type": "merge_queue"/.test(rulesetText);
+  assert.ok(teamrigQueues, "teamrig's main ruleset has the merge_queue rule");
+  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, slug.endsWith('/teamrig') && teamrigQueues, slug);
 });
 
 test('the shipped repos.json keeps every repo\'s merge on the whole local suite until its main requires CI (T3414); teamrig\'s does, so its merge runs the changed checks (#1464)', () => {
