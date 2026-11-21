@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { APP, CLAUDE_SESSION, CliHarness, TEAM } from '../testing/cli-harness.ts';
+import { steplessHost } from '../testing/shipped-steps.ts';
 
 function shellFailure(error: string): string {
   return JSON.stringify({
@@ -22,6 +23,16 @@ describe('the missing-cli hook', () => {
     assert.ok(line !== undefined);
     assert.match(line, /"hookEventName":"PostToolUseFailure"/);
     assert.ok(line.includes('`node \\"/opt/teamrig/dist/cli/main.js\\" <command> ...`'));
+  });
+
+  it('still answers on a host that names no steps, without a reload to name', async () => {
+    const kit = new CliHarness(TEAM);
+    const result = await kit.run(['hook', 'missing-cli'], { stdin: shellFailure('bash: teamrig: command not found'), host: steplessHost() });
+    assert.equal(result.code, 0);
+    const [line] = result.stdout;
+    assert.ok(line !== undefined);
+    assert.ok(line.includes('<command> ...`'));
+    assert.ok(!line.includes('brings the bare name back'));
   });
 
   it('answers outside a team too', async () => {
