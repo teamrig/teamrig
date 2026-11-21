@@ -1,6 +1,6 @@
 import type { IssueTarget, RefCodec } from '../../../plugin-api/index.ts';
 import { declaration } from './declaration.ts';
-import { issueKey, issueNumber, parseProject, projectKey } from './site.ts';
+import { browseUrl, issueKey, issueNumber, parseProject, projectKey, type JiraProject } from './site.ts';
 
 /** An issue key as a ref holds it, in capitals: the project key, a dash, the issue's number. */
 const KEY = /^([A-Z][A-Z0-9_]*)-([1-9][0-9]{0,9})$/;
@@ -11,10 +11,19 @@ const KEY = /^([A-Z][A-Z0-9_]*)-([1-9][0-9]{0,9})$/;
  * has no ref. With no site named, no ref is read or written.
  */
 export function jiraRefs(site: string | undefined): RefCodec {
+  /** The project `target` sits in, when it is one of the named site's. */
+  const projectOf = (target: IssueTarget): JiraProject | undefined => {
+    const project = parseProject(target.repo);
+    return project === undefined || project.site !== site ? undefined : project;
+  };
   return {
     refOf: (target: IssueTarget) => {
-      const project = parseProject(target.repo);
-      return project === undefined || project.site !== site ? undefined : `${declaration.refPrefix}${issueKey(project, target.number)}`;
+      const project = projectOf(target);
+      return project === undefined ? undefined : `${declaration.refPrefix}${issueKey(project, target.number)}`;
+    },
+    pageOf: (target: IssueTarget) => {
+      const project = projectOf(target);
+      return project === undefined ? undefined : browseUrl(project, target.number);
     },
     parseRef: (ref: string) => {
       const key = ref.startsWith(declaration.refPrefix) ? KEY.exec(ref.slice(declaration.refPrefix.length)) : null;

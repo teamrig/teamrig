@@ -31,5 +31,11 @@ describe('the refs of Jira issues (T4912)', () => {
     const siteless = jiraRefs(undefined);
     assert.equal(siteless.refOf({ repo: 'acme/eng', number: 12 }), undefined);
     assert.equal(siteless.parseRef('jira:ENG-12'), undefined);
+    assert.equal(siteless.pageOf({ repo: 'acme/eng', number: 12 }), undefined);
+  });
+
+  it("gives an issue's page on the named site, and none for another site's", () => {
+    assert.equal(refs.pageOf({ repo: 'acme/eng', number: 12 }), 'https://acme.atlassian.net/browse/ENG-12');
+    assert.equal(refs.pageOf({ repo: 'other/eng', number: 12 }), undefined);
   });
 });

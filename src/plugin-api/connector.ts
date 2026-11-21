@@ -78,6 +78,11 @@ export interface RefCodec {
   readonly refOf: (target: IssueTarget) => string | undefined;
   /** The issue `ref` names; undefined when it is another connector's ref, or names none of this one's places. */
   readonly parseRef: (ref: string) => IssueTarget | undefined;
+  /**
+   * The page of the tracker's issue `target`, built from the connector's config, never an address an answer sent: the
+   * sync writes it as a closed issue's evidence. Undefined, as for refOf, when the target is no place the config names.
+   */
+  readonly pageOf: (target: IssueTarget) => string | undefined;
 }
 
 /** What the author of a connector writes: its declaration, how its config section is read, and how its ports are built. */
