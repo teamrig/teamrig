@@ -225,12 +225,15 @@ describe('runCli: help, version and usage errors', () => {
     assert.equal(kit.files.get(EVENTS_PATH), undefined);
   });
 
-  it('refuses gh sync and gh migrate with their new group, issue, running neither', async () => {
+  it('refuses gh sync and gh migrate with their new group, issue, running neither, though gh is a command now', async () => {
     const kit = new CliHarness();
-    for (const argv of [['gh', 'sync', '--yes'], ['gh', 'migrate', 'rows.jsonl', '--yes']]) {
+    for (const [argv, line] of [
+      [['gh', 'sync', '--yes'], 'gh sync was renamed: use issue sync'],
+      [['gh', 'migrate', 'rows.jsonl', '--yes'], 'gh migrate was renamed: use issue migrate'],
+    ] as const) {
       const result = await kit.run(argv);
       assert.equal(result.code, EXIT.usage, argv.join(' '));
-      assert.equal(result.stderr[0]?.split('\n')[0], 'gh was renamed: use issue', argv.join(' '));
+      assert.equal(result.stderr[0]?.split('\n')[0], line, argv.join(' '));
     }
     assert.equal(kit.files.get(EVENTS_PATH), undefined);
   });

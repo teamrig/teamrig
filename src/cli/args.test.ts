@@ -75,6 +75,12 @@ describe('parseArgs', () => {
     assert.equal(usageMessage(() => parseArgs(['post'], COMMANDS)), 'unknown command "post"', 'with no rename given it is just unknown');
   });
 
+  it('refuses a renamed two-word command even when its first word is a command now, and runs that command otherwise', () => {
+    const renamed: Renamed = { commands: { 'add sync': 'issue sync' } };
+    assert.equal(usageMessage(() => parseArgs(['add', 'sync', '--yes'], COMMANDS, {}, renamed)), 'add sync was renamed: use issue sync');
+    assert.equal(parseArgs(['add', '--title', 'x'], COMMANDS, {}, renamed).command, 'add');
+  });
+
   it('refuses a flag without a value or given twice', () => {
     assert.equal(usageMessage(() => parseArgs(['add', '--title'], COMMANDS)), '--title needs a value');
     assert.equal(usageMessage(() => parseArgs(['add', '--title', '--priority', 'p2'], COMMANDS)), '--title needs a value');
