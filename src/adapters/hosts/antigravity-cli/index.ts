@@ -17,11 +17,11 @@ export default defineHost({
       toolCall,
       transcripts: unsupported('Antigravity transcript reader is not wired yet'),
       usage: unsupported('Antigravity has no usage meter wired yet'),
-      statusLine: unsupported('Antigravity has no status line hook'),
+      statusLine: unsupported('Antigravity CLI status-line port is not built yet'),
       paths: hostPaths(deps.platform),
-      permissions: unsupported('Antigravity has no Claude Code permission file'),
-      plugin: unsupported('Antigravity plugin store port is not wired yet'),
-      launcher: unsupported('Antigravity session launcher port is not wired yet'),
+      permissions: unsupported('Antigravity CLI permissions port is not built yet'),
+      plugin: unsupported('Antigravity CLI plugin store port is not built yet'),
+      launcher: unsupported('Antigravity CLI session launcher port is not built yet'),
     };
   },
 });

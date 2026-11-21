@@ -8,7 +8,7 @@ export type AdapterTable = Readonly<Record<string, string>>;
 export const HOST_ADAPTERS: AdapterTable = {
   'claude-code': '../adapters/hosts/claude-code',
   'codex-cli': '../adapters/hosts/codex-cli',
-  antigravity: '../adapters/hosts/antigravity',
+  'antigravity-cli': '../adapters/hosts/antigravity-cli',
 };
 
 /** The host teamrig asks its host ports of, until a team's config names another. */
