@@ -7,7 +7,7 @@ import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming, hostRunning, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -769,6 +769,20 @@ describe('teamrig launch', () => {
     await kit.files.write('C:\\x\\claude.cmd', 'claude-code %*');
     const skipped = await kit.run(LAUNCH, { platform: 'win32', env: { PATH: 'C:\\x' }, probe: new FakePathProbe({ folders: [APP], files: ['C:\\x\\claude.cmd'] }) });
     assert.deepEqual(skipped.stdout, ['REFUSED Claude Code (claude) is not on PATH (skipped: C:\\x\\claude.cmd is not an npm launcher); install it, then run this again']);
+  });
+
+  it('starts the program the running host names, found on PATH as any program is, and none on a host that tells nothing of its sessions', async () => {
+    const desk = '/usr/local/bin/agent-desk';
+    const both = new FakePathProbe({ folders: [APP], files: [CLAUDE, desk] });
+    const processes = new FakeProcesses();
+    const started = await launch(processes, ['--no-prompt'], { probe: both, host: hostStarting('agent-desk') });
+    assert.equal(started.code, EXIT.ok, [...started.stdout, ...started.stderr].join('\n'));
+    assert.deepEqual(processes.ran.map((run) => run.command), [desk]);
+    const missing = await launch(new FakeProcesses(), [], { host: hostStarting('agent-desk') });
+    assert.deepEqual(missing.stdout, ['REFUSED Claude Code (agent-desk) is not on PATH; install it, then run this again']);
+    const none = new FakeProcesses();
+    const untold = await launch(none, [], { probe: both, host: NO_SESSION_HOST });
+    assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
   });
 
   it('refuses a session not on the team or a missing project; reads a bad line as a usage error', async () => {

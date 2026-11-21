@@ -11,7 +11,8 @@ import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 import { promptLine, replyLine, type FixtureTool } from '../testing/transcript-lines.ts';
 import { FakeHooks } from '../testing/fake-hooks.ts';
-import { NO_PATHS_HOST } from '../testing/host.ts';
+import type { HostSource } from '../composition/host-ports.ts';
+import { hostStarting, NO_PATHS_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { SKILL_DOCTOR_ARGS } from '../setup/skill-doctor.ts';
 import { DEFAULT_SCAN_DAYS } from './commands/setup-scan.ts';
 import { EXIT } from './runtime.ts';
@@ -179,6 +180,21 @@ describe('setup scan', () => {
     const none = new FakeHooks();
     okLines(await scan(harness, [], new MemoryTranscripts(), {}, none));
     assert.deepEqual(none.ran, []);
+  });
+
+  it('runs /skill-doctor through the program the running host names, and skips it on a host that names none', async () => {
+    const harness = await world();
+    await harness.files.write(CLAUDE, '');
+    await harness.files.write('/opt/claude/bin/agent-desk', '');
+    const on = (host: HostSource, hooks: FakeHooks) =>
+      harness.run(['setup', 'scan'], { env: CLAUDE_PATH, probe: new MemoryPathProbe(harness.files), transcripts: transcripts(HOUR_MS), hooks, host });
+    const hooks = new FakeHooks();
+    okLines(await on(hostStarting('agent-desk'), hooks));
+    assert.deepEqual(hooks.ran.map((request) => request.argv), [['/opt/claude/bin/agent-desk', ...SKILL_DOCTOR_ARGS]]);
+    const none = new FakeHooks();
+    const lines = okLines(await on(NO_SESSION_HOST, none));
+    assert.deepEqual(none.ran, []);
+    assert.ok(lines.some((line) => line.startsWith('UNUSED') && line.endsWith('; /skill-doctor skipped: the host names no program to run it with')), lines.join('\n'));
   });
 
   it('scans the --project folder, from the working folder, outside any team', async () => {

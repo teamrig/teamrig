@@ -10,7 +10,7 @@ import { HiringLog } from '../../hiring/log.ts';
 import { rehiredFrom, type RetireRecord } from '../../hiring/record.ts';
 import type { ResumeVerdict } from '../../hiring/rehire.ts';
 import { CLAUDE_SESSION_ID } from '../../inbox/marks.ts';
-import { findClaude, type ClaudeProgram } from '../../open/claude.ts';
+import { findProgram, type HostProgram } from '../../open/host-program.ts';
 import type { FocusOutcome } from '../../open/focus.ts';
 import { launchFlags } from '../../open/launch-flags.ts';
 import { openTab, type OpenOutcome } from '../../open/open-tab.ts';
@@ -25,7 +25,7 @@ import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
-import { cacheBinOf, childEnvOf, launchHostOf } from '../host.ts';
+import { cacheBinOf, childEnvOf, launcherOf, launchHostOf } from '../host.ts';
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
 import { liveRunOf, liveRunText } from '../live-run.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -447,14 +447,18 @@ async function closeSince(runtime: CliRuntime, log: SessionLog, id: string, resu
   }
 }
 
-/** How to start Claude Code in `env`; refused when it is not on that PATH. */
-export async function claudeProgramOf(runtime: CliRuntime, env: Env): Promise<ClaudeProgram> {
-  const claude = await findClaude({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node });
-  if (claude.kind === 'missing') {
-    const skipped = claude.skipped.length === 0 ? '' : ` (skipped: ${claude.skipped.join('; ')})`;
-    throw new RefusedError(`Claude Code (claude) is not on PATH${skipped}; install it, then run this again`);
+/**
+ * How to start the running host's program in `env`: the program its session launcher names, found on that PATH.
+ * Refused when it is not there, and with the host's own reason on a host that tells nothing of its sessions.
+ */
+export async function hostProgramOf(runtime: CliRuntime, env: Env): Promise<HostProgram> {
+  const { program } = launcherOf(runtime);
+  const found = await findProgram({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, program);
+  if (found.kind === 'missing') {
+    const skipped = found.skipped.length === 0 ? '' : ` (skipped: ${found.skipped.join('; ')})`;
+    throw new RefusedError(`Claude Code (${program}) is not on PATH${skipped}; install it, then run this again`);
   }
-  return claude.program;
+  return found.program;
 }
 
 /** The exit for how Claude Code ended, for a command that ran it on this terminal. */
@@ -509,7 +513,7 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   if (!roster.ids.includes(id)) {
     throw new RefusedError(`${id} is not a session of team ${team}`);
   }
-  const { command, prefix } = await claudeProgramOf(runtime, claudeEnv);
+  const { command, prefix } = await hostProgramOf(runtime, claudeEnv);
   const name = roster.nameOf(id) ?? id;
   const host = launchHostOf(runtime);
   const { leadDefault } = host;
