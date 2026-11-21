@@ -49,8 +49,24 @@ describe('the Jira adapter', () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(connectorAdapterProblems(adapter), []);
     const { ports } = kit();
-    assert.deepEqual(Object.keys(ports), ['tracker']);
+    assert.deepEqual(Object.keys(ports), ['tracker', 'targets']);
     assert.ok(ports.tracker instanceof JiraTracker);
+  });
+
+  it("names a target for each project of its section, written as the tracker's repo, and none with no site (T4912)", () => {
+    const deps = connectorDeps({ http: new FakeHttp(), credentials: new FakeCredentials(), stamp: true });
+    assert.deepEqual(portsOf(adapter, deps, { site: 'acme', projects: ['ENG', 'OPS_2'] }).targets, ['acme/eng', 'acme/ops_2']);
+    assert.deepEqual(portsOf(adapter, deps, { site: 'acme' }).targets, []);
+    assert.deepEqual(portsOf(adapter, deps, {}).targets, []);
+  });
+
+  it('names targets its own tracker takes as places of the site its config names (T4912)', async () => {
+    const http = new FakeHttp();
+    const credentials = new FakeCredentials().saves('teamrig-jira-acme', 'someone@example.com:the-token');
+    const ports = portsOf(adapter, connectorDeps({ http, credentials, stamp: true }), { site: 'acme', projects: ['ENG'] });
+    const [target] = ports.targets ?? [];
+    assert.equal(target, REPO);
+    assert.equal((await trackerOf(ports).reach(REPO, 'read')).kind, 'reached');
   });
 
   it("reads its section of the team config: the issue type it names reaches the tracker (T4766)", async () => {

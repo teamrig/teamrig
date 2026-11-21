@@ -56,6 +56,12 @@ export interface ConnectorDeps {
 export interface ConnectorPorts {
   readonly tracker?: Tracker;
   readonly codeHost?: CodeHost;
+  /**
+   * The places the connector's config section names for its tracker, each written as the tracker's `repo` (Jira:
+   * `<site>/<project key>` in lowercase), so an issue command reads them without knowing the connector's keys. Left
+   * out by a connector whose places the team config names elsewhere (GitHub: `github.repos`).
+   */
+  readonly targets?: readonly string[];
 }
 
 /** What the author of a connector writes: its declaration, how its config section is read, and how its ports are built. */

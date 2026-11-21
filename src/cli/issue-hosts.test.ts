@@ -62,7 +62,7 @@ function onlyDeps(given: readonly ConnectorDeps[]): ConnectorDeps {
   return deps;
 }
 
-function bothPorts(): Required<ConnectorPorts> {
+function bothPorts(): Required<Pick<ConnectorPorts, 'tracker' | 'codeHost'>> {
   const fake = new FakeIssueHost();
   return { tracker: trackerOnly(fake), codeHost: codeHostOnly(fake) };
 }
