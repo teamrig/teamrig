@@ -69,6 +69,23 @@ describe('parseArgs', () => {
     assert.equal(usageMessage(() => parseArgs(['hook', 'stop', '--host-event', 'Stop', '--host-event', 'Stop'], hooks)), '--host-event is given twice');
   });
 
+  it('reads --host on any command apart from its flags, once, with a value (T4752)', () => {
+    const args = parseArgs(['add', '--title', 'x', '--host', 'claude-code'], COMMANDS);
+    assert.equal(args.host, 'claude-code');
+    assert.deepEqual([...args.flags], [['title', 'x']]);
+    assert.equal(args.common.size, 0);
+    assert.equal(parseArgs(['inbox', 'read', '--host', 'claude-code'], COMMANDS).host, 'claude-code');
+    assert.equal(parseArgs(['show'], COMMANDS).host, undefined);
+    assert.equal(usageMessage(() => parseArgs(['show', '--host'], COMMANDS)), '--host needs a value');
+    assert.equal(usageMessage(() => parseArgs(['show', '--host', 'a', '--host', 'b'], COMMANDS)), '--host is given twice');
+  });
+
+  it('leaves --host to a command whose own flag it is', () => {
+    const args = parseArgs(['inbox', 'add', '--host', 'web1'], { ...COMMANDS, 'inbox add': ['host'] });
+    assert.equal(args.flags.get('host'), 'web1');
+    assert.equal(args.host, undefined);
+  });
+
   it('refuses a flag the command does not take, so a typo never means nothing', () => {
     assert.equal(usageMessage(() => parseArgs(['add', '--titel', 'x'], COMMANDS)), 'add takes no --titel');
     assert.equal(usageMessage(() => parseArgs(['show', 'T1', '--priority', 'p2'], COMMANDS)), 'show takes no --priority');

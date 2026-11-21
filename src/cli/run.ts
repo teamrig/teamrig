@@ -11,6 +11,7 @@ import { parseArgs, UsageError, type CommandEffect, type CommandEffects, type Co
 import { RENAMED } from './renamed.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from './runtime.ts';
 import { hookLockDeadline } from './hook-timeouts.ts';
+import { chooseHost } from './host-choice.ts';
 import type { CommandTable } from '../slash/plan.ts';
 
 type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode>;
@@ -1290,19 +1291,25 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     if (spec === undefined) {
       throw new UsageError(`unknown command "${args.command}"`);
     }
-    refuseSettingsWrite(args.command, args.switches, runtime);
+    const teamFlag = args.flags.get('team') ?? args.common.get('team');
+    // Loaded only when the choice needs the team's list (host-choice.ts): a hook loads none of the config code for it.
+    const teamHosts = async (): Promise<readonly string[] | undefined> => (await import('./team-hosts.ts')).teamHostsOf(runtime, teamFlag);
+    const host = await chooseHost(args.command, args.host, runtime, teamHosts);
+    // Every check and the command itself work in the host the run names, never the process's default one.
+    const hosted: CliRuntime = host === runtime.host ? runtime : { ...runtime, host };
+    refuseSettingsWrite(args.command, args.switches, hosted);
     if (args.common.size > 0) {
       // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
       const common = await import('./common-flags.ts');
-      await common.checkCommonFlags(args, runtime);
+      await common.checkCommonFlags(args, hosted);
     }
     if (spec.effect === 'write' && spec.bindsTab !== true) {
       // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
-      await (await tabSessionCommands()).refuseAnotherTabSession(args, runtime);
+      await (await tabSessionCommands()).refuseAnotherTabSession(args, hosted);
     }
     const command = await spec.load();
-    const lockDeadline = hookLockDeadline(args.command, runtime.clock.now());
-    const hookRuntime = lockDeadline === undefined ? runtime : { ...runtime, lockDeadline };
+    const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
+    const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
     return await command(args, args.hostEvent === undefined ? hookRuntime : { ...hookRuntime, hostEvent: args.hostEvent });
   } catch (error) {
     if (error instanceof UsageError) {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { HostSource } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { HOOKS_ONLY_HOST, hostNaming, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
@@ -14,7 +14,7 @@ const OTHER_HOST = hostNaming({ marks: ['OTHER_AGENT', 'OTHER_TOOL'], identity: 
 const MARKLESS_HOST = hostNaming({ marks: [], identity: [] });
 const NO_SESSION = 'no session of the host is told';
 
-function by(host: HostSource, env: Readonly<Record<string, string | undefined>>, shippedHosts: readonly HostSource[] = quietWorld().shippedHosts): RunBy {
+function by(host: HostSource, env: Readonly<Record<string, string | undefined>>, shippedHosts: ShippedHosts = quietWorld().shippedHosts): RunBy {
   return runBy({ host, shippedHosts, env, platform: 'linux' });
 }
 
@@ -37,7 +37,7 @@ describe('runBy', () => {
     }
     assert.deepEqual(by(OTHER_HOST, { OTHER_AGENT: 'yes' }), { kind: 'agent', mark: 'OTHER_AGENT' });
     assert.deepEqual(by(OTHER_HOST, { OTHER_TOOL: '1' }), { kind: 'agent', mark: 'OTHER_TOOL' });
-    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, [SHIPPED_HOST, OTHER_HOST]), { kind: 'agent', mark: 'OTHER_AGENT' });
+    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, { 'claude-code': SHIPPED_HOST, other: OTHER_HOST }), { kind: 'agent', mark: 'OTHER_AGENT' });
   });
 
   it('takes no variable but a mark as one: an identity variable set alone is no mark', () => {
@@ -49,7 +49,7 @@ describe('runBy', () => {
     for (const host of [NO_SESSION_HOST, HOOKS_ONLY_HOST, bare]) {
       assert.deepEqual(by(host, {}), { kind: 'untold', notice: NO_SESSION });
     }
-    assert.deepEqual(by(bare, {}, []), { kind: 'untold', notice: NO_SESSION });
+    assert.deepEqual(by(bare, {}, {}), { kind: 'untold', notice: NO_SESSION });
   });
 
   it('leaves a run untold where the launcher of the running host names no mark', () => {

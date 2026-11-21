@@ -139,7 +139,7 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
  */
 export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecrets {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  const named = [...Object.values(runtime.shippedHosts), runtime.host].flatMap((source) => {
     const { secrets } = source(seen);
     return isUnsupported(secrets) ? [] : secrets.secretFiles();
   });
@@ -199,7 +199,7 @@ export function launcherIfTold(runtime: Pick<CliRuntime, 'host' | 'env' | 'platf
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly SessionLauncher[] {
   const seen = { env: runtime.env, platform: runtime.platform };
-  return [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  return [...Object.values(runtime.shippedHosts), runtime.host].flatMap((source) => {
     const { launcher } = source(seen);
     return isUnsupported(launcher) ? [] : [launcher];
   });
