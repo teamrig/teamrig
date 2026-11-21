@@ -9,7 +9,7 @@ import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { teamRegister } from '../team-register.ts';
 import { CONNECTOR_OFF } from '../connector-off.ts';
 import { githubOffBy } from './issue-sync-auto.ts';
-import { shown } from './issue-sync.ts';
+import { shown } from './issue-sync-lines.ts';
 
 /**
  * `issue links [--repo <owner/name>] [--yes]`: puts the task tree on the GitHub issues of the team's `github.repos`.

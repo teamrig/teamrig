@@ -5,7 +5,7 @@ import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts
 import { followersOf, parseFollows } from '../../sync/follows.ts';
 import { issueMarkStep, type IssueAudience, type IssueChangeRoute, type IssueMark } from '../../sync/issue-marks.ts';
 import { GITHUB_TRACKER, importRules, issueOwner, issueRef } from '../../sync/map.ts';
-import { importedTasks, linkedRefs, planSync, refHolders, type SyncPlan, type SyncStep } from '../../sync/plan.ts';
+import { importedTasks, linkedRefs, planSync, refHolders } from '../../sync/plan.ts';
 import { withCiExcerpts } from '../../sync/ci-excerpt.ts';
 import {
   firstMentionWatch,
@@ -22,12 +22,12 @@ import {
 import { securityIssues, type SecurityIssue } from '../../sync/security-alert.ts';
 import { eventsByRecipient, pullEvents, pullListeners, pullNewsText, pullRecipient, type PullEvent, type PullWatch } from '../../sync/pull-news.ts';
 import { ourLogins } from '../../sync/trust.ts';
-import { applySteps, closedSince, type StepOutcome } from '../../sync/sync.ts';
+import { applySteps, closedSince } from '../../sync/sync.ts';
 import { GITHUB_REPOS_HOST, type PullRequests, type ReviewPosts } from '../../issues/host.ts';
 import type { HostPull } from '../../issues/pull.ts';
 import { sessionLogins } from '../../issues/status-push.ts';
 import type { Task } from '../../register/fold.ts';
-import { GITHUB_SOURCE, priorityText } from '../../register/model.ts';
+import { GITHUB_SOURCE } from '../../register/model.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hostsOf, reposOf } from '../issue-hosts.ts';
@@ -43,16 +43,8 @@ import { reserveHour, settleHour } from './issue-push-hour.ts';
 import { issuePush, pushEndLine, pushRepos } from './issue-push.ts';
 import { CONNECTOR_OFF } from '../connector-off.ts';
 import { githubOffBy, readSyncState, reportAutoSync } from './issue-sync-auto.ts';
+import { leftOutLines, previewLines, refusedReason, resultLines, type RepoEnd } from './issue-sync-lines.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
-
-/** The rows of steps a repository prints; the rest are counted. */
-export const SHOWN_STEPS = 10;
-
-/** The left-out issue numbers a repository's LEFT OUT line names; the rest are counted. */
-export const SHOWN_LEFT_OUT = 20;
-
-/** How the sync of one repository ended, for the exit code. */
-type RepoEnd = 'ok' | 'failed' | 'refused';
 
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
@@ -373,72 +365,6 @@ async function readMentions(
       ...(read.cutAt === undefined ? [] : [`NOTE ${repo}: the mention read was cut off; it read through ${read.cutAt} and the next run goes on from there`]),
     ],
   };
-}
-
-/** Why the task list refused some of a repository's steps: how many, and the first one's error; undefined when none was. */
-function refusedReason(outcomes: readonly StepOutcome[]): string | undefined {
-  const errors = outcomes.flatMap((outcome) => (outcome.result.ok ? [] : [outcome.result.error]));
-  return errors.length === 0 ? undefined : `the task list refused ${errors.length} step(s), first: ${errors[0]}`;
-}
-
-function previewLines(repo: string, plan: SyncPlan): string[] {
-  return [
-    `REPO ${repo}: ${plan.inserted} to add, ${plan.changed} to change, ${plan.unchanged} unchanged`,
-    ...shown(plan.steps.map((step) => stepLine(step, step.kind === 'add' ? 'new' : step.id))),
-  ];
-}
-
-function resultLines(repo: string, plan: SyncPlan, outcomes: readonly StepOutcome[]): string[] {
-  const done = outcomes.filter((outcome) => outcome.result.ok);
-  const added = done.filter((outcome) => outcome.step.kind === 'add').length;
-  const changed = new Set(done.filter((outcome) => outcome.step.kind !== 'add').map((outcome) => outcome.step.ref)).size;
-  const refused = outcomes.length - done.length;
-  return [
-    `REPO ${repo}: ${added} added, ${changed} changed, ${plan.unchanged} unchanged${refused > 0 ? `, ${refused} refused` : ''}`,
-    ...shown(done.map((outcome) => stepLine(outcome.step, outcome.result.ok ? outcome.result.value : ''))),
-    ...outcomes.flatMap((outcome) => (outcome.result.ok ? [] : [`SKIPPED ${outcome.step.ref}: ${outcome.result.error}`])),
-  ];
-}
-
-/**
- * The line naming the open issues the trust rule (trust.ts) left out of a repository, and the label that lets
- * one in: their numbers only, as their text is an outsider's, at most SHOWN_LEFT_OUT and then how many more;
- * none when it left none out.
- */
-function leftOutLines(repo: string, leftOut: readonly number[], acceptLabel: string): string[] {
-  if (leftOut.length === 0) {
-    return [];
-  }
-  const more = leftOut.length - SHOWN_LEFT_OUT;
-  const numbers = leftOut.slice(0, SHOWN_LEFT_OUT).map((number) => `#${number}`).join(' ');
-  return [
-    `LEFT OUT ${repo}: ${leftOut.length} open issue(s) by people outside the repository wait for someone to add the ${JSON.stringify(acceptLabel)} label: ${numbers}${more > 0 ? ` and ${more} more` : ''}`,
-  ];
-}
-
-/** The first SHOWN_STEPS lines, then how many more there are. */
-export function shown(lines: readonly string[]): string[] {
-  const more = lines.length - SHOWN_STEPS;
-  return more > 0 ? [...lines.slice(0, SHOWN_STEPS), `... and ${more} more`] : [...lines];
-}
-
-/** One step on one line; a title is outside input, so it is printed quoted, as data, and a description only by its length. */
-export function stepLine(step: SyncStep, id: string): string {
-  switch (step.kind) {
-    case 'add':
-      return `ADD ${id} ${step.ref} ${priorityText(step.input.priority)} ${step.input.owner}: ${JSON.stringify(step.input.title)}`;
-    case 'update': {
-      const { title, description, priority } = step.changes;
-      const fields = [
-        ...(title === undefined ? [] : [`title ${JSON.stringify(title)}`]),
-        ...(description === undefined ? [] : [description === null ? 'description none' : `description (${description.length} characters)`]),
-        ...(priority === undefined ? [] : [`priority ${priorityText(priority)}`]),
-      ];
-      return `UPDATE ${id} ${step.ref}: ${fields.join(', ')}`;
-    }
-    case 'status':
-      return `SET ${id} ${step.ref} ${step.input.status}: ${step.input.note ?? ''}`;
-  }
 }
 
 /** Who hears of an issue's close, reopen and labels: the owner of the task holding it, finished once done or dropped, and its followers. */
