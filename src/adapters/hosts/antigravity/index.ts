@@ -21,6 +21,7 @@ export default defineHost({
       paths: hostPaths(deps.platform),
       permissions: unsupported('Antigravity has no Claude Code permission file'),
       plugin: unsupported('Antigravity plugin store port is not wired yet'),
+      launcher: unsupported('Antigravity session launcher port is not wired yet'),
     };
   },
 });
