@@ -20,7 +20,7 @@ import { SHIP_TOOL_READS, SHIP_TOOL_REREAD_MS } from './ship-role-check.ts';
 import { FakeSteps } from '../testing/fake-steps.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { heldBy, OTHER, otherRuns } from '../testing/held-lock.ts';
-import { hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
 import { lineRequests } from '../testing/line-tickets.ts';
 import { ROOMY_FREE_MB } from '../testing/quiet-delivery.ts';
 import { WakeAsks } from '../wake/asks.ts';
@@ -1077,6 +1077,32 @@ describe('teamrig queue --detach (T2227)', () => {
     const [hidden] = processes.hidden;
     assert.deepEqual([processes.hidden.length, hidden?.command, hidden?.args, hidden?.log, hidden?.env['GH_TOKEN']], [1, '/usr/bin/node', DISPATCHER, join(DETACHED_DIR, 'dispatcher.log'), 'secret-token'], 'the dispatcher gets them in memory');
     assert.deepEqual([steps.ran, kit.files.get(LOCK), kit.files.get(LEDGER), await alphaLines(kit)], [[], undefined, undefined, []], 'the caller waits for nothing and runs nothing');
+  });
+
+  it("parks the session variables a host lets a step keep and every host's mark of an agent's run, and no credential a host names", async () => {
+    const { kit, steps } = harness();
+    const host = hostNaming({ marks: ['AGENT_RUN'], identity: ['AGENT_SESSION'] }, {}, { session: ['AGENT_SOCKET', 'AGENT_TAB'], parked: ['AGENT_TAB', 'GH_TOKEN'], login: [] });
+    const env = {
+      TEAMRIG_SESSION: 'alpha',
+      PATH: '/usr/bin',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      CLAUDE_CODE_MESSAGING_TOKEN: 'secret-token',
+      AGENT_RUN: '1',
+      AGENT_TAB: 't-1',
+      AGENT_SOCKET: '/run/agent',
+      GH_TOKEN: 'secret-token',
+    };
+    assert.equal((await kit.run(DETACH_BUILD, { steps, processes: new FakeProcesses(), env, host })).code, 0);
+    assert.deepEqual(parkedOf(kit, DETACHED_ID)?.env, {
+      TEAMRIG_HOME: KIT,
+      TEAMRIG_SESSION: 'alpha',
+      PATH: '/usr/bin',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      AGENT_RUN: '1',
+      AGENT_TAB: 't-1',
+    });
   });
 
   it('refuses under a pipeline freeze on its kind, starting nothing', async () => {

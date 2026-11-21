@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
+import type { HostSource } from '../../composition/host-ports.ts';
 import { park, PARKED_FORMAT, parkedDirOf, parkedPathOf, type ParkedStep } from '../../delivery/parked.ts';
 import { CliHarness, CLI_PID } from '../../testing/cli-harness.ts';
 import { FakeProcesses } from '../../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../../testing/fake-session-processes.ts';
+import { hostNaming } from '../../testing/host.ts';
 import { MemoryFiles } from '../../testing/memory-files.ts';
 import type { ParsedArgs } from '../args.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -50,7 +52,11 @@ function recording(seen: Seen[], gate?: () => Promise<void>): StepRun {
 }
 
 /** A dispatcher's lines and its end, over `files` and `sessionProcesses`. */
-async function runDispatcher(kit: CliHarness, run: StepRun, options: { readonly files?: MemoryFiles; readonly sessionProcesses?: FakeSessionProcesses; readonly env?: Record<string, string> } = {}): Promise<{ code: ExitCode; lines: string[] }> {
+async function runDispatcher(
+  kit: CliHarness,
+  run: StepRun,
+  options: { readonly files?: MemoryFiles; readonly sessionProcesses?: FakeSessionProcesses; readonly env?: Record<string, string>; readonly host?: HostSource } = {},
+): Promise<{ code: ExitCode; lines: string[] }> {
   const lines: string[] = [];
   const runtime = kit.runtime({ ...options, env: { GH_TOKEN: 'dispatcher-token', ...options.env } }, { stdout: (line) => lines.push(line), stderr: (line) => lines.push(line) });
   const code = await dispatch(runtime, DETACHED, run);
@@ -86,6 +92,17 @@ describe('queue --dispatch (T4093)', () => {
     assert.deepEqual([kit.files.get(BUILD.log), kit.files.get(TEST.log)], ['ran build\n', 'ran test\n']);
     assert.deepEqual(lines, [`dispatcher pid ${CLI_PID} for ${DETACHED}`, `running parked step ${BUILD.id}: build`, `running parked step ${TEST.id}: test`, 'dispatcher ends: nothing parked or running']);
     assert.deepEqual([kit.files.get(RECORD), await kit.files.list(PARKED)], [undefined, []]);
+  });
+
+  it("runs a step with no session variable of the dispatcher's starter: the shipped host's and those the running host names", async () => {
+    const kit = new CliHarness();
+    await park(kit.files, PARKED, { ...BUILD, env: { ...BUILD.env, AGENT_RUN: 'parker' } });
+    const seen: Seen[] = [];
+    const host = hostNaming({ marks: ['AGENT_RUN'], identity: ['AGENT_SESSION'] }, {}, { session: ['AGENT_SOCKET'], parked: [], login: [] });
+    const env = { CLAUDECODE: '1', CLAUDE_CODE_MESSAGING_TOKEN: 't', AGENT_RUN: 'dispatcher', AGENT_SESSION: 's-1', AGENT_SOCKET: '/run/agent', JAVA_HOME: '/jdk' };
+    const { code } = await runDispatcher(kit, recording(seen), { env, host });
+    assert.equal(code, EXIT.ok);
+    assert.deepEqual(seen.map((step) => step.env), [{ GH_TOKEN: 'dispatcher-token', JAVA_HOME: '/jdk', PATH: '/usr/bin', STEP: BUILD.id, AGENT_RUN: 'parker' }]);
   });
 
   it("writes a step's refusal or failure to its log and runs on", async () => {
