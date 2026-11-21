@@ -63,6 +63,35 @@ export function isIssueRef(ref: string | null | undefined): ref is IssueRefText 
 }
 
 /**
+ * The trackers `teamrig issue sync` imports from, each source beside the prefix its tasks' refs start with. A task
+ * of one of these sources was written by the import alone (policy.ts). The source is the connector's id and the
+ * prefix its declaration's `refPrefix`: this folder imports no adapter, so the composition spec holds the two equal.
+ * The local connector is no import source: its `local: ` refs carry a reason, not an issue.
+ */
+export const IMPORT_SOURCES = { [GITHUB_SOURCE]: ISSUE_REF_PREFIX, jira: 'jira:' } as const;
+
+/** A tracker the import writes tasks for, by its connector id. */
+export type ImportSource = keyof typeof IMPORT_SOURCES;
+
+/** A ref an import source wrote: its prefix, then an id only that tracker's connector reads. */
+export type TrackerRefText = `${(typeof IMPORT_SOURCES)[ImportSource]}${string}`;
+
+/** Every import source, in the table's order; model.test.ts holds it equal to the table's keys. */
+export const IMPORT_SOURCE_IDS: readonly ImportSource[] = [GITHUB_SOURCE, 'jira'];
+
+export function isImportSource(value: unknown): value is ImportSource {
+  return IMPORT_SOURCE_IDS.some((source) => source === value);
+}
+
+/**
+ * Whether a ref points at an issue of any import source, by its prefix alone. Never a generic `<word>:` test: the
+ * register holds free-text refs (`https:...`) beside the trackers' own.
+ */
+export function isTrackerRef(ref: string | null | undefined): ref is TrackerRefText {
+  return typeof ref === 'string' && IMPORT_SOURCE_IDS.some((source) => ref.startsWith(IMPORT_SOURCES[source]));
+}
+
+/**
  * The ref of a task kept off GitHub: this, then the reason (`add --local`), so the reason is on the task and never
  * posted. Here, beside ISSUE_REF_PREFIX, so the check can tell a task with its reason from one with neither.
  */
