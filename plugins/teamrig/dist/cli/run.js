@@ -73,6 +73,7 @@ const automodeCommands = () => import("./commands/automode.js");
 const permissionsCommands = () => import("./commands/permissions.js");
 const setupScanCommand = () => import("./commands/setup-scan.js");
 const testCommand = () => import("./commands/test.js");
+const ghCommand = () => import("./commands/gh.js");
 const queueCommand = () => import("./commands/queue.js");
 const withdrawCommand = () => import("./commands/withdraw.js");
 const stepAsideCommands = () => import("./commands/step-aside.js");
@@ -280,6 +281,7 @@ const COMMANDS = {
     'worktree add': { effect: 'write', flags: ['repo', 'task', 'type'], load: async () => (await worktreeCommands()).add },
     'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
     test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
+    gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
     queue: { effect: 'write', flags: QUEUE_FLAGS, switches: QUEUE_SWITCHES, rest: true, load: async () => (await queueCommand()).queue },
     withdraw: { effect: 'write', flags: ['session', 'what'], switches: ['all'], load: async () => (await withdrawCommand()).withdraw },
     'step-away': { effect: 'write', flags: [], load: async () => (await stepAsideCommands()).stepAway },
@@ -1108,6 +1110,13 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       file as --small, anything more as a heavy step; exit 0 when the command passed, 1 otherwise. One
       quoted word runs as a shell line ("npm run build && npm test"); several run as one command, each
       word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
+  gh -- <gh args ...>          runs one gh call with the key saved for the owner of the repository it
+      reaches (-R, a gh api repos/, orgs/ or users/ path, a gh repo command's repository, else GH_REPO,
+      else the folder's git remotes), never the machine's gh login; REFUSED when it reaches more than
+      one owner or none teamrig can tell, for gh auth, config, alias, extension and any alias or
+      extension, for a host other than github.com, and for a write on one of the team's github.repos,
+      which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
+      when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by Claude Code, hook JSON on stdin)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

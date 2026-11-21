@@ -37,6 +37,13 @@ const ACCOUNT_GROUPS = setOf('gist', 'org', 'project', 'codespace', 'ssh-key', '
 const LOCAL_GROUPS = setOf('auth', 'config', 'alias', 'extension');
 /** Every group gh has: a word naming none of them is an alias or an extension. */
 const GH_GROUPS = new Set(['api', ...GH_READS.keys(), ...READ_GROUPS]);
+/** What a gh group is: one of gh's own; one that changes gh's own login, settings, aliases or extensions; or none of gh's, so an alias or an extension. */
+export function ghGroupKind(group) {
+    if (LOCAL_GROUPS.has(group)) {
+        return 'local';
+    }
+    return GH_GROUPS.has(group) ? 'gh' : 'other';
+}
 /** `gh api` flags that take the next word as their value; any other flag is a switch. */
 const API_VALUE_FLAGS = new Set(['-X', '--method', '-f', '--raw-field', '-F', '--field', '-H', '--header', '--input', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-p', '--preview']);
 /** `gh api` flags whose values make a request body, which turns gh's default GET into a POST. */
@@ -112,7 +119,7 @@ const FOLDER_NAME = setOf('{repo}', ':repo');
  * `:owner/:repo`, which it fills from the folder or `GH_REPO`; undefined for any other path, or a part shaped like a
  * placeholder, which no GitHub owner or name can hold.
  */
-function apiRepoOf(path) {
+export function apiRepoOf(path) {
     const [first, owner, name] = path.split('/');
     if (first !== 'repos' || owner === undefined || name === undefined || owner === '' || name === '') {
         return undefined;
@@ -190,8 +197,8 @@ export function repoInWord(text) {
     const named = /^([\w.-]+)\/([\w.-]+)(?:#\d+)?$/u.exec(text);
     return named === null ? undefined : repoFromParts(named[1], named[2]);
 }
-/** The repositories a write's words name through `-R`/`--repo`; undefined when a value names none. */
-function repoFlagsOf(words) {
+/** The repositories a call's words name through `-R`/`--repo`, and whether one is given; undefined when a value names none. */
+export function repoFlagsOf(words) {
     const repos = [];
     let given = false;
     for (let index = 0; index < words.length; index += 1) {

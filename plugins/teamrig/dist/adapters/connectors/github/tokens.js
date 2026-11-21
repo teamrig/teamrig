@@ -38,8 +38,12 @@ export class RepoTokens {
         this.env = env;
     }
     /** The access to `repo` through its owner's saved token, or the error that stops the command when there is none to use. */
-    async accessFor(repo) {
-        const owner = repoOwner(repo);
+    accessFor(repo) {
+        return this.accessForOwner(repoOwner(repo));
+    }
+    /** The access to every repository of `owner` (any case) through its saved token, or the error that stops the command when there is none to use. */
+    async accessForOwner(name) {
+        const owner = name.toLowerCase();
         const credential = tokenName(owner);
         const save = this.store.saveCommand(credential);
         const read = await this.readOnce(credential);

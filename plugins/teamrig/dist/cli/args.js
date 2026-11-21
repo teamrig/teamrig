@@ -21,6 +21,10 @@ export const REST_MARKER = '--';
 function commandOf(argv, commandFlags, renamedCommands) {
     const [first = '', second] = argv;
     const pair = `${first} ${second ?? ''}`;
+    const renamedPair = second === undefined ? undefined : renamedCommands[pair];
+    if (renamedPair !== undefined) {
+        throw new UsageError(`${pair} was renamed: use ${renamedPair}`);
+    }
     if (second !== undefined && commandFlags[pair] !== undefined) {
         return { command: pair, tail: argv.slice(2) };
     }

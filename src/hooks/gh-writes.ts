@@ -68,6 +68,14 @@ const LOCAL_GROUPS: ReadonlySet<string> = setOf('auth', 'config', 'alias', 'exte
 /** Every group gh has: a word naming none of them is an alias or an extension. */
 const GH_GROUPS: ReadonlySet<string> = new Set(['api', ...GH_READS.keys(), ...READ_GROUPS]);
 
+/** What a gh group is: one of gh's own; one that changes gh's own login, settings, aliases or extensions; or none of gh's, so an alias or an extension. */
+export function ghGroupKind(group: string): 'gh' | 'local' | 'other' {
+  if (LOCAL_GROUPS.has(group)) {
+    return 'local';
+  }
+  return GH_GROUPS.has(group) ? 'gh' : 'other';
+}
+
 /** `gh api` flags that take the next word as their value; any other flag is a switch. */
 const API_VALUE_FLAGS: ReadonlySet<string> = new Set(['-X', '--method', '-f', '--raw-field', '-F', '--field', '-H', '--header', '--input', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-p', '--preview']);
 
@@ -162,7 +170,7 @@ const FOLDER_NAME: ReadonlySet<string> = setOf('{repo}', ':repo');
  * `:owner/:repo`, which it fills from the folder or `GH_REPO`; undefined for any other path, or a part shaped like a
  * placeholder, which no GitHub owner or name can hold.
  */
-function apiRepoOf(path: string): string | 'folder' | undefined {
+export function apiRepoOf(path: string): string | 'folder' | undefined {
   const [first, owner, name] = path.split('/');
   if (first !== 'repos' || owner === undefined || name === undefined || owner === '' || name === '') {
     return undefined;
@@ -246,8 +254,8 @@ export function repoInWord(text: string): string | undefined {
   return named === null ? undefined : repoFromParts(named[1], named[2]);
 }
 
-/** The repositories a write's words name through `-R`/`--repo`; undefined when a value names none. */
-function repoFlagsOf(words: readonly ShellWord[]): { readonly repos: string[]; readonly given: boolean } | undefined {
+/** The repositories a call's words name through `-R`/`--repo`, and whether one is given; undefined when a value names none. */
+export function repoFlagsOf(words: readonly ShellWord[]): { readonly repos: string[]; readonly given: boolean } | undefined {
   const repos: string[] = [];
   let given = false;
   for (let index = 0; index < words.length; index += 1) {

@@ -7,11 +7,12 @@ import type { Renamed } from './args.ts';
  * claim` became `teamrig freeze`, `teamrig release` became `teamrig unfreeze`, `teamrig windows` became `teamrig
  * stable-periods` and `teamrig load` became `teamrig job` (`load end` with it). `teamrig gh sync` and `teamrig gh
  * migrate` became `teamrig issue sync` and `teamrig issue migrate`, beside `issue reply` and `issue close`, since
- * they are the issue host's commands, not the gh CLI's.
+ * they are the issue host's commands, not the gh CLI's. Those two are kept as two words, since `teamrig gh` is now a
+ * command of its own (one gh call on teamrig's saved key, T4897): an old line still gets its new name.
  *
  * The ship gate reads this file's text at main and at the branch tip (tools/ship/renamed-callers.ts), to refuse a
  * merge that renames a command while a consumer still calls the old name: keep `commands: {` on its own line with one
- * `old: 'new',` per line.
+ * `old: 'new',` per line (a two-word name quoted).
  */
 export const RENAMED: Renamed = {
   flags: { tier: 'priority', problem: 'type bug [--critical] (or --type task)' },
@@ -24,6 +25,7 @@ export const RENAMED: Renamed = {
     release: 'unfreeze',
     windows: 'stable-periods',
     load: 'job',
-    gh: 'issue',
+    'gh sync': 'issue sync',
+    'gh migrate': 'issue migrate',
   },
 };
