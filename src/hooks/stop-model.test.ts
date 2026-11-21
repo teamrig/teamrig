@@ -22,7 +22,7 @@ const LEAD: StopModelInput = {
 };
 const EFFORT_LINE = 'MODEL app-lead runs at low effort; the team config asks for model opus at xhigh effort: type /effort xhigh';
 const FALLBACK_LINE =
-  'MODEL app-lead now runs model claude-opus-4-8, not claude-opus-5-5: Claude Code switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back';
+  'MODEL app-lead now runs model claude-opus-4-8, not claude-opus-5-5: the host switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back';
 
 /** A transcript in which Claude Code switched from Opus 5.5 to Opus 4.8 (`uuid` tells one switch from another). */
 function switched(uuid = 'switch-1'): string {

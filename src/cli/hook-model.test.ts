@@ -64,7 +64,7 @@ const TRANSCRIPT = join(USER_HOME, '.claude', 'projects', 'app', `${CLAUDE_SESSI
 const NOTICES = (id: string): string => join(TEAM_HOME, 'state', 'model-notices', `${id}.json`);
 const LEAD_AT_HIGH = 'MODEL app-lead runs at high effort; the team config asks for model opus at xhigh effort: type /effort xhigh';
 const ALPHA_SWITCHED =
-  'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: Claude Code switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model claude-fable-5-1 to switch back';
+  'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model claude-fable-5-1 to switch back';
 
 /** A Stop payload; `effort` is the level Claude Code reports, if any. */
 function stopPayload(effort?: string, claudeSession: string = CLAUDE_SESSION): string {

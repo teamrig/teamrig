@@ -65,5 +65,5 @@ export async function readLastFallback(reader: TranscriptReader, files: Files, t
  */
 export function fallbackLine(models: HostModels, name: string, fallback: ModelFallback, wanted: string | undefined): string {
   const why = fallback.category === undefined ? '' : ` (${fallback.category})`;
-  return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: Claude Code switched after its safeguards stopped a reply${why} and keeps it for this session; type ${models.switchModelStep(wanted ?? fallback.from)} to switch back`;
+  return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: the host switched after its safeguards stopped a reply${why} and keeps it for this session; type ${models.switchModelStep(wanted ?? fallback.from)} to switch back`;
 }

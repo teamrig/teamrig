@@ -99,11 +99,11 @@ describe('fallbackLine', () => {
   it('names both models, the category and the command back to the team model or the old one', () => {
     assert.equal(
       fallbackLine(MODELS, 'app-lead', SWITCH, 'opus'),
-      'MODEL app-lead now runs model claude-opus-4-8, not claude-fable-5-1: Claude Code switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back',
+      'MODEL app-lead now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back',
     );
     assert.equal(
       fallbackLine(MODELS, 'app-alpha', { ...SWITCH, category: undefined }, undefined),
-      'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: Claude Code switched after its safeguards stopped a reply and keeps it for this session; type /model claude-fable-5-1 to switch back',
+      'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply and keeps it for this session; type /model claude-fable-5-1 to switch back',
     );
   });
 });
