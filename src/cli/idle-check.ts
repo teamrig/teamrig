@@ -27,7 +27,7 @@ import { startableTasks } from '../wake/day-start.ts';
 import type { RestExemption } from '../wake/exempt.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { measureTranscript, type LastSession } from './commands/rehire.ts';
-import { sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
+import { hostProgramsOf, sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
 import { teamZone, type Kit } from './kit.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 import { teamRegister } from './team-register.ts';
@@ -288,5 +288,5 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
 
 /** What ends a session's tab and checks what that would cut off, from the runtime. */
 export function enderOf(runtime: CliRuntime): TabEnder {
-  return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform };
+  return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform, hostPrograms: hostProgramsOf(runtime) };
 }

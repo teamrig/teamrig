@@ -126,6 +126,7 @@ class World {
         await this.clock.sleep(ms);
       },
       platform: options.platform ?? 'win32',
+      hostPrograms: ['claude'],
       openTab: async () => {
         this.opened.push(this.clock.now());
         return this.opening;

@@ -229,6 +229,14 @@ export function sessionProcessCheckOf(runtime: Pick<CliRuntime, 'host' | 'shippe
   return (process) => launchers.some((launcher) => launcher.isSessionProcess(process));
 }
 
+/**
+ * The programs that start a session, each once, as any shipped host or the running host names it: a tab's shell runs
+ * whichever host's program its session is, so the running host adds to the shipped ones and takes none away.
+ */
+export function hostProgramsOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly string[] {
+  return [...new Set(launchersOf(runtime).map((launcher) => launcher.program))];
+}
+
 /** What a session's process tells of it by its command line, as any shipped host or the running host reads it. */
 export interface SessionCommandLines {
   /** Whether a process with `commandLine` is a fork of session `session`; false for a command line the system kept back. */
