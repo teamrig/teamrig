@@ -20,7 +20,7 @@ function hired(session: string, burst?: number): HireRecord {
 function check(request: Partial<HireRequest> = {}, burst: Burst | null = BURST, active: readonly HireRecord[] = [], file: JsonRecord = FILE): ReturnType<typeof burstHireOf> {
   const { config, issues } = parseConfig(file);
   assert.deepEqual(issues, [], 'the test file must be valid');
-  return burstHireOf({ ...REQUEST, ...request }, burst ?? undefined, active, config);
+  return burstHireOf({ ...REQUEST, ...request }, burst ?? undefined, active, config, { model: 'opus', effort: 'xhigh' });
 }
 
 function problem(...args: Parameters<typeof check>): string {

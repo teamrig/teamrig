@@ -1,4 +1,4 @@
-import { launchOf } from '../../config/launch.ts';
+import { ownLaunchOf } from '../../config/launch.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { SessionLog, type SessionLogRecord } from '../../sessions/log.ts';
@@ -28,7 +28,7 @@ function lastClosedFolderOf(records: readonly SessionLogRecord[], id: string): s
  */
 function treeFoldersOf(runtime: CliRuntime, config: KitConfig, records: readonly SessionLogRecord[]): SessionFolderOf {
   return async (id) => {
-    const named = launchOf(config, id).project ?? config.team?.project ?? lastClosedFolderOf(records, id);
+    const named = ownLaunchOf(config, id).project ?? config.team?.project ?? lastClosedFolderOf(records, id);
     if (named === undefined) {
       throw new RefusedError(`no folder is known for session ${id}: set launch.${id}.project or team.project`);
     }

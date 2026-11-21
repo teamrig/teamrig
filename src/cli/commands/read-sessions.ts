@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { describeLaunch, launchOf } from '../../config/launch.ts';
+import { leadLaunchOf } from '../host.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
 import { Roster } from '../../config/roster.ts';
 import type { TeamTree } from '../../config/tree.ts';
@@ -104,9 +105,11 @@ async function teamInputOf(runtime: CliRuntime, tree: TeamTree, own: string, { k
   const tabs = new TabNeedStore(files, kit.paths);
   const records = await new SessionRecordStore(files, kit.paths).readEach(config.sessions);
   const members: MemberInput[] = [];
+  // Resolved as the session starts: the lead's unset keys show the host's lead default, so a reader hard-codes none.
+  const leadDefault = leadLaunchOf(runtime);
   for (const id of config.sessions) {
     const mark = marks.get(id);
-    const launch = launchOf(config, id);
+    const launch = launchOf(config, id, leadDefault);
     members.push({
       id,
       name: roster.nameOf(id) ?? id,

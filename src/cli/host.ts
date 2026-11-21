@@ -15,6 +15,7 @@ import {
   type TranscriptReader,
   type UsageMeter,
 } from '../ports/host/index.ts';
+import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
 import type { ContextSource } from '../refresh/usage.ts';
 import type { HostSecretFiles } from '../secret-guard/rules.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
@@ -257,6 +258,23 @@ export function pluginIfKept(runtime: Pick<CliRuntime, 'host' | 'env' | 'platfor
 export function modelsIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostModels | undefined {
   const { models } = hostOf(runtime);
   return isUnsupported(models) ? undefined : models;
+}
+
+/**
+ * The launch the lead takes for each key its `launch` entry leaves unset: the host's lead default, its effort only when
+ * it is a level on teamrig's scale. None from a host that knows no models, so the lead then starts on the host's own.
+ */
+export function leadLaunchFrom(models: HostModels | undefined): LaunchConfig {
+  if (models === undefined) {
+    return {};
+  }
+  const { model, effort } = models.leadDefault;
+  return isEffortLevel(effort) ? { model, effort } : { model };
+}
+
+/** The run's host's lead default (`leadLaunchFrom`). */
+export function leadLaunchOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): LaunchConfig {
+  return leadLaunchFrom(modelsIfKnown(runtime));
 }
 
 /**

@@ -1,8 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { testConfig } from '../testing/config.ts';
-import { DEFAULT_LEAD_LAUNCH } from './defaults.ts';
 import { describeLaunch, isDefaultModel, isEffort, isModel, launchOf, MODEL_ALIASES, ownLaunchOf } from './launch.ts';
+import type { LaunchConfig } from './types.ts';
+
+/** A host's lead default, as the CLI hands it in (src/cli/host.ts `leadLaunchOf`). */
+const LEAD_DEFAULT: LaunchConfig = { model: 'opus', effort: 'xhigh' };
 
 describe('isModel', () => {
   it('takes every documented alias', () => {
@@ -35,25 +38,29 @@ describe('isEffort', () => {
 });
 
 describe('launchOf', () => {
-  it('starts the lead on Opus at xhigh effort when nothing is set', () => {
-    assert.deepEqual(DEFAULT_LEAD_LAUNCH, { model: 'opus', effort: 'xhigh' });
-    assert.deepEqual(launchOf(testConfig(), 'lead'), { model: 'opus', effort: 'xhigh' });
+  it("starts the lead on the host's lead default when nothing is set", () => {
+    assert.deepEqual(launchOf(testConfig(), 'lead', LEAD_DEFAULT), { model: 'opus', effort: 'xhigh' });
+  });
+
+  it('leaves the lead to the host when the host gives no lead default', () => {
+    assert.deepEqual(launchOf(testConfig(), 'lead', {}), {});
+    assert.deepEqual(launchOf(testConfig({ launch: { lead: { effort: 'max' } } }), 'lead', {}), { effort: 'max' });
   });
 
   it('lets the lead set each key on its own and keeps the default for the other', () => {
-    assert.deepEqual(launchOf(testConfig({ launch: { lead: { model: 'best' } } }), 'lead'), { model: 'best', effort: 'xhigh' });
-    assert.deepEqual(launchOf(testConfig({ launch: { lead: { effort: 'max' } } }), 'lead'), { model: 'opus', effort: 'max' });
-    assert.deepEqual(launchOf(testConfig({ launch: { lead: { model: 'default', effort: 'high' } } }), 'lead'), { model: 'default', effort: 'high' });
+    assert.deepEqual(launchOf(testConfig({ launch: { lead: { model: 'best' } } }), 'lead', LEAD_DEFAULT), { model: 'best', effort: 'xhigh' });
+    assert.deepEqual(launchOf(testConfig({ launch: { lead: { effort: 'max' } } }), 'lead', LEAD_DEFAULT), { model: 'opus', effort: 'max' });
+    assert.deepEqual(launchOf(testConfig({ launch: { lead: { model: 'default', effort: 'high' } } }), 'lead', LEAD_DEFAULT), { model: 'default', effort: 'high' });
   });
 
   it('leaves the other sessions to Claude Code unless they are set', () => {
     const config = testConfig({ launch: { alpha: { model: 'sonnet', effort: 'medium' } } });
-    assert.deepEqual(launchOf(config, 'alpha'), { model: 'sonnet', effort: 'medium' });
-    assert.deepEqual(launchOf(config, 'bravo'), {});
+    assert.deepEqual(launchOf(config, 'alpha', LEAD_DEFAULT), { model: 'sonnet', effort: 'medium' });
+    assert.deepEqual(launchOf(config, 'bravo', LEAD_DEFAULT), {});
   });
 
   it('never reads an id from the object prototype', () => {
-    assert.deepEqual(launchOf(testConfig(), 'constructor'), {});
+    assert.deepEqual(launchOf(testConfig(), 'constructor', LEAD_DEFAULT), {});
   });
 });
 

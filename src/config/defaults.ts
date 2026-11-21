@@ -18,7 +18,6 @@ import type {
   IdleConfig,
   ExecConfig,
   HiringConfig,
-  LaunchConfig,
   LockConfig,
   LeadBoundaryConfig,
   LoopsConfig,
@@ -492,11 +491,3 @@ export const DEFAULT_HIRING: HiringConfig = {
   scaleOut: DEFAULT_SCALE_OUT,
 };
 
-/**
- * The lead's model and effort for each key its `launch` entry leaves unset: Opus (Claude Code's `opus`
- * alias, its newest Opus) at xhigh effort, since the lead plans, splits and judges the whole team's work.
- * Not `best`: in a lead A/B, Fable at xhigh judged no better than Opus and cost 2.4 times as much. A team
- * sets `launch.<lead id>.model` to `best` or a full model id to change it. The other sessions default to
- * Claude Code's own.
- */
-export const DEFAULT_LEAD_LAUNCH: Required<Pick<LaunchConfig, 'model' | 'effort'>> = { model: 'opus', effort: 'xhigh' };

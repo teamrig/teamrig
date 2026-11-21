@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { formatSnapshot, parseSnapshot } from '../../src/budget/snapshot.ts';
 import { HELP_FLAGS } from '../../src/cli/args.ts';
 import { COMMAND_FLAGS, COMMAND_SWITCHES, HELP, VERSION } from '../../src/cli/run.ts';
-import { DEFAULT_LEAD_LAUNCH } from '../../src/config/defaults.ts';
+import { shippedModels } from '../../src/testing/shipped-models.ts';
 import { TEST_SYSTEMS } from '../ci/change-kind.ts';
 import { headingAnchors, type DocFile } from './doc-check.ts';
 
@@ -316,7 +316,7 @@ function sentenceWith(text: string, marker: string): string {
 }
 
 describe("the lead's default launch in the docs", () => {
-  const { model, effort } = DEFAULT_LEAD_LAUNCH;
+  const { model, effort } = shippedModels().leadDefault;
   const tick = (word: string): string => `\`${word}\``;
 
   it('is the model and effort the code starts the lead on', () => {

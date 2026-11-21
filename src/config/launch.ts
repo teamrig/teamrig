@@ -1,4 +1,3 @@
-import { DEFAULT_LEAD_LAUNCH } from './defaults.ts';
 import type { Check } from './reader.ts';
 import { EFFORT_LEVELS, isEffortLevel, type KitConfig, type LaunchConfig } from './types.ts';
 
@@ -45,12 +44,13 @@ export function ownLaunchOf(config: KitConfig, id: string): LaunchConfig {
 }
 
 /**
- * The model and effort a session starts on: its own `launch` entry, and for the lead
- * `DEFAULT_LEAD_LAUNCH` under each key the entry leaves unset. Other sessions leave unset keys to Claude Code.
+ * The model and effort a session starts on: its own `launch` entry, and for the lead `leadDefault` (the host's lead
+ * default, src/cli/host.ts `leadLaunchOf`) under each key the entry leaves unset. Other sessions leave unset keys to
+ * the host.
  */
-export function launchOf(config: KitConfig, id: string): LaunchConfig {
+export function launchOf(config: KitConfig, id: string, leadDefault: LaunchConfig): LaunchConfig {
   const own = ownLaunchOf(config, id);
-  return config.roles.lead === id ? { ...DEFAULT_LEAD_LAUNCH, ...own } : own;
+  return config.roles.lead === id ? { ...leadDefault, ...own } : own;
 }
 
 /** True when the settings leave the model to Claude Code. */

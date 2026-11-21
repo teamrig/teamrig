@@ -1708,8 +1708,8 @@ export function isEffortLevel(value: unknown): value is EffortLevel {
 
 /**
  * The Claude Code model and effort a session starts on (`claude --model`, `claude --effort`), and the folder it
- * starts in; an unset key leaves Claude Code's own choice. The lead takes `DEFAULT_LEAD_LAUNCH` for each model
- * and effort key it leaves unset.
+ * starts in; an unset key leaves Claude Code's own choice. The lead takes its host's lead default for each
+ * model and effort key it leaves unset (src/config/launch.ts `launchOf`).
  */
 export interface LaunchConfig {
   /** A Claude Code model alias, such as `best` or `opus`, or a full model id starting `claude-`. */
@@ -1873,7 +1873,7 @@ export interface KitConfig {
   readonly statusLine: StatusLineConfig;
   /** Goal-first ranking: work classes, the WSJF score, the WIP rule and the class allocation (T2076). */
   readonly focus: FocusConfig;
-  /** Each session's Claude Code model and effort, by id; the lead's unset keys take `DEFAULT_LEAD_LAUNCH`. */
+  /** Each session's Claude Code model and effort, by id; the lead's unset keys take its host's lead default. */
   readonly launch: Readonly<Record<string, LaunchConfig>>;
   readonly paths: PathsConfig;
 }

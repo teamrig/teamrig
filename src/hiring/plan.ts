@@ -1,7 +1,7 @@
 import { isDefaultModel, isModel, launchOf } from '../config/launch.ts';
 import { LeadTree } from '../config/lead-tree.ts';
 import { ownerAsk } from '../config/tree.ts';
-import type { EffortLevel, KitConfig } from '../config/types.ts';
+import type { EffortLevel, KitConfig, LaunchConfig } from '../config/types.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { ID_PATTERN } from '../core/ids.ts';
 import { formatUtcDay, parseUtcDay } from '../core/time.ts';
@@ -105,7 +105,7 @@ function policyProblem(config: KitConfig, request: HireRequest): string | undefi
  * it, so a burst hire stays on the lead's (src/hiring/burst-hire.ts). It gets no fixed daily budget: like any session,
  * its part of the team's daily budget follows its share and its queued work (src/budget/parts.ts).
  */
-export function planHire(file: JsonRecord, config: KitConfig, request: HireRequest): Checked<HirePlan> {
+export function planHire(file: JsonRecord, config: KitConfig, request: HireRequest, leadDefault: LaunchConfig): Checked<HirePlan> {
   const refusal = hirerProblem(config, request.by) ?? policyProblem(config, request);
   if (refusal !== undefined) {
     return { ok: false, problem: refusal };
@@ -132,7 +132,7 @@ export function planHire(file: JsonRecord, config: KitConfig, request: HireReque
     return reviewBy;
   }
   const lead = config.roles.lead;
-  const leads = lead === undefined ? {} : launchOf(config, lead);
+  const leads = lead === undefined ? {} : launchOf(config, lead, leadDefault);
   const model = request.model ?? leads.model;
   const effort = request.effort ?? leads.effort;
   const launch = { ...(isDefaultModel(model) ? {} : { model }), ...(effort === undefined ? {} : { effort }) };

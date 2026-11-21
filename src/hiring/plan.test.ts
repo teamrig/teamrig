@@ -13,7 +13,7 @@ const REQUEST: HireRequest = { id: 'helper', scope: 'port the importer', reason:
 function plan(file: JsonRecord, request: Partial<HireRequest> = {}): ReturnType<typeof planHire> {
   const { config, issues } = parseConfig(file);
   assert.deepEqual(issues, [], 'the test file must be valid');
-  return planHire(file, config, { ...REQUEST, ...request });
+  return planHire(file, config, { ...REQUEST, ...request }, { model: 'opus', effort: 'xhigh' });
 }
 
 function planned(file: JsonRecord, request: Partial<HireRequest> = {}): HirePlan {

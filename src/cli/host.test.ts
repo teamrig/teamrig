@@ -18,6 +18,8 @@ import {
   hostHomeIfKnown,
   hostHomeOf,
   hostOf,
+  leadLaunchFrom,
+  leadLaunchOf,
   identityOf,
   modelsIfKnown,
   pathsIfKnown,
@@ -84,6 +86,20 @@ describe('modelsIfKnown', () => {
     const known = modelsIfKnown({ host: world.host, env: {}, platform: world.platform });
     assert.equal(known?.defaultName, shippedModels().defaultName);
     assert.equal(modelsIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('leadLaunchOf', () => {
+  it("gives the host's lead default, and nothing on a host that knows no models", () => {
+    const world = quietWorld();
+    const { model, effort } = shippedModels().leadDefault;
+    assert.deepEqual(leadLaunchOf({ host: world.host, env: {}, platform: world.platform }), { model, effort });
+    assert.deepEqual(leadLaunchOf({ host: bare, env: {}, platform: 'linux' }), {});
+  });
+
+  it("keeps the model but drops an effort that is no level on teamrig's scale", () => {
+    const models = { ...shippedModels(), leadDefault: { model: 'model-one', effort: 'turbo' } };
+    assert.deepEqual(leadLaunchFrom(models), { model: 'model-one' });
   });
 });
 

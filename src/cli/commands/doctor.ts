@@ -1,5 +1,5 @@
 import { claudeProjectsDir } from '../../budget/discover.ts';
-import { launchOf } from '../../config/launch.ts';
+import { launchOf, ownLaunchOf } from '../../config/launch.ts';
 import { Roster } from '../../config/roster.ts';
 import type { ContextFilesConfig, KitConfig } from '../../config/types.ts';
 import { KIT_NAME } from '../../core/home.ts';
@@ -16,7 +16,7 @@ import { inboxStatus } from '../../inbox/inbox.ts';
 import { JsonlRenameLog } from '../../names/log.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { pathsIfKnown, permissionsIfKept } from '../host.ts';
+import { leadLaunchOf, pathsIfKnown, permissionsIfKept } from '../host.ts';
 import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
@@ -45,7 +45,7 @@ async function configuredProjects(probe: PathProbe, config: KitConfig, ids: read
   const named: readonly Omit<ConfiguredProject, 'kind'>[] = [
     ...(team === undefined ? [] : [{ session: undefined, path: team }]),
     ...ids.flatMap((id) => {
-      const path = launchOf(config, id).project;
+      const path = ownLaunchOf(config, id).project;
       return path === undefined ? [] : [{ session: id, path }];
     }),
   ];
@@ -120,7 +120,7 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     settingsEnv: await readSettingsEnv(runtime.files, sessionSettingsOf(runtime, project)),
     settingsDeny: await readSecretDeny(runtime, project),
     wideAllow: await readWideAllow(runtime, { paths, config, project }),
-    launches: roster.ids.map((id) => ({ id, launch: launchOf(config, id) })),
+    launches: roster.ids.map((id) => ({ id, launch: launchOf(config, id, leadLaunchOf(runtime)) })),
     projects: await configuredProjects(runtime.probe, config, roster.ids),
     shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
     page: pageProblemOf(await pageCheckOf(runtime, paths.team)),

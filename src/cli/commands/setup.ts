@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { launchOf } from '../../config/launch.ts';
+import { ownLaunchOf } from '../../config/launch.ts';
 import { SHIPPED_CONFIG_FORMAT } from '../../config/migrate.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { KIT_NAME, resolveKitHome, teamConfigFile } from '../../core/home.ts';
@@ -35,7 +35,7 @@ export async function projectOf(runtime: CliRuntime, flag: string | undefined): 
  * ({@link teamProjectOf}), else as {@link projectOf}.
  */
 export function sessionProjectOf(runtime: CliRuntime, config: KitConfig, id: string, flag: string | undefined, from: string): Promise<string> {
-  return projectOf(runtime, flag ?? launchOf(config, id).project ?? teamProjectOf(config, from));
+  return projectOf(runtime, flag ?? ownLaunchOf(config, id).project ?? teamProjectOf(config, from));
 }
 
 /** {@link sessionProjectOf} for each session a pass over the team reads. */

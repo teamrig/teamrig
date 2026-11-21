@@ -15,6 +15,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { homeCloseOf, SessionLog } from '../../sessions/log.ts';
 import { onePositional, requiredFlag, UsageError, type Flags, type ParsedArgs } from '../args.ts';
 import { readBursts } from '../burst-reading.ts';
+import { leadLaunchOf } from '../host.ts';
 import { headroomOf } from '../headroom.ts';
 import { callerOf } from '../inputs.ts';
 import { checkedNextConfig, configFileJson, configLockOf, findTeam, openKit, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
@@ -75,7 +76,7 @@ function requestOf(args: ParsedArgs, runtime: CliRuntime, id: string, by: string
 /** The request tied to the burst in force, for `hire --burst`; refused when the burst takes no such hire. */
 async function burstRequestOf(runtime: CliRuntime, kit: Kit, config: KitConfig, request: HireRequest, active: readonly HireRecord[]): Promise<HireRequest> {
   const { records, usedPct } = await readBursts(runtime, kit.paths, config.budget, request.now);
-  const checked = burstHireOf(request, activeBurst(records, request.now, usedPct), active, config);
+  const checked = burstHireOf(request, activeBurst(records, request.now, usedPct), active, config, leadLaunchOf(runtime));
   if (!checked.ok) {
     throw new RefusedError(checked.problem);
   }
@@ -196,7 +197,7 @@ export async function hire(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
     const { records, skipped } = await log.read();
     const active = activeHires(records);
     const request = args.switches.has('burst') ? await burstRequestOf(runtime, kit, config, asked, active) : asked;
-    const plan = planHire(await configFileJson(runtime, load.path), config, request);
+    const plan = planHire(await configFileJson(runtime, load.path), config, request, leadLaunchOf(runtime));
     if (!plan.ok) {
       throw new RefusedError(plan.problem);
     }
