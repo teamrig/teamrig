@@ -1,9 +1,38 @@
 import { MAX_DESCRIPTION } from '../config/defaults.ts';
 import type { KitConfig } from '../config/types.ts';
 import { SecretScanner } from '../core/secrets.ts';
+import { issuePage, type IssueTarget } from '../issues/host.ts';
 import type { HostIssue } from '../issues/issue.ts';
 import { refOf } from '../issues/ref.ts';
 import { plainLine } from '../core/printable.ts';
+import { GITHUB_SOURCE, type ImportSource } from '../register/model.ts';
+
+/**
+ * The tracker an import reads: the source its tasks carry (register/model.ts), its name as the sync's titles and notes
+ * say it, and its issue refs (the connector's RefCodec, plugin-api/connector.ts).
+ */
+export interface ImportTracker {
+  readonly source: ImportSource;
+  readonly name: string;
+  /** The ref of an issue's task; undefined for an issue at a place the tracker's config does not name. */
+  readonly refOf: (target: IssueTarget) => string | undefined;
+  /**
+   * The issue's page, built by teamrig from the target, never the address the tracker's answer sent: the sync writes
+   * it as a closed issue's evidence.
+   */
+  readonly pageOf: (target: IssueTarget) => string;
+}
+
+/**
+ * GitHub, as the import of `github.repos` reads it: each issue's ref is `gh:<owner>/<name>#<number>` (issues/ref.ts),
+ * its page issuePage's.
+ */
+export const GITHUB_TRACKER: ImportTracker = {
+  source: GITHUB_SOURCE,
+  name: 'GitHub',
+  refOf: (target) => refOf(target),
+  pageOf: (target) => issuePage(target.repo, target.number),
+};
 
 /** The priority of an issue with no priority label of the team's: p2, or the team's least urgent level when it has no p2. */
 export const ISSUE_PRIORITY = 2;
@@ -72,10 +101,15 @@ export function issueRef(repo: string, number: number): string {
   return refOf({ repo, number });
 }
 
-export function issueTask(issue: HostIssue, rules: ImportRules): IssueTask {
+/** The task `issue` calls for on `tracker`; undefined for an issue at a place the tracker's config does not name, as it has no ref. */
+export function issueTask(issue: HostIssue, rules: ImportRules, tracker: ImportTracker): IssueTask | undefined {
+  const ref = tracker.refOf(issue);
+  if (ref === undefined) {
+    return undefined;
+  }
   return {
-    ref: issueRef(issue.repo, issue.number),
-    title: taskTitle(issue, rules.maxTitle),
+    ref,
+    title: taskTitle(issue, rules.maxTitle, tracker.name),
     description: taskDescription(issue.body, rules.secrets),
     priority: issuePriority(issue.labels, rules.priorities),
     owner: issueOwner(issue, rules),
@@ -85,11 +119,11 @@ export function issueTask(issue: HostIssue, rules: ImportRules): IssueTask {
 
 /**
  * The issue's title on one plain line, cut to `maxTitle`: outside text, so control and format characters
- * go. A title with nothing left names the issue instead.
+ * go. A title with nothing left names the issue on its tracker, `trackerName` (`GitHub issue acme/web#7`), instead.
  */
-export function taskTitle(issue: HostIssue, maxTitle: number): string {
+export function taskTitle(issue: HostIssue, maxTitle: number, trackerName: string): string {
   const title = plainLine(issue.title);
-  const text = title === '' ? `GitHub issue ${issue.repo}#${issue.number}` : title;
+  const text = title === '' ? `${trackerName} issue ${issue.repo}#${issue.number}` : title;
   // A cut between the two halves of a character leaves the first half alone: it goes too.
   return text.length <= maxTitle ? text : text.slice(0, maxTitle).replace(/[\uD800-\uDBFF]$/, '').trimEnd();
 }

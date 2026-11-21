@@ -4,7 +4,7 @@ import { testConfig } from '../testing/config.ts';
 import type { HostIssue } from '../issues/issue.ts';
 import { MAX_DESCRIPTION } from '../config/defaults.ts';
 import { SecretScanner } from '../core/secrets.ts';
-import { importRules, issueOutcome, issueOwner, issuePriority, issueRef, issueTask, SECRET_BODY, taskDescription, taskTitle, type ImportRules } from './map.ts';
+import { GITHUB_TRACKER, importRules, issueOutcome, issueOwner, issuePriority, issueRef, issueTask, SECRET_BODY, taskDescription, taskTitle, type ImportRules, type ImportTracker } from './map.ts';
 
 const RULES: ImportRules = importRules(testConfig({ github: { repos: ['acme/web'], owners: { octocat: 'bravo', hubot: 'alpha' } } }));
 const SECRETS = new SecretScanner();
@@ -61,7 +61,7 @@ describe('importRules', () => {
 
 describe('issueTask', () => {
   it('makes an open issue a task keyed by its ref, with its title, body, priority label and assignee', () => {
-    assert.deepEqual(issueTask(issue({ body: 'Steps:\r\n1. log in', labels: ['bug', 'p1'], assignees: ['octocat'] }), RULES), {
+    assert.deepEqual(issueTask(issue({ body: 'Steps:\r\n1. log in', labels: ['bug', 'p1'], assignees: ['octocat'] }), RULES, GITHUB_TRACKER), {
       ref: 'gh:acme/web#7',
       title: 'Fix login',
       description: 'Steps:\n1. log in',
@@ -69,8 +69,18 @@ describe('issueTask', () => {
       owner: 'bravo',
       outcome: 'open',
     });
-    assert.equal(issueTask(issue(), RULES).description, null);
+    assert.equal(issueTask(issue(), RULES, GITHUB_TRACKER)?.description, null);
     assert.equal(issueRef('acme/web', 12), 'gh:acme/web#12');
+  });
+
+  it("keys the task by the tracker's ref, and makes none for an issue the tracker gives no ref", () => {
+    const named: ImportTracker = { ...GITHUB_TRACKER, source: 'jira', name: 'Jira', refOf: (target) => (target.repo === 'acme/web' ? `jira:WEB-${target.number}` : undefined) };
+    assert.equal(issueTask(issue(), RULES, named)?.ref, 'jira:WEB-7');
+    assert.equal(issueTask(issue({ repo: 'acme/other' }), RULES, named), undefined);
+  });
+
+  it("gives GitHub's page for GitHub's issues, whatever address the answer sent", () => {
+    assert.equal(GITHUB_TRACKER.pageOf({ repo: 'acme/web', number: 7 }), 'https://github.com/acme/web/issues/7');
   });
 });
 
@@ -104,17 +114,18 @@ describe('taskDescription', () => {
 
 describe('taskTitle', () => {
   it('strips control and format characters, so an outside title stays one plain line', () => {
-    assert.equal(taskTitle(issue({ title: 'Fix\u001b[31m login‮\r\nnow' }), 140), 'Fix [31m login now');
+    assert.equal(taskTitle(issue({ title: 'Fix\u001b[31m login‮\r\nnow' }), 140, 'GitHub'), 'Fix [31m login now');
   });
 
   it('cuts a long title to the cap, never between the halves of a character', () => {
-    assert.equal(taskTitle(issue({ title: 'abcdef ghij' }), 7), 'abcdef');
-    assert.equal(taskTitle(issue({ title: 'abc\u{1F600}def' }), 4), 'abc');
-    assert.equal(taskTitle(issue({ title: 'abc\u{1F600}def' }), 5), 'abc\u{1F600}');
+    assert.equal(taskTitle(issue({ title: 'abcdef ghij' }), 7, 'GitHub'), 'abcdef');
+    assert.equal(taskTitle(issue({ title: 'abc\u{1F600}def' }), 4, 'GitHub'), 'abc');
+    assert.equal(taskTitle(issue({ title: 'abc\u{1F600}def' }), 5, 'GitHub'), 'abc\u{1F600}');
   });
 
   it('names the issue when its title has nothing left', () => {
-    assert.equal(taskTitle(issue({ title: ' \u0007​ ' }), 140), 'GitHub issue acme/web#7');
+    assert.equal(taskTitle(issue({ title: ' \u0007​ ' }), 140, 'GitHub'), 'GitHub issue acme/web#7');
+    assert.equal(taskTitle(issue({ title: '' }), 140, 'Jira'), 'Jira issue acme/web#7');
   });
 });
 

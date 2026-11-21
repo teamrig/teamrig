@@ -4,7 +4,7 @@ import { activityRoutes, type ActivityAudience, type ActivityRoute } from '../..
 import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts';
 import { followersOf, parseFollows } from '../../sync/follows.ts';
 import { issueMarkStep, type IssueAudience, type IssueChangeRoute, type IssueMark } from '../../sync/issue-marks.ts';
-import { importRules, issueOwner, issueRef } from '../../sync/map.ts';
+import { GITHUB_TRACKER, importRules, issueOwner, issueRef } from '../../sync/map.ts';
 import { importedTasks, linkedRefs, planSync, refHolders, type SyncPlan, type SyncStep } from '../../sync/plan.ts';
 import { withCiExcerpts } from '../../sync/ci-excerpt.ts';
 import {
@@ -154,8 +154,8 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     }
     read.notes.forEach((note) => say(`NOTE ${repo}: ${note}`));
     const tasks = [...(await register.snapshot()).state.tasks.values()];
-    const imported = importedTasks(tasks);
-    const plan = planSync(read.issues, imported, rules, linkedRefs(tasks));
+    const imported = importedTasks(tasks, GITHUB_SOURCE);
+    const plan = planSync(read.issues, imported, rules, GITHUB_TRACKER, linkedRefs(tasks));
     // A security issue goes to its task's owner, else where the import would route it; an outsider's left-out report too.
     security.set(repo, securityIssues(read.issues, (issue) => imported.get(issueRef(issue.repo, issue.number))?.owner ?? issueOwner(issue, rules)));
     leftOut.set(repo, plan.leftOut);
