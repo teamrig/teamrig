@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { FakeGit } from '../lib/fake-git.ts';
-import { MULTI_LINE_ARG, POSIX_LAUNCHER, hookCommandsOf, launcherModeFinding, smokeDist, type RunRequest, type RunResult, type Runner, type SmokeInput } from './dist-smoke.ts';
+import { MULTI_LINE_ARG, POSIX_LAUNCHER, hookCommandsOf, launcherModeFinding, sampleKeyOf, smokeDist, type RunRequest, type RunResult, type Runner, type SmokeInput } from './dist-smoke.ts';
 
 const ROOT = resolve('/plugin');
 
@@ -31,7 +31,7 @@ const OK: RunResult = { status: 0, stdout: '', stderr: '' };
 /** The CLI's answer to the multi-line argument handed over whole: an unknown command, then the usage. */
 const UNKNOWN_MULTI_LINE: RunResult = { status: 64, stdout: '', stderr: `unknown command "${MULTI_LINE_ARG}"\n\nteamrig <command> ...\n` };
 
-/** Answers like a healthy dist; `override` replaces the answer to the request whose args end with the given word. */
+/** Answers like a healthy dist; `override` replaces the answer to the hook it names, else to the request whose args end with the given word. */
 class FakeRunner {
   readonly requests: RunRequest[] = [];
   private readonly overrides: ReadonlyMap<string, RunResult>;
@@ -43,7 +43,8 @@ class FakeRunner {
   readonly run = (request: RunRequest): RunResult => {
     this.requests.push(request);
     const last = request.args.at(-1) ?? '';
-    const word = last.endsWith('--version"') ? '--version' : last.includes(MULTI_LINE_ARG) ? MULTI_LINE_ARG : last;
+    const hook = request.args[1] === 'hook' ? request.args[2] : undefined;
+    const word = hook !== undefined ? hook : last.endsWith('--version"') ? '--version' : last.includes(MULTI_LINE_ARG) ? MULTI_LINE_ARG : last;
     const override = this.overrides.get(word);
     if (override !== undefined) {
       return override;
@@ -112,7 +113,7 @@ describe('hookCommandsOf', () => {
     const manifest: unknown = JSON.parse(await readFile(new URL('../../plugins/teamrig/hooks/hooks.json', import.meta.url), 'utf8'));
     const healthy = new FakeRunner();
     const garbled: Runner = (request) => (request.file === input().nodePath ? { ...OK, stdout: 'garbled' } : healthy.run(request));
-    const judged = hookCommandsOf(manifest, ROOT).commands.filter(({ args }) => args.at(-1) !== 'inbox-reminder');
+    const judged = hookCommandsOf(manifest, ROOT).commands.filter(({ args }) => args[2] !== 'inbox-reminder');
     const findings = smokeDist(input({ manifest }), garbled);
     assert.deepEqual(
       findings.map((finding) => finding.split(': ')[0]),
@@ -121,7 +122,24 @@ describe('hookCommandsOf', () => {
   });
 });
 
+describe('sampleKeyOf', () => {
+  it('names the hook without the host flags after it, so each host shares one sample', () => {
+    assert.equal(sampleKeyOf(['main.js', 'hook', 'stop']), 'hook stop');
+    assert.equal(sampleKeyOf(['main.js', 'hook', 'stop', '--host', 'claude-code']), 'hook stop');
+    assert.equal(sampleKeyOf(['main.js', 'hook', 'stop', '--host', 'antigravity-cli', '--host-event', 'Stop']), 'hook stop');
+  });
+});
+
 describe('smokeDist', () => {
+  it("runs a hook line that names its host with that hook's sample, the whole line kept", () => {
+    const stop = { type: 'command', command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'stop', '--host', 'claude-code'] };
+    const runner = new FakeRunner();
+    assert.deepEqual(smokeDist(input({ manifest: manifestOf({ Stop: [stop] }) }), runner.run), []);
+    const hookRun = runner.requests.at(-1);
+    assert.deepEqual(hookRun?.args, [`${ROOT}/dist/cli/main.js`, 'hook', 'stop', '--host', 'claude-code']);
+    assert.equal(hookRun?.input, JSON.stringify({ hook_event_name: 'Stop', session_id: '0123abcd-0000-4000-8000-00000000000a', stop_hook_active: false }));
+  });
+
   it('finds nothing wrong with a healthy dist', () => {
     const runner = new FakeRunner();
     assert.deepEqual(smokeDist(input(), runner.run), []);
