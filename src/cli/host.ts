@@ -131,7 +131,7 @@ export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' 
 }
 
 /** What a host telling nothing of its sessions tells a run: no part of who it is. */
-const UNTOLD: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined };
+const UNTOLD: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
 
 /**
  * Who the run's host says this run is: the folder its session started in, how the host was started, the kind of

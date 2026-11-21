@@ -50,13 +50,19 @@ export const NO_PATHS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), p
  */
 export const NO_SESSION_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), launcher: unsupported('no session of the host is told') });
 
+/** Who a run is when the host tells none of it: each part untold. */
+export const UNTOLD_IDENTITY: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
+
+/** The program name a test host's launcher gives, apart from the shipped host's own so a spec can tell them apart. */
+export const TEST_PROGRAM = 'Test Host';
+
 /**
  * The shipped host, saying every run is `identity` whatever the environment holds: for a spec of a reader that must
  * ask the host who the run is and read no variable of a host itself.
  */
 export function hostTelling(identity: Partial<SessionIdentity>): HostSource {
-  const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables: testSessionVariables(), identity: () => told } });
+  const told: SessionIdentity = { ...UNTOLD_IDENTITY, ...identity };
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { programName: TEST_PROGRAM, variables: testSessionVariables(), identity: () => told } });
 }
 
 /**
@@ -64,8 +70,8 @@ export function hostTelling(identity: Partial<SessionIdentity>): HostSource {
  * part untold unless given: for a spec of a run on a host that names marks of its own, or none.
  */
 export function hostNaming(variables: SessionVariables, identity: Partial<SessionIdentity> = {}): HostSource {
-  const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables, identity: () => told } });
+  const told: SessionIdentity = { ...UNTOLD_IDENTITY, ...identity };
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { programName: TEST_PROGRAM, variables, identity: () => told } });
 }
 
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */

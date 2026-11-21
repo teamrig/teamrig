@@ -261,11 +261,12 @@ describe('secretFilesOf', () => {
 describe('identityOf', () => {
   const PROJECT = join('/', 'work', 'app');
   const TOLD = { CLAUDE_PROJECT_DIR: PROJECT, CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_KIND: 'bg' };
-  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined };
+  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
 
   it('gives who the host says the run is, read from the environment of the run', () => {
     const world = quietWorld();
-    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg', sessionId: undefined });
+    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { ...UNTOLD, projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg' });
+    assert.equal(identityOf({ host: world.host, env: { CLAUDE_CODE_EFFORT_LEVEL: 'low' }, platform: world.platform }).forcedEffort, 'low');
     assert.equal(identityOf({ host: world.host, env: { CLAUDE_CODE_SESSION_ID: 's-1' }, platform: world.platform }).sessionId, 's-1');
     assert.deepEqual(identityOf({ host: world.host, env: {}, platform: world.platform }), UNTOLD);
   });
@@ -279,14 +280,13 @@ describe('identityOf', () => {
     const seen: Parameters<HostSource>[0][] = [];
     const telling: HostSource = (given) => {
       seen.push(given);
-      const identity = { projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionKind: undefined, sessionId: given.env['AGENT_SESSION'] };
-      return { ...BARE, launcher: { variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, identity: () => identity } };
+      const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
+      return { ...BARE, launcher: { programName: 'Agent', variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, identity: () => identity } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
+      ...UNTOLD,
       projectDir: PROJECT,
       startedAs: 'desk',
-      sessionKind: undefined,
-      sessionId: undefined,
     });
     assert.deepEqual(seen, [{ env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }]);
   });

@@ -1,6 +1,6 @@
 /**
- * The host's sessions as the core starts, finds and names them. So far the port tells who the host says a run is;
- * its program, a launch, a resume, a session's processes and a wake join it as each moves out of the core.
+ * The host's sessions as the core starts, finds and names them. So far the port tells the program's name and who the
+ * host says a run is; a launch, a resume, a session's processes and a wake join it as each moves out of the core.
  */
 
 /**
@@ -26,6 +26,11 @@ export interface SessionIdentity {
    * by; undefined when the host tells none, as in the person's own shell.
    */
   readonly sessionId: string | undefined;
+  /**
+   * The effort level the host's environment forces on every session it starts, over the one a session picked, in the
+   * host's own word; undefined when nothing forces one, and the session's own effort holds.
+   */
+  readonly forcedEffort: string | undefined;
 }
 
 /**
@@ -47,6 +52,11 @@ export interface SessionVariables {
 }
 
 export interface SessionLauncher {
+  /**
+   * The host program's name as people know it, such as `Claude Code`: what a commit stamp names. The core sees no
+   * adapter's declaration, so the port carries the name itself.
+   */
+  readonly programName: string;
   /** The variables the host tells a run about its session by, the ones its declaration names. */
   readonly variables: SessionVariables;
   /** Who the host says this run is, in the environment the port was built for. */
