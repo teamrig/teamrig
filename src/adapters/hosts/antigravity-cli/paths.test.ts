@@ -18,7 +18,6 @@ describe("Antigravity's paths", () => {
     assert.equal(p.projectRules(proj), posix.join(proj, '.agents', 'rules'));
     assert.equal(p.skills(home), posix.join(home, '.gemini', 'config', 'skills'));
     assert.equal(p.projectSkills(proj), posix.join(proj, '.agents', 'skills'));
-    assert.equal(p.userAgents(home), posix.join(home, '.gemini', 'config', 'agents'));
     assert.equal(p.projectAgents(proj), posix.join(proj, '.agents', 'agents'));
     assert.deepEqual(p.secretFiles(), []);
   });
@@ -41,6 +40,7 @@ describe("Antigravity's paths", () => {
     const home = posix.join('/', 'people', 'sam');
     const proj = posix.join('/', 'work', 'app');
     assert.throws(() => p.worktrees(proj), /unsupported:/);
+    assert.throws(() => p.userAgents(home), /unsupported:/);
     assert.throws(() => p.memoryFolder(home, proj), /unsupported:/);
     assert.throws(() => p.memoryIndex(home, proj), /unsupported:/);
     assert.throws(() => p.memoryFolders(home), /unsupported:/);

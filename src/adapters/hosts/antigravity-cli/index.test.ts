@@ -5,11 +5,11 @@ import { hostDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import adapter from './index.ts';
 
-describe('the Antigravity adapter', () => {
+describe('the Antigravity CLI adapter', () => {
   it('declares a valid host for the plugin API of this teamrig', () => {
     assert.deepEqual(hostDeclarationProblems(declaration), []);
-    assert.equal(declaration.id, 'antigravity');
-    assert.equal(declaration.name, 'Antigravity');
+    assert.equal(declaration.id, 'antigravity-cli');
+    assert.equal(declaration.name, 'Antigravity CLI');
     assert.equal(apiVersionNotice(declaration.apiVersion, API_VERSION), undefined);
   });
 

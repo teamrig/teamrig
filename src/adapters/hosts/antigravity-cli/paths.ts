@@ -25,7 +25,7 @@ export function hostPaths(platform: HostDeps['platform']): HostPaths {
     projectRules: (project) => path.join(project, '.agents', 'rules'),
     skills: (userHome) => path.join(home(userHome), 'skills'),
     projectSkills: (project) => path.join(project, '.agents', 'skills'),
-    userAgents: (userHome) => path.join(home(userHome), 'agents'),
+    userAgents: () => unsupportedPath('userAgents'),
     projectAgents: (project) => path.join(project, '.agents', 'agents'),
     memoryFolder: () => unsupportedPath('memoryFolder'),
     memoryIndex: () => unsupportedPath('memoryIndex'),
