@@ -11,6 +11,7 @@ import {
   type ToolCall,
   type ToolCallShape,
 } from '../../../plugin-api/index.ts';
+import { checkHookInput } from './hook-input.ts';
 
 /** Antigravity's hook event names paired with teamrig's event names (built without type casts). */
 const EVENT_PAIRS: readonly (readonly [HookEventName, string])[] = [
@@ -63,8 +64,7 @@ function callOf(payload: JsonRecord, shape: ToolCallShape): ToolCall | undefined
   };
 }
 
-function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
-  const hostName = stringField(payload, 'hookEventName');
+function eventOf(payload: JsonRecord, shape: ToolCallShape, hostName: string | undefined): HookEvent {
   const error = stringField(payload, 'error');
   const name = eventNameOf(hostName, error);
   return {
@@ -179,12 +179,23 @@ function replyText(on: HookEventName, reply: HookReply): string {
 /**
  * The hook port of Antigravity: reads Antigravity's camelCase hook payloads into {@link HookEvent} and serializes
  * {@link HookReply} into Antigravity's `hooks.json` stdout JSON contracts.
+ *
+ * agy's input does not name its event, so the hook's command line does (`--host-event`, written by the hooks file):
+ * that event wins, and the input must then fit the shape agy's hooks page gives it, or the bridge reads no event, as
+ * it does for text that is no JSON object, rather than act on a misread input. A line with no `--host-event` falls
+ * back to a `hookEventName` field in the input, unchecked, until a live agy run shows whether any build sends one.
  */
 export function hookBridge(shape: ToolCallShape): HookBridge {
   return {
-    parse: (raw) => {
+    parse: (raw, hostEvent) => {
       const value = parsed(raw);
-      return isRecord(value) ? eventOf(value, shape) : undefined;
+      if (!isRecord(value)) {
+        return undefined;
+      }
+      if (hostEvent === undefined) {
+        return eventOf(value, shape, stringField(value, 'hookEventName'));
+      }
+      return checkHookInput(hostEvent, value).ok ? eventOf(value, shape, hostEvent) : undefined;
     },
     reply: replyText,
     // Unproven: assumes Antigravity lets the call through when a hook fails; verify on a live agy run.
