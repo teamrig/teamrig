@@ -2,7 +2,6 @@ import { DEFAULT_COMMITS } from '../../src/config/defaults.ts';
 import { stampTrailer } from '../../src/core/stamp.ts';
 import { pathMatcher, weighCommit, type CommitWeight, type FileChange } from '../../src/push-guard/commit-size.ts';
 import { approvedRebase, type ClearMerge, type WorkCommit } from './approval.ts';
-import { freeBranch } from './branch-names.ts';
 import type { BuildStep } from './build-steps.ts';
 import type { CheckScope } from '../ci/check-scope.ts';
 import type { GateVerdict } from './local-gate.ts';
@@ -122,15 +121,14 @@ function commit(deps: ShipDeps, files: readonly string[], subject: string, body:
  *      apart, then push the change branch (push.ts, never main) and merge it (merge.ts).
  * Another ship can merge while this one runs its checks (heavy steps share the host), and main then moves past
  * the branch. When that move changed no file this change changes, the version files and the dist aside (every
- * run sets those again), the ship renames the branch `<branch>-N` (a pushed branch is never rewritten, the
- * lead's ruling of 11-06) and goes again from step 0, at most SHIP_ATTEMPTS runs in all; the older pushed name
- * is deleted by the merge's sweep (leftovers.ts). A move that changed the same files is refused, naming them.
+ * run sets those again), the ship goes again from step 0 on the same branch, at most SHIP_ATTEMPTS runs in all: sync.ts
+ * rebases it, and push.ts replaces the pushed copy with a lease, so the pull request stays the same one (the owner's
+ * rule of 11-21: a rebase never opens a new branch). A move that changed the same files is refused, naming them.
  * With --merge, local checks that fail on a branch main moved past go again the same way (T2725).
  * A refusal throws `REFUSED <reason>`; a failed step throws its own error.
  */
 export async function shipCommits(args: ShipArgs, written: readonly Chunk[], deps: ShipDeps): Promise<number> {
-  let stem: string | null = args.merge ? deps.git(['rev-parse', '--abbrev-ref', 'HEAD']).trim() : null;
-  const approved = stem === null ? null : await clearedChange(args, stem, deps);
+  const approved = args.merge ? await clearedChange(args, deps.git(['rev-parse', '--abbrev-ref', 'HEAD']).trim(), deps) : null;
   for (let attempt = 1; ; attempt++) {
     const exit = await shipOnce(args, written, deps, approved);
     if (exit.kind === 'done') return exit.code;
@@ -138,12 +136,9 @@ export async function shipCommits(args: ShipArgs, written: readonly Chunk[], dep
     if (attempt === SHIP_ATTEMPTS) throw new Error(`REFUSED main moved past the branch ${SHIP_ATTEMPTS} times during this ship, last to ${tip}: ship again`);
     const shared = sharedWithMain(deps, exit.tip);
     if (shared.length > 0) {
-      throw new Error(`REFUSED main moved to ${tip} and changed ${shared.join(', ')}, which this change changes too: rebase onto origin/main by hand, then ship again under a new branch name`);
+      throw new Error(`REFUSED main moved to ${tip} and changed ${shared.join(', ')}, which this change changes too: rebase onto origin/main by hand, then ship again on the same branch`);
     }
-    stem ??= deps.git(['rev-parse', '--abbrev-ref', 'HEAD']).trim();
-    const next = freeBranch((...gitArgs) => deps.git(gitArgs).trim(), stem);
-    deps.run('git', ['branch', '-m', next]);
-    deps.log(`\nmain moved to ${tip}, touching no file this change touches: shipping again as ${next}`);
+    deps.log(`\nmain moved to ${tip}, touching no file this change touches: shipping again on the same branch`);
   }
 }
 

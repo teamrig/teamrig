@@ -109,19 +109,12 @@ describe('takeBackEarlierRun', () => {
     assert.deepEqual(logs, []);
   });
 
-  test('refuses to rewrite commits already pushed to origin, and leaves the branch as it is', () => {
+  test('takes back commits already pushed to origin on the same branch: the next push replaces them with a lease (T4907)', () => {
     earlierRun();
     repo.git('push', '-q', 'origin', 't1-change');
-    const before = head();
-    assert.throws(
-      () => takeBackEarlierRun(deps(), CHUNKS, 'origin/main'),
-      /^Error: REFUSED 3 commit\(s\) an earlier run of this plan made are on origin\/t1-change, and a pushed branch is never rewritten: ship the change under a new branch name \(git branch -m t1-change t1-change-b\), then ship again$/,
-    );
-    assert.equal(head(), before);
-    assert.deepEqual(status(), []);
-
-    repo.git('branch', '-m', 't1-change', 't1-change-b');
-    assert.equal(takeBackEarlierRun(deps(), CHUNKS, 'origin/main'), 3, 'the new name is not on origin');
+    assert.equal(takeBackEarlierRun(deps(), CHUNKS, 'origin/main'), 3);
+    assert.equal(head(), fork);
+    assert.equal(repo.git('rev-parse', '--abbrev-ref', 'HEAD').trim(), 't1-change', 'no new branch: the same pull request');
   });
 
   test('a branch pushed before the run, whose origin tip lacks the run, is taken back', () => {
@@ -129,20 +122,5 @@ describe('takeBackEarlierRun', () => {
     earlierRun();
     assert.equal(takeBackEarlierRun(deps(), CHUNKS, 'origin/main'), 3);
     assert.equal(head(), fork);
-  });
-
-  test("an origin tip this clone lacks counts as pushed: it may hold the run's commits", () => {
-    earlierRun();
-    const other = new TempRepo('rerun-other').init();
-    try {
-      other.git('symbolic-ref', 'HEAD', 'refs/heads/t1-change');
-      other.write('x.txt', 'x\n');
-      other.git('add', 'x.txt');
-      other.git('commit', '-q', '-m', 'elsewhere');
-      other.git('push', '-q', join(repo.outside, 'origin.git'), 't1-change');
-    } finally {
-      other.remove();
-    }
-    assert.throws(() => takeBackEarlierRun(deps(), CHUNKS, 'origin/main'), /^Error: REFUSED 3 commit\(s\)/);
   });
 });
