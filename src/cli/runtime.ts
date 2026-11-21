@@ -1,5 +1,5 @@
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
@@ -76,13 +76,17 @@ export interface CliRuntime {
   readonly secretsGit: SecretsGit;
   readonly out: Output;
   readonly platform: NodeJS.Platform;
-  /** The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts). */
+  /**
+   * The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts).
+   * The process starts with the default host's; `runCli` swaps in the one the run names (src/cli/host-choice.ts).
+   */
   readonly host: HostSource;
   /**
-   * Every host adapter teamrig ships with, the one the run works in among them: for what holds on a machine whatever
-   * host runs the session, the hosts' own secret files (`secretFilesOf`, host.ts).
+   * Every host adapter teamrig ships with by id, the one the run works in among them: for the host a run names
+   * (`--host`), and for what holds on a machine whatever host runs the session, the hosts' own secret files
+   * (`secretFilesOf`, host.ts).
    */
-  readonly shippedHosts: readonly ShippedHost[];
+  readonly shippedHosts: ShippedHosts;
   /** Terminal launchers and Claude Code, for `teamrig open` and `teamrig launch`. */
   readonly processes: Processes;
   /** The running session's Claude Code process and its tab, which the automatic context refresh ends. */

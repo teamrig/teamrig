@@ -71,17 +71,22 @@ export function loadHostPorts(run: ProgramRunner, importer: ModuleImporter = imp
   return sourceOf(DEFAULT_HOST, run, importer);
 }
 
+/** Every host adapter teamrig ships with, each id beside the way to build its ports. */
+export type ShippedHosts = Readonly<Record<string, ShippedHost>>;
+
 /**
  * Loads every host adapter teamrig ships with (`HOST_ADAPTERS`), the one it runs in among them, and gives the way to
- * build each one's ports beside the session variables it declares. For what holds on a machine whatever host runs the
- * session, such as the files a host keeps a login in. One that does not load throws every reason, as the running one
- * does: an answer drawn from fewer hosts than ship would be a weaker one, told to nobody.
+ * build each one's ports beside the session variables it declares, by id: for the host a run names (`--host`,
+ * src/cli/host-choice.ts), and for what holds on a machine whatever host runs the session, such as the files a host
+ * keeps a login in. One that does not load throws every reason, as the running one does: an answer drawn from fewer
+ * hosts than ship would be a weaker one, told to nobody.
  */
-export function loadShippedHosts(run: ProgramRunner, importer: ModuleImporter = importModule): Promise<readonly ShippedHost[]> {
-  return Promise.all(
-    Object.keys(HOST_ADAPTERS).map(async (id): Promise<ShippedHost> => {
+export async function loadShippedHosts(run: ProgramRunner, importer: ModuleImporter = importModule): Promise<ShippedHosts> {
+  const entries = await Promise.all(
+    Object.keys(HOST_ADAPTERS).map(async (id) => {
       const adapter = await adapterOf(id, importer);
-      return { ports: sourceFrom(adapter, id, run), sessionVariables: adapter.declaration.sessionVariables };
+      return [id, { ports: sourceFrom(adapter, id, run), sessionVariables: adapter.declaration.sessionVariables }] as const;
     }),
   );
+  return Object.fromEntries(entries);
 }

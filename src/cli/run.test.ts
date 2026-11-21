@@ -1132,6 +1132,20 @@ describe('runCli: which team', () => {
     assert.match(untold.stdout[0] ?? '', /^REFUSED no team here: /);
   });
 
+  it('works in the host --host names, and refuses an unknown one or one the team does not list (T4752)', async () => {
+    const kit = new CliHarness(CURRENT_TEAM);
+    // The default host tells no project folder, so only a run in the named host finds the team from APP's pointer.
+    const shippedHosts = { 'claude-code': hostTelling({ projectDir: APP }), other: SHIPPED_HOST };
+    const options: RunOptions = { cwd: ELSEWHERE, host: NO_SESSION_HOST, shippedHosts };
+    assert.deepEqual(await kit.run(['config', 'validate', '--host', 'claude-code'], options), VALID);
+    const unknown = await kit.run(['config', 'validate', '--host', 'nope'], options);
+    assert.equal(unknown.code, EXIT.usage);
+    assert.match(unknown.stderr.join('\n'), /--host nope names no host teamrig ships; it ships claude-code, other/);
+    const unlisted = await kit.run(['list', '--host', 'other', '--team', 'app'], options);
+    assert.equal(unlisted.code, EXIT.refused);
+    assert.match(unlisted.stdout[0] ?? '', /^REFUSED --host other is not one of the team's hosts \(claude-code\)/);
+  });
+
   it('takes $TEAMRIG_TEAM over the pointer', async () => {
     const result = await new CliHarness().run(['config', 'validate'], { env: { TEAMRIG_TEAM: 'ops' } });
     assert.equal(result.code, EXIT.refused);

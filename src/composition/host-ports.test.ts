@@ -102,14 +102,15 @@ describe('loadShippedHosts', () => {
     const ids = Object.keys(HOST_ADAPTERS);
     assert.equal(ids.includes(DEFAULT_HOST), true);
     assert.deepEqual(asked, ids.map((id) => `../adapters/hosts/${id}/index.ts`));
+    assert.deepEqual(Object.keys(sources), ids);
     assert.deepEqual(
-      sources.map((source) => source({ env: {}, platform: 'linux' }).paths),
+      Object.values(sources).map((source) => source({ env: {}, platform: 'linux' }).paths),
       ids.map((id) => unsupported(`${id} tells no folder`)),
     );
   });
 
   it('loads the shipped adapters as they are, each with its secret files', async () => {
-    const sources = (await loadShippedHosts(run)).map((shipped) => shipped.ports);
+    const sources = Object.values(await loadShippedHosts(run)).map((shipped) => shipped.ports);
     assert.equal(sources.length, Object.keys(HOST_ADAPTERS).length);
     assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
   });
