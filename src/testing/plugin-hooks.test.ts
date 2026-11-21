@@ -95,12 +95,13 @@ describe('hookMatches', () => {
 describe('pluginHooks', () => {
   const hooks = pluginHooks();
 
-  it('reads the manifest the plugin ships, each hook a teamrig hook command', () => {
+  it('reads the manifest the plugin ships, each hook a teamrig hook command naming its host (T4752)', () => {
     assert.ok(hooks.length > 0);
     for (const { event, argv } of hooks) {
-      assert.equal(argv.length, 2, event);
+      assert.equal(argv.length, 4, event);
       assert.equal(argv[0], 'hook', event);
       assert.match(argv[1] ?? '', /^[a-z][a-z-]+$/, event);
+      assert.deepEqual(argv.slice(2), ['--host', 'claude-code'], event);
     }
   });
 
