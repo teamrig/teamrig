@@ -173,6 +173,8 @@ export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/ht
 export { plainLine } from '../core/printable.ts';
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter, type StampCredit } from '../core/stamp.ts';
+// A host's own folder an environment variable moved, as the secret guard's globs of its secret files there.
+export { folderGlob, movedFolderSecrets } from '../secret-guard/folder-glob.ts';
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
 export { isClaim } from '../issues/claim.ts';
 // A tracker as the public interface's documents name it, and the issue a task's ref names: a tracker's adapter builds
