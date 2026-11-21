@@ -1,10 +1,12 @@
 import {
   bind,
+  MODELS_CONTRACT,
   PERMISSIONS_CONTRACT,
   PLUGIN_CONTRACT,
   STATUS_LINE_CONTRACT,
   TRANSCRIPT_CONTRACT,
   USAGE_CONTRACT,
+  type ModelsWorld,
   type PermissionsWorld,
   type PluginWorld,
   type StatusLineWorld,
@@ -16,6 +18,7 @@ import { isStringArray, recordField, stringField, type JsonRecord, type RateWind
 import { describeContracts } from '../../../testing/contracts.ts';
 import { promptLine, resultsLine } from '../../../testing/transcript-lines.ts';
 import { declaration } from './declaration.ts';
+import { hostModels } from './models.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
 import { statusLine } from './status-line.ts';
@@ -92,6 +95,9 @@ const permissionsWorld: PermissionsWorld = {
   routesOf: (settings) => listIn(recordField(settings, 'autoMode'), 'environment'),
 };
 
+/** Two models of different families, and one of a family Claude Code does not name. */
+const modelsWorld: ModelsWorld = { model: 'claude-opus-5-5', otherModel: 'claude-haiku-5-5', unplaced: 'claude-zeta-9' };
+
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';
 
 /** An install's scope and project in `installed_plugins.json`: `user` for every project, `managed` for one teamrig does not know. */
@@ -140,5 +146,6 @@ describeContracts({
     bind({ contract: STATUS_LINE_CONTRACT, make: () => ({ port: statusLine, world: statusLineWorld }) }),
     bind({ contract: PERMISSIONS_CONTRACT, make: () => ({ port: hostPermissions, world: permissionsWorld }) }),
     bind({ contract: PLUGIN_CONTRACT, make: () => ({ port: hostPlugin, world: pluginWorld }) }),
+    bind({ contract: MODELS_CONTRACT, make: () => ({ port: hostModels, world: modelsWorld }) }),
   ],
 });
