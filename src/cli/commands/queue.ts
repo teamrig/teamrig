@@ -29,7 +29,7 @@ import { TASK_ID } from '../../register/model.ts';
 import { commandLine } from '../../test-run/shell.ts';
 import { requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { hostLockOf, logLineOf, type Say, teamAdmissionOf } from '../delivery-ports.ts';
-import { identityOf } from '../host.ts';
+import { childEnvOf, identityOf } from '../host.ts';
 import { sessionRef, shellWordsOf } from '../inputs.ts';
 import { openTeamKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
 import { parentLockOf } from '../parent-lock.ts';
@@ -430,7 +430,7 @@ async function startDetached(runtime: CliRuntime, places: DetachedPlaces, args: 
     log: places.log,
     argv: detachedArgsOf(args, words, session, id, arrivedAt),
     cwd: runtime.cwd,
-    env: parkedEnvOf(runtime.env),
+    env: parkedEnvOf(runtime.env, childEnvOf(runtime).parked),
     parkedAt: new Date(runtime.clock.now()).toISOString(),
   });
   runtime.out.stdout(`QUEUED ${id}: ${what} runs detached; log ${places.log}; ${session}'s inbox gets a line when it starts and when it ends`);

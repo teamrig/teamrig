@@ -3,6 +3,7 @@ import { dispatchedEnvOf } from '../../core/child-env.ts';
 import { errorMessage, isRecord, numberField, stringField } from '../../core/guards.ts';
 import { claimParked, hasParked, park, parkedDirOf, type ParkedStep } from '../../delivery/parked.ts';
 import { parseArgs, UsageError, type ParsedArgs } from '../args.ts';
+import { childEnvOf } from '../host.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode, type Output } from '../runtime.ts';
 import { QUEUE_FLAGS, QUEUE_SWITCHES } from './queue-args.ts';
 
@@ -128,7 +129,7 @@ function stepRuntimeOf(runtime: CliRuntime, step: ParkedStep, out: Output): CliR
   return {
     ...runtime,
     cwd: step.cwd,
-    env: dispatchedEnvOf(runtime.env, step.env),
+    env: dispatchedEnvOf(runtime.env, step.env, childEnvOf(runtime).session),
     out,
     steps: { run: (request) => runtime.steps.run({ ...request, log: request.log ?? step.log }) },
   };
