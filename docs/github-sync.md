@@ -433,9 +433,9 @@ To land it: rebase its branch onto origin/main and resolve these files.
 ```
 
 For an outside pull request, post those files and the rebase in a comment (`teamrig issue reply`). A team pull
-request is re-shipped by its owner on the newest base under a new branch name, never force-pushed. `--base` names
-the branch the pull request targets when it is not `origin`'s default; the fetch uses git's own access to `origin`,
-not a token.
+request is rebased by its owner onto the newest base and pushed back to the same branch and pull request with a lease
+(`--force-with-lease`), never under a new branch name. `--base` names the branch the pull request targets when it is
+not `origin`'s default; the fetch uses git's own access to `origin`, not a token.
 
 ## Showing each task's status on its issue
 

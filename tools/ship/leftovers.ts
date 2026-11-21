@@ -7,9 +7,9 @@ import { describeCredential } from './token-check.ts';
 
 /**
  * Remote branches ship cleans up after a change lands, since nothing else does (T1867, T2674):
- * - leftovers, branches whose work is already on main: a branch that fell behind main is rebased and pushed again
- *   under a new name, since a force-push is refused, and the old name stays forever. After a merge, ship deletes
- *   the leftovers of the merged branch's own task and names the rest.
+ * - leftovers, branches whose work is already on main: a branch that fell behind main used to be rebased and pushed
+ *   again under a new name, and the old name stayed forever (a rebase now goes back to the same branch, T4907).
+ *   After a merge, ship deletes the leftovers of the merged branch's own task and names the rest.
  * - the merged head itself: GitHub's auto-delete is a repo setting a teamrig user may not have on, so after a
  *   merge ship deletes the head while origin still has it at the sha that merged.
  * - the heads of closed pull requests that never merged: GitHub's auto-delete acts only on a merge, and closing a
