@@ -307,6 +307,15 @@ export function stepsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
   return steps;
 }
 
+/**
+ * The steps the run's host's person types, or undefined on a host that names none: for a caller that goes on without
+ * a notice naming them, such as the idle pass, whose acts must not fail for a line it cannot word.
+ */
+export function stepsIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostSteps | undefined {
+  const { steps } = hostOf(runtime);
+  return isUnsupported(steps) ? undefined : steps;
+}
+
 /** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
 export function hostNameOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): string {
   const { launcher } = hostOf(runtime);

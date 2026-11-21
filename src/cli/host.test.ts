@@ -31,6 +31,7 @@ import {
   secretFilesOf,
   sessionProcessCheckOf,
   sessionVariablesOf,
+  stepsIfKnown,
   stepsOf,
   transcriptsIfKept,
   transcriptsOf,
@@ -82,6 +83,14 @@ describe('transcriptsIfKept', () => {
     const world = quietWorld();
     assert.deepEqual(transcriptsIfKept({ host: world.host, env: {}, platform: world.platform })?.entry('not a transcript line'), { kind: 'unread', reason: 'damaged' });
     assert.equal(transcriptsIfKept({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('stepsIfKnown', () => {
+  it('gives the steps of a host that names them, and nothing for a host that names none', () => {
+    const world = quietWorld();
+    assert.equal(stepsIfKnown({ host: world.host, env: {}, platform: world.platform })?.exit, shippedSteps().exit);
+    assert.equal(stepsIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
   });
 });
 

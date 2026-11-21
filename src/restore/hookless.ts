@@ -5,7 +5,7 @@ import type { SessionAddress } from '../core/address.ts';
 import { parseObject, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
 import { MS_PER_MINUTE } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
-import type { EntryKind, TranscriptReader } from '../ports/host/index.ts';
+import type { EntryKind, HostSteps, TranscriptReader } from '../ports/host/index.ts';
 import type { RestoreEntry } from './entry.ts';
 
 /**
@@ -193,9 +193,10 @@ export function hooklessReader(tab: Pick<HooklessTab, 'session'>, roles: RolesCo
  * The inbox line naming a hookless tab, written at `now`, its times on `zone`'s clock: `14:20 IDT` on the line's
  * day, else with their date (`10-20 16:37 IDT`), so a tab hookless for days does not read as hours (T1069). It
  * asks for a restart in the tab's folder, never a reload: a /reload-plugins does not bring a tab's hooks back
- * (T1055). It names the tab's session as `session`, as the reader's team writes it: `app/lead` on a team above.
+ * (T1055), in the words the host's person types there (`steps`). It names the tab's session as `session`, as the
+ * reader's team writes it: `app/lead` on a team above.
  */
-export function hooklessLine(tab: HooklessTab, session: string, zone: TimeZone, now: number): string {
+export function hooklessLine(tab: HooklessTab, session: string, steps: HostSteps, zone: TimeZone, now: number): string {
   const today = zone.day(new Date(now));
   const time = (at: number): string => {
     const date = new Date(at);
@@ -205,6 +206,6 @@ export function hooklessLine(tab: HooklessTab, session: string, zone: TimeZone, 
   return (
     `HOOKLESS ${session}: its tab (Claude session ${tab.claudeSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
     `(hook ${time(tab.hookAt)}, last reply ${time(tab.turnAt)}), so it gets no inbox, guards or tab status: ` +
-    `/exit that tab and run claude --resume ${tab.claudeSession} in ${tab.projectDir}`
+    `${steps.exit} that tab and run ${steps.resume(tab.claudeSession)} in ${tab.projectDir}`
   );
 }

@@ -2,6 +2,7 @@ import type { Roster } from '../config/roster.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { MS_PER_MINUTE } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
+import type { HostSteps } from '../ports/host/index.ts';
 import type { CloseRecord, SessionLogRecord } from '../sessions/log.ts';
 import type { SessionRecord } from '../sessions/record.ts';
 
@@ -22,7 +23,7 @@ export interface HooklessReopen {
   readonly id: string;
   /** The reopen's time, epoch ms. */
   readonly at: number;
-  /** The Claude Code session its tab resumed; undefined when it opened fresh. */
+  /** The host session its tab resumed; undefined when it opened fresh. */
   readonly resumed: string | undefined;
 }
 
@@ -56,15 +57,16 @@ export function hooklessReopensOf(records: readonly SessionLogRecord[], starts: 
 }
 
 /**
- * The line naming a hookless reopen, written at `now`: a tab that resumed its Claude Code session resumes it again
- * in the same terminal once the plugins settled, and one that opened fresh lost nothing, so it opens again. It names
- * the session as `session`, as the reader's team writes it (`app/lead` on a team above), which `open` takes there too.
+ * The line naming a hookless reopen, written at `now`: a tab that resumed its host session resumes it again in the
+ * same terminal once the plugins settled, and one that opened fresh lost nothing, so it opens again. The exit and the
+ * resume are what the host's person types there (`steps`). It names the session as `session`, as the reader's team
+ * writes it (`app/lead` on a team above), which `open` takes there too.
  */
-export function hooklessReopenLine(reopen: HooklessReopen, session: string, roster: Roster, zone: TimeZone, now: number): string {
+export function hooklessReopenLine(reopen: HooklessReopen, session: string, roster: Roster, steps: HostSteps, zone: TimeZone, now: number): string {
   const minutes = Math.floor((now - reopen.at) / MS_PER_MINUTE);
-  const restart = reopen.resumed === undefined ? `run ${KIT_NAME} open ${session}` : `run claude --resume ${reopen.resumed} in its terminal`;
+  const restart = reopen.resumed === undefined ? `run ${KIT_NAME} open ${session}` : `run ${steps.resume(reopen.resumed)} in its terminal`;
   return (
     `HOOKLESS ${roster.nameOf(reopen.id) ?? session} (session ${session}): reopened ${zone.shortMinute(new Date(reopen.at))}, and no teamrig hook ` +
-    `has started in its tab in the ${minutes} min since, so it gets no inbox, guards or tab status: /exit that tab and ${restart}`
+    `has started in its tab in the ${minutes} min since, so it gets no inbox, guards or tab status: ${steps.exit} that tab and ${restart}`
   );
 }
