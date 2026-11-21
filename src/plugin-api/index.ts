@@ -20,6 +20,7 @@ export {
   type ConnectorDeps,
   type ConnectorPorts,
   type ConnectorSpec,
+  type RefCodec,
 } from './connector.ts';
 export {
   PANE_STATES,

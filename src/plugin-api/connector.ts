@@ -5,7 +5,7 @@ import type { HttpClient } from '../core/http.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import { featuresOf, isConnectorKind, type ConnectorKind } from '../features/registry.ts';
-import type { CodeHost, Tracker } from '../issues/host.ts';
+import type { CodeHost, IssueTarget, Tracker } from '../issues/host.ts';
 import { adapterEntry, declarationProblems, type AdapterDeclaration } from './declaration.ts';
 import { isSupport } from './support.ts';
 
@@ -62,6 +62,22 @@ export interface ConnectorPorts {
    * out by a connector whose places the team config names elsewhere (GitHub: `github.repos`).
    */
   readonly targets?: readonly string[];
+  /**
+   * How a task's ref names one of the tracker's issues, both ways. Left out by a connector whose refs core reads
+   * itself (GitHub: issues/ref.ts).
+   */
+  readonly refs?: RefCodec;
+}
+
+/**
+ * A connector's issue refs: its declaration's `refPrefix`, then an id only the connector reads (`jira:ENG-12`), so a
+ * ref stays the same text whatever place the config names it by.
+ */
+export interface RefCodec {
+  /** The ref of the tracker's issue `target`; undefined when the target is no place the connector's config names. */
+  readonly refOf: (target: IssueTarget) => string | undefined;
+  /** The issue `ref` names; undefined when it is another connector's ref, or names none of this one's places. */
+  readonly parseRef: (ref: string) => IssueTarget | undefined;
 }
 
 /** What the author of a connector writes: its declaration, how its config section is read, and how its ports are built. */

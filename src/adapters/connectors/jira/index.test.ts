@@ -49,7 +49,7 @@ describe('the Jira adapter', () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(connectorAdapterProblems(adapter), []);
     const { ports } = kit();
-    assert.deepEqual(Object.keys(ports), ['tracker', 'targets']);
+    assert.deepEqual(Object.keys(ports), ['tracker', 'targets', 'refs']);
     assert.ok(ports.tracker instanceof JiraTracker);
   });
 
@@ -58,6 +58,19 @@ describe('the Jira adapter', () => {
     assert.deepEqual(portsOf(adapter, deps, { site: 'acme', projects: ['ENG', 'OPS_2'] }).targets, ['acme/eng', 'acme/ops_2']);
     assert.deepEqual(portsOf(adapter, deps, { site: 'acme' }).targets, []);
     assert.deepEqual(portsOf(adapter, deps, {}).targets, []);
+  });
+
+  it("writes refs of its targets' issues under its declaration's prefix, read back to the same issue (T4912)", () => {
+    const deps = connectorDeps({ http: new FakeHttp(), credentials: new FakeCredentials(), stamp: true });
+    const ports = portsOf(adapter, deps, { site: 'acme', projects: ['ENG'] });
+    const ref = ports.refs?.refOf(TARGET);
+    if (ref === undefined) {
+      assert.fail('the Jira adapter wrote no ref for an issue of its site');
+    }
+    assert.equal(ref, 'jira:ENG-12');
+    assert.ok(ref.startsWith(declaration.refPrefix));
+    assert.deepEqual(ports.refs?.parseRef(ref), TARGET);
+    assert.equal(portsOf(adapter, deps, {}).refs?.parseRef(ref), undefined);
   });
 
   it('names targets its own tracker takes as places of the site its config names (T4912)', async () => {
