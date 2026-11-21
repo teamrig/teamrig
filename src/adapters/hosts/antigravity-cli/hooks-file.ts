@@ -6,7 +6,8 @@
  * take `{ matcher, hooks }` entries, the other events a flat list of handlers. A handler is one `command` string,
  * run by `sh -c`, or by `cmd /c` on Windows, from the folder that holds the hooks file. An event name agy does not
  * know is accepted and never fires, so teamrig's file, with its own event names and `modules` key, would load and do
- * nothing. agy's hook input does not name its event, so each command line carries it as `--host-event <event>`.
+ * nothing. agy's hook input does not name its event, so each command line carries it as `--host-event <event>`, and
+ * names agy's host as `--host antigravity-cli` in place of the host the source's line names.
  *
  * A hooks file that lost a guard on the way would look like a working one, so a source this module does not know in
  * full is refused whole with a reason: a key, an event or a handler field it has no rule for, or a word the shell
@@ -99,6 +100,9 @@ const DEFAULT_TIMEOUT_SECONDS = 15;
 const DEFAULT_GROUP_NAME = 'teamrig';
 const EVERY_TOOL = '*';
 const EVENT_FLAG = '--host-event';
+const HOST_FLAG = '--host';
+/** This adapter's id in teamrig's host table, which each hook line names so the run loads agy's ports. */
+export const ANTIGRAVITY_CLI_HOST = 'antigravity-cli';
 
 const FILE_KEYS: readonly string[] = ['description', 'modules', 'hooks'];
 const GROUP_KEYS: readonly string[] = ['matcher', 'hooks'];
@@ -256,8 +260,34 @@ function checkWord(word: string, shell: HookShell, what: string): void {
   }
 }
 
+/**
+ * The source's words without the host it names: teamrig's file is Claude Code's, whose lines say `--host claude-code`,
+ * and an agy line must load agy's ports instead.
+ */
+function withoutHost(words: readonly string[], what: string): readonly string[] {
+  const kept: string[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index] ?? '';
+    if (word !== HOST_FLAG) {
+      kept.push(word);
+      continue;
+    }
+    if (words[index + 1] === undefined) {
+      throw new UnknownSource(`${what} ends with ${HOST_FLAG} and names no host`);
+    }
+    index += 1;
+  }
+  return kept;
+}
+
 function commandLine(sourceWords: readonly string[], event: AntigravityHookEvent, options: AntigravityHooksFileOptions, what: string): string {
-  const words = [...sourceWords.map((word) => word.replaceAll(PLUGIN_ROOT, options.pluginRoot)), EVENT_FLAG, event];
+  const words = [
+    ...withoutHost(sourceWords, what).map((word) => word.replaceAll(PLUGIN_ROOT, options.pluginRoot)),
+    HOST_FLAG,
+    ANTIGRAVITY_CLI_HOST,
+    EVENT_FLAG,
+    event,
+  ];
   for (const word of words) {
     checkWord(word, options.shell, what);
   }

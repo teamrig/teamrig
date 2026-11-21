@@ -8816,7 +8816,7 @@ teamrig help
 Output: the usage, starting:
 
 ```text
-teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>)
+teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>, and --host <id> for the host it runs in, else the first in hosts)
 ```
 
 ### teamrig version

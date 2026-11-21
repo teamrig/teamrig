@@ -408,7 +408,7 @@ export const COMMAND_REST: CommandRest = new Set(Object.entries(COMMANDS).flatMa
 /** The table a line is read with, and each command's effect: what `/teamrig` plans a line from (src/slash/plan.ts). */
 export const COMMAND_TABLE: CommandTable = { flags: COMMAND_FLAGS, switches: COMMAND_SWITCHES, renamed: RENAMED, rest: COMMAND_REST, effects: COMMAND_EFFECTS };
 
-export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|name>, else $${ENV.session}; every command takes --session <id|name> and --team <team>)
+export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|name>, else $${ENV.session}; every command takes --session <id|name> and --team <team>, and --host <id> for the host it runs in, else the first in hosts)
   team create <team> --sessions <id,id> [--lead <id>] [--project <dir>] [--parent <team>] [--dry-run]
       writes the team config, ties the project folder to the team (the lead defaults to lead) and
       starts a root team's lead on its first task, setting the team up; --parent hangs it under
@@ -1239,7 +1239,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
       stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
-      (run by the host, hook JSON on stdin; a host whose JSON does not name its event passes
+      (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
       (run by the plugin's mod: the automatic restart's /clear in the tab)

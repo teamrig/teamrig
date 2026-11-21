@@ -48,10 +48,10 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     ].map((entry) => entry.command);
     assert.ok(lines.length > 20);
     for (const line of lines) {
-      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host-event [A-Za-z]+$/u);
+      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host antigravity-cli --host-event [A-Za-z]+$/u);
       assert.equal(line.includes('${'), false);
     }
-    assert.equal(group?.PreInvocation?.[0]?.command, 'node /opt/teamrig/plugin/dist/cli/main.js hook inbox-reminder --host-event PreInvocation');
+    assert.equal(group?.PreInvocation?.[0]?.command, 'node /opt/teamrig/plugin/dist/cli/main.js hook inbox-reminder --host antigravity-cli --host-event PreInvocation');
   });
 
   it('runs a typed prompt’s hooks before each model call, as agy has no prompt event', () => {
@@ -83,7 +83,7 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
       {
         event: 'SessionStart',
         matcher: 'clear',
-        words: ['node', '${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'refresh-wake'],
+        words: ['node', '${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'refresh-wake', '--host', 'claude-code'],
         reason: 'rewake agy lacks',
       },
     );
@@ -93,7 +93,7 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     const forCmd = okOf(antigravityHooksFile(SHIPPED, CMD)).file['teamrig'];
     assert.equal(
       forCmd?.Stop?.[0]?.command,
-      'node "C:\\Tools\\teamrig plugin/dist/cli/main.js" hook stop --host-event Stop',
+      'node "C:\\Tools\\teamrig plugin/dist/cli/main.js" hook stop --host antigravity-cli --host-event Stop',
     );
   });
 });
@@ -103,10 +103,16 @@ describe('antigravityHooksFile', () => {
     const { file } = okOf(antigravityHooksFile(fileOf({ PreToolUse: [{ hooks: [handler('a')] }], Stop: [{ hooks: [handler('b')] }] }), SH));
     assert.deepEqual(file, {
       teamrig: {
-        PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'node /opt/teamrig/plugin/dist/cli/main.js hook a --host-event PreToolUse', timeout: 15 }] }],
-        Stop: [{ type: 'command', command: 'node /opt/teamrig/plugin/dist/cli/main.js hook b --host-event Stop', timeout: 15 }],
+        PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'node /opt/teamrig/plugin/dist/cli/main.js hook a --host antigravity-cli --host-event PreToolUse', timeout: 15 }] }],
+        Stop: [{ type: 'command', command: 'node /opt/teamrig/plugin/dist/cli/main.js hook b --host antigravity-cli --host-event Stop', timeout: 15 }],
       },
     });
+  });
+
+  it('names agy’s host in place of the one the source line names (T4752)', () => {
+    const named = handler('a', { args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'a', '--host', 'claude-code'] });
+    const { file } = okOf(antigravityHooksFile(fileOf({ Stop: [{ hooks: [named] }] }), SH));
+    assert.equal(file['teamrig']?.Stop?.[0]?.command, 'node /opt/teamrig/plugin/dist/cli/main.js hook a --host antigravity-cli --host-event Stop');
   });
 
   it('keeps each handler’s own timeout', () => {
@@ -127,12 +133,12 @@ describe('antigravityHooksFile', () => {
 
   it('quotes a word sh would split, and leaves a percent sign alone there', () => {
     const { file } = okOf(antigravityHooksFile(fileOf({ Stop: [{ hooks: [handler("it's 50%")] }] }), { ...SH, pluginRoot: '/opt/my plugin' }));
-    assert.equal(file['teamrig']?.Stop?.[0]?.command, "node '/opt/my plugin/dist/cli/main.js' hook 'it'\\''s 50%' --host-event Stop");
+    assert.equal(file['teamrig']?.Stop?.[0]?.command, "node '/opt/my plugin/dist/cli/main.js' hook 'it'\\''s 50%' --host antigravity-cli --host-event Stop");
   });
 
   it('doubles a quoted word’s last backslashes on cmd, so its closing quote stays a quote', () => {
     const source = fileOf({ Stop: [{ hooks: [{ type: 'command', command: 'node', args: ['C:\\my dir\\'] }] }] });
-    assert.equal(okOf(antigravityHooksFile(source, CMD)).file['teamrig']?.Stop?.[0]?.command, 'node "C:\\my dir\\\\" --host-event Stop');
+    assert.equal(okOf(antigravityHooksFile(source, CMD)).file['teamrig']?.Stop?.[0]?.command, 'node "C:\\my dir\\\\" --host antigravity-cli --host-event Stop');
   });
 
   it('refuses a plugin root that is not absolute, or an empty group name', () => {
@@ -154,6 +160,7 @@ describe('antigravityHooksFile', () => {
       [fileOf({ Stop: [{ hooks: [handler('${HOME}')] }] }), 'Stop group 1, handler 1 holds a variable other than ${CLAUDE_PLUGIN_ROOT}, which agy does not fill'],
       [fileOf({ Stop: [{ hooks: [handler('a\nb')] }] }), 'Stop group 1, handler 1 holds a line break, which no command line carries'],
       [fileOf({ Stop: [{ hooks: [handler('')] }] }), 'Stop group 1, handler 1 holds an empty word'],
+      [fileOf({ Stop: [{ hooks: [handler('a', { args: ['main.js', 'hook', 'a', '--host'] })] }] }), 'Stop group 1, handler 1 ends with --host and names no host'],
     ];
     for (const [source, reason] of cases) {
       assert.equal(reasonOf(antigravityHooksFile(source, SH)), reason);
