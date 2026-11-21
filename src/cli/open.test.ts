@@ -7,7 +7,7 @@ import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -506,6 +506,15 @@ describe('teamrig launch', () => {
     const env = { PATH: '/usr/local/bin', ANTHROPIC_API_KEY: value, GH_TOKEN: value, NPM_TOKEN: value, AWS_SECRET_ACCESS_KEY: value };
     await new CliHarness({ ...TEAM, delivery: { passEnv: ['GH_TOKEN'] } }).run(LAUNCH, { probe: ON_PATH, processes, env });
     assert.deepEqual(processes.ran.map((run) => run.env), [{ ...SESSION_ENV, ANTHROPIC_API_KEY: value, GH_TOKEN: value }]);
+  });
+
+  it("starts the session with the running host's login and no other host's, and with no session variable of any host", async () => {
+    const processes = new FakeProcesses();
+    const value = 'not-a-real-credential';
+    const host = hostNaming({ marks: ['AGENT_RUN'], identity: ['AGENT_SESSION'] }, {}, { session: ['AGENT_SOCKET'], parked: [], login: ['OPENAI_API_KEY'] });
+    const env = { PATH: '/usr/local/bin', ANTHROPIC_API_KEY: value, OPENAI_API_KEY: value, CLAUDE_PID: '7', CLAUDE_CODE_MESSAGING_TOKEN: value, AGENT_RUN: '1', AGENT_SESSION: 'abc', AGENT_SOCKET: '/run/agent' };
+    await new CliHarness(TEAM).run(LAUNCH, { probe: ON_PATH, processes, env, host });
+    assert.deepEqual(processes.ran.map((run) => run.env), [{ ...SESSION_ENV, OPENAI_API_KEY: value }]);
   });
 
   it("starts Claude Code without the opener's plugin bin folders on PATH, so the session's own teamrig answers its Bash calls", async () => {

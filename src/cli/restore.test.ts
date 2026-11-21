@@ -12,6 +12,7 @@ import { ROOM_POLL_MS, TAB_STAGGER_MS } from '../restore/run.ts';
 import { APP, CliHarness, KIT, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { FakePathProbe, FakeProcesses, NO_POWERSHELL } from '../testing/fake-processes.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
+import { hostNaming } from '../testing/host.ts';
 import { FakeCountdown, FakeShutdownLog, FakeStopWatch } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
@@ -307,6 +308,14 @@ describe('teamrig restore resume', () => {
     const result = await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: OPENER_ENV });
     assert.deepEqual(result, { code: EXIT.ok, stdout: [`Resuming Claude Code session ${NOTES} in ${APP} at high effort`], stderr: [] });
     assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--resume', NOTES, '--effort', 'high', 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+  });
+
+  it("resumes with no session variable of any host: the shipped host's and those the running host names", async () => {
+    const processes = new FakeProcesses();
+    const host = hostNaming({ marks: ['AGENT_RUN'], identity: ['AGENT_SESSION'] }, {}, { session: ['AGENT_SOCKET'], parked: [], login: [] });
+    const env = { ...OPENER_ENV, CLAUDE_CODE_MESSAGING_TOKEN: 't', AGENT_RUN: '1', AGENT_SESSION: 'abc', AGENT_SOCKET: '/run/agent', AGENT_EFFORT: 'high' };
+    okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP], { probe: ON_PATH, processes, env, host }));
+    assert.deepEqual(processes.ran.map((run) => run.env), [{ TEAMRIG_HOME: KIT, PATH: '/usr/local/bin', AGENT_EFFORT: 'high' }]);
   });
 
   it('resumes idle on the kit home it is given', async () => {
