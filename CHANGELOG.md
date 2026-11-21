@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.502.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.501.0...teamrig-v0.502.0) (2026-11-21)
+
+
+### Features
+
+* **gh:** teamrig gh runs one gh call on the key saved for the owner it reaches (T4897) ([fa2b741](https://github.com/teamrig/teamrig/commit/fa2b741afb228e3f28e9824a0f60bd81ab18015b))
+
+
+### Bug Fixes
+
+* **cli:** gh sync and gh migrate keep their rename hint now that gh is a command (T4897) ([b8a509b](https://github.com/teamrig/teamrig/commit/b8a509b02542a5c09a30c2b4f54d53544da29991))
+
 ## [0.501.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.500.0...teamrig-v0.501.0) (2026-11-21)
 
 
