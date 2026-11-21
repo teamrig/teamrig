@@ -9,11 +9,10 @@
  * a read that failed is `{ kind: 'failed' }`, so one broken source never hides the others' entries.
  *
  * Adapters go in `src/changes/sources/<id>.ts`, each with `<id>.test.ts` on fixture files, its deps built by
- * `changeDepsOf` (src/testing/fake-change-git.ts) over MemoryFiles, FakeGh and FakeChangeGit.
+ * `changeDepsOf` (src/testing/fake-change-git.ts) over MemoryFiles and FakeChangeGit. A source that reads a host such as
+ * GitHub ships with that host's connector adapter (src/adapters/connectors), never in this core port.
  */
 import type { Files } from '../core/files.ts';
-import type { GhRunner } from '../github/gh.ts';
-import type { NoAccessError, RepoAccess } from '../github/tokens.ts';
 
 /** Who an entry is for: `lead` shows only at the lead's start, `all` also goes to each session's inbox (T3425). */
 export type ChangeAudience = 'lead' | 'all';
@@ -92,17 +91,10 @@ export type ChangeRead =
   | { readonly kind: 'read'; readonly entries: readonly ChangeEntry[]; readonly warnings: readonly string[] }
   | { readonly kind: 'failed'; readonly error: string };
 
-/** What a source may use; nothing else, so its specs run on fakes. GitHub goes only through teamrig's own key. */
+/** What a source may use; nothing else, so its specs run on fakes. */
 export interface ChangeSourceDeps {
   readonly files: Files;
   readonly git: ChangeGit;
-  /** GitHub reads, each run with the env `access` returns (`GH_TOKEN` set to the key teamrig saved for the owner). */
-  readonly gh: GhRunner;
-  /**
-   * The key for one repository ('owner/name'), never the gh login. It is a `NoAccessError` when no key is
-   * saved or it cannot be read (`RepoTokens.accessFor`); the source returns its message as `{ kind: 'failed' }`, naming the command that saves one.
-   */
-  access(repo: string): Promise<RepoAccess | NoAccessError>;
   /** The project's folder, absolute. */
   readonly project: string;
   /** The team's register, when the project has a team: the tasks its commits name. */

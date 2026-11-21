@@ -3,7 +3,6 @@ import { CHANGE_SOURCES } from '../../changes/registry.ts';
 import type { ChangeEntry, ChangePoint, ChangeSourceDeps, RegisterTask, ResolvedPoint, TaskReader } from '../../changes/source.ts';
 import { parseTypedInstant } from '../../core/time.ts';
 import type { TimeZone } from '../../core/zone.ts';
-import { RepoTokens } from '../../github/tokens.ts';
 import type { Task } from '../../register/fold.ts';
 import { noPositionals, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
@@ -82,12 +81,9 @@ export async function changes(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
   const zone = teamZone(config, runtime);
   const since = pointOf('since', requiredFlag(args.flags, 'since'), runtime, zone);
   const untilText = args.flags.get('until');
-  const tokens = new RepoTokens(runtime.credentials, runtime.env);
   const deps: ChangeSourceDeps = {
     files: runtime.files,
     git: runtime.changeGit,
-    gh: runtime.gh,
-    access: (repo) => tokens.accessFor(repo),
     project: await projectFolder(runtime, config),
     register: teamTasks(runtime),
   };

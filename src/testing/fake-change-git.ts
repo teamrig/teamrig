@@ -1,6 +1,4 @@
 import type { ChangeGit, ChangeSourceDeps, GitCommit, RegisterTask, Release, ResolvedPoint, TaskReader } from '../changes/source.ts';
-import { TokenMissingError } from '../github/tokens.ts';
-import { FakeGh } from './fake-gh.ts';
 import { MemoryFiles } from './memory-files.ts';
 
 /** A commit for a spec: `files` and `body` default to none. */
@@ -73,15 +71,13 @@ export function registerTaskOf(id: string, title: string, fields: Partial<Pick<R
 export const CHANGE_PROJECT = '/work/app';
 
 /**
- * A source's deps for a spec: empty files, a history with no commits, a gh that sees nothing, no saved key and no
+ * A source's deps for a spec: empty files, a history with no commits and no
  * register at `/work/app`, each replaced by what the spec gives.
  */
 export function changeDepsOf(overrides: Partial<ChangeSourceDeps> = {}): ChangeSourceDeps {
   return {
     files: new MemoryFiles(),
     git: new FakeChangeGit(),
-    gh: new FakeGh(),
-    access: async (repo) => new TokenMissingError(repo.split('/')[0] ?? repo, 'spec-credential', 'the spec store', 'save-key'),
     project: CHANGE_PROJECT,
     register: undefined,
     ...overrides,
