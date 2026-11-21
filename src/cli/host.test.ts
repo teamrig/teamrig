@@ -10,6 +10,7 @@ import { bareHost } from '../testing/bare-host.ts';
 import { HOOKS_ONLY_HOST, hostNaming, hostRunning, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { shippedModels } from '../testing/shipped-models.ts';
+import { shippedSteps } from '../testing/shipped-steps.ts';
 import { join } from 'node:path';
 import {
   childEnvOf,
@@ -17,6 +18,7 @@ import {
   hooksOf,
   hostHomeIfKnown,
   hostHomeOf,
+  hostNameOf,
   hostOf,
   identityOf,
   launchHostFrom,
@@ -29,6 +31,7 @@ import {
   secretFilesOf,
   sessionProcessCheckOf,
   sessionVariablesOf,
+  stepsOf,
   transcriptsIfKept,
   transcriptsOf,
   usageIfMetered,
@@ -469,5 +472,27 @@ describe('hostHomeIfKnown', () => {
     const world = quietWorld();
     assert.equal(hostHomeIfKnown({ host: world.host, env: {}, platform: world.platform, userHome: USER_HOME }), join(USER_HOME, '.claude'));
     assert.equal(hostHomeIfKnown({ host: bare, env: {}, platform: 'linux', userHome: USER_HOME }), undefined);
+  });
+});
+
+describe('stepsOf', () => {
+  it('gives the steps of the host the run is in', () => {
+    const world = quietWorld();
+    assert.equal(stepsOf({ host: world.host, env: {}, platform: world.platform }).exit, shippedSteps().exit);
+  });
+
+  it('refuses with the reason of a host that names no steps', () => {
+    assert.throws(() => stepsOf({ host: bare, env: {}, platform: 'linux' }), (error) => error instanceof RefusedError && error.message === 'no steps are known');
+  });
+});
+
+describe('hostNameOf', () => {
+  it('gives the name of the host the run is in', () => {
+    const world = quietWorld();
+    assert.equal(hostNameOf({ host: world.host, env: {}, platform: world.platform }), 'Claude Code');
+  });
+
+  it('refuses with the reason of a host that does not say who it is', () => {
+    assert.throws(() => hostNameOf({ host: bare, env: {}, platform: 'linux' }), (error) => error instanceof RefusedError && error.message === 'no session of the host is told');
   });
 });

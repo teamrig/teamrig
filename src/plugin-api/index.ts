@@ -107,6 +107,7 @@ export {
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
+  type HostSteps,
   type HostPorts,
   type InputEntry,
   type InputOrigin,

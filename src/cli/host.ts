@@ -7,6 +7,7 @@ import {
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
+  type HostSteps,
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
@@ -295,4 +296,22 @@ export function launchHostOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platfor
 export function cacheBinOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): (folder: string) => boolean {
   const plugin = pluginIfKept(runtime);
   return plugin === undefined ? () => false : (folder) => plugin.isCacheBin(folder);
+}
+
+/** The steps the run's host's person types. A host that names none refuses with its own reason, as `transcriptsOf` does. */
+export function stepsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostSteps {
+  const { steps } = hostOf(runtime);
+  if (isUnsupported(steps)) {
+    throw new RefusedError(steps.notice);
+  }
+  return steps;
+}
+
+/** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
+export function hostNameOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): string {
+  const { launcher } = hostOf(runtime);
+  if (isUnsupported(launcher)) {
+    throw new RefusedError(launcher.notice);
+  }
+  return launcher.programName;
 }
