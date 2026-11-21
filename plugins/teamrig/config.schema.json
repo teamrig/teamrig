@@ -99,6 +99,14 @@
       "items": { "type": "string", "minLength": 1, "maxLength": 60, "pattern": "^[^\\r\\n]+$" },
       "default": ["permissions"]
     },
+    "hosts": {
+      "description": "The hosts the team's sessions run on, by adapter id; it says which hosts' files install. Each session names the host it runs on itself; the first one listed is only the fallback for a bare CLI run in a terminal.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["claude-code"] },
+      "default": ["claude-code"]
+    },
     "ruleConflicts": {
       "description": "Local rules (a line of a CLAUDE.md, rules file, skill, memory file, hook or settings file) kept although they conflict with a core rule, each with the side that wins. teamrig rules scan finds them; teamrig rules keep records one, teamrig rules forget drops one. The core pack lists them.",
       "type": "array",
