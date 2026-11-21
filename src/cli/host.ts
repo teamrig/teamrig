@@ -1,11 +1,13 @@
 import {
   isUnsupported,
+  type ChildEnvironment,
   type HookBridge,
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
   type SessionIdentity,
+  type SessionLauncher,
   type SessionVariables,
   type StatusLine,
   type TranscriptReader,
@@ -150,14 +152,41 @@ export function identityOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'
  * refuses: a host that tells nothing of its sessions adds none.
  */
 export function sessionVariablesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): SessionVariables {
-  const seen = { env: runtime.env, platform: runtime.platform };
-  const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
-    const { launcher } = source(seen);
-    return isUnsupported(launcher) ? [] : [launcher.variables];
-  });
+  const named = launchersOf(runtime).map((launcher) => launcher.variables);
   return {
     marks: [...new Set(named.flatMap((variables) => variables.marks))],
     identity: [...new Set(named.flatMap((variables) => variables.identity))],
+  };
+}
+
+/** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
+function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly SessionLauncher[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  return [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+    const { launcher } = source(seen);
+    return isUnsupported(launcher) ? [] : [launcher];
+  });
+}
+
+/**
+ * What a program this run starts may inherit of a host's session variables, each name once, the shipped hosts' first.
+ * `session`, what a new session or a dispatched step never inherits, joins every shipped host adapter's names with
+ * the running host's: its session variables, the marks and identity variables it tells a run by, and what it parks.
+ * A machine may run a host other than the one this run works in, and a child inheriting any host's variables would be
+ * taken for that host's session. `parked` joins them the same way, with every mark: a step parked by an agent's run
+ * keeps the mark of that run whichever host set it, so it never runs as the person's own. `login` is the running
+ * host's alone, as the session started is a session of that host and keeps no other host's login. It never refuses:
+ * a host that tells nothing of its sessions adds no name.
+ */
+export function childEnvOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): ChildEnvironment {
+  const launchers = launchersOf(runtime);
+  const parked = launchers.flatMap(({ childEnv, variables }) => [...childEnv.parked, ...variables.marks]);
+  const session = launchers.flatMap(({ childEnv, variables }) => [...childEnv.session, ...variables.marks, ...variables.identity, ...childEnv.parked]);
+  const { launcher: running } = hostOf(runtime);
+  return {
+    session: [...new Set(session)],
+    parked: [...new Set(parked)],
+    login: isUnsupported(running) ? [] : [...new Set(running.childEnv.login)],
   };
 }
 

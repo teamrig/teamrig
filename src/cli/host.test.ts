@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { HostSource } from '../composition/host-ports.ts';
 import { isUnsupported, type HostPorts } from '../ports/host/index.ts';
 import type { SecretGuardConfig } from '../config/types.ts';
+import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
@@ -10,6 +11,7 @@ import { HOOKS_ONLY_HOST, hostNaming, NO_PATHS_HOST, SHIPPED_HOST, testPaths } f
 import { quietWorld } from '../testing/quiet-world.ts';
 import { join } from 'node:path';
 import {
+  childEnvOf,
   contextSourceIfTold,
   hooksOf,
   hostHomeIfKnown,
@@ -280,7 +282,8 @@ describe('identityOf', () => {
     const telling: HostSource = (given) => {
       seen.push(given);
       const identity = { projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionKind: undefined, sessionId: given.env['AGENT_SESSION'] };
-      return { ...BARE, launcher: { variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, identity: () => identity } };
+      const childEnv = { session: [], parked: [], login: [] };
+      return { ...BARE, launcher: { variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, childEnv, identity: () => identity } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       projectDir: PROJECT,
@@ -312,6 +315,60 @@ describe('sessionVariablesOf', () => {
     });
     assert.deepEqual(sessionVariablesOf({ host: OTHER, shippedHosts: [], env: {}, platform }), { marks: ['OTHER_AGENT', 'CLAUDECODE'], identity: ['OTHER_SESSION', 'CLAUDE_PROJECT_DIR'] });
     assert.deepEqual(sessionVariablesOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { marks: [], identity: [] });
+  });
+});
+
+describe('childEnvOf', () => {
+  const SHIPPED_SESSION = [
+    'CLAUDECODE',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_ENTRYPOINT',
+    'CLAUDE_CODE_EXECPATH',
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_CODE_SESSION_ATTENDED',
+    'CLAUDE_PID',
+    'CLAUDE_PROJECT_DIR',
+  ];
+  const SHIPPED_PARKED = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_PROJECT_DIR'];
+  const SHIPPED_LOGIN = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
+  const OTHER = hostNaming({ marks: ['OTHER_AGENT'], identity: ['OTHER_SESSION', 'OTHER_ROOT'] }, {}, { session: ['OTHER_SOCKET', 'CLAUDE_PID'], parked: ['OTHER_SESSION', 'OTHER_TAB'], login: ['OTHER_KEY'] });
+
+  it("leaves a child none of a shipped host's session variables and parks its marks, whatever host the run works in", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      const { session, parked } = childEnvOf({ host, shippedHosts, env: {}, platform });
+      assert.deepEqual([session, parked], [SHIPPED_SESSION, SHIPPED_PARKED], name);
+    }
+  });
+
+  it("keeps the running host's login alone: the shipped host's own, and none on a host that tells nothing of its sessions", () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(childEnvOf({ host: SHIPPED_HOST, shippedHosts, env: {}, platform }).login, SHIPPED_LOGIN);
+    assert.deepEqual(childEnvOf({ host: OTHER, shippedHosts, env: {}, platform }).login, ['OTHER_KEY']);
+    assert.deepEqual(childEnvOf({ host: bare, shippedHosts, env: {}, platform }).login, []);
+    assert.deepEqual(childEnvOf({ host: HOOKS_ONLY_HOST, shippedHosts, env: {}, platform }).login, []);
+  });
+
+  it('adds what the running host names after the shipped names, each once: its marks and identity variables are session variables, and its marks are parked', () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(childEnvOf({ host: OTHER, shippedHosts, env: {}, platform }), {
+      session: [...SHIPPED_SESSION, 'OTHER_SOCKET', 'OTHER_AGENT', 'OTHER_SESSION', 'OTHER_ROOT', 'OTHER_TAB'],
+      parked: [...SHIPPED_PARKED, 'OTHER_SESSION', 'OTHER_TAB', 'OTHER_AGENT'],
+      login: ['OTHER_KEY'],
+    });
+    assert.deepEqual(childEnvOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { session: [], parked: [], login: [] });
+  });
+
+  it('ships no host whose login is not a credential variable, nor one that parks a credential', () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.ok(shippedHosts.length > 0);
+    for (const host of shippedHosts) {
+      const { login, parked } = childEnvOf({ host, shippedHosts: [], env: {}, platform });
+      assert.ok(login.length > 0 && login.every((name) => CREDENTIAL_VARIABLES.includes(name)), login.join(' '));
+      assert.ok(parked.every((name) => !CREDENTIAL_VARIABLES.includes(name)), parked.join(' '));
+    }
   });
 });
 

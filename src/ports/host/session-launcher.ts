@@ -46,9 +46,31 @@ export interface SessionVariables {
   readonly identity: readonly string[];
 }
 
+/**
+ * The environment variables a host sets for a session, by what a program teamrig starts may inherit of them. They
+ * are names and no reading: teamrig filters the environment it hands a new session or a queued step by them.
+ */
+export interface ChildEnvironment {
+  /**
+   * Every variable the host sets for a session's own tools. A session or a step started from inside one must not
+   * inherit them: it would look nested in its starter's session and could reach what the host keeps for that
+   * session alone.
+   */
+  readonly session: readonly string[];
+  /**
+   * Those of `session` a step parked on disk keeps, so a `teamrig` it runs still resolves its parker's tab. What is
+   * named here lands in a file, so none is a secret.
+   */
+  readonly parked: readonly string[];
+  /** The host's own login. A session of the host keeps these; no other program teamrig starts gets them. */
+  readonly login: readonly string[];
+}
+
 export interface SessionLauncher {
   /** The variables the host tells a run about its session by, the ones its declaration names. */
   readonly variables: SessionVariables;
+  /** The variables the host sets for a session, by what a new session or a queued step may inherit of them. */
+  readonly childEnv: ChildEnvironment;
   /** Who the host says this run is, in the environment the port was built for. */
   identity(): SessionIdentity;
 }

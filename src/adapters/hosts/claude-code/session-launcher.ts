@@ -1,8 +1,7 @@
 import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
-import { PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './session-variables.ts';
+import { CHILD_ENVIRONMENT } from './child-env.ts';
+import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './session-variables.ts';
 
-/** How Claude Code was started: `cli` for a terminal tab. */
-const ENTRYPOINT = 'CLAUDE_CODE_ENTRYPOINT';
 /** `bg` for a background session; unset for any other. */
 const SESSION_KIND = 'CLAUDE_CODE_SESSION_KIND';
 
@@ -16,6 +15,7 @@ function told(env: HostDeps['env'], name: string): string | undefined {
 export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
   return {
     variables: SESSION_VARIABLES,
+    childEnv: CHILD_ENVIRONMENT,
     identity: () => ({
       projectDir: told(env, PROJECT_DIR),
       startedAs: told(env, ENTRYPOINT),

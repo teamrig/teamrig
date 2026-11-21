@@ -3,12 +3,14 @@ import type { JsonRecord } from '../core/guards.ts';
 import {
   isUnsupported,
   unsupported,
+  type ChildEnvironment,
   type HookBridge,
   type HookEvent,
   type HookEventName,
   type HookReply,
   type HostPaths,
   type SessionIdentity,
+  type SessionLauncher,
   type SessionVariables,
   type ShellCall,
 } from '../ports/host/index.ts';
@@ -56,26 +58,37 @@ export const NO_SESSION_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given),
  */
 export function hostTelling(identity: Partial<SessionIdentity>): HostSource {
   const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables: testSessionVariables(), identity: () => told } });
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), identity: () => told } });
 }
 
 /**
  * The shipped host, its sessions told by `variables` in place of its own and every run said to be `identity`, each
- * part untold unless given: for a spec of a run on a host that names marks of its own, or none.
+ * part untold unless given: for a spec of a run on a host that names marks of its own, or none. Its child
+ * environment is the shipped host's unless `childEnv` names another.
  */
-export function hostNaming(variables: SessionVariables, identity: Partial<SessionIdentity> = {}): HostSource {
+export function hostNaming(variables: SessionVariables, identity: Partial<SessionIdentity> = {}, childEnv: ChildEnvironment = testChildEnv()): HostSource {
   const told: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables, identity: () => told } });
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { variables, childEnv, identity: () => told } });
 }
 
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
 export const NO_MARK_HOST: HostSource = hostNaming({ marks: [], identity: [] });
 
-/** The session variables the shipped host hands a run: the ones its declaration names. */
-export function testSessionVariables(): SessionVariables {
+/** The shipped host's session launcher in an empty environment: the names it hands a run are the same in every one. */
+function shippedLauncher(): SessionLauncher {
   const { launcher } = SHIPPED_HOST({ env: {}, platform: 'linux' });
   if (isUnsupported(launcher)) throw new Error(`the shipped host tells nothing of its sessions: ${launcher.notice}`);
-  return launcher.variables;
+  return launcher;
+}
+
+/** The session variables the shipped host hands a run: the ones its declaration names. */
+export function testSessionVariables(): SessionVariables {
+  return shippedLauncher().variables;
+}
+
+/** What the shipped host lets a program started from one of its sessions inherit of the session's variables. */
+export function testChildEnv(): ChildEnvironment {
+  return shippedLauncher().childEnv;
 }
 
 /** The shipped host's paths in the environment `env` on `platform`: where a spec's files are, as a run would be told them. */
