@@ -226,4 +226,14 @@ describe('runGuard', () => {
     assert.equal(isHookArgv(['hook', 'slash-command']), false);
     assert.equal(isHookArgv(['hook', 'session-start']), false);
   });
+
+  it('reads a guard hook with the event a host wrote after it, and nothing else beside it (T4752)', () => {
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'PreToolUse']), true);
+    assert.equal(isHookArgv(['hook', 'session-start', '--host-event', 'SessionStart']), false, 'not a guard hook');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event']), false, 'no event');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'Pre ToolUse']), false, 'not one word');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'x; rm']), false, 'not letters');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--session', 'PreToolUse']), false, 'another flag');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'PreToolUse', 'roles']), false, 'a word after it');
+  });
 });
