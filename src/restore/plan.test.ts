@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { join, parse, resolve } from 'node:path';
 import { PROMPT_MAX } from '../open/prompt.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
+import { testSessionPlace } from '../testing/host.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import type { RestoreEntry } from './entry.ts';
 import {
@@ -65,6 +66,7 @@ function facts(overrides: Partial<JudgeFacts> = {}): JudgeFacts {
     stalled: new Set(),
     transcripts: new Map([[SESSION, '/claude/projects/app/s.jsonl']]),
     kinds: new Map(),
+    placeOf: testSessionPlace(),
     ...overrides,
   };
 }
@@ -135,6 +137,18 @@ describe('judgeEntry', () => {
     assert.equal(judgeEntry(entry({ entrypoint: 'sdk-ts' }), facts()).reason, 'not a terminal session (sdk-ts)');
     assert.equal(judgeEntry(entry({ sessionKind: 'bg' }), facts()).reason, 'background session');
     assert.equal(judgeEntry(entry({ entrypoint: undefined }), facts()).verdict, 'restore');
+  });
+
+  it("reads where a session ran by the host's own words, not Claude Code's", () => {
+    const desk = facts({
+      placeOf: ({ startedAs, sessionKind }) => (sessionKind === 'daemon' ? 'background' : startedAs === 'desk-term' ? 'tab' : startedAs === undefined ? undefined : 'elsewhere'),
+    });
+    assert.equal(judgeEntry(entry({ entrypoint: 'desk-term' }), desk).verdict, 'restore');
+    assert.deepEqual(judgeEntry(entry({ entrypoint: 'desk-term', sessionKind: 'daemon' }), desk), { verdict: 'discard', reason: 'background session' });
+    assert.deepEqual(judgeEntry(entry(), desk), { verdict: 'discard', reason: 'not a terminal session (cli)' });
+    const untold = facts({ placeOf: ({ sessionKind }) => (sessionKind === 'job' ? 'elsewhere' : undefined) });
+    assert.deepEqual(judgeEntry(entry({ entrypoint: undefined, sessionKind: 'job' }), untold), { verdict: 'discard', reason: 'not a terminal session' });
+    assert.equal(judgeEntry(entry({ sessionKind: 'bg' }), untold).verdict, 'restore', 'a host that reads none of it reopens it as a tab');
   });
 
   it('discards a session its transcript shows as a background job or continued in another, though no end was recorded', () => {

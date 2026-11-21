@@ -119,6 +119,11 @@ export function testSessionVariables(): SessionVariables {
   return shippedLauncher().variables;
 }
 
+/** The shipped host's reading of where a session ran, for a spec of a restore that must ask the host. */
+export function testSessionPlace(): SessionLauncher['sessionPlaceOf'] {
+  return shippedLauncher().sessionPlaceOf;
+}
+
 /** Whether a process is the shipped host's own program running a session, as its launcher port answers. */
 export function testSessionProcess(process: RunningProgram): boolean {
   return shippedLauncher().isSessionProcess(process);

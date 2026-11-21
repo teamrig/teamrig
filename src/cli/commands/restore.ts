@@ -195,6 +195,7 @@ async function restoreDepsOf(runtime: CliRuntime, terminal: TerminalChoice | und
     sleep: runtime.sleep,
     probe: runtime.probe,
     reader: transcriptsOf(runtime),
+    placeOf: launcherOf(runtime).sessionPlaceOf,
     shutdowns: runtime.restore.shutdowns,
     countdown: runtime.restore.countdown,
     stops: runtime.restore.stops,

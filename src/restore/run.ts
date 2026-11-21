@@ -5,7 +5,7 @@ import type { PathProbe } from '../core/path-probe.ts';
 import { samePath } from '../core/paths.ts';
 import { customTitleOf } from '../names/title.ts';
 import type { EndOutcome } from '../open/session-processes.ts';
-import type { TranscriptReader } from '../ports/host/index.ts';
+import type { SessionLauncher, TranscriptReader } from '../ports/host/index.ts';
 import { CARRY_TAIL_BYTES } from '../refresh/carry.ts';
 import { turnRunning } from '../refresh/turn.ts';
 import { resumeFolderOf } from '../sessions/resume-folder.ts';
@@ -76,6 +76,8 @@ export interface RestoreDeps {
   readonly probe: PathProbe;
   /** Reads the host's transcript lines: whether a session's last turn still runs. */
   readonly reader: TranscriptReader;
+  /** The host's reading of where a session ran, from the words its entry kept: only a tab is reopened. */
+  readonly placeOf: SessionLauncher['sessionPlaceOf'];
   readonly shutdowns: ShutdownLog;
   readonly countdown: Countdown;
   readonly stops: StopWatch;
@@ -166,7 +168,7 @@ async function factsOf(deps: RestoreDeps, entries: readonly RestoreEntry[], sinc
       }
     }
   }
-  return { now, since, shutdown: await deps.shutdowns.lastShutdown(), running, stalled, transcripts, kinds };
+  return { now, since, shutdown: await deps.shutdowns.lastShutdown(), running, stalled, transcripts, kinds, placeOf: deps.placeOf };
 }
 
 /** Whether the transcript was last written HUNG_AFTER_MS ago or more: a live turn writes it at each step. */

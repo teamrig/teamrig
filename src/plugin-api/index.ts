@@ -130,6 +130,7 @@ export {
   type SearchCall,
   type SessionIdentity,
   type SessionLauncher,
+  type SessionPlace,
   type SessionStart,
   type SessionVariables,
   type ShellCall,

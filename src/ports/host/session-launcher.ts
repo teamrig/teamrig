@@ -1,8 +1,8 @@
 /**
  * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
  * host says a run is, what a child inherits of a session, which process runs one and what its command line says (a
- * fork, a background job), and the program and arguments that start or resume one; a wake joins it as it moves out
- * of the core.
+ * fork, a background job), where a session ran, and the program and arguments that start or resume one; a wake joins
+ * it as it moves out of the core.
  */
 
 /**
@@ -140,4 +140,15 @@ export interface SessionLauncher {
    * teamrig tells by it the job a tab handed its conversation to, which may no longer be in the tab's tree.
    */
   backgroundJobSession(lineage: readonly RunningProgram[]): string | undefined;
+  /**
+   * Where a session ran, read from the host's own words for how it started, as `identity` told them and its restore
+   * record kept them; undefined when they say nothing of it. The restore reopens only a `tab`.
+   */
+  sessionPlaceOf(told: Pick<SessionIdentity, 'startedAs' | 'sessionKind'>): SessionPlace | undefined;
 }
+
+/**
+ * Where a session of the host ran: a terminal `tab` the person works in, a `background` job of the host, or
+ * `elsewhere`, such as a run the host's SDK or its print mode started.
+ */
+export type SessionPlace = 'tab' | 'background' | 'elsewhere';

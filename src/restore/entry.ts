@@ -28,9 +28,12 @@ export interface RestoreEntry {
   /** The folder it started in, kept from its first event: a later `cd` does not move it. */
   readonly projectDir: string;
   readonly transcriptPath: string | undefined;
-  /** How it was started (`$CLAUDE_CODE_ENTRYPOINT`): only `cli` is a tab to reopen. */
+  /**
+   * How the host was started, in its own word (`SessionIdentity.startedAs`); with `sessionKind` the host's launcher
+   * reads from it where the session ran, and only a tab is reopened.
+   */
   readonly entrypoint: string | undefined;
-  /** `$CLAUDE_CODE_SESSION_KIND`: `bg` is a background session, never reopened. */
+  /** The session's kind in the host's own word (`SessionIdentity.sessionKind`). */
   readonly sessionKind: string | undefined;
   /** Its Claude Code's process id at its last event. */
   readonly pid: number | undefined;

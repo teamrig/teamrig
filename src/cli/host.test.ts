@@ -348,7 +348,7 @@ describe('identityOf', () => {
       const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
       const childEnv = { session: [], parked: [], login: [] };
       const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
-      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined } };
+      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       ...UNTOLD,
