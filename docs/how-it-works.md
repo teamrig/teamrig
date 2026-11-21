@@ -284,7 +284,8 @@ turns this off: `register.autoArchive: false` in the team's `config.json`, after
   from `src/read/index.ts`, reads it). The file names the Claude account it counts in (`budget.account`, else the
   config dir the team's sessions run in) and the stretches that account's week sat at its usage limit, for a reader
   that marks those days without the meter log, such as the pane's Stats tab. It also says where the week's use
-  counts from, a reset inside the week when there was one, so the status line's pace stands where `teamrig budget`
+  counts from, a reset inside the week when there was one, and the use that reset left (`startPct`, as a reset of one
+  model's limit leaves the rest), so the status line's pace stands where `teamrig budget`
   reads it without opening the account's period on every tick. A child team keeps its own; a reader that shows it
   under its parent adds it when both name one account.
   Beside it, `usage/sessions.week.json` holds each session on the team's roster: its use of the week so far,
