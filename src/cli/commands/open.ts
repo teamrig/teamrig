@@ -25,8 +25,8 @@ import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
+import { cacheBinOf, childEnvOf } from '../host.ts';
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
-import { cacheBinOf } from '../host.ts';
 import { liveRunOf, liveRunText } from '../live-run.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { launchListing } from '../skill-listing.ts';
@@ -499,11 +499,12 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   const prompt = launchPrompt(args, team, id);
   const resume = resumeFlag(args.flags.get('resume'));
   const effort = effortFlag(args.flags.get('effort'));
-  const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform, cacheBinOf(runtime)), [ENV.launched]: id };
+  const inherited = childEnvOf(runtime);
+  const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform, cacheBinOf(runtime), inherited.session), [ENV.launched]: id };
   const sessionRuntime: CliRuntime = { ...runtime, env };
   const kit = await openKit(sessionRuntime, team);
   const config = requireConfig(kit, sessionRuntime, 'read');
-  const claudeEnv = sessionCredentialFree(env, config.delivery.passEnv);
+  const claudeEnv = sessionCredentialFree(env, config.delivery.passEnv, inherited.login);
   const roster = await rosterOf(sessionRuntime, kit, config);
   if (!roster.ids.includes(id)) {
     throw new RefusedError(`${id} is not a session of team ${team}`);

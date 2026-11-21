@@ -1,4 +1,4 @@
-import { CLAUDE_LOGIN_VARIABLES, CLAUDE_SESSION_VARIABLES, withoutCredentials } from '../core/child-env.ts';
+import { withoutCredentials } from '../core/child-env.ts';
 import { ENV, type Env } from '../core/home.ts';
 import { envKey, pathList } from '../core/path-search.ts';
 
@@ -8,8 +8,10 @@ export type CacheBinTest = (folder: string) => boolean;
 /** Variables that make Claude Code a teamrig session: its id, its team, and that `launch` runs it. */
 const TEAMRIG_SESSION_VARIABLES: readonly string[] = [ENV.session, ENV.team, ENV.launched];
 
+/** `env` without the variables `names` lists, names compared without case, as Windows reads them. */
 function withoutVariables(env: Env, names: readonly string[]): Env {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => !names.includes(name.toUpperCase())));
+  const left = new Set(names.map((name) => name.toUpperCase()));
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !left.has(name.toUpperCase())));
 }
 
 /**
@@ -38,13 +40,14 @@ export interface SessionIdentity {
 }
 
 /**
- * The environment Claude Code starts in: the session and team set, so every hook and `teamrig`
- * command in it knows who it is, and the opener's own Claude Code session variables and plugin
- * `bin` folders left out.
+ * The environment a session starts in: the session and team set, so every hook and `teamrig` command in it knows who
+ * it is, and the opener's own plugin `bin` folders and `hostSession` left out: the variables a host sets for a
+ * session's own tools (the host port's `childEnv.session`), which would make the new session look nested in the
+ * opener's and let it reach what the host keeps for that one.
  */
-export function sessionEnv(env: Env, identity: SessionIdentity, platform: NodeJS.Platform, isCacheBin: CacheBinTest): Env {
+export function sessionEnv(env: Env, identity: SessionIdentity, platform: NodeJS.Platform, isCacheBin: CacheBinTest, hostSession: readonly string[]): Env {
   return {
-    ...withoutVariables(withoutPluginBins(env, platform, isCacheBin), CLAUDE_SESSION_VARIABLES),
+    ...withoutVariables(withoutPluginBins(env, platform, isCacheBin), hostSession),
     [ENV.session]: identity.id,
     [ENV.team]: identity.team,
     ...(identity.home === undefined ? {} : { [ENV.home]: identity.home }),
@@ -52,22 +55,23 @@ export function sessionEnv(env: Env, identity: SessionIdentity, platform: NodeJS
 }
 
 /**
- * A team session's environment without the credential variables (core/child-env.ts), but Claude Code's own login, as
- * the session is Claude Code, and those `pass` (`delivery.passEnv`) names: the session's tools run the team's code.
- * A session outside any team (plainSessionEnv) keeps its environment, as no team config names what it needs.
+ * A team session's environment without the credential variables (core/child-env.ts), but `login`, the host's own
+ * (the host port's `childEnv.login`), as the session is the host's program, and those `pass` (`delivery.passEnv`)
+ * names: the session's tools run the team's code. A session outside any team (plainSessionEnv) keeps its environment,
+ * as no team config names what it needs.
  */
-export function sessionCredentialFree(env: Env, pass: readonly string[]): Env {
-  return withoutCredentials(env, [...CLAUDE_LOGIN_VARIABLES, ...pass]);
+export function sessionCredentialFree(env: Env, pass: readonly string[], login: readonly string[]): Env {
+  return withoutCredentials(env, [...login, ...pass]);
 }
 
 /**
- * The environment a session outside any team resumes in: neither the opener's Claude Code session variables nor its
- * teamrig session, so the resumed session is not taken for the opener, nor its plugin `bin` folders; the kit home set
- * when it is not the default.
+ * The environment a session outside any team resumes in: neither the opener's host session variables (`hostSession`,
+ * as for sessionEnv) nor its teamrig session, so the resumed session is not taken for the opener, nor its plugin
+ * `bin` folders; the kit home set when it is not the default.
  */
-export function plainSessionEnv(env: Env, home: string | undefined, platform: NodeJS.Platform, isCacheBin: CacheBinTest): Env {
+export function plainSessionEnv(env: Env, home: string | undefined, platform: NodeJS.Platform, isCacheBin: CacheBinTest, hostSession: readonly string[]): Env {
   return {
-    ...withoutVariables(withoutPluginBins(env, platform, isCacheBin),[...CLAUDE_SESSION_VARIABLES, ...TEAMRIG_SESSION_VARIABLES]),
+    ...withoutVariables(withoutPluginBins(env, platform, isCacheBin), [...hostSession, ...TEAMRIG_SESSION_VARIABLES]),
     ...(home === undefined ? {} : { [ENV.home]: home }),
   };
 }
