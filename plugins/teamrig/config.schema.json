@@ -104,7 +104,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "type": "string", "enum": ["claude-code"] },
+      "items": { "type": "string", "enum": ["claude-code", "antigravity-cli"] },
       "default": ["claude-code"]
     },
     "ruleConflicts": {
