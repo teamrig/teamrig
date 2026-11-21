@@ -62,6 +62,10 @@ new audit ([tasks.md](../teamrig-guide/tasks.md#task-statuses)).
   you run any `teamrig` step after. A file that must call it names its full path.
 - PowerShell: a here-string's closing `'@` starts at column 0. Keep `} else {` and `} elseif (...) {` on one line:
   pasted by mistake, `}` and `else {` on two lines run as two commands, and the change silently never runs.
+- Never a step on the human's own login to the code host: no call of the host's CLI and no git command that reaches
+  a remote (push, fetch, pull, clone), which take whatever key the human's keyring holds. `audit` refuses such a
+  file, naming each call. A repository setting goes as click steps in the `.md`; a host call or a push you run
+  yourself after, through teamrig, which uses the key the team saved.
 - A number a later step needs comes from the same run; one from an earlier run is stale.
 - An edit after the audit, a small fix too, is a new audit: the card prints `do not run` in place of the run line,
   and `check` flags `RUN-CHANGED`, until the reviewer pins it again.

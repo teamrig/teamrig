@@ -251,6 +251,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       (roles.securityReviewer; with none set, any session but the task's owner) pins a hand step file
       (.ps1, .sh or .md) for a task still to finish at the sha256 of its bytes now (core rule 11), so a
       card may hand it to the owner; an edit needs a new audit; the task's owner gets an inbox line;
+      REFUSED for a file that calls gh, or a git command reaching a remote (push, fetch, pull, clone,
+      ls-remote, remote update, submodule update), on the human's own login, naming each call;
       --team <child>: the reviewer on a team above audits a task of that team below
   audit T<n> --verdict "<what the review found>" [--note ..] [--team <child>]   the security reviewer
       gives its verdict on the task's card (core rule 9), pinned with the question, options and

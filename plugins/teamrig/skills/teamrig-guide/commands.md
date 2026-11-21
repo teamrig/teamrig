@@ -587,6 +587,8 @@ Flags:
 
 - `--session <id|name>`: the caller, the security reviewer.
 - `--file <path>`: the hand step file, read from the caller's folder; one of `--file` or `--verdict` is required.
+  A file that calls the code host's CLI, or a git command reaching a remote, on the human's own login is refused,
+  naming each call.
 - `--verdict "<what the review found>"`: the security verdict on the task's card, and whether the owner may
   approve it.
 - `--note "<text>"`: what you checked.
