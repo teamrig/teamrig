@@ -5397,8 +5397,8 @@ start a part of the name: it tells whose branch it is), `{issue}` (the number of
 [delivery.branches.slugMax], default 40) and `{session}` (the task's owner). The branch type is `--type` when
 given, else the one [delivery.branches.classes] maps the task's work class to, else the one
 [delivery.branches.itemTypes] maps its item type to (default: a task `feat`, a bug `fix`);
-[delivery.branches.typePatterns] gives a branch type its own pattern. Branches named before keep their names. To
-ship a branch again under a new name, add `-b` to it (`feat/t12-parse-input-b`), never a force-push.
+[delivery.branches.typePatterns] gives a branch type its own pattern. Branches named before keep their names. A
+rebase or conflict fix goes back to the same branch with `--force-with-lease`, never under a new name.
 
 It refuses (exit 2) before any change for: a name that is no branch name; a folder already there; an `origin/HEAD`
 that names no default branch (`git remote set-head origin --auto` sets it); a branch that already exists; `--repo`
