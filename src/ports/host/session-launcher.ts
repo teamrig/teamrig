@@ -1,6 +1,7 @@
 /**
- * The host's sessions as the core starts, finds and names them. So far the port tells the program's name and who the
- * host says a run is; a launch, a resume, a session's processes and a wake join it as each moves out of the core.
+ * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
+ * host says a run is, what a child inherits of a session and which process runs one; a launch, a resume and a wake
+ * join it as each moves out of the core.
  */
 
 /**
@@ -71,6 +72,14 @@ export interface ChildEnvironment {
   readonly login: readonly string[];
 }
 
+/** A running process as the system describes it, by what tells whose program it is. */
+export interface RunningProgram {
+  /** Its program's file name, such as `node` or a host's own binary. */
+  readonly name: string;
+  /** Its whole command line; empty when the system does not show it (a process of another user). */
+  readonly commandLine: string;
+}
+
 export interface SessionLauncher {
   /**
    * The host program's name as people know it, such as `Claude Code`: what a commit stamp names. The core sees no
@@ -83,4 +92,10 @@ export interface SessionLauncher {
   readonly childEnv: ChildEnvironment;
   /** Who the host says this run is, in the environment the port was built for. */
   identity(): SessionIdentity;
+  /**
+   * Whether a running process is the host's own program running a session: its binary, or a runtime running its
+   * script. teamrig tells by it that a recorded session still runs, and finds the session a hook or a step runs
+   * under; a process id the system gave another program since must not pass.
+   */
+  isSessionProcess(process: RunningProgram): boolean;
 }

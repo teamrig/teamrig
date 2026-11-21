@@ -9,6 +9,7 @@ import {
   type HookEventName,
   type HookReply,
   type HostPaths,
+  type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
   type SessionVariables,
@@ -74,7 +75,15 @@ export function hostTelling(identity: Partial<SessionIdentity>): HostSource {
  */
 export function hostNaming(variables: SessionVariables, identity: Partial<SessionIdentity> = {}, childEnv: ChildEnvironment = testChildEnv()): HostSource {
   const told: SessionIdentity = { ...UNTOLD_IDENTITY, ...identity };
-  return (given) => ({ ...SHIPPED_HOST(given), launcher: { programName: TEST_PROGRAM, variables, childEnv, identity: () => told } });
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), programName: TEST_PROGRAM, variables, childEnv, identity: () => told } });
+}
+
+/**
+ * The shipped host, its sessions run by the program named `program` and no other: for a spec of a reader that must
+ * ask the host which process is a session's and know no host's program itself.
+ */
+export function hostRunning(program: string): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), isSessionProcess: (process) => process.name === program } });
 }
 
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
@@ -90,6 +99,11 @@ function shippedLauncher(): SessionLauncher {
 /** The session variables the shipped host hands a run: the ones its declaration names. */
 export function testSessionVariables(): SessionVariables {
   return shippedLauncher().variables;
+}
+
+/** Whether a process is the shipped host's own program running a session, as its launcher port answers. */
+export function testSessionProcess(process: RunningProgram): boolean {
+  return shippedLauncher().isSessionProcess(process);
 }
 
 /** What the shipped host lets a program started from one of its sessions inherit of the session's variables. */

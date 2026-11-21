@@ -122,6 +122,7 @@ export {
   type ReadCall,
   type ReplyCall,
   type ReplyEntry,
+  type RunningProgram,
   type ScheduledCarryEntry,
   type ScheduledJob,
   type SearchCall,

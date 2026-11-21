@@ -1,6 +1,7 @@
 import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
+import { isSessionProcess } from './session-process.ts';
 import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './session-variables.ts';
 
 /** `bg` for a background session; unset for any other. */
@@ -27,5 +28,6 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
       sessionId: told(env, SESSION_ID),
       forcedEffort: told(env, EFFORT_LEVEL),
     }),
+    isSessionProcess,
   };
 }

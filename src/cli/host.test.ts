@@ -7,7 +7,7 @@ import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, hostRunning, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { join } from 'node:path';
 import {
@@ -21,6 +21,7 @@ import {
   pathsIfKnown,
   pathsOf,
   secretFilesOf,
+  sessionProcessCheckOf,
   sessionVariablesOf,
   transcriptsIfKept,
   transcriptsOf,
@@ -284,7 +285,8 @@ describe('identityOf', () => {
       seen.push(given);
       const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
       const childEnv = { session: [], parked: [], login: [] };
-      return { ...BARE, launcher: { programName: 'Agent', variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, childEnv, identity: () => identity } };
+      const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
+      return { ...BARE, launcher: { programName: 'Agent', variables, childEnv, identity: () => identity, isSessionProcess: () => false } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       ...UNTOLD,
@@ -369,6 +371,33 @@ describe('childEnvOf', () => {
       assert.ok(login.length > 0 && login.every((name) => CREDENTIAL_VARIABLES.includes(name)), login.join(' '));
       assert.ok(parked.every((name) => !CREDENTIAL_VARIABLES.includes(name)), parked.join(' '));
     }
+  });
+});
+
+describe('sessionProcessCheckOf', () => {
+  const SHIPPED_PROGRAM = { name: 'claude.exe', commandLine: '' };
+  const OTHER_PROGRAM = { name: 'agent-desk', commandLine: 'agent-desk --resume' };
+  const SHELL = { name: 'bash', commandLine: 'bash -l' };
+
+  it("knows a shipped host's session process whatever host the run works in, and no other program", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      const isSessionProcess = sessionProcessCheckOf({ host, shippedHosts, env: {}, platform });
+      assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(isSessionProcess), [true, false, false], name);
+    }
+  });
+
+  it('adds the program the running host says runs its sessions, and takes none of the shipped ones away', () => {
+    const { shippedHosts, platform } = quietWorld();
+    const isSessionProcess = sessionProcessCheckOf({ host: hostRunning('agent-desk'), shippedHosts, env: {}, platform });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(isSessionProcess), [true, true, false]);
+  });
+
+  it('knows the running host alone when no host is shipped, and no process at all where no host tells of its sessions', () => {
+    const alone = sessionProcessCheckOf({ host: hostRunning('agent-desk'), shippedHosts: [], env: {}, platform: 'linux' });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(alone), [false, true, false]);
+    const none = sessionProcessCheckOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(none), [false, false, false]);
   });
 });
 

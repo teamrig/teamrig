@@ -6,6 +6,7 @@ import {
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
+  type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
   type SessionVariables,
@@ -188,6 +189,18 @@ export function childEnvOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | '
     parked: [...new Set(parked)],
     login: isUnsupported(running) ? [] : [...new Set(running.childEnv.login)],
   };
+}
+
+/**
+ * Whether a running process is a session's own host program, as any host adapter teamrig ships with or the running
+ * host tells it. A machine may run a host other than the one this run works in, and a session recorded on it still
+ * runs whichever host's program it is: so the running host adds to what the shipped hosts know and takes none away.
+ * It never refuses: a host that tells nothing of its sessions knows none, and with no host that does, no process is
+ * a session's.
+ */
+export function sessionProcessCheckOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): (process: RunningProgram) => boolean {
+  const launchers = launchersOf(runtime);
+  return (process) => launchers.some((launcher) => launcher.isSessionProcess(process));
 }
 
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
