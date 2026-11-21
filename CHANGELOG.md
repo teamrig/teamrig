@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.501.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.500.0...teamrig-v0.501.0) (2026-11-21)
+
+
+### Features
+
+* **check:** BLOCKER-OPEN flags a blocker still unfixed past register.check.blockerOpenAfterHours (T4329) ([4e82d38](https://github.com/teamrig/teamrig/commit/4e82d38c7997df4095a62d92adc86dbcfe79cc16))
+* **cli:** a connector's state lives in its own folder, state/connectors/&lt;id&gt; (T4766) ([08d02af](https://github.com/teamrig/teamrig/commit/08d02afc1ece08f13ae25c9af32c588add9dde5e))
+* **cli:** a run is an agent's by any shipped host's mark, and untold where its host names none (T4749) ([8e6947a](https://github.com/teamrig/teamrig/commit/8e6947ae2444d744e47ed6e5d63d4b0058b3793c))
+* **cli:** a settings writer's write asks the host who runs it (T4749) ([fa6ca7a](https://github.com/teamrig/teamrig/commit/fa6ca7ac8a4405864602b9205e684af75aef363e))
+* **cli:** a tab's id comes from the host, for the inbox bind, queue, withdraw, worktree remove and the write gate (T4749) ([e487888](https://github.com/teamrig/teamrig/commit/e4878883f992e0762ecc46af3916f736eca60654))
+* **cli:** each issue command hands its connector the team's section under the connector's id (T4766) ([54e9998](https://github.com/teamrig/teamrig/commit/54e99984b740d75914add1c1e4e6890106375a77))
+* **cli:** TEAMRIG_CONNECTOR_&lt;ID&gt;=off turns any connector off on a machine, GitHub's older switch kept (T4766) ([66a2053](https://github.com/teamrig/teamrig/commit/66a20535d8cbf8e4f487be611ae0cae0c7cd2b80))
+* **cli:** the owner's acts, the slash command, the inbox rebind and a host job's line ask the host who runs them (T4749) ([39b8a01](https://github.com/teamrig/teamrig/commit/39b8a01699cd96ebee1d3b4526bce852c8b00dab))
+* **config:** a connectors map gives each connector its own section, kept as written (T4766) ([52facab](https://github.com/teamrig/teamrig/commit/52facaba1e5cae9e357fb7e138aa7c73db2242c6))
+* **config:** wake.maxGapMinutes, the gap between wakes once five tasks are due (T4852) ([b410ed6](https://github.com/teamrig/teamrig/commit/b410ed6ec52f811f88aadf4361b40c7a39e1bbb8))
+* **exec-guard:** the guard holds every shipped host's session variables, and the running host's (T4749) ([0ae3d1b](https://github.com/teamrig/teamrig/commit/0ae3d1bb8100835dd7b13c1c48b8141a537cc7f2))
+* **host:** the launcher port hands a run its host's session variables and the session id (T4749) ([053465f](https://github.com/teamrig/teamrig/commit/053465f51e65f0e6ffdc4d2974939880d9116d95))
+* **inbox:** a line naming p0 work no longer wakes on its own; only a blocker does (T4329) ([b3a7d88](https://github.com/teamrig/teamrig/commit/b3a7d88c5835f0c6b17474e6342eed5bf44d9f76))
+* **jira:** the connector reads its config section: site, projects, and the type a new issue opens as (T4766) ([df5b2b5](https://github.com/teamrig/teamrig/commit/df5b2b54ba46aca4fc5dee798d21470c4bbf94ca))
+* **plugin-api:** a connector reads its own config section, and declares the keys it takes (T4766) ([e93dbe6](https://github.com/teamrig/teamrig/commit/e93dbe615722b35536599c35ffea4ddb74eb6332))
+* **plugin-api:** a host declares its session variables, and one naming no mark of an agent's run does not load (T4749) ([f5980a6](https://github.com/teamrig/teamrig/commit/f5980a6afa8f5840181dccfb65fd76355da3ca6f))
+* **queue:** a blocker's step goes ahead of earlier p0 steps in the host line (T4329) ([e9a674d](https://github.com/teamrig/teamrig/commit/e9a674da1bce14e0b4af0ba367669142de1229d6))
+* **register:** a blocker goes wherever p0 goes: wakes past holds, URGENT, expedite, scale-out (T4329) ([8f2c88f](https://github.com/teamrig/teamrig/commit/8f2c88fdcdebb2987d1e7fb38d6cdae3fb38d9ae))
+* **register:** a blocker its owner can take up heads plan order, ahead of a pin (T4329) ([d94b6c8](https://github.com/teamrig/teamrig/commit/d94b6c85b4f414e5704daf17ba58b5bd40334a43))
+* **register:** a blocker priority above p0, written as p0 marked blocker (T4329) ([38f988d](https://github.com/teamrig/teamrig/commit/38f988defa47f7bf02cf0e56e0a9bb225d4afc07))
+* **register:** a blocker says why and never waits on another task (T4329) ([750afbf](https://github.com/teamrig/teamrig/commit/750afbfee878d630424649dc530b4131aa798723))
+* **register:** a session holding a blocker starts no other work until it is fixed (T4329) ([c055f02](https://github.com/teamrig/teamrig/commit/c055f0280a670e88babb309891533733018a1c36))
+* **register:** a task made a blocker wakes its owner's leader and the lead at once (T4329) ([c50dd96](https://github.com/teamrig/teamrig/commit/c50dd96856c84e45123e0bbe9f01d01c13278d51))
+* **release:** a gate that passes only a green one-commit release pull request, and an App merge pinned to its head (T4712) ([bf9aad2](https://github.com/teamrig/teamrig/commit/bf9aad25854d0faaeec3009ac195e7dc3ab155e2))
+* **release:** a release-merge CLI the workflow runs, every value from the environment (T4712) ([9fe604c](https://github.com/teamrig/teamrig/commit/9fe604c4f899086190eede6f0e5d7cd5dab182b5))
+* **rules:** a blocker comes first, its owner drops the rest and fixes it now (T4329) ([b0755a7](https://github.com/teamrig/teamrig/commit/b0755a7084032e98b4255e9e81ca583d3bab2421))
+* **wake:** the gap between wakes grows with the tasks due, and a blocker skips it (T4852) ([fdd32ab](https://github.com/teamrig/teamrig/commit/fdd32ab32636500f5abd175648cfb866fed82a93))
+
+
+### Bug Fixes
+
+* **jira:** a missing issue type's line quotes Jira's type names as plain lines, at most ten listed (T4766) ([2fff2c8](https://github.com/teamrig/teamrig/commit/2fff2c83d232e86c718314be7bb24c6113664a22))
+* **merge:** a rebase conflict's hint sends a reviewed branch back to itself with a lease, not under a new name (T4907) ([edaf37e](https://github.com/teamrig/teamrig/commit/edaf37e99dbe3721e47f68d641d953728af58968))
+* **permissions:** the git-push route takes a lease push of an own task branch back to that same branch (T4908) ([730c4e1](https://github.com/teamrig/teamrig/commit/730c4e17bd07457c930a6d86d4b7ae6defca9fef))
+* **queue:** a waiting blocker step keeps its blocker priority when its line request is read again (T4329) ([aa1b1e7](https://github.com/teamrig/teamrig/commit/aa1b1e7fda988a6859ae5b426a4107bcb9423706))
+* **ship:** a merge's catch-up rebases the head in place and pushes it to the same branch with a lease (T4907) ([2d4ce1d](https://github.com/teamrig/teamrig/commit/2d4ce1d5830a2ccd5758553dc23c86f9ca35e4e6))
+* **ship:** a ship that main moved past ships again on the same branch, and a rerun takes back pushed commits for the lease push (T4907) ([0af6a04](https://github.com/teamrig/teamrig/commit/0af6a0415c150e89e1de45a80f43809428825e29))
+* **ship:** the release pull request's check takes one commit, plain files and notes in one block below the title (T4712) ([6181e60](https://github.com/teamrig/teamrig/commit/6181e607b1f21fe08a6ae94e6909ca2349cbfccb))
+
 ## [0.500.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.499.0...teamrig-v0.500.0) (2026-11-21)
 
 
