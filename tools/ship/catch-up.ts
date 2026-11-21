@@ -1,4 +1,3 @@
-import { freeBranch } from './branch-names.ts';
 import type { MainMove } from './merge.ts';
 import { pushOwnBranch } from './push.ts';
 import { type Regeneration, type ReplayPlan, planReplay, regenerate, regenerationFor, workPathspec } from './regenerate.ts';
@@ -7,10 +6,11 @@ import { mainMovedPast } from './sync.ts';
 /**
  * Brings a pushed change branch that main moved past up to main, for `ship.ts merge` (T2809). A merge queued
  * behind other heavy steps runs up to an hour or two later, and on a busy day main moves every few minutes, so a
- * merge that only refused a stale head could not land at all. The head is rebased onto main's tip as a new branch
- * `<stem>-N` (branch-names.ts: a pushed branch is never rewritten) and goes on only when the rebase is clean and the
- * change's own diff is the same, so what merges is what was reviewed and approved; the new branch is pushed and its
- * checks run as any head's. Anything else is refused with the repo dir back on the head as it was.
+ * merge that only refused a stale head could not land at all. The head is rebased onto main's tip in place and goes
+ * on only when the rebase is clean and the change's own diff is the same, so what merges is what was reviewed and
+ * approved; it is pushed to the same branch, so the same pull request, with a lease on the sha it was rebased from
+ * (push.ts; the owner's rule of 11-21: a rebase never opens a new branch or pull request), and its checks run as any
+ * head's. Anything else is refused with the repo dir back on the head as it was.
  *
  * In a repo whose profile calls teamrig's version files and dist regenerated, the change's commits of only those are
  * dropped instead, its work commits are replayed on main's tip, and the raise and the dist are made again on main
@@ -34,8 +34,6 @@ export interface CatchUpDeps {
 export interface CatchUpRequest {
   /** The branch main moved past, which should be checked out in the repo dir. */
   readonly head: string;
-  /** The name new branches are numbered from: the head the merge began with. */
-  readonly stem: string;
   /** main's tip on origin, which the head does not contain. */
   readonly tip: string;
   /** The branch merged into. */
@@ -44,7 +42,7 @@ export interface CatchUpRequest {
   readonly regenerated: readonly string[];
 }
 
-/** Pushed as a new head; main moved again before that push went through (the repo dir back on the head); or refused. */
+/** Pushed to the same branch at a new sha; main moved again before that push went through (the repo dir back on the head); or refused. */
 export type CatchUp =
   | { readonly kind: 'rebased'; readonly head: string; readonly sha: string }
   | ({ readonly kind: 'moved' } & MainMove)
@@ -72,12 +70,12 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
 
 export function catchUp(deps: CatchUpDeps, request: CatchUpRequest): CatchUp {
   const { git, log } = deps;
-  const { head, stem, tip, main } = request;
+  const { head, tip, main } = request;
   const sha = git('rev-parse', `refs/heads/${head}`);
   const past = `${main} moved to ${tip.slice(0, 7)}, which ${head} ${sha.slice(0, 7)} does not contain`;
   const refuse = (why: string): CatchUp => ({ kind: 'refused', reason: `${past}, and ${why}` });
   if (git('rev-parse', '--abbrev-ref', 'HEAD') !== head) {
-    return refuse(`it is not checked out in the repo dir to be rebased there: rebase it onto origin/${main}, push it under a new name and merge that`);
+    return refuse(`it is not checked out in the repo dir to be rebased there: rebase it onto origin/${main}, push it with --force-with-lease and merge again`);
   }
   if (git('status', '--porcelain') !== '') return refuse('the repo dir has uncommitted changes: commit them or set them aside, then merge again');
 
@@ -85,14 +83,13 @@ export function catchUp(deps: CatchUpDeps, request: CatchUpRequest): CatchUp {
   const regeneration = regenerationFor(request.regenerated);
   const plan = regeneration === null ? null : planReplay(git, regeneration, base, sha, tip);
   if (typeof plan === 'string') return refuse(`${plan}: ${WITH_PLAN}`);
-  const next = freeBranch(git, stem);
-  const caught = regeneration === null || plan === null ? rebase(deps, request, base, sha, next) : replay(deps, regeneration, plan, { head, base, sha, tip, next });
+  const caught = regeneration === null || plan === null ? rebase(deps, request, base, sha) : replay(deps, regeneration, plan, { base, sha, tip });
   if (caught.kind === 'refused') return refuse(caught.why);
   const rebased = git('rev-parse', 'HEAD');
   try {
-    pushOwnBranch(git, main);
+    pushOwnBranch(git, main, sha);
   } catch (error) {
-    const how = `${caught.done === null ? 'rebased' : 'caught up'} as ${next}`;
+    const how = `${caught.done === null ? 'rebased' : 'caught up'} to ${head}`;
     const moved = movedAgain(git, main);
     caught.undo();
     if (moved === null) return refuse(`pushing it ${how} failed: ${messageOf(error)}`);
@@ -100,8 +97,8 @@ export function catchUp(deps: CatchUpDeps, request: CatchUpRequest): CatchUp {
     log(`${past}; ${again}: catching it up again`);
     return { kind: 'moved', tip: moved.tip, reason: `${head} ${sha.slice(0, 7)} was caught up, and ${again}` };
   }
-  log(`${past}: ${caught.done === null ? 'rebased it cleanly with the same diff' : `replayed its work with the same diff, ${caught.done},`} and pushed it as ${next} ${rebased.slice(0, 7)}; merging that`);
-  return { kind: 'rebased', head: next, sha: rebased };
+  log(`${past}: ${caught.done === null ? 'rebased it cleanly with the same diff' : `replayed its work with the same diff, ${caught.done},`} and pushed it to ${head} ${rebased.slice(0, 7)}; merging that`);
+  return { kind: 'rebased', head, sha: rebased };
 }
 
 /**
@@ -120,17 +117,15 @@ function movedAgain(git: CatchUpDeps['git'], main: string): MainMove | null {
 
 const WITH_PLAN = "ship it again with its plan (ship.ts <dir> <plan.json> --merge), which sets the raise on main's version";
 
-/** The head brought onto the tip as `next` (checked out), what was made again on it (null: a plain rebase), and how to drop it; or why not. */
+/** The head brought onto the tip in place, what was made again on it (null: a plain rebase), and how to drop it; or why not. */
 type Caught = { readonly kind: 'caught'; readonly done: string | null; readonly undo: () => void } | { readonly kind: 'refused'; readonly why: string };
 
 /** The whole head rebased onto the tip, as before regeneration (a repo with no version files and dist to make again). */
-function rebase(deps: CatchUpDeps, request: CatchUpRequest, base: string, sha: string, next: string): Caught {
+function rebase(deps: CatchUpDeps, request: CatchUpRequest, base: string, sha: string): Caught {
   const { git } = deps;
   const own = ownDiff(git, base, sha);
-  git('switch', '--quiet', '--create', next);
   const undo = (): void => {
-    git('switch', '--quiet', request.head);
-    git('branch', '--quiet', '--delete', '--force', next);
+    git('reset', '--quiet', '--hard', sha);
   };
   const giveUp = (why: string): Caught => {
     undo();
@@ -141,32 +136,29 @@ function rebase(deps: CatchUpDeps, request: CatchUpRequest, base: string, sha: s
   } catch {
     git('rebase', '--abort');
     return giveUp(
-      `rebasing it onto that tip conflicts: rebase it by hand, push it under a new name and merge that (a change that raises the plugin version ships again with its plan, which sets the raise on main's)`,
+      `rebasing it onto that tip conflicts: rebase it by hand, push it with --force-with-lease and merge again (a change that raises the plugin version ships again with its plan, which sets the raise on main's)`,
     );
   }
-  if (ownDiff(git, request.tip, git('rev-parse', 'HEAD')) !== own) return giveUp('its diff changes when rebased onto that tip: rebase it by hand, check it, push it under a new name and merge that');
+  if (ownDiff(git, request.tip, git('rev-parse', 'HEAD')) !== own) return giveUp('its diff changes when rebased onto that tip: rebase it by hand, check it, push it with --force-with-lease and merge again');
   return { kind: 'caught', done: null, undo };
 }
 
 interface Replay {
-  readonly head: string;
   readonly base: string;
   readonly sha: string;
   readonly tip: string;
-  readonly next: string;
 }
 
-/** The head's work commits replayed on the tip as `next`, then its raise and dist made again there (regenerate.ts). */
+/** The head's work commits replayed on the tip in place, then its raise and dist made again there (regenerate.ts). */
 function replay(deps: CatchUpDeps, regeneration: Regeneration, plan: ReplayPlan, at: Replay): Caught {
   const { git } = deps;
   const pathspec = workPathspec(regeneration);
   const own = ownDiff(git, at.base, at.sha, pathspec);
-  git('switch', '--quiet', '--create', at.next, at.tip);
-  // A failed build may leave new files in the dist, which are this branch's own until it is dropped.
+  git('reset', '--quiet', '--hard', at.tip);
+  // A failed build may leave new files in the dist, which only this replay made.
   const undo = (): void => {
     git('clean', '-fdq', '--', regeneration.dist);
-    git('switch', '--quiet', '--discard-changes', at.head);
-    git('branch', '--quiet', '--delete', '--force', at.next);
+    git('reset', '--quiet', '--hard', at.sha);
   };
   const giveUp = (why: string): Caught => {
     undo();
