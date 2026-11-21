@@ -236,4 +236,25 @@ describe('runGuard', () => {
     assert.equal(isHookArgv(['hook', 'push-guard', '--session', 'PreToolUse']), false, 'another flag');
     assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'PreToolUse', 'roles']), false, 'a word after it');
   });
+
+  it('reads a guard hook with the host its line names, and the host event beside it, each once (T4752)', () => {
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'claude-code']), true);
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'antigravity-cli', '--host-event', 'PreToolUse']), true);
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host-event', 'PreToolUse', '--host', 'antigravity-cli']), true, 'either order');
+    assert.equal(isHookArgv(['hook', 'session-start', '--host', 'claude-code']), false, 'not a guard hook');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host']), false, 'no id');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'Claude-Code']), false, 'not lowercase');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'claude code']), false, 'not one word');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', '--session']), false, 'a flag as the id');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'a', '--host', 'b']), false, 'twice');
+    assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'claude-code', 'roles']), false, 'a word after it');
+  });
+
+  it('runs a guard hook whose line names its host (T4752)', async () => {
+    const host = new FakeHost();
+    await runGuard(['hook', 'push-guard', '--host', 'claude-code'], SCRIPT, async () => answering(EXIT.ok, [DENY]).main, host);
+    assert.deepEqual(host.written, [`${DENY}
+`]);
+    assert.deepEqual(host.errors, []);
+  });
 });
