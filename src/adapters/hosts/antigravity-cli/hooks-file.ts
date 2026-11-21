@@ -15,6 +15,7 @@
  * kept as they are: which agy tool a matcher's name stands for is the host port's rule, not this file's.
  */
 
+import { declaration } from './declaration.ts';
 import type { AntigravityHookEvent } from './events.ts';
 
 /** One command hook as agy reads it. */
@@ -102,7 +103,7 @@ const EVERY_TOOL = '*';
 const EVENT_FLAG = '--host-event';
 const HOST_FLAG = '--host';
 /** This adapter's id in teamrig's host table, which each hook line names so the run loads agy's ports. */
-export const ANTIGRAVITY_CLI_HOST = 'antigravity-cli';
+export const ANTIGRAVITY_CLI_HOST = declaration.id;
 
 const FILE_KEYS: readonly string[] = ['description', 'modules', 'hooks'];
 const GROUP_KEYS: readonly string[] = ['matcher', 'hooks'];
