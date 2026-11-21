@@ -96,9 +96,42 @@ describe('matchesGitPush', () => {
     }
   });
 
+  it('takes a leased push of an own task branch back to that same branch, as a rebase sends it (T4908)', async () => {
+    for (const line of [
+      'git push --force-with-lease origin t1-x',
+      'git push --force-with-lease --force-if-includes origin t1-x',
+      'git push -q --force-with-lease=t1-x origin t1-x',
+      'git push --force-with-lease=refs/heads/t1-x:0123abcd origin t1-x',
+      'git push --force-with-lease=t1-x: origin t1-x',
+      'git -C C:/w push origin feat/t1-parser --force-with-lease=feat/t1-parser:89ABCDEF0123',
+    ]) {
+      assert.equal(await push(line), true, line);
+    }
+  });
+
+  it('takes no lease on another ref, an expected revision that is not an object name, or a lease to a protected or unowned branch', async () => {
+    for (const line of [
+      'git push --force-with-lease=t1-y origin t1-x',
+      'git push --force-with-lease=main origin t1-x',
+      'git push --force-with-lease=refs/heads/main:0123abcd origin t1-x',
+      'git push --force-with-lease=refs/tags/t1-x origin t1-x',
+      'git push --force-with-lease=t1-x:HEAD~1 origin t1-x',
+      'git push --force-with-lease=t1-x:origin/t1-x origin t1-x',
+      'git push --force-with-lease= origin t1-x',
+      'git push --force-with-lease origin main',
+      'git push --force-with-lease origin t3-release',
+      'git push --force-with-lease origin t2-x',
+      'git push --force-with-lease origin +t1-x',
+      'git push --force-with-lease origin t1-x:main',
+    ]) {
+      assert.equal(await push(line), false, line);
+    }
+  });
+
   it('takes no force, delete, mirror, hook skip or other option', async () => {
-    for (const option of ['-f', '--force', '--force-with-lease', '--force-if-includes', '--mirror', '--all', '--delete', '-d', '--prune', '--no-verify', '--receive-pack=x', '--exec=x', '--repo=x', '-o', '-uf', '--', '-']) {
+    for (const option of ['-f', '--force', '--no-force-with-lease', '--force-with-lease-x', '--mirror', '--all', '--delete', '-d', '--prune', '--no-verify', '--receive-pack=x', '--exec=x', '--repo=x', '-o', '-uf', '--', '-']) {
       assert.equal(await push(`git push ${option} origin t1-x`), false, option);
+      assert.equal(await push(`git push --force-with-lease ${option} origin t1-x`), false, `${option} with a lease`);
     }
   });
 

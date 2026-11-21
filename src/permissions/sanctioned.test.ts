@@ -89,6 +89,8 @@ describe('routeOf', () => {
       ['teamrig inbox add --to teamrig --text x', 'register'],
       ['git commit -s -m "fix: the route (T1)"', 'git-commit'],
       ['git -C C:/w push origin t1-canary', 'git-push'],
+      ['git -C C:/w push --force-with-lease --force-if-includes origin t1-canary', 'git-push'],
+      ['git -C C:/w push --force-with-lease=t1-canary origin t1-canary', 'git-push'],
     ];
     for (const [line, id] of routes) {
       assert.equal(await idOf(line), id, line);
@@ -217,8 +219,9 @@ describe('routeOf', () => {
       'git push origin t1-canary t1-more',
       'git push -f origin t1-canary',
       'git push --force origin t1-canary',
-      'git push --force-with-lease origin t1-canary',
-      'git push --force-if-includes origin t1-canary',
+      'git push --force-with-lease origin main',
+      'git push --force-with-lease=main origin t1-canary',
+      'git push --force-with-lease origin +t1-canary',
       'git push --mirror origin',
       'git push --all origin',
       'git push -d origin t1-canary',
@@ -232,7 +235,7 @@ describe('routeOf', () => {
       'git push origin t1-canary --force',
       'git push origin t1-canary -f',
       'git push origin t1-canary --no-verify',
-      'git push --force-with-lease=t1-canary origin t1-canary',
+      'git push --force-with-lease=t1-canary:HEAD origin t1-canary',
       'git push origin :t1-canary',
       'git push origin @',
       'git push origin HEAD:t1-canary',
