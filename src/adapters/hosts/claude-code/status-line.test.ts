@@ -96,6 +96,7 @@ describe('statusLine', () => {
     agent: { name: 'alpha' },
     model: { id: 'model-id', display_name: 'Opus' },
     effort: { level: 'high' },
+    version: '2.1.329',
     cost: { total_cost_usd: 1.25 },
     context_window: { used_percentage: 42, total_input_tokens: 84_000 },
   };
@@ -114,6 +115,7 @@ describe('statusLine', () => {
       agentName: 'alpha',
       model: 'Opus',
       effort: 'high',
+      hostVersion: '2.1.329',
       costUsd: 1.25,
       contextUsedPct: 42,
       contextInputTokens: 84_000,
@@ -121,9 +123,9 @@ describe('statusLine', () => {
   });
 
   it('leaves a field the input did not tell undefined, the folder empty', () => {
-    const bare = { sessionId: undefined, cwd: '', agentName: undefined, model: undefined, effort: undefined, costUsd: undefined, contextUsedPct: undefined, contextInputTokens: undefined };
+    const bare = { sessionId: undefined, cwd: '', agentName: undefined, model: undefined, effort: undefined, hostVersion: undefined, costUsd: undefined, contextUsedPct: undefined, contextInputTokens: undefined };
     assert.deepEqual(statusLine.parse('{}'), bare);
-    const blank = { agent: { name: ' ' }, model: { display_name: '' }, effort: { level: 3 }, cost: { total_cost_usd: '1' }, context_window: { used_percentage: Number.NaN } };
+    const blank = { agent: { name: ' ' }, model: { display_name: '' }, effort: { level: 3 }, version: 2, cost: { total_cost_usd: '1' }, context_window: { used_percentage: Number.NaN } };
     assert.deepEqual(statusLine.parse(JSON.stringify(blank)), bare);
   });
 

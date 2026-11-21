@@ -13,6 +13,8 @@ export interface StatusReading {
   readonly model: string | undefined;
   /** The effort level, on a host and a model that take one. */
   readonly effort: string | undefined;
+  /** The version of the host's program running the session, as the host names it. */
+  readonly hostVersion: string | undefined;
   readonly costUsd: number | undefined;
   readonly contextUsedPct: number | undefined;
   readonly contextInputTokens: number | undefined;

@@ -57,12 +57,13 @@ const usageWorld: UsageWorld = {
 
 /** Claude Code's status input for what a case tells, and its settings, the status line under `statusLine.command`. */
 const statusLineWorld: StatusLineWorld = {
-  status: ({ sessionId, cwd, model, effort }) =>
+  status: ({ sessionId, cwd, model, effort, hostVersion }) =>
     JSON.stringify({
       session_id: sessionId,
       ...(cwd === undefined ? {} : { workspace: { current_dir: cwd } }),
       ...(model === undefined ? {} : { model: { display_name: model } }),
       ...(effort === undefined ? {} : { effort: { level: effort } }),
+      ...(hostVersion === undefined ? {} : { version: hostVersion }),
     }),
   settings: (command) => (command === undefined ? { theme: 'dark' } : { theme: 'dark', statusLine: { type: 'command', command } }),
   commandOf: (settings) => {
