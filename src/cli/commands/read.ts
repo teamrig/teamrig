@@ -386,6 +386,7 @@ function tasksSource(scope: ReadScope): DocumentSource {
       const register = await workingSetOf(runtime, kit.paths, layout);
       const body = tasksBody({
         tasks: register.tasks.values(),
+        retired: register.retired,
         owner: scope.owner,
         shapes: new SecretScanner(config.register.secretPatterns),
         connectors: DOCUMENT_CONNECTORS,
