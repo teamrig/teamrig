@@ -24,7 +24,7 @@ import { ExtraLog, lastSpentOf, type ExtraEntry } from '../../budget/extra.ts';
 import { formatPct, formatUsd } from '../../budget/format.ts';
 import { activeGroupLift, activeLift, decideLift, LiftLog, liftText, parentBudgetText, type Lift, type LiftNames } from '../../budget/lift.ts';
 import { CATCH_UP_CHUNK_BYTES, MAX_RUNS_PER_SESSION, measure, OUTSIDE_ID, outsideUsageDir, type Measured } from '../../budget/measure.ts';
-import { paceLineOfWeek } from '../../budget/pace.ts';
+import { paceLineOfWeek, type WeekWindow } from '../../budget/pace.ts';
 import { resetStockLines } from '../../budget/resets.ts';
 import { budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, groupPartsOf, liftPlaceOf, liftWeekPctOf, teamPartOf, type BudgetSplit, type TeamsOnAccount } from '../../budget/parts.ts';
 import { fundForDay, isPaused, pausableOf } from '../../budget/pause.ts';
@@ -756,14 +756,14 @@ async function meetingMarkOf(runtime: CliRuntime, team: LoadedTeam | undefined, 
 }
 
 /**
- * Where the team's hooks last said the week resetting at `resetsAt` counts from; undefined with no file, one of another
- * week, or one that names no start. A failed read is told on stderr, never breaking the status bar: it is caught here
- * so it cannot read as a snapshot that was not saved.
+ * Where the team's hooks last said the week resetting at `resetsAt` counts from, and its use there; undefined with no
+ * file, one of another week, or one that names no start. A failed read is told on stderr, never breaking the status
+ * bar: it is caught here so it cannot read as a snapshot that was not saved.
  */
-async function keptWeekStart(runtime: CliRuntime, path: string, resetsAt: number): Promise<number | undefined> {
+async function keptWeekStart(runtime: CliRuntime, path: string, resetsAt: number): Promise<Pick<WeekWindow, 'start' | 'startPct'> | undefined> {
   try {
     const kept = await readTeamWeek(runtime.files, path);
-    return kept?.resetsAt === resetsAt ? kept.start : undefined;
+    return kept?.resetsAt === resetsAt && kept.start !== undefined ? { start: kept.start, startPct: kept.startPct } : undefined;
   } catch (error) {
     runtime.out.stderr(`teamrig statusline: the team's week was not read: ${errorMessage(error)}`);
     return undefined;

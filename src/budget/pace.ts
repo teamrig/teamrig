@@ -75,14 +75,20 @@ export function paceLinePct(window: WeekWindow, targetPct: number, at: number, p
 /**
  * Where the pace line of the week resetting at `reset` stands at `now`, its active time from the budget's quiet hours:
  * the status line's cheap reading, which opens no stored period. It runs from `start`, where `teamrig budget` counts
- * the week from, a reset inside the week included; with no start known, over the seven days before the reset.
- * Undefined once the week reset.
+ * the week from, a reset inside the week included, and from the use there (`from.startPct`); with no start known,
+ * from 0 over the seven days before the reset. Undefined once the week reset.
  */
-export function paceLineOfWeek(reset: number, budget: Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'quietHours'>, now: number, start?: number): number | undefined {
+export function paceLineOfWeek(
+  reset: number,
+  budget: Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'quietHours'>,
+  now: number,
+  from?: Pick<WeekWindow, 'start' | 'startPct'>,
+): number | undefined {
   if (reset <= now) {
     return undefined;
   }
-  return paceLinePct(weekWindow(reset, budget.paceEndHoursBeforeReset, start), budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
+  const window = weekWindow(reset, budget.paceEndHoursBeforeReset, from?.start, from?.startPct);
+  return paceLinePct(window, budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
 }
 
 export type PaceBudget = Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'paceTolerancePct'>;

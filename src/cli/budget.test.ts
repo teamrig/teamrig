@@ -1054,7 +1054,7 @@ describe('teamrig statusline', () => {
   const SHOWN = `Opus 5.5, ${basename(APP)} on dev, week 30% (pace 20%), 5h 6%`;
   const TEAM_WEEK = join(TEAM_HOME, 'state', ...TEAM_WEEK_IN_STATE);
   /** This week as the team's hooks keep it, but for the start a format 3 file names. */
-  const KEPT_WEEK = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: RESET, at: Date.parse('2030-01-08T09:00:00Z'), limits: [] };
+  const KEPT_WEEK = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: RESET, startPct: 0, at: Date.parse('2030-01-08T09:00:00Z'), limits: [] };
 
   /** A repository whose branch and HEAD answers are counted. */
   function countedRepo(branch: string | undefined, head: string | undefined) {
@@ -1173,6 +1173,12 @@ describe('teamrig statusline', () => {
     const kit = new CliHarness(LIMITED);
     await kit.files.write(TEAM_WEEK, formatTeamWeek({ ...KEPT_WEEK, start: Date.parse('2030-01-08T00:00:00Z') }));
     assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [SHOWN.replace('pace 20%', 'pace 7%')]);
+  });
+
+  it('starts the pace line at the use a reset inside the week left: 25%, then 10 of the 144 hours of the 74.5 to go (T4885)', async () => {
+    const kit = new CliHarness(LIMITED);
+    await kit.files.write(TEAM_WEEK, formatTeamWeek({ ...KEPT_WEEK, start: Date.parse('2030-01-08T00:00:00Z'), startPct: 25 }));
+    assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [SHOWN.replace('pace 20%', 'pace 30%')]);
   });
 
   it("keeps the seven days before the reset with no start for this week: another week's file, a format 2 one or a torn one (T2082)", async () => {

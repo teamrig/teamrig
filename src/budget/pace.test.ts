@@ -147,9 +147,16 @@ describe('paceLineOfWeek', () => {
 
   it('counts from a start it is given, as `teamrig budget` does after a reset inside the week (T2082)', () => {
     const start = at('2026-10-16T00:00:00Z');
-    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, start);
+    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 0 });
     assert.equal(counted, paceLinePct(weekWindow(RESET, 1, start), 99.5, evening, EVEN));
     assert.notEqual(counted, paceLineOfWeek(RESET, DEFAULT_BUDGET, evening));
+  });
+
+  it('starts at the use a reset inside the week left, as `teamrig budget` does after a Fable reset (T4885)', () => {
+    const start = at('2026-10-16T00:00:00Z');
+    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 41 });
+    assert.equal(counted, paceLinePct(weekWindow(RESET, 1, start, 41), 99.5, evening, EVEN));
+    assert.ok((counted ?? 0) > (paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 0 }) ?? 0));
   });
 
   it("counts only the active time outside the budget's quiet hours", () => {
