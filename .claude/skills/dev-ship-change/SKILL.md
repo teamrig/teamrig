@@ -5,6 +5,10 @@ description: Land a finished teamrig change through small signed commits with Co
 
 # Ship a change
 
+The steps every repository shares (a branch per change, the description, one merge flow, a rebase back to the same
+branch) are the plugin's [ship-change skill](../../../plugins/teamrig/skills/ship-change/SKILL.md); these are teamrig's
+own on top of it.
+
 1. Before you build, settle the change's reach (CONTRIBUTING.md, Where a change lives): all users by default, so a
    team's value is a config key with a default and a how-to is a plugin skill; teamrig development only for this
    repo's own tooling. Write it in the task's description.
