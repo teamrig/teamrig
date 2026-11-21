@@ -22,7 +22,7 @@ import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { heldBy, OTHER, otherRuns } from '../testing/held-lock.ts';
 import { hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
 import { lineRequests } from '../testing/line-tickets.ts';
-import { ROOMY_FREE_MB } from '../testing/quiet-world.ts';
+import { ROOMY_FREE_MB } from '../testing/quiet-delivery.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { EXIT } from './runtime.ts';
 
