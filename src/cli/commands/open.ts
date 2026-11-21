@@ -12,7 +12,7 @@ import type { ResumeVerdict } from '../../hiring/rehire.ts';
 import { CLAUDE_SESSION_ID } from '../../inbox/marks.ts';
 import { findProgram, type HostProgram } from '../../open/host-program.ts';
 import type { FocusOutcome } from '../../open/focus.ts';
-import { launchFlags } from '../../open/launch-flags.ts';
+import { sessionStartOf } from '../../open/session-start.ts';
 import { openTab, type OpenOutcome } from '../../open/open-tab.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../../open/prompt.ts';
 import { shellCommand } from '../../open/quote.ts';
@@ -514,6 +514,7 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     throw new RefusedError(`${id} is not a session of team ${team}`);
   }
   const { command, prefix } = await hostProgramOf(runtime, claudeEnv);
+  const launcher = launcherOf(runtime);
   const name = roster.nameOf(id) ?? id;
   const host = launchHostOf(runtime);
   const { leadDefault } = host;
@@ -533,8 +534,9 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   let resuming = resume;
   for (;;) {
     await refuseLiveRun(runtime, kit, roster, id, name);
-    const resumeArgs = resuming === undefined ? [] : ['--resume', resuming];
-    const args = [...prefix, ...launchFlags(settings), ...listing.args, ...resumeArgs, '--name', name, ...(first === undefined ? [] : [first])];
+    // The host spells its own flags: this start only says what the session is to be.
+    const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
+    const args = [...prefix, ...launcher.launchArgs(start)];
     const startedAt = runtime.clock.now();
     const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
     if (!(await restartTaken(store, id))) {

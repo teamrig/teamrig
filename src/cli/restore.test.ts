@@ -12,6 +12,7 @@ import { ROOM_POLL_MS, TAB_STAGGER_MS } from '../restore/run.ts';
 import { APP, CliHarness, KIT, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { FakePathProbe, FakeProcesses, NO_POWERSHELL } from '../testing/fake-processes.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
+import type { SessionStart } from '../ports/host/index.ts';
 import { hostNaming, hostStarting, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakeCountdown, FakeShutdownLog, FakeStopWatch } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
@@ -307,7 +308,20 @@ describe('teamrig restore resume', () => {
     const processes = new FakeProcesses();
     const result = await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: OPENER_ENV });
     assert.deepEqual(result, { code: EXIT.ok, stdout: [`Resuming Claude Code session ${NOTES} in ${APP} at high effort`], stderr: [] });
-    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--resume', NOTES, '--effort', 'high', 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--effort', 'high', '--resume', NOTES, 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+  });
+
+  it('resumes with the arguments the running host spells, telling it the session, effort and prompt and no flag of its own', async () => {
+    const seen: SessionStart[] = [];
+    const host = hostStarting('agent-desk', (start) => {
+      seen.push(start);
+      return ['continue', start.resume ?? 'none'];
+    });
+    const processes = new FakeProcesses();
+    const probe = new FakePathProbe({ folders: [APP], files: ['/usr/local/bin/agent-desk'] });
+    okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe, processes, env: OPENER_ENV, host }));
+    assert.deepEqual(processes.ran.map((run) => run.args), [['continue', NOTES]]);
+    assert.deepEqual(seen, [{ name: undefined, model: undefined, effort: 'high', resume: NOTES, settingsFile: undefined, prompt: 'Go on' }]);
   });
 
   it("resumes with no session variable of any host: the shipped host's and those the running host names", async () => {

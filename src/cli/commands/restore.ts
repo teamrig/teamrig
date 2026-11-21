@@ -24,7 +24,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
-import { cacheBinOf, childEnvOf, transcriptsOf } from '../host.ts';
+import { cacheBinOf, childEnvOf, launcherOf, transcriptsOf } from '../host.ts';
 import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
 import { claudeExit, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
@@ -326,6 +326,8 @@ export async function restoreResume(args: ParsedArgs, runtime: CliRuntime): Prom
   const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
   const { command, prefix } = await hostProgramOf(runtime, env);
   runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
-  const claudeArgs = [...prefix, '--resume', claudeSession, ...(effort === undefined ? [] : ['--effort', effort]), ...(prompt === undefined ? [] : [prompt])];
+  // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
+  const start = { name: undefined, model: undefined, effort, resume: claudeSession, settingsFile: undefined, prompt };
+  const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
   return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }

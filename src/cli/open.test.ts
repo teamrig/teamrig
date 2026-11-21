@@ -6,6 +6,7 @@ import type { JsonRecord } from '../core/guards.ts';
 import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
+import type { SessionStart } from '../ports/host/index.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
@@ -783,6 +784,24 @@ describe('teamrig launch', () => {
     const none = new FakeProcesses();
     const untold = await launch(none, [], { probe: both, host: NO_SESSION_HOST });
     assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
+  });
+
+  it('starts with the arguments the running host spells, telling it what the session is to be and no flag of its own', async () => {
+    const seen: SessionStart[] = [];
+    const host = hostStarting('agent-desk', (start) => {
+      seen.push(start);
+      return ['run', `as=${start.name ?? 'none'}`];
+    });
+    const kit = new CliHarness(TEAM);
+    await kit.files.write(join(SKILLS_DIR, 'bravo-deploy', 'SKILL.md'), ['---', 'name: bravo-deploy', 'description: Use when testing.', '---', '', 'Owner: bravo', ''].join('\n'));
+    const processes = new FakeProcesses();
+    const probe = new FakePathProbe({ folders: [APP], files: ['/usr/local/bin/agent-desk'] });
+    const argv = [...LAUNCH, '--effort', 'max', '--resume', CLAUDE_SESSION, '--encoded-prompt', encodePrompt('Go on')];
+    const started = await kit.run(argv, { probe, processes, env: { PATH: '/usr/local/bin' }, host });
+    assert.equal(started.code, EXIT.ok, [...started.stdout, ...started.stderr].join('\n'));
+    assert.deepEqual(processes.ran.map((run) => run.args), [['run', 'as=app-alpha']]);
+    const settingsFile = join(TEAM_HOME, 'state', 'launch', 'alpha.settings.json');
+    assert.deepEqual(seen, [{ name: 'app-alpha', model: undefined, effort: 'max', resume: CLAUDE_SESSION, settingsFile, prompt: 'Go on' }]);
   });
 
   it('refuses a session not on the team or a missing project; reads a bad line as a usage error', async () => {
