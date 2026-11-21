@@ -1,5 +1,6 @@
 import type { StarterWatch, StarterWatching } from '../delivery/starter-watch.ts';
-import { isClaudeProcess, type ProcessInfo } from '../open/session-processes.ts';
+import type { ProcessInfo, SessionProcessCheck } from '../open/session-processes.ts';
+import { testSessionProcess } from './host.ts';
 
 /** The Bash tool's shell a tab's step runs in. */
 export const SHELL: ProcessInfo = { pid: 4100, parentPid: 4000, name: 'bash.exe', commandLine: 'bash -c teamrig queue' };
@@ -8,15 +9,18 @@ export const CLAUDE: ProcessInfo = { pid: 4000, parentPid: 3000, name: 'claude.e
 
 /**
  * Starters in memory: each watch lists `starters` (default `SHELL` and `CLAUDE`) and runs until `end` ends one, which
- * aborts every open watch, as the real checks would find it gone.
+ * aborts every open watch, as the real checks would find it gone. The tab's session among them is the one
+ * `isSessionProcess` tells, by default as the shipped host does.
  */
 export class FakeStarterWatch implements StarterWatch {
   private readonly starters: readonly ProcessInfo[];
+  private readonly isSessionProcess: SessionProcessCheck;
   private readonly open = new Set<(starter: ProcessInfo) => void>();
   private readonly gone = new Set<number>();
 
-  constructor(starters: readonly ProcessInfo[] = [SHELL, CLAUDE]) {
+  constructor(starters: readonly ProcessInfo[] = [SHELL, CLAUDE], isSessionProcess: SessionProcessCheck = testSessionProcess) {
     this.starters = starters;
+    this.isSessionProcess = isSessionProcess;
   }
 
   /** The watches not closed yet. */
@@ -45,7 +49,7 @@ export class FakeStarterWatch implements StarterWatch {
       }
     };
     this.open.add(ended);
-    const tabAlive = (): boolean => this.starters.some((starter) => isClaudeProcess(starter) && !this.gone.has(starter.pid));
+    const tabAlive = (): boolean => this.starters.some((starter) => this.isSessionProcess(starter) && !this.gone.has(starter.pid));
     return { starters: this.starters, stop: controller.signal, ended: () => found, tabAlive, close: () => this.open.delete(ended) };
   }
 }

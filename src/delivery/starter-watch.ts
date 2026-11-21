@@ -1,4 +1,4 @@
-import { isClaudeProcess, type ProcessInfo, type SessionProcesses } from '../open/session-processes.ts';
+import type { ProcessInfo, SessionProcessCheck, SessionProcesses } from '../open/session-processes.ts';
 
 /**
  * How often a watch looks: one signal 0 per starter, cheap enough to run through a whole step, and soon enough that a
@@ -45,16 +45,17 @@ export function launchingShellsOf(env: Readonly<Record<string, string | undefine
 /**
  * The processes worth watching: the ones that started this one (`lineage` past its first entry), then each launching
  * shell's in turn (`shellLineages`, nearest shell first, each from the shell up) where the lines before stop short of
- * them, up to and with the nearest Claude Code, since what runs above it (a terminal, the desktop) ends a tab only
- * through it; with no Claude Code among them, as in a person's own terminal, every one.
+ * them, up to and with the nearest session's host program (`isSessionProcess` tells it), since what runs above it (a
+ * terminal, the desktop) ends a tab only through it; with no session among them, as in a person's own terminal, every
+ * one.
  */
-export function startersOf(lineage: readonly ProcessInfo[], shellLineages: readonly (readonly ProcessInfo[])[] = []): readonly ProcessInfo[] {
+export function startersOf(lineage: readonly ProcessInfo[], isSessionProcess: SessionProcessCheck, shellLineages: readonly (readonly ProcessInfo[])[] = []): readonly ProcessInfo[] {
   const starters = lineage.slice(1);
   for (const shellLineage of shellLineages) {
     starters.push(...shellLineage.filter((shell) => !starters.some((starter) => starter.pid === shell.pid)));
   }
-  const claude = starters.findIndex(isClaudeProcess);
-  return claude === -1 ? starters : starters.slice(0, claude + 1);
+  const session = starters.findIndex((starter) => isSessionProcess(starter));
+  return session === -1 ? starters : starters.slice(0, session + 1);
 }
 
 /** One watch of this process's starters. */
@@ -66,8 +67,8 @@ export interface StarterWatching {
   /** The starter found ended; undefined while every one runs. */
   ended(): ProcessInfo | undefined;
   /**
-   * Whether the tab's Claude Code among the starters still runs, looked up now: a starter that ended under it was a
-   * shell its reaper ended alone. False with no Claude Code among them, as in a person's own terminal.
+   * Whether the tab's session among the starters, its host's own program, still runs, looked up now: a starter that
+   * ended under it was a shell its reaper ended alone. False with no session among them, as in a person's own terminal.
    */
   tabAlive(): boolean;
   /** Ends the checks. */
@@ -95,7 +96,7 @@ export interface Watched {
 }
 
 /**
- * Watches the processes that started this one. Claude Code may end a Bash tool's shell alone (its low-memory reaper
+ * Watches the processes that started this one. A host may end a tool's shell alone (Claude Code's low-memory reaper
  * does), and on Windows what the shell started runs on: a launcher's `sh` stub too, so the direct starter alone can
  * look fine while the shell above it is gone. Any starter that ends means no one waits for this process's work.
  */
@@ -124,13 +125,24 @@ async function ownLineage(processes: Pick<SessionProcesses, 'lineage'>, pid: num
 /**
  * The watch over the system's processes: `lineage` for the process (`ownLineage`) and once for each launching shell, then `alive`
  * on each starter every `everyMs`. A starter whose id another process took between two checks still looks alive; that
- * only leaves the step to its time limit.
+ * only leaves the step to its time limit. `isSessionProcess` tells which starter is a session's host program: the
+ * watch knows no host's program itself.
  */
-export function starterWatch(processes: Pick<SessionProcesses, 'lineage' | 'alive'>, watched: Watched, every: Every, everyMs: number = STARTER_CHECK_MS): StarterWatch {
+export function starterWatch(
+  processes: Pick<SessionProcesses, 'lineage' | 'alive'>,
+  watched: Watched,
+  isSessionProcess: SessionProcessCheck,
+  every: Every,
+  everyMs: number = STARTER_CHECK_MS,
+): StarterWatch {
   return {
     async watch() {
       const [lineage, ...shellLineages] = await Promise.all([ownLineage(processes, watched.pid), ...watched.shells.map((pid) => processes.lineage(pid))]);
-      const starters = startersOf(lineage ?? [], shellLineages.map((shellLineage) => shellLineage ?? []));
+      const starters = startersOf(
+        lineage ?? [],
+        isSessionProcess,
+        shellLineages.map((shellLineage) => shellLineage ?? []),
+      );
       const controller = new AbortController();
       let ended: ProcessInfo | undefined;
       let cancel: () => void = () => undefined;
@@ -143,8 +155,8 @@ export function starterWatch(processes: Pick<SessionProcesses, 'lineage' | 'aliv
           }
         });
       }
-      const claude = starters.find(isClaudeProcess);
-      const tabAlive = (): boolean => claude !== undefined && processes.alive(claude.pid);
+      const session = starters.find((starter) => isSessionProcess(starter));
+      const tabAlive = (): boolean => session !== undefined && processes.alive(session.pid);
       return { starters, stop: controller.signal, ended: () => ended, tabAlive, close: () => cancel() };
     },
   };
