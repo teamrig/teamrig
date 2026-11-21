@@ -4,6 +4,7 @@ import { API_VERSION, apiVersionNotice, hostAdapterProblems, hostDeclarationProb
 import { hostDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import adapter from './index.ts';
+import { statusLine } from './status-line.ts';
 
 describe('the Antigravity CLI adapter', () => {
   it('declares a valid host for the plugin API of this teamrig', () => {
@@ -21,6 +22,7 @@ describe('the Antigravity CLI adapter', () => {
     assert.equal(isUnsupported(ports.hooks), false);
     assert.equal(isUnsupported(ports.toolCall), false);
     assert.equal(isUnsupported(ports.paths), false);
+    assert.equal(ports.statusLine, statusLine);
     assert.equal(isUnsupported(ports.transcripts), true);
   });
 });

@@ -2,6 +2,7 @@ import { defineHost, unsupported } from '../../../plugin-api/index.ts';
 import { declaration } from './declaration.ts';
 import { hookBridge } from './hook-bridge.ts';
 import { hostPaths } from './paths.ts';
+import { statusLine } from './status-line.ts';
 import { toolCallShape } from './tool-call.ts';
 
 /**
@@ -17,7 +18,7 @@ export default defineHost({
       toolCall,
       transcripts: unsupported('Antigravity transcript reader is not wired yet'),
       usage: unsupported('Antigravity has no usage meter wired yet'),
-      statusLine: unsupported('Antigravity CLI status-line port is not built yet'),
+      statusLine,
       paths: hostPaths(deps.platform),
       permissions: unsupported('Antigravity CLI permissions port is not built yet'),
       plugin: unsupported('Antigravity CLI plugin store port is not built yet'),

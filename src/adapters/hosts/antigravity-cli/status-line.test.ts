@@ -125,6 +125,7 @@ describe('statusLine', () => {
       agentName: undefined,
       model: 'gemini-3-pro-high',
       effort: undefined,
+      hostVersion: undefined,
       costUsd: undefined,
       contextUsedPct: 42,
       contextInputTokens: undefined,
@@ -132,7 +133,7 @@ describe('statusLine', () => {
   });
 
   it('leaves a field the input did not tell, or told in the wrong type, undefined and the folder empty', () => {
-    const bare = { sessionId: undefined, cwd: '', agentName: undefined, model: undefined, effort: undefined, costUsd: undefined, contextUsedPct: undefined, contextInputTokens: undefined };
+    const bare = { sessionId: undefined, cwd: '', agentName: undefined, model: undefined, effort: undefined, hostVersion: undefined, costUsd: undefined, contextUsedPct: undefined, contextInputTokens: undefined };
     assert.deepEqual(statusLine.parse('{}'), bare);
     const wrong = { session_id: ' ', cwd: 3, model: { name: 'gemini' }, context_window: { used_percentage: Number.NaN } };
     assert.deepEqual(statusLine.parse(JSON.stringify(wrong)), bare);

@@ -74,7 +74,7 @@ export const declaration: HostDeclaration = {
     'budget.model-share': NOT_YET('Antigravity usage meter'),
     'budget.week-reading': NOT_YET('Antigravity usage meter'),
     'budget.five-hour': NOT_YET('Antigravity usage meter'),
-    'budget.status-line': NOT_YET('status-line port'),
+    'budget.status-line': UNPROVED,
     'budget.helper-weight': NOT_YET('Antigravity usage meter'),
     'budget.pools': NOT_YET('Antigravity usage meter'),
     'budget.windows': NOT_YET('Antigravity usage meter'),
