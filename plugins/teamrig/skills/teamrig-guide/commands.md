@@ -1766,9 +1766,9 @@ ASSIGNED acme/web#12: octocat
 Run in a clone of the pull request's repository, it fetches the pull request's head (a fork's too) and the newest
 base from `origin`, then prints each file the two conflict on, without a merge: no local branch, file or index of the
 clone changes, and nothing is written to GitHub. Use it to tell an outside author which files to rebase, in a
-comment through `teamrig issue reply`, or to see what to redo before re-shipping a team pull request on the newest
-base under a new branch name. A folder whose `origin` is another repository, or not on GitHub, fails before any
-fetch. Exit 1 when it failed, 2 when refused, else 0, for a clean merge too.
+comment through `teamrig issue reply`, or to see what to redo before rebasing a team pull request onto the newest
+base and pushing it back to the same branch with a lease. A folder whose `origin` is another repository, or not on
+GitHub, fails before any fetch. Exit 1 when it failed, 2 when refused, else 0, for a clean merge too.
 
 Flags:
 

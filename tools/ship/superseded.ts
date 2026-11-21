@@ -3,9 +3,10 @@ import { type Git, isRegenerated } from './leftovers.ts';
 import { type OpenPull, type PullRequest, closePull, openPullsInto } from './pulls.ts';
 
 /**
- * Closes the pull requests a newer push of the same change replaces (T4780). A head main moved past is pushed again
- * as `<stem>-N` (catch-up.ts, or a session's own rebase), since a force-push is refused, and each push opened its own
- * pull request; the older ones stayed open, showing "Review required" on heads nobody would merge. Once a merge or
+ * Closes the pull requests a newer push of the same change replaces (T4780). A head main moved past used to be pushed
+ * again as `<stem>-N`, each push with its own pull request, and the older ones stayed open, showing "Review required"
+ * on heads nobody would merge. A rebase now goes back to the same branch with a lease (T4907), so only copies pushed
+ * before that, or by hand under a new name, are left for this to close. Once a merge or
  * `ship.ts pr` holds the pull request of its head, each older open one into the same base whose head is the same
  * stem, in the repo itself (never a fork), and whose work commits the new head all carries is closed with a comment
  * linking the new one. One whose work the new head lacks stays open with a line naming what is missing, and no
