@@ -103,6 +103,7 @@ export {
   type HookNoteEntry,
   type HookReply,
   type HookVerdict,
+  type HostModels,
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
