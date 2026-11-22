@@ -89,6 +89,16 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
       ],
     );
   });
+
+  it("reads each product's own words from its declaration, which the provider-word check counts in the skills", async () => {
+    const { hosts, connectors, terminals } = await readDeclarations();
+    const terms = [...hosts, ...connectors, ...terminals].flatMap((load) => (load.kind === 'loaded' && load.value.terms !== undefined ? [[load.id, load.value.terms]] : []));
+    assert.deepEqual(terms, [
+      ['claude-code', ['Claude Code', 'CLAUDE.md', '.claude/', '/clear']],
+      ['github', ['GitHub', 'gh', 'pull request']],
+      ['jira', ['Jira', 'JQL']],
+    ]);
+  });
 });
 
 describe('reading the declarations', () => {

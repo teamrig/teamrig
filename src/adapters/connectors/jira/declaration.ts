@@ -35,6 +35,7 @@ export const declaration: ConnectorDeclaration = {
   name: 'Jira',
   kinds: ['tracker'],
   refPrefix: 'jira:',
+  terms: ['Jira', 'JQL'],
   configKeys: CONFIG_KEYS,
   manifest: {
     'tracker.issue-import': partial(

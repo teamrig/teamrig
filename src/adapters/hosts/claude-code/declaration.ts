@@ -42,6 +42,7 @@ export const declaration: HostDeclaration = {
   id: 'claude-code',
   name: 'Claude Code',
   sessionVariables: SESSION_VARIABLES,
+  terms: ['Claude Code', 'CLAUDE.md', '.claude/', '/clear'],
   manifest: {
     'rules.session-start': provedOnWindows('rules.session-start', RESCAN),
     'rules.instruction-files': provedOnWindows('rules.instruction-files', SCAN),

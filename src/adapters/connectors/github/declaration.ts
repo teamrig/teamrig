@@ -23,6 +23,7 @@ export const declaration: ConnectorDeclaration = {
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
   refPrefix: 'gh:',
+  terms: ['GitHub', 'gh', 'pull request'],
   // GitHub's keys are still the team config's own `github` section, which the commands read.
   configKeys: {},
   manifest: {
