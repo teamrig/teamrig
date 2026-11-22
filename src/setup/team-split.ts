@@ -101,6 +101,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   tabStatus: 'copy',
   needsYou: 'copy',
   pickerGuard: 'copy',
+  cliOnPath: 'copy',
   meeting: 'copy',
   turnLog: 'copy',
   ui: 'copy',
