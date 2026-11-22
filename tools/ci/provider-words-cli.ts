@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { EXIT_CLEAN, EXIT_FINDINGS } from '../lib/exit.ts';
 import { takeRoot } from '../lib/repo-root.ts';
-import { baselineText, compareCounts, readBaseline } from '../lib/count-baseline.ts';
+import { baselineFor, baselineText, compareCounts, takeBase } from '../lib/count-baseline.ts';
 import { runMain } from '../lib/run-main.ts';
 import { BASELINE_FILE, type SkillFile, hitLine, providerHits, skillCounts } from './provider-words.ts';
 
@@ -11,7 +11,7 @@ const SKILL_ROOTS = ['plugins/teamrig/skills', '.claude/skills'] as const;
 const BASELINE = 'tools/ci/provider-words.json';
 /** A skill's step texts name one product by design, so the check leaves them out. */
 const STEP_TEXTS = 'steps.md';
-const USAGE = 'usage: provider-words-cli.ts [--list] [--write] [--root <repo>]';
+const USAGE = 'usage: provider-words-cli.ts [--list] [--write] [--base <commit>] [--root <repo>]';
 
 /** The `/` path from the repo root. */
 const repoPath = (root: string, absolute: string): string => relative(root, absolute).split(sep).join('/');
@@ -39,18 +39,22 @@ function skillFiles(root: string): readonly SkillFile[] {
  * Counts the host and tool words in each skill of this repo (or `--root <repo>`) against the baseline file and fails
  * when a count rose; `--list` prints each hit first, `--write` records the counts (a fall lowers a baseline, a new
  * skill adds one) and refuses a rise. Warn mode: a count at or below its baseline passes, so only a skill whose
- * baseline reached 0 fails on every word.
+ * baseline reached 0 fails on every word. `--base <commit>` holds each count to the lower of the baseline file and that
+ * commit's copy, so a change cannot raise a count by raising its own baseline (CI passes the base).
  */
 async function main(args: readonly string[]): Promise<number> {
-  const { root, rest } = takeRoot(args);
+  const { root, rest: rooted } = takeRoot(args);
+  const { base, rest } = takeBase(rooted);
   const unknown = rest.filter((arg) => arg !== '--list' && arg !== '--write');
   if (unknown.length > 0) throw new Error(`unknown option ${unknown.join(' ')} (${USAGE})`);
+  if (base !== undefined && rest.includes('--write')) throw new Error(`--base holds a check, --write records counts: give one (${USAGE})`);
   const files = skillFiles(root);
   if (rest.includes('--list')) {
     for (const hit of providerHits(files)) console.log(hitLine(hit));
   }
   const counts = skillCounts(files);
-  const baseline = readBaseline(join(root, BASELINE), BASELINE_FILE.field);
+  const baseline = baselineFor(root, BASELINE, BASELINE_FILE.field, base);
+  if (base !== undefined) console.log(`provider-words: each count held to the lower of ${BASELINE} and its copy at ${base}`);
   const { rose, fell, gone } = compareCounts(counts, baseline);
   for (const { key: skill, count, baseline: was } of rose) console.log(`provider-words: ${skill} rose to ${count} from ${was}: say the step and let the adapter say how`);
   if (rest.includes('--write')) {

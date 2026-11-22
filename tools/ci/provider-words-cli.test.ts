@@ -97,7 +97,7 @@ describe('provider-words-cli', () => {
   it('exits 2 on an unknown option or a broken baseline', () => {
     const unknown = check(['--fix']);
     assert.equal(unknown.status, 2);
-    assert.equal(unknown.stderr, 'provider-words: unknown option --fix (usage: provider-words-cli.ts [--list] [--write] [--root <repo>])\n');
+    assert.equal(unknown.stderr, 'provider-words: unknown option --fix (usage: provider-words-cli.ts [--list] [--write] [--base <commit>] [--root <repo>])\n');
     repo.write(BASELINE, '{"skills": {"a": "x"}}');
     const broken = check();
     assert.equal(broken.status, 2);
@@ -110,5 +110,25 @@ describe('provider-words-cli', () => {
     assert.equal(own.status, 0, own.stdout);
     assert.deepEqual(own, repo.runOutside(CLI, ['--root', TOOLS_REPO]));
     assert.deepEqual(readdirSync(repo.outside), []);
+  });
+
+  it("--base fails a rise the change records in its own baseline, which the base commit's copy does not hold", () => {
+    skills();
+    baseline([[OWN, 1], [PLUGIN, 2]]);
+    repo.init();
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', 'base');
+    repo.write(`${OWN}/more.md`, 'Then /clear again.\n');
+    baseline([[OWN, 2], [PLUGIN, 2]]);
+    assert.equal(check().status, 0, 'without --base the raised baseline passes');
+    const held = check(['--base', 'HEAD']);
+    assert.equal(held.status, 1, held.stderr);
+    assert.equal(
+      held.stdout,
+      `provider-words: each count held to the lower of ${BASELINE} and its copy at HEAD\nprovider-words: ${OWN} rose to 2 from 1: say the step and let the adapter say how\n${total(4, 2, 0)}`,
+    );
+    const writing = check(['--base', 'HEAD', '--write']);
+    assert.equal(writing.status, 2);
+    assert.match(writing.stderr, /^provider-words: --base holds a check, --write records counts: give one/);
   });
 });

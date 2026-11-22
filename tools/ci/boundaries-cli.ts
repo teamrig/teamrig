@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { baselineText, compareCounts, readBaseline } from '../lib/count-baseline.ts';
+import { baselineFor, baselineText, compareCounts, takeBase } from '../lib/count-baseline.ts';
 import { EXIT_CLEAN, EXIT_FINDINGS } from '../lib/exit.ts';
 import { takeRoot } from '../lib/repo-root.ts';
 import { runMain } from '../lib/run-main.ts';
@@ -9,7 +9,7 @@ import { BASELINE_FILE, type SourceFile, boundaryCounts, boundaryFindings, findi
 /** The folders whose TypeScript the boundaries hold. */
 const FOLDERS = ['src', 'tools'] as const;
 const BASELINE = 'tools/ci/boundaries.json';
-const USAGE = 'usage: boundaries-cli.ts [--list] [--write] [--root <repo>]';
+const USAGE = 'usage: boundaries-cli.ts [--list] [--write] [--base <commit>] [--root <repo>]';
 
 /** The `.ts` files under one folder of the repo, by their path from the repo root with `/` separators. */
 function pathsUnder(root: string, folder: string): readonly string[] {
@@ -28,19 +28,23 @@ function sourceFiles(root: string): readonly SourceFile[] {
 /**
  * Counts what crosses the layer boundaries of this repo (or `--root <repo>`), one line per rule, against the baseline
  * file, and fails when a count rose; `--list` prints each finding first, `--write` records the counts (a fall lowers
- * a baseline, a new rule adds one) and refuses a rise.
+ * a baseline, a new rule adds one) and refuses a rise. `--base <commit>` holds each count to the lower of the baseline
+ * file and that commit's copy, so a change cannot raise a count by raising its own baseline (CI passes the base).
  */
 async function main(args: readonly string[]): Promise<number> {
-  const { root, rest } = takeRoot(args);
+  const { root, rest: rooted } = takeRoot(args);
+  const { base, rest } = takeBase(rooted);
   const unknown = rest.filter((arg) => arg !== '--list' && arg !== '--write');
   if (unknown.length > 0) throw new Error(`unknown option ${unknown.join(' ')} (${USAGE})`);
+  if (base !== undefined && rest.includes('--write')) throw new Error(`--base holds a check, --write records counts: give one (${USAGE})`);
   const findings = boundaryFindings(sourceFiles(root));
   if (rest.includes('--list')) {
     for (const finding of findings) console.log(findingLine(finding));
   }
   for (const line of boundaryCounts(findings)) console.log(`boundaries: ${line}`);
   const counts = ruleCounts(findings);
-  const baseline = readBaseline(join(root, BASELINE), BASELINE_FILE.field);
+  const baseline = baselineFor(root, BASELINE, BASELINE_FILE.field, base);
+  if (base !== undefined) console.log(`boundaries: each count held to the lower of ${BASELINE} and its copy at ${base}`);
   const { rose, fell, gone } = compareCounts(counts, baseline);
   for (const { key, count, baseline: was } of rose) console.log(`boundaries: ${key} rose to ${count} from ${was}: run --list to see each finding`);
   if (rest.includes('--write')) {
