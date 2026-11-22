@@ -127,6 +127,11 @@ const launcherWorld: LauncherWorld = {
       }),
     ),
   sessionProcess: { name: 'claude.exe', commandLine: 'claude --resume 0f3c2a1b-9d4e-4c7a-8b21-5e6f7a8b9c0d' },
+  forkOf: (session) => `claude --fork-session --resume ${session}`,
+  backgroundJob: (session) => [
+    { name: 'claude', commandLine: 'claude' },
+    { name: 'claude', commandLine: `claude bg-pty-host --bg-pty-host /run/bg.sock 120 40 -- claude --session-id ${session}` },
+  ],
 };
 
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';

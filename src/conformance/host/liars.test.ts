@@ -51,7 +51,7 @@ describe('the steps liars', () => {
 });
 
 describe('the launcher liars', () => {
-  it('nothingLauncher names nothing, passes no argument, tells no part of a run and owns no process', () => {
+  it('nothingLauncher names nothing, passes no argument, tells no part of a run and owns no process, fork or job', () => {
     const { port, world } = nothingLauncher();
     const launcher = port(world.env({ sessionId: 'session-one', forcedEffort: 'high' }));
     assert.deepEqual([launcher.programName, launcher.program], ['', '']);
@@ -59,13 +59,17 @@ describe('the launcher liars', () => {
     assert.deepEqual(Object.values(launcher.identity()), [undefined, undefined, undefined, undefined, undefined]);
     assert.deepEqual([launcher.variables.marks, launcher.variables.identity, launcher.childEnv.session], [[], [], []]);
     assert.equal(launcher.isSessionProcess(world.sessionProcess), false);
+    assert.equal(launcher.isForkOf(world.forkOf('session-one'), 'session-one'), false);
+    assert.equal(launcher.backgroundJobSession(world.backgroundJob('session-one')), undefined);
   });
 
-  it('yesLauncher tells one fixed run whatever it is told, starts every session alike and owns every process', () => {
+  it('yesLauncher tells one fixed run whatever it is told, starts every session alike and owns every process, fork and job', () => {
     const { port, world } = yesLauncher();
     assert.deepEqual(port(world.env({ sessionId: 'session-one' })).identity(), port({}).identity());
     const launcher = port({});
     assert.deepEqual(launcher.launchArgs({ name: undefined, model: 'one', effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined }), launcher.launchArgs({ name: undefined, model: 'two', effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined }));
     assert.equal(launcher.isSessionProcess({ name: 'anything', commandLine: '' }), true);
+    assert.equal(launcher.isForkOf('', 'session-one'), true);
+    assert.equal(launcher.backgroundJobSession([]), launcher.backgroundJobSession(world.backgroundJob('session-one')));
   });
 });

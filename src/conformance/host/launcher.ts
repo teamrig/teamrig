@@ -16,6 +16,10 @@ export interface LauncherWorld {
   readonly env: (identity: WorldIdentity) => Env;
   /** A process running one of the host's sessions, as the system shows it. */
   readonly sessionProcess: RunningProgram;
+  /** The command line of a fork the host starts from session `session`'s conversation. */
+  readonly forkOf: (session: string) => string;
+  /** The lineage of a background job running as session `session`: the job's process first, then its starters. */
+  readonly backgroundJob: (session: string) => readonly RunningProgram[];
 }
 
 /** The port as the core builds it: once for each run, from the environment the run got. */
@@ -26,6 +30,9 @@ export type LauncherCase = ContractCase<LauncherOf, LauncherWorld, 'host'>;
 
 /** Every part told, each a value no liar's fixed answer holds. */
 const TOLD: Required<WorldIdentity> = { projectDir: '/work/app', startedAs: 'terminal', sessionKind: 'background', sessionId: 'session-7f3a', forcedEffort: 'high' };
+
+/** A session no case's fork or job runs as. */
+const OTHER_SESSION = 'session-9b2c';
 
 /** Every part of who a run is, each told alone in a case. */
 const PARTS = ['projectDir', 'startedAs', 'sessionKind', 'sessionId', 'forcedEffort'] as const satisfies readonly (keyof SessionIdentity)[];
@@ -138,12 +145,41 @@ const CASES: readonly LauncherCase[] = [
       }
     },
   },
+  {
+    id: 'launcher.reads-fork',
+    title: 'reads a fork of a session from its command line, and neither a plain resume of it nor a fork of another as one',
+    features: ['sessions.process'],
+    run: ({ port, world }) => {
+      const launcher = port({});
+      const fork = world.forkOf(TOLD.sessionId);
+      assert.ok(launcher.isForkOf(fork, TOLD.sessionId), `${fork} is not read as a fork of ${TOLD.sessionId}`);
+      assert.equal(launcher.isForkOf(fork, OTHER_SESSION), false, `${fork} is read as a fork of ${OTHER_SESSION}`);
+      const resume = [launcher.program, ...launcher.launchArgs({ ...EMPTY, resume: TOLD.sessionId })].join(' ');
+      assert.equal(launcher.isForkOf(resume, TOLD.sessionId), false, `the plain resume ${resume} is read as a fork`);
+      assert.equal(launcher.isForkOf('', TOLD.sessionId), false, 'an empty command line is read as a fork');
+    },
+  },
+  {
+    id: 'launcher.reads-background-job',
+    title: 'names the session a background job runs as, and none for a process no background run of the host started',
+    features: ['sessions.process'],
+    run: ({ port, world }) => {
+      const launcher = port({});
+      assert.equal(launcher.backgroundJobSession(world.backgroundJob(TOLD.sessionId)), TOLD.sessionId);
+      assert.equal(launcher.backgroundJobSession(world.backgroundJob(OTHER_SESSION)), OTHER_SESSION);
+      assert.equal(launcher.backgroundJobSession([world.sessionProcess, ...STRANGERS]), undefined, "a tab's session is read as a background job");
+      assert.equal(launcher.backgroundJobSession(STRANGERS), undefined, 'a stranger is read as a background job');
+      assert.equal(launcher.backgroundJobSession([]), undefined);
+    },
+  },
 ];
 
-/** The liars' world: each part under its own name. */
+/** The liars' world: each part under its own name, a fork and a background job by their own flags. */
 const WORLD: LauncherWorld = {
   env: (identity) => Object.fromEntries(Object.entries(identity).map(([part, value]) => [`HOST_${part.toUpperCase()}`, value])),
   sessionProcess: { name: 'host', commandLine: 'host --resume session-7f3a' },
+  forkOf: (session) => `host --fork ${session}`,
+  backgroundJob: (session) => [{ name: 'host', commandLine: `host --job ${session}` }],
 };
 
 const VARIABLES = { marks: [], identity: [] } as const;
@@ -153,7 +189,7 @@ const CHILD_ENV = { session: [], parked: [], login: [] } as const;
 export function nothingLauncher(): LauncherSubject {
   return {
     world: WORLD,
-    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false }),
+    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined }),
   };
 }
 
@@ -170,6 +206,8 @@ export function yesLauncher(): LauncherSubject {
       childEnv: { session: ['HOST'], parked: ['HOST'], login: [] },
       identity: () => fixed,
       isSessionProcess: () => true,
+      isForkOf: () => true,
+      backgroundJobSession: () => 'yes',
     }),
   };
 }
