@@ -95,7 +95,7 @@ function firstQuestionOf(input: JsonRecord): string | undefined {
   return first === undefined ? undefined : stringField(first, 'question');
 }
 
-const READERS: Readonly<Record<string, Reader>> = {
+const READERS = {
   run_command: shell,
   view_file: (name, input) => ({ kind: 'read', name, input, path: decodePath(stringField(input, 'AbsolutePath')) }),
   read_file: (name, input) => ({ kind: 'read', name, input, path: decodePath(stringField(input, 'Path')) }),
@@ -141,14 +141,18 @@ const READERS: Readonly<Record<string, Reader>> = {
   }),
   ask_question: (name, input) => ({ kind: 'ask', name, input, asks: 'question', question: firstQuestionOf(input) }),
   schedule: (name, input) => ({ kind: 'schedule', name, input }),
-};
+} as const satisfies Readonly<Record<string, Reader>>;
+
+/** A tool agy names in its hook input's `toolCall.name`, which this port reads. */
+export type AntigravityToolName = keyof typeof READERS;
+
+export function isAntigravityToolName(name: string): name is AntigravityToolName {
+  return Object.hasOwn(READERS, name);
+}
 
 /** The tool-call port of Antigravity on `platform`. */
 export function toolCallShape(platform: HostDeps['platform']): ToolCallShape {
   return {
-    normalize: (name, input) => {
-      const reader = Object.hasOwn(READERS, name) ? READERS[name] : undefined;
-      return reader === undefined ? { kind: 'other', name, input } : reader(name, input, platform);
-    },
+    normalize: (name, input) => (isAntigravityToolName(name) ? READERS[name](name, input, platform) : { kind: 'other', name, input }),
   };
 }

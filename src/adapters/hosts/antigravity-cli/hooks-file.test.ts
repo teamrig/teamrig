@@ -61,9 +61,49 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     );
   });
 
-  it('keeps every tool matcher as it is', () => {
-    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['Bash|PowerShell', 'Bash']);
+  /** The hooks agy runs before its tool `tool`, by name: what fires when its PreToolUse matcher matches. */
+  function guardsBefore(tool: string): readonly string[] {
+    return (group?.PreToolUse ?? [])
+      .filter((entry) => new RegExp(entry.matcher, 'u').test(tool))
+      .flatMap((entry) => entry.hooks.map((hook) => hook.command.split(' ')[3] ?? ''));
+  }
+
+  // Found by Yogev Cohen's live agy 1.5.8 e2e on #2142: a Claude Code matcher never fires on agy (T5033).
+  const GUARDED: readonly (readonly [string, readonly string[]])[] = [
+    ['run_command', ['push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'readonly-allow', 'route-allow', 'picker-guard']],
+    ['view_file', ['secret-guard']],
+    ['read_file', ['secret-guard']],
+    ['grep_search', ['secret-guard']],
+    ['write_to_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['write_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['replace_file_content', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['edit_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['multi_replace_file_content', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['send_message', ['cold-send']],
+    ['invoke_subagent', ['helper-gate']],
+    ['swarm', ['helper-gate']],
+    ['ask_question', ['tab-status', 'picker-guard']],
+  ];
+  for (const [tool, guards] of GUARDED) {
+    it(`runs ${guards.join(', ')} before agy's ${tool}`, () => {
+      const before = guardsBefore(tool);
+      for (const guard of guards) {
+        assert.ok(before.includes(guard), `${guard} does not run before ${tool}: ${before.join(', ')}`);
+      }
+    });
+  }
+
+  it('names no Claude Code tool in a matcher, and keeps a hook with no matcher on every tool', () => {
+    const matchers = [...(group?.PreToolUse ?? []), ...(group?.PostToolUse ?? [])].map((entry) => entry.matcher);
+    for (const matcher of matchers) {
+      assert.doesNotMatch(matcher, /Bash|PowerShell|Read|Grep|Write|Edit|SendMessage|Agent|Task|AskUserQuestion/u);
+    }
+    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['run_command', 'run_command']);
     assert.ok(group?.PostToolUse?.some((entry) => entry.matcher === '*'));
+  });
+
+  it('keeps every shipped tool hook, as each of its matchers names a tool agy has', () => {
+    assert.deepEqual(skipped.filter((entry) => entry.reason === 'tool agy lacks'), []);
   });
 
   it('lists what it left out, each with its reason', () => {
@@ -124,6 +164,19 @@ describe('antigravityHooksFile', () => {
     const { file, skipped } = okOf(antigravityHooksFile(fileOf({ SessionStart: [{ matcher: 'startup', hooks: [handler('a')] }] }), SH));
     assert.deepEqual(file, { teamrig: {} });
     assert.deepEqual(skipped.map((entry) => entry.reason), ['matcher agy cannot hold']);
+  });
+
+  it('skips a tool hook when agy has none of the tools its matcher names', () => {
+    const { file, skipped } = okOf(antigravityHooksFile(fileOf({ PreToolUse: [{ matcher: 'NotebookEdit|ExitPlanMode', hooks: [handler('a')] }] }), SH));
+    assert.deepEqual(file, { teamrig: {} });
+    assert.deepEqual(skipped.map((entry) => `${entry.matcher ?? ''}: ${entry.reason}`), ['NotebookEdit|ExitPlanMode: tool agy lacks']);
+  });
+
+  it('refuses a tool matcher naming a tool it has no rule for, whole', () => {
+    assert.equal(
+      reasonOf(antigravityHooksFile(fileOf({ PostToolUse: [{ matcher: 'Bash|LSP', hooks: [handler('a')] }] }), SH)),
+      'PostToolUse group 1: the matcher Bash|LSP names the tool LSP, which has no rule for an Antigravity tool',
+    );
   });
 
   it('names the group as asked', () => {
