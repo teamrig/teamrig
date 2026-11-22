@@ -5124,7 +5124,8 @@ SET messages.maxLines 12 -> 20; the old config is at /home/you/.teamrig/teams/sh
 ```
 
 It refuses anyone but the lead, a key that is read-only (the roster, an owner gate, a map), a key that holds other
-keys, a value the key does not take, an older config until `config migrate` writes it, and a change that would leave
+keys, a value the key does not take, an older config until it is updated (the refusal names the line to type, `/teamrig steps run config-format
+--yes`, which keeps a backup first), and a change that would leave
 the config with a problem; a set that fixes the config's only problem goes through.
 
 ### teamrig config migrate

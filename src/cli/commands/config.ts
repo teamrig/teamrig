@@ -19,6 +19,7 @@ import {
   type LoadedConfig,
 } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { CONFIG_FORMAT_STEP, stepCommandOf } from '../../steps/pending.ts';
 
 /**
  * The config schema beside this CLI: the plugin's own copy for the installed CLI (`<plugin>/dist/cli/main.js`), the
@@ -122,7 +123,9 @@ export async function set(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
     throw new RefusedError(`${load.path} is config version ${load.newerVersion}, from a newer teamrig; update teamrig before writing`);
   }
   if (load.pending !== undefined) {
-    throw new RefusedError(`${load.path} is config version ${load.pending.fromVersion}; write the current format first: teamrig config migrate`);
+    throw new RefusedError(
+      `${load.path} is config version ${load.pending.fromVersion}, an older layout, so a setting cannot change until it is updated; to update it, with a backup kept first, type: ${stepCommandOf(CONFIG_FORMAT_STEP.id)}`,
+    );
   }
   leadOnly(await rosterOf(runtime, kit, config), callerOf(args.flags, runtime.env), 'changes the team config');
   const row = editableRowOf(await settingRowsOf(runtime, load), key);

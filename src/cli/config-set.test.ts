@@ -115,14 +115,14 @@ describe('config set', () => {
     assert.match(result.stdout[0] ?? '', /messages\.maxLines takes 3 to 50, not 99$/);
   });
 
-  it('refuses an older config until it is migrated', async () => {
+  it('refuses an older config until it is updated, naming the step to type', async () => {
     const renamed: ConfigFormat = {
       version: CONFIG_VERSION + 1,
       migrations: [...CONFIG_MIGRATIONS, { from: CONFIG_VERSION, firstRelease: '9.0.0', apply: (config) => ({ config, changes: ['nothing'] }) }],
     };
     const result = await (await teamWithSchema()).run(['config', 'set', 'messages.maxLines', '20', '--yes'], { ...AS_LEAD, configFormat: renamed });
     assert.equal(result.code, EXIT.refused);
-    assert.match(result.stdout[0] ?? '', /write the current format first: teamrig config migrate$/);
+    assert.match(result.stdout[0] ?? '', /an older layout, so a setting cannot change until it is updated; to update it, with a backup kept first, type: \/teamrig steps run config-format --yes$/);
   });
 
   it('needs a key and a value, or --unset alone', async () => {
