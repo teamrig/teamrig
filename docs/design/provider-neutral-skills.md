@@ -70,10 +70,11 @@ host whose adapter serves them.
   side (host or connector), one line of what it covers and a neutral fallback: `tracker.link-child`,
   `codehost.private-report`, `codehost.fetch-outside-change`, `host.rename`, `host.slim-setup`,
   `host.denial-sources`. A new id is one line, like a feature row.
-- **The text.** Each adapter folder holds `steps.md`, one `## <step id>` section per step it serves, in the same
-  plain style as a skill. Its declaration lists those ids (`steps: [...]`). The loader checks them as it checks the
-  manifest: an id not in the registry, or a listed id with no section, refuses the adapter; a spec holds every built-in
-  adapter to it.
+- **The text.** Each adapter folder holds `step-texts.ts`, a record of one text per step it serves, keyed by step id,
+  in the same plain style as a skill: the build is `tsc` alone and copies no Markdown into `dist`, so a text ships as
+  a module the loader imports like the declaration. Its declaration lists those ids (`steps: [...]`). The loader
+  checks them as it checks the manifest: an id not in the registry, a listed id with no text, or a text for an id it
+  does not list refuses the adapter; a spec holds every built-in adapter to it.
 - **The command.** `teamrig skills step <id> [--for <ref>]` prints the text of each configured adapter that serves the
   step, headed by its name; `--for gh:owner/name#12` picks the connector by the ref's prefix. With none configured it
   prints the registry's fallback and says which adapter would serve it. It runs at the moment of use, so it serves any
@@ -92,7 +93,7 @@ host whose adapter serves them.
   loader refuses a declaration.
 - `tools/ci/provider-words-cli.ts` counts each term in `plugins/teamrig/skills/**` and `.claude/skills/**`, with a
   baseline file per skill like `tools/ci/boundaries-cli.ts`: warn mode first, a count may fall but never rise, and it
-  fails once a skill reaches zero. Step texts (`steps.md`) and docs about one product are outside its reach.
+  fails once a skill reaches zero. Step texts (each adapter's `step-texts.ts`) and docs about one product are outside its reach.
 - A new adapter brings its own words, so the check needs no edit for a third host or connector.
 
 ## This repo's own skills
@@ -127,7 +128,9 @@ Each its own pull request, with a test that fails without it.
 1. This design.
 2. The provider-word check in warn mode, with today's baseline.
 3. The step registry, `steps` and `terms` in the declaration, the loader's check, `teamrig skills step`, and the
-   GitHub and Claude Code texts for the first steps.
+   GitHub and Claude Code texts for the first steps. In two pull requests: 3a the registry, the two declaration
+   fields (plugin API 0.2.0) and the check reading its terms from the declarations; 3b the step texts, the loader's
+   check of them and `teamrig skills step`.
 4. `teamrig issue search`, `issue show` and `issue open` on the tracker port, where missing.
 5. First moves: `dev-github-intake` becomes the plugin's `intake` skill, neutral (`dev-design-issue` folds into it;
    teamrig's own beliefs stay in CONTRIBUTING.md); `write-issue` and `approvals` neutral.
