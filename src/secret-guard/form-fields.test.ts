@@ -27,6 +27,26 @@ describe('FormFields', () => {
     assert.deepEqual(values(join("<INPUT value='", PASSWORD, "' TYPE=password>")), [PASSWORD]);
   });
 
+  it('takes the whole value when it holds a pipe, a brace or a >', () => {
+    assert.deepEqual(values(join('INPUT|password|pw|pass|ab|', PASSWORD)), [join('ab|', PASSWORD)]);
+    assert.deepEqual(values(join('{"type":"password","value":"ab}', PASSWORD, '"}')), [join('ab}', PASSWORD)]);
+    assert.deepEqual(values(join('{"type":"password","value":"ab{', PASSWORD, '"}')), [join('ab{', PASSWORD)]);
+    assert.deepEqual(values(join('<input type="password" value="ab>', PASSWORD, '">')), [join('ab>', PASSWORD)]);
+  });
+
+  it('reads nested objects, JSON held as a string, and objects after a stray brace', () => {
+    assert.deepEqual(values(join('{"type":"password","attrs":{"a":1},"value":"', PASSWORD, '"}')), [PASSWORD]);
+    assert.deepEqual(values(join('{"fields":[{"input":{"name":"pwd","value":"', PASSWORD, '"}}]}')), [PASSWORD]);
+    assert.deepEqual(values(join('{"out":"{\\"type\\":\\"password\\",\\"value\\":\\"', PASSWORD, '\\"}"}')), [PASSWORD]);
+    assert.deepEqual(values(join('a { opens here\n{"type":"password","value":"', PASSWORD, '"}')), [PASSWORD]);
+    assert.deepEqual(values(join("{'type':'password'} {\"type\":\"password\",\"value\":\"", PASSWORD, '"}')), [PASSWORD]);
+  });
+
+  it('takes the attribute named value or type, never a data- attribute first', () => {
+    assert.deepEqual(values(join('<input type=password data-value="x" value="', PASSWORD, '">')), [PASSWORD]);
+    assert.deepEqual(values(join('<input data-type="password" type="text" value="', PASSWORD, '">')), []);
+  });
+
   it('passes an empty, masked, short or placeholder value', () => {
     for (const value of ['', '••••••••', '********', 'abc', 'password', 'changeme', '${PASSWORD}']) {
       const text = join('INPUT|password|pw|pass|', value, '\n{"type":"password","value":"', value, '"}\n<input type="password" value="', value, '">');
