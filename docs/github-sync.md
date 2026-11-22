@@ -155,6 +155,13 @@ The same run first imports any other tracker your team config has a `connectors`
 trust rule ships, every Jira issue is left out, so it adds no task yet. A Jira section that is wrong or cannot be read
 gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub alone.
 
+Another tracker's import reads only the team's issues by default: those assigned to the signed-in account or to a
+person `connectors.jira.people` names, and those carrying a label of `sync.scope.labels` (`teamrig`) or the accept
+label. The issues of the team's active tasks there are always read, so a narrower scope never closes a task. A
+`SCOPE` line counts the issues the tracker gave outside the scope. `sync.maxOpen` (200) caps the open tasks one
+tracker's import holds and `sync.maxNewPerSync` (50) the adds of one run; past either, a `CAPPED` line says how many
+wait for a later run. To read every open issue of a project, as before, set `"sync": { "scope": { "all": true } }`.
+
 ## Then it runs on its own
 
 Once the repositories are listed, nobody needs to run it. When a session of the team starts or ends a turn, its hook

@@ -1363,6 +1363,14 @@ line names them by key) until its trust rule ships. A section the connector refu
 cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
 tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
 
+Import scope: by default another tracker's import reads only the team's issues, those assigned to the signed-in
+account or to a person its connector section lists as the team's people, and those carrying a label of
+`sync.scope.labels` or the accept label; the issues of the team's active tasks there are read too, so a narrower scope
+never closes a task. A `SCOPE` line counts the issues the tracker gave outside the scope, which were dropped.
+`sync.maxOpen` (200) caps the open imported tasks and `sync.maxNewPerSync` (50) the adds of one run, across a
+tracker's places; a `CAPPED` line says how many adds waited for a later run and which key held them. The one line back
+to the whole project is `sync.scope.all: true`.
+
 On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by default), the team's
 `teamrig issue watch` runs `teamrig issue sync --auto` within a probe of a change on GitHub. A new issue so reaches its
 owner while sessions work; a run by hand still works at any time.

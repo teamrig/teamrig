@@ -6,6 +6,10 @@ import { GITHUB_SOURCE, isImportSource, type ImportSource } from '../../register
 import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts';
 import type { ImportRules, ImportTracker } from '../../sync/map.ts';
 import { importedTasks, linkedRefs, planSync } from '../../sync/plan.ts';
+import { capPlan, scopeIssues, type CappedPlan, type ImportScope, type ScopeRequest } from '../../sync/scope.ts';
+import { ACTIVE_STATUSES } from '../../register/model.ts';
+import type { Task } from '../../register/fold.ts';
+import type { IssueTarget } from '../../issues/host.ts';
 import { applySteps, type ImportWriter } from '../../sync/sync.ts';
 import { connectorOffBy, CONNECTOR_OFF } from '../connector-off.ts';
 import { HostAdapterError, trackerPortsOf, type ConnectorLoader, type HostRuntime, type TrackerPorts } from '../issue-hosts.ts';
@@ -82,9 +86,10 @@ export async function syncTrackers(run: TrackerSyncRun, say: (line: string) => v
     }
     const tracker: ImportTracker = { source: id, name: ports.tracker.name, refOf: ports.refs.refOf, pageOf: ports.refs.pageOf };
     const told = new Set<string>();
+    const planned = { adds: 0 };
     let wrote = 0;
     for (const target of ports.targets) {
-      const end = await syncTarget(run, { ports, tracker, rules, told }, target, say);
+      const end = await syncTarget(run, { ports, tracker, rules, told, planned }, target, say);
       ends.push(end.end);
       added.push(...end.added);
       failures.push(...end.failures);
@@ -127,6 +132,8 @@ interface TrackerRun {
   readonly tracker: ImportTracker;
   readonly rules: ImportRules;
   readonly told: Set<string>;
+  /** The adds this run planned so far across the connector's places, which the caps count (sync.maxNewPerSync). */
+  readonly planned: { adds: number };
 }
 
 /** How one place's import ended, and what it wrote. */
@@ -150,14 +157,28 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
     on.told.add(reach.scope);
     say(`ACCESS ${reach.access}`);
   }
-  const read = await on.ports.tracker.list(target, run.since);
+  const tasks = [...(await run.register.snapshot()).state.tasks.values()];
+  const imported = importedTasks(tasks, on.tracker.source);
+  const active = [...imported.values()].filter((task) => ACTIVE_STATUSES.includes(task.status));
+  const request = scopeRequestOf(run.config.sync.scope, on.rules.acceptLabel, heldAt(target, active, on.ports.refs.parseRef));
+  const read = await on.ports.tracker.list(target, run.since, request);
   if (read.kind === 'failed') {
     return failed(read.reason);
   }
   read.notes.forEach((note) => say(`NOTE ${target}: ${note}`));
-  const tasks = [...(await run.register.snapshot()).state.tasks.values()];
-  const plan = planSync(read.issues, importedTasks(tasks, on.tracker.source), on.rules, on.tracker, linkedRefs(tasks));
-  const leftOut = leftOutLine(target, plan.leftOut.flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? []));
+  const counted: ScopeRequest = { ...request, people: read.people ?? [] };
+  const scoped = scopeIssues(read.issues, counted);
+  const planned = planSync(scoped.issues, imported, on.rules, on.tracker, linkedRefs(tasks));
+  // A preview writes nothing, so the adds this run already planned at earlier places count as held here.
+  const open = active.length + (run.write ? 0 : on.planned.adds);
+  const caps = { maxOpen: run.config.sync.maxOpen, maxNewPerSync: Math.max(0, run.config.sync.maxNewPerSync - on.planned.adds) };
+  const capped = capPlan(planned, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number }), counted, caps, open);
+  const plan = capped.plan;
+  on.planned.adds += plan.steps.filter((step) => step.kind === 'add').length;
+  const leftOut = [
+    ...scopeLines(target, scoped.outside, capped),
+    ...leftOutLine(target, plan.leftOut.flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
+  ];
   if (!run.write) {
     [...previewLines(target, plan), ...leftOut].forEach(say);
     return { end: 'ok', written: 0, added: [], failures: [] };
@@ -171,6 +192,35 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
     added: addedTasks(outcomes),
     failures: refused === undefined ? [] : [{ repo: target, reason: refused }],
   };
+}
+
+/**
+ * The request a place's list reads: the team's scope with the accept label always counted (an issue a person
+ * accepted is always meant for the team), no people of the core's own (the connector names the tracker's), and
+ * `held`, the issue numbers the register holds active tasks for there.
+ */
+export function scopeRequestOf(scope: ImportScope, acceptLabel: string, held: readonly number[]): ScopeRequest {
+  const labels = scope.labels.some((label) => label.toLowerCase() === acceptLabel.toLowerCase()) ? scope.labels : [...scope.labels, acceptLabel];
+  return { scope: { ...scope, labels }, people: [], held };
+}
+
+/** The numbers of the issues at `target` that the `active` imported tasks hold, by their refs. */
+export function heldAt(target: string, active: readonly Task[], parseRef: (ref: string) => IssueTarget | undefined): number[] {
+  return active.flatMap((task) => {
+    const at = task.ref === null ? undefined : parseRef(task.ref);
+    return at !== undefined && at.repo === target ? [at.number] : [];
+  });
+}
+
+/**
+ * The lines saying what the scope and the caps kept out of a place: a SCOPE line for the issues outside the scope the
+ * tracker gave, a CAPPED line for the adds the caps held back, with the key that held them.
+ */
+export function scopeLines(target: string, outside: number, capped: CappedPlan): string[] {
+  return [
+    ...(outside > 0 ? [`SCOPE ${target}: ${outside} issue(s) outside the import scope dropped; sync.scope widens it`] : []),
+    ...(capped.held > 0 && capped.key !== undefined ? [`CAPPED ${target}: ${capped.held} more in scope, held for a later run; raise sync.${capped.key} or narrow sync.scope`] : []),
+  ];
 }
 
 /**
