@@ -149,6 +149,10 @@ which the git hooks `npm run setup` sets do before each commit. Its coverage gat
   the limit passes) the run gets the limit again, up to three limits in all, as other steps' test runs can slow it
   that long.
 
+`npm test` and the coverage gate both end their output with the 30 slowest test files and tests
+(`tools/ci/slowest-reporter.ts`), in CI too, so a slow test shows where it lands. One file runs its tests one after
+another, so the slowest file is a floor under the suite's wall time.
+
 Never lower a floor to pass a change. A file that truly cannot reach one (for example an error
 path that needs a real disk failure) gets an entry under `exceptions` in `tools/ci/coverage.json`
 with a reason the reviewer accepts; the gate reports the entry once the file no longer needs it.
