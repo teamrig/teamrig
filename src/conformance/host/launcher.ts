@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { HostDeps, RunningProgram, SessionIdentity, SessionLauncher, SessionStart } from '../../plugin-api/index.ts';
+import type { HostDeps, RunningProgram, SessionIdentity, SessionLauncher, SessionPlace, SessionStart } from '../../plugin-api/index.ts';
 import { defineContract, type ContractCase, type Subject } from '../contract.ts';
 
 type Env = HostDeps['env'];
@@ -20,6 +20,8 @@ export interface LauncherWorld {
   readonly forkOf: (session: string) => string;
   /** The lineage of a background job running as session `session`: the job's process first, then its starters. */
   readonly backgroundJob: (session: string) => readonly RunningProgram[];
+  /** The parts the host tells of how a run in each place started: a terminal tab, a background job, elsewhere. */
+  readonly places: { readonly [Place in SessionPlace]: WorldIdentity };
 }
 
 /** The port as the core builds it: once for each run, from the environment the run got. */
@@ -30,6 +32,9 @@ export type LauncherCase = ContractCase<LauncherOf, LauncherWorld, 'host'>;
 
 /** Every part told, each a value no liar's fixed answer holds. */
 const TOLD: Required<WorldIdentity> = { projectDir: '/work/app', startedAs: 'terminal', sessionKind: 'background', sessionId: 'session-7f3a', forcedEffort: 'high' };
+
+/** Every place a session may run in, each read in a case. */
+const PLACES = ['tab', 'background', 'elsewhere'] as const satisfies readonly SessionPlace[];
 
 /** A session no case's fork or job runs as. */
 const OTHER_SESSION = 'session-9b2c';
@@ -172,6 +177,19 @@ const CASES: readonly LauncherCase[] = [
       assert.equal(launcher.backgroundJobSession([]), undefined);
     },
   },
+  {
+    id: 'launcher.session-place',
+    title: 'reads a tab, a background job and a run elsewhere from how the host told each started, and no place when it told nothing',
+    features: ['sessions.identity'],
+    run: ({ port, world }) => {
+      for (const place of PLACES) {
+        const launcher = port(world.env(world.places[place]));
+        assert.equal(launcher.sessionPlaceOf(launcher.identity()), place, `a run told ${JSON.stringify(world.places[place])} is not read as a ${place}`);
+      }
+      const untold = port({});
+      assert.equal(untold.sessionPlaceOf(untold.identity()), undefined, 'a run the host told nothing of is read as in a place');
+    },
+  },
 ];
 
 /** The liars' world: each part under its own name, a fork and a background job by their own flags. */
@@ -180,6 +198,7 @@ const WORLD: LauncherWorld = {
   sessionProcess: { name: 'host', commandLine: 'host --resume session-7f3a' },
   forkOf: (session) => `host --fork ${session}`,
   backgroundJob: (session) => [{ name: 'host', commandLine: `host --job ${session}` }],
+  places: { tab: { startedAs: 'terminal' }, background: { startedAs: 'terminal', sessionKind: 'background' }, elsewhere: { startedAs: 'script' } },
 };
 
 const VARIABLES = { marks: [], identity: [] } as const;
@@ -189,7 +208,7 @@ const CHILD_ENV = { session: [], parked: [], login: [] } as const;
 export function nothingLauncher(): LauncherSubject {
   return {
     world: WORLD,
-    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined }),
+    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined }),
   };
 }
 
@@ -208,6 +227,7 @@ export function yesLauncher(): LauncherSubject {
       isSessionProcess: () => true,
       isForkOf: () => true,
       backgroundJobSession: () => 'yes',
+      sessionPlaceOf: () => 'tab',
     }),
   };
 }

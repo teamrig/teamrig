@@ -132,6 +132,7 @@ const launcherWorld: LauncherWorld = {
     { name: 'claude', commandLine: 'claude' },
     { name: 'claude', commandLine: `claude bg-pty-host --bg-pty-host /run/bg.sock 120 40 -- claude --session-id ${session}` },
   ],
+  places: { tab: { startedAs: 'cli' }, background: { startedAs: 'cli', sessionKind: 'bg' }, elsewhere: { startedAs: 'sdk-ts' } },
 };
 
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';
