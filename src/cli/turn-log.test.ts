@@ -6,7 +6,8 @@ import type { Files } from '../core/files.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import { parseObject } from '../core/jsonl.ts';
 import { HOOKS_ONLY_HOST } from '../testing/host.ts';
-import { APP, CLAUDE_SESSION, CliHarness, TEAM, TEAM_HOME, USER_HOME } from '../testing/cli-harness.ts';
+import { LastTypedStore } from '../sessions/last-typed.ts';
+import { APP, CLAUDE_SESSION, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME } from '../testing/cli-harness.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { promptLine, textLine, transcript } from '../testing/transcript-lines.ts';
 import { parseEntry, type TurnLogEntry } from '../turn-log/entry.ts';
@@ -19,6 +20,8 @@ const LOG = join(TEAM_HOME, 'state', 'turn-log');
 /** The harness's clock is 2030-01-08 10:00 UTC. */
 const NOW_FILE = join(LOG, 'alpha', '2030-01-08T10.jsonl');
 const ALPHA = { TEAMRIG_SESSION: 'alpha' };
+/** A second tab, of session bravo. */
+const OTHER_TAB = '0123abcd-0000-4000-8000-00000000000b';
 
 /** Secret-shaped strings are assembled at runtime so none sits in the source. */
 const secret = (...parts: string[]) => parts.join('');
@@ -127,6 +130,26 @@ describe('turn log hooks', () => {
         { text: woke, from: undefined },
       ],
     );
+  });
+
+  it('marks the session the person last typed in, for every team on the host, never for a wake, and with turnLog off too', async () => {
+    const kit = new CliHarness({ ...TEAM, turnLog: { enabled: false } });
+    const store = new LastTypedStore(kit.files, KIT);
+    const woke = 'New work was handed to you while this tab was idle: T2.';
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: 'go on' }), env: ALPHA });
+    assert.deepEqual(await store.read(), { team: 'app', session: 'alpha', tab: CLAUDE_SESSION, at: '2030-01-08T10:00:00.000Z' });
+    await new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake')).remember('bravo', { tab: OTHER_TAB, text: woke });
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: woke, session_id: OTHER_TAB }), env: { TEAMRIG_SESSION: 'bravo' } });
+    assert.equal((await store.read())?.session, 'alpha', "a wake teamrig submitted leaves the person's session");
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: 'and this', session_id: OTHER_TAB }), env: { TEAMRIG_SESSION: 'bravo' } });
+    assert.deepEqual(await store.read(), { team: 'app', session: 'bravo', tab: OTHER_TAB, at: '2030-01-08T10:00:00.000Z' });
+  });
+
+  it('marks no session for a tab that is no team session, or an empty prompt', async () => {
+    const kit = new CliHarness(TEAM);
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }) });
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: '  ' }), env: ALPHA });
+    assert.equal(await new LastTypedStore(kit.files, KIT).read(), undefined);
   });
 
   it('writes nothing with turnLog off, or in a tab that is no team session', async () => {

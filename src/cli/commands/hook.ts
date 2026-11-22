@@ -75,7 +75,7 @@ import { recordSessionStart } from './hook-session-record.ts';
 import { envSession, hookScopeOf, readHookInput, sessionScopeOf, sessionTeam, startSessionOf, teamScopeOf, teamSessionOf, turnLeadPathsOf, writeReply, type SessionScope, type TeamScope } from './hook-input.ts';
 import { recordTabNeed } from './hook-tab-need.ts';
 import { tabStatusOn, tabTitleOf } from './hook-tab-status.ts';
-import { logPrompt, logReply, logStart } from './hook-turn-log.ts';
+import { logPrompt, logReply, logStart, noteLastTyped, sentPromptOf } from './hook-turn-log.ts';
 import { keepWorkingReasonOf } from './keep-working.ts';
 import { lastTaskAskReasonOf } from './last-task-ask.ts';
 import { verifyByLinesOf, verifyStartNoteOf } from './verify-queue.ts';
@@ -280,8 +280,11 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
   const hint = await bindHintOnce(runtime, kit, binding, hostSession);
   // Found like a rename: `$TEAMRIG_SESSION` first, so a session is shown its lines before its first `inbox read`.
   const session = await teamSessionOf(runtime, kit, own.roster, hostSession);
-  if (session !== undefined) {
-    await logPrompt(runtime, { config, paths: kit.paths, id: session }, event).catch(() => undefined);
+  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => undefined);
+  if (session !== undefined && sent !== undefined) {
+    // Apart, so a log that cannot be written still leaves the UI following the person.
+    await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
+    await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
   }
   const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
   const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);

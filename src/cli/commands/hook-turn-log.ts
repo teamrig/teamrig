@@ -2,6 +2,7 @@ import type { KitConfig } from '../../config/types.ts';
 import type { TeamPaths } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
+import { LastTypedStore } from '../../sessions/last-typed.ts';
 import { cappedText, type TurnLogEntry, type TurnLogKind } from '../../turn-log/entry.ts';
 import { REPLY_TAIL_BYTES, replyOf, type Reply } from '../../turn-log/reply.ts';
 import { TurnLog } from '../../turn-log/store.ts';
@@ -46,17 +47,41 @@ function logOf(runtime: CliRuntime, scope: TurnLogScope): TurnLog {
   return new TurnLog(runtime.files, scope.paths.turnLog);
 }
 
+/** A prompt sent in a team session's tab: its text, and whether teamrig submitted it to wake the tab. */
+export interface SentPrompt {
+  readonly tab: string;
+  readonly text: string;
+  readonly woke: boolean;
+}
+
 /**
- * UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`;
- * nothing with the log off or an empty prompt.
+ * The prompt of a UserPromptSubmit, told the person's from teamrig's: the wake teamrig answered that tab with is taken
+ * once, so the same text typed again is the person's. Undefined for no tab or an empty prompt.
  */
-export async function logPrompt(runtime: CliRuntime, scope: TurnLogScope, { session, prompt }: Pick<HookEvent, 'session' | 'prompt'>): Promise<void> {
-  if (!scope.config.turnLog.enabled || session === undefined || prompt === undefined || prompt.trim() === '') {
+export async function sentPromptOf(runtime: CliRuntime, wake: string, id: string, { session, prompt }: Pick<HookEvent, 'session' | 'prompt'>): Promise<SentPrompt | undefined> {
+  if (session === undefined || prompt === undefined || prompt.trim() === '') {
+    return undefined;
+  }
+  const woke = await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt });
+  return { tab: session, text: prompt, woke };
+}
+
+/** UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`; nothing with the log off. */
+export async function logPrompt(runtime: CliRuntime, scope: TurnLogScope, sent: SentPrompt): Promise<void> {
+  if (!scope.config.turnLog.enabled) {
     return;
   }
-  const woke = await new WakePrompts(runtime.files, scope.paths.wake).take(scope.id, { tab: session, text: prompt });
-  const said: Said = { kind: 'prompt', claude: session, text: prompt, ...(woke ? { from: 'teamrig' } : {}) };
+  const said: Said = { kind: 'prompt', claude: sent.tab, text: sent.text, ...(sent.woke ? { from: 'teamrig' } : {}) };
   await logOf(runtime, scope).append(scope.id, entryOf(runtime, scope, said));
+}
+
+/** UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101). */
+export async function noteLastTyped(runtime: CliRuntime, paths: Pick<TeamPaths, 'kitHome' | 'team'>, id: string, sent: SentPrompt): Promise<void> {
+  if (sent.woke) {
+    return;
+  }
+  const at = new Date(runtime.clock.now()).toISOString();
+  await new LastTypedStore(runtime.files, paths.kitHome).write({ team: paths.team, session: id, tab: sent.tab, at });
 }
 
 /** A reply to log: its text, whether its start is missing, and the last transcript entry it took, when known. */
