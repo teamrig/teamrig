@@ -766,39 +766,42 @@ function catchUpChangeHead(args: MergeArgs, deps: MergeDeps, move: MainMove): Ca
   return deps.catchUp({ head, tip: move.tip, main, regenerated });
 }
 
-/** How many times main may move past a `ship.ts merge`'s heads before it gives up (T2809, T4131). */
-export const MERGE_ATTEMPTS = 3;
+/**
+ * How long, from its start, a `ship.ts merge` goes on catching up a head main keeps moving past (T5134). No count of
+ * moves stops it: each catch-up goes on only clean and with the same patches (catch-up.ts refuses any other), so a
+ * move costs a CI run, never the approval, and a busy evening moved main past healthy merges more than any fixed count
+ * allowed (T5027, T4916 refused at 3 on 11-22). Three hours holds a line of older merges, each waiting at most
+ * TURN_TIMES.timeoutMs for its own turn plus its CI run; only a main that never stops moving reaches it.
+ */
+export const MERGE_MOVING_MS = 3 * 60 * 60_000;
 
 /**
  * `ship.ts merge` as a command. A merge waits in the queue behind other heavy steps, often past another merge, so a
  * head main moved past is caught up (catch-up.ts: rebased onto main in place when clean with the same diff, pushed
  * to the same branch and pull request with a lease) and merged; anything else main's move does is refused (T2809). Main may also move while a
  * catch-up's push runs its gate, as another merge whose share was set aside for its CI wait lands (T3336): that head
- * is caught up again on the new tip, which raises the plugin version again (T4131). Each move counts, at most
- * MERGE_ATTEMPTS in all. Merges of one repo land oldest first (landing-turn.ts), so the merges started before this one
- * cost it one move, not one each (T4196); and a move read right after a wait the older merges ended by landing costs
- * nothing, since the turn made it wait for exactly that move (T4280). That never loops: only merges started before
- * this one hold its turn, a set that only shrinks. A ship's own merge (mergeBranch) gets the move back instead and
- * goes again from its plan (T2696).
+ * is caught up again on the new tip, which raises the plugin version again (T4131). Merges of one repo land oldest
+ * first (landing-turn.ts), so the merges started before this one cost it one move, not one each (T4196). It goes on
+ * for every clean move until MERGE_MOVING_MS from its start, then refuses at the next one (T5134). A ship's own merge
+ * (mergeBranch) gets the move back instead and goes again from its plan (T2696).
  */
 export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number> {
   let current = args;
   const release = args.release === null ? null : releaseGate(args.release, args, deps);
   const gate = release === null ? approvalGate(args, deps) : release.gate;
+  const started = deps.waiter.now();
   let move: MainMove | null = null;
   let moves = 0;
-  let waits = deps.turn.waited();
   for (;;) {
     if (move === null) {
       const exit = await mergeRun(current, deps, gate);
       if (exit.kind === 'done') return exit.code;
       move = exit;
     }
-    const waitsNow = deps.turn.waited();
-    if (waitsNow === waits) moves += 1;
-    waits = waitsNow;
-    if (moves === MERGE_ATTEMPTS) {
-      deps.err(`REFUSED ${move.reason} (main moved ${MERGE_ATTEMPTS} times during this merge)`);
+    moves += 1;
+    const ranMs = deps.waiter.now() - started;
+    if (ranMs >= MERGE_MOVING_MS) {
+      deps.err(`REFUSED ${move.reason} (main moved ${moves} times in ${Math.floor(ranMs / 60_000)} min of this merge, past its ${MERGE_MOVING_MS / 60_000} min bound: run merge again)`);
       return 1;
     }
     const caught: CatchUp = release === null ? catchUpChangeHead(current, deps, move) : catchUpReleaseHead(deps, release, move);

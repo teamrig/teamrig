@@ -7,7 +7,7 @@ import type { CatchUp } from './catch-up.ts';
 import type { Gh, RequiredChecks } from './github.ts';
 import type { Credential } from './keychain.ts';
 import type { GateDeps } from './local-gate.ts';
-import { type MainBranch, type MergeArgs, type MergeDeps, type MergeRequest, type MergeResult, type Waiter, CHECK_READ_TRIES, MERGE_ATTEMPTS, ciProof,mainBranchOf, mergeBranch, mergeCommand, mergeRun, mergeThroughPull, parseArgs, pullBody, realMergeDeps, runMerge, missingSections, stepShareOf, waitForChecks } from './merge.ts';
+import { type MainBranch, type MergeArgs, type MergeDeps, type MergeRequest, type MergeResult, type Waiter, CHECK_READ_TRIES, MERGE_MOVING_MS, ciProof,mainBranchOf, mergeBranch, mergeCommand, mergeRun, mergeThroughPull, parseArgs, pullBody, realMergeDeps, runMerge, missingSections, stepShareOf, waitForChecks } from './merge.ts';
 import type { PullTask } from './pull-task.ts';
 import { parseProfiles } from './repos.ts';
 import type { Supersede } from './superseded.ts';
@@ -1045,15 +1045,39 @@ test('without --head the caught-up head is the branch checked out; a ship merge 
   assert.equal(shipped.catchUp.mock.callCount(), 0);
 });
 
-test(`main moving past ${MERGE_ATTEMPTS} heads in one merge is refused, each caught-up head caught up again`, async () => {
-  const { deps, err, catchUp, sweep } = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP], rebasedBehind: true });
-  assert.equal(await runMerge(ARGS, deps), 1);
+const HOUR = 60 * MINUTE;
+
+/** The fixture's deps on a clock an hour on for each catch-up run so far, so each move reads the merge an hour older. */
+function hourPerCatchUp(fixture: ReturnType<typeof runFixture>): MergeDeps {
+  return { ...fixture.deps, waiter: { now: () => fixture.catchUp.mock.callCount() * HOUR, sleep: () => Promise.resolve() } };
+}
+
+test(`main moving past each caught-up head goes on catching it up, until a move at ${MERGE_MOVING_MS / HOUR} h from the merge's start is refused (T5134)`, async () => {
+  const fixture = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP], rebasedBehind: true });
+  assert.equal(await runMerge(ARGS, hourPerCatchUp(fixture)), 1);
   assert.deepEqual(
-    catchUp.mock.calls.map(call => call.arguments[0].head),
-    [BRANCH, NEXT],
+    fixture.catchUp.mock.calls.map(call => call.arguments[0].head),
+    [BRANCH, NEXT, NEXT],
   );
-  assert.deepEqual(err, [`REFUSED main moved to moved00, which ${NEXT} rebased does not contain: rebase ${NEXT} onto origin/main, push it and run merge again (main moved ${MERGE_ATTEMPTS} times during this merge)`]);
-  assert.equal(sweep.mock.callCount(), 0);
+  assert.deepEqual(fixture.err, [`REFUSED main moved to moved00, which ${NEXT} rebased does not contain: rebase ${NEXT} onto origin/main, push it and run merge again (main moved 4 times in 180 min of this merge, past its 180 min bound: run merge again)`]);
+  assert.equal(fixture.sweep.mock.callCount(), 0);
+});
+
+test('a merge main moves past five times lands, each clean catch-up going on with no count of moves (T5134)', async () => {
+  const { deps, out, err, catchUp, sweep } = runFixture({ mainTip: MOVED, catchUp: [MOVED_AGAIN, MOVED_AGAIN, MOVED_AGAIN, MOVED_AGAIN, CAUGHT_UP] });
+  assert.equal(await runMerge(ARGS, deps), 0, err.join('\n'));
+  assert.equal(catchUp.mock.callCount(), 5);
+  assert.equal(out.at(-1), 'MERGED #3 into main, now at main999');
+  assert.deepEqual(sweep.mock.calls.map(call => call.arguments[0]), [{ repo: REPO, head: NEXT, sha: REBASED }]);
+});
+
+test('a catch-up after clean moves that finds the patches changed is refused at once with its reason (T5134)', async () => {
+  const changed: CatchUp = { kind: 'refused', reason: `main moved to again00, which ${BRANCH} abc1234 does not contain, and its rebase onto that tip changed the patch of aaaa1111a "cli: a"` };
+  const { deps, err, catchUp, ghWrites } = runFixture({ mainTip: MOVED, catchUp: [MOVED_AGAIN, MOVED_AGAIN, changed] });
+  assert.equal(await runMerge(ARGS, deps), 1);
+  assert.equal(catchUp.mock.callCount(), 3);
+  assert.deepEqual(err, [`REFUSED ${changed.reason}`]);
+  assert.equal(ghWrites.length, 0);
 });
 
 /** `ship.ts merge --release` on the release task T7, approved at SHA (T4645). */
@@ -1183,23 +1207,21 @@ test('a head whose catch-up push lost to a merge landing meanwhile is caught up 
   assert.deepEqual(sweep.mock.calls.map(call => call.arguments[0]), [{ repo: REPO, head: NEXT, sha: REBASED }]);
 });
 
-test(`each move during a catch-up counts toward the ${MERGE_ATTEMPTS} a merge allows (T4131)`, async () => {
-  const { deps, err, catchUp, ghWrites } = runFixture({ mainTip: MOVED, catchUp: [MOVED_AGAIN] });
-  assert.equal(await runMerge(ARGS, deps), 1);
-  assert.equal(catchUp.mock.callCount(), MERGE_ATTEMPTS - 1);
-  assert.deepEqual(err, [`REFUSED ${MOVED_AGAIN.kind === 'moved' ? MOVED_AGAIN.reason : ''} (main moved ${MERGE_ATTEMPTS} times during this merge)`]);
-  assert.equal(ghWrites.length, 0);
+test(`each move during a catch-up's push is caught up again, until one at ${MERGE_MOVING_MS / HOUR} h from the merge's start is refused (T4131, T5134)`, async () => {
+  const fixture = runFixture({ mainTip: MOVED, catchUp: [MOVED_AGAIN] });
+  assert.equal(await runMerge(ARGS, hourPerCatchUp(fixture)), 1);
+  assert.equal(fixture.catchUp.mock.callCount(), MERGE_MOVING_MS / HOUR);
+  assert.deepEqual(fixture.err, [`REFUSED ${MOVED_AGAIN.kind === 'moved' ? MOVED_AGAIN.reason : ''} (main moved 4 times in 180 min of this merge, past its 180 min bound: run merge again)`]);
+  assert.equal(fixture.ghWrites.length, 0);
 });
 
-test(`a move read right after older merges landed during the turn's wait is not counted toward the ${MERGE_ATTEMPTS} (T4280)`, async () => {
-  const afterTurn = runFixture({ movesDuringWait: true, olderLanded: true, catchUp: [MOVED_AGAIN, MOVED_AGAIN, CAUGHT_UP] });
-  assert.equal(await runMerge(ARGS, afterTurn.deps), 0, afterTurn.err.join('\n'));
-  assert.equal(afterTurn.catchUp.mock.callCount(), MERGE_ATTEMPTS);
-  assert.equal(afterTurn.out.at(-1), 'MERGED #3 into main, now at main999');
-
-  const raced = runFixture({ movesDuringWait: true, catchUp: [MOVED_AGAIN, MOVED_AGAIN, CAUGHT_UP] });
-  assert.equal(await runMerge(ARGS, raced.deps), 1, 'the same moves with no older merge waited on still count');
-  assert.match(raced.err.at(-1) ?? '', new RegExp(`main moved ${MERGE_ATTEMPTS} times during this merge`));
+test('a merge main moved past during its first checks lands after clean catch-ups, whether or not older merges were waited on (T4280, T5134)', async () => {
+  for (const olderLanded of [true, false]) {
+    const fixture = runFixture({ movesDuringWait: true, olderLanded, catchUp: [MOVED_AGAIN, MOVED_AGAIN, CAUGHT_UP] });
+    assert.equal(await runMerge(ARGS, fixture.deps), 0, fixture.err.join('\n'));
+    assert.equal(fixture.catchUp.mock.callCount(), 3);
+    assert.equal(fixture.out.at(-1), 'MERGED #3 into main, now at main999');
+  }
 });
 
 test("on the ci gate the step's host share is set aside for the checks' wait and the merge call, never taken back once merged (T3336)", async () => {
