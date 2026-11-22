@@ -96,9 +96,11 @@ jobs:
           retention-days: 1
 
   publish:
-    name: publish to the release branch
-    # The marketplace entry installs from the release branch: main's released commit with the dist built above on
-    # top, tagged v<version> (tools/release/publish.ts). It runs no npm package, only the repo's own reviewed code.
+    name: publish to the preview branch
+    # The preview channel installs from the preview branch: main's released commit with the dist built above on top,
+    # tagged v<version> (tools/release/publish.ts). Its first commit descends from the release branch, which stable
+    # installs read and which only moves along preview's chain (T5133). It runs no npm package, only the repo's own
+    # reviewed code.
     needs: build
     if: ${{ always() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
@@ -123,7 +125,7 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
-      - run: node tools/release/publish-cli.ts --version "$VERSION" --source "$SOURCE"
+      - run: node tools/release/publish-cli.ts --version "$VERSION" --source "$SOURCE" --branch preview --seed release
         env:
           VERSION: ${{ needs.build.outputs.version }}
           SOURCE: ${{ needs.build.outputs.sha }}

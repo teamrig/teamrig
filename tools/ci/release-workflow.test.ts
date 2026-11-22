@@ -82,14 +82,14 @@ describe('release.yml', () => {
     assert.match(text, /^ {6}version: \$\{\{ steps\.version\.outputs\.version \}\}\n {6}sha: \$\{\{ steps\.version\.outputs\.sha \}\}\n/m);
   });
 
-  it('publishes with a read-only token, running no npm package, the commit and version the build took', () => {
+  it('publishes to the preview branch, started from the release branch, with a read-only token, running no npm package, the commit and version the build took', () => {
     const text = job('publish');
     assert.deepEqual(permissionsOf(text), ['contents: read']);
     assert.match(text, /^ {4}needs: build\n {4}if: \$\{\{ always\(\) && needs\.build\.result == 'success' \}\}$/m);
     assert.match(text, /^ {10}VERSION: \$\{\{ needs\.build\.outputs\.version \}\}\n {10}SOURCE: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
     assert.doesNotMatch(text, /^ {6}- run: .*\bnp[mx]\b/m);
     assert.match(text, /^ {10}ref: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
-    assert.match(text, /^ {6}- run: node tools\/release\/publish-cli\.ts --version "\$VERSION" --source "\$SOURCE"$/m);
+    assert.match(text, /^ {6}- run: node tools\/release\/publish-cli\.ts --version "\$VERSION" --source "\$SOURCE" --branch preview --seed release$/m);
   });
 
   it("pushes with the release environment's deploy key, the one actor the release rulesets let through", () => {
