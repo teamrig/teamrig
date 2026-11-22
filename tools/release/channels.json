@@ -1,0 +1,6 @@
+{
+  "zone": "Asia/Jerusalem",
+  "previewSlots": ["09:00", "12:00", "15:00", "18:00", "21:00"],
+  "stableAt": "20:00",
+  "soakHours": 3
+}
