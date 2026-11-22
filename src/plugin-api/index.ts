@@ -256,8 +256,22 @@ export { MENTION_PAGE_SIZE, MENTION_PAGES_MAX, REVIEW_READS_MAX } from '../issue
 export { repoTokenName, tokenName } from '../issues/token-names.ts';
 // The length a posted comment is held to, and why a label may not be written.
 export { labelRefusal, MAX_COMMENT } from '../issues/write.ts';
-// How a program ended, as a failure line words it.
-export { exitText } from '../open/processes.ts';
+// How a program ended, as a failure line words it; what a terminal's adapter starts its launcher and runs its programs
+// with, and how long a launcher may take to return.
+export {
+  EXIT_WAIT_MS,
+  exitText,
+  type LaunchEnd,
+  type RunOutcome,
+  type RunRequest,
+  type StartMode,
+  type StartOutcome,
+  type StartRequest,
+  type TerminalProcesses,
+} from '../open/processes.ts';
+// A script for Windows PowerShell as one program run, and a command made into a shell's or a Windows command line's text.
+export { powerShellRequest, type PowerShellRequest } from '../core/powershell.ts';
+export { shellCommand, windowsCommandLine } from '../open/quote.ts';
 export { ProgramOutputCapError, type ProgramRequest, type ProgramResult, type ProgramRunner } from '../core/program-runner.ts';
 export type { SecretScanner } from '../core/secrets.ts';
 export type { ShellEnd } from '../core/shell-end.ts';

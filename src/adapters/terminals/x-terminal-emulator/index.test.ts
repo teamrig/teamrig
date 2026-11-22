@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION, apiVersionNotice, featuresOf, terminalAdapterProblems, terminalDeclarationProblems } from '../../../plugin-api/index.ts';
+import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import adapter from './index.ts';
 
@@ -22,6 +23,6 @@ describe('the x-terminal-emulator adapter', () => {
   it('enters through defineTerminal with that declaration, and builds no port yet', () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(terminalAdapterProblems(adapter), []);
-    assert.deepEqual(adapter.create({ env: {}, platform: 'linux' }), {});
+    assert.deepEqual(adapter.create(terminalDeps()), {});
   });
 });

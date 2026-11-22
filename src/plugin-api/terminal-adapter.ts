@@ -1,4 +1,5 @@
 import type { Env } from '../core/home.ts';
+import type { TerminalProcesses } from '../open/processes.ts';
 import { adapterEntry, declarationProblems, type AdapterDeclaration } from './declaration.ts';
 import type { TerminalPort } from './terminal.ts';
 
@@ -9,6 +10,10 @@ export type TerminalDeclaration = AdapterDeclaration<'terminal'>;
 export interface TerminalDeps {
   readonly env: Env;
   readonly platform: NodeJS.Platform;
+  /** The launchers it starts and the programs it runs, each with no shell in between. */
+  readonly processes: TerminalProcesses;
+  /** The folder a program it runs starts in, where the request names no pane's own: teamrig's working folder. */
+  readonly cwd: string;
 }
 
 /** What a terminal adapter builds: its one port, absent while the adapter only declares what its terminal can do. */

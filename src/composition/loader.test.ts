@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION } from '../plugin-api/index.ts';
 import { HOST_PORT_NAMES } from '../ports/host/index.ts';
-import { hostDeps } from '../testing/adapter-deps.ts';
+import { hostDeps, terminalDeps } from '../testing/adapter-deps.ts';
 import { connectorDeclarationData, hostDeclarationData, terminalDeclarationData } from '../testing/manifests.ts';
 import { TERMINAL_ADAPTERS } from './adapters.ts';
 import { importModule, loadConnector, loadHost, loadTerminal, readDeclarations, type Load, type ModuleImporter } from './loader.ts';
@@ -54,7 +54,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     for (const id of TERMINAL_IDS) {
       const load = await loadTerminal(id);
       assert.equal(load.kind === 'loaded' && load.value.declaration.id, id);
-      assert.deepEqual(load.kind === 'loaded' && load.value.create({ env: {}, platform: 'linux' }), {});
+      assert.deepEqual(load.kind === 'loaded' && load.value.create(terminalDeps()), {});
     }
   });
 

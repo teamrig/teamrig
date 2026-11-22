@@ -1,14 +1,20 @@
 import assert from 'node:assert/strict';
 import { SecretScanner } from '../core/secrets.ts';
-import type { ConnectorAdapter, ConnectorDeps, ConnectorPorts, HostDeps, JsonRecord, ProgramRunner } from '../plugin-api/index.ts';
+import type { ConnectorAdapter, ConnectorDeps, ConnectorPorts, HostDeps, JsonRecord, ProgramRunner, TerminalDeps } from '../plugin-api/index.ts';
 import { FakeCredentials } from './fake-credentials.ts';
 import { FakeHttp } from './fake-http.ts';
+import { FakeProcesses } from './fake-processes.ts';
 
 const noProgram: ProgramRunner = () => Promise.reject(new Error('no program runs here'));
 
 /** What a loader hands a host adapter, on Linux with an empty environment and no program to run; `over` replaces fields. */
 export function hostDeps(over: Partial<HostDeps> = {}): HostDeps {
   return { env: {}, platform: 'linux', run: noProgram, ...over };
+}
+
+/** What a loader hands a terminal adapter, on Linux with an empty environment and processes that start nothing; `over` replaces fields. */
+export function terminalDeps(over: Partial<TerminalDeps> = {}): TerminalDeps {
+  return { env: {}, platform: 'linux', processes: new FakeProcesses(), cwd: '/work', ...over };
 }
 
 /**
