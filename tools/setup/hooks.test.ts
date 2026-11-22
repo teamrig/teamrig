@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SECRET_HOOKS } from '../../src/cli/secret-hook-check.ts';
+import { STAMP_HOOKS } from '../../src/cli/stamp-hook-check.ts';
 import { callsHookLine } from '../../src/git-hooks/hook-lines.ts';
 import { FakeGit } from '../lib/fake-git.ts';
 import { GitError } from '../lib/git.ts';
@@ -82,6 +83,13 @@ describe('the repo hooks', () => {
     for (const hook of SECRET_HOOKS) {
       const script = readFileSync(fileURLToPath(new URL(`../../${HOOKS_PATH}/${hook.hook}`, import.meta.url)), 'utf8');
       assert.ok(callsHookLine(script, hook), `${HOOKS_PATH}/${hook.hook} runs no secrets ${hook.sub}`);
+    }
+  });
+
+  it('stamp each commit with the program, model and effort that made it (T4869)', () => {
+    for (const hook of STAMP_HOOKS) {
+      const script = readFileSync(fileURLToPath(new URL(`../../${HOOKS_PATH}/${hook.hook}`, import.meta.url)), 'utf8');
+      assert.ok(callsHookLine(script, hook), `${HOOKS_PATH}/${hook.hook} runs no stamp ${hook.sub}`);
     }
   });
 });

@@ -764,7 +764,9 @@ closes and reopens no one, and SECRET-HOOK: a repository in `delivery.repos` who
 pre-push hook (in the folder `core.hooksPath` names, else `.git/hooks`; husky's scripts in `.husky`) does not call
 `teamrig secrets staged`, `teamrig secrets message` or `teamrig secrets pushed`, so a secret there can be committed or
 pushed, with the line to add to each (a new hook file starts `#!/bin/sh` and must be executable), or one git cannot
-read, and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
+read, STAMP-HOOK: while `commits.stamp` is on, a repository in `delivery.repos` whose commit-msg hook does
+not call `teamrig stamp commit`, with the line to add (`teamrig stamp commit "$1" || true`; a repository git cannot
+read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
 `disableAllHooks`, which stops every teamrig hook, the secret guard's included, FIVE-HOUR: the account's five-hour
