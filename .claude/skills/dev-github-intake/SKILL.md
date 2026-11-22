@@ -52,7 +52,7 @@ page you point them to.
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).
 5. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
-   leader's approval with a note naming the head, then `teamrig pr approve <owner/name#n> --head <sha>` and
+   leader's approval with a note naming the full 40-hex head, then `teamrig pr approve <owner/name#n> --head <sha>` and
    `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a push after the
    approval needs a new one. Its author keeps the credit as the commits' author.
    Otherwise land it with credit by hand: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its

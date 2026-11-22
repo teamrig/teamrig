@@ -1814,22 +1814,22 @@ To land it: rebase its branch onto origin/main and resolve these files.
 Approves one PR of the team's repositories at its head on the code host, with the token saved for the repository's
 owner, so the session holding an outside PR's task reviews it there with no person's hand. It writes only once every
 gate passes, reading them all first: exactly one task holds the PR (its ref), the caller owns that task (only a
-change's owner lands it), the caller's leader approved it with a note naming the head (an approval covers only the
-head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's default
-branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
+change's owner lands it), the caller's leader approved it with a note naming the full 40-hex head (an approval covers
+only the head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's
+default branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
 own approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
 when the code host failed, 2 when refused, else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, at least 7 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
 Example:
 
 ```sh
-teamrig pr approve acme/web#12 --head d00d5eed
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
 ```
 
 Output:
@@ -1841,21 +1841,22 @@ APPROVED acme/web#12 at d00d5ee
 ### teamrig pr merge
 
 Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
-its base or is in the merge queue already. Where the repository has a merge queue it enters it (`ENQUEUED`), else it
-is merged by rebase (`MERGED`); both are pinned to the head read, so the code host refuses the landing if the head
-moved since. The code host's own required checks and reviews still gate it. Exit 1 when the code host failed, 2 when
-refused, else 0.
+its base, is in the merge queue already or any check on its head has not passed (pending, failing or none). Where
+the repository has a merge queue it enters it (`ENQUEUED`), else it is merged by rebase (`MERGED`); both are pinned
+to the head read, so the code host refuses the landing if the head moved since. teamrig reads the checks itself, as a
+token that may bypass the branch's rules skips the code host's own. Exit 1 when the code host failed, 2 when refused,
+else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, at least 7 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
 Example:
 
 ```sh
-teamrig pr merge acme/web#12 --head d00d5eed
+teamrig pr merge acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
 ```
 
 Output:

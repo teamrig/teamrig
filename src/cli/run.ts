@@ -879,13 +879,12 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       writes nothing to GitHub; refuses a folder whose origin is another repository
   pr approve <owner/name#n> --head <sha> [--check]   approves one pull request of the team's repositories
       at its head, with the token saved for the owner; refused, writing nothing, unless one task holds it
-      (its ref), the caller owns that task, the caller's leader approved it with a note naming the head (a
-      root team's lead needs no one), and the pull request is open, no draft, on its default branch and
-      at the head --head names; --check prints what it would do and writes nothing
+      (its ref), the caller owns that task, the caller's leader approved it with a note naming the full
+      40-hex head (a root team's lead needs no one), and the pull request is open, no draft, on its default
+      branch and at the full head --head names; --check prints what it would do and writes nothing
   pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
-      refused while it conflicts or is queued already: into its merge queue where the repository has one,
-      else merged by rebase, both pinned to the head read; GitHub's own required checks and reviews still
-      gate the landing
+      refused while it conflicts, is queued already or its head's checks have not all passed: into its
+      merge queue where the repository has one, else merged by rebase, both pinned to the head read
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links

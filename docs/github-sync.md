@@ -451,14 +451,15 @@ The session holding an outside pull request's task reviews and lands it itself, 
 repository's owner, once its leader approved the exact head: `teamrig pr approve` posts the approving review and
 `teamrig pr merge` lands it, into the repository's merge queue where it has one, else merged by rebase. Both read
 every gate before writing anything: one task holds the pull request, the caller owns it, the leader's approval note
-names the head (a root team's lead needs no one's), and the pull request is open, no draft, on its default branch
-and still at `--head`; a merge also needs it free of conflicts and not queued already. Each write is pinned to the
+names the full 40-hex head (a root team's lead needs no one's), and the pull request is open, no draft, on its
+default branch and still at `--head`; a merge also needs it free of conflicts, not queued already and every check on
+its head passed, which teamrig reads itself, since an admin token may bypass the branch's own rules. Each write is pinned to the
 head read, so a push after the approval makes GitHub refuse it, and a newer head needs its own approval.
 
 ```sh
-teamrig pr approve acme/web#12 --head d00d5eed --check   # every gate, nothing written
-teamrig pr approve acme/web#12 --head d00d5eed
-teamrig pr merge acme/web#12 --head d00d5eed
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef --check   # every gate, nothing written
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
+teamrig pr merge acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
 ```
 
 ```text
