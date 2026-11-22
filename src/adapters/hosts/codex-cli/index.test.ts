@@ -24,7 +24,7 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(claimed, []);
   });
 
-  it('enters through defineHost with that declaration, and names every host port unsupported but its secret files', () => {
+  it('enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools and secret files', () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(hostAdapterProblems(adapter), []);
     const ports = adapter.create(hostDeps());
@@ -33,8 +33,16 @@ describe('the Codex CLI adapter', () => {
       Object.entries(ports)
         .filter(([, port]) => !isUnsupported(port))
         .map(([name]) => name),
-      ['secrets'],
+      ['hooks', 'toolCall', 'secrets'],
     );
+  });
+
+  it("reads a hook's tool call through its own tools on the platform it is handed", () => {
+    const { hooks } = adapter.create(hostDeps({ platform: 'win32' }));
+    assert.ok(!isUnsupported(hooks));
+    const event = hooks.parse(JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'Get-ChildItem' } }));
+    assert.equal(event?.call?.kind, 'shell');
+    assert.equal(event?.call?.kind === 'shell' ? event.call.dialect : undefined, 'powershell');
   });
 
   it("names Codex's secret files from the environment and platform it is handed", () => {
