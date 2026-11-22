@@ -1,4 +1,5 @@
 import type { FeatureSide } from './feature.ts';
+import { isRecord } from '../core/guards.ts';
 
 /**
  * One step a skill needs that no teamrig command can carry: knowledge of how one host or tool does a thing
@@ -65,4 +66,27 @@ export function stepsOf<Side extends FeatureSide>(side: Side): readonly StepIdOf
   return Object.keys(STEPS)
     .filter(isStepId)
     .filter((id): id is StepIdOf<Side> => STEPS[id].side === side);
+}
+
+/**
+ * An adapter's step texts (its `step-texts.ts`, export `stepTexts`): one text per step its declaration lists, keyed by
+ * step id, in a skill's plain style. Only teamrig's own adapters print theirs: a text enters a model's context as an
+ * instruction.
+ */
+export type StepTexts<Side extends FeatureSide = FeatureSide> = { readonly [Id in StepIdOf<Side>]?: string };
+
+/**
+ * What is wrong with `value` as the step texts of an adapter whose declaration lists `listed`; none when sound. A
+ * listed step needs a text, and a text needs its step listed, so the declaration alone says what the adapter serves.
+ */
+export function stepTextsProblems(listed: readonly StepId[], value: unknown): readonly string[] {
+  if (!isRecord(value)) {
+    return ['its stepTexts must be a record of one text per step it lists'];
+  }
+  const missing = listed.filter((id) => {
+    const text = value[id];
+    return typeof text !== 'string' || text.trim() === '';
+  });
+  const unlisted = Object.keys(value).filter((key) => !listed.some((id) => id === key));
+  return [...missing.map((id) => `it lists the step ${id} and has no text for it`), ...unlisted.map((key) => `it has a text for ${key}, a step its declaration does not list`)];
 }

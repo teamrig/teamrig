@@ -5,7 +5,7 @@ import { HOST_PORT_NAMES } from '../ports/host/index.ts';
 import { hostDeps, terminalDeps } from '../testing/adapter-deps.ts';
 import { connectorDeclarationData, hostDeclarationData, terminalDeclarationData } from '../testing/manifests.ts';
 import { TERMINAL_ADAPTERS } from './adapters.ts';
-import { importModule, loadConnector, loadHost, loadTerminal, readDeclarations, type Load, type ModuleImporter } from './loader.ts';
+import { importModule, loadConnector, loadHost, loadTerminal, readConnectorSteps, readDeclarations, readHostSteps, type Load, type ModuleImporter } from './loader.ts';
 
 const HOST_ENTRY = '../adapters/hosts/claude-code/index.ts';
 const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator'];
@@ -204,5 +204,60 @@ describe('an adapter the loader refuses', () => {
 
   it('is told of its id and its version at once', async () => {
     assert.equal(noticesOf(await loadHost('claude-code', hostEntry({ id: 'some-cli', apiVersion: '9.0.0' })))?.length, 2);
+  });
+});
+
+describe('reading the steps each adapter serves', () => {
+  const CLAUDE_CODE = '../adapters/hosts/claude-code';
+  /** The table's host declarations, Claude Code's listing `steps`, and its step texts module when given. */
+  function hostsServing(steps: readonly string[], texts?: unknown): ModuleImporter {
+    return serving({
+      [`${CLAUDE_CODE}/declaration.ts`]: { declaration: hostDeclarationData({ id: 'claude-code', apiVersion: '0.2.0', steps }) },
+      '../adapters/hosts/codex-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'codex-cli' }) },
+      ...(texts === undefined ? {} : { [`${CLAUDE_CODE}/step-texts.ts`]: { stepTexts: texts } }),
+    }).importer;
+  }
+
+  it('holds every adapter teamrig ships to its declaration: a text for each step it lists, and none for another', async () => {
+    const [hosts, connectors] = await Promise.all([readHostSteps(), readConnectorSteps()]);
+    const served = [...hosts, ...connectors].map((load) => [load.id, load.kind === 'loaded' ? [...load.value.texts.keys()] : load.notices]);
+    assert.deepEqual(served, [
+      ['claude-code', ['host.rename', 'host.slim-setup', 'host.denial-sources']],
+      ['codex-cli', []],
+      ['github', ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change']],
+      ['jira', []],
+      ['local', []],
+    ]);
+  });
+
+  it('reads the texts of the steps a declaration lists, by step id', async () => {
+    const [claudeCode] = await readHostSteps(hostsServing(['host.rename'], { 'host.rename': 'Rename it so.' }));
+    assert.deepEqual(claudeCode?.kind === 'loaded' && [...claudeCode.value.texts], [['host.rename', 'Rename it so.']]);
+  });
+
+  it('imports no step texts for an adapter listing no step', async () => {
+    const { importer, asked } = serving({ '../adapters/hosts/codex-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'codex-cli' }) } });
+    const [, codex] = await readHostSteps(importer);
+    assert.equal(codex?.kind === 'loaded' && codex.value.texts.size, 0);
+    assert.ok(!asked.some((specifier) => specifier.endsWith('step-texts.ts')));
+  });
+
+  it('refuses one listing a step it has no text for, or with a text for a step it does not list', async () => {
+    const [missing] = await readHostSteps(hostsServing(['host.rename', 'host.slim-setup'], { 'host.rename': 'Rename it so.', 'host.denial-sources': 'Read it.' }));
+    assert.deepEqual(missing && noticesOf(missing), ['it lists the step host.slim-setup and has no text for it', 'it has a text for host.denial-sources, a step its declaration does not list']);
+  });
+
+  it('refuses one listing steps whose step texts do not load, or are no record', async () => {
+    const [absent] = await readHostSteps(hostsServing(['host.rename']));
+    assert.deepEqual(absent && noticesOf(absent), [`its step-texts.ts did not load: Cannot find module ${CLAUDE_CODE}/step-texts.ts`]);
+    const [broken] = await readHostSteps(hostsServing(['host.rename'], 'Rename it so.'));
+    assert.deepEqual(broken && noticesOf(broken), ['its stepTexts must be a record of one text per step it lists']);
+  });
+
+  it('refuses one whose declaration is refused, for its own reasons', async () => {
+    const [, codex] = await readHostSteps(hostsServing([]));
+    assert.equal(codex?.kind, 'loaded');
+    const [claudeCode] = await readHostSteps(serving({}).importer);
+    assert.deepEqual(claudeCode && noticesOf(claudeCode), [`its declaration.ts did not load: Cannot find module ${CLAUDE_CODE}/declaration.ts`]);
   });
 });

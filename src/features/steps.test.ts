@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONNECTOR_KINDS } from './feature.ts';
-import { STEPS, isStepId, stepsOf } from './steps.ts';
+import { STEPS, isStepId, stepTextsProblems, stepsOf } from './steps.ts';
 
 const STEP_ID = /^[a-z]+\.[a-z]+(-[a-z]+)*$/;
 
@@ -37,5 +37,25 @@ describe('the step registry', () => {
     assert.deepEqual(stepsOf('connector'), ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change']);
     assert.deepEqual(stepsOf('host'), ['host.rename', 'host.slim-setup', 'host.denial-sources']);
     assert.deepEqual(stepsOf('terminal'), []);
+  });
+});
+
+describe("an adapter's step texts", () => {
+  it('are sound with a text for each listed step and nothing more', () => {
+    assert.deepEqual(stepTextsProblems(['host.rename'], { 'host.rename': 'Rename it so.' }), []);
+    assert.deepEqual(stepTextsProblems([], {}), []);
+  });
+
+  it('name each listed step with no text, a blank one included, then each text for a step not listed', () => {
+    assert.deepEqual(stepTextsProblems(['host.rename', 'host.slim-setup', 'host.denial-sources'], { 'host.rename': ' ', 'host.denial-sources': 3, 'tracker.link-child': 'Link it.' }), [
+      'it lists the step host.rename and has no text for it',
+      'it lists the step host.slim-setup and has no text for it',
+      'it lists the step host.denial-sources and has no text for it',
+      'it has a text for tracker.link-child, a step its declaration does not list',
+    ]);
+  });
+
+  it('must be a record', () => {
+    for (const value of [undefined, 'text', ['host.rename']]) assert.deepEqual(stepTextsProblems(['host.rename'], value), ['its stepTexts must be a record of one text per step it lists']);
   });
 });
