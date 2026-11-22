@@ -73,7 +73,10 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     );
     assert.deepEqual(
       hosts.map((load) => [load.id, load.kind]),
-      [['claude-code', 'loaded']],
+      [
+        ['claude-code', 'loaded'],
+        ['codex-cli', 'loaded'],
+      ],
     );
     assert.deepEqual(
       connectors.map((load) => [load.id, load.kind, load.kind === 'loaded' && load.value.name]),
@@ -90,6 +93,7 @@ describe('reading the declarations', () => {
   it('imports the declaration file of each adapter and none of its code', async () => {
     const { importer, asked } = serving({
       '../adapters/hosts/claude-code/declaration.ts': { declaration: hostDeclarationData({ id: 'claude-code' }) },
+      '../adapters/hosts/codex-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'codex-cli' }) },
       '../adapters/connectors/github/declaration.ts': { declaration: connectorDeclarationData({ id: 'github' }) },
       '../adapters/connectors/jira/declaration.ts': { declaration: connectorDeclarationData({ id: 'jira' }) },
       '../adapters/connectors/local/declaration.ts': { declaration: connectorDeclarationData({ id: 'local' }) },
@@ -98,10 +102,11 @@ describe('reading the declarations', () => {
     const { hosts, connectors, terminals } = await readDeclarations(importer);
     assert.deepEqual(
       [...hosts, ...connectors, ...terminals].map((load) => [load.id, load.kind]),
-      ['claude-code', 'github', 'jira', 'local', ...TERMINAL_IDS].map((id) => [id, 'loaded']),
+      ['claude-code', 'codex-cli', 'github', 'jira', 'local', ...TERMINAL_IDS].map((id) => [id, 'loaded']),
     );
     assert.deepEqual(asked, [
       '../adapters/hosts/claude-code/declaration.ts',
+      '../adapters/hosts/codex-cli/declaration.ts',
       '../adapters/connectors/github/declaration.ts',
       '../adapters/connectors/jira/declaration.ts',
       '../adapters/connectors/local/declaration.ts',
@@ -117,7 +122,7 @@ describe('reading the declarations', () => {
       [terminalDeclarationFile('konsole')]: { declaration: terminalDeclarationData({ id: 'konsole', name: '' }) },
     });
     const { hosts, connectors, terminals } = await readDeclarations(importer);
-    assert.deepEqual(hosts.map(noticesOf), [undefined]);
+    assert.deepEqual(hosts.map(noticesOf), [undefined, ['its declaration.ts did not load: Cannot find module ../adapters/hosts/codex-cli/declaration.ts']]);
     assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined]);
     assert.deepEqual(connectors.map(noticesOf), [
       ['its refPrefix must be a lower-case word ending in a colon'],
@@ -130,8 +135,8 @@ describe('reading the declarations', () => {
 describe('an adapter the loader refuses', () => {
   it('is one the table of its side does not name', async () => {
     const { importer, asked } = serving({});
-    assert.deepEqual(await loadHost('codex', importer), { kind: 'refused', id: 'codex', notices: ['no host adapter is named codex: the host adapters are claude-code'] });
-    assert.deepEqual(noticesOf(await loadHost('github', importer)), ['no host adapter is named github: the host adapters are claude-code']);
+    assert.deepEqual(await loadHost('codex', importer), { kind: 'refused', id: 'codex', notices: ['no host adapter is named codex: the host adapters are claude-code, codex-cli'] });
+    assert.deepEqual(noticesOf(await loadHost('github', importer)), ['no host adapter is named github: the host adapters are claude-code, codex-cli']);
     assert.deepEqual(noticesOf(await loadConnector('claude-code', importer)), ['no connector adapter is named claude-code: the connector adapters are github, jira, local']);
     assert.deepEqual(noticesOf(await loadConnector('constructor', importer)), ['no connector adapter is named constructor: the connector adapters are github, jira, local']);
     assert.deepEqual(noticesOf(await loadTerminal('iterm', importer)), [`no terminal adapter is named iterm: the terminal adapters are ${TERMINAL_LIST}`]);
