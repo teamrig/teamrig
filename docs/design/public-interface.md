@@ -97,7 +97,7 @@ A read returns a versioned JSON document built from parsed data, never a file's 
 `plan`, 1.2: `goals`, 1.3: `history`, 1.4: `stats`; 1.5 added a field, `plan`'s `ownerCards`; 1.6 added the
 task fields the pane folded itself, `tasks`' `card`, `descriptionCut`, `sizeBase`, `prepares`, `noGoal`, `startedAt`
 and `waitsAt`; 1.8 added `tasks`' `retired`, the count of finished tasks left to the archive, and each `sessions`
-team's `week`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
+team's `week`; 1.9: `steps`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
 the design above left open is settled this way:
 
 - **One line a document.** Each document asked is one JSON object on one line of stdout, in the order asked, and
@@ -166,6 +166,13 @@ the design above left open is settled this way:
   the team's day or an active task's due. Only the asked team is counted, never the teams below it, since a read
   serves the own team and those above it. The days the account's week sat at its limit come from the meter log, as
   `teamrig stats` reads it.
+- **`steps` (1.9).** A one-time step teamrig needs its person to take, such as updating the team settings to the
+  current layout, was only printed by `teamrig steps` and the lead's start, so a reader could not show it. `steps`
+  serves each pending step as `teamrig steps` lists it: its `id`, `title`, `why`, the `preview` lines of what it
+  changes and the `command` the person types. A reader shows the step and offers to type that `command` in the
+  person's own tab; it never runs the step itself, since a step changes the person's files and only they approve
+  it. The config format this teamrig writes is part of `revision`, so an update that brings a new format makes a
+  step pending with no file changed and is never answered `unchanged`.
 
 ## Act
 

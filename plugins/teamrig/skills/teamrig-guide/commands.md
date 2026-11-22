@@ -2594,17 +2594,18 @@ Nothing else is written to stdout, so every line there parses; a refusal is one 
 and no document, where other commands print it to stdout. It writes no file, marks nothing read and takes no lock.
 
 The five documents of interface 1.0 are served, and `plan`, which 1.1 added, `goals`, which 1.2 added, `history`,
-which 1.3 added, and `stats`, which 1.4 added. `tasks` is the register's working set, the active tasks and the
+which 1.3 added, `stats`, which 1.4 added, and `steps`, which 1.9 added. `tasks` is the register's working set, the active tasks and the
 finished ones not yet archived. `plan` is the team's active tasks in plan order, each as teamrig's own lists place
 it. `goals` is the goals a task of the team may serve. `history` is every event of the one task `--task` names.
-`stats` is the register's numbers over `--range`, as `teamrig stats` counts them. `inbox` is the asking
+`stats` is the register's numbers over `--range`, as `teamrig stats` counts them. `steps` is the one-time steps
+teamrig needs its person to take, as `teamrig steps` lists them. `inbox` is the asking
 session's own inbox. `sessions` is every session of your tree of teams. `meetings` is the team's meetings still
 scheduled or started. `config` is the team's config key by key, and the one document a run with no team is
 answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.8`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.9`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2789,6 +2790,13 @@ not in a loop. It also reads the goals of the team and the teams above it and th
 found as `teamrig stats` finds it. When an archive segment is gone, no event is counted, so every number is 0, and
 `problems` names the segment: numbers counted without it would be wrong.
 
+`steps` (since interface 1.9) holds the steps `teamrig steps` lists, in the order they are taken, and `cuts`. Each
+step is `{ "id", "title", "why", "preview", "command" }`: `id` the step's kind (`config-format`), what `teamrig
+steps run` takes; `title` and `why` plain words for the person; `preview` what the step changes, a line each, as
+`teamrig steps` prints them; `command` what the person types in a tab to take it. Show the step and offer to type
+its `command` in the person's own tab; never run it yourself, since it changes their files. An empty `steps` means
+none is pending. A teamrig update that brings a new config format changes `revision` with no file moving.
+
 `inbox` adds `session` (`{ "id", "name" }`), `unread` (how many lines the session has not read; `null` when it never
 ran `teamrig inbox read`, and then every line counts as unread), `lines` and `cuts`. `lines` holds every unread line
 and the read ones posted in the last 24 hours (`--since`), in file order, each `{ "key", "at", "from", "text",
@@ -2912,7 +2920,7 @@ teamrig read tasks --json --owner api
 Output:
 
 ```text
-{"interface":"1.8","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
+{"interface":"1.9","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
 ```
 
 ### teamrig events
@@ -2965,8 +2973,8 @@ teamrig events --json --documents tasks,inbox --session api
 Output:
 
 ```text
-{"interface":"1.8","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
-{"interface":"1.8","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
+{"interface":"1.9","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
+{"interface":"1.9","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
 ```
 
 ### teamrig sessions

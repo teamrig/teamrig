@@ -358,14 +358,16 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       task --task names, the oldest first: its creation, each status set, each change of its fields
       and a move to another team), stats (the register's numbers over --range of the team's days,
       as teamrig stats counts them, with their Health levels, each count's tasks by id; --owner keeps
-      one session's; validUntil says when a number counted in days of age next goes stale), inbox
-      (--session's own lines, marking none read: the unread ones and the read ones of the last --since
-      hours, 24 unless given), sessions (every session of your tree of teams: its place, hire, state
-      and unread count; a hire's and a retirement's words only for your own team and the teams above
-      it), meetings (the team's scheduled and started meetings by time, as meeting list --json prints
-      them), config (the team, its zone, its priorities and every key of the team config as config get
-      --json reads it, a key naming where a secret is kept without its value; with no team here config
-      alone is answered, with the teams of this machine to join).
+      one session's; validUntil says when a number counted in days of age next goes stale), steps
+      (the steps teamrig needs its person to take, as teamrig steps lists them: each one's title, why,
+      what it changes and what the person types), inbox (--session's own lines, marking none read: the
+      unread ones and the read ones of the last --since hours, 24 unless given), sessions (every
+      session of your tree of teams: its place, hire, state and unread count; a hire's and a
+      retirement's words only for your own team and the teams above it), meetings (the team's
+      scheduled and started meetings by time, as meeting list --json prints them), config (the team,
+      its zone, its priorities and every key of the team config as config get --json reads it, a key
+      naming where a secret is kept without its value; with no team here config alone is answered,
+      with the teams of this machine to join).
       --conversation: the host's id of the conversation the program runs in; sessions then names the
       session holding it (self), and inbox serves that session's when no --session is given. --team: a
       team above yours, for tasks, plan, goals, history, stats, meetings and config. --task: the one
