@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { lineShellOf, powerShellSpec, type ScriptRun } from './line-shell.ts';
 import { treeOf, wholeNumberTriples, type ProcessLink } from './processes.ts';
 
 /**
@@ -138,12 +139,15 @@ const LIST_SCRIPT =
   'Get-CimInstance Win32_Process | ForEach-Object { ' +
   "'{0},{1},{2}' -f $_.ProcessId,$_.ParentProcessId,$(if ($_.CreationDate) { ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } else { 0 }) }";
 
-/** Runs a program on the host; settles with what it printed, or undefined when it failed, timed out or never started. */
-export type HostRun = (file: string, args: readonly string[]) => Promise<string | undefined>;
-
-const runOnHost: HostRun = (file, args) =>
+/** PowerShell started for one script, which it is given as its command. */
+export const runPowerShellOnce: ScriptRun = (script) =>
   new Promise((resolve) => {
-    execFile(file, args, { windowsHide: true, maxBuffer: LIST_MAX_BUFFER, timeout: HOST_CALL_TIMEOUT_MS }, (error, stdout) => resolve(error === null ? stdout : undefined));
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { windowsHide: true, maxBuffer: LIST_MAX_BUFFER, timeout: HOST_CALL_TIMEOUT_MS },
+      (error, stdout) => resolve(error === null ? stdout : undefined),
+    );
   });
 
 /**
@@ -168,26 +172,46 @@ export function killScript(targets: readonly StartedProcess[]): string {
 }
 
 /**
- * The Windows host over `run`: PowerShell lists the processes and ends listed ones by id and start (`killScript`). A
- * failed call ends nothing.
+ * The Windows host over `run`, a PowerShell script runner: it lists the processes and ends listed ones by id and start
+ * (`killScript`). A failed call ends nothing.
  */
-export function windowsSweepHostOf(run: HostRun, now: () => number = () => Date.now()): SweepHost {
+export function windowsSweepHostOf(run: ScriptRun, now: () => number = () => Date.now()): SweepHost {
   return {
     list: async () => {
-      const printed = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', LIST_SCRIPT]);
+      const printed = await run(LIST_SCRIPT);
       return printed === undefined ? undefined : parseStartedProcesses(printed);
     },
     kill: async (targets) => {
       if (targets.length > 0) {
-        await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', killScript(targets)]);
+        await run(killScript(targets));
       }
     },
     now,
   };
 }
 
-/** The real Windows host. */
-export const windowsSweepHost: SweepHost = windowsSweepHostOf(runOnHost);
+/** The real Windows host, starting PowerShell for each call. */
+export const windowsSweepHost: SweepHost = windowsSweepHostOf(runPowerShellOnce);
+
+/** A host opened for one sweep; `close` frees what it holds. */
+export interface SweepSession {
+  readonly host: SweepHost;
+  close(): void;
+}
+
+/** Opens the host for one sweep. */
+export type SweepOpener = () => SweepSession;
+
+/**
+ * The real Windows host over one PowerShell kept open for the sweep. A sweep lists, kills and lists again at least, and
+ * a fresh PowerShell costs about 0.45 s to launch and 0.6 s more to load the CIM module before its first list; one
+ * shell pays that once, and its later lists take about 0.4 s (T5031). A call that hangs ends that shell, and the next
+ * call starts another.
+ */
+export const openWindowsSweep: SweepOpener = () => {
+  const shell = lineShellOf(powerShellSpec(HOST_CALL_TIMEOUT_MS, LIST_MAX_BUFFER));
+  return { host: windowsSweepHostOf(shell.run), close: shell.close };
+};
 
 /**
  * On Windows the sweep ends the tree: killing only the shell would leave the command it started running. When the host
@@ -195,11 +219,19 @@ export const windowsSweepHost: SweepHost = windowsSweepHostOf(runOnHost);
  * reach a stranger. On POSIX the step runs as its own process group, and the group is killed; an orphan stays in its
  * group.
  */
-export function nodeTreeKill(platform: NodeJS.Platform, host: SweepHost = windowsSweepHost): TreeKill {
+export function nodeTreeKill(platform: NodeJS.Platform, open: SweepOpener = openWindowsSweep): TreeKill {
   if (platform === 'win32') {
     return async (held) => {
-      if (held.pid !== undefined && (await sweepTree(held.pid, host)) === 'unlisted') {
-        held.kill('SIGKILL');
+      if (held.pid === undefined) {
+        return;
+      }
+      const session = open();
+      try {
+        if ((await sweepTree(held.pid, session.host)) === 'unlisted') {
+          held.kill('SIGKILL');
+        }
+      } finally {
+        session.close();
       }
     };
   }

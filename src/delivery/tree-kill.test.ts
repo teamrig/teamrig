@@ -9,9 +9,11 @@ import {
   SWEEP_ROUNDS,
   windowsSweepHostOf,
   type HeldProcess,
-  type HostRun,
   type StartedProcess,
+  type SweepHost,
+  type SweepOpener,
 } from './tree-kill.ts';
+import type { ScriptRun } from './line-shell.ts';
 import { FakeSweepHost } from '../testing/fake-sweep-host.ts';
 
 /** A process the caller holds, as Node's ChildProcess: it records each signal sent through its handle. */
@@ -44,7 +46,7 @@ function killTargets(script: string): StartedProcess[] {
  * one.
  */
 class ProcessTable {
-  readonly runs: (readonly string[])[] = [];
+  readonly runs: string[] = [];
   /** The ids each kill script named, in order. */
   readonly kills: (readonly number[])[] = [];
   private rows: StartedProcess[];
@@ -56,10 +58,9 @@ class ProcessTable {
     this.births = births;
   }
 
-  readonly run: HostRun = (file, args) => {
+  readonly run: ScriptRun = (script) => {
     const born = this.births.get(this.runs.length) ?? [];
-    this.runs.push([file, ...args]);
-    const script = args.at(-1) ?? '';
+    this.runs.push(script);
     if (script.includes('.Kill()')) {
       const targets = killTargets(script);
       this.kills.push(targets.map((target) => target.pid));
@@ -183,25 +184,23 @@ describe('sweepTree on the Windows host', () => {
 
 describe('windowsSweepHostOf', () => {
   /** A run that records each call; a kill script prints nothing, and a list fails. */
-  function recorder(): { runs: (readonly string[])[]; run: HostRun } {
-    const runs: (readonly string[])[] = [];
+  function recorder(): { runs: string[]; run: ScriptRun } {
+    const runs: string[] = [];
     return {
       runs,
-      run: (file, args) => {
-        runs.push([file, ...args]);
-        return Promise.resolve((args.at(-1) ?? '').includes('.Kill()') ? '' : undefined);
+      run: (script) => {
+        runs.push(script);
+        return Promise.resolve(script.includes('.Kill()') ? '' : undefined);
       },
     };
   }
 
-  it('ends exactly the processes it is given, each by id and start in one PowerShell run, without taskkill', async () => {
+  it('ends exactly the processes it is given, each by id and start in one script, without taskkill', async () => {
     const { runs, run } = recorder();
     await windowsSweepHostOf(run).kill([proc(10, 1, 100), proc(11, 10, 200)]);
     assert.equal(runs.length, 1);
-    const [file, ...args] = runs[0] ?? [];
-    assert.equal(file, 'powershell.exe');
-    assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
-    const script = args[3] ?? '';
+    const script = runs[0] ?? '';
+    assert.doesNotMatch(script, /[\r\n]/, 'a line shell runs it as one script');
     assert.match(script, /\$want = @\{ 10 = 100; 11 = 200 \}/);
     assert.ok(script.indexOf('.Handle') < script.indexOf('.StartTime'), 'it holds each id before it reads the starts');
     assert.ok(script.indexOf('.StartTime') < script.indexOf('.Kill()'), 'it checks each start before it ends the process');
@@ -260,44 +259,70 @@ describe('parseStartedProcesses', () => {
   });
 });
 
+/** An opener handing out `host` for each sweep; it counts the sessions opened and closed. */
+class CountingOpener {
+  opened = 0;
+  closed = 0;
+  readonly open: SweepOpener;
+
+  constructor(host: SweepHost) {
+    this.open = () => {
+      this.opened += 1;
+      return { host, close: () => (this.closed += 1) };
+    };
+  }
+}
+
 describe('nodeTreeKill', () => {
-  it('sweeps through the host it is given on Windows, sending nothing through the held handle', async () => {
+  it('sweeps through one session of the host on Windows, closes it, and sends nothing through the held handle', async () => {
     const host = new FakeSweepHost([STEP, []]);
+    const opener = new CountingOpener(host);
     const held = new FakeHeld(10);
-    await nodeTreeKill('win32', host)(held);
+    await nodeTreeKill('win32', opener.open)(held);
     assert.deepEqual(host.kills, [[10, 11]]);
     assert.deepEqual(held.signals, []);
+    assert.deepEqual([opener.opened, opener.closed], [1, 1]);
   });
 
-  it('ends the held process alone through its handle when the host cannot be listed (T2336)', async () => {
+  it('ends the held process alone through its handle when the host cannot be listed, and closes the session (T2336)', async () => {
     const host = new FakeSweepHost(Array.from({ length: LIST_TRIES }, () => undefined));
+    const opener = new CountingOpener(host);
     const held = new FakeHeld(10);
-    await nodeTreeKill('win32', host)(held);
+    await nodeTreeKill('win32', opener.open)(held);
     assert.deepEqual(host.kills, []);
     assert.deepEqual(held.signals, ['SIGKILL']);
+    assert.equal(opener.closed, 1);
+  });
+
+  it('closes the session when the sweep throws', async () => {
+    const broken: SweepHost = { list: () => Promise.reject(new Error('no PowerShell')), kill: () => Promise.resolve(), now: () => 0 };
+    const opener = new CountingOpener(broken);
+    await assert.rejects(nodeTreeKill('win32', opener.open)(new FakeHeld(10)), /no PowerShell/);
+    assert.equal(opener.closed, 1);
   });
 
   it('sends nothing to a held process the list no longer has', async () => {
     const held = new FakeHeld(10);
-    await nodeTreeKill('win32', new FakeSweepHost([[proc(1, 0, 0)]]))(held);
+    await nodeTreeKill('win32', new CountingOpener(new FakeSweepHost([[proc(1, 0, 0)]])).open)(held);
     assert.deepEqual(held.signals, []);
   });
 
-  it('ends nothing for a process that never started', async () => {
+  it('opens no session and ends nothing for a process that never started', async () => {
     for (const platform of ['win32', 'linux'] as const) {
       const host = new FakeSweepHost([STEP, []]);
+      const opener = new CountingOpener(host);
       const held = new FakeHeld(undefined);
-      await nodeTreeKill(platform, host)(held);
-      assert.equal(host.listCalls, 0, platform);
+      await nodeTreeKill(platform, opener.open)(held);
+      assert.equal(opener.opened, 0, platform);
       assert.deepEqual(held.signals, [], platform);
     }
   });
 
   it('settles at once on POSIX when the group has already ended', async () => {
-    const host = new FakeSweepHost([]);
+    const opener = new CountingOpener(new FakeSweepHost([]));
     const held = new FakeHeld(2 ** 22 + 7);
-    await nodeTreeKill('linux', host)(held);
-    assert.equal(host.listCalls, 0);
+    await nodeTreeKill('linux', opener.open)(held);
+    assert.equal(opener.opened, 0);
     assert.deepEqual(held.signals, []);
   });
 });
