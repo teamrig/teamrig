@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { CLAUDE_SESSION, CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { treeHarness } from '../testing/team-tree.ts';
 import { EXIT, RefusedError } from './runtime.ts';
-import { mergeStandingOf, tabCallerOf } from './ship-approval.ts';
+import { testConfig } from '../testing/config.ts';
+import { approversIn, mergeStandingOf, tabCallerOf } from './ship-approval.ts';
 
 /** Team app with T1, alpha's, waiting on the lead's approval, which the lead gave. */
 async function approved(): Promise<CliHarness> {
@@ -55,6 +56,20 @@ describe('mergeStandingOf: who merges, its task and who approves it, read from t
   it('refuses a team whose config does not load', async () => {
     const kit = new CliHarness(null);
     await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1'), /config at .* is missing: the merge cannot tell who approves it/);
+  });
+});
+
+describe('approversIn: whose approval clears a landing, from a loaded config (T4817)', () => {
+  const ABOVE = { team: 'app', id: 'lead' };
+
+  it("names a member's leaders, none for a root team's lead, and the parent's lead for a child team's lead", () => {
+    assert.deepEqual(approversIn('app', testConfig(), 'alpha', undefined), ['lead']);
+    assert.deepEqual(approversIn('app', testConfig(), 'lead', ABOVE), []);
+    assert.deepEqual(approversIn('web', testConfig({ team: { id: 'web', parent: 'app' } }), 'lead', ABOVE), ['app/lead']);
+  });
+
+  it("refuses a child team's lead when no parent lead was read", () => {
+    assert.throws(() => approversIn('web', testConfig({ team: { id: 'web', parent: 'app' } }), 'lead', undefined), /team app, the parent team, has no config/);
   });
 });
 
