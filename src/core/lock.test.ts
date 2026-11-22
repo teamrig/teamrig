@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FaultyFiles } from '../testing/faulty-files.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import type { Files } from './files.ts';
-import { FileLock, LockBusyError, type LockTimings, realSleep, type Sleep, systemClock } from './lock.ts';
+import { FileLock, idleSleep, LockBusyError, type LockTimings, realSleep, type Sleep, systemClock } from './lock.ts';
 
 const TIMINGS: LockTimings = { ttlMs: 30_000, pollMs: 50, waitMs: 1_000 };
 const PATH = '/state/events.lock';
@@ -256,5 +258,30 @@ describe('systemClock and realSleep', () => {
     t.mock.timers.tick(1);
     await slept;
     assert.equal(woke, true);
+  });
+});
+
+describe('idleSleep', () => {
+  it('waits its time', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let woke = false;
+    const slept = idleSleep(50).then(() => {
+      woke = true;
+    });
+    t.mock.timers.tick(49);
+    await Promise.resolve();
+    assert.equal(woke, false);
+    t.mock.timers.tick(1);
+    await slept;
+    assert.equal(woke, true);
+  });
+
+  it('holds no process open: one waiting only on it ends before the wait does', () => {
+    const lock = pathToFileURL(fileURLToPath(new URL('./lock.ts', import.meta.url))).href;
+    const script = `import { idleSleep } from ${JSON.stringify(lock)}; await idleSleep(60_000); console.log('woke');`;
+    const started = Date.now();
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(run.stdout, '');
+    assert.ok(Date.now() - started < 30_000, 'the process waited out the timer');
   });
 });

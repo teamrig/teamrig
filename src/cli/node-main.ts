@@ -11,7 +11,7 @@ import { nodeHostCpu } from '../delivery/cpu.ts';
 import { nodeHostMemory } from '../delivery/memory.ts';
 import { launchingShellsOf, nodeEvery, starterWatch } from '../delivery/starter-watch.ts';
 import { nodeStepRunner } from '../delivery/steps.ts';
-import { realSleep, systemClock } from '../core/lock.ts';
+import { idleSleep, realSleep, systemClock } from '../core/lock.ts';
 import { NODE_PATH_PROBE } from '../core/path-probe.ts';
 import { storeWriter } from '../core/store-program.ts';
 import { NODE_STORE_FOLDERS } from '../plugin-store/node-folders.ts';
@@ -114,6 +114,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     clock: systemClock,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     sleep: realSleep,
+    idleSleep,
     git: GIT_CLI,
     pointerGit: GIT_POINTER,
     commitLog: GIT_COMMIT_LOG,
