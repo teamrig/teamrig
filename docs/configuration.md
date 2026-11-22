@@ -51,6 +51,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `tabStatus` | [object](#tabstatus) |  | A colored circle before each terminal tab's title for what its session is doing: green ready, yellow working (or a helper still running), orange waiting on the user, blue waiting on the user's decision (a turn whose last message has a `Decision needed:` line), red an API error, purple compacting. |
 | `needsYou` | [object](#needsyou) |  | The needs-you band: every tab of the team shows which other tab asks the user something (a permission prompt, a question, a `Decision needed:` line), read from the tab files under state/tabs/, with a Focus button that brings that tab to the front. During an open meeting only a p0 task's ask gets the Focus button. |
 | `pickerGuard` | [object](#pickerguard) |  | Refuses Claude Code's question picker (AskUserQuestion) in every session and helper of the team, the lead's own thread included, in the owner's daily meeting too, where the lead asks each card in plain text: the picker stops the session until the person answers, and the owner may be away for hours, so none of its other tasks moves meanwhile. The refusal tells the session to decide it when it is its own, else to record it on its task (a waiting status with its decision card, --default included), which reaches the owner through the lead, and go on with its next task; only with no task left, to end its turn with the question and a `Decision needed:` line. A helper ends its report with the decision instead. Plan mode's ExitPlanMode stays allowed. It also refuses a session's Bash line that leads with `cd D &&` and runs git or leaves the session's folder, which Claude Code would hold on a permission prompt, quoting the line's git -C / env -C form to rerun (since 0.375.0). |
+| `cliOnPath` | [object](#clionpath) |  | Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH. |
 | `meeting` | [object](#meeting) |  | The owner's daily meeting with the lead, in the lead's tab. |
 | `turnLog` | [object](#turnlog) |  | Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour>.jsonl for the task pane, so a /clear or a compaction never takes away what the person was reading in the tab. Secret shapes are redacted. |
 | `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts in the terminal it is run in. |
@@ -736,6 +737,14 @@ Refuses Claude Code's question picker (AskUserQuestion) in every session and hel
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Refuses the question picker in every session and helper of the team, the lead's own thread included, in the owner's daily meeting too. On unless a team sets it false. |
+
+## `cliOnPath`
+
+Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Writes the launchers and the PATH entry at a session start of the team. On unless a team sets it false; off, a session of the team writes neither, so an entry the user removed stays removed through each new version, while a session of another team that leaves it on still writes them. |
 
 ## `meeting`
 
