@@ -97,6 +97,7 @@ const permissionsCommands = () => import('./commands/permissions.ts');
 const setupScanCommand = () => import('./commands/setup-scan.ts');
 const testCommand = () => import('./commands/test.ts');
 const ghCommand = () => import('./commands/gh.ts');
+const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const queueCommand = () => import('./commands/queue.ts');
 const withdrawCommand = () => import('./commands/withdraw.ts');
 const stepAsideCommands = () => import('./commands/step-aside.ts');
@@ -319,6 +320,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
+  'git-credential': { effect: 'internal', flags: [], load: async () => (await gitCredentialCommand()).gitCredential },
   queue: { effect: 'write', flags: QUEUE_FLAGS, switches: QUEUE_SWITCHES, rest: true, load: async () => (await queueCommand()).queue },
   withdraw: { effect: 'write', flags: ['session', 'what'], switches: ['all'], load: async () => (await withdrawCommand()).withdraw },
   'step-away': { effect: 'write', flags: [], load: async () => (await stepAsideCommands()).stepAway },
@@ -1207,6 +1209,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  git-credential get | store | erase
+      (run by git as its credential helper for https to github.com: get
+      answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
+      stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by Claude Code, hook JSON on stdin)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

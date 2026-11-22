@@ -6849,6 +6849,32 @@ Output:
 {"state":"OPEN","title":"Ship the release"}
 ```
 
+### teamrig git-credential
+
+git's credential helper for https to the code host the saved keys are for: git runs it, not a session. `get` reads
+git's request on standard input and answers with the key teamrig saved for the owner of the repository in git's
+path, read from the credential store only, never a token in the environment or the machine's own login. It answers
+only `https` to that host itself (no other host, no suffix or port), with the repository's path (git's
+`credential.<url>.useHttpPath true`) and no user name in the URL. Anything else, an owner with no saved key, or a
+request git itself never writes (a carriage return, an unknown key, a key given twice) answers `quit=1` with the
+reason on standard error, so git asks no later helper and no prompt. `store` and `erase` keep and change nothing:
+only teamrig saves the keys. Exit 0 for each of them; any other word is a usage error, exit 64.
+
+Flags: none.
+
+Example, with `request.txt` holding the lines `protocol=ssh` and `host=example.com`, as git would write them:
+
+```sh
+teamrig git-credential get < request.txt
+```
+
+Output (the second line on standard error):
+
+```text
+quit=1
+teamrig git-credential: no key given: teamrig answers https only, not ssh
+```
+
 ### teamrig test
 
 Runs a test command in the shell and prints a few lines instead of all it printed, so a long test run costs the

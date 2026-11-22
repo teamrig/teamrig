@@ -822,6 +822,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  git-credential get | store | erase
+      (run by git as its credential helper for https to github.com: get
+      answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
+      stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by Claude Code, hook JSON on stdin)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
