@@ -227,14 +227,27 @@ jobs:
       # page, on a docs change too, which could edit the page by hand.
       - run: node tools/docs/parity-cli.ts --check
         if: ${{ needs.changes.outputs.kind != 'design' && !contains(matrix.part, '/') }}
+      # The two count checks below hold a pull request's counts to the base branch's baseline files too (--base), so a
+      # change cannot raise a count by raising its own baseline; the checkout is shallow, so the base commit is fetched.
+      - run: git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA"
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') && (github.event.pull_request.base.sha || github.event.merge_group.base_sha) }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       # The layer boundaries of src (what the core and an adapter import, who imports an adapter, where a tool is named): each count held to tools/ci/boundaries.json, failing a rise.
       # A docs or design change touches no file under src, so only a code change runs it.
-      - run: node tools/ci/boundaries-cli.ts
+      - run: node tools/ci/boundaries-cli.ts ${BASE_SHA:+--base "$BASE_SHA"}
         if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       # The host and tool words in each skill (plugins/teamrig/skills, .claude/skills): a count may fall, never rise
       # over tools/ci/provider-words.json. Skills are code to the change kind, so only a code change runs it.
-      - run: node tools/ci/provider-words-cli.ts
+      - run: node tools/ci/provider-words-cli.ts ${BASE_SHA:+--base "$BASE_SHA"}
         if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
       # Every link, anchor and Mermaid block in the Markdown must resolve on every OS; a design change's too, as
       # docs/design/ is Markdown a reader follows.
       - run: node tools/docs/doc-check-cli.ts
