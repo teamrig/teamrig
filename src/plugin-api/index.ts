@@ -89,6 +89,7 @@ export {
   type CompactEntry,
   type ContinuedEntry,
   type EditCall,
+  type EditedFile,
   type EntryKind,
   type EntryThread,
   type EnvironmentEntry,

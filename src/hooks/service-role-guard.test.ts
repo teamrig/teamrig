@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { OWNER_GATED_KEYS } from '../config/owner-gated.ts';
 import { isRecord, recordField, stringField, type JsonRecord } from '../core/guards.ts';
-import { hookEventOf, replyText } from '../testing/host.ts';
+import { editEventOf, hookEventOf, replyText } from '../testing/host.ts';
 import { changedGatedKeys, serviceRoleGuardReply, type ServiceRoleGuardEnv } from './service-role-guard.ts';
 
 const CONFIG = 'C:/u/.teamrig/teams/shop/config.json';
@@ -161,6 +161,15 @@ describe('service-role guard: the team config', () => {
     }
     assert.equal(await decide(call('Edit', { file_path: CONFIG, old_string: '"lead"', new_string: '"boss"' }), env({ configPath: undefined })), undefined);
     assert.equal(await decide(call('Edit', { file_path: '/c/u/.teamrig/teams/other/notes.json', old_string: 'a', new_string: 'b' })), undefined);
+  });
+
+  it('refuses an edit of several files whose second file changes an owner-gated key of the config', async () => {
+    const notes = { path: 'C:/w/notes.md', texts: ['x'], change: { kind: 'whole', text: 'x' } } as const;
+    const roles = { path: CONFIG, texts: [], change: { kind: 'whole', text: JSON.stringify({ sessions: ['lead'] }) } } as const;
+    const replyOf = async (files: Parameters<typeof editEventOf>[1]): Promise<string | undefined> =>
+      decisionOf(replyText('tool-start', await serviceRoleGuardReply(editEventOf({ cwd: 'C:/w' }, files), env())))?.decision;
+    assert.equal(await replyOf([notes, roles]), 'deny');
+    assert.equal(await replyOf([notes, { ...roles, change: { kind: 'whole', text: TEXT } }]), undefined);
   });
 
   it("guards every team's config under the kit home, each against its own text (T3083)", async () => {

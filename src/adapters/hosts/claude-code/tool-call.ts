@@ -2,6 +2,7 @@ import {
   isRecord,
   stringField,
   type AskCall,
+  type EditedFile,
   type JsonRecord,
   type ShellDialect,
   type TextChange,
@@ -67,14 +68,13 @@ function edit(changeOf: ChangeReader): Reader {
   return (name, input) => {
     const edits = input['edits'];
     const records = [input, ...(Array.isArray(edits) ? edits.filter(isRecord) : [])];
-    return {
-      kind: 'edit',
-      name,
-      input,
+    const file: EditedFile = {
       path: stringField(input, 'file_path') ?? stringField(input, 'notebook_path'),
       texts: records.flatMap((record) => WRITTEN_TEXT_KEYS.flatMap((key) => stringField(record, key) ?? [])),
       change: changeOf(input),
     };
+    // Each of Claude Code's file tools touches one file.
+    return { kind: 'edit', name, input, files: [file] };
   };
 }
 

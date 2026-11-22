@@ -21,8 +21,8 @@ const NAMES_RECORD_FOLDER = new RegExp(`(?<![\\w-])${PASS_RECORD_FOLDER}(?![\\w-
 export function passRecordReach(event: HookEvent): string | undefined {
   const { call } = event;
   if (call?.kind === 'edit') {
-    const { path } = call;
-    return path !== undefined && IN_RECORD_FOLDER.test(path) ? `this ${call.name} writes ${path}, in the folder of the trees' pass records` : undefined;
+    const path = call.files.map((file) => file.path).find((each) => each !== undefined && IN_RECORD_FOLDER.test(each));
+    return path === undefined ? undefined : `this ${call.name} writes ${path}, in the folder of the trees' pass records`;
   }
   if (call?.kind === 'shell') {
     const line = call.command;

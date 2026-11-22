@@ -63,17 +63,27 @@ export type TextChange =
   | { readonly kind: 'whole'; readonly text: string }
   | { readonly kind: 'replacements'; readonly replacements: readonly TextReplacement[] };
 
-/** One file written or changed. */
-export interface EditCall extends ToolCallBase {
-  readonly kind: 'edit';
+/** One file an edit writes, changes, moves or deletes. */
+export interface EditedFile {
+  /** The file as the call names it; undefined when its input names none. */
   readonly path: string | undefined;
   /** Every text the call writes into the file, in the input's order. */
   readonly texts: readonly string[];
   /**
    * The call as a change of the file's text; undefined when its input does not read as one (a field missing, an edit
-   * of something other than the text), so a reader cannot tell the text the call leaves.
+   * of something other than the text, a delete or a move), so a reader cannot tell the text the call leaves.
    */
   readonly change: TextChange | undefined;
+}
+
+/**
+ * Files written or changed. One host's edit tool touches one file, another's (a patch) several in one call, so a
+ * guard reads every file: one it passes for a single file would let a second file of the same call by.
+ */
+export interface EditCall extends ToolCallBase {
+  readonly kind: 'edit';
+  /** At least one file, in the input's order. */
+  readonly files: readonly EditedFile[];
 }
 
 /** A search of file names or of file contents. */

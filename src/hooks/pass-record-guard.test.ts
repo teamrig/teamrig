@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JsonRecord } from '../core/guards.ts';
-import { hookEventOf, replyText } from '../testing/host.ts';
+import { editEventOf, hookEventOf, replyText } from '../testing/host.ts';
 import { passRecordGuardReply, passRecordReach as reachOf, passRecordReason } from './pass-record-guard.ts';
 
 const RECORD = 'C:/work/repo/.git/local-ci/0123abcd.json';
@@ -25,6 +25,13 @@ describe('passRecordReach', () => {
     ] as const) {
       assert.match(passRecordReach(call(tool, { [field]: path })) ?? '', new RegExp(`^this ${tool} writes `), path);
     }
+  });
+
+  it('names an edit of several files when any one is in the records folder, not only the first', () => {
+    const other = { path: 'C:/work/repo/src/a.ts', texts: ['x'], change: undefined };
+    const record = { path: RECORD, texts: ['{}'], change: undefined };
+    assert.equal(reachOf(editEventOf({ tool_name: 'apply_patch' }, [other, record])), `this apply_patch writes ${RECORD}, in the folder of the trees' pass records`);
+    assert.equal(reachOf(editEventOf({ tool_name: 'apply_patch' }, [other, { ...other, path: undefined }])), undefined);
   });
 
   it('passes a file tool writing anywhere else, the code that names the folder too', () => {

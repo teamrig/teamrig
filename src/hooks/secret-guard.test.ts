@@ -4,7 +4,7 @@ import { DEFAULT_SECRET_GUARD } from '../config/defaults.ts';
 import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { testConfig } from '../testing/config.ts';
-import { hookEventOf, replyText, testSecrets } from '../testing/host.ts';
+import { editEventOf, hookEventOf, replyText, testSecrets } from '../testing/host.ts';
 import { secretFindingsOf, secretGuardOf, secretGuardReply, secretPatternsOf, secretReason, type SecretGuardEnv } from './secret-guard.ts';
 
 const RULES = secretRulesOf(DEFAULT_SECRET_GUARD, 'C:/u', 'win32', testSecrets());
@@ -170,6 +170,15 @@ describe('secretFindingsOf on the text a file-writing call writes (T1369 R3)', (
   it("finds a written text by the team's own secret patterns", () => {
     const rules = secretRulesOf(DEFAULT_SECRET_GUARD, 'C:/u', 'win32', testSecrets(), ['tok_[a-z0-9]{8}']);
     assert.deepEqual(findings(call('Write', { file_path: 'C:/w/deploy.sh', content: join('deploy --key tok_', 'q8r7s6t5') }), rules), ['config-1']);
+  });
+
+  it('reads every file of an edit that touches several: a secret in a second file is found, one in a secret file passes', () => {
+    const kinds = (files: Parameters<typeof editEventOf>[1]): string[] =>
+      secretFindingsOf(editEventOf({ tool_name: 'apply_patch' }, files), 'C:/w', RULES).map((finding) => finding.kind);
+    const secretFile = { path: 'C:/w/.env', texts: [join('GH=', TOKEN)], change: undefined };
+    const plain = { path: 'C:/w/src/a.ts', texts: ['const a = 1;'], change: undefined };
+    assert.deepEqual(kinds([secretFile, { ...plain, texts: [TOKEN] }]), ['written']);
+    assert.deepEqual(kinds([secretFile, plain]), []);
   });
 
   it('lets a write to a secret file, text it replaces, a placeholder, a reference and a fixture built from parts pass', () => {

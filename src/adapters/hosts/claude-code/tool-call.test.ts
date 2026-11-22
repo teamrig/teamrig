@@ -33,20 +33,20 @@ describe("Claude Code's file tools", () => {
 
   it('write the texts of a Write, an Edit, each MultiEdit edit and a NotebookEdit', () => {
     const write = { file_path: '/repo/a.ts', content: 'whole' };
-    assert.deepEqual(call('Write', write), { kind: 'edit', name: 'Write', input: write, path: '/repo/a.ts', texts: ['whole'], change: { kind: 'whole', text: 'whole' } });
+    assert.deepEqual(call('Write', write), { kind: 'edit', name: 'Write', input: write, files: [{ path: '/repo/a.ts', texts: ['whole'], change: { kind: 'whole', text: 'whole' } }] });
     const edit = { file_path: '/repo/a.ts', old_string: 'x', new_string: 'y' };
     const replaces = { kind: 'replacements', replacements: [{ from: 'x', to: 'y', all: false }] };
-    assert.deepEqual(call('Edit', edit), { kind: 'edit', name: 'Edit', input: edit, path: '/repo/a.ts', texts: ['y'], change: replaces });
+    assert.deepEqual(call('Edit', edit), { kind: 'edit', name: 'Edit', input: edit, files: [{ path: '/repo/a.ts', texts: ['y'], change: replaces }] });
     const multi = { file_path: '/repo/a.ts', edits: [{ old_string: 'a', new_string: 'one' }, 'not an edit', { old_string: 'b', new_string: 'two' }] };
-    assert.deepEqual(call('MultiEdit', multi), { kind: 'edit', name: 'MultiEdit', input: multi, path: '/repo/a.ts', texts: ['one', 'two'], change: undefined });
+    assert.deepEqual(call('MultiEdit', multi), { kind: 'edit', name: 'MultiEdit', input: multi, files: [{ path: '/repo/a.ts', texts: ['one', 'two'], change: undefined }] });
     const notebook = { notebook_path: '/repo/n.ipynb', new_source: 'cell' };
-    assert.deepEqual(call('NotebookEdit', notebook), { kind: 'edit', name: 'NotebookEdit', input: notebook, path: '/repo/n.ipynb', texts: ['cell'], change: undefined });
+    assert.deepEqual(call('NotebookEdit', notebook), { kind: 'edit', name: 'NotebookEdit', input: notebook, files: [{ path: '/repo/n.ipynb', texts: ['cell'], change: undefined }] });
   });
 
   it("say the change an edit makes to its file's text, and none where the input does not read as one", () => {
     const changeOf = (name: string, input: JsonRecord): unknown => {
       const made = call(name, input);
-      return made.kind === 'edit' ? made.change : 'not an edit';
+      return made.kind === 'edit' ? made.files[0]?.change : 'not an edit';
     };
     assert.deepEqual(changeOf('Edit', { file_path: 'a', old_string: 'x', new_string: 'y', replace_all: true }), { kind: 'replacements', replacements: [{ from: 'x', to: 'y', all: true }] });
     const edits = [{ old_string: 'a', new_string: 'one' }, { old_string: 'b', new_string: 'two', replace_all: true }];

@@ -63,14 +63,13 @@ export function secretFindingsOf(event: HookEvent, cwd: string, rules: SecretRul
 }
 
 /**
- * The secrets a file-writing call writes as text (the call's `texts`). A secret file (`secretGuard.paths`) is where a
- * secret belongs, so a call that writes one passes; every other folder, tests too, is read.
+ * The secrets a file-writing call writes as text (each file's `texts`). A secret file (`secretGuard.paths`) is where a
+ * secret belongs, so what the call writes there passes; what it writes in every other file, tests too, is read.
  */
 function writeFindings(call: EditCall, dir: string, rules: SecretRules): SecretFinding[] {
-  if (call.path !== undefined && rules.paths.listed(toolPath(call.path, dir, rules.home))) {
-    return [];
-  }
-  return writtenFindings(call.texts, rules.shapes);
+  return call.files.flatMap((file) =>
+    file.path !== undefined && rules.paths.listed(toolPath(file.path, dir, rules.home)) ? [] : writtenFindings(file.texts, rules.shapes),
+  );
 }
 
 /** The secret file a search that shows content reads, named by its path or by a glob that picks the files it reads. */
