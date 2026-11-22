@@ -1,7 +1,8 @@
 import { DEFAULT_COMMITS } from '../../src/config/defaults.ts';
 import { stampTrailer } from '../../src/core/stamp.ts';
 import { pathMatcher, weighCommit, type CommitWeight, type FileChange } from '../../src/push-guard/commit-size.ts';
-import { approvedRebase, type ClearMerge, type WorkCommit } from './approval.ts';
+import type { WorkCommit } from '../../src/merge/work-commits.ts';
+import { approvedRebase, type ClearMerge } from './approval.ts';
 import type { BuildStep } from './build-steps.ts';
 import type { CheckScope } from '../ci/check-scope.ts';
 import type { GateVerdict } from './local-gate.ts';
