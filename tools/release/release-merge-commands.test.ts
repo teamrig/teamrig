@@ -84,8 +84,9 @@ describe('gateCommand', () => {
     GITHUB_STEP_SUMMARY: summary,
     ...over,
   });
+  const clockHold = (lastMerge: Date | null): string | null => (lastMerge === null ? null : `held since ${lastMerge.toISOString()}`);
   const run = (gate: (target: GateTarget, deps: GateDeps) => Promise<GateOutcome>, over: Env = {}, profiles = PROFILES): Promise<number> =>
-    gateCommand(env(over), { git: (args) => repo.git(...args), profiles, gate, fetchFn: noFetch, out: (line) => printed.push(line) });
+    gateCommand(env(over), { git: (args) => repo.git(...args), profiles, gate, fetchFn: noFetch, clockHold, out: (line) => printed.push(line) });
 
   beforeEach(() => {
     repo = new TempRepo('release-merge-commands').init();
@@ -126,6 +127,18 @@ describe('gateCommand', () => {
     assert.equal(code, 0);
     assert.equal(readFileSync(output, 'utf8'), 'pass=false\n');
     assert.equal(readFileSync(summary, 'utf8'), 'Release merge gate found nothing to merge: no release pull request is open\n');
+  });
+
+  it("passes the gate the release clock and exits 0 with pass=false when the clock holds the release", async () => {
+    const gate = async (target: GateTarget, deps: GateDeps): Promise<GateOutcome> => {
+      calls.push({ target, token: deps.token });
+      const hold = deps.clockHold(new Date('2026-11-22T07:10:00Z'));
+      return hold === null ? { kind: 'stale', reason: 'the clock passed it' } : { kind: 'held', reason: hold };
+    };
+    const code = await run(gate);
+    assert.equal(code, 0);
+    assert.equal(readFileSync(output, 'utf8'), 'pass=false\n');
+    assert.equal(readFileSync(summary, 'utf8'), 'Release merge gate held: held since 2026-11-22T07:10:00.000Z\n');
   });
 
   it('throws before the gate runs on a missing output file, a malformed run id or a repository with no release', async () => {

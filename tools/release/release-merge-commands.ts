@@ -21,7 +21,8 @@ import {
  * The two commands release-merge-cli.ts runs for .github/workflows/release-merge.yml (T4712), every value read from
  * the environment so no event text reaches a shell, and every effect passed in:
  * - `gateCommand` (job token, read-only): passes the release pull request ci just passed, writes `pass`, `pr`, `sha`,
- *   `checks` and `paths` to GITHUB_OUTPUT and the outcome to GITHUB_STEP_SUMMARY; exit 0 on pass or stale, 1 refused.
+ *   `checks` and `paths` to GITHUB_OUTPUT and the outcome to GITHUB_STEP_SUMMARY; exit 0 on pass, stale or held by the
+ *   release clock, 1 refused.
  * - `mergeCommand` (the App key, in its own job): merges that pull request at that sha; 1 unless merged and commented.
  * A missing or malformed value throws, which the CLI exits 2 on.
  */
@@ -43,6 +44,8 @@ export interface GateCommandDeps {
   readonly profiles: ReadonlyMap<string, RepoProfile>;
   readonly gate: (target: GateTarget, deps: GateDeps) => Promise<GateOutcome>;
   readonly fetchFn: Fetch;
+  /** The release clock (channels.ts `slotHold` at the job's now), passed to the gate as is. */
+  readonly clockHold: GateDeps['clockHold'];
   /** Prints one line, without its line end. */
   readonly out: (line: string) => void;
 }
@@ -66,7 +69,8 @@ const apiRoot = (env: Env): string | undefined => env['GITHUB_API_URL'] || undef
 
 export function gateSummary(outcome: GateOutcome): string {
   if (outcome.kind === 'pass') return `Release merge gate passed pull request #${outcome.pr} at ${codeSpan(outcome.sha)}: ${outcome.checks} checks green.\n`;
-  return `Release merge gate ${outcome.kind === 'stale' ? 'found nothing to merge' : 'refused'}: ${outcome.reason}\n`;
+  const verdict = { stale: 'found nothing to merge', held: 'held', refused: 'refused' }[outcome.kind];
+  return `Release merge gate ${verdict}: ${outcome.reason}\n`;
 }
 
 export async function gateCommand(env: Env, deps: GateCommandDeps): Promise<number> {
@@ -91,14 +95,14 @@ export async function gateCommand(env: Env, deps: GateCommandDeps): Promise<numb
   };
   const outcome = await deps.gate(
     { repo, runId, main: profile.main, head: release.head, summary: profile.summary },
-    { api: fetchGitHubApi(deps.fetchFn, apiRoot(env)), token, filesRefusal },
+    { api: fetchGitHubApi(deps.fetchFn, apiRoot(env)), token, filesRefusal, clockHold: deps.clockHold },
   );
   const summary = gateSummary(outcome);
   appendFileSync(summaryFile, summary);
   deps.out(summary.trimEnd());
   if (outcome.kind !== 'pass') {
     appendFileSync(output, 'pass=false\n');
-    return outcome.kind === 'stale' ? EXIT_CLEAN : EXIT_FINDINGS;
+    return outcome.kind === 'refused' ? EXIT_FINDINGS : EXIT_CLEAN;
   }
   appendFileSync(output, `pass=true\npr=${outcome.pr}\nsha=${outcome.sha}\nchecks=${outcome.checks}\npaths=${paths.join(',')}\n`);
   return EXIT_CLEAN;

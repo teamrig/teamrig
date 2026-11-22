@@ -7,7 +7,8 @@ import { isRecord, type JsonRecord } from '../lib/guards.ts';
  * - `releaseGate` reads GitHub with the job's read-only token and passes only the one open release pull request
  *   whose head is the head ci just passed, a single commit holding nothing but the version raises and the notes
  *   (`releaseRefusal`), with every check on that head green: a skipped check only when no rule requires it, and the
- *   summary check from GitHub Actions itself. Anything it cannot read, or reads in an unexpected shape, refuses.
+ *   summary check from GitHub Actions itself. Anything it cannot read, or reads in an unexpected shape, refuses. The
+ *   release clock (`clockHold`, tools/release/channels.ts) may hold a release that would pass until its slot (T5133).
  * - `mergeRelease` mints a short-lived token of the teamrig-release App for this repository alone, merges that head
  *   pinned by its sha, comments on the pull request, and revokes the token.
  * Refusals and comments name paths, checks and reasons in code spans and never echo pull request text.
@@ -112,6 +113,8 @@ export type GateOutcome =
   | { readonly kind: 'pass'; readonly pr: number; readonly sha: string; readonly checks: number }
   /** Nothing to merge from this run: the branch moved past its head, or no release pull request is open. */
   | { readonly kind: 'stale'; readonly reason: string }
+  /** A release that may merge, but not yet: the release clock holds it (T5133). */
+  | { readonly kind: 'held'; readonly reason: string }
   | { readonly kind: 'refused'; readonly reason: string };
 
 export interface GateDeps {
@@ -120,6 +123,8 @@ export interface GateDeps {
   readonly token: string;
   /** Why the release head's change may not merge, read from git's tree data (`releaseRefusal`), or null. */
   readonly filesRefusal: (sha: string) => string | null;
+  /** Why the release clock holds a release now, given when the last release pull request merged (null: never), or null. */
+  readonly clockHold: (lastMerge: Date | null) => string | null;
 }
 
 /** One check that a rule requires on main: its name, and the App that must report it when the rule names one. */
@@ -163,6 +168,12 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
   if (fieldString(pullHead, 'sha', 'pull.head') !== sha) return { kind: 'stale', reason: `the release branch moved past ${codeSpan(sha)}: the ci run on its new head decides` };
   const pullRefusal = releasePullRefusal(pull, target);
   if (pullRefusal !== null) return { kind: 'refused', reason: pullRefusal };
+  const closed = listOf(
+    await get(`/pulls?state=closed&base=${encodeURIComponent(target.main)}&head=${encodeURIComponent(`${owner}:${target.head}`)}&sort=updated&direction=desc&per_page=${PAGE}`),
+    'closed pull list',
+  );
+  const hold = deps.clockHold(lastMergeOf(closed));
+  if (hold !== null) return { kind: 'held', reason: hold };
 
   const files = deps.filesRefusal(sha);
   if (files !== null) return { kind: 'refused', reason: `the change is more than a release: ${codeSpan(files)}` };
@@ -176,6 +187,23 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
     return { kind: 'refused', reason: `the head's commit status is ${codeSpan(fieldString(status, 'state', 'combined status'))}` };
   }
   return { kind: 'pass', pr, sha, checks: runs.filter((one) => one.conclusion === 'success').length };
+}
+
+/**
+ * When the newest of these closed release pull requests merged, or null when none did. release-please reuses its one
+ * branch for every release, so the newest hundred updated cover the last merge; a closed one never merged has null.
+ */
+export function lastMergeOf(closed: readonly JsonRecord[]): Date | null {
+  let last: Date | null = null;
+  for (const [index, pull] of closed.entries()) {
+    const merged = pull['merged_at'];
+    if (merged === null || merged === undefined) continue;
+    if (typeof merged !== 'string') throw new Error(`GitHub's closed pull list[${index}].merged_at is not a time`);
+    const at = new Date(merged);
+    if (Number.isNaN(at.getTime())) throw new Error(`GitHub's closed pull list[${index}].merged_at is not a time`);
+    if (last === null || at.getTime() > last.getTime()) last = at;
+  }
+  return last;
 }
 
 /** Why the ci run is not a passed run of release.yml's dispatch on the release branch of this repository, or null. */
