@@ -1272,8 +1272,8 @@ describe('teamrig statusline', () => {
     const kit = new CliHarness(LIMITED);
     assert.deepEqual(await kit.run(['statusline'], { stdin: 'not json' }), {
       code: EXIT.ok,
-      stdout: ['Claude'],
-      stderr: ['teamrig statusline: the status input is not Claude Code status JSON with a session id; nothing saved'],
+      stdout: ['Claude Code'],
+      stderr: ["teamrig statusline: the status input is not Claude Code's status JSON with a session id; nothing saved"],
     });
     const files = new FaultyFiles(kit.files).fail('write', join(LIVE, SNAPSHOT), systemError('EACCES'));
     assert.deepEqual(await kit.run(['statusline'], { stdin: status(APP), files }), {

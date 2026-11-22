@@ -18,6 +18,7 @@ import {
   hooksOf,
   hostHomeIfKnown,
   hostHomeOf,
+  hostNameIfKnown,
   hostNameOf,
   hostOf,
   identityOf,
@@ -580,5 +581,13 @@ describe('hostNameOf', () => {
 
   it('refuses with the reason of a host that does not say who it is', () => {
     assert.throws(() => hostNameOf({ host: bare, env: {}, platform: 'linux' }), (error) => error instanceof RefusedError && error.message === 'no session of the host is told');
+  });
+});
+
+describe('hostNameIfKnown', () => {
+  it('gives the name of the host the run is in, or undefined on one that does not say who it is', () => {
+    const world = quietWorld();
+    assert.equal(hostNameIfKnown({ host: world.host, env: {}, platform: world.platform }), 'Claude Code');
+    assert.equal(hostNameIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
   });
 });

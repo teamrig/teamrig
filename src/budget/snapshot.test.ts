@@ -363,7 +363,14 @@ describe('statusLineText', () => {
   it('names the model, where the session works, and the plan windows it knows, the week beside where the pace line stands', () => {
     assert.equal(statusLineText(both, { folder: 'app', branch: 'main', pacePct: 53.4 }), 'Opus 5.5, app on main, week 57% (pace 53%), 5h 6%');
     assert.equal(statusLineText(both, { folder: 'app', branch: 'main' }), 'Opus 5.5, app on main, week 57%, 5h 6%');
-    assert.equal(statusLineText(snapshot({ model: null, rateLimits: null }), {}), 'Claude');
+  });
+
+  it("shows the host's name in the model's place when the input names no model, and neither when the host names none", () => {
+    const unnamed = snapshot({ model: null, rateLimits: null });
+    assert.equal(statusLineText(unnamed, { host: 'Some CLI' }), 'Some CLI');
+    assert.equal(statusLineText(both, { host: 'Some CLI' }), 'Opus 5.5, week 57%, 5h 6%', 'the model wins');
+    assert.equal(statusLineText(unnamed, { folder: 'app', effort: 'high' }), 'app');
+    assert.equal(statusLineText(unnamed, {}), '');
   });
 
   it('shows a rush in force after the plan windows', () => {
@@ -381,9 +388,9 @@ describe('statusLineText', () => {
     assert.equal(statusLineText(both, { folder: 'app' }), 'Opus 5.5, app, week 57%, 5h 6%');
   });
 
-  it('shows the effort level right after the model, or after Claude when the input names no model', () => {
+  it("shows the effort level right after the model, or after the host's name when the input names no model", () => {
     assert.equal(statusLineText(both, { effort: 'high', folder: 'app', branch: 'main', pacePct: 53.4 }), 'Opus 5.5 (high), app on main, week 57% (pace 53%), 5h 6%');
-    assert.equal(statusLineText(snapshot({ model: null, rateLimits: null }), { effort: 'xhigh' }), 'Claude (xhigh)');
+    assert.equal(statusLineText(snapshot({ model: null, rateLimits: null }), { host: 'Some CLI', effort: 'xhigh' }), 'Some CLI (xhigh)');
   });
 
   it("leads the meeting tab's line with the coloured meeting title, and ends every other tab's in the coloured meeting name (T2985, #1675)", () => {

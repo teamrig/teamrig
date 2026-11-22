@@ -428,6 +428,15 @@ export function stepsIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platfor
   return isUnsupported(steps) ? undefined : steps;
 }
 
+/**
+ * The run's host's name as people know it, or undefined on a host with no launcher: for a caller that goes on
+ * without it, such as the status line, which never fails.
+ */
+export function hostNameIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): string | undefined {
+  const { launcher } = hostOf(runtime);
+  return isUnsupported(launcher) ? undefined : launcher.programName;
+}
+
 /** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
 export function hostNameOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): string {
   const { launcher } = hostOf(runtime);
