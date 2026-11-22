@@ -2,7 +2,7 @@
 
 Two small files, one minute.
 
-1. Install the plugin (the install commands in the [README](../README.md#get-started)). Claude Code puts the `teamrig` command on the path of each session's Bash and PowerShell tools.
+1. Install the plugin (the install commands in the [README](../README.md#get-started)). Claude Code puts the `teamrig` command on the path of each session's Bash and PowerShell tools, and the first session start puts it on your own PATH, for terminals you open from then on.
 2. Describe your team in `~/.teamrig/teams/<team>/config.json`:
    ```json
    { "configVersion": 9, "sessions": ["lead", "api", "web", "data"], "roles": { "lead": "lead" } }

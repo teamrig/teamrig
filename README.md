@@ -34,7 +34,8 @@ claude plugin install teamrig-pane@teamrig-pane
 ```
 
 Both repositories are public, so no GitHub account or key is needed: Claude Code clones over SSH when you have a key,
-else over HTTPS. The plugin brings its own `teamrig` command, which every tab's Bash tool finds on its PATH.
+else over HTTPS. The plugin brings its own `teamrig` command, which every tab's Bash tool finds on its PATH; after the first
+session start, terminals you open yourself find it too.
 
 Open Claude Code in your project (in a tab already open, type `/reload-plugins` first), ask for a team, and tell your
 lead what you want done. No config files to write. The first session start lists the secret deny lines your Claude
