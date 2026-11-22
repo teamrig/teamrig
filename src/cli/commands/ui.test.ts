@@ -16,6 +16,10 @@ const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
 const WITH_UI = { ...TEAM, ui: { path: ENTRY } };
 
+function argsOf(flags: Readonly<Record<string, string>> = {}): ParsedArgs {
+  return { command: 'ui', positionals: [], flags: new Map(Object.entries(flags)), switches: new Set(), rest: [], help: false, common: new Map() };
+}
+
 function world(): { processes: FakeProcesses; probe: FakePathProbe } {
   return { processes: new FakeProcesses(), probe: new FakePathProbe({ files: [ENTRY] }) };
 }
@@ -63,11 +67,12 @@ describe('teamrig ui', () => {
     assert.deepEqual(processes.ran, []);
   });
 
-  it('is refused without ui.path, saying no released UI is pinned and naming the key', async () => {
+  it('is refused without ui.path in a build that pins no release, saying so and naming the key', async () => {
     const { processes, probe } = world();
-    const result = await new CliHarness().run(['ui'], { processes, probe });
-    assert.equal(result.code, 2);
-    assert.match(result.stdout.join('\n'), /^REFUSED no released UI is pinned in this teamrig yet; set ui\.path /);
+    await assert.rejects(
+      uiCommand(undefined)(argsOf(), new CliHarness().runtime({ processes, probe })),
+      (error: unknown) => error instanceof RefusedError && /^no released UI is pinned in this teamrig yet; set ui\.path /.test(error.message),
+    );
     assert.deepEqual(processes.ran, []);
   });
 
@@ -110,10 +115,6 @@ describe('teamrig ui', () => {
     const PIN: UiPin = { version: VERSION, url: URL, sha256: sha256Hex(new TextEncoder().encode(ARCHIVE)) };
     const RELEASED_ENTRY = `${normalisePath(KIT)}/ui/${VERSION}-${PIN.sha256}/ui/main.js`;
     const CALLER_ENV = { PATH: '/bin', LANG: 'C.UTF-8', GH_TOKEN: 'token', NODE_OPTIONS: '--require /x.js' };
-
-    function argsOf(flags: Readonly<Record<string, string>> = {}): ParsedArgs {
-      return { command: 'ui', positionals: [], flags: new Map(Object.entries(flags)), switches: new Set(), rest: [], help: false, common: new Map() };
-    }
 
     it('fetches and installs the pinned UI once, then runs it with only the allowed variables', async () => {
       const kit = new CliHarness();
