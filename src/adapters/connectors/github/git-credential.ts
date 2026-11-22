@@ -1,4 +1,4 @@
-import { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../../../core/git-credential.ts';
+import { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../../../plugin-api/index.ts';
 import { NoAccessError, type RepoTokens } from './tokens.ts';
 
 /** The user name GitHub takes with a token as the password over https. */

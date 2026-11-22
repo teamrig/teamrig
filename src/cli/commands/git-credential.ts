@@ -1,5 +1,4 @@
-import { githubGitAnswer } from '../../adapters/connectors/github/git-credential.ts';
-import { RepoTokens } from '../../adapters/connectors/github/tokens.ts';
+import { gitKeys } from '../../composition/git-keys.ts';
 import { CREDENTIAL_QUIT, credentialOperationOf, parseCredentialRequest } from '../../core/git-credential.ts';
 import type { ParsedArgs } from '../args.ts';
 import { UsageError } from '../args.ts';
@@ -24,7 +23,7 @@ export async function gitCredential(args: ParsedArgs, runtime: Pick<CliRuntime, 
   const answer =
     parsed.kind === 'refused'
       ? { stdout: CREDENTIAL_QUIT, note: `teamrig git-credential: no key given: ${parsed.why}` }
-      : await githubGitAnswer(parsed.ask, new RepoTokens(runtime.credentials, {}));
+      : await gitKeys(runtime.credentials).answer(parsed.ask);
   for (const line of answer.stdout.split('\n')) {
     if (line !== '') {
       runtime.out.stdout(line);

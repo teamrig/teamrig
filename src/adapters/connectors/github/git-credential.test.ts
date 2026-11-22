@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { CredentialAsk } from '../../../core/git-credential.ts';
+import type { CredentialAsk } from '../../../plugin-api/index.ts';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { githubGitAnswer, githubHelperScope, repoOfGitPath } from './git-credential.ts';
 import { RepoTokens } from './tokens.ts';

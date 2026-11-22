@@ -182,6 +182,8 @@ export {
   type JsonRecord,
 } from '../core/guards.ts';
 export type { Env } from '../core/home.ts';
+// git's credential helper protocol: what a connector answers git's `get` with, and where its helper is wired.
+export { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../core/git-credential.ts';
 export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/http.ts';
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from '../core/printable.ts';

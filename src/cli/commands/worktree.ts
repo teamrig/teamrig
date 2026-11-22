@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
-import { githubHelperScope } from '../../adapters/connectors/github/git-credential.ts';
-import { RepoTokens } from '../../adapters/connectors/github/tokens.ts';
+import { gitKeys } from '../../composition/git-keys.ts';
 import { wireCredentialHelper } from '../../worktree/credential-helper.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
 import type { DeliveryRepoConfig, KitConfig } from '../../config/types.ts';
@@ -54,11 +53,11 @@ export async function add(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
  * refusal leaves git as it was and is said as a NOTE, the worktree being made; a config write that fails is FAILED.
  */
 async function wireHelper(mainDir: string, runtime: CliRuntime): Promise<ExitCode> {
-  const keys = new RepoTokens(runtime.credentials, {});
+  const keys = gitKeys(runtime.credentials);
   const { node, execArgv, script } = runtime.self;
   const end = await wireCredentialHelper(
     { mainDir, node, execArgv, script, platform: runtime.platform },
-    { git: runtime.worktrees.git, scopeOf: async (url) => await githubHelperScope(url, keys) },
+    { git: runtime.worktrees.git, scopeOf: async (url) => await keys.scopeOf(url) },
   );
   switch (end.kind) {
     case 'wired':
