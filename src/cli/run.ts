@@ -84,6 +84,7 @@ const compactCommands = () => import('./commands/compact.ts');
 const rulesCommands = () => import('./commands/rules.ts');
 const ruleConflictCommands = () => import('./commands/rule-conflicts.ts');
 const skillsCommands = () => import('./commands/skills.ts');
+const skillStepCommand = () => import('./commands/skill-step.ts');
 const openCommands = () => import('./commands/open.ts');
 const meetCommands = () => import('./commands/meet.ts');
 const ownerCommands = () => import('./commands/owner.ts');
@@ -203,6 +204,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
     flags: ['from', 'to', 'baseline-from', 'baseline-to'],
     load: async () => (await skillsCommands()).scorecard,
   },
+  'skills step': { effect: 'read', flags: ['for'], load: async () => (await skillStepCommand()).skillStep },
   start: { effect: 'write', flags: ['session'], switches: ['all'], load: async () => (await startCommands()).start },
   'meeting start': { effect: 'write', flags: ['session', 'about', 'meets', 'minutes', 'with', 'tasks', 'brief'], load: async () => (await meetingCommands()).meetingStart },
   'meeting agenda': { effect: 'write', flags: ['session'], load: async () => (await meetingCommands()).meetingAgenda },
@@ -503,6 +505,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       loads, missed uses (a call matching its "Signature: \`<regex>\`" line with no load before it), calls
       and errors per run, against a baseline (default: the last 7 UTC days, and the 7 before); each run
       reads only what the transcripts gained since the last one
+  skills step <step id> [--for <ref>]   prints how the tool in use does one step a skill names (such as
+      tracker.link-child): a host step's text is the running host's; a connector step's is the connector
+      whose prefix starts --for's ref (gh:owner/name#12), else each one the team config uses; with none
+      serving it, the step's neutral line and the adapters that would serve it
   start [--session <id|name>] [--all]   the start of a work block in one call: the team's time, how far
       the checkout is behind origin's main as last fetched (only when it is), today's scheduled meetings
       it is in (the lead: all), the unread inbox lines (marked read), the session's tasks, the other

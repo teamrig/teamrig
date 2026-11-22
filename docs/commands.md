@@ -98,6 +98,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       loads, missed uses (a call matching its "Signature: `<regex>`" line with no load before it), calls
       and errors per run, against a baseline (default: the last 7 UTC days, and the 7 before); each run
       reads only what the transcripts gained since the last one
+  skills step <step id> [--for <ref>]   prints how the tool in use does one step a skill names (such as
+      tracker.link-child): a host step's text is the running host's; a connector step's is the connector
+      whose prefix starts --for's ref (gh:owner/name#12), else each one the team config uses; with none
+      serving it, the step's neutral line and the adapters that would serve it
   start [--session <id|name>] [--all]   the start of a work block in one call: the team's time, how far
       the checkout is behind origin's main as last fetched (only when it is), today's scheduled meetings
       it is in (the lead: all), the unread inbox lines (marked read), the session's tasks, the other

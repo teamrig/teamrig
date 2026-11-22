@@ -3612,6 +3612,34 @@ missed: a call matching the skill's Signature line with no load in the 30 calls 
 Read 14 files, 38.2 MB this run.
 ```
 
+### teamrig skills step
+
+Prints how the tool your team uses does one step a skill names, when no teamrig command does that step: how the
+tracker files a child issue under its parent, where the code host takes a private security report. A skill says
+"run `teamrig skills step <id>` and follow it", so it stays the same whichever host and tools a team runs. The steps
+are `tracker.link-child`, `codehost.private-report`, `codehost.fetch-outside-change`, `host.rename`,
+`host.slim-setup` and `host.denial-sources`. A host step prints the running host's text; a connector step prints
+the text of each connector the team config uses, or only the one `--for` names. When none in use serves the step it
+prints the step's neutral line and the tools that would serve it. Only the tools teamrig ships print a text.
+Refused (exit 64): an id that is no step, `--for` on a host step, or a ref no connector's prefix starts.
+
+Flags:
+
+- `--for <ref>`: a ref such as an issue's, whose prefix picks the connector, whatever the team config uses.
+
+Example:
+
+```sh
+teamrig skills step tracker.link-child
+```
+
+Output:
+
+```text
+<the connector's name>:
+<its text of the step: where to click, or the line to run>
+```
+
 ### teamrig start
 
 Prints what you read at the start of a work block, in one call: the time on the team's clock, today's scheduled

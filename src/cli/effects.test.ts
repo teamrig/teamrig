@@ -39,6 +39,7 @@ const EXPECTED = {
   rules: 'read',
   'rules scan': 'read',
   'skills scorecard': 'read',
+  'skills step': 'read',
   'rules keep': 'write',
   'rules forget': 'write',
   'rules clear': 'write',
