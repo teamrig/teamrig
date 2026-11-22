@@ -32,34 +32,59 @@ function rulesOf(ruleset: JsonRecord): ReadonlyMap<string, JsonRecord> {
 
 /** GitHub Actions' app id: a required check from any other app with the same name does not satisfy it. */
 const GITHUB_ACTIONS = 15368;
-/** The admin repository role, the only bypass actor and only through a pull request. */
-const ADMIN_ROLE = 5;
+/**
+ * Who may skip a ruleset of main, each only through a pull request: the admin repository role (the maintainer) and the
+ * teamrig-release GitHub App, which the release merge workflow merges the release pull request as (RELEASE_APP_ID).
+ */
+const PULL_REQUEST_BYPASS = [
+  { actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'pull_request' },
+  { actor_id: 5865151, actor_type: 'Integration', bypass_mode: 'pull_request' },
+];
 
 const main = readRecord('.github/rulesets/main.json');
+const checks = readRecord('.github/rulesets/main-checks.json');
 const review = readRecord('.github/rulesets/main-review.json');
 
 describe('rulesets for main', () => {
-  it('both guard the default branch and are on', () => {
-    for (const ruleset of [main, review]) {
+  it('all three guard the default branch and are on', () => {
+    for (const ruleset of [main, checks, review]) {
       assert.equal(ruleset['target'], 'branch');
       assert.equal(ruleset['enforcement'], 'active');
       assert.deepEqual(recordField(ruleset, 'conditions'), { ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] } });
     }
   });
 
-  it('main lets no one push, force-push or delete, and merges only a pull request whose summary check passed', () => {
+  it('a ruleset anyone may bypass holds neither the CI check nor linear history, so no merge skips them (T4916)', () => {
+    // A bypass skips every rule of its ruleset: CI and linear history live where the bypass list is empty.
+    for (const ruleset of [main, review]) {
+      const rules = rulesOf(ruleset);
+      assert.notDeepEqual(ruleset['bypass_actors'], []);
+      assert.equal(rules.has('required_status_checks'), false, String(ruleset['name']));
+      assert.equal(rules.has('required_linear_history'), false, String(ruleset['name']));
+    }
+    assert.deepEqual(checks['bypass_actors'], [], 'no one bypasses main checks, the maintainer and the release App included');
+  });
+
+  it('main lets no one push, force-push or delete, and lands a pull request only through the rebasing merge queue', () => {
     const rules = rulesOf(main);
-    assert.deepEqual([...rules.keys()].sort(), ['deletion', 'non_fast_forward', 'pull_request', 'required_linear_history', 'required_status_checks']);
-    assert.deepEqual(main['bypass_actors'], [], 'no one bypasses main, the maintainer included');
-    const checks = rules.get('required_status_checks') ?? {};
-    assert.equal(checks['strict_required_status_checks_policy'], true, 'a pull request is tested on the main it merges into');
-    const summary = /^ {2}summary:\n {4}name: (.+)$/m.exec(read('.github/workflows/ci.yml'))?.[1];
-    assert.ok(summary !== undefined, "ci.yml's summary job has a name");
-    assert.deepEqual(checks['required_status_checks'], [{ context: summary, integration_id: GITHUB_ACTIONS }]);
+    assert.deepEqual([...rules.keys()].sort(), ['deletion', 'merge_queue', 'non_fast_forward', 'pull_request']);
+    assert.deepEqual(main['bypass_actors'], PULL_REQUEST_BYPASS);
+    assert.equal(rules.get('merge_queue')?.['merge_method'], 'REBASE');
     assert.deepEqual(rules.get('pull_request')?.['allowed_merge_methods'], ['rebase'], 'rebase merges keep the history linear');
   });
 
-  it('main review asks a code owner to approve the last push, which only the maintainer bypasses through a pull request', () => {
+  it('main checks lands only a pull request whose summary check from GitHub Actions passed, on a linear history', () => {
+    const rules = rulesOf(checks);
+    assert.deepEqual([...rules.keys()].sort(), ['deletion', 'non_fast_forward', 'required_linear_history', 'required_status_checks']);
+    const required = rules.get('required_status_checks') ?? {};
+    // The merge queue tests each pull request on the newest main, so the branch need not be up to date itself.
+    assert.equal(required['strict_required_status_checks_policy'], false);
+    const summary = /^ {2}summary:\n {4}name: (.+)$/m.exec(read('.github/workflows/ci.yml'))?.[1];
+    assert.ok(summary !== undefined, "ci.yml's summary job has a name");
+    assert.deepEqual(required['required_status_checks'], [{ context: summary, integration_id: GITHUB_ACTIONS }]);
+  });
+
+  it('main review asks a code owner to approve the last push, which only the maintainer and the release App bypass', () => {
     const rules = rulesOf(review);
     assert.deepEqual([...rules.keys()], ['pull_request']);
     const pull = rules.get('pull_request') ?? {};
@@ -68,7 +93,7 @@ describe('rulesets for main', () => {
     assert.equal(pull['require_last_push_approval'], true);
     assert.equal(pull['dismiss_stale_reviews_on_push'], true);
     assert.deepEqual(pull['allowed_merge_methods'], ['rebase']);
-    assert.deepEqual(review['bypass_actors'], [{ actor_id: ADMIN_ROLE, actor_type: 'RepositoryRole', bypass_mode: 'pull_request' }]);
+    assert.deepEqual(review['bypass_actors'], PULL_REQUEST_BYPASS);
   });
 
   it("CODEOWNERS makes the repository's owner the code owner of every path", () => {

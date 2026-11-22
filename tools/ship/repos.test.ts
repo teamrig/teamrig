@@ -118,7 +118,7 @@ test('the shipped repos.json merges no repo through the merge queue until main\'
 
 test('the shipped repos.json keeps every repo\'s merge on the whole local suite until its main requires CI (T3414); teamrig\'s does, so its merge runs the changed checks (#1464)', () => {
   const profiles = readProfiles();
-  // This repository's main requires CI (.github/rulesets/main.json), so a second full local run at merge only repeats it.
+  // This repository's main requires CI (.github/rulesets/main-checks.json), so a second full local run at merge only repeats it.
   assert.ok(rulesetRequiredChecks().length > 0, 'teamrig\'s main requires CI');
   for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).mergeChecks, slug === 'GeneralA6/teamrig' ? 'changed' : 'full', slug);
 });
@@ -134,9 +134,16 @@ test('the shipped repos.json calls regenerated exactly the dist, the version fil
   assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig-pane').regenerated, ['plugins/teamrig-pane/.claude-plugin/plugin.json', TEAMRIG_RELEASE_MANIFEST.path]);
 });
 
-/** The status checks main's ruleset requires before GitHub accepts a merge. */
+/** The rulesets that guard main, each one's file under .github/rulesets. */
+const MAIN_RULESETS = ['main.json', 'main-checks.json', 'main-review.json'];
+
+/** The status checks main's rulesets require before GitHub accepts a merge, whichever ruleset holds them (T4916). */
 function rulesetRequiredChecks(): string[] {
-  const ruleset: unknown = JSON.parse(readFileSync(new URL('../../.github/rulesets/main.json', import.meta.url), 'utf8'));
+  return MAIN_RULESETS.flatMap(file => requiredChecksOf(file));
+}
+
+function requiredChecksOf(file: string): string[] {
+  const ruleset: unknown = JSON.parse(readFileSync(new URL(`../../.github/rulesets/${file}`, import.meta.url), 'utf8'));
   assert.ok(typeof ruleset === 'object' && ruleset !== null && 'rules' in ruleset && Array.isArray(ruleset.rules));
   const contexts: string[] = [];
   for (const rule of ruleset.rules) {

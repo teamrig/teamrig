@@ -202,8 +202,8 @@ so `every check passed` reads a pass from each. Before that, the
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
 dependency review, which reads GitHub's dependency graph ([Security checks](#security-checks)):
 - It refuses a push to `main`, before any check: every change lands through a pull request. On GitHub,
-  the `main` ruleset refuses the same push from a clone without the hooks: it has no bypass actor, so no one can
-  change main outside a pull request (see [Rules on `main`](#pull-requests)).
+  the `main` rulesets refuse the same push from a clone without the hooks: their bypass actors skip them only through
+  a pull request, so no one can change main outside one (see [Rules on `main`](#pull-requests)).
 - It proves a committed tree: it refuses uncommitted changes, and a pushed commit that is not checked out.
 - It stops at the first failing check and prints its output.
 - A pass is recorded in the clone's git folder (`local-ci/<tree>.json`, shared by its worktrees), so a tree is
@@ -378,11 +378,13 @@ as how teamrig works today.
   still fire?" and wants the spec of it firing in the real flow ([Tests](#tests)). A change to the git hooks, CI, the scrub or teamrig's guards
   (`.githooks/`, `.github/`, `tools/scrub/`, `tools/ci/`, `src/hooks/`, `src/push-guard/`, `src/secret-guard/`,
   `src/package-guard/`, `src/permissions/`) also gets a security review.
-- **Rules on `main`**: `.github/rulesets/` holds the repository's rulesets, the two for `main` and the three for
-  releases, imported under Settings, Rules, Rulesets. `main` lets no one push, force-push or delete it and takes a change only through a pull request,
-  rebase-merged once its `every check passed` check passed on the newest `main`; `main review` asks a code owner
-  to approve the last push, which only the maintainer's own pull requests skip. `tools/ci/rulesets.test.ts` holds
-  them to `ci.yml` and `.github/CODEOWNERS`.
+- **Rules on `main`**: `.github/rulesets/` holds the repository's rulesets, the three for `main` and the three for
+  releases, imported under Settings, Rules, Rulesets. `main` lets no one push, force-push or delete it and takes a
+  change only through a pull request, landed by the rebasing merge queue; `main checks` lands it only once its
+  `every check passed` check from GitHub Actions passed, on a linear history; `main review` asks a code owner to
+  approve the last push. The maintainer and the `teamrig-release` App, which merges the release pull request, may
+  skip `main` and `main review` through a pull request only; no one skips `main checks`, since a bypass skips every
+  rule of its ruleset. `tools/ci/rulesets.test.ts` holds them to `ci.yml` and `.github/CODEOWNERS`.
 - **Rules on releases**: the `release` branch, which every install reads, and a `v<version>` tag, which an install
   can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
   deploy key, the rulesets' one bypass actor, whose private half is a secret of the `release` environment, which only
