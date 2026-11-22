@@ -11,7 +11,8 @@ import { slugOf } from './repos.ts';
  * consumer still calls only the old name, since teamrig refuses an old name with no alias and the caller then fails
  * (0.243.0 renamed `teamrig heavy` to `teamrig queue` and broke the git hooks of every repo that called it).
  *
- * A command is newly renamed when the tip's `src/cli/renamed.ts` maps it and main's does not, or maps it elsewhere.
+ * A command is newly renamed when the tip's `src/cli/renamed.ts` maps it and the merge-base's does not, or maps it
+ * elsewhere. The merge-base, not main, so a branch cut before main dropped a rename does not read as adding it (T4956).
  * Consumers are read on this machine: the tracked files and git hooks of each team's delivery repo checkout (but the
  * repo shipped, whose own callers the change moves), the Claude Code skills folder and each project's memory. A file
  * that names `teamrig <old>` and never `teamrig <new>` is a caller; naming both is a moved one with a fallback.
@@ -46,7 +47,7 @@ export function parseRenamedCommands(text: string): RenamedRead {
   return { ok: false, reason: `${RENAMED_FILE} never closes its "commands: {" block` };
 }
 
-/** The tip's renames that main lacks, or maps to another name. */
+/** The tip's renames that the merge-base lacks, or maps to another name. */
 export function newlyRenamed(base: ReadonlyMap<string, string>, tip: ReadonlyMap<string, string>): Map<string, string> {
   return new Map([...tip].filter(([old, renamed]) => base.get(old) !== renamed));
 }
@@ -75,6 +76,8 @@ export interface RenamedCallersDeps {
   originOf: (checkout: string) => string | null;
   /** A file's text at a revision of the repo shipped, or null when that revision lacks it. */
   gitShow: (rev: string, file: string) => string | null;
+  /** The best common ancestor of two revisions of the repo shipped, or null when git cannot find one. */
+  mergeBase: (left: string, right: string) => string | null;
   log: (line: string) => void;
 }
 
@@ -198,19 +201,31 @@ function memoryFiles(claudeDir: string, deps: RenamedCallersDeps): string[] {
     });
 }
 
+/**
+ * The revision the tip's renames are measured from: its merge-base with main, so only the branch's own renames count.
+ * With no merge-base (git failed), main itself: the stricter read, which may refuse but never lets a rename slip by.
+ */
+function sinceOf(request: RenamedCallersRequest, deps: RenamedCallersDeps): string {
+  const since = deps.mergeBase(request.base, request.tip);
+  if (since !== null) return since;
+  deps.log(`renamed callers: no merge-base of ${request.base} and ${request.tip.slice(0, 7)}, so renames are measured from ${request.base}`);
+  return request.base;
+}
+
 /** The renames `request` brings, then every consumer file still calling only an old name. */
 export function scanRenamedCallers(request: RenamedCallersRequest, deps: RenamedCallersDeps): CallersScan {
   const tipText = deps.gitShow(request.tip, RENAMED_FILE);
   if (tipText === null) return { kind: 'none' };
   const tip = parseRenamedCommands(tipText);
   if (!tip.ok) return { kind: 'unreadable', reason: `${tip.reason} at ${request.tip.slice(0, 7)}` };
-  const baseText = deps.gitShow(request.base, RENAMED_FILE);
+  const since = sinceOf(request, deps);
+  const baseText = deps.gitShow(since, RENAMED_FILE);
   if (baseText === null) {
-    deps.log(`renamed callers: ${request.base} has no ${RENAMED_FILE}, so no command counts as newly renamed`);
+    deps.log(`renamed callers: ${since} has no ${RENAMED_FILE}, so no command counts as newly renamed`);
     return { kind: 'none' };
   }
   const base = parseRenamedCommands(baseText);
-  if (!base.ok) return { kind: 'unreadable', reason: `${base.reason} at ${request.base}` };
+  if (!base.ok) return { kind: 'unreadable', reason: `${base.reason} at ${since}` };
   const renames = newlyRenamed(base.commands, tip.commands);
   if (renames.size === 0) return { kind: 'none' };
   deps.log(`renamed callers: this change renames ${[...renames].map(([old, renamed]) => `${old} to ${renamed}`).join(', ')}; reading consumer checkouts, skills and memory`);
@@ -281,6 +296,10 @@ export function realRenamedCallersDeps(dir: string, log: (line: string) => void)
     },
     originOf: checkout => gitText(['-C', checkout, 'remote', 'get-url', 'origin'])?.trim() ?? null,
     gitShow: (rev, file) => gitText(['-C', dir, 'show', `${rev}:${file}`]),
+    mergeBase: (left, right) => {
+      const sha = gitText(['-C', dir, 'merge-base', left, right])?.trim() ?? '';
+      return sha === '' ? null : sha;
+    },
     log,
   };
 }
