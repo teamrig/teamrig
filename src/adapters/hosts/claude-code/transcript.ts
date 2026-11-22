@@ -76,7 +76,7 @@ const ORIGIN_NAMES: ReadonlyMap<string, InputOrigin> = new Map<string, InputOrig
 const DAMAGED: UnreadLine = { kind: 'unread', reason: 'damaged' };
 const NOT_AN_OBJECT: UnreadLine = { kind: 'unread', reason: 'not-an-object' };
 
-type Base = Pick<TranscriptEntry, 'at' | 'id' | 'parent' | 'session' | 'thread' | 'meta' | 'job' | 'planSlug'>;
+type Base = Pick<TranscriptEntry, 'at' | 'id' | 'parent' | 'session' | 'thread' | 'meta' | 'job'>;
 
 function threadOf(entry: JsonRecord): Base['thread'] {
   const sidechain = entry['isSidechain'];
@@ -94,9 +94,7 @@ function jobOf(entry: JsonRecord): Base['job'] {
   return stringField(entry, 'entrypoint') === undefined ? undefined : stringField(entry, 'sessionKind') === 'bg';
 }
 
-/** Claude Code names a session's plan file by the `slug` it stamps on the session's lines. */
 function baseOf(entry: JsonRecord): Base {
-  const planSlug = stringField(entry, 'slug');
   return {
     at: instantField(entry, 'timestamp'),
     id: stringField(entry, 'uuid'),
@@ -105,7 +103,6 @@ function baseOf(entry: JsonRecord): Base {
     thread: threadOf(entry),
     meta: entry['isMeta'] === true,
     job: jobOf(entry),
-    ...(planSlug === undefined ? {} : { planSlug }),
   };
 }
 
@@ -407,6 +404,8 @@ function canBe(line: string, only: readonly EntryKind[]): boolean {
 }
 
 const NOT_BLANK = /\S/;
+/** Claude Code names a session's plan file by the `slug` it stamps on each of the session's lines. */
+const SLUG_KEY = '"slug":"';
 
 /** Claude Code's transcript lines as teamrig's entries. */
 export const transcriptReader: TranscriptReader = {
@@ -416,5 +415,15 @@ export const transcriptReader: TranscriptReader = {
     }
     const found = entryOfLine(line);
     return found.kind === 'unread' || only === undefined || only.includes(found.kind) ? found : undefined;
+  },
+  // One scan from the end, never a parse: each line carries the slug, so the last key found is the session's.
+  lastPlanSlug(text) {
+    const start = text.lastIndexOf(SLUG_KEY);
+    if (start < 0) {
+      return undefined;
+    }
+    const from = start + SLUG_KEY.length;
+    const end = text.indexOf('"', from);
+    return end < 0 ? undefined : text.slice(from, end);
   },
 };

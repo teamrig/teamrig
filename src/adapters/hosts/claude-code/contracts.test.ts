@@ -48,6 +48,7 @@ const transcriptWorld: TranscriptWorld = {
   title: (text) => JSON.stringify({ type: 'custom-title', customTitle: text, sessionId: 'session-1' }),
   unknown: () => JSON.stringify({ type: 'file-history-snapshot', messageId: 'message-1', snapshot: {} }),
   torn: () => promptLine(AT, 'a prompt the write never finished').slice(0, 40),
+  planned: (slug) => JSON.stringify({ type: 'user', message: { role: 'user', content: 'go on' }, slug, timestamp: AT }),
 };
 
 /** A window as Claude Code's status input holds it, its reset in epoch seconds. */

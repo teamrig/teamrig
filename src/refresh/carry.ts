@@ -98,21 +98,10 @@ function snapshotOf(tasks: unknown): Map<string, CarriedCron> {
   return crons;
 }
 
-/**
- * The session's plan slug, from the last entry that names one, read from the end: a host that stamps it on each
- * line answers at the last line, and a line that cannot be read is passed over.
- */
+/** The session's plan slug as the host's reader finds it, kept only when it is a safe file name. */
 function lastSlugOf(reader: TranscriptReader, text: string): string | undefined {
-  let end = text.length;
-  while (end > 0) {
-    const start = text.lastIndexOf('\n', end - 1) + 1;
-    const entry = reader.entry(text.slice(start, end));
-    if (entry !== undefined && entry.kind !== 'unread' && entry.planSlug !== undefined) {
-      return SLUG.test(entry.planSlug) ? entry.planSlug : undefined;
-    }
-    end = start - 1;
-  }
-  return undefined;
+  const slug = reader.lastPlanSlug(text);
+  return slug !== undefined && SLUG.test(slug) ? slug : undefined;
 }
 
 /** Follows a transcript's scheduling calls in order, from its last cron snapshot on. */
