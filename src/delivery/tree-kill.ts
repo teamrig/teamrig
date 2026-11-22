@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { lineShellOf, powerShellSpec, type ScriptRun } from './line-shell.ts';
+import { lineShellOf, powerShellSpec, type LineShellSpec, type ScriptRun, type ScriptShell } from './line-shell.ts';
 import { treeOf, wholeNumberTriples, type ProcessLink } from './processes.ts';
 
 /**
@@ -202,16 +202,24 @@ export interface SweepSession {
 /** Opens the host for one sweep. */
 export type SweepOpener = () => SweepSession;
 
+/** Starts a shell kept open across scripts, as `lineShellOf` does. */
+export type ShellOpener = (spec: LineShellSpec) => ScriptShell;
+
 /**
- * The real Windows host over one PowerShell kept open for the sweep. A sweep lists, kills and lists again at least, and
- * a fresh PowerShell costs about 0.45 s to launch and 0.6 s more to load the CIM module before its first list; one
- * shell pays that once, and its later lists take about 0.4 s (T5031). A call that hangs ends that shell, and the next
- * call starts another.
+ * The Windows host over one PowerShell kept open for the sweep, from `openShell`. A sweep lists, kills and lists again
+ * at least, and a fresh PowerShell costs about 0.45 s to launch and 0.6 s more to load the CIM module before its first
+ * list; one shell pays that once, and its later lists take about 0.4 s (T5031). A call that hangs ends that shell, and
+ * the next call starts another. Closing the session closes the shell.
  */
-export const openWindowsSweep: SweepOpener = () => {
-  const shell = lineShellOf(powerShellSpec(HOST_CALL_TIMEOUT_MS, LIST_MAX_BUFFER));
-  return { host: windowsSweepHostOf(shell.run), close: shell.close };
-};
+export function windowsSweepOpenerOf(openShell: ShellOpener): SweepOpener {
+  return () => {
+    const shell = openShell(powerShellSpec(HOST_CALL_TIMEOUT_MS, LIST_MAX_BUFFER));
+    return { host: windowsSweepHostOf(shell.run), close: shell.close };
+  };
+}
+
+/** The real Windows host over one PowerShell kept open for each sweep. */
+export const openWindowsSweep: SweepOpener = windowsSweepOpenerOf(lineShellOf);
 
 /**
  * On Windows the sweep ends the tree: killing only the shell would leave the command it started running. When the host

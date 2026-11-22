@@ -8,12 +8,14 @@ import {
   sweepTree,
   SWEEP_ROUNDS,
   windowsSweepHostOf,
+  windowsSweepOpenerOf,
   type HeldProcess,
+  type ShellOpener,
   type StartedProcess,
   type SweepHost,
   type SweepOpener,
 } from './tree-kill.ts';
-import type { ScriptRun } from './line-shell.ts';
+import type { LineShellSpec, ScriptRun } from './line-shell.ts';
 import { FakeSweepHost } from '../testing/fake-sweep-host.ts';
 
 /** A process the caller holds, as Node's ChildProcess: it records each signal sent through its handle. */
@@ -218,6 +220,27 @@ describe('windowsSweepHostOf', () => {
   it('lists nothing when PowerShell fails', async () => {
     const { run } = recorder();
     assert.equal(await windowsSweepHostOf(run).list(), undefined);
+  });
+});
+
+describe('windowsSweepOpenerOf', () => {
+  it('opens one PowerShell for the session, lists and kills through it, and closes it with the session', async () => {
+    const specs: LineShellSpec[] = [];
+    const table = new ProcessTable(STEP, new Map());
+    let closes = 0;
+    const openShell: ShellOpener = (spec) => {
+      specs.push(spec);
+      return { run: table.run, close: () => (closes += 1) };
+    };
+    const session = windowsSweepOpenerOf(openShell)();
+    assert.equal(await sweepTree(10, session.host), 'swept');
+    session.close();
+    assert.deepEqual(
+      specs.map((spec) => [spec.file, spec.args]),
+      [['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '-']]],
+    );
+    assert.deepEqual(table.pids(), [1, 20]);
+    assert.equal(closes, 1);
   });
 });
 
