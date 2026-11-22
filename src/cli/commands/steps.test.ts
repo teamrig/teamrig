@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { DEFAULT_STEPS } from '../../config/defaults.ts';
 import { CONFIG_MIGRATIONS, type ConfigFormat } from '../../config/migrate.ts';
 import { CONFIG_VERSION } from '../../config/types.ts';
 import { settingsWriteRefusal } from '../../core/settings-writers.ts';
@@ -60,7 +61,7 @@ describe('teamrig steps run', () => {
         [
           `PREVIEW ${TITLE}; nothing changed`,
           CHANGE,
-          `NOTE a backup goes to ${BACKUPS} first and stays until this step runs again. Take it: /teamrig steps run config-format --yes`,
+          `NOTE a backup goes to ${BACKUPS} first and stays until this step runs again or teamrig start removes it after ${DEFAULT_STEPS.backupDays} days [steps.backupDays]. Take it: /teamrig steps run config-format --yes`,
         ],
       ],
     );

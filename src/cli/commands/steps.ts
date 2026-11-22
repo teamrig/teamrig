@@ -36,7 +36,8 @@ export async function list(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
 
 /**
  * `steps run <id> [--yes]`: without --yes, what the step changes and where its backup goes; with it, the step taken
- * after a backup, which stays until the step's next run. A settings writer: the person runs it, never an agent.
+ * after a backup, which stays until the step's next run replaces it or `start` removes it past `steps.backupDays`
+ * (src/cli/step-backup-sweep.ts), whichever comes first. A settings writer: the person runs it, never an agent.
  */
 export async function run(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const [id, extra] = args.positionals;
@@ -60,7 +61,10 @@ export async function run(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
   if (!args.switches.has(WRITE_SWITCH)) {
     runtime.out.stdout(`PREVIEW ${step.title}; nothing changed`);
     step.preview.forEach((line) => runtime.out.stdout(`  ${line}`));
-    runtime.out.stdout(`NOTE a backup goes to ${kit.paths.backups} first and stays until this step runs again. Take it: ${step.command}`);
+    const days = requireConfig(kit, runtime, 'read').steps.backupDays;
+    runtime.out.stdout(
+      `NOTE a backup goes to ${kit.paths.backups} first and stays until this step runs again or ${KIT_NAME} start removes it after ${days} days [steps.backupDays]. Take it: ${step.command}`,
+    );
     return EXIT.ok;
   }
   const done = await take(runtime, kit);
