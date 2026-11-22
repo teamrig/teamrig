@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { declaration } from './declaration.ts';
+import { launchArgs, PROGRAM } from './launch-args.ts';
+import { backgroundJobSession, isForkOf, sessionPlaceOf } from './session-command-lines.ts';
 import { sessionLauncher } from './session-launcher.ts';
 
 const NONE = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
@@ -24,6 +26,15 @@ describe("Codex CLI's session launcher", () => {
     const launcher = sessionLauncher({ CODEX_THREAD_ID: 't' });
     assert.equal(launcher.programName, 'Codex CLI');
     assert.equal(launcher.variables, declaration.sessionVariables);
+  });
+
+  it("starts Codex's own program with its launch arguments and reads forks with its command-line reader", () => {
+    const launcher = sessionLauncher({});
+    assert.equal(launcher.program, PROGRAM);
+    assert.equal(launcher.launchArgs, launchArgs);
+    assert.equal(launcher.isForkOf, isForkOf);
+    assert.equal(launcher.backgroundJobSession, backgroundJobSession);
+    assert.equal(launcher.sessionPlaceOf, sessionPlaceOf);
   });
 
   it("reads the session id from the mark its declaration names", () => {

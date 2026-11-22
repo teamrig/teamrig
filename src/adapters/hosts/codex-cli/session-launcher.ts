@@ -1,6 +1,8 @@
 import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
+import { launchArgs, PROGRAM } from './launch-args.ts';
+import { backgroundJobSession, isForkOf, sessionPlaceOf } from './session-command-lines.ts';
 import { isCodexSessionProcess } from './session-process.ts';
 import { AGENT_MARK } from './session-variables.ts';
 
@@ -18,6 +20,8 @@ function told(env: HostDeps['env'], name: string): string | undefined {
 export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
   return {
     programName: declaration.name,
+    program: PROGRAM,
+    launchArgs,
     variables: declaration.sessionVariables,
     childEnv: CHILD_ENVIRONMENT,
     identity: () => ({
@@ -28,5 +32,8 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
       forcedEffort: undefined,
     }),
     isSessionProcess: isCodexSessionProcess,
+    isForkOf,
+    backgroundJobSession,
+    sessionPlaceOf,
   };
 }
