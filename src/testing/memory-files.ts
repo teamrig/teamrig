@@ -11,6 +11,7 @@ import type { PathKind, PathProbe } from '../core/path-probe.ts';
 export class MemoryFiles implements Files {
   private readonly contents = new Map<string, string>();
   private readonly folders = new Set<string>();
+  private readonly links = new Map<string, string>();
   private readonly changedBy = new Map<string, number>();
   private readonly changedAt = new Map<string, number>();
   private readonly clock: Clock;
@@ -139,6 +140,33 @@ export class MemoryFiles implements Files {
   async size(path: string): Promise<number | undefined> {
     const text = this.contents.get(normalisePath(path));
     return text === undefined ? undefined : Buffer.byteLength(text, 'utf8');
+  }
+
+  /**
+   * Puts a link at `path` to `target`, a file or a folder, as a symlink or a junction would be. Only `realPath` and
+   * `isPlainFile` see it; the other calls take `path` as it is written.
+   */
+  link(path: string, target: string): void {
+    this.links.set(normalisePath(path), normalisePath(target));
+  }
+
+  async realPath(path: string): Promise<string | undefined> {
+    let resolved = '';
+    for (const part of normalisePath(path).split('/')) {
+      const next = resolved === '' && part === '' ? '' : `${resolved}/${part}`;
+      resolved = this.links.get(next) ?? next;
+    }
+    return this.holds(resolved) ? resolved : undefined;
+  }
+
+  async isPlainFile(path: string): Promise<boolean> {
+    const key = normalisePath(path);
+    return !this.links.has(key) && this.contents.has(key);
+  }
+
+  /** Whether a file, a made folder or a folder with files below it is at `key`. */
+  private holds(key: string): boolean {
+    return [...this.contents.keys(), ...this.folders].some((held) => isAtOrBelow(held, key));
   }
 
   private put(key: string, text: string): void {

@@ -106,6 +106,16 @@ export class FaultyFiles implements Files {
     return this.inner.size(path);
   }
 
+  async realPath(path: string): Promise<string | undefined> {
+    await this.check('realPath', path);
+    return this.inner.realPath(path);
+  }
+
+  async isPlainFile(path: string): Promise<boolean> {
+    await this.check('isPlainFile', path);
+    return this.inner.isPlainFile(path);
+  }
+
   private async check(operation: FileOperation, path: string): Promise<void> {
     const key = keyOf(operation, path);
     const error = this.faults.get(key);

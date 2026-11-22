@@ -1,5 +1,5 @@
 import { constants, type Stats } from 'node:fs';
-import { appendFile, link, lstat, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile, type FileHandle } from 'node:fs/promises';
+import { appendFile, link, lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { errorCode } from './guards.ts';
 import type { Sleep } from './lock.ts';
@@ -165,6 +165,13 @@ export interface Files {
   modifiedAt(path: string): Promise<number | undefined>;
   /** The file's size in bytes, without reading it, or undefined when there is no file there (a missing path or a folder). */
   size(path: string): Promise<number | undefined>;
+  /** The path with every link and `..` in it resolved, or undefined when nothing is there. */
+  realPath(path: string): Promise<string | undefined>;
+  /**
+   * Whether a regular file is at the path itself, not following a link: false for a missing path, a folder, a link
+   * or junction, a pipe or a device. For a path someone else wrote down, before teamrig removes what it names.
+   */
+  isPlainFile(path: string): Promise<boolean>;
 }
 
 /**
@@ -260,5 +267,28 @@ export function nodeFiles(sleep: Sleep): Files {
     async size(path) {
       return (await fileStatsOf(path))?.size;
     },
+    async realPath(path) {
+      try {
+        return await realpath(path);
+      } catch (error) {
+        if (MISSING_PATH_CODES.has(errorCode(error) ?? '')) {
+          return undefined;
+        }
+        throw error;
+      }
+    },
+    async isPlainFile(path) {
+      try {
+        return (await lstat(path)).isFile();
+      } catch (error) {
+        if (MISSING_PATH_CODES.has(errorCode(error) ?? '')) {
+          return false;
+        }
+        throw error;
+      }
+    },
   };
 }
+
+/** What `fs` throws for a path with nothing there: missing, or a file where a folder in it should be. */
+const MISSING_PATH_CODES: ReadonlySet<string> = new Set(['ENOENT', 'ENOTDIR']);
