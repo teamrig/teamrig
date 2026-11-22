@@ -36,6 +36,7 @@ describe('localChecks', () => {
   it('runs every command CI runs', () => {
     for (const command of ciCommands()) {
       if (command.startsWith('npm ci')) continue; // installing is the developer's setup
+      if (command.startsWith('git fetch ')) continue; // CI's shallow checkout fetches the base a local clone holds
       const script = /^node (\S+\.ts)/.exec(command)?.[1];
       const tsc = /^tsc (.+)$/.exec(command)?.[1];
       if (script !== undefined) assert.ok(argvs.some((argv) => argv.startsWith(`node ${script}`)), `no local check runs ${script}`);

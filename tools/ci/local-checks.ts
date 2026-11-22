@@ -17,8 +17,7 @@ export function localChecks(base: string): readonly LocalCheck[] {
   return [
     ...commitChecks(base),
     ...TYPECHECKS,
-    BOUNDARIES,
-    PROVIDER_WORDS,
+    ...countChecks(base),
     ...BUILD,
     { name: 'coverage gate', argv: ['node', 'tools/ci/coverage-cli.ts'] },
     { name: 'dist smoke', argv: ['node', 'tools/ci/dist-smoke-cli.ts'] },
@@ -40,8 +39,7 @@ export function prePushChecks(base: string): readonly LocalCheck[] {
   return [
     ...commitChecks(base),
     ...TYPECHECKS,
-    BOUNDARIES,
-    PROVIDER_WORDS,
+    ...countChecks(base),
     ...BUILD,
     PLUGIN_TESTS,
     ...DOC_CHECKS,
@@ -57,10 +55,16 @@ const TYPECHECKS: readonly LocalCheck[] = [
   { name: 'typecheck: mod', argv: ['node', TSC, '-p', 'tsconfig.mod.json'] },
 ];
 
-/** The layer boundaries of `src`, counted in under a second; it fails when a rule's count rose over its baseline. */
-const BOUNDARIES: LocalCheck = { name: 'boundaries', argv: ['node', 'tools/ci/boundaries-cli.ts'] };
-/** The host and tool words in each skill, counted in under a second; it fails when a count rose over its baseline. */
-const PROVIDER_WORDS: LocalCheck = { name: 'provider words', argv: ['node', 'tools/ci/provider-words-cli.ts'] };
+/**
+ * The two count checks, each in under a second: the layer boundaries of `src` and the host and tool words in each
+ * skill. Each fails when a count rose over the lower of the branch's baseline and the base's, as CI holds it (T5014).
+ */
+function countChecks(base: string): readonly LocalCheck[] {
+  return [
+    { name: 'boundaries', argv: ['node', 'tools/ci/boundaries-cli.ts', '--base', base] },
+    { name: 'provider words', argv: ['node', 'tools/ci/provider-words-cli.ts', '--base', base] },
+  ];
+}
 
 /** `npm run build`'s three steps: the dist cleared, compiled and its integrity list written. */
 const BUILD: readonly LocalCheck[] = [
