@@ -278,9 +278,13 @@ describe('idleSleep', () => {
 
   it('holds no process open: one waiting only on it ends before the wait does', () => {
     const lock = pathToFileURL(fileURLToPath(new URL('./lock.ts', import.meta.url))).href;
-    const script = `import { idleSleep } from ${JSON.stringify(lock)}; await idleSleep(60_000); console.log('woke');`;
+    // A .then, not a top-level await: Node ends a module whose top-level await never settles with exit 13.
+    const script = `import { idleSleep } from ${JSON.stringify(lock)}; void idleSleep(60_000).then(() => console.log('woke'));`;
     const started = Date.now();
     const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
+    // A run killed at the spawn's timeout ends with a signal and no status: that reads as its own failure here.
+    assert.equal(run.signal, null, 'the process was killed at the spawn timeout');
+    assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout, '');
     assert.ok(Date.now() - started < 30_000, 'the process waited out the timer');
   });
