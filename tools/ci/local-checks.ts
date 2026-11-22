@@ -50,7 +50,7 @@ export function prePushChecks(base: string): readonly LocalCheck[] {
 
 const TYPECHECK: LocalCheck = { name: 'typecheck', argv: ['node', TSC, '-p', 'tsconfig.json'] };
 
-/** The layer boundaries of `src`, counted in under a second; in warn mode it fails only when it cannot read the tree. */
+/** The layer boundaries of `src`, counted in under a second; it fails when a rule's count rose over its baseline. */
 const BOUNDARIES: LocalCheck = { name: 'boundaries', argv: ['node', 'tools/ci/boundaries-cli.ts'] };
 /** The host and tool words in each skill, counted in under a second; it fails when a count rose over its baseline. */
 const PROVIDER_WORDS: LocalCheck = { name: 'provider words', argv: ['node', 'tools/ci/provider-words-cli.ts'] };

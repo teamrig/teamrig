@@ -203,7 +203,7 @@ jobs:
       # page, on a docs change too, which could edit the page by hand.
       - run: node tools/docs/parity-cli.ts --check
         if: ${{ needs.changes.outputs.kind != 'design' }}
-      # The layer boundaries of src (what the core and an adapter import, who imports an adapter, where a tool is named): counted, failing nothing in warn mode.
+      # The layer boundaries of src (what the core and an adapter import, who imports an adapter, where a tool is named): each count held to tools/ci/boundaries.json, failing a rise.
       # A docs or design change touches no file under src, so only a code change runs it.
       - run: node tools/ci/boundaries-cli.ts
         if: ${{ needs.changes.outputs.kind == 'code' }}

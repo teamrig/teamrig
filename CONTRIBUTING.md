@@ -21,7 +21,8 @@ team, [the configuration reference](docs/configuration.md) from each key's `desc
 redrawn. To change a key's text, edit its `description` and run `npm run docs:config`; to change what a tool supports,
 edit its adapter's declaration and run `npm run docs:parity`. The layer boundaries of `src` (what the core and an
 adapter may import, who may import an adapter or a fake of `src/testing`, where a tool is named) are counted by
-`node tools/ci/boundaries-cli.ts`, in warn mode: it prints the counts and fails nothing yet. The host and tool words in
+`node tools/ci/boundaries-cli.ts` against `tools/ci/boundaries.json`: a rule's count may fall, never rise, `--list`
+prints each finding and `--write` records a fall. The host and tool words in
 each skill (a step a skill tells, which an adapter says how to do) are counted by `node tools/ci/provider-words-cli.ts`
 against `tools/ci/provider-words.json`: a count may fall, never rise, and `--write` records a fall. The sections below
 give the test and sign-off rules.
