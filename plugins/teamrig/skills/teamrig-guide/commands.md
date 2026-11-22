@@ -7493,6 +7493,27 @@ loads: none
 app: 2 commits pushed, not deployed (c1a2b3c4..d5e6f7a8)
 ```
 
+### teamrig redact-exec
+
+Runs a shell command and redacts secret shapes and secret variables from its output before printing it, for hosts
+whose `PostToolUse` hook cannot rewrite tool output. Prints a warning on stderr when any secret was redacted, and exits
+0 when the command passed or 1 otherwise.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig redact-exec -- env
+```
+
+Output:
+
+```text
+API_KEY=[redacted secret assignment]
+teamrig: this result held a secret (secret assignment); it was redacted before you saw it. Treat it as leaked: lead rotates it. Do not print it again.
+```
+
 ### teamrig gh
 
 Runs one call of the code host's own command-line tool with the key teamrig saved for the owner of the repository
