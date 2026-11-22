@@ -53,7 +53,7 @@ import { knownSettingsScope, readWideAllow } from '../allow-scope.ts';
 import { noPositionals, onePositional, requiredFlag, somePositionals, UsageError, type Flags, type ParsedArgs } from '../args.ts';
 import { handStepPin, readRunFiles } from '../hand-step-file.ts';
 import { KitTreeGoals } from '../tree-goals.ts';
-import { addInputOf, callerOf, changesOf, criticalOf, deadlineOf, dropApprovalOf, listFilterOf, NONE, oneCommitOf, pinOf, setInputOf, taskIdOf, taskRefOf, weekOf, withSecurityCard, type TypedTimes } from '../inputs.ts';
+import { addInputOf, callerOf, changesOf, criticalOf, deadlineOf, dropApprovalOf, exemptOf, listFilterOf, NONE, oneCommitOf, pinOf, setInputOf, taskIdOf, taskRefOf, weekOf, withSecurityCard, type TypedTimes } from '../inputs.ts';
 import { findTeam, openKit, pastOrPresentIdOf, projectFolder, sessionIdOf, teamZone } from '../kit.ts';
 import { checkLines, listLines, SHORT_TITLE_CHARS, waitingOnLines, type CheckReport, type CheckSection, type LeadDecisions, type TaskRow } from '../reports.ts';
 import { fiveHourWarnings } from '../five-hour-check.ts';
@@ -780,7 +780,7 @@ export async function update(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   if (later !== undefined) {
     return report(runtime, await team.register.defer(by, id, later, args.flags.get('note')), 'UPDATED', team);
   }
-  const changes = { ...changesOf(args.flags, typedTimes(runtime, team.zone)), ...criticalOf(args.switches), ...pinOf(args.switches, by) };
+  const changes = { ...changesOf(args.flags, typedTimes(runtime, team.zone)), ...criticalOf(args.switches), ...pinOf(args.switches, by), ...exemptOf(args.switches, by) };
   const sizeBase = typeof changes.size === 'number' ? await readSizeBase(runtime, team.paths, team.config.sessions, id, runtime.clock.now()) : undefined;
   const verdict = await team.register.update(by, id, changeIds(team.roster, changes), args.flags.get('note'), sizeBase);
   const code = report(runtime, verdict, 'UPDATED', team);

@@ -4,7 +4,7 @@ import { TimeZone } from '../core/zone.ts';
 import { BLOCKER_PRIORITY_ID, TASK_STATUSES } from '../register/model.ts';
 import { JERUSALEM } from '../testing/zone.ts';
 import { UsageError } from './args.ts';
-import { addInputOf, callerOf, changesOf, criticalOf, deadlineOf, dropApprovalOf, goalsOf, instantOf, listFilterOf, pinOf, priorityOf, sessionRef, setInputOf, sizeOf, statusInputOf, taskIdOf, taskRefOf, typeOf, waitsOf, weekOf, withSecurityCard, type TypedTimes } from './inputs.ts';
+import { addInputOf, callerOf, changesOf, criticalOf, deadlineOf, dropApprovalOf, exemptOf, goalsOf, instantOf, listFilterOf, pinOf, priorityOf, sessionRef, setInputOf, sizeOf, statusInputOf, taskIdOf, taskRefOf, typeOf, waitsOf, weekOf, withSecurityCard, type TypedTimes } from './inputs.ts';
 
 const flags = (entries: Readonly<Record<string, string>>): ReadonlyMap<string, string> => new Map(Object.entries(entries));
 
@@ -191,6 +191,15 @@ describe('criticalOf', () => {
     assert.deepEqual(criticalOf(new Set(['not-critical'])), { critical: false });
     assert.deepEqual(criticalOf(new Set()), {});
     assert.throws(() => criticalOf(new Set(['critical', 'not-critical'])), { name: 'UsageError', message: '--critical and --not-critical: give one' });
+  });
+});
+
+describe('exemptOf', () => {
+  it('exempts in the name of the caller, clears the mark, or changes nothing, and refuses both at once (T4948)', () => {
+    assert.deepEqual(exemptOf(new Set(['exempt']), 'lead'), { exempt: 'lead' });
+    assert.deepEqual(exemptOf(new Set(['not-exempt']), 'lead'), { exempt: null });
+    assert.deepEqual(exemptOf(new Set(), 'lead'), {});
+    assert.throws(() => exemptOf(new Set(['exempt', 'not-exempt']), 'lead'), { name: 'UsageError', message: '--exempt and --not-exempt: give one' });
   });
 });
 

@@ -4,8 +4,8 @@ import type { WakeRest } from './decide.ts';
 
 /**
  * The work a held session still takes up to `upTo` (its configured wake priority), past the p0 cap its rest sets:
- * a task another session's task waits on, since a waited-on answer is never budget-held (rule 8, T4948). Only a
- * rest that yields gives one ({@link restExemptionOf}).
+ * a task another session's task waits on, since a waited-on answer is never budget-held (rule 8, T4948), or one a
+ * leader marked exempt (`update --exempt`). Only a rest that yields gives one ({@link restExemptionOf}).
  */
 export interface RestExemption {
   readonly upTo: number;
@@ -47,6 +47,9 @@ export function restExemptionOf(rest: WakeRest, configured: number, tasks: Reado
   return {
     upTo: configured,
     isExempt: (task) => {
+      if (task.exempt !== null) {
+        return true;
+      }
       waited ??= waitedOnByOthers(tasks, elsewhere);
       return waited.has(task.id);
     },

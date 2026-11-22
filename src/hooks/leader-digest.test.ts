@@ -21,6 +21,7 @@ const fields = (owner: string, title = 'Ship it'): TaskFields => ({
   type: null,
   critical: false,
   pin: null,
+  exempt: null,
   workClass: null,
   prepares: null,
 });

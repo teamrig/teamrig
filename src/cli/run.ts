@@ -143,7 +143,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   add: { effect: 'write', flags: ['session', 'source', 'team', ...TASK_FIELDS, 'issue', 'issue-body', 'issue-repo', 'local'], switches: ['critical'], load: async () => (await registerCommands()).add },
   set: { effect: 'write', flags: ['session', 'status', 'note', 'evidence', 'skill', 'followups', 'waits', 'question', 'options', 'recommend', 'default', 'why-ask', 'gate', 'affects', 'run', 'proof', 'watch', 'met', 'due', 'ask', 'text', ...REVIEW_FLAGS], switches: ['one-commit', 'security', 'drop-approval'], load: async () => (await registerCommands()).set },
   // --prepares only here: a lead marks a task that exists, so `add` (which shares TASK_FIELDS) never takes it.
-  update: { effect: 'write', flags: ['session', 'note', 'later', 'prepares', ...TASK_FIELDS], switches: ['pin', 'unpin', 'critical', 'not-critical', 'decided'], load: async () => (await registerCommands()).update },
+  update: { effect: 'write', flags: ['session', 'note', 'later', 'prepares', ...TASK_FIELDS], switches: ['pin', 'unpin', 'exempt', 'not-exempt', 'critical', 'not-critical', 'decided'], load: async () => (await registerCommands()).update },
   'refs apply': { effect: 'write', flags: ['session'], switches: ['yes'], load: async () => (await refsCommands()).apply },
   // No register changes, but --out writes the path the line names: a line no person typed must not reach that.
   sweep: { effect: 'write', flags: ['session', 'out'], switches: ['tree'], load: async () => (await sweepCommands()).sweep },
@@ -602,8 +602,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   update <id> [--title ..] [--description ..|none] [--owner ..] [--priority p<n>|blocker] [--ref ..|none]
       [--due <date>|none] [--goals a,b|none] [--week <date>|none] [--after T5,T6|none] [--size <pct>|none]
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
-      [--prepares <goal>:<slice>|none] [--note ..]
-      the lead may change owner, priority, due, week, after, size, type, class, critical and pin on any task
+      [--exempt|--not-exempt] [--prepares <goal>:<slice>|none] [--note ..]
+      the lead may change owner, priority, due, week, after, size, type, class, critical, pin and exempt on any
+      task
+      --exempt: a held owner still wakes for the task past the daily cap or a plain budget cut, never a stop;
+      set only by a leader above the owner (the lead on its own tasks too)
       --pin: puts the task above every other task on its owner's list, set by the owner's leaders (the lead
       on its own tasks too); it moves the owner's earlier pin, and handing the task on clears it
       --prepares <goal>:<slice>|none: marks a design, study or prep plan for that slice of a goal, set only by

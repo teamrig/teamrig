@@ -47,9 +47,10 @@ export const IMPORT_STATUSES: readonly TaskStatus[] = ['open', 'done', 'dropped'
 /**
  * Fields the lead may change on a task someone else owns: who does it, how urgent, when, in what order and its size
  * (the lead plans the week), its type and critical mark, so the lead can mark another session's fix a bug, its
- * work class, as leaders triage the class of their sessions' tasks (T2076), and the goal slice it prepares (T2453).
+ * work class, as leaders triage the class of their sessions' tasks (T2076), the goal slice it prepares (T2453) and
+ * its exemption from its owner's rest (T4948).
  */
-export const LEAD_FIELDS: readonly TaskFieldName[] = ['owner', 'priority', 'due', 'week', 'after', 'size', 'type', 'critical', 'pin', 'workClass', 'prepares'];
+export const LEAD_FIELDS: readonly TaskFieldName[] = ['owner', 'priority', 'due', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares'];
 
 /**
  * Fields the lead may change on a task whose owner is no session of the team any more (a retired hire, a session that
@@ -390,6 +391,8 @@ export class RegisterPolicy {
       type: input.type ?? null,
       critical: input.critical ?? false,
       pin: null,
+      // A leader exempts a task with `update` once it exists, as it marks what one prepares.
+      exempt: null,
       workClass: this.classSpelling(input.workClass ?? null),
       // A lead marks what a task prepares with `update` once it exists, where the policy knows who marks it.
       prepares: null,
@@ -1225,7 +1228,8 @@ export class RegisterPolicy {
     }
     const pinned = changes.pin === undefined ? undefined : this.pinProblem(task.id, changes.owner ?? task.owner, caller, changes.pin);
     const prepared = changes.prepares === undefined ? undefined : this.prepProblem(task.id, changes.owner ?? task.owner, caller, changes.prepares, goalTags);
-    const marked = pinned ?? prepared;
+    const exempted = changes.exempt === undefined ? undefined : this.exemptProblem(task.id, changes.owner ?? task.owner, caller, changes.exempt);
+    const marked = pinned ?? prepared ?? exempted;
     if (marked !== undefined) {
       return refuse(marked);
     }
@@ -1317,6 +1321,19 @@ export class RegisterPolicy {
   }
 
   /**
+   * Why `caller` may not set or clear the rest exemption of task `id` (T4948), or undefined when it may: the mark wakes
+   * the task's `owner` past the daily cap and a plain budget cut, so only a leader sets it (the lead, or a sub-lead over
+   * that owner), never the owner itself unless it is the lead, so a session cannot spend past its own hold; the mark
+   * names the leader who set it.
+   */
+  private exemptProblem(id: string, owner: string, caller: string, exempt: string | null): string | undefined {
+    if (caller !== this.tree.lead && !this.tree.leads(caller, owner)) {
+      return `only ${this.approversText(owner)} exempts ${id} from its owner's rest: the mark wakes ${owner} past its budget hold`;
+    }
+    return exempt === null || exempt === caller ? undefined : `an exemption names the session that sets it (${caller}), not ${exempt}`;
+  }
+
+  /**
    * Why `caller` may not set or clear the prep marker of task `id` (T2453), or undefined when it may: the marker lets a
    * design for a ranked goal's near slice past the slice cap, so only a lead sets it (the lead, or a sub-lead over the
    * task's `owner`), never the owner itself unless it is the lead, so a build cannot ride it. A marker names one of
@@ -1375,7 +1392,7 @@ export class RegisterPolicy {
     if (!input.ref.startsWith(prefix)) {
       return refuse(`ref ${input.ref} is not a ${source} ref: it starts with ${prefix}`);
     }
-    const fields: TaskFields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null };
+    const fields: TaskFields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
     const holder = [...state.tasks.values()].find((task) => task.ref === input.ref);
     if (holder !== undefined) {
       return refuse(`${holder.id} already has ref ${input.ref}`);
@@ -1516,8 +1533,8 @@ export class RegisterPolicy {
 const OWN_LIMITS: readonly string[] = ['title', 'description'];
 
 function pickFields(task: Task): TaskFields {
-  const { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, workClass, prepares } = task;
-  return { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, workClass, prepares };
+  const { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, exempt, workClass, prepares } = task;
+  return { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, exempt, workClass, prepares };
 }
 
 /** An update naming goals for a task said to serve none also clears that mark, which a task with goals cannot hold. */

@@ -38,6 +38,14 @@ describe('waitedOnByOthers', () => {
 describe('restExemptionOf', () => {
   const tasks = tasksOf(RECHECK, LONE, WAITER);
 
+  it('exempts a task a leader marked exempt, which nobody waits on, up to the configured priority', () => {
+    const marked = { ...LONE, exempt: 'lead' };
+    const exemption = restExemptionOf(HELD, 1, tasks, NO_TASKS_ELSEWHERE);
+    assert.equal(isExemptFromRest(marked, exemption), true);
+    assert.equal(isExemptFromRest({ ...marked, priority: 2 }, exemption), false, 'past the configured priority');
+    assert.equal(isExemptFromRest(marked, restExemptionOf(STOPPED, 1, tasks, NO_TASKS_ELSEWHERE)), false, 'never past a stop');
+  });
+
   it('exempts the waited-on task up to the configured priority while the daily cap or a plain cut holds the session', () => {
     const exemption = restExemptionOf(HELD, 1, tasks, NO_TASKS_ELSEWHERE);
     assert.equal(isExemptFromRest(RECHECK, exemption), true);
