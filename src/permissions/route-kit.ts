@@ -1,4 +1,4 @@
-import { REST_MARKER } from '../cli/args.ts';
+import { REST_MARKER, type ParsedArgs } from '../cli/args.ts';
 import { REGISTER_COMMANDS, REGISTER_POSTING_FLAGS } from '../automode/lines.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { placeProgram, type ClientInstalls, type ClientSearch, type WordAt } from '../exec/client-launch.ts';
@@ -45,16 +45,33 @@ export const KIT_SHAPES = {
 /** A path from the root of a drive or of the file system, as bash or Windows writes it. */
 export const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/])/;
 
-/** True when `words` run `shape` through this install's own teamrig. */
-export async function matchesKit(shape: KitShape, words: readonly string[], context: KitContext): Promise<boolean> {
+/** A teamrig line as the CLI reads it: its program word, and what the CLI parses from the words after it. */
+export interface KitCall {
+  readonly program: string;
+  readonly parsed: ParsedArgs;
+}
+
+/**
+ * The teamrig line `words` run, as the CLI reads it; undefined for a line the CLI refuses, a help request or a `--`.
+ * Whether the program word starts this install's own teamrig is the caller's last check (`context.ownClient`), as it
+ * may search the folders.
+ */
+export function kitCallOf(words: readonly string[], cli: CommandTable): KitCall | undefined {
   const [program, ...argv] = words;
   if (program === undefined || argv.includes(REST_MARKER)) {
+    return undefined;
+  }
+  const parsed = readable(argv, cli);
+  return parsed === undefined || parsed.help ? undefined : { program, parsed };
+}
+
+/** True when `words` run `shape` through this install's own teamrig. */
+export async function matchesKit(shape: KitShape, words: readonly string[], context: KitContext): Promise<boolean> {
+  const call = kitCallOf(words, context.cli);
+  if (call === undefined || !shape.commands.includes(call.parsed.command)) {
     return false;
   }
-  const parsed = readable(argv, context.cli);
-  if (parsed === undefined || parsed.help || !shape.commands.includes(parsed.command)) {
-    return false;
-  }
+  const { program, parsed } = call;
   const options = [...parsed.flags.keys(), ...parsed.switches];
   const allowed = shape.options;
   if (allowed !== undefined && !options.every((name) => allowed.includes(name))) {

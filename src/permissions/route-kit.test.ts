@@ -4,7 +4,7 @@ import { REGISTER_COMMANDS, REGISTER_POSTING_FLAGS } from '../automode/lines.ts'
 import { ADD_ISSUE_FLAGS } from '../cli/commands/add-issue.ts';
 import { COMMAND_TABLE } from '../cli/run.ts';
 import { ClientInstalls, type ClientSearch, type WordAt } from '../exec/client-launch.ts';
-import { KIT_SHAPES, matchesKit, ownClientOf, type KitContext, type KitShape } from './route-kit.ts';
+import { KIT_SHAPES, kitCallOf, matchesKit, ownClientOf, type KitContext, type KitShape } from './route-kit.ts';
 
 const CONTEXT: KitContext = { cli: COMMAND_TABLE, ownClient: async (word) => word === 'teamrig' };
 
@@ -100,6 +100,22 @@ describe('matchesKit', () => {
     assert.equal(await matchesKit(KIT_SHAPES.merge, ['teamrig', 'merge', '--force'], context), false);
     assert.equal(await matchesKit(KIT_SHAPES.merge, [], context), false);
     assert.deepEqual(asked, ['./teamrig']);
+  });
+});
+
+describe('kitCallOf', () => {
+  it('gives the program word and the CLI reading of a line it reads', () => {
+    const call = kitCallOf(['teamrig', 'show', 'T1', '--session', 'tr-x'], COMMAND_TABLE);
+    assert.equal(call?.program, 'teamrig');
+    assert.equal(call?.parsed.command, 'show');
+    assert.deepEqual(call?.parsed.positionals, ['T1']);
+    assert.equal(call?.parsed.flags.get('session'), 'tr-x');
+  });
+
+  it('gives none for no words, a line the CLI refuses, a help request or a --', () => {
+    for (const words of [[], ['teamrig', 'list', '--no-such-flag'], ['teamrig', 'list', '--help'], ['teamrig', 'test', '--', 'x']]) {
+      assert.equal(kitCallOf(words, COMMAND_TABLE), undefined, words.join(' '));
+    }
   });
 });
 
