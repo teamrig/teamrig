@@ -203,8 +203,10 @@ describe('windowsSweepHostOf', () => {
     assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
     const script = args[3] ?? '';
     assert.match(script, /\$want = @\{ 10 = 100; 11 = 200 \}/);
-    assert.ok(script.indexOf('.Handle') < script.indexOf('Get-CimInstance'), 'it holds each id before it reads the starts');
-    assert.match(script, /\.Kill\(\)/);
+    assert.ok(script.indexOf('.Handle') < script.indexOf('.StartTime'), 'it holds each id before it reads the starts');
+    assert.ok(script.indexOf('.StartTime') < script.indexOf('.Kill()'), 'it checks each start before it ends the process');
+    // T5031: the start comes from the held handle, so the kill loads no CIM module and runs no second process query.
+    assert.doesNotMatch(script, /Get-CimInstance|Win32_Process/);
     assert.doesNotMatch(script, /taskkill/);
   });
 

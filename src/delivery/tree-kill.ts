@@ -150,20 +150,20 @@ const runOnHost: HostRun = (file, args) =>
  * Ends each target only while its id still names the process the list saw. Windows hands a freed id to the next new
  * process within milliseconds and a list takes about a second, so a listed process that ended by itself meanwhile (a
  * console host whose shell was just killed) can be another program by the kill, which `taskkill /PID` would end
- * (T1562). The script first opens a handle to each target, which holds its id, then reads their starts through the
- * list's own Win32_Process query and ends, through that handle, only a held process whose start is the listed one; a
- * process with no start is never ended. A target that ended or cannot be opened is skipped; the next list finds any
- * member it missed.
+ * (T1562). The script first opens a handle to each target, which holds its id, then reads each start through that
+ * handle and ends, through it, only a held process whose start is the listed one; a process whose start cannot be read
+ * is never ended. The handle's start is the kernel's creation time, the one Win32_Process's CreationDate shows, so it
+ * matches the list to the millisecond, and the kill needs no CIM query of its own: each query loads CimCmdlets and
+ * takes about 0.4 s idle, seconds under load, and a sweep kills at least once (T5031). A target that ended or cannot
+ * be opened is skipped; the next list finds any member it missed.
  */
 export function killScript(targets: readonly StartedProcess[]): string {
   const wanted = targets.map((target) => `${target.pid} = ${target.startedMs}`).join('; ');
   return (
     `$want = @{ ${wanted} }; $held = @{}; ` +
     'foreach ($id in @($want.Keys)) { try { $p = Get-Process -Id $id -ErrorAction Stop; $null = $p.Handle; $held[$id] = $p } catch {} }; ' +
-    'if ($held.Count -gt 0) { ' +
-    "Get-CimInstance Win32_Process -Filter ((@($held.Keys) | ForEach-Object { \"ProcessId=$_\" }) -join ' OR ') | ForEach-Object { " +
-    '$id = [int]$_.ProcessId; ' +
-    'if ($_.CreationDate -and ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() -eq $want[$id]) { try { $held[$id].Kill() } catch {} } } }'
+    'foreach ($id in @($held.Keys)) { try { ' +
+    'if (([DateTimeOffset]$held[$id].StartTime).ToUnixTimeMilliseconds() -eq $want[$id]) { $held[$id].Kill() } } catch {} }'
   );
 }
 
