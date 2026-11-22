@@ -116,6 +116,9 @@ export interface TeamPaths {
   /** The append-only log of session renames, so every name a session has had still finds it. */
   readonly renames: string;
   readonly renamesLock: string;
+  /** The backups a step took before it ran (src/steps/backups.ts): the only files a step's cleanup removes. */
+  readonly stepBackups: string;
+  readonly stepBackupsLock: string;
   /** The skills folder the skills lint and `--skill` checks read: the host's own, unless the config moves it. */
   readonly skills: string;
   /** Each session's context-refresh state, one small file per session. */
@@ -320,6 +323,8 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     ruleVerdicts: join(state, 'rule-verdicts.json'),
     renames: join(state, 'renames.jsonl'),
     renamesLock: join(state, 'renames.lock'),
+    stepBackups: join(state, 'step-backups.jsonl'),
+    stepBackupsLock: join(state, 'step-backups.lock'),
     skills: inHome(overrides.skills) ?? hostSkills ?? join(home, 'skills'),
     refresh: join(state, 'refresh'),
     handover: inHome(overrides.handover) ?? join(home, 'handover'),
