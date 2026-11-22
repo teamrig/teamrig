@@ -1,5 +1,8 @@
 import { CHILD_ENVIRONMENT } from "./child-env.js";
 import { declaration } from "./declaration.js";
+import { launchArgs, PROGRAM } from "./launch-args.js";
+import { backgroundJobSession, isForkOf } from "./session-command-lines.js";
+import { sessionPlaceOf } from "./session-place.js";
 import { isSessionProcess } from "./session-process.js";
 import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from "./session-variables.js";
 /** `bg` for a background session; unset for any other. */
@@ -15,6 +18,8 @@ function told(env, name) {
 export function sessionLauncher(env) {
     return {
         programName: declaration.name,
+        program: PROGRAM,
+        launchArgs,
         variables: SESSION_VARIABLES,
         childEnv: CHILD_ENVIRONMENT,
         identity: () => ({
@@ -25,5 +30,8 @@ export function sessionLauncher(env) {
             forcedEffort: told(env, EFFORT_LEVEL),
         }),
         isSessionProcess,
+        isForkOf,
+        backgroundJobSession,
+        sessionPlaceOf,
     };
 }

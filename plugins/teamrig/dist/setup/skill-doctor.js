@@ -1,4 +1,4 @@
-import { findClaude } from "../open/claude.js";
+import { findProgram } from "../open/host-program.js";
 import { hookEndText, succeeded } from "../deploy/hooks.js";
 /** Measured 29 to 61 s on 2.1.312 (10-28), all of it Claude Code starting: the command itself calls no model. */
 export const SKILL_DOCTOR_TIMEOUT_MS = 120_000;
@@ -67,7 +67,10 @@ export function parseSkillDoctor(lines) {
 export function claudeSkillDoctor(deps) {
     return {
         async read(project) {
-            const found = await findClaude(deps);
+            if (deps.program === undefined) {
+                return { kind: 'skipped', why: 'the host names no program to run it with' };
+            }
+            const found = await findProgram(deps, deps.program);
             if (found.kind === 'missing') {
                 return { kind: 'skipped', why: 'Claude Code is not on PATH' };
             }

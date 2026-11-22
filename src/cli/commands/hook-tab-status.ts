@@ -1,29 +1,45 @@
 import type { KitConfig } from '../../config/types.ts';
-import { ENV, type Env } from '../../core/home.ts';
 import { tabDisplayOf, type TeamRoster } from '../../hooks/bind.ts';
 import { TRANSCRIPT_TAIL_BYTES } from '../../names/title.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
 import { readRunningKinds } from '../../refresh/running.ts';
+import type { TitleHold } from '../../setup/tab-status-note.ts';
 import { helpersRun, readyWaitsOnHelpers, tabChangeOf, tabTitle, topicOf, type TranscriptTail } from '../../tabs/status.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { transcriptsIfKept } from '../host.ts';
+import { hooksIfRun, launcherIfTold, transcriptsIfKept } from '../host.ts';
 import { openKit, rosterOf } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readHookInput, sessionTeam, writeReply } from './hook-input.ts';
 import { pickerRefusal } from './hook-picker-guard.ts';
 import { recordTabNeed } from './hook-tab-need.ts';
 
-/** The values Claude Code reads as on for a switch such as `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`. */
-const ON_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'yes', 'on']);
+type HostOfRun = Pick<CliRuntime, 'host' | 'env' | 'platform'>;
 
-/** Whether Claude Code leaves the tab title to hooks: otherwise it writes its own over the circle. */
-export function titleLeftToHooks(env: Env): boolean {
-  return ON_VALUES.has(env[ENV.claudeTitleOff]?.trim().toLowerCase() ?? '');
+/**
+ * Who holds the run's tab title, as its host's hook port tells: the hooks when the host's title switch is on or it
+ * names none (it writes no title of its own), else the host until that switch is set. Named by the host's program
+ * where its launcher tells one.
+ */
+export function titleHoldOf(runtime: HostOfRun): TitleHold {
+  const hooks = hooksIfRun(runtime);
+  if (hooks === undefined) {
+    return { kind: 'no-hooks' };
+  }
+  const { titleSwitch } = hooks;
+  if (titleSwitch === undefined || titleSwitch.on(runtime.env)) {
+    return { kind: 'hooks' };
+  }
+  return { kind: 'host', hostName: launcherIfTold(runtime)?.programName ?? 'the host', variable: titleSwitch.variable, value: titleSwitch.value };
 }
 
-/** Whether a team's hooks show tab status: `tabStatus.enabled` in its config, and Claude Code leaves them the title. */
-export function tabStatusOn(env: Env, config: KitConfig): boolean {
-  return config.tabStatus.enabled && titleLeftToHooks(env);
+/** Whether the host leaves the tab title to hooks: otherwise it writes its own over the circle. */
+export function titleLeftToHooks(runtime: HostOfRun): boolean {
+  return titleHoldOf(runtime).kind === 'hooks';
+}
+
+/** Whether a team's hooks show tab status: `tabStatus.enabled` in its config, and the host leaves them the title. */
+export function tabStatusOn(runtime: HostOfRun, config: KitConfig): boolean {
+  return config.tabStatus.enabled && titleLeftToHooks(runtime);
 }
 
 /** The end of the session's transcript the topic reads; undefined without one. */
@@ -65,7 +81,7 @@ export async function tabTitleOf(runtime: CliRuntime, event: HookEvent, own: Tea
  */
 export async function tabStatusTitleOf(runtime: CliRuntime, event: HookEvent): Promise<string | undefined> {
   // The switch first: it costs no file read, and on most machines it is off.
-  if (!titleLeftToHooks(runtime.env)) {
+  if (!titleLeftToHooks(runtime)) {
     return undefined;
   }
   const found = await sessionTeam(event.cwd, runtime);
@@ -81,7 +97,7 @@ export async function tabStatusTitleOf(runtime: CliRuntime, event: HookEvent): P
 
 /**
  * Every hook event but Stop (whose hook writes the title with its own output): with `tabStatus.enabled` and
- * Claude Code's own title off, sets the tab's title to a circle for what the session is doing (tabs/status.ts)
+ * the host's own title off, sets the tab's title to a circle for what the session is doing (tabs/status.ts)
  * before its topic. Outside a team, with either off, for input that is not a hook payload or on any error, it
  * prints nothing. Either way it records a team session's tab in its tab file (hook-tab-need.ts).
  */

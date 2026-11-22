@@ -20,6 +20,14 @@ export function hooksOf(runtime) {
     return hooks;
 }
 /**
+ * The run's hook bridge, or undefined on a host that calls no hook: for a caller that goes on without hooks, such as
+ * a note on what the hooks would show.
+ */
+export function hooksIfRun(runtime) {
+    const { hooks } = hostOf(runtime);
+    return isUnsupported(hooks) ? undefined : hooks;
+}
+/**
  * The run's transcript reader, or undefined on a host that keeps no transcript teamrig can read: for a caller that
  * goes on without what a transcript would tell, such as a hook that must never answer by a refusal.
  */
@@ -129,6 +137,26 @@ export function sessionVariablesOf(runtime) {
         identity: [...new Set(named.flatMap((variables) => variables.identity))],
     };
 }
+/**
+ * The running host's session launcher, for a command that starts or resumes a session: the session it starts is one
+ * of the host the run works in, whatever other host's sessions the machine holds. A host that tells nothing of its
+ * sessions refuses with its own reason, as `transcriptsOf` does.
+ */
+export function launcherOf(runtime) {
+    const { launcher } = hostOf(runtime);
+    if (isUnsupported(launcher)) {
+        throw new RefusedError(launcher.notice);
+    }
+    return launcher;
+}
+/**
+ * The running host's session launcher, or undefined on a host that tells nothing of its sessions: for a caller that
+ * goes on without the host's program, such as a hook that must never answer by a refusal.
+ */
+export function launcherIfTold(runtime) {
+    const { launcher } = hostOf(runtime);
+    return isUnsupported(launcher) ? undefined : launcher;
+}
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime) {
     const seen = { env: runtime.env, platform: runtime.platform };
@@ -168,6 +196,25 @@ export function childEnvOf(runtime) {
 export function sessionProcessCheckOf(runtime) {
     const launchers = launchersOf(runtime);
     return (process) => launchers.some((launcher) => launcher.isSessionProcess(process));
+}
+/**
+ * The programs that start a session, each once, as any shipped host or the running host names it: a tab's shell runs
+ * whichever host's program its session is, so the running host adds to the shipped ones and takes none away.
+ */
+export function hostProgramsOf(runtime) {
+    return [...new Set(launchersOf(runtime).map((launcher) => launcher.program))];
+}
+/**
+ * The readers of a session's command line, as any host adapter teamrig ships with or the running host reads it: the
+ * same union as `sessionProcessCheckOf`, since a session on the machine runs whichever host's program it is. A host
+ * that tells nothing of its sessions reads none, so with no host that does, no command line is a fork or a job's.
+ */
+export function sessionCommandLinesOf(runtime) {
+    const launchers = launchersOf(runtime);
+    return {
+        isForkOf: (commandLine, session) => commandLine !== undefined && launchers.some((launcher) => launcher.isForkOf(commandLine, session)),
+        backgroundJobSession: (lineage) => launchers.map((launcher) => launcher.backgroundJobSession(lineage)).find((session) => session !== undefined),
+    };
 }
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
 export function hostHomeOf(runtime) {

@@ -13,6 +13,7 @@ import {
   type ToolCall,
   type ToolCallShape,
 } from '../../../plugin-api/index.ts';
+import { TITLE_SWITCH } from './title-switch.ts';
 
 /** Claude Code's name for each moment teamrig knows: the `hook_event_name` of its hook input and of a reply. */
 const HOST_NAMES: Readonly<Record<HookEventName, string>> = {
@@ -206,5 +207,6 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
     reply: replyText,
     // A hook that exits with an error other than 2 is shown to the human and the moment goes on.
     failureRule: 'passes',
+    titleSwitch: TITLE_SWITCH,
   };
 }

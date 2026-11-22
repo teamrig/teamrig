@@ -3,7 +3,8 @@ import { posix } from 'node:path';
 /**
  * The layer boundaries of `src/`, checked over file text alone: what the core may import, who may import an
  * adapter, what an adapter may import, who may import a fake, and which lines outside the adapters still name a
- * tool. The last is the backlog of the move into adapters, counted so it can only shrink.
+ * tool. Each rule's count is held to its baseline in `tools/ci/boundaries.json`, so it can fall but never rise; the
+ * tool names are the backlog of the move into adapters.
  */
 
 /** One source file: its path from the repo root with `/` separators, and its text. */
@@ -131,10 +132,23 @@ export function boundaryFindings(files: readonly SourceFile[]): readonly Boundar
   return files.flatMap((file) => [...importFindings(file), ...toolNameFindings(file)]);
 }
 
-/** How many findings each rule has, in the order of `BOUNDARY_RULES`, as the line a person reads. */
-export function boundaryCounts(findings: readonly BoundaryFinding[]): readonly string[] {
-  return BOUNDARY_RULES.map(({ id, title }) => `${findings.filter((finding) => finding.rule === id).length} ${title}`);
+/** How many findings each rule has, every rule listed (one with none at 0), in the order of `BOUNDARY_RULES`. */
+export function ruleCounts(findings: readonly BoundaryFinding[]): ReadonlyMap<BoundaryRule, number> {
+  return new Map(BOUNDARY_RULES.map(({ id }) => [id, findings.filter((finding) => finding.rule === id).length]));
 }
+
+/** Each rule's count as the line a person reads, in the order of `BOUNDARY_RULES`. */
+export function boundaryCounts(findings: readonly BoundaryFinding[]): readonly string[] {
+  const counts = ruleCounts(findings);
+  return BOUNDARY_RULES.map(({ id, title }) => `${counts.get(id) ?? 0} ${title}`);
+}
+
+/** The baseline file of the check, the field that holds each rule's count and the comment it opens with. */
+export const BASELINE_FILE = {
+  field: 'rules',
+  comment:
+    'The layer boundary check (tools/ci/boundaries-cli.ts): how many findings each rule has. A count may fall, never rise; `--write` records the counts and refuses a rise.',
+} as const;
 
 export function findingLine(finding: BoundaryFinding): string {
   return `${finding.path}:${finding.line}: ${finding.rule}: ${finding.detail}`;

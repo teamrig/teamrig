@@ -6,6 +6,7 @@ import { Roster } from "../../config/roster.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { HiringLog } from "../../hiring/log.js";
+import { parseTeamWeek } from "../../budget/team-week-summary.js";
 import { activeHires, rehiredFrom, retiredSessions } from "../../hiring/record.js";
 import { lineHash } from "../../inbox/line-hash.js";
 import { indexMarks } from "../../inbox/marks.js";
@@ -57,8 +58,25 @@ function teamFilesOf(runtime, { kit, config }) {
         kit.paths.renames,
         kit.paths.hires,
         kit.paths.inboxMarks,
+        kit.paths.teamWeek,
         ...config.sessions.flatMap((id) => [inboxes.pathOf(id), tabs.pathOf(id), records.pathOf(id)]),
     ];
+}
+/** A team's week file as the document serves it: null when it is missing, damaged or in a format this teamrig cannot read. */
+function servedWeekOf(text) {
+    const week = text === undefined ? undefined : parseTeamWeek(text);
+    if (week === undefined) {
+        return null;
+    }
+    const iso = (at) => new Date(at).toISOString();
+    return {
+        usedPct: week.usedPct,
+        plannedPct: week.plannedPct,
+        accountUsedPct: week.accountUsedPct,
+        resetsAt: iso(week.resetsAt),
+        start: week.start === undefined ? null : iso(week.start),
+        at: iso(week.at),
+    };
 }
 /** Where `team` stands to the caller's `own`: only its own team's and the ones above it serve their words. */
 function reachOf(tree, own, team) {
@@ -124,6 +142,7 @@ async function teamInputOf(runtime, tree, own, { kit, config }) {
             formerNames: roster.formerNamesOf(retire.session),
             retire,
         })),
+        week: servedWeekOf(await files.read(kit.paths.teamWeek)),
     };
     const skipped = hiring.skipped > 0 ? [`${servedPathOf(kit.paths, kit.paths.hires)}: ${hiring.skipped} damaged or newer line(s) left out`] : [];
     return { input, problems: [...skippedOf(kit.paths, kit.paths.inboxMarks, markLog), ...skipped] };

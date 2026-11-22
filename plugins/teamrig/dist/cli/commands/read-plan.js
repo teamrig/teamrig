@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import { outsideUsageDir } from "../../budget/measure.js";
+import { snapshotDirOf } from "../../budget/snapshot.js";
 import { planBody } from "../../interface/index.js";
 import { layoutPaths, MissingSegmentError } from "../../register/layout.js";
 import { NO_TASKS_ELSEWHERE, TaskTree } from "../../register/tree.js";
 import { teamZone } from "../kit.js";
-import { readWPerPct } from "../stored-week.js";
 import { teamRanking } from "../team-ranking.js";
 import { TreeTasks } from "../tree-tasks.js";
 import { teamsFolderOf } from "../tree.js";
@@ -16,11 +16,12 @@ import { belowOf, servedPathOf, stampsOf, workingSetOf } from "./read-source.js"
  * config, the team's register, the register of every other team of its tree (a need held there), the goals of the
  * team and of the teams above it, and the metered spend a score's size is read from.
  *
- * Its revision covers each of them, the spend by the session stores' stamps and by the week's rate as read, which
- * is itself read from files this document cannot name ahead (the account's meter log, kept by another team). A
- * metered turn moves a session's store, so on a working team the revision moves at every turn, as the scores do:
- * `--unless` saves this document little there. The clock is no part of it; `validUntil` tells a reader when to ask
- * again with no file moved.
+ * Its revision covers each of them by their files' stamps alone, so a follower's pass stamps and parses nothing. The
+ * spend is stamped where the week's rate is read from: every tree team's session stores and renames (the account's
+ * meter log is kept by whichever team holds the account) and the status line's snapshots. A metered turn moves a
+ * session's store, so on a working team the revision moves at every turn, as the scores do: `--unless` saves this
+ * document little there. The clock is no part of it; `validUntil` tells a reader when to ask again with no file
+ * moved.
  *
  * Of another team's task it serves the id, the team, the owner and the status, and nothing else.
  */
@@ -33,7 +34,7 @@ export function planSource(scope) {
             const loaded = await scope.tree();
             const configs = [...[...loaded.teams.values()].map((other) => other.kit.load.path), ...[...loaded.leftOut.values()].map((load) => load.path)];
             const teams = treeTeamsOf(loaded, team);
-            const rate = await readWPerPct(runtime, kit.paths, config, runtime.clock.now());
+            const kept = [...loaded.teams.values()].map((other) => other.kit.paths);
             return {
                 document: 'plan',
                 args: [
@@ -46,9 +47,9 @@ export function planSource(scope) {
                     ...(await stampsOf(runtime, configs)),
                     ...(await registerStampsOf(runtime, teams)),
                     ...(await stampsOf(runtime, teams.map((other) => other.kit.paths.goals))),
-                    ...(await folderStampsOf(runtime, kit.paths.usage)),
-                    ...(await folderStampsOf(runtime, outsideUsageDir(kit.paths.usage))),
-                    rate === undefined ? null : String(rate),
+                    ...(await stampsOf(runtime, kept.map((paths) => paths.renames))),
+                    ...(await foldersStampsOf(runtime, kept.flatMap((paths) => [paths.usage, outsideUsageDir(paths.usage)]))),
+                    ...(await folderStampsOf(runtime, snapshotDirOf(config.budget, kit.paths))),
                 ],
             };
         },
@@ -99,6 +100,14 @@ async function registerStampsOf(runtime, teams) {
     for (const { kit } of teams) {
         const layout = layoutPaths(kit.paths.events);
         stamps.push(...(await stampsOf(runtime, [layout.snapshot, layout.tail])), (await runtime.files.list(layout.archive)).join(','));
+    }
+    return stamps;
+}
+/** Each folder's stamps, as {@link folderStampsOf} takes them, one folder after another. */
+async function foldersStampsOf(runtime, folders) {
+    const stamps = [];
+    for (const folder of folders) {
+        stamps.push(...(await folderStampsOf(runtime, folder)));
     }
     return stamps;
 }

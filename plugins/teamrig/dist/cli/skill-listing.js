@@ -10,14 +10,15 @@ const LISTED = {
 };
 /**
  * Writes `<state>/launch/<id>.settings.json` with the `skillOverrides` for the session's skill listing
- * ([skills.otherAreas]) and returns the `--settings` argument naming it; nothing when every skill is listed in full.
+ * ([skills.otherAreas]) and returns its path, which the host's launcher spells the argument for; nothing when every
+ * skill is listed in full.
  * A skill's area is a session of any team of the kit home sharing this team's skills folder, so another team's skills
  * there are another area's too. A file, not inline JSON, so no shell quoting touches it.
  */
 export async function launchListing(runtime, kit, config, roster, id) {
     const otherAreas = config.skills.otherAreas;
     if (otherAreas === 'on') {
-        return { args: [], note: '' };
+        return { settingsFile: undefined, note: '' };
     }
     const { teams } = await loadTree(runtime);
     const sharing = [...teams.values()].filter((team) => team.kit.paths.skills === kit.paths.skills).flatMap((team) => team.roster.ids);
@@ -25,10 +26,10 @@ export async function launchListing(runtime, kit, config, roster, id) {
     const overrides = listingOverrides(skills, { session: id, areas: [...new Set([...roster.ids, ...sharing])], sharedPrefix: config.skills.sharedPrefix, otherAreas });
     const count = Object.keys(overrides).length;
     if (count === 0) {
-        return { args: [], note: '' };
+        return { settingsFile: undefined, note: '' };
     }
     const path = join(kit.paths.launchSettings, `${id}.settings.json`);
     await runtime.files.write(path, `${JSON.stringify({ skillOverrides: overrides }, null, 2)}\n`);
     const skillsWord = count === 1 ? 'skill' : 'skills';
-    return { args: ['--settings', path], note: `; ${count} ${skillsWord} of other areas listed ${LISTED[otherAreas]} (skills.otherAreas)` };
+    return { settingsFile: path, note: `; ${count} ${skillsWord} of other areas listed ${LISTED[otherAreas]} (skills.otherAreas)` };
 }

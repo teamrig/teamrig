@@ -7,9 +7,9 @@ import { END_WAIT_MS, endAndWait, SHELL_RECHECK_MS, tabProcessOf, workCutOffBy, 
 const CLAUDE = { pid: 8100, parentPid: 8000, name: 'claude.exe', commandLine: 'claude --resume 1' };
 const TAB = { pid: 8000, parentPid: 7900, name: 'powershell.exe', commandLine: 'powershell -NoExit -Command claude --resume 1' };
 
-function enderOf(processes: FakeSessionProcesses, platform: NodeJS.Platform = 'win32'): TabEnder & { readonly clock: FakeClock } {
+function enderOf(processes: FakeSessionProcesses, platform: NodeJS.Platform = 'win32', hostPrograms: readonly string[] = ['claude']): TabEnder & { readonly clock: FakeClock } {
   const clock = new FakeClock('2030-01-08T10:00:00.000Z');
-  return { processes, clock, sleep: clock.sleep, platform };
+  return { processes, clock, sleep: clock.sleep, platform, hostPrograms };
 }
 
 describe('ending a tab', () => {
@@ -19,6 +19,14 @@ describe('ending a tab', () => {
     assert.equal(await tabProcessOf(enderOf(processes, 'linux'), CLAUDE), CLAUDE.pid);
     const plainParent = new FakeSessionProcesses().add({ ...TAB, commandLine: 'powershell' }).add(CLAUDE);
     assert.equal(await tabProcessOf(enderOf(plainParent), CLAUDE), CLAUDE.pid, 'a shell that did not start Claude Code is not its tab');
+  });
+
+  it("tells the tab shell by any program the hosts start a session with, and by no host's program it was not told", async () => {
+    const DESK = { ...CLAUDE, name: 'agent-desk.exe', commandLine: 'agent-desk --resume 1' };
+    const processes = new FakeSessionProcesses().add({ ...TAB, commandLine: 'pwsh -NoExit -Command Agent-Desk --resume 1' }).add(DESK);
+    assert.equal(await tabProcessOf(enderOf(processes, 'win32', ['claude', 'agent-desk']), DESK), TAB.pid);
+    assert.equal(await tabProcessOf(enderOf(processes), DESK), DESK.pid, 'a shell running a program no host names is not its tab');
+    assert.equal(await tabProcessOf(enderOf(new FakeSessionProcesses().add(TAB).add(CLAUDE), 'win32', []), CLAUDE), CLAUDE.pid, 'no host told, no tab shell');
   });
 
   it('asks first, forces a process that outlives the wait, and says when even that fails', async () => {

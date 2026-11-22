@@ -20,10 +20,10 @@ import { noRoomText } from "../../sessions/headroom.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
-import { cacheBinOf, childEnvOf, transcriptsOf } from "../host.js";
+import { cacheBinOf, childEnvOf, launcherOf, transcriptsOf } from "../host.js";
 import { runsHostSession } from "../session-process.js";
 import { loadTree } from "../tree.js";
-import { claudeExit, claudeProgramOf, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
+import { claudeExit, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
 /** How long the restore's own tab stays once it reopened every session: the last one starts meanwhile. */
@@ -179,6 +179,7 @@ async function restoreDepsOf(runtime, terminal) {
         sleep: runtime.sleep,
         probe: runtime.probe,
         reader: transcriptsOf(runtime),
+        placeOf: launcherOf(runtime).sessionPlaceOf,
         shutdowns: runtime.restore.shutdowns,
         countdown: runtime.restore.countdown,
         stops: runtime.restore.stops,
@@ -304,8 +305,10 @@ export async function restoreResume(args, runtime) {
     const encoded = args.flags.get('encoded-prompt');
     const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
     const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
-    const { command, prefix } = await claudeProgramOf(runtime, env);
+    const { command, prefix } = await hostProgramOf(runtime, env);
     runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
-    const claudeArgs = [...prefix, '--resume', claudeSession, ...(effort === undefined ? [] : ['--effort', effort]), ...(prompt === undefined ? [] : [prompt])];
+    // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
+    const start = { name: undefined, model: undefined, effort, resume: claudeSession, settingsFile: undefined, prompt };
+    const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
     return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }

@@ -6,7 +6,7 @@
 import { succeeded, type HookRunner } from '../deploy/hooks.ts';
 import { gitEnvironment } from '../core/git-run.ts';
 import type { Env } from '../core/home.ts';
-import type { ClaudeProgram } from '../open/claude.ts';
+import type { HostProgram } from '../open/host-program.ts';
 import type { HostPlugin } from '../ports/host/index.ts';
 import type { UpdateGit } from './check.ts';
 
@@ -38,7 +38,7 @@ export type ApplyOutcome = { readonly ok: true } | { readonly ok: false; readonl
 export interface ApplyDeps {
   readonly hooks: HookRunner;
   readonly env: Env;
-  readonly claude: ClaudeProgram;
+  readonly claude: HostProgram;
   readonly cwd: string;
   /** The host's plugin port, which names the update's steps. */
   readonly plugin: Pick<HostPlugin, 'updateSteps'>;

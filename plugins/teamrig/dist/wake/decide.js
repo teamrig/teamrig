@@ -13,6 +13,7 @@ import { BLOCKER_PRIORITY_ID, priorityText } from "../register/model.js";
 import { wouldPark } from "../register/park.js";
 import { neededIds } from "../register/tree.js";
 import { unfinishedAfter, waitContext } from "../register/waits.js";
+import { isExemptFromRest } from "./exempt.js";
 /**
  * Waking a session idle at its prompt when work is handed to it, pure. A wake is a model turn, so only work the
  * session can go on with now ({@link canGoOn}) and has not seen wakes it: its own task at `wake.priority` or more
@@ -75,17 +76,22 @@ export function canGoOn(task, context) {
  * the rule, as most never do. A wake's `elsewhere` comes from `snapshotWithElsewhere`, which gives none when the own
  * tasks need no outside id, so a need from another register goes unseen: a wake may pass over a task `list` still shows.
  */
-export function wakeContext(tasks, elsewhere, now, zone, parking) {
+export function wakeContext(tasks, elsewhere, now, zone, parking, exemption) {
     let needed;
     const isNeeded = (id) => {
         needed ??= neededIds(tasks.values(), elsewhere);
         return needed.has(id);
     };
-    return { ...waitContext(tasks, new Date(now), zone, elsewhere), isParked: (task) => wouldPark(task, { ...parking, now, needed: isNeeded }) };
+    const context = { ...waitContext(tasks, new Date(now), zone, elsewhere), isParked: (task) => wouldPark(task, { ...parking, now, needed: isNeeded }) };
+    return exemption === undefined ? context : { ...context, exemption };
 }
-/** True when the task is the session's, it can go on with it now, it is urgent enough to wake it, and it is not parked. */
+/**
+ * True when the task is the session's, it can go on with it now, it is urgent enough to wake it (or its rest's
+ * exemption lets it past the cap: {@link isExemptFromRest}), and it is not parked.
+ */
 export function isWakeWorthy(task, session, maxPriority, context) {
-    return task.owner === session && task.priority <= maxPriority && canGoOn(task, context) && !context.isParked(task);
+    const urgent = task.priority <= maxPriority || isExemptFromRest(task, context.exemption);
+    return task.owner === session && urgent && canGoOn(task, context) && !context.isParked(task);
 }
 function timeOf(at) {
     return at === null ? Number.NEGATIVE_INFINITY : Date.parse(at);
@@ -159,7 +165,7 @@ export function byUrgency(a, b) {
 }
 /** The session's tasks that could wake it at `now` ({@link isWakeWorthy}), in the register's order. */
 export function worthyTasksOf(input) {
-    const context = wakeContext(input.tasks, input.elsewhere, input.now, input.zone, input.parking);
+    const context = wakeContext(input.tasks, input.elsewhere, input.now, input.zone, input.parking, input.exemption);
     return [...input.tasks.values()].filter((task) => isWakeWorthy(task, input.session, input.maxPriority, context));
 }
 /**
@@ -222,7 +228,9 @@ export function wakeRestOf(facts, quietHours, now, turnW) {
         return { held: false, quiet: quietSpanOf(quietHours, now) !== undefined };
     }
     const turnPct = facts.todayWPerPct > 0 ? turnW / facts.todayWPerPct : 0;
-    return { held: isPausedNow(facts) || isHeld(facts, turnPct), quiet: sessionQuietSpan(facts, quietHours) !== undefined };
+    const paused = isPausedNow(facts);
+    const held = paused || isHeld(facts, turnPct);
+    return { held, quiet: sessionQuietSpan(facts, quietHours) !== undefined, yields: held && !paused && facts.cut?.stop !== true };
 }
 /**
  * The least urgent priority that wakes the session now: p0 only while its budget holds or pauses it, in quiet hours

@@ -21,6 +21,7 @@ import { LoginStore } from '../../restore/login-store.ts';
 import { apiRetryLine, claimApiRetry } from '../../restore/api-error.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../../restore/registry.ts';
 import type { Task } from '../../register/fold.ts';
+import { unfinishedAfter, waitContext } from '../../register/waits.ts';
 import { parkRulesOf } from '../../register/park.ts';
 import type { TasksElsewhere } from '../../register/tree.ts';
 import { askVerdictOf, asksFolderOf, asksNowOf, handedPrompt, handedToast, WakeAsks, type WakeAsk } from '../../wake/asks.ts';
@@ -36,6 +37,7 @@ import {
   type DayStartVerdict,
 } from '../../wake/day-start.ts';
 import { decideWake, effectivePriority, HELD_PRIORITY, wakeCost, wakeRestOf, type WakeDecision, type WakeInput, type WakeState, type WakeVerdict } from '../../wake/decide.ts';
+import { isExemptFromRest, restExemptionOf } from '../../wake/exempt.ts';
 import { apiRetryPrompt, apiRetryToast, type ApiRetryFacts } from '../../wake/api-retry.ts';
 import { loginRetryPrompt, loginRetryToast } from '../../wake/login-retry.ts';
 import { WakePrompts } from '../../wake/prompts.ts';
@@ -162,6 +164,7 @@ function dueIdsOf(verdict: WakeVerdict): ReadonlySet<string> {
  * the budget's quiet hours (unless its lift
  * exempts it) for p1 and p0, p0 alone when they block (`effectivePriority`). Then it decides again at that priority, which wakes for a part of
  * what was due, and leaves the tasks the rest cut out of what the session knows, so they wake it once the rest ends.
+ * A task another session waits on is never cut by a rest that yields (`restExemptionOf`, T4948).
  */
 async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, input: WakeInput): Promise<WakeDecision> {
   const { config } = scope;
@@ -175,11 +178,12 @@ async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope,
   const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [scope.tab]);
   const rest = wakeRestOf(facts, config.budget.quietHours, input.now, wakeWOf(config, lastTurnAt, input.now));
   const maxPriority = effectivePriority(input.maxPriority, rest, config.budget.quietHours);
-  const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority).map((task) => task.id));
+  const exemption = restExemptionOf(rest, input.maxPriority, input.tasks, input.elsewhere);
+  const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority && !isExemptFromRest(task, exemption)).map((task) => task.id));
   if (cut.size === 0) {
     return decision;
   }
-  const capped = decideWake({ ...input, maxPriority });
+  const capped = decideWake({ ...input, maxPriority, exemption });
   return { verdict: capped.verdict, state: { ...capped.state, known: decision.state.known.filter((id) => !cut.has(id)) } };
 }
 
@@ -252,7 +256,8 @@ async function pokeOf(
   if (rush === undefined || !rush.sessions.includes(id)) {
     return { kind: 'none' };
   }
-  const startable = startableTasks(tasks, elsewhere, id, now, teamZone(config, runtime), parkRulesOf(config));
+  const zone = teamZone(config, runtime);
+  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config));
   const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
   const idleMs = config.rush.pokeAfterMinutes * MINUTE_MS;
   const pokeInput: PokeInput = { rush, startable, lastTurnAt, now, idleMs, lastPokeAt: state.settled.poke, queued: new Set() };
@@ -282,7 +287,8 @@ async function pokeOf(
   if (stepRunningFor(ledger, id, now, config.delivery.queue.maxRunMinutes * MINUTE_MS)) {
     return { kind: 'later', at: now + idleMs };
   }
-  return { kind: 'poke', rush, task: verdict.task, idleMs: verdict.idleMs, lastTurnAt, mark: pokeMarkOf(seen) };
+  const plannedAfter = unfinishedAfter(verdict.task.after, waitContext(tasks, new Date(now), zone, elsewhere))[0];
+  return { kind: 'poke', rush, task: verdict.task, idleMs: verdict.idleMs, plannedAfter, lastTurnAt, mark: pokeMarkOf(seen) };
 }
 
 type CheckVerdict =
@@ -291,7 +297,7 @@ type CheckVerdict =
   | { readonly kind: 'login'; readonly why: LoginRetryWhy; readonly failAt: number }
   | { readonly kind: 'api'; readonly retry: ApiRetryFacts }
   | { readonly kind: 'fresh' }
-  | { readonly kind: 'poke'; readonly rush: Rush; readonly task: Task; readonly idleMs: number; readonly lastTurnAt: number }
+  | { readonly kind: 'poke'; readonly rush: Rush; readonly task: Task; readonly idleMs: number; readonly plannedAfter: string | undefined; readonly lastTurnAt: number }
   | { readonly kind: 'wait'; readonly recheckAt: number | null; readonly watch: readonly string[] };
 
 /**
@@ -544,9 +550,9 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
     return wake(runtime, scope, { kind: 'wake', ids: [], text, toast: apiRetryToast(retry, cost) });
   }
   if (verdict.kind === 'poke') {
-    const { rush, task, idleMs } = verdict;
+    const { rush, task, idleMs, plannedAfter } = verdict;
     await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids: [task.id], cost, poke: true });
-    return wake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost), toast: rushPokeToast(rush, task, idleMs, cost) });
+    return wake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost, plannedAfter), toast: rushPokeToast(rush, task, idleMs, cost) });
   }
   const ids = verdict.tasks.map((task) => task.id);
   if (verdict.kind === 'handed') {

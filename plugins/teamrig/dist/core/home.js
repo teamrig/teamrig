@@ -27,8 +27,6 @@ export const ENV = {
     effortLevel: 'CLAUDE_CODE_EFFORT_LEVEL',
     /** At 1, Claude Code picks a helper's model over every per-call Agent `model`; `doctor` warns when set. */
     subagentModelForce: 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
-    /** Set (`1`), Claude Code stops writing the terminal tab's title and leaves it to hooks: tab status needs it. */
-    claudeTitleOff: 'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
 };
 /**
  * The kit home is the machine root: each team keeps its config, rules and state in its own folder

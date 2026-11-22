@@ -21,7 +21,8 @@ team, [the configuration reference](docs/configuration.md) from each key's `desc
 redrawn. To change a key's text, edit its `description` and run `npm run docs:config`; to change what a tool supports,
 edit its adapter's declaration and run `npm run docs:parity`. The layer boundaries of `src` (what the core and an
 adapter may import, who may import an adapter or a fake of `src/testing`, where a tool is named) are counted by
-`node tools/ci/boundaries-cli.ts`, in warn mode: it prints the counts and fails nothing yet. The host and tool words in
+`node tools/ci/boundaries-cli.ts` against `tools/ci/boundaries.json`: a rule's count may fall, never rise, `--list`
+prints each finding and `--write` records a fall. The host and tool words in
 each skill (a step a skill tells, which an adapter says how to do) are counted by `node tools/ci/provider-words-cli.ts`
 against `tools/ci/provider-words.json`: a count may fall, never rise, and `--write` records a fall. The sections below
 give the test and sign-off rules.
@@ -148,6 +149,10 @@ which the git hooks `npm run setup` sets do before each commit. Its coverage gat
   the limit passes) the run gets the limit again, up to three limits in all, as other steps' test runs can slow it
   that long.
 
+`npm test` and the coverage gate both end their output with the 30 slowest test files and tests
+(`tools/ci/slowest-reporter.ts`), in CI too, so a slow test shows where it lands. One file runs its tests one after
+another, so the slowest file is a floor under the suite's wall time.
+
 Never lower a floor to pass a change. A file that truly cannot reach one (for example an error
 path that needs a real disk failure) gets an entry under `exceptions` in `tools/ci/coverage.json`
 with a reason the reviewer accepts; the gate reports the entry once the file no longer needs it.
@@ -190,7 +195,8 @@ is no base to compare with). It runs the base commit's copy of that tool, never 
 that edits `tools/ci` cannot name itself docs; a base from before the tool is `code`. A `docs` change runs the commit checks (scrub, DCO, size rule, subjects, dependency
 review) and, on ubuntu alone, the build, the docs' specs, the pictures, the config reference, the parity page and the doc links; a
 `design` change runs the commit checks and the doc links; a `code` change runs everything on every OS (the test
-matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). Each job still runs and skips only its steps,
+matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
+gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
@@ -273,7 +279,9 @@ matrix.
   a release task at the release pull request's head, and `node tools/ship/ship.ts merge <repo dir> --release T<id>
   --approved <sha>` merges it (skill `dev-ship-release`). That merge refuses a head holding anything but the version
   raises and the changelog's new notes, never opens the pull request, and asks for a new head's approval when main
-  moved, since release-please rewrites the head on each push to main. Once it merged, the next run tags
+  gained a commit the changelog shows, since release-please then rewrites the head; when main gained only commits it
+  hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
+  merged, the next run tags
   main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
   the dist on top to the `release` branch, tagged `v<version>` (`tools/release/publish.ts`). The marketplace entry
   installs from that branch (a `git-subdir` source on ref `release`), so main ignores `plugins/teamrig/dist` and no
@@ -358,6 +366,11 @@ as how teamrig works today.
   so the merge takes no landing turn. A pull request already queued is waited on, not queued again. One the queue
   lets go unmerged stops the merge with GitHub's reason and the failed merge group run's jobs; one still queued at
   the timeout stays queued, and a merge run again waits on it.
+- **Auto-merge on at open**: the `auto-merge` workflow (`.github/workflows/auto-merge.yml`) switches GitHub's
+  auto-merge on for each pull request into `main` that is not a draft, at open, reopen, ready for review and each
+  push, so one that is approved and green enters the merge queue with no click. It runs `main`'s copy of the file
+  (`pull_request_target`), checks out no code, holds no secret and uses the job's own token, which is on no
+  ruleset's bypass list: the review and every required check still hold, and a push after the approval dismisses it.
 - **Review**: a code owner (`.github/CODEOWNERS`: the maintainer) reviews the code and approves the last push, and a
   new push dismisses an approval given before it. The reviewer holds it to
   [What a change is held to](#what-a-change-is-held-to) and declines a wrong direction. On a threshold, limit or trigger the reviewer asks "can this

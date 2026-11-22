@@ -18,10 +18,12 @@ import { claudeCredentialsPath, LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath,
 import { LoginStore } from "../../restore/login-store.js";
 import { apiRetryLine, claimApiRetry } from "../../restore/api-error.js";
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from "../../restore/registry.js";
+import { unfinishedAfter, waitContext } from "../../register/waits.js";
 import { parkRulesOf } from "../../register/park.js";
 import { askVerdictOf, asksFolderOf, asksNowOf, handedPrompt, handedToast, WakeAsks } from "../../wake/asks.js";
 import { dayStartPrompt, dayStartToast, decideDayStart, dueMoments, startableTasks, } from "../../wake/day-start.js";
 import { decideWake, effectivePriority, HELD_PRIORITY, wakeCost, wakeRestOf } from "../../wake/decide.js";
+import { isExemptFromRest, restExemptionOf } from "../../wake/exempt.js";
 import { apiRetryPrompt, apiRetryToast } from "../../wake/api-retry.js";
 import { loginRetryPrompt, loginRetryToast } from "../../wake/login-retry.js";
 import { WakePrompts } from "../../wake/prompts.js";
@@ -110,6 +112,7 @@ function dueIdsOf(verdict) {
  * the budget's quiet hours (unless its lift
  * exempts it) for p1 and p0, p0 alone when they block (`effectivePriority`). Then it decides again at that priority, which wakes for a part of
  * what was due, and leaves the tasks the rest cut out of what the session knows, so they wake it once the rest ends.
+ * A task another session waits on is never cut by a rest that yields (`restExemptionOf`, T4948).
  */
 async function restCappedDecision(runtime, scope, input) {
     const { config } = scope;
@@ -123,11 +126,12 @@ async function restCappedDecision(runtime, scope, input) {
     const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [scope.tab]);
     const rest = wakeRestOf(facts, config.budget.quietHours, input.now, wakeWOf(config, lastTurnAt, input.now));
     const maxPriority = effectivePriority(input.maxPriority, rest, config.budget.quietHours);
-    const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority).map((task) => task.id));
+    const exemption = restExemptionOf(rest, input.maxPriority, input.tasks, input.elsewhere);
+    const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority && !isExemptFromRest(task, exemption)).map((task) => task.id));
     if (cut.size === 0) {
         return decision;
     }
-    const capped = decideWake({ ...input, maxPriority });
+    const capped = decideWake({ ...input, maxPriority, exemption });
     return { verdict: capped.verdict, state: { ...capped.state, known: decision.state.known.filter((id) => !cut.has(id)) } };
 }
 /**
@@ -176,7 +180,8 @@ async function pokeOf(runtime, scope, tasks, elsewhere, state, now) {
     if (rush === undefined || !rush.sessions.includes(id)) {
         return { kind: 'none' };
     }
-    const startable = startableTasks(tasks, elsewhere, id, now, teamZone(config, runtime), parkRulesOf(config));
+    const zone = teamZone(config, runtime);
+    const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config));
     const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
     const idleMs = config.rush.pokeAfterMinutes * MINUTE_MS;
     const pokeInput = { rush, startable, lastTurnAt, now, idleMs, lastPokeAt: state.settled.poke, queued: new Set() };
@@ -206,7 +211,8 @@ async function pokeOf(runtime, scope, tasks, elsewhere, state, now) {
     if (stepRunningFor(ledger, id, now, config.delivery.queue.maxRunMinutes * MINUTE_MS)) {
         return { kind: 'later', at: now + idleMs };
     }
-    return { kind: 'poke', rush, task: verdict.task, idleMs: verdict.idleMs, lastTurnAt, mark: pokeMarkOf(seen) };
+    const plannedAfter = unfinishedAfter(verdict.task.after, waitContext(tasks, new Date(now), zone, elsewhere))[0];
+    return { kind: 'poke', rush, task: verdict.task, idleMs: verdict.idleMs, plannedAfter, lastTurnAt, mark: pokeMarkOf(seen) };
 }
 /** The earliest of the times given; null with none. */
 function earliest(...times) {
@@ -430,9 +436,9 @@ export async function wakeCheck(args, runtime) {
         return wake(runtime, scope, { kind: 'wake', ids: [], text, toast: apiRetryToast(retry, cost) });
     }
     if (verdict.kind === 'poke') {
-        const { rush, task, idleMs } = verdict;
+        const { rush, task, idleMs, plannedAfter } = verdict;
         await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids: [task.id], cost, poke: true });
-        return wake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost), toast: rushPokeToast(rush, task, idleMs, cost) });
+        return wake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost, plannedAfter), toast: rushPokeToast(rush, task, idleMs, cost) });
     }
     const ids = verdict.tasks.map((task) => task.id);
     if (verdict.kind === 'handed') {

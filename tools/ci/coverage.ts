@@ -236,6 +236,12 @@ export function suiteWorkers(cores: number): number {
 /** The most test files the suite runs at once on any host, by the owner's order (T4064). */
 export const MAX_SUITE_WORKERS = 10;
 
+/**
+ * The reporter that ends the run's output with its slowest files and tests (T5027), named by its own URL, as the
+ * suite runs from a `--root` that need not hold this file.
+ */
+export const SLOWEST_REPORTER = new URL('./slowest-reporter.ts', import.meta.url).href;
+
 /** The `node --test` arguments for one coverage run with `workers` test files at once, writing lcov and TAP to the given files. */
 export function suiteArgs(policy: CoveragePolicy, lcovPath: string, tapPath: string, workers: number): string[] {
   return [
@@ -251,6 +257,8 @@ export function suiteArgs(policy: CoveragePolicy, lcovPath: string, tapPath: str
     `--test-reporter-destination=${lcovPath}`,
     '--test-reporter=tap',
     `--test-reporter-destination=${tapPath}`,
+    `--test-reporter=${SLOWEST_REPORTER}`,
+    '--test-reporter-destination=stdout',
     ...TEST_FILES,
   ];
 }

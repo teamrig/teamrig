@@ -1,24 +1,37 @@
-import { ENV } from "../../core/home.js";
 import { tabDisplayOf } from "../../hooks/bind.js";
 import { TRANSCRIPT_TAIL_BYTES } from "../../names/title.js";
 import { readRunningKinds } from "../../refresh/running.js";
 import { helpersRun, readyWaitsOnHelpers, tabChangeOf, tabTitle, topicOf } from "../../tabs/status.js";
 import { noPositionals } from "../args.js";
-import { transcriptsIfKept } from "../host.js";
+import { hooksIfRun, launcherIfTold, transcriptsIfKept } from "../host.js";
 import { openKit, rosterOf } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { readHookInput, sessionTeam, writeReply } from "./hook-input.js";
 import { pickerRefusal } from "./hook-picker-guard.js";
 import { recordTabNeed } from "./hook-tab-need.js";
-/** The values Claude Code reads as on for a switch such as `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`. */
-const ON_VALUES = new Set(['1', 'true', 'yes', 'on']);
-/** Whether Claude Code leaves the tab title to hooks: otherwise it writes its own over the circle. */
-export function titleLeftToHooks(env) {
-    return ON_VALUES.has(env[ENV.claudeTitleOff]?.trim().toLowerCase() ?? '');
+/**
+ * Who holds the run's tab title, as its host's hook port tells: the hooks when the host's title switch is on or it
+ * names none (it writes no title of its own), else the host until that switch is set. Named by the host's program
+ * where its launcher tells one.
+ */
+export function titleHoldOf(runtime) {
+    const hooks = hooksIfRun(runtime);
+    if (hooks === undefined) {
+        return { kind: 'no-hooks' };
+    }
+    const { titleSwitch } = hooks;
+    if (titleSwitch === undefined || titleSwitch.on(runtime.env)) {
+        return { kind: 'hooks' };
+    }
+    return { kind: 'host', hostName: launcherIfTold(runtime)?.programName ?? 'the host', variable: titleSwitch.variable, value: titleSwitch.value };
 }
-/** Whether a team's hooks show tab status: `tabStatus.enabled` in its config, and Claude Code leaves them the title. */
-export function tabStatusOn(env, config) {
-    return config.tabStatus.enabled && titleLeftToHooks(env);
+/** Whether the host leaves the tab title to hooks: otherwise it writes its own over the circle. */
+export function titleLeftToHooks(runtime) {
+    return titleHoldOf(runtime).kind === 'hooks';
+}
+/** Whether a team's hooks show tab status: `tabStatus.enabled` in its config, and the host leaves them the title. */
+export function tabStatusOn(runtime, config) {
+    return config.tabStatus.enabled && titleLeftToHooks(runtime);
 }
 /** The end of the session's transcript the topic reads; undefined without one. */
 async function transcriptTailOf(runtime, transcript) {
@@ -56,7 +69,7 @@ export async function tabTitleOf(runtime, event, own, label) {
  */
 export async function tabStatusTitleOf(runtime, event) {
     // The switch first: it costs no file read, and on most machines it is off.
-    if (!titleLeftToHooks(runtime.env)) {
+    if (!titleLeftToHooks(runtime)) {
         return undefined;
     }
     const found = await sessionTeam(event.cwd, runtime);
@@ -71,7 +84,7 @@ export async function tabStatusTitleOf(runtime, event) {
 }
 /**
  * Every hook event but Stop (whose hook writes the title with its own output): with `tabStatus.enabled` and
- * Claude Code's own title off, sets the tab's title to a circle for what the session is doing (tabs/status.ts)
+ * the host's own title off, sets the tab's title to a circle for what the session is doing (tabs/status.ts)
  * before its topic. Outside a team, with either off, for input that is not a hook payload or on any error, it
  * prints nothing. Either way it records a team session's tab in its tab file (hook-tab-need.ts).
  */

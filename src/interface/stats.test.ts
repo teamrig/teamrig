@@ -13,7 +13,7 @@ import { cutText, statsBody, type ServedStatsTask, type StatsBody } from './inde
 /** A text the shipped shapes take for a secret, built here so no secret-shaped line sits in the repository. */
 const SECRET = ['pass', 'word', '=', 'hunter2'].join('');
 
-const FIELDS: TaskFields = { title: 'Ship it', description: 'the long words', owner: 'alpha', source: 'lead', ref: null, priority: 2, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null };
+const FIELDS: TaskFields = { title: 'Ship it', description: 'the long words', owner: 'alpha', source: 'lead', ref: null, priority: 2, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
 
 /** Thursday 2030-01-10 12:00 on the team's clock (UTC+2): a 7 d range runs 01-04 to 01-10. */
 const NOW = new Date('2030-01-10T10:00:00.000Z');

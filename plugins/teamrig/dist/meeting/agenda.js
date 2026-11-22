@@ -113,13 +113,28 @@ export function laterLine(command, ownerMarker, lead, until) {
     return `  A card ${ownerMarker} puts off to a date: ${command} update <id> --later <date> --note "${ownerMarker} put it off: <why>" --session ${lead}; ${until}.`;
 }
 /**
+ * One line per team that meets the owner itself (#1430) with waits on the owner, the dedicated ones too: their count
+ * and where they are asked, in place of their cards.
+ */
+function ownMeetingLines(input) {
+    return input.ownMeetings.flatMap(({ team, registers }) => {
+        const waits = registers.reduce((sum, register) => sum + ownerAsks(register).length, 0);
+        return waits === 0 ? [] : [`  Team ${team}: ${waits} more waiting on ${input.ownerMarker}, asked at its own lead's meeting with ${input.ownerMarker} (decisions.ownMeetingTeams), not here.`];
+    });
+}
+/** The teams under the lead's whose waits on the owner this meeting asks: every one but those that meet the owner themselves (#1430). */
+function askedHere(input) {
+    const covered = new Set(input.ownMeetings.flatMap(({ registers }) => registers.map((register) => register.team)));
+    return input.below.filter((team) => !covered.has(team.team));
+}
+/**
  * The cards the agenda asks today, in its order: the carried over ones first (T2775), a batch one too on any day, as a
  * meeting asked it already; then the other daily ones; then the Improvements batch on its weekday (empty on the
  * others). A carried card no longer waiting on the owner is not asked. The meeting's agenda panel lists the same cards
  * in the same order (src/meeting/panel.ts).
  */
 export function askedDecisions(input) {
-    const order = decisionOrder([decisionRead(input, undefined), ...input.below.map((team) => decisionRead(team, team.team))]);
+    const order = decisionOrder([decisionRead(input, undefined), ...askedHere(input).map((team) => decisionRead(team, team.team))]);
     const carried = new Set(input.carried);
     const isCarried = (decision) => carried.has(decisionKey(decision));
     const fresh = (decisions) => decisions.filter((decision) => !isCarried(decision));
@@ -150,7 +165,7 @@ function decisionLines(input) {
     const asked = [...daily, ...batch];
     const head = `DECISIONS ${asked.length} waiting on ${input.ownerMarker} (decision or approval)`;
     if (asked.length === 0) {
-        return [head];
+        return [head, ...ownMeetingLines(input)];
     }
     const below = asked.some((decision) => decision.team !== undefined);
     const labelled = below ? ' (<team>/<id> for a task of a team under yours, as its row names it)' : '';
@@ -170,6 +185,7 @@ function decisionLines(input) {
         ...carriedBlock,
         ...cardsOf(fresh, input.runFiles),
         ...(batch.length === 0 ? [] : [`  Improvements batch ${batch.length}, weekly, after the daily cards:`, ...cardsOf(batch, input.runFiles)]),
+        ...ownMeetingLines(input),
         `  Read each card to ${input.ownerMarker} as it stands, each figure explained; where one says no card yet, ask its owner for it (check flags it NO-CARD). Never point to a doc; \`${input.command} show <id>\` prints a task whole.`,
         askLine(input.ownerMarker),
         `  A question a card does not answer is its task owner's to find: ${input.command} add --owner <id>${handed} --due <date> --session ${input.lead}, then relay the answer; never look it up yourself.`,
@@ -211,7 +227,7 @@ function dedicatedGroupLines(group, input) {
  * none is read out: each session gets its own meeting after the daily, with a full brief. No block when none waits.
  */
 function dedicatedLines(input) {
-    const groups = [dedicatedGroups(input, undefined), ...input.below.map((team) => dedicatedGroups(team, team.team))].flat();
+    const groups = [dedicatedGroups(input, undefined), ...askedHere(input).map((team) => dedicatedGroups(team, team.team))].flat();
     if (groups.length === 0) {
         return [];
     }

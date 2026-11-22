@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { FakePathProbe } from '../testing/fake-processes.ts';
-import { hostTelling, NO_PATHS_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostTelling, hostTitledBy, NO_PATHS_HOST, NO_SESSION_HOST, TEST_PROGRAM, testTitleSwitch } from '../testing/host.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { APP, CliHarness, KIT, POINTER, TEAM, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { CONFIG_VERSION } from '../config/types.ts';
@@ -167,6 +167,14 @@ describe('teamrig team create', () => {
       `NOTE each tab of team shop shows a colored circle before its title for what its session is doing once you set "tabStatus": { "enabled": true } in ${SHOP_CONFIG}`,
     );
     assert.equal(JSON.parse((await kit.files.read(SHOP_CONFIG)) ?? '')['tabStatus'], undefined, 'a repeat leaves a kept config as it is');
+  });
+
+  it("names in its tab note the switch the host's hook port names, and its program, else says tab status is on", async () => {
+    const other = await new CliHarness(null, null).run(CREATE, { probe: FOLDERS, host: hostTitledBy(testTitleSwitch('OTHER_TITLE_OFF')) });
+    assert.equal(other.code, EXIT.ok, other.stderr.join('\n'));
+    assert.match(other.stdout[2] ?? '', new RegExp(`once you add "OTHER_TITLE_OFF": "yes" to "env" in .+ and restart ${TEST_PROGRAM}, so it stops`, 'u'));
+    const untitled = await new CliHarness(null, null).run(CREATE, { probe: FOLDERS, host: hostTitledBy(undefined) });
+    assert.match(untitled.stdout[2] ?? '', /^TAB STATUS on: /u, 'a host that writes no title of its own leaves it to the hooks');
   });
 
   it('creates the team on a host whose folders teamrig does not know, its tab note naming the switch and no settings file', async () => {

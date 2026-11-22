@@ -14,7 +14,7 @@ import { openKit, requireConfig, teamFolders, teamProjectOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { teamRegister } from "../team-register.js";
 import { loadTree } from "../tree.js";
-import { titleLeftToHooks } from "./hook-tab-status.js";
+import { titleHoldOf } from "./hook-tab-status.js";
 /** The session that leads a team created without `--lead`. */
 export const DEFAULT_LEAD = 'lead';
 /** The project a command sets up: `--project`, else the folder the host says the session started in, else the current folder. */
@@ -141,7 +141,7 @@ export async function teamCreate(args, runtime) {
         team,
         configOn: done.value.tabStatus,
         configPath,
-        titleLeft: titleLeftToHooks(runtime.env),
+        title: titleHoldOf(runtime),
         // Creating a team needs no file of the host, so a host whose folders are not known still gets its team: the note then names no file.
         settingsPath: pathsIfKnown(runtime)?.userSettings(runtime.userHome),
     });

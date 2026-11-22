@@ -68,7 +68,7 @@ const LEGACY_KINDS = new Map([
     ['problem', { type: 'bug', critical: false }],
     ['critical', { type: 'bug', critical: true }],
 ]);
-export const TASK_FIELD_NAMES = ['title', 'description', 'owner', 'source', 'ref', 'priority', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'workClass', 'prepares'];
+export const TASK_FIELD_NAMES = ['title', 'description', 'owner', 'source', 'ref', 'priority', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares'];
 /** The lead's answer to the approval a waiting task asks of it (T684): given, or declined with the note saying why. */
 export const APPROVAL_VERDICTS = ['approved', 'declined'];
 export function isApprovalVerdict(value) {
@@ -115,6 +115,7 @@ export function eventRecord(event) {
         (name === 'critical' && !task.critical) ||
         (name === 'noGoal' && !task.noGoal) ||
         (name === 'pin' && task.pin === null) ||
+        (name === 'exempt' && task.exempt === null) ||
         (name === 'workClass' && task.workClass === null) ||
         (name === 'prepares' && task.prepares === null);
     return { ...event, task: Object.fromEntries(Object.entries(task).filter(([name]) => !left(name))) };
@@ -418,6 +419,12 @@ function readField(fields, name, value, blocker) {
                 return 'pin is not text';
             }
             fields.pin = typeof value === 'string' ? value : null;
+            return undefined;
+        case 'exempt':
+            if (value !== undefined && value !== null && (typeof value !== 'string' || value === '')) {
+                return 'exempt is not text';
+            }
+            fields.exempt = typeof value === 'string' ? value : null;
             return undefined;
         case 'workClass':
             if (value !== undefined && value !== null && (typeof value !== 'string' || !WORK_CLASS_NAME.test(value))) {

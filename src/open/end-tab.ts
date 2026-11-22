@@ -7,6 +7,8 @@ export interface TabEnder {
   readonly clock: Clock;
   readonly sleep: Sleep;
   readonly platform: NodeJS.Platform;
+  /** The programs the hosts start a session with (`SessionLauncher.program`): a tab shell's command line names one. */
+  readonly hostPrograms: readonly string[];
 }
 
 /** How long an ended process may take to go. */
@@ -50,14 +52,19 @@ export async function endAndWait(ender: TabEnder, target: number, watched: numbe
 
 /**
  * The process to end so the tab closes: on Windows, the shell the tab runs Claude Code in (ending it
- * ends Claude Code too); otherwise Claude Code itself, and its tab stays open at a prompt.
+ * ends Claude Code too), told by a command line naming a host's program; otherwise Claude Code itself, and its tab
+ * stays open at a prompt.
  */
 export async function tabProcessOf(ender: TabEnder, claude: ProcessInfo): Promise<number> {
   if (ender.platform !== 'win32') {
     return claude.pid;
   }
   const parent = await ender.processes.describe(claude.parentPid);
-  return parent !== undefined && TAB_SHELL.test(parent.name) && /claude/i.test(parent.commandLine) ? parent.pid : claude.pid;
+  if (parent === undefined || !TAB_SHELL.test(parent.name)) {
+    return claude.pid;
+  }
+  const line = parent.commandLine.toLowerCase();
+  return ender.hostPrograms.some((program) => line.includes(program.toLowerCase())) ? parent.pid : claude.pid;
 }
 
 /** The command shells `pid` runs; undefined when the system would not tell. */

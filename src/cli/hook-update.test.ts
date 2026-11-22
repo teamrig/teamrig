@@ -5,6 +5,7 @@ import type { HostSource } from '../composition/host-ports.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { CliHarness, TEAM, USER_HOME, KIT, type CliResult } from '../testing/cli-harness.ts';
 import { FakeHooks } from '../testing/fake-hooks.ts';
+import { hostStarting, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
 import { EXIT } from './runtime.ts';
 
@@ -31,8 +32,8 @@ async function installed(marketplace: 'local' | 'kit', published = '0.333.0'): P
   return kit;
 }
 
-function run(kit: CliHarness, command: string, hooks: FakeHooks, stdin = '', host?: HostSource): Promise<CliResult> {
-  return kit.run(['hook', command], { stdin, hooks, platform: 'linux', env: { PATH: '/bin' }, probe: new MemoryPathProbe(kit.files), ...(host === undefined ? {} : { host }) });
+function run(kit: CliHarness, command: string, hooks: FakeHooks, stdin = '', host: HostSource = SHIPPED_HOST): Promise<CliResult> {
+  return kit.run(['hook', command], { stdin, hooks, platform: 'linux', env: { PATH: '/bin' }, probe: new MemoryPathProbe(kit.files), host });
 }
 
 function answerOf(result: CliResult): unknown {
@@ -167,5 +168,18 @@ describe('runCli: hook update-apply', () => {
     const hooks = new FakeHooks();
     assert.deepEqual(answerOf(await run(kit, 'update-apply', hooks, '{"plugin": "teamrig"}', bareHost)), { kind: 'failed', why: 'no plugin is installed' });
     assert.deepEqual(hooks.ran, []);
+  });
+
+  it('updates through the program the running host names, and fails plainly on a host that names none', async () => {
+    const kit = await installed('local');
+    await kit.files.write('/bin/agent-desk', '');
+    const hooks = new FakeHooks();
+    const applied = await run(kit, 'update-apply', hooks, '{"plugin": "teamrig"}', hostStarting('agent-desk'));
+    assert.deepEqual(answerOf(applied), { kind: 'applied', plugin: 'teamrig', version: '0.333.0' });
+    assert.deepEqual(hooks.commands, ['/bin/agent-desk plugin marketplace update local', '/bin/agent-desk plugin update teamrig@local']);
+    const none = new FakeHooks();
+    const untold = await run(await installed('local'), 'update-apply', none, '{"plugin": "teamrig"}', NO_SESSION_HOST);
+    assert.deepEqual(answerOf(untold), { kind: 'failed', why: 'the host names no program to update a plugin with' });
+    assert.deepEqual(none.ran, []);
   });
 });

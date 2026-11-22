@@ -20,7 +20,7 @@ import { asksNowOf, urgentLinesText, WakeAsks } from "../wake/asks.js";
 import { startableTasks } from "../wake/day-start.js";
 import { inboxDepsOf } from "./commands/inbox.js";
 import { measureTranscript } from "./commands/rehire.js";
-import { sessionProcessCheckOf, transcriptsIfKept } from "./host.js";
+import { hostProgramsOf, sessionProcessCheckOf, transcriptsIfKept } from "./host.js";
 import { teamZone } from "./kit.js";
 import { RefusedError } from "./runtime.js";
 import { teamRegister } from "./team-register.js";
@@ -161,7 +161,7 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
         return keep(notRunning);
     }
     const { now, zone, tasks, elsewhere } = facts;
-    const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority);
+    const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority, options.exemption);
     if (startable.length > 0) {
         return keep(`has work it can start (${startable.map((task) => task.id).join(', ')})`);
     }
@@ -188,8 +188,9 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
         return keep('runs on a host whose transcript teamrig cannot read, so what it still runs is unknown');
     }
     const { tail, cut } = await transcriptTailOf(runtime, last.transcript);
-    // A tail with no timed own entry falls back to the file's last change, which is never earlier.
-    const idleMinutes = Math.floor((now - (lastTurnAtOf(reader, tail, cut) ?? last.changedAt)) / MINUTE_MS);
+    // A tail with no timed own entry falls back to the file's last change, which is never earlier. `now` is read before
+    // the transcript, so an entry the tab wrote meanwhile (or a clock ahead of this host's) is stamped after it: quiet 0 min.
+    const idleMinutes = Math.max(0, Math.floor((now - (lastTurnAtOf(reader, tail, cut) ?? last.changedAt)) / MINUTE_MS));
     const needed = config.open.headroom.closeIdleMinutes;
     if (idleMinutes < needed) {
         return keep(`has been quiet ${idleMinutes} min; it closes after ${needed} (open.headroom.closeIdleMinutes)`);
@@ -222,5 +223,5 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
 }
 /** What ends a session's tab and checks what that would cut off, from the runtime. */
 export function enderOf(runtime) {
-    return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform };
+    return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform, hostPrograms: hostProgramsOf(runtime) };
 }

@@ -47,7 +47,7 @@ const READ_LINES_HOURS = 24;
 const HOUR_MS = 3_600_000;
 
 /** What one run of `read` was asked for, checked as far as the command line and the environment alone allow. */
-interface ReadRequest {
+export interface ReadRequest {
   readonly documents: readonly DocumentName[];
   readonly team: string | undefined;
   readonly owner: string | undefined;
@@ -124,15 +124,33 @@ function requestOf(args: ParsedArgs, env: Env): ReadRequest {
   }
   return {
     documents,
+    ...scopeFlagsOf(args, env),
+    ...documentFlagsOf(args, documents),
+    unless: unlessOf(args.flags.get('unless'), documents),
+    speaks,
+  };
+}
+
+/** Whose documents a run reads: the flags every command of the interface takes alike, so a follower's scope is a read's. */
+export type ScopeFlags = Pick<ReadRequest, 'team' | 'owner' | 'session' | 'conversation' | 'sinceHours'>;
+
+export function scopeFlagsOf(args: ParsedArgs, env: Env): ScopeFlags {
+  return {
     team: teamOf(args.flags.get('team')),
     owner: ownerOf(args.flags.get('owner')),
     session: askerOf(args.flags.get('session'), env),
     conversation: conversationOf(args.flags.get('conversation')),
     sinceHours: sinceHoursOf(args.flags.get('since')),
+  };
+}
+
+/** What one document is asked of: the flags only a run naming that document takes, at their defaults when not given. */
+export type DocumentFlags = Pick<ReadRequest, 'task' | 'range'>;
+
+export function documentFlagsOf(args: ParsedArgs, documents: readonly DocumentName[]): DocumentFlags {
+  return {
     task: taskOf(args.flags.get('task'), documents),
     range: statsRangeOf(args.flags.get('range'), documents),
-    unless: unlessOf(args.flags.get('unless'), documents),
-    speaks,
   };
 }
 
@@ -268,7 +286,7 @@ async function answersOf(request: ReadRequest, runtime: CliRuntime): Promise<obj
 }
 
 /** What one run answers from: each document asked with its source, in the order asked. */
-interface ReadSources {
+export interface ReadSources {
   readonly sources: ReadonlyMap<DocumentName, DocumentSource>;
   /** What every document of the run carries in its problems. */
   readonly warnings: readonly string[];
@@ -279,7 +297,7 @@ interface ReadSources {
  * for one ({@link TEAMLESS}) and no `--team` is named; any other is refused as every command with no team is, since
  * a run answers every document it was asked or none.
  */
-async function sourcesOf(request: ReadRequest, runtime: CliRuntime): Promise<ReadSources> {
+export async function sourcesOf(request: ReadRequest, runtime: CliRuntime): Promise<ReadSources> {
   const found = await lookForTeam(runtime);
   if (found.kind === 'none' && request.team === undefined) {
     const teamless = new Map<DocumentName, DocumentSource>();
@@ -337,7 +355,7 @@ async function scopeOf(request: ReadRequest, runtime: CliRuntime, own: string): 
  * change what the same files are served as with no new interface version (a fixed builder, a new secret shape), and
  * a reader must not be told `unchanged` across it.
  */
-function revisionOf(parts: RevisionParts): string {
+export function revisionOf(parts: RevisionParts): string {
   return createHash('sha256').update(KIT_VERSION).update('\n').update(revisionText(parts)).digest('hex').slice(0, 16);
 }
 
@@ -368,6 +386,7 @@ function tasksSource(scope: ReadScope): DocumentSource {
       const register = await workingSetOf(runtime, kit.paths, layout);
       const body = tasksBody({
         tasks: register.tasks.values(),
+        retired: register.retired,
         owner: scope.owner,
         shapes: new SecretScanner(config.register.secretPatterns),
         connectors: DOCUMENT_CONNECTORS,

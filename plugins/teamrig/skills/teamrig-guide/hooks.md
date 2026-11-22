@@ -328,7 +328,10 @@ the guard cannot read (`--script-shell=node`, or a variable) is refused as a dou
   sessions' commits. Push your own branch, or use --force-with-lease if you truly mean it."
 - **Refuses, in doubt**: when it cannot read part of the line (an unclosed quote, a branch or alias only known when
   the line runs, a push held in quoted text such as `x='$(git push)'`, which bash runs if `${x@P}` or `$((x))`
-  reads it again, though not quoted backticks that never close, which run nothing; a bash variable counts as known when the line set it earlier to text and other known variables,
+  reads it again, in any word, though not quoted backticks that never close, which run nothing; other quoted text
+  it cannot read counts only where bash may read it again: an assignment, a builtin's argument, a word a redirection
+  other than to `/dev/null`, a pipe into `tee` or an in-place edit (`sed -i`) writes for a later line, never a plain
+  argument of another program such as a perl or sed pattern; a bash variable counts as known when the line set it earlier to text and other known variables,
   as in `B=feat; git push -u origin $B` or `G="git -C /w"; $G push`, and never set it otherwise, in a command or a
   file it writes to (`cat > $S/x`); from a command that may set variables unseen (`read B`, `eval`, a program held
   in an unknown variable), or from the start of a loop or group that holds one, no variable counts as known; `$HOME` and a
@@ -1755,6 +1758,11 @@ end of the budget day). New helpers are refused. More: teamrig budget`. Its lead
 gave the cut, and the model reads `you are past today's budget and the lead cut you to it until 03:00 IDT (the end of
 the budget day)`. A stop (`--stop`) holds the session whatever its use: the wake check and the idle pass wake and
 reopen it for p0 work only from the day's start, and past its part the model reads `the lead stopped you until ...`.
+
+A session held by the daily cap or a plain cut, never a stop, quiet hours or a short day's pause, still wakes for
+two kinds of task up to its configured wake priority, since a waited-on answer is never budget-held: a task another
+session's active task waits on (`--waits task:T<id>`, in this register or another of the team tree), and a task a
+leader above its owner marked with [teamrig update](commands.md#teamrig-update) `--exempt`.
 
 While escalated, the model is told with the next prompt, once per level: `teamrig budget: you are past today's
 budget and the team has no room left today, and it is ahead of its pace line. Finish the step in hand and start

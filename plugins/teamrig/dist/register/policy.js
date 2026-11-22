@@ -2,8 +2,9 @@ import { MAX_DESCRIPTION } from "../config/defaults.js";
 import { LeadTree } from "../config/lead-tree.js";
 import { priorityLevels } from "../config/priorities.js";
 import { ADDRESS_PATTERN } from "../core/address.js";
+import { clipEnd } from "../core/clip.js";
 import { SecretScanner } from "../core/secrets.js";
-import { parseDeadline, parseUtcDay, parseUtcDeadline, showStored } from "../core/time.js";
+import { parseDeadline, parseUtcDay, parseUtcDeadline, showStored, storedText } from "../core/time.js";
 import { waitAnswerersOf } from "./approval.js";
 import { blockerHold } from "./blocker-hold.js";
 import { NO_GOAL_TAGS } from "./goals.js";
@@ -36,9 +37,10 @@ export const IMPORT_STATUSES = ['open', 'done', 'dropped'];
 /**
  * Fields the lead may change on a task someone else owns: who does it, how urgent, when, in what order and its size
  * (the lead plans the week), its type and critical mark, so the lead can mark another session's fix a bug, its
- * work class, as leaders triage the class of their sessions' tasks (T2076), and the goal slice it prepares (T2453).
+ * work class, as leaders triage the class of their sessions' tasks (T2076), the goal slice it prepares (T2453) and
+ * its exemption from its owner's rest (T4948).
  */
-export const LEAD_FIELDS = ['owner', 'priority', 'due', 'week', 'after', 'size', 'type', 'critical', 'pin', 'workClass', 'prepares'];
+export const LEAD_FIELDS = ['owner', 'priority', 'due', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares'];
 /**
  * Fields the lead may change on a task whose owner is no session of the team any more (a retired hire, a session that
  * left at a team split): the LEAD_FIELDS and its ref, which no session of the team could keep true otherwise, such as
@@ -179,6 +181,8 @@ export class RegisterPolicy {
             type: input.type ?? null,
             critical: input.critical ?? false,
             pin: null,
+            // A leader exempts a task with `update` once it exists, as it marks what one prepares.
+            exempt: null,
             workClass: this.classSpelling(input.workClass ?? null),
             // A lead marks what a task prepares with `update` once it exists, where the policy knows who marks it.
             prepares: null,
@@ -775,6 +779,52 @@ export class RegisterPolicy {
         return ok({ changes: {}, note: text, waits, decided: true });
     }
     /**
+     * The owner's answer to a card from the pane (T4078), written as the owner (register.ownerSource): a Decided whose
+     * note says which option of the card the owner chose, or that the owner approved or declined, judged as
+     * {@link decideFrom} judges one. An option answers a wait on the owner's decision whose card has that option; yes
+     * or no answers a wait on the owner's approval.
+     */
+    ownerDecide(task, answer) {
+        const by = this.config.register.ownerSource;
+        const note = this.ownerAnswerNote(task, answer);
+        if (!note.ok) {
+            return note;
+        }
+        const decided = this.decideFrom(task, note.value);
+        return decided.ok ? ok({ ...decided.value, by }) : decided;
+    }
+    /** What the history keeps of the owner's answer: the option chosen by its number and words, or yes or no. */
+    ownerAnswerNote(task, answer) {
+        const by = this.config.register.ownerSource;
+        if (!waitsOnOwner(task, by)) {
+            return refuse(`${task.id} waits on no decision or approval of ${by}: only such a card is answered`);
+        }
+        const waitsOn = (kind) => task.waits.some((reason) => reason.kind === kind && reason.who === by);
+        if (answer.kind !== 'option') {
+            if (!waitsOn('approval')) {
+                return refuse(`${task.id} waits on ${by}'s decision, not an approval: answer it with --option <n>`);
+            }
+            return ok(answer.kind === 'approve' ? 'approved' : 'declined');
+        }
+        if (!waitsOn('decision')) {
+            return refuse(`${task.id} waits on ${by}'s approval, not a decision: answer it with --approve or --decline`);
+        }
+        const options = task.card?.options ?? [];
+        const chosen = options[answer.option - 1];
+        if (chosen === undefined) {
+            return refuse(options.length === 0 ? `${task.id}'s card has no options to choose from` : `${task.id}'s card has options 1 to ${options.length}, not ${answer.option}`);
+        }
+        return ok(clipEnd(`chose option ${answer.option} of ${options.length}: ${chosen}`, this.config.register.maxText));
+    }
+    /**
+     * The owner's Later from the pane (T4078), written as the owner: the card put off to `until` (stored form), with a
+     * note naming the time on the team's clock, judged as {@link deferFrom} judges one.
+     */
+    ownerLater(task, until, context) {
+        const deferred = this.deferFrom(task, until, `put off until ${storedText(until, context.zone)}`, context);
+        return deferred.ok ? ok({ ...deferred.value, by: this.config.register.ownerSource }) : deferred;
+    }
+    /**
      * Who audits a hand step of the owner's (T2312, core rule 11), never the owner itself: the team's security reviewer
      * (roles.securityReviewer, a `<team>/<id>` when it sits on a team above), or the reviewer's leaders on the reviewer's
      * own task. Undefined when the team has no reviewer, or the reviewer owns the task and has no leader but itself (the
@@ -912,7 +962,8 @@ export class RegisterPolicy {
         }
         const pinned = changes.pin === undefined ? undefined : this.pinProblem(task.id, changes.owner ?? task.owner, caller, changes.pin);
         const prepared = changes.prepares === undefined ? undefined : this.prepProblem(task.id, changes.owner ?? task.owner, caller, changes.prepares, goalTags);
-        const marked = pinned ?? prepared;
+        const exempted = changes.exempt === undefined ? undefined : this.exemptProblem(task.id, changes.owner ?? task.owner, caller, changes.exempt);
+        const marked = pinned ?? prepared ?? exempted;
         if (marked !== undefined) {
             return refuse(marked);
         }
@@ -996,6 +1047,18 @@ export class RegisterPolicy {
         return pin === null || pin === caller ? undefined : `a pin names the session that sets it (${caller}), not ${pin}`;
     }
     /**
+     * Why `caller` may not set or clear the rest exemption of task `id` (T4948), or undefined when it may: the mark wakes
+     * the task's `owner` past the daily cap and a plain budget cut, so only a leader sets it (the lead, or a sub-lead over
+     * that owner), never the owner itself unless it is the lead, so a session cannot spend past its own hold; the mark
+     * names the leader who set it.
+     */
+    exemptProblem(id, owner, caller, exempt) {
+        if (caller !== this.tree.lead && !this.tree.leads(caller, owner)) {
+            return `only ${this.approversText(owner)} exempts ${id} from its owner's rest: the mark wakes ${owner} past its budget hold`;
+        }
+        return exempt === null || exempt === caller ? undefined : `an exemption names the session that sets it (${caller}), not ${exempt}`;
+    }
+    /**
      * Why `caller` may not set or clear the prep marker of task `id` (T2453), or undefined when it may: the marker lets a
      * design for a ranked goal's near slice past the slice cap, so only a lead sets it (the lead, or a sub-lead over the
      * task's `owner`), never the owner itself unless it is the lead, so a build cannot ride it. A marker names one of
@@ -1052,7 +1115,7 @@ export class RegisterPolicy {
         if (!input.ref.startsWith(prefix)) {
             return refuse(`ref ${input.ref} is not a ${source} ref: it starts with ${prefix}`);
         }
-        const fields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null };
+        const fields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
         const holder = [...state.tasks.values()].find((task) => task.ref === input.ref);
         if (holder !== undefined) {
             return refuse(`${holder.id} already has ref ${input.ref}`);
@@ -1185,8 +1248,8 @@ export class RegisterPolicy {
 /** The texts whose length is judged against their own limit, not `maxText`. */
 const OWN_LIMITS = ['title', 'description'];
 function pickFields(task) {
-    const { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, workClass, prepares } = task;
-    return { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, workClass, prepares };
+    const { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, exempt, workClass, prepares } = task;
+    return { title, description, owner, source, ref, priority, due, goals, noGoal, week, after, size, type, critical, pin, exempt, workClass, prepares };
 }
 /** An update naming goals for a task said to serve none also clears that mark, which a task with goals cannot hold. */
 function clearNoGoal(task, changes) {

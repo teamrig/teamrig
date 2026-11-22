@@ -12,7 +12,8 @@ import { ROOM_POLL_MS, TAB_STAGGER_MS } from '../restore/run.ts';
 import { APP, CliHarness, KIT, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { FakePathProbe, FakeProcesses, NO_POWERSHELL } from '../testing/fake-processes.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming } from '../testing/host.ts';
+import type { SessionStart } from '../ports/host/index.ts';
+import { hostNaming, hostStarting, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakeCountdown, FakeShutdownLog, FakeStopWatch } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
@@ -307,7 +308,20 @@ describe('teamrig restore resume', () => {
     const processes = new FakeProcesses();
     const result = await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: OPENER_ENV });
     assert.deepEqual(result, { code: EXIT.ok, stdout: [`Resuming Claude Code session ${NOTES} in ${APP} at high effort`], stderr: [] });
-    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--resume', NOTES, '--effort', 'high', 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--effort', 'high', '--resume', NOTES, 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+  });
+
+  it('resumes with the arguments the running host spells, telling it the session, effort and prompt and no flag of its own', async () => {
+    const seen: SessionStart[] = [];
+    const host = hostStarting('agent-desk', (start) => {
+      seen.push(start);
+      return ['continue', start.resume ?? 'none'];
+    });
+    const processes = new FakeProcesses();
+    const probe = new FakePathProbe({ folders: [APP], files: ['/usr/local/bin/agent-desk'] });
+    okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe, processes, env: OPENER_ENV, host }));
+    assert.deepEqual(processes.ran.map((run) => run.args), [['continue', NOTES]]);
+    assert.deepEqual(seen, [{ name: undefined, model: undefined, effort: 'high', resume: NOTES, settingsFile: undefined, prompt: 'Go on' }]);
   });
 
   it("resumes with no session variable of any host: the shipped host's and those the running host names", async () => {
@@ -330,6 +344,17 @@ describe('teamrig restore resume', () => {
     const env = { ...OPENER_ENV, PATH: '/home/me/.claude/plugins/cache/teamrig/teamrig/0.75.0/bin:/usr/local/bin' };
     okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP], { probe: ON_PATH, processes, env }));
     assert.equal(processes.ran[0]?.env['PATH'], '/usr/local/bin');
+  });
+
+  it('resumes in the program the running host names, and runs none on a host that tells nothing of its sessions', async () => {
+    const desk = '/usr/local/bin/agent-desk';
+    const both = new FakePathProbe({ folders: [APP], files: [CLAUDE, desk] });
+    const processes = new FakeProcesses();
+    okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP], { probe: both, processes, env: OPENER_ENV, host: hostStarting('agent-desk') }));
+    assert.deepEqual(processes.ran.map((run) => run.command), [desk]);
+    const none = new FakeProcesses();
+    const untold = await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP], { probe: both, processes: none, env: OPENER_ENV, host: NO_SESSION_HOST });
+    assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
   });
 
   it('refuses a folder that is gone and anything but a Claude Code session id', async () => {

@@ -122,6 +122,6 @@ export function sessionsBody(input) {
         const text = new TeamText(served, team);
         return [...team.members.map((member) => memberOf(text, team, member)), ...team.retired.map((retired) => retiredOf(text, team, retired))];
     });
-    const teams = input.teams.map((team) => ({ id: team.id, parent: team.parent, active: team.members.length, retired: team.retired.length }));
+    const teams = input.teams.map((team) => ({ id: team.id, parent: team.parent, active: team.members.length, retired: team.retired.length, week: team.week }));
     return { self: input.self, teams, sessions, failures: input.failures, cuts: served.cuts };
 }

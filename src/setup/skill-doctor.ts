@@ -1,4 +1,4 @@
-import { findClaude, type ClaudeSearchDeps } from '../open/claude.ts';
+import { findProgram, type ProgramSearchDeps } from '../open/host-program.ts';
 import { hookEndText, succeeded, type HookRunner } from '../deploy/hooks.ts';
 
 /**
@@ -99,15 +99,23 @@ export function parseSkillDoctor(lines: readonly string[]): DoctorSkill[] | unde
 }
 
 /** What starting Claude Code needs: where to look for it, and the runner that runs it with a time limit and no shell. */
-export interface SkillDoctorDeps extends ClaudeSearchDeps {
+export interface SkillDoctorDeps extends ProgramSearchDeps {
   readonly hooks: HookRunner;
+  /**
+   * The file name of the host's program, as its session launcher names it; undefined on a host that names none,
+   * where the check is skipped.
+   */
+  readonly program: string | undefined;
 }
 
 /** `/skill-doctor` through the Claude Code on PATH, run in the project's folder so its skills are listed too. */
 export function claudeSkillDoctor(deps: SkillDoctorDeps): SkillDoctor {
   return {
     async read(project) {
-      const found = await findClaude(deps);
+      if (deps.program === undefined) {
+        return { kind: 'skipped', why: 'the host names no program to run it with' };
+      }
+      const found = await findProgram(deps, deps.program);
       if (found.kind === 'missing') {
         return { kind: 'skipped', why: 'Claude Code is not on PATH' };
       }

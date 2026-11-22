@@ -373,6 +373,11 @@ Flags:
 - `--pin`: pins the task to the top of its owner's list; the pin names who set it, which `show` prints
   (`pinned by lead: above every other task of api`), and its `list` row says `pinned`.
 - `--unpin`: clears the task's pin.
+- `--exempt`: exempts the task from its owner's rest: while the daily cap or a plain budget cut holds the owner,
+  it still wakes for this task (up to its configured wake priority), never past a stop. Only a leader above the owner
+  sets it (the lead on its own tasks too), never the owner itself; the mark names who set it, which `show` prints
+  (`exempted by lead: ...`). A task another session's task waits on is exempt without the mark.
+- `--not-exempt`: clears the exemption.
 - `--prepares <goal>:<slice>|none`: marks the task as a design, study or prep plan for that slice of a goal
   (`--prepares G1:2`), or `none` to clear it. Only a leader above the owner sets or clears it (the lead on its own
   tasks too), never the owner: while the slice is the goal's open one (`goal set --slice`) or the next, the task runs
@@ -2546,7 +2551,7 @@ answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.5`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.8`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2560,7 +2565,24 @@ Every document carries:
 
 `tasks` adds `tasks`, each with the task's fields as the register holds them (`id`, `title`, `description`, `owner`,
 `priority`, `status`, `due`, `note`, `proof`, `evidence`, `source`, `ref`, `waits`, `after`, its times and the
-rest), and `cuts`.
+rest), and `cuts`. Since interface 1.6 each task also has:
+
+- `card`: what its wait on a decision or an approval asks, `{ "question", "options", "recommend", "byDefault",
+  "whyAsk", "gate", "run", "affects", "security" }`, a part the card leaves out as `null` and `security` `true` when
+  the question reaches the owner only with the security reviewer's verdict; `null` on any other task. Its texts are
+  cut as the other texts are, a cut named `card.<part>`.
+- `descriptionCut`: `{ "chars", "hash" }` when the register's snapshot left out a description it has, so
+  `description` is `null`.
+- `sizeBase`: `{ "day", "w" }`, what the task had cost that UTC day when it got its current size; its spend over size
+  counts from there. `null` when it got its size at creation.
+- `prepares`: `{ "goal", "slice" }`, the goal slice the task prepares, or `null`; `noGoal`: `true` when a leader
+  marked it as serving no goal.
+- `startedAt`: when it first went in progress or verifying, `null` until then; `waitsAt`: when it last asked for
+  something new (its creation at the latest), what "waiting since" reads.
+
+Since interface 1.8 `tasks` also has `retired`: how many finished tasks the register's compaction left to the
+archive, which are in no row. It counts every owner's, `--owner` or not, and is `0` when none is; above 0, a count of
+done tasks made from the rows is of the working set only.
 
 `plan` (since interface 1.1) adds `at`, `validUntil`, `week`, `tasks`, `finished` and `ownerCards`: where each task
 stands in the team's plan, as `teamrig list` orders it, so a program ranks nothing itself. It holds ids, numbers,
@@ -2729,7 +2751,12 @@ and takes no `--team`; a session your team does not have now is refused.
 is your own.
 
 - `teams`: every team of the tree, the root first, each `{ "id", "parent", "active", "retired" }` (`parent` is `null`
-  for the root; the two counts are its sessions and its retired ones).
+  for the root; the two counts are its sessions and its retired ones). Since interface 1.8 each also has `week`: the
+  team's own part of the account's week as its budget hooks last wrote it, `{ "usedPct", "plannedPct",
+  "accountUsedPct", "resetsAt", "start", "at" }` (percents of the account's week; `start` `null` when none was
+  named), or `null` when no readable file holds one. A child team's part is in its own row: add the rows of one week
+  for a team with its children, and drop a week whose `resetsAt` has passed. Its file moves as the team works, and
+  each write is a new revision.
 - `sessions`: each team's sessions in its config's order, then its retired ones. A row holds `team`, `id`, `name`,
   `formerNames`, `roles`, `leader` (its direct leader's id; `null` for the team's lead and for a retired session),
   `ledBy` (the leaders above it, nearest first), `leads` (how many it leads directly), `active` (`false` once it is
@@ -2832,7 +2859,61 @@ teamrig read tasks --json --owner api
 Output:
 
 ```text
-{"interface":"1.5","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"cuts":[]}
+{"interface":"1.8","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
+```
+
+### teamrig events
+
+The events side of the public interface, for a program that shows the team and wants to know when to read again
+without asking on a timer: start `teamrig events --json`, keep it running and read its stdout. Each line is one JSON
+frame, and nothing else is written there. It is a program's command: `/teamrig events` is refused, since it runs
+until its reader ends.
+
+- The first frame is `hello`: `{ "interface", "event": "hello", "documents": [{ "document", "revision" }] }`, every
+  followed document with the revision `teamrig read` answers for it now.
+- Then a `changed` frame each time a revision moved, naming only the documents that moved, with their new revision.
+  The files are looked at once a second, so every change inside a second is one frame, and a second with no change
+  sends nothing.
+- A frame holds documents and revisions and no text of the team's: run `teamrig read <document> --json --unless
+  <document>=<revision you hold>` for what changed. A `revision` of `null` means the document's files could not be
+  looked at; read it to be told why.
+- Ignore an event or a field you do not know: a minor version adds some.
+
+A refusal is `read`'s: one `REFUSED` line on stderr with exit 2, before any frame. The follower ends with exit 0
+once the program that started it is gone, or once that program reads its stdout no more, which is seen at the next
+frame's write. It writes no file, marks nothing read and takes no lock. It keeps the team, sessions and paths it
+started with: start it again after the team config changed (every followed document is then named in one frame).
+
+Flags:
+
+- `--json`: required; interface 1 has no text form.
+- `--documents <document>[,<document>...]`: the documents to follow, each once: `tasks`, `inbox`, `sessions`,
+  `meetings`, `config`, `plan`, `goals`, `history`, `stats`. Every one when left out, `history` only when `--task`
+  names its task, and then `inbox` needs a session to serve.
+- `--session <id|name>`: who is asking, which picks whose `inbox` is followed; `$TEAMRIG_SESSION` when left out.
+- `--conversation <id>`: the host's own id of the conversation your program runs in, as `teamrig read` takes it.
+- `--team <id>`: follows a team above yours in your tree instead of your own, for the documents `teamrig read`
+  serves a team above yours.
+- `--owner <id|name>`: the session whose tasks your reads keep.
+- `--since <hours>`: the reach your `inbox` reads ask.
+- `--task <id>`: the one task your `history` reads ask; refused when `history` is not followed.
+- `--range <days>`: the days your `stats` reads count over, `7d` when left out; refused when `stats` is not
+  followed.
+
+Give the follower the flags you give your reads: a revision counts what was asked, so only then are its revisions
+the ones your reads hold.
+
+Example:
+
+```sh
+teamrig events --json --documents tasks,inbox --session api
+```
+
+Output:
+
+```text
+{"interface":"1.8","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
+{"interface":"1.8","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
 ```
 
 ### teamrig sessions
@@ -4161,6 +4242,62 @@ PREVIEW owner next T14: goes to the top of web's list (the earlier pin on T9 mov
 NEXT T14 open, p2, pinned, owner web, from lead | Saved carts survive a logout
 ```
 
+### teamrig owner decide
+
+The owner answers a card from the pane's Decisions tab (`teamrig owner decide <[team/]T<id>> --option <n>`, or
+`--approve` or `--decline`): a task waiting on the owner's decision takes one of its card's options by number, a
+task waiting on the owner's approval takes yes or no. The answer is kept in the task's history as the owner's
+decision, naming the option chosen in full, so the meeting asks it no more; the task's waits on the owner end, and
+its session is woken to go on from the answer. It refuses a task that waits on no decision or approval of the owner,
+an option the card does not have, yes or no to a decision and an option to an approval. It writes as the owner, so
+the exec guard refuses it from an agent's tool call, and it refuses itself under `$CLAUDECODE`, as `owner note` does.
+
+Flags:
+
+- `--option <n>`: the number of the card's option the owner chose, from 1.
+- `--approve`: yes to an approval.
+- `--decline`: no to an approval.
+
+Example:
+
+```sh
+teamrig owner decide T21 --option 2
+```
+
+Output:
+
+```text
+DECIDED T21 waiting, p1, owner web, from lead | Pick the launch pricing tier (waiting: owner decided, by owner; launch pricing)
+NOTE web has an inbox line that wakes its idle tab: owner answered your card on T21: chose option 2 of 2: Pro at 29 dollars a month; it waits on owner no more, so go on from the answer
+```
+
+### teamrig owner later
+
+The owner puts a card off from the pane's Decisions tab (`teamrig owner later <[team/]T<id>> --until <when>`): the
+card leaves the owner's list until then and comes back by itself. `--until` takes `in-<n>h` (n hours from now, up to
+168), `tomorrow` or `monday` (09:00 on the team's clock the next day, or next Monday), or a time as `--due` takes
+it. The Later is kept in the task's history as the owner's, and the task's session is told with no wake, as nothing
+waits on it to act. It refuses a task that waits on no decision or approval of the owner, and a time gone by. It
+writes as the owner, so the exec guard refuses it from an agent's tool call, and it refuses itself under
+`$CLAUDECODE`, as `owner note` does.
+
+Flags:
+
+- `--until <in-<n>h|tomorrow|monday|time>`: required; when the card comes back.
+
+Example:
+
+```sh
+teamrig owner later T21 --until tomorrow
+```
+
+Output:
+
+```text
+LATER T21 waiting, p1, owner web, from lead | Pick the launch pricing tier (waiting: decision owner · until Wed 01-09 09:00 IST; launch pricing)
+NOTE web has an inbox line: owner put off your card on T21 until 2030-01-09 09:00 IST: it comes back to owner then, and waits on owner until answered
+```
+
 ### teamrig owner wake
 
 The owner wakes one session by hand (`teamrig owner wake <[team/]id|name>`), the pane's Wake on a session row. A
@@ -4730,8 +4867,8 @@ Without the key it runs the released UI this teamrig pins: the first start fetch
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
 gets only PATH, HOME, USERPROFILE, SYSTEMROOT, TERM, COLORTERM, LANG, LANGUAGE, TEAMRIG_HOME, TEAMRIG_TEAM,
-TEAMRIG_SESSION and the `LC_*` variables of yours. While this teamrig pins no release, it is refused without [ui.path], and it is refused when the key
-names no file. As it starts a program,
+TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.80.0's UI. It is refused when
+[ui.path] names no file. As it starts a program,
 `/teamrig ui` runs only when you type it in the tab, never from a session's line; and [ui.path] is the owner's key,
 which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
 [ui.path] at a working tree a session edits: its edits would run in your terminal unchecked.
@@ -4747,11 +4884,11 @@ Example:
 teamrig ui --session web
 ```
 
-Output (none of its own while the UI runs, and exit 0 when you quit it; this is the refusal while [ui.path] is
-unset):
+Output: none of its own while the UI runs, and exit 0 when you quit it. The refusal when the first start cannot
+fetch the released UI:
 
 ```text
-REFUSED no released UI is pinned in this teamrig yet; set ui.path in the team config to a UI entry script of your own build
+REFUSED the UI 0.80.0 could not be fetched: <why>
 ```
 
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
@@ -5876,7 +6013,7 @@ WITHDRAWN heavy: build api, waiting since 2030-01-08 11:58 IST: it stops at its 
 Run inside a queued step (`teamrig queue`) while the step only waits on a remote service, such as a merge waiting
 on its pull request's checks: it sets the step's host share aside, so the ship slot, its heavy place and the MB it
 held go to the next step in line, and the step goes on running. `teamrig step-back` takes the share back before the
-step does local work again. The time from stepping away until the share is taken back, its wait in line included, does
+step does local work again, at its first place in line: ahead of every later step but a fronted or more urgent one. The time from stepping away until the share is taken back, its wait in line included, does
 not count against the step's `delivery.queue.maxRunMinutes`. A share set aside is dropped when the step ends, or at the next step's look once the
 step's process is gone. `KEPT` when the step holds the whole host (an exclusive step), or when a teamrig older than
 0.448.0 runs the queue (it would not drop the share), which it keeps; `NONE` when it holds nothing. Refused outside a queued step, which

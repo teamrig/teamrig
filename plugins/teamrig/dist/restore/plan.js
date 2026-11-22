@@ -34,10 +34,11 @@ export const CLOSED_KEEP_MS = 48 * 60 * 60_000;
  */
 export const HUNG_AFTER_MS = 3 * 60 * 60_000;
 export function judgeEntry(entry, facts) {
-    if (entry.entrypoint !== undefined && entry.entrypoint !== 'cli') {
-        return { verdict: 'discard', reason: `not a terminal session (${entry.entrypoint})` };
+    const place = facts.placeOf({ startedAs: entry.entrypoint, sessionKind: entry.sessionKind });
+    if (place === 'elsewhere') {
+        return { verdict: 'discard', reason: entry.entrypoint === undefined ? 'not a terminal session' : `not a terminal session (${entry.entrypoint})` };
     }
-    if (entry.sessionKind === 'bg') {
+    if (place === 'background') {
         return { verdict: 'discard', reason: 'background session' };
     }
     if (entry.restoredAt !== undefined && entry.restoredAt >= entry.updatedAt && facts.now - entry.restoredAt < RESTORE_IN_FLIGHT_MS) {

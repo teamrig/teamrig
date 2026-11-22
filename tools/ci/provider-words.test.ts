@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type SkillFile, baselineText, compareCounts, hitLine, parseBaseline, providerHits, skillCounts, termPattern } from './provider-words.ts';
+import { type SkillFile, hitLine, providerHits, skillCounts, termPattern } from './provider-words.ts';
 
 const file = (skill: string, ...lines: readonly string[]): SkillFile => ({ skill, path: `${skill}/SKILL.md`, text: lines.join('\n') });
 /** One file's hits, each as `<line> <term>`. */
@@ -47,34 +47,5 @@ describe('skillCounts', () => {
   it("sums each skill's files and lists a skill with none at 0, sorted by folder", () => {
     const files = [file('s/two', 'GitHub'), file('s/one', 'nothing'), { skill: 's/two', path: 's/two/more.md', text: 'gh and JQL' }];
     assert.deepEqual([...skillCounts(files)], [['s/one', 0], ['s/two', 3]]);
-  });
-});
-
-describe('compareCounts', () => {
-  it('sorts the counts into rose, fell and gone, a skill the baseline lacks having 0', () => {
-    const counts = new Map([['a', 3], ['b', 1], ['c', 2], ['d', 0]]);
-    const baseline = new Map([['a', 3], ['b', 4], ['z', 1]]);
-    assert.deepEqual(compareCounts(counts, baseline), {
-      rose: [{ skill: 'c', count: 2, baseline: 0 }],
-      fell: [{ skill: 'b', count: 1, baseline: 4 }],
-      gone: ['z'],
-    });
-  });
-});
-
-describe('the baseline file', () => {
-  it('reads back what it writes, skills sorted', () => {
-    const text = baselineText(new Map([['b', 2], ['a', 0]]));
-    assert.match(text, /"a": 0,\n {4}"b": 2\n/);
-    assert.ok(text.endsWith('}\n'));
-    assert.deepEqual([...parseBaseline(JSON.parse(text))], [['a', 0], ['b', 2]]);
-  });
-
-  it('refuses a file without a skills object or with a count that is not a whole number', () => {
-    assert.throws(() => parseBaseline([]), /needs a "skills" object/);
-    assert.throws(() => parseBaseline({ skills: [] }), /needs a "skills" object/);
-    assert.throws(() => parseBaseline({ skills: { a: '1' } }), /count of a is not a whole number/);
-    assert.throws(() => parseBaseline({ skills: { a: 1.5 } }), /count of a is not a whole number/);
-    assert.throws(() => parseBaseline({ skills: { a: -1 } }), /count of a is not a whole number/);
   });
 });

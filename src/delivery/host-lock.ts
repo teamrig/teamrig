@@ -71,6 +71,8 @@ export interface LockWaiter {
   readonly request?: TicketRequest;
   /** What it waited on at its last look; left out before its first look, and by an older kit. */
   readonly waitingOn?: WaitingOn;
+  /** True when its step is taking back the share it set aside ({@link HostLock.takeBack}), so admission keeps its arrival place (T4196); left out otherwise. */
+  readonly back?: boolean;
 }
 
 /**
@@ -516,7 +518,8 @@ function isLockWaiter(value: unknown): value is LockWaiter {
     isTime(value['expiresAt']) &&
     (value['stopsOnWithdraw'] === undefined || typeof value['stopsOnWithdraw'] === 'boolean') &&
     (value['request'] === undefined || isTicketRequest(value['request'])) &&
-    (value['waitingOn'] === undefined || isWaitingOn(value['waitingOn']))
+    (value['waitingOn'] === undefined || isWaitingOn(value['waitingOn'])) &&
+    (value['back'] === undefined || typeof value['back'] === 'boolean')
   );
 }
 
@@ -1008,7 +1011,7 @@ export class HostLock {
    */
   async acquire(session: string, purpose: string, maxWaitMs: number, pollMs: number, onWait: Tell, ask: StepAsk = {}, stop?: AbortSignal): Promise<Taking> {
     const patience = new Patience(this.ports.clock.now(), maxWaitMs);
-    const ticket = await this.joinLine(session, purpose, patience.deadline, this.ticketRequestOf(ask, await this.rulesNow()), ask.arrivedAt, ask.back?.id);
+    const ticket = await this.joinLine(session, purpose, patience.deadline, this.ticketRequestOf(ask, await this.rulesNow()), ask.arrivedAt, ask.back?.id, ask.back !== undefined);
     const reports = new WaitReports(onWait, this.ports.zone);
     try {
       const waited = await this.waitInLine(ticket, patience, pollMs, reports, ask, stop);
@@ -1748,9 +1751,10 @@ export class HostLock {
 
   /**
    * Writes this step's ticket in line, its wait running out at `deadline`, saying what it asks when it names a `request`:
-   * at the end, or at its first arrival `arrivedAt` when it joins again (never later than now).
+   * at the end, or at its first arrival `arrivedAt` when it joins again (never later than now), marked `back` when it
+   * joins to take back its share.
    */
-  private async joinLine(session: string, purpose: string, deadline: number, request: TicketRequest | undefined, arrivedAt?: number, id?: string): Promise<OwnTicket> {
+  private async joinLine(session: string, purpose: string, deadline: number, request: TicketRequest | undefined, arrivedAt?: number, id?: string, back = false): Promise<OwnTicket> {
     const now = Math.min(arrivedAt ?? this.ports.clock.now(), this.ports.clock.now());
     const waiter: LockWaiter = {
       id: id ?? this.ports.newId(),
@@ -1762,6 +1766,7 @@ export class HostLock {
       expiresAt: ticketExpiry(deadline),
       stopsOnWithdraw: true,
       ...(request === undefined ? {} : { request }),
+      ...(back ? { back: true } : {}),
     };
     const name = `${String(now).padStart(ARRIVAL_DIGITS, '0')}-${waiter.id}.json`;
     await this.ports.files.write(join(this.queue, name), stored(waiter));

@@ -327,6 +327,7 @@ export function formatEvent(event, zone) {
                 task.size === null ? undefined : `size=${sizeText(task.size)}`,
                 task.type === null ? undefined : `type=${task.type}`,
                 task.critical ? 'critical=true' : undefined,
+                task.exempt === null ? undefined : `exempt=${task.exempt}`,
                 task.workClass === null ? undefined : `workClass=${task.workClass}`,
                 task.prepares === null ? undefined : `prepares=${prepText(task.prepares)}`,
             ]
@@ -388,6 +389,9 @@ export function formatTaskDetail(task, events, tree, extras) {
     }
     if (task.pin !== null) {
         lines.push(`pinned by ${task.pin}: above every other task of ${task.owner}`);
+    }
+    if (task.exempt !== null) {
+        lines.push(`exempted by ${task.exempt}: ${task.owner} still wakes for it past the daily cap or a budget cut`);
     }
     if (task.size !== null) {
         const cost = extras.sizeCost?.(task.size);

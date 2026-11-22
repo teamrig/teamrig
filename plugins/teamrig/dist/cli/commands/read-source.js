@@ -47,12 +47,12 @@ export function skippedOf(folder, path, read) {
 export async function workingSetOf(runtime, folder, layout) {
     try {
         const snapshot = await readWorkingSet(runtime.files, layout);
-        return { tasks: snapshot.state.tasks, problems: damageOf(snapshot, folder, layout.tail) };
+        return { tasks: snapshot.state.tasks, retired: snapshot.retired?.count ?? 0, problems: damageOf(snapshot, folder, layout.tail) };
     }
     catch (error) {
         if (error instanceof MissingSegmentError) {
             const segment = servedPathOf(folder, error.path);
-            return { tasks: new Map(), problems: [`${segment}: missing, so the register's archive is incomplete and its tasks cannot be read`] };
+            return { tasks: new Map(), retired: 0, problems: [`${segment}: missing, so the register's archive is incomplete and its tasks cannot be read`] };
         }
         throw error;
     }

@@ -4,6 +4,7 @@ import { claudeProjectSlug } from '../budget/discover.ts';
 import type { EndOutcome } from '../open/session-processes.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FakeCountdown, FakeShutdownLog, FakeStopWatch } from '../testing/fake-restore.ts';
+import { testSessionPlace } from '../testing/host.ts';
 import { MemoryFiles, MemoryPathProbe } from '../testing/memory-files.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { ARCHIVE_KEEP_MS, RestoreArchive, restoreArchiveDir } from './archive.ts';
@@ -153,6 +154,7 @@ async function world(
       sleep: clock.sleep,
       probe,
       reader: shippedTranscripts(),
+      placeOf: testSessionPlace(),
       shutdowns: new FakeShutdownLog({ start: SHUTDOWN, end: SHUTDOWN + 60_000 }),
       countdown,
       stops,

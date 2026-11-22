@@ -88,6 +88,11 @@ export interface TaskFields {
   /** The leader who pinned the task to the top of its owner's list, above priority; null: not pinned. Absent on older lines: not pinned. */
   readonly pin: string | null;
   /**
+   * The leader who exempted the task from its owner's rest (T4948): a session held by the daily cap or a plain budget
+   * cut still wakes for it (wake/exempt.ts), never past a stop. Null: not exempted. Absent on older lines: not exempted.
+   */
+  readonly exempt: string | null;
+  /**
    * The work class (T2076), one of the team's `focus.classes` when written; null when no one set it, which counts as the
    * team's `focus.defaultClass` (focus.ts). Parsing checks only its spelling, so a class a team later renames still
    * reads. Absent on older lines: not set.
@@ -137,7 +142,7 @@ const LEGACY_KINDS: ReadonlyMap<unknown, Pick<TaskFields, 'type' | 'critical'>> 
   ['critical', { type: 'bug', critical: true }],
 ]);
 
-export const TASK_FIELD_NAMES = ['title', 'description', 'owner', 'source', 'ref', 'priority', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'workClass', 'prepares'] as const;
+export const TASK_FIELD_NAMES = ['title', 'description', 'owner', 'source', 'ref', 'priority', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares'] as const;
 
 export type TaskFieldName = (typeof TASK_FIELD_NAMES)[number];
 
@@ -296,6 +301,7 @@ export function eventRecord(event: RegisterEvent): JsonRecord {
     (name === 'critical' && !task.critical) ||
     (name === 'noGoal' && !task.noGoal) ||
     (name === 'pin' && task.pin === null) ||
+    (name === 'exempt' && task.exempt === null) ||
     (name === 'workClass' && task.workClass === null) ||
     (name === 'prepares' && task.prepares === null);
   return { ...event, task: Object.fromEntries(Object.entries(task).filter(([name]) => !left(name))) };
@@ -617,6 +623,12 @@ function readField(fields: { -readonly [K in TaskFieldName]?: TaskFields[K] }, n
         return 'pin is not text';
       }
       fields.pin = typeof value === 'string' ? value : null;
+      return undefined;
+    case 'exempt':
+      if (value !== undefined && value !== null && (typeof value !== 'string' || value === '')) {
+        return 'exempt is not text';
+      }
+      fields.exempt = typeof value === 'string' ? value : null;
       return undefined;
     case 'workClass':
       if (value !== undefined && value !== null && (typeof value !== 'string' || !WORK_CLASS_NAME.test(value))) {

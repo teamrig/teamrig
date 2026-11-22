@@ -12,7 +12,7 @@ import { RestartLog } from "../../refresh/restart-log.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { RestoreRegistry, restoreSessionsDir } from "../../restore/registry.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
-import { leadLaunchOf, sessionProcessCheckOf, transcriptsOf } from "../host.js";
+import { hostProgramsOf, leadLaunchOf, sessionProcessCheckOf, transcriptsOf } from "../host.js";
 import { openKit, reloadTeamConfig, requireConfig, rosterOf } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { inboxDepsOf } from "./inbox.js";
@@ -86,6 +86,7 @@ export async function restart(args, runtime) {
         clock: runtime.clock,
         sleep: runtime.sleep,
         platform: runtime.platform,
+        hostPrograms: hostProgramsOf(runtime),
         asks: new ClearAsks(runtime.files, clearAskDir(kit.paths.kitHome)),
         restore: new RestoreRegistry(runtime.files, restoreSessionsDir(kit.paths.kitHome)),
         isSessionProcess: sessionProcessCheckOf(runtime),

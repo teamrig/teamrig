@@ -26,13 +26,16 @@ describe('every workflow', () => {
   it('gives the token read-only contents by default, none in release-merge.yml, and never runs a fork pull request with secrets', () => {
     for (const [name, text] of workflows) {
       assert.match(text, name === 'release-merge.yml' ? /^permissions: \{\}\n/m : /^permissions:\n {2}contents: read\n/m, name);
-      assert.doesNotMatch(text, /pull_request_target/, name);
+      // auto-merge.yml alone runs on pull_request_target, with no secret and no checkout (auto-merge-workflow.test.ts).
+      assert.equal(/pull_request_target/.test(text), name === 'auto-merge.yml', name);
+      if (name === 'auto-merge.yml') assert.doesNotMatch(text, /secrets\.|actions\/checkout/, name);
     }
   });
 
-  it('never merges a pull request by gh or auto-merge, so no dependency update lands without a person checking it', () => {
+  it('switches auto-merge on only from auto-merge.yml, which leaves the review to a person, and never merges a dependency update by itself', () => {
     for (const [name, text] of workflows) {
-      assert.doesNotMatch(text, /gh pr merge|--auto\b|enablePullRequestAutoMerge|dependabot\/fetch-metadata/, name);
+      assert.equal(/gh pr merge|--auto\b|enablePullRequestAutoMerge/.test(text), name === 'auto-merge.yml', name);
+      assert.doesNotMatch(text, /dependabot\/fetch-metadata|gh pr review|--approve\b|addPullRequestReview/, name);
     }
   });
 
@@ -42,9 +45,9 @@ describe('every workflow', () => {
     }
   });
 
-  it('writes pull requests only from release.yml, once, to open the release pull request', () => {
+  it('writes pull requests only from release.yml, to open the release pull request, and auto-merge.yml, to switch auto-merge on, once each', () => {
     for (const [name, text] of workflows) {
-      assert.equal(text.match(/pull-requests: write/g)?.length ?? 0, name === 'release.yml' ? 1 : 0, name);
+      assert.equal(text.match(/pull-requests: write/g)?.length ?? 0, name === 'release.yml' || name === 'auto-merge.yml' ? 1 : 0, name);
     }
   });
 });

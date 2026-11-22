@@ -1,20 +1,35 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { baselineText, parseBaseline } from '../lib/count-baseline.ts';
 import { TOOLS_REPO } from '../lib/repo-root.ts';
 import { type CliRun, TempRepo } from '../lib/temp-repo.ts';
-import { BOUNDARY_RULES } from './boundaries.ts';
+import { BASELINE_FILE, BOUNDARY_RULES } from './boundaries.ts';
 
 const CLI = fileURLToPath(new URL('./boundaries-cli.ts', import.meta.url));
-const WARN = 'boundaries: warn mode, so the counts fail nothing yet\n';
-/** The count lines and the closing line, given each rule's count in the rules' order. */
-const counted = (...counts: readonly number[]): string => `${BOUNDARY_RULES.map((rule, index) => `boundaries: ${counts[index] ?? 0} ${rule.title}\n`).join('')}${WARN}`;
+const BASELINE = 'tools/ci/boundaries.json';
+const HELD = 'boundaries: a count may fall, never rise\n';
+/** Each rule's count line, given the counts in the rules' order. */
+const counted = (...counts: readonly number[]): string => BOUNDARY_RULES.map((rule, index) => `boundaries: ${counts[index] ?? 0} ${rule.title}\n`).join('');
+/** The counts of the repo `crossed` writes, by rule. */
+const CROSSED: readonly (readonly [string, number])[] = [
+  ['core-imports', 1],
+  ['adapter-reach', 2],
+  ['adapter-imports', 1],
+  ['fakes-reach', 1],
+  ['tool-names', 2],
+];
 
 describe('boundaries-cli', () => {
   let repo: TempRepo;
   /** Runs the CLI on the temp repo from a folder outside it, so a read by the cwd would find nothing. */
   const check = (args: readonly string[] = []): CliRun => repo.runOutside(CLI, [...args, '--root', repo.dir]);
+  const baseline = (entries: readonly (readonly [string, number])[]): void => {
+    repo.write(BASELINE, baselineText(BASELINE_FILE.comment, BASELINE_FILE.field, new Map(entries)));
+  };
+  const written = (): ReadonlyMap<string, number> => parseBaseline(JSON.parse(readFileSync(join(repo.dir, BASELINE), 'utf8')), BASELINE_FILE.field);
   /** A repo with a finding of every rule, and files the check must not read. */
   const crossed = (): void => {
     repo.write('tools/docs/pages/draw.ts', "import host from '../../../src/adapters/hosts/first/index.ts';\n");
@@ -30,15 +45,41 @@ describe('boundaries-cli', () => {
   });
   afterEach(() => repo.remove());
 
-  it('counts each rule over the .ts files of src and tools of the --root repo, and exits 0 whatever it finds', () => {
+  it('passes counts at their baseline, counting each rule over the .ts files of src and tools of the --root repo', () => {
     crossed();
+    baseline(CROSSED);
     const result = check();
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout, counted(1, 2, 1, 1, 2));
+    assert.equal(result.stdout, `${counted(1, 2, 1, 1, 2)}${HELD}`);
+  });
+
+  it('fails a count above its baseline, and any finding of a rule the baseline lacks', () => {
+    crossed();
+    baseline([['core-imports', 1], ['adapter-reach', 1], ['adapter-imports', 1], ['tool-names', 2]]);
+    const result = check();
+    assert.equal(result.status, 1, result.stderr);
+    const rose = ['adapter-reach rose to 2 from 1', 'fakes-reach rose to 1 from 0'].map((line) => `boundaries: ${line}: run --list to see each finding\n`);
+    assert.equal(result.stdout, `${counted(1, 2, 1, 1, 2)}${rose.join('')}${HELD}`);
+  });
+
+  it('fails every finding when there is no baseline file', () => {
+    crossed();
+    const result = check();
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /boundaries: tool-names rose to 2 from 0/);
+  });
+
+  it('passes a fall and a gone rule, naming --write for each', () => {
+    crossed();
+    baseline([...CROSSED.filter(([rule]) => rule !== 'tool-names'), ['tool-names', 5], ['old-rule', 3]]);
+    const result = check();
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${counted(1, 2, 1, 1, 2)}boundaries: tool-names fell to 2 from 5: run --write to lower its baseline\nboundaries: old-rule is gone: run --write to drop its baseline\n${HELD}`);
   });
 
   it('--list prints each finding before the counts, src before tools, each sorted by its / path', () => {
     crossed();
+    baseline(CROSSED);
     const result = check(['--list']);
     assert.equal(result.status, 0, result.stderr);
     const findings = [
@@ -50,29 +91,51 @@ describe('boundaries-cli', () => {
       'src/core/run.ts:1: core-imports: src/cli/b.ts',
       'tools/docs/pages/draw.ts:1: adapter-reach: src/adapters/hosts/first/index.ts',
     ];
-    assert.equal(result.stdout, `${findings.join('\n')}\n${counted(1, 2, 1, 1, 2)}`);
+    assert.equal(result.stdout, `${findings.join('\n')}\n${counted(1, 2, 1, 1, 2)}${HELD}`);
   });
 
-  it('counts nothing in a repo with no src or tools folder', () => {
+  it('--write records falls and new rules, and drops gone ones', () => {
+    crossed();
+    baseline([['tool-names', 5], ['old-rule', 3]]);
+    const result = check(['--write']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /boundaries: wrote tools\/ci\/boundaries\.json\n$/);
+    assert.deepEqual([...written()], [...CROSSED].sort(([a], [b]) => (a < b ? -1 : 1)));
+  });
+
+  it('--write refuses a rise over a recorded baseline and writes nothing', () => {
+    crossed();
+    baseline([['tool-names', 1]]);
+    const result = check(['--write']);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /boundaries: tool-names rose to 2 from 1: run --list to see each finding\nboundaries: wrote nothing: a count never rises\n$/);
+    assert.deepEqual([...written()], [['tool-names', 1]]);
+  });
+
+  it('counts nothing and passes in a repo with no src or tools folder and no baseline', () => {
     const result = check(['--list']);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout, counted(0, 0, 0, 0, 0));
+    assert.equal(result.stdout, `${counted(0, 0, 0, 0, 0)}${HELD}`);
   });
 
-  it('checks its own repo, not the cwd, when no --root is given, and writes nothing in the cwd', () => {
-    const foreign = repo.runOutside(CLI);
-    assert.equal(foreign.stderr, '');
-    assert.equal(foreign.status, 0);
-    assert.deepEqual(foreign, repo.runOutside(CLI, ['--root', TOOLS_REPO]));
+  it('checks its own repo, which its baseline holds, when no --root is given, and writes nothing in the cwd', () => {
+    const own = repo.runOutside(CLI);
+    assert.equal(own.stderr, '');
+    assert.equal(own.status, 0, own.stdout);
+    assert.deepEqual(own, repo.runOutside(CLI, ['--root', TOOLS_REPO]));
     assert.deepEqual(readdirSync(repo.outside), []);
   });
 
-  it('exits 2 on an unknown option or a --root with no folder', () => {
+  it('exits 2 on an unknown option, a --root with no folder or a broken baseline', () => {
     const unknown = check(['--fix']);
     assert.equal(unknown.status, 2);
-    assert.equal(unknown.stderr, 'boundaries: unknown option --fix (usage: boundaries-cli.ts [--list] [--root <repo>])\n');
+    assert.equal(unknown.stderr, 'boundaries: unknown option --fix (usage: boundaries-cli.ts [--list] [--write] [--root <repo>])\n');
     const bare = repo.runOutside(CLI, ['--root']);
     assert.equal(bare.status, 2);
     assert.equal(bare.stderr, 'boundaries: --root needs a folder\n');
+    repo.write(BASELINE, '{"rules": {"tool-names": -1}}');
+    const broken = check();
+    assert.equal(broken.status, 2);
+    assert.equal(broken.stderr, 'boundaries: the baseline count of tool-names is not a whole number\n');
   });
 });

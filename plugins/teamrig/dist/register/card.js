@@ -255,7 +255,7 @@ export function cardLines(card, indent, audits, runFiles, verdict) {
     return [
         `${indent}decide: ${card.question}`,
         ...(card.gate === undefined ? [] : [`${indent}gate: ${card.gate}`]),
-        ...(verdict === null ? (card.security === true ? [`${indent}security: no verdict yet; it reaches the owner only with the security reviewer's`] : []) : [`${indent}security: ${verdictText(verdict, card)}`]),
+        ...optionalLine(indent, securityLine(card, verdict)),
         ...(card.whyAsk === undefined ? [] : [`${indent}why asked: ${card.whyAsk}`]),
         ...(card.affects === undefined ? [] : [`${indent}affects: ${card.affects}`]),
         ...card.options.map((option, index) => `${indent}  ${index + 1}. ${option}`),
@@ -263,6 +263,21 @@ export function cardLines(card, indent, audits, runFiles, verdict) {
         `${indent}with no answer: ${card.byDefault}`,
         ...(card.run === undefined ? [] : [`${indent}run: ${runText(card.run, audits, runFiles)}`]),
     ];
+}
+/** `line` led by `indent` when there is one, else nothing. */
+function optionalLine(indent, line) {
+    return line === undefined ? [] : [`${indent}${line}`];
+}
+/**
+ * A card's security line, as cardLines prints it with no indent: the verdict (verdictText), or, with no verdict on a
+ * card marked --security, that it waits on one; undefined when the card has neither. A reader that draws the card
+ * (the read entry, src/read) uses it, so both print the same words.
+ */
+export function securityLine(card, verdict) {
+    if (verdict !== null) {
+        return `security: ${verdictText(verdict, card)}`;
+    }
+    return card.security === true ? "security: no verdict yet; it reaches the owner only with the security reviewer's" : undefined;
 }
 /**
  * The security verdict as the owner reads it: the reviewer's text and who gave it, or, once the card asks another

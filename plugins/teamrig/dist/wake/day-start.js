@@ -44,9 +44,10 @@ export function dueMoments(now, dayStart, burst, settled) {
 /**
  * The session's work it can go on with now (`canGoOn`) at `maxPriority` or more urgent (any by default), most urgent
  * first, a parked task left out; a wait or an `after` may name a task the team tree's other registers hold (`elsewhere`).
+ * A held session's `exemption` adds the waited-on work its rest lets past `maxPriority`.
  */
-export function startableTasks(tasks, elsewhere, session, now, zone, parking, maxPriority = Number.POSITIVE_INFINITY) {
-    const context = wakeContext(tasks, elsewhere, now, zone, parking);
+export function startableTasks(tasks, elsewhere, session, now, zone, parking, maxPriority = Number.POSITIVE_INFINITY, exemption) {
+    const context = wakeContext(tasks, elsewhere, now, zone, parking, exemption);
     return [...tasks.values()].filter((task) => isWakeWorthy(task, session, maxPriority, context)).sort(byUrgency);
 }
 function settle(settled, moments) {

@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { EXIT_CLEAN, EXIT_FINDINGS } from '../lib/exit.ts';
 import { takeRoot } from '../lib/repo-root.ts';
+import { baselineText, compareCounts, readBaseline } from '../lib/count-baseline.ts';
 import { runMain } from '../lib/run-main.ts';
-import { type SkillFile, baselineText, compareCounts, hitLine, parseBaseline, providerHits, skillCounts } from './provider-words.ts';
+import { BASELINE_FILE, type SkillFile, hitLine, providerHits, skillCounts } from './provider-words.ts';
 
 /** The folders whose every subfolder is one skill: the plugin's and this repo's own. */
 const SKILL_ROOTS = ['plugins/teamrig/skills', '.claude/skills'] as const;
@@ -34,11 +35,6 @@ function skillFiles(root: string): readonly SkillFile[] {
   });
 }
 
-function readBaseline(root: string): ReadonlyMap<string, number> {
-  const file = join(root, BASELINE);
-  return existsSync(file) ? parseBaseline(JSON.parse(readFileSync(file, 'utf8'))) : new Map();
-}
-
 /**
  * Counts the host and tool words in each skill of this repo (or `--root <repo>`) against the baseline file and fails
  * when a count rose; `--list` prints each hit first, `--write` records the counts (a fall lowers a baseline, a new
@@ -54,20 +50,20 @@ async function main(args: readonly string[]): Promise<number> {
     for (const hit of providerHits(files)) console.log(hitLine(hit));
   }
   const counts = skillCounts(files);
-  const baseline = readBaseline(root);
+  const baseline = readBaseline(join(root, BASELINE), BASELINE_FILE.field);
   const { rose, fell, gone } = compareCounts(counts, baseline);
-  for (const { skill, count, baseline: was } of rose) console.log(`provider-words: ${skill} rose to ${count} from ${was}: say the step and let the adapter say how`);
+  for (const { key: skill, count, baseline: was } of rose) console.log(`provider-words: ${skill} rose to ${count} from ${was}: say the step and let the adapter say how`);
   if (rest.includes('--write')) {
-    const raised = rose.filter(({ skill }) => baseline.has(skill));
+    const raised = rose.filter(({ key }) => baseline.has(key));
     if (raised.length > 0) {
       console.log('provider-words: wrote nothing: a count never rises');
       return EXIT_FINDINGS;
     }
-    writeFileSync(join(root, BASELINE), baselineText(counts));
+    writeFileSync(join(root, BASELINE), baselineText(BASELINE_FILE.comment, BASELINE_FILE.field, counts));
     console.log(`provider-words: wrote ${BASELINE}`);
     return EXIT_CLEAN;
   }
-  for (const { skill, count, baseline: was } of fell) console.log(`provider-words: ${skill} fell to ${count} from ${was}: run --write to lower its baseline`);
+  for (const { key: skill, count, baseline: was } of fell) console.log(`provider-words: ${skill} fell to ${count} from ${was}: run --write to lower its baseline`);
   for (const skill of gone) console.log(`provider-words: ${skill} is gone: run --write to drop its baseline`);
   const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
   const clear = [...counts.values()].filter((count) => count === 0).length;

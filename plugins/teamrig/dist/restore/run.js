@@ -54,7 +54,7 @@ async function factsOf(deps, entries, since) {
             }
         }
     }
-    return { now, since, shutdown: await deps.shutdowns.lastShutdown(), running, stalled, transcripts, kinds };
+    return { now, since, shutdown: await deps.shutdowns.lastShutdown(), running, stalled, transcripts, kinds, placeOf: deps.placeOf };
 }
 /** Whether the transcript was last written HUNG_AFTER_MS ago or more: a live turn writes it at each step. */
 async function stalledSince(deps, transcript, now) {

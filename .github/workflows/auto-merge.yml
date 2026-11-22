@@ -1,0 +1,39 @@
+name: auto-merge
+
+on:
+  # Switches auto-merge on for each pull request into main (ours, outside contributors', release-please's), so one
+  # that is approved and green enters the merge queue with no click (T4906). pull_request_target runs main's copy of
+  # this file, never the pull request's, and the job checks out no code at all: its one step is a gh call on the pull
+  # request's number. synchronize turns it back on, as GitHub turns auto-merge off when someone without write access
+  # pushes.
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request replaces a run still waiting.
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: auto-merge on
+    # GitHub refuses auto-merge on a draft; ready_for_review turns it on once it is not one. It uses the job's own
+    # token, not the release App: github-actions is on no ruleset's bypass list, so the review and every required
+    # check still hold before the queue lands it, and a push after the approval dismisses it (main review).
+    if: ${{ !github.event.repository.private && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Merging is what auto-merge needs the token for: contents to land it, pull-requests to switch it on.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Values go in by env alone, never into the run line: the pull request is text anyone may open.
+      - run: gh pr merge --auto --rebase "$PR" --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}

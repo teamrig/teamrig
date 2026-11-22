@@ -4,9 +4,11 @@
  * built-ins, and `interface/index.test.ts` fails if anything reachable from here imports one. The command
  * (src/cli/commands/read.ts) gathers through the ports and calls these.
  */
+export { servedCard } from "./card.js";
 export { configBody, KEPT_NOTE, SETTING_PROBLEM, } from "./config.js";
 export {} from "./connector.js";
 export { answerOf, DOCUMENTS, isDocumentName, unchangedAnswer } from "./envelope.js";
+export { changedFrame, EVENTS, helloFrame, movedDocuments } from "./events.js";
 export { goalsBody } from "./goals.js";
 export { eventKeyOf, historyBody, } from "./history.js";
 export { inboxBody } from "./inbox.js";
@@ -17,6 +19,6 @@ export { revisionText } from "./revision.js";
 export { sessionsBody, } from "./sessions.js";
 export { statsBody, } from "./stats.js";
 export { sourceOf } from "./source.js";
-export { tasksBody } from "./tasks.js";
+export { tasksBody, } from "./tasks.js";
 export { cutText, ServedText } from "./text.js";
 export { checkInterfaceRange, INTERFACE_MAJOR, INTERFACE_MINOR, INTERFACE_VERSION, parseInterfaceVersion } from "./version.js";

@@ -1,3 +1,4 @@
+import { servedCard } from "./card.js";
 import { refOf } from "./ref.js";
 import { sourceOf } from "./source.js";
 import { ServedText } from "./text.js";
@@ -13,7 +14,7 @@ export function tasksBody(input) {
             tasks.push(servedTask(task, served, input));
         }
     }
-    return { tasks, cuts: served.cuts };
+    return { tasks, retired: input.retired, cuts: served.cuts };
 }
 function servedTask(task, served, input) {
     const source = sourceOf(served, task.id, task.source, input.names);
@@ -54,6 +55,13 @@ function servedTask(task, served, input) {
             : { verdict: task.answer.verdict, by: task.answer.by, at: task.answer.at, note: served.plainOrNull(task.id, 'answer.note', task.answer.note) },
         decided: task.decided === null ? null : { by: task.decided.by, at: task.decided.at, note: served.plainOrNull(task.id, 'decided.note', task.decided.note) },
         after: [...task.after],
+        card: task.card === null ? null : servedCard(served, task.id, task.card),
+        descriptionCut: task.descriptionCut === null ? null : { chars: task.descriptionCut.chars, hash: task.descriptionCut.hash },
+        sizeBase: task.sizeBase === null ? null : { day: task.sizeBase.day, w: task.sizeBase.w },
+        prepares: task.prepares === null ? null : { goal: task.prepares.goal, slice: task.prepares.slice },
+        noGoal: task.noGoal,
+        startedAt: task.startedAt,
+        waitsAt: task.waitsAt,
     };
 }
 /** A wait written out field by field, so a field the register adds to a reason is not served by accident. */

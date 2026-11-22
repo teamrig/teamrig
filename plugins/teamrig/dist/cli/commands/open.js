@@ -8,8 +8,8 @@ import { samePath } from "../../core/paths.js";
 import { HiringLog } from "../../hiring/log.js";
 import { rehiredFrom } from "../../hiring/record.js";
 import { CLAUDE_SESSION_ID } from "../../inbox/marks.js";
-import { findClaude } from "../../open/claude.js";
-import { launchFlags } from "../../open/launch-flags.js";
+import { findProgram } from "../../open/host-program.js";
+import { sessionStartOf } from "../../open/session-start.js";
 import { openTab } from "../../open/open-tab.js";
 import { decodePrompt, defaultPrompt, encodePrompt, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from "../../open/prompt.js";
 import { shellCommand } from "../../open/quote.js";
@@ -21,7 +21,7 @@ import { teamWindowOf } from "../../open/terminals.js";
 import { urgentFirstPrompt } from "../../wake/asks.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
-import { cacheBinOf, childEnvOf, launchHostOf } from "../host.js";
+import { cacheBinOf, childEnvOf, launcherOf, launchHostOf } from "../host.js";
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { liveRunOf, liveRunText } from "../live-run.js";
 import { EXIT, RefusedError } from "../runtime.js";
@@ -348,14 +348,18 @@ async function closeSince(runtime, log, id, result, since) {
         await runtime.sleep(CLOSE_LOG_POLL_MS);
     }
 }
-/** How to start Claude Code in `env`; refused when it is not on that PATH. */
-export async function claudeProgramOf(runtime, env) {
-    const claude = await findClaude({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node });
-    if (claude.kind === 'missing') {
-        const skipped = claude.skipped.length === 0 ? '' : ` (skipped: ${claude.skipped.join('; ')})`;
-        throw new RefusedError(`Claude Code (claude) is not on PATH${skipped}; install it, then run this again`);
+/**
+ * How to start the running host's program in `env`: the program its session launcher names, found on that PATH.
+ * Refused when it is not there, and with the host's own reason on a host that tells nothing of its sessions.
+ */
+export async function hostProgramOf(runtime, env) {
+    const { program } = launcherOf(runtime);
+    const found = await findProgram({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, program);
+    if (found.kind === 'missing') {
+        const skipped = found.skipped.length === 0 ? '' : ` (skipped: ${found.skipped.join('; ')})`;
+        throw new RefusedError(`Claude Code (${program}) is not on PATH${skipped}; install it, then run this again`);
     }
-    return claude.program;
+    return found.program;
 }
 /** The exit for how Claude Code ended, for a command that ran it on this terminal. */
 export function claudeExit(runtime, command, result) {
@@ -408,7 +412,8 @@ export async function launch(args, runtime) {
     if (!roster.ids.includes(id)) {
         throw new RefusedError(`${id} is not a session of team ${team}`);
     }
-    const { command, prefix } = await claudeProgramOf(runtime, claudeEnv);
+    const { command, prefix } = await hostProgramOf(runtime, claudeEnv);
+    const launcher = launcherOf(runtime);
     const name = roster.nameOf(id) ?? id;
     const host = launchHostOf(runtime);
     const { leadDefault } = host;
@@ -428,8 +433,9 @@ export async function launch(args, runtime) {
     let resuming = resume;
     for (;;) {
         await refuseLiveRun(runtime, kit, roster, id, name);
-        const resumeArgs = resuming === undefined ? [] : ['--resume', resuming];
-        const args = [...prefix, ...launchFlags(settings), ...listing.args, ...resumeArgs, '--name', name, ...(first === undefined ? [] : [first])];
+        // The host spells its own flags: this start only says what the session is to be.
+        const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
+        const args = [...prefix, ...launcher.launchArgs(start)];
         const startedAt = runtime.clock.now();
         const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
         if (!(await restartTaken(store, id))) {

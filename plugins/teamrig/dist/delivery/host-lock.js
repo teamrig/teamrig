@@ -123,7 +123,8 @@ function isLockWaiter(value) {
         isTime(value['expiresAt']) &&
         (value['stopsOnWithdraw'] === undefined || typeof value['stopsOnWithdraw'] === 'boolean') &&
         (value['request'] === undefined || isTicketRequest(value['request'])) &&
-        (value['waitingOn'] === undefined || isWaitingOn(value['waitingOn'])));
+        (value['waitingOn'] === undefined || isWaitingOn(value['waitingOn'])) &&
+        (value['back'] === undefined || typeof value['back'] === 'boolean'));
 }
 function isTicketRequest(value) {
     return isLineRequest(value) && isRecord(value) && isNonNegativeInteger(value['needMb']) && typeof value['heavy'] === 'boolean' && typeof value['exclusive'] === 'boolean';
@@ -571,7 +572,7 @@ export class HostLock {
      */
     async acquire(session, purpose, maxWaitMs, pollMs, onWait, ask = {}, stop) {
         const patience = new Patience(this.ports.clock.now(), maxWaitMs);
-        const ticket = await this.joinLine(session, purpose, patience.deadline, this.ticketRequestOf(ask, await this.rulesNow()), ask.arrivedAt, ask.back?.id);
+        const ticket = await this.joinLine(session, purpose, patience.deadline, this.ticketRequestOf(ask, await this.rulesNow()), ask.arrivedAt, ask.back?.id, ask.back !== undefined);
         const reports = new WaitReports(onWait, this.ports.zone);
         try {
             const waited = await this.waitInLine(ticket, patience, pollMs, reports, ask, stop);
@@ -1278,9 +1279,10 @@ export class HostLock {
     }
     /**
      * Writes this step's ticket in line, its wait running out at `deadline`, saying what it asks when it names a `request`:
-     * at the end, or at its first arrival `arrivedAt` when it joins again (never later than now).
+     * at the end, or at its first arrival `arrivedAt` when it joins again (never later than now), marked `back` when it
+     * joins to take back its share.
      */
-    async joinLine(session, purpose, deadline, request, arrivedAt, id) {
+    async joinLine(session, purpose, deadline, request, arrivedAt, id, back = false) {
         const now = Math.min(arrivedAt ?? this.ports.clock.now(), this.ports.clock.now());
         const waiter = {
             id: id ?? this.ports.newId(),
@@ -1292,6 +1294,7 @@ export class HostLock {
             expiresAt: ticketExpiry(deadline),
             stopsOnWithdraw: true,
             ...(request === undefined ? {} : { request }),
+            ...(back ? { back: true } : {}),
         };
         const name = `${String(now).padStart(ARRIVAL_DIGITS, '0')}-${waiter.id}.json`;
         await this.ports.files.write(join(this.queue, name), stored(waiter));

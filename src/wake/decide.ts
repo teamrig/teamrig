@@ -16,6 +16,7 @@ import { BLOCKER_PRIORITY_ID, priorityText, type TaskStatus } from '../register/
 import { wouldPark, type ParkRules } from '../register/park.ts';
 import { neededIds, type TasksElsewhere } from '../register/tree.ts';
 import { unfinishedAfter, waitContext, type WaitContext } from '../register/waits.ts';
+import { isExemptFromRest, type RestExemption } from './exempt.ts';
 
 /**
  * Waking a session idle at its prompt when work is handed to it, pure. A wake is a model turn, so only work the
@@ -85,6 +86,8 @@ export function canGoOn(task: Task, context: WaitContext): boolean {
 /** What a wake judges a task by: its waits, and whether the park rule took it. */
 export interface WakeContext extends WaitContext {
   isParked(task: Task): boolean;
+  /** The work a held session takes past its priority cap ({@link isExemptFromRest}); absent: none. */
+  readonly exemption?: RestExemption | undefined;
 }
 
 /**
@@ -92,18 +95,30 @@ export interface WakeContext extends WaitContext {
  * the rule, as most never do. A wake's `elsewhere` comes from `snapshotWithElsewhere`, which gives none when the own
  * tasks need no outside id, so a need from another register goes unseen: a wake may pass over a task `list` still shows.
  */
-export function wakeContext(tasks: ReadonlyMap<string, Task>, elsewhere: TasksElsewhere, now: number, zone: TimeZone, parking: ParkRules): WakeContext {
+export function wakeContext(
+  tasks: ReadonlyMap<string, Task>,
+  elsewhere: TasksElsewhere,
+  now: number,
+  zone: TimeZone,
+  parking: ParkRules,
+  exemption?: RestExemption,
+): WakeContext {
   let needed: ReadonlySet<string> | undefined;
   const isNeeded = (id: string): boolean => {
     needed ??= neededIds(tasks.values(), elsewhere);
     return needed.has(id);
   };
-  return { ...waitContext(tasks, new Date(now), zone, elsewhere), isParked: (task) => wouldPark(task, { ...parking, now, needed: isNeeded }) };
+  const context = { ...waitContext(tasks, new Date(now), zone, elsewhere), isParked: (task: Task) => wouldPark(task, { ...parking, now, needed: isNeeded }) };
+  return exemption === undefined ? context : { ...context, exemption };
 }
 
-/** True when the task is the session's, it can go on with it now, it is urgent enough to wake it, and it is not parked. */
+/**
+ * True when the task is the session's, it can go on with it now, it is urgent enough to wake it (or its rest's
+ * exemption lets it past the cap: {@link isExemptFromRest}), and it is not parked.
+ */
 export function isWakeWorthy(task: Task, session: string, maxPriority: number, context: WakeContext): boolean {
-  return task.owner === session && task.priority <= maxPriority && canGoOn(task, context) && !context.isParked(task);
+  const urgent = task.priority <= maxPriority || isExemptFromRest(task, context.exemption);
+  return task.owner === session && urgent && canGoOn(task, context) && !context.isParked(task);
 }
 
 function timeOf(at: string | null): number {
@@ -207,6 +222,8 @@ export interface WakeInput {
   /** The team's zone, which a waiting task's stored day is a day of. */
   readonly zone: TimeZone;
   readonly maxPriority: number;
+  /** The work past `maxPriority` a held session still wakes for (`restExemptionOf`); absent: none. */
+  readonly exemption?: RestExemption | undefined;
   readonly parking: ParkRules;
   readonly batchMs: number;
   /** The least gap after the last wake, for one task due (`wake.minGapMinutes`). */
@@ -250,11 +267,11 @@ export function byUrgency(a: Task, b: Task): number {
 }
 
 /** What picks the tasks that could wake a session at a moment. */
-export type WorthyInput = Pick<WakeInput, 'tasks' | 'elsewhere' | 'session' | 'now' | 'zone' | 'maxPriority' | 'parking'>;
+export type WorthyInput = Pick<WakeInput, 'tasks' | 'elsewhere' | 'session' | 'now' | 'zone' | 'maxPriority' | 'exemption' | 'parking'>;
 
 /** The session's tasks that could wake it at `now` ({@link isWakeWorthy}), in the register's order. */
 export function worthyTasksOf(input: WorthyInput): Task[] {
-  const context = wakeContext(input.tasks, input.elsewhere, input.now, input.zone, input.parking);
+  const context = wakeContext(input.tasks, input.elsewhere, input.now, input.zone, input.parking, input.exemption);
   return [...input.tasks.values()].filter((task) => isWakeWorthy(task, input.session, input.maxPriority, context));
 }
 
@@ -313,6 +330,11 @@ export function decideWake(input: WakeInput): WakeDecision {
 export interface WakeRest {
   readonly held: boolean;
   readonly quiet: boolean;
+  /**
+   * True when only the daily cap or a leader's plain cut holds it, so a waited-on task still wakes it
+   * (`restExemptionOf`, T4948); a stop or a short day's pause holds it whatever waits. Absent: false.
+   */
+  readonly yields?: boolean;
 }
 
 /**
@@ -336,7 +358,9 @@ export function wakeRestOf(facts: BudgetFacts | undefined, quietHours: QuietHour
     return { held: false, quiet: quietSpanOf(quietHours, now) !== undefined };
   }
   const turnPct = facts.todayWPerPct > 0 ? turnW / facts.todayWPerPct : 0;
-  return { held: isPausedNow(facts) || isHeld(facts, turnPct), quiet: sessionQuietSpan(facts, quietHours) !== undefined };
+  const paused = isPausedNow(facts);
+  const held = paused || isHeld(facts, turnPct);
+  return { held, quiet: sessionQuietSpan(facts, quietHours) !== undefined, yields: held && !paused && facts.cut?.stop !== true };
 }
 
 /**

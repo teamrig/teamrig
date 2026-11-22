@@ -1,7 +1,7 @@
 /**
  * The change-source port (T3424): where `teamrig changes` reads what changed in a project. Each source is one way a
  * project records its changes (teamrig's register and git, its own `changes/<slug>.md` notes, and behind T3426 the
- * third-party ones: changesets, release-please, a Keep a Changelog CHANGELOG.md, GitHub releases).
+ * third-party ones: changesets, release-please, a Keep a Changelog CHANGELOG.md, a code host's releases).
  *
  * A source declares what it can filter by (`capabilities`); the core filters the rest itself after the read, so a
  * source that cannot read by file is still usable with `--file`, it just returns every entry and the core drops the
@@ -9,8 +9,8 @@
  * a read that failed is `{ kind: 'failed' }`, so one broken source never hides the others' entries.
  *
  * Adapters go in `src/changes/sources/<id>.ts`, each with `<id>.test.ts` on fixture files, its deps built by
- * `changeDepsOf` (src/testing/fake-change-git.ts) over MemoryFiles and FakeChangeGit. A source that reads a host such as
- * GitHub ships with that host's connector adapter (src/adapters/connectors), never in this core port.
+ * `changeDepsOf` (src/testing/fake-change-git.ts) over MemoryFiles and FakeChangeGit. A source that reads a code host
+ * ships with that host's connector adapter (src/adapters/connectors), never in this core port.
  */
 import type { Files } from '../core/files.ts';
 
@@ -147,7 +147,7 @@ export interface GitCommit {
 }
 
 export interface ChangeSource {
-  /** Its id in config and output: 'register', 'git', 'notes', 'changesets', 'release-please', 'keep-a-changelog', 'github-releases'. */
+  /** Its id in config and output: 'register', 'git', 'notes', 'changesets', 'release-please', 'keep-a-changelog', and a connector's own. */
   readonly id: string;
   readonly capabilities: ChangeSourceCapabilities;
   /** Whether it applies to this project, for `changes.sources: auto` (the default): a cheap file or folder check, never a network read. */

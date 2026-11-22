@@ -84,15 +84,25 @@ function requestOf(args, env) {
     }
     return {
         documents,
+        ...scopeFlagsOf(args, env),
+        ...documentFlagsOf(args, documents),
+        unless: unlessOf(args.flags.get('unless'), documents),
+        speaks,
+    };
+}
+export function scopeFlagsOf(args, env) {
+    return {
         team: teamOf(args.flags.get('team')),
         owner: ownerOf(args.flags.get('owner')),
         session: askerOf(args.flags.get('session'), env),
         conversation: conversationOf(args.flags.get('conversation')),
         sinceHours: sinceHoursOf(args.flags.get('since')),
+    };
+}
+export function documentFlagsOf(args, documents) {
+    return {
         task: taskOf(args.flags.get('task'), documents),
         range: statsRangeOf(args.flags.get('range'), documents),
-        unless: unlessOf(args.flags.get('unless'), documents),
-        speaks,
     };
 }
 /**
@@ -221,7 +231,7 @@ async function answersOf(request, runtime) {
  * for one ({@link TEAMLESS}) and no `--team` is named; any other is refused as every command with no team is, since
  * a run answers every document it was asked or none.
  */
-async function sourcesOf(request, runtime) {
+export async function sourcesOf(request, runtime) {
     const found = await lookForTeam(runtime);
     if (found.kind === 'none' && request.team === undefined) {
         const teamless = new Map();
@@ -277,7 +287,7 @@ async function scopeOf(request, runtime, own) {
  * change what the same files are served as with no new interface version (a fixed builder, a new secret shape), and
  * a reader must not be told `unchanged` across it.
  */
-function revisionOf(parts) {
+export function revisionOf(parts) {
     return createHash('sha256').update(KIT_VERSION).update('\n').update(revisionText(parts)).digest('hex').slice(0, 16);
 }
 /**
@@ -307,6 +317,7 @@ function tasksSource(scope) {
             const register = await workingSetOf(runtime, kit.paths, layout);
             const body = tasksBody({
                 tasks: register.tasks.values(),
+                retired: register.retired,
                 owner: scope.owner,
                 shapes: new SecretScanner(config.register.secretPatterns),
                 connectors: DOCUMENT_CONNECTORS,

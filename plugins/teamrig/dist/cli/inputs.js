@@ -139,6 +139,13 @@ export function pinOf(switches, by) {
     }
     return switches.has('pin') ? { pin: by } : switches.has('unpin') ? { pin: null } : {};
 }
+/** `--exempt` (exempted by `by`) or `--not-exempt` on update, as a change; none with neither (T4948). */
+export function exemptOf(switches, by) {
+    if (switches.has('exempt') && switches.has('not-exempt')) {
+        throw new UsageError('--exempt and --not-exempt: give one');
+    }
+    return switches.has('exempt') ? { exempt: by } : switches.has('not-exempt') ? { exempt: null } : {};
+}
 /** `--type task|bug`: what the item is (T1252); `--type task` also tells the bug hint the task is no bug. */
 export function typeOf(text) {
     if (!isItemType(text)) {

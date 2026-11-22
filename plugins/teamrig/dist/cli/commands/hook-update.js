@@ -1,12 +1,12 @@
 import { join } from 'node:path';
 import { isRecord, stringField } from "../../core/guards.js";
 import { claudeConfigDir, resolveKitHome } from "../../core/home.js";
-import { findClaude } from "../../open/claude.js";
+import { findProgram } from "../../open/host-program.js";
 import { isUnsupported } from "../../ports/host/index.js";
 import { UpdateCheck } from "../../update/check.js";
 import { applyUpdate, hookGit } from "../../update/runner.js";
 import { noPositionals } from "../args.js";
-import { hostOf } from "../host.js";
+import { hostOf, launcherIfTold } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { parseJson } from "./hook-input.js";
 function answer(runtime, value) {
@@ -71,7 +71,12 @@ export async function updateApply(args, runtime) {
     if (notice === undefined) {
         return answer(runtime, { kind: 'failed', why: `no newer ${plugin ?? 'plugin'} is published` });
     }
-    const claude = await findClaude({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node });
+    // The update runs the host's own program, which the host names: a host telling nothing of its sessions names none.
+    const launcher = launcherIfTold(runtime);
+    if (launcher === undefined) {
+        return answer(runtime, { kind: 'failed', why: 'the host names no program to update a plugin with' });
+    }
+    const claude = await findProgram({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, launcher.program);
     if (claude.kind === 'missing') {
         return answer(runtime, { kind: 'failed', why: 'Claude Code is not on PATH' });
     }

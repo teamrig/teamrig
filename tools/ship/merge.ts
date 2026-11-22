@@ -15,6 +15,7 @@ import { type MergeOutcome, type PullRequest, findOpenPull, openPull, rebaseMerg
 import { type MergedHead, pullsOfHead, sweepAfterMerge } from './leftovers.ts';
 import { type GateDeps, proveTree, realGateDeps } from './local-gate.ts';
 import { type LandingTurn, processLandingTurn } from './landing-turn.ts';
+import { type ReleaseCatchUpRequest, catchUpRelease } from './release-catch-up.ts';
 import { releaseRefusal } from './release-pull.ts';
 import { queueLanding } from './merge-queue.ts';
 import { realRenamedCallersDeps, renamedCallersRefusal } from './renamed-callers.ts';
@@ -39,7 +40,9 @@ import { describeCredential } from './token-check.ts';
  *
  * `--release <task>` merges the repo's release pull request instead (T4645): the head its release tool pushed, read
  * from origin, only while it holds nothing but a release (release-pull.ts), on that task's approval; the merge never
- * opens that pull request nor catches up its head, which the release tool rewrites on each move of main.
+ * opens that pull request. The release tool rewrites its head when main gains a commit its changelog shows; a main
+ * that gained only hidden ones leaves the head behind, so the merge catches that head up itself and merges it on the
+ * same approval (release-catch-up.ts, T5055), and refuses any other move.
  *
  * A rebase merge replays the branch onto main as it is at merge time, and GitHub merges a stale branch
  * whenever it does not conflict: what lands is then a tree no check ran on, and a commit that repeats one
@@ -581,6 +584,8 @@ export interface MergeDeps {
   releaseRefusal: (profile: RepoProfile, release: ReleasePull, sha: string) => string | null;
   /** A head main moved past, rebased onto main's tip and pushed as a new branch when its diff stays the same (catch-up.ts). */
   catchUp: (request: CatchUpRequest) => CatchUp;
+  /** The release pull request's head main moved past only by commits its changelog hides, rebased and pushed (release-catch-up.ts, T5055). */
+  releaseCatchUp: (request: ReleaseCatchUpRequest) => CatchUp;
   /** The work commits `rev` carries over origin's main, with their patch ids (approval.ts `workCommitsOf`). */
   workOf: (rev: string) => readonly WorkCommit[];
   /** The register's task of a head branch, which dresses its pull request (pull-task.ts, T4796). */
@@ -651,23 +656,61 @@ function approvalGate(args: MergeArgs, deps: MergeDeps): MergeGate {
 const clearedBy = (clearance: Exclude<MergeClearance, { kind: 'refused' }>): string =>
   clearance.kind === 'self' ? "the caller's own, a root team's lead" : `approved by ${clearance.by}`;
 
+/** The gate of `ship.ts merge --release`, with the head it last cleared and the caught-up head it lets through on that. */
+interface ReleaseGate {
+  readonly gate: MergeGate;
+  /** The release head's sha the gate last let through, which a catch-up leases on; null before any. */
+  cleared(): string | null;
+  /** Lets `sha`, the cleared head caught up by release-catch-up.ts, through on the cleared head's approval. */
+  carry(sha: string): void;
+}
+
 /**
  * The gate of `ship.ts merge --release` (T4645): the caller's clearance of the release pull request's head on the
- * approval of the release task `task`, since the branch the release tool names names no task. It is asked once: a head
- * main moved past is never caught up (runMerge), as the release tool rewrites that head itself.
+ * approval of the release task `task`, since the branch the release tool names names no task. A head runMerge caught
+ * up from the cleared one (release-catch-up.ts: the same diff rebased onto main, T5055) passes on that clearance; any
+ * other head, one the release tool wrote meanwhile among them, is asked again, so it needs its own approval.
  */
-function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): MergeGate {
-  return async (head, sha) => {
-    const clearance = await deps.clearTaskMerge(task, sha, args.approved);
-    if (clearance.kind === 'refused') return clearance.reason;
-    deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${clearedBy(clearance)} on ${task}`);
-    return null;
+function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGate {
+  let cleared: { sha: string; by: string } | null = null;
+  let carried: string | null = null;
+  return {
+    gate: async (head, sha) => {
+      if (cleared !== null && sha === carried) {
+        deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: caught up from ${cleared.sha.slice(0, 9)}, ${cleared.by} on ${task}`);
+        cleared = { sha, by: cleared.by };
+        return null;
+      }
+      const clearance = await deps.clearTaskMerge(task, sha, args.approved);
+      if (clearance.kind === 'refused') return clearance.reason;
+      const by = clearedBy(clearance);
+      deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${by} on ${task}`);
+      cleared = { sha, by };
+      return null;
+    },
+    cleared: () => cleared?.sha ?? null,
+    carry: sha => {
+      carried = sha;
+    },
   };
 }
 
-/** Why a release merge stops when main moved past its head: only the release tool writes the head that follows main. */
-const releaseMoved = (move: MainMove): string =>
-  `the main branch moved to ${move.tip.slice(0, 7)}, past the release pull request's head: the release tool rewrites that head on each move of main, so once its new head's checks pass, ask approval of that head and merge again`;
+/** Catches up the release head `gate` cleared onto main's tip `move` names (release-catch-up.ts, T5055). */
+function catchUpReleaseHead(deps: MergeDeps, gate: ReleaseGate, move: MainMove): CatchUp {
+  const profile = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
+  const sha = gate.cleared();
+  // mergeRun reads the release head and clears it before it reads any move of main.
+  if (profile.release === null || sha === null) throw new Error('main moved past a release head that was never read and cleared');
+  return deps.releaseCatchUp({ head: profile.release.head, sha, tip: move.tip, main: profile.main });
+}
+
+/** Catches up the change branch `args` merges onto main's tip `move` names (catch-up.ts, T2809). */
+function catchUpChangeHead(args: MergeArgs, deps: MergeDeps, move: MainMove): CatchUp {
+  // The checkout has not changed since the run read it, and a catch-up that main moved past put it back.
+  const head = args.head ?? checkedOutBranch(deps.git);
+  const { main, regenerated } = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
+  return deps.catchUp({ head, tip: move.tip, main, regenerated });
+}
 
 /** How many times main may move past a `ship.ts merge`'s heads before it gives up (T2809, T4131). */
 export const MERGE_ATTEMPTS = 3;
@@ -686,7 +729,8 @@ export const MERGE_ATTEMPTS = 3;
  */
 export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number> {
   let current = args;
-  const gate = args.release === null ? approvalGate(args, deps) : releaseGate(args.release, args, deps);
+  const release = args.release === null ? null : releaseGate(args.release, args, deps);
+  const gate = release === null ? approvalGate(args, deps) : release.gate;
   let move: MainMove | null = null;
   let moves = 0;
   let waits = deps.turn.waited();
@@ -694,10 +738,6 @@ export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number
     if (move === null) {
       const exit = await mergeRun(current, deps, gate);
       if (exit.kind === 'done') return exit.code;
-      if (args.release !== null) {
-        deps.err(`REFUSED ${releaseMoved(exit)}`);
-        return 1;
-      }
       move = exit;
     }
     const waitsNow = deps.turn.waited();
@@ -707,10 +747,7 @@ export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number
       deps.err(`REFUSED ${move.reason} (main moved ${MERGE_ATTEMPTS} times during this merge)`);
       return 1;
     }
-    // The checkout has not changed since the run read it, and a catch-up that main moved past put it back.
-    const head = current.head ?? checkedOutBranch(deps.git);
-    const { main, regenerated } = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
-    const caught = deps.catchUp({ head, tip: move.tip, main, regenerated });
+    const caught: CatchUp = release === null ? catchUpChangeHead(current, deps, move) : catchUpReleaseHead(deps, release, move);
     if (caught.kind === 'refused') {
       deps.err(`REFUSED ${caught.reason}`);
       return 1;
@@ -719,7 +756,9 @@ export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number
       move = caught;
       continue;
     }
-    current = { ...current, head: caught.head };
+    // A release run reads its head from origin again, where the catch-up pushed it.
+    if (release === null) current = { ...current, head: caught.head };
+    else release.carry(caught.sha);
     move = null;
   }
 }
@@ -869,6 +908,7 @@ export function realMergeDeps(dir: string): MergeDeps {
         },
         request,
       ),
+    releaseCatchUp: request => catchUpRelease({ git, log: out }, request),
     workOf: rev => {
       const profile = profileFor(readProfiles(), slugOf(git('remote', 'get-url', 'origin')));
       return workCommitsOf(runGit, rev, `refs/remotes/origin/${profile.main}`, teamrigShipWritesOf(profile.regenerated));

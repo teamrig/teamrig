@@ -2112,6 +2112,19 @@ describe('HostLock setting a share aside while its step waits on a remote servic
     );
   });
 
+  it('takes the share back ahead of a later heavy step that admission order alone ranks first, as its step already ran in its turn (T4196)', async () => {
+    const at = world({}, undefined, undefined, PIPELINE);
+    const merge = await at.lock.acquire('alpha', 'heavy: merge', 0, 30_000, () => undefined, { request: { ...MERGE, priority: 3 } });
+    assert.equal(merge.kind, 'taken');
+    const asking = lockOver(at.files, at.clock, OTHER, at.clock.sleep, PIPELINE);
+    assert.equal((await asking.setAside('t1')).kind, 'aside');
+    at.clock.advance(20 * 60_000);
+    const [later, text] = ticket(waiterOf('2030-01-08T10:10:00.000Z', { request: { ...REQUEST, needMb: 0, heavy: true, exclusive: false } }));
+    await at.files.write(later, text);
+    const back = await asking.takeBack('t1', 0, 30_000, () => undefined);
+    assert.equal(back.kind, 'taken', 'the later p1 test outranks the p3 merge by priority, but the merge ran before it joined');
+  });
+
   it('reports the time its step spent away while away, back in line and after it took its share back, summed over each time it stepped away (T4218)', async () => {
     const { files, clock, lock } = await merging();
     assert.equal(await lock.awayMs('t1'), 0, 'never away');

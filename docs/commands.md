@@ -52,6 +52,15 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       other task on its session's list (moving that session's earlier pin), wakes the session to start
       it once the step in hand is done, and tells the lead; refused on a done, dropped or in-progress
       task, and where Claude Code sets $CLAUDECODE; --preview prints what it would do and writes nothing
+  owner decide <[team/]T<id>> --option <n>|--approve|--decline   the owner answers a card from the pane:
+      kept in the task's history as the owner's decision, naming the option chosen or yes or no, which
+      ends the task's wait on the owner and wakes its session to go on from it; refused on a task that
+      waits on no decision or approval of the owner, an option its card lacks, yes or no to a decision,
+      an option to an approval, and where Claude Code sets $CLAUDECODE
+  owner later <[team/]T<id>> --until in-<n>h|tomorrow|monday|<time>   the owner puts a card off from
+      the pane: to n hours from now, 09:00 on the team's clock tomorrow or next Monday, or a time; kept
+      in the task's history as the owner's, the session told with no wake; refused on a task that
+      waits on no decision or approval of the owner, a time gone by, and where Claude Code sets $CLAUDECODE
   owner wake <[team/]id|name> [--terminal <name>] [--project <dir>]   the owner wakes one session from the
       pane: a running idle tab gets an inbox line that wakes it at once to work its list (none more while
       that ask waits), a closed one opens in a new tab; refused on a tab in a turn, at a tool call or with
@@ -215,8 +224,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   update <id> [--title ..] [--description ..|none] [--owner ..] [--priority p<n>|blocker] [--ref ..|none]
       [--due <date>|none] [--goals a,b|none] [--week <date>|none] [--after T5,T6|none] [--size <pct>|none]
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
-      [--prepares <goal>:<slice>|none] [--note ..]
-      the lead may change owner, priority, due, week, after, size, type, class, critical and pin on any task
+      [--exempt|--not-exempt] [--prepares <goal>:<slice>|none] [--note ..]
+      the lead may change owner, priority, due, week, after, size, type, class, critical, pin and exempt on any
+      task
+      --exempt: a held owner still wakes for the task past the daily cap or a plain budget cut, never a stop;
+      set only by a leader above the owner (the lead on its own tasks too)
       --pin: puts the task above every other task on its owner's list, set by the owner's leaders (the lead
       on its own tasks too); it moves the owner's earlier pin, and handing the task on clears it
       --prepares <goal>:<slice>|none: marks a design, study or prep plan for that slice of a goal, set only by
@@ -361,6 +373,15 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       revision you hold of a document asked; one still at that revision is answered with unchanged:
       true in place of its body, from its files' stamps alone. --interface: the version you speak,
       refused when this teamrig does not serve it. It writes nothing
+  events --json [--documents <document>[,...]] [--session <id|name>] [--conversation <id>] [--team <id>]
+      [--owner <id|name>] [--since <hours>] [--task <id>] [--range <days>]   the public interface's
+      events side, for a program that starts it and reads its stdout: one JSON line a frame, first
+      hello with every followed document's revision, then a changed frame naming the documents whose
+      revision moved, at most one a second. A frame holds documents and revisions only: read --unless
+      serves what changed. --documents: the documents to follow (every one unless given, history
+      only with --task); the other flags are read's, and so are its refusals, on stderr before the
+      first frame. It ends with exit 0 once the
+      program that started it is gone or reads its stdout no more. It writes nothing
   sessions [--pass] [--project <dir>]   each session: running (and the MB its Claude Code's processes
       hold), closed or never recorded; then the host's free memory and commit charge. --pass: what an
       idle pass would close and reopen (one reopen a pass, with room on the host) and why it keeps or

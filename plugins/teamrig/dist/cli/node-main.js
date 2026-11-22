@@ -42,22 +42,29 @@ import { processStopWatch } from "../restore/stops.js";
 import { CMD_SHIM_LINE_ENV } from "./cmd-shim.js";
 import { sessionProcessCheckOf } from "./host.js";
 import { runCli } from "./run.js";
-/** The process's own stdout and stderr, a line at a time. */
-export const PROCESS_OUTPUT = {
-    stdout: (line) => process.stdout.write(`${line}\n`),
-    stderr: (line) => process.stderr.write(`${line}\n`),
-};
+/** The process's own stdout and stderr, a line at a time; `stdoutClosed` is what `ignoreClosedPipe` gave for stdout. */
+export function processOutput(stdoutClosed) {
+    return {
+        stdout: (line) => process.stdout.write(`${line}\n`),
+        stderr: (line) => process.stderr.write(`${line}\n`),
+        closed: stdoutClosed,
+    };
+}
 /**
  * Ends the stack dump a reader that closed early causes (`teamrig show T1 | head -2`): the write fails with EPIPE, and
  * with no 'error' listener node throws it as an uncaught exception. The run goes on to its own exit code, since a
  * command that also writes files must not stop halfway because nobody reads its output; any other stream error still
- * throws as before.
+ * throws as before. The signal it returns aborts at that EPIPE, for the command that only prints and so has to end
+ * with its reader (`Output.closed`).
  */
 export function ignoreClosedPipe(stream) {
+    const closed = new AbortController();
     stream.on('error', (error) => {
         if (error.code !== 'EPIPE')
             throw error;
+        closed.abort();
     });
+    return closed.signal;
 }
 /**
  * The process adapter: real files, clock, git, child processes and stdio around the testable runner. Its own module,

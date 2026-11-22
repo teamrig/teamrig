@@ -48,8 +48,15 @@ describe('parseSkillDoctor', () => {
   });
 });
 
+const DESK = 'C:\\bin\\agent-desk.exe';
+
+/** The doctor of a host naming `program`; undefined is a host that names none, so it is no default parameter. */
+function doctorNaming(program: string | undefined, hooks: FakeHooks, path: string): ReturnType<typeof claudeSkillDoctor> {
+  return claudeSkillDoctor({ env: { PATH: path }, platform: 'win32', probe: new FakePathProbe({ files: [CLAUDE, DESK] }), files: new MemoryFiles(), node: 'C:\\node\\node.exe', hooks, program });
+}
+
 function doctorOf(hooks: FakeHooks, path: string): ReturnType<typeof claudeSkillDoctor> {
-  return claudeSkillDoctor({ env: { PATH: path }, platform: 'win32', probe: new FakePathProbe({ files: [CLAUDE] }), files: new MemoryFiles(), node: 'C:\\node\\node.exe', hooks });
+  return doctorNaming('claude', hooks, path);
 }
 
 describe('claudeSkillDoctor', () => {
@@ -68,6 +75,15 @@ describe('claudeSkillDoctor', () => {
     const hooks = new FakeHooks();
     assert.deepEqual(await doctorOf(hooks, 'C:\\elsewhere').read(PROJECT), { kind: 'skipped', why: 'Claude Code is not on PATH' });
     assert.deepEqual(hooks.ran, []);
+  });
+
+  it('runs the program its host names and no other, and is skipped running nothing on a host that names none', async () => {
+    const hooks = new FakeHooks().answer([DESK, ...SKILL_DOCTOR_ARGS], { lines: TABLE });
+    assert.equal((await doctorNaming('agent-desk', hooks, 'C:\\bin').read(PROJECT)).kind, 'read');
+    assert.deepEqual(hooks.ran.map((request) => request.argv[0]), [DESK]);
+    const none = new FakeHooks();
+    assert.deepEqual(await doctorNaming(undefined, none, 'C:\\bin').read(PROJECT), { kind: 'skipped', why: 'the host names no program to run it with' });
+    assert.deepEqual(none.ran, []);
   });
 
   it('is skipped with how the run ended when it fails or runs out of time', async () => {

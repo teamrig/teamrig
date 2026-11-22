@@ -3,18 +3,15 @@ import { basename } from 'node:path';
 function argsOf(commandLine) {
     return commandLine.split(/[\s\0]+/).filter((arg) => arg !== '');
 }
-/** Whether `commandLine` is a fork (`--fork-session`) resumed from Claude Code session `claudeSession` or its transcript file. */
-export function isForkOf(commandLine, claudeSession) {
-    if (commandLine === undefined) {
-        return false;
-    }
+/** Whether `commandLine` is a fork (`--fork-session`) resumed from Claude Code session `session` or its transcript file. */
+export function isForkOf(commandLine, session) {
     const args = argsOf(commandLine);
     if (!args.includes('--fork-session')) {
         return false;
     }
     return args.some((arg, i) => {
         const value = arg.startsWith('--resume=') ? arg.slice('--resume='.length) : i > 0 && (args[i - 1] === '--resume' || args[i - 1] === '-r') ? arg : undefined;
-        return value !== undefined && (value === claudeSession || basename(value).replace(/\.jsonl$/, '') === claudeSession);
+        return value !== undefined && (value === session || basename(value).replace(/\.jsonl$/, '') === session);
     });
 }
 /** How many of a background job's starters are looked through for its host: the host starts the job itself. */
@@ -38,7 +35,7 @@ function sessionIdOf(args) {
  * with `--session-id`. The host's comes first: it is not the process that runs the job's turns and /clear. Undefined for
  * a process no background host runs, or a job that names no session.
  */
-export function backgroundJobSessionOf(lineage) {
+export function backgroundJobSession(lineage) {
     const [job, ...starters] = lineage;
     const host = starters.slice(0, BACKGROUND_HOST_HOPS).find((starter) => argsOf(starter.commandLine).includes('--bg-pty-host'));
     if (job === undefined || host === undefined) {

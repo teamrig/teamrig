@@ -16,7 +16,7 @@ import type { TranscriptReader } from './transcript-reader.ts';
 import type { Unsupported } from './unsupported.ts';
 import type { UsageMeter } from './usage-meter.ts';
 
-export { HOOK_EVENTS, isHookEventName, type HookBridge, type HookEvent, type HookEventName, type HookHelper, type HookReply, type HookVerdict } from './hook-bridge.ts';
+export { HOOK_EVENTS, isHookEventName, type HookBridge, type HookEvent, type HookEventName, type HookHelper, type HookReply, type HookVerdict, type TitleSwitch } from './hook-bridge.ts';
 export {
   SHELL_DIALECTS,
   TOOL_KINDS,
@@ -46,7 +46,15 @@ export type { HostSteps } from './steps.ts';
 export type { StatusLine, StatusLineAnswer, StatusLinePlan, StatusReading } from './status-line.ts';
 export type { RateLimits, RateWindow, TokenWeights, UsageMeter } from './usage-meter.ts';
 export type { FolderSettings, HostPaths } from './paths.ts';
-export type { ChildEnvironment, RunningProgram, SessionIdentity, SessionLauncher, SessionVariables } from './session-launcher.ts';
+export type {
+  ChildEnvironment,
+  RunningProgram,
+  SessionIdentity,
+  SessionLauncher,
+  SessionPlace,
+  SessionStart,
+  SessionVariables,
+} from './session-launcher.ts';
 
 /** Every host port by its name. Each line is required: an adapter names every port, filled or not. */
 export interface HostPorts {

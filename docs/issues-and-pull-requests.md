@@ -82,8 +82,9 @@ step and its date:
 - **Needs more**: an issue missing a section of its form is labelled `needs-format`, with a comment naming what is
   missing.
 - **Taken**: a sound report gets its labels and the `teamrig` label, which makes it a task on the maintainer's list.
-- **Your pull request landed**: once its review and CI pass (on ubuntu, windows and macos), its commits land on `main`
-  with your name and your sign-off, and the pull request is closed with a comment naming the landed commit.
+- **Your pull request landed**: auto-merge is switched on for it once it is not a draft, so once its review and CI
+  pass (on ubuntu, windows and macos) the merge queue lands its commits on `main` with your name and your sign-off,
+  and the pull request is closed with a comment naming the landed commit.
 - **Redone**: when the fault is real but the change does not fit (the wrong layer, one setup only, no test), the
   maintainer proposes the better fix on your pull request first, then lands it crediting yours.
 - **Closed**: a duplicate links the original; a request outside [what teamrig takes](#what-teamrig-takes), one

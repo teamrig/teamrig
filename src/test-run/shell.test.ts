@@ -78,12 +78,18 @@ describe('unrunnableReason', () => {
 describe('nodeShellRunner', () => {
   const shell = nodeShellRunner();
 
-  it('keeps stdout and stderr together in the order they arrived', async () => {
+  it('keeps stdout and stderr together, each stream in the order it was written', async () => {
     const command = script(
       'order.mjs',
       "const wait = () => new Promise((done) => setTimeout(done, 40));\nprocess.stdout.write('one\\n'); await wait();\nprocess.stderr.write('two\\n'); await wait();\nprocess.stdout.write('three é\\n');\n",
     );
-    assert.deepEqual(await shell.run({ command, cwd: DIR, env: ENV }), { end: { kind: 'exited', code: 0 }, output: 'one\ntwo\nthree é\n' });
+    const { end, output } = await shell.run({ command, cwd: DIR, env: ENV });
+    assert.deepEqual(end, { kind: 'exited', code: 0 });
+    // stdout and stderr are two pipes, read as each one's reads fire: a parent starved past the child's gaps may
+    // read both stdout writes before the stderr one, so only each stream's own order is certain.
+    const lines = output.split('\n');
+    assert.deepEqual([...lines].sort(), ['', 'one', 'three é', 'two']);
+    assert.deepEqual(lines.filter((line) => line !== 'two'), ['one', 'three é', '']);
   });
 
   it('reports a failing exit code with what was printed', async () => {

@@ -8,11 +8,13 @@ import { SecretScanner } from '../../core/secrets.ts';
 import { HiringLog } from '../../hiring/log.ts';
 import { inboxLineOf } from '../../inbox/inbox.ts';
 import { lineHash } from '../../inbox/line-hash.ts';
+import { formatTeamWeek, TEAM_WEEK_IN_STATE } from '../../budget/team-week-summary.ts';
 import { EVENT_VERSION } from '../../register/events.ts';
 import { layoutPaths } from '../../register/layout.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { formatSessionRecord } from '../../sessions/record.ts';
 import { formatTabNeed } from '../../tabs/need.ts';
+import { INTERFACE_MAJOR, INTERFACE_MINOR, INTERFACE_VERSION } from '../../interface/index.ts';
 import { CliHarness, CONFIG_PATH, EVENTS_PATH, TEAM, TEAM_HOME, type CliResult } from '../../testing/cli-harness.ts';
 import { rotateRegister } from '../../testing/rotation.ts';
 import { normalisePath } from '../../testing/memory-files.ts';
@@ -123,7 +125,7 @@ describe('teamrig read tasks', () => {
     const kit = new CliHarness();
     await add(kit, 'Ship the gate', 'alpha');
     const answer = served(await kit.run(READ_TASKS));
-    assert.deepEqual([answer['interface'], answer['document'], answer['problems'], answer['cuts']], ['1.5', 'tasks', [], []]);
+    assert.deepEqual([answer['interface'], answer['document'], answer['problems'], answer['cuts']], [INTERFACE_VERSION, 'tasks', [], []]);
     assert.match(String(answer['revision']), REVISION);
     const [task] = tasksOf(answer);
     assert.deepEqual([task?.['id'], task?.['title'], task?.['owner']], ['T1', { text: 'Ship the gate', source: 'team' }, 'alpha']);
@@ -131,7 +133,24 @@ describe('teamrig read tasks', () => {
   });
 
   it('serves an empty register as no task', async () => {
-    assert.deepEqual(tasksOf(served(await new CliHarness().run(READ_TASKS))), []);
+    const answer = served(await new CliHarness().run(READ_TASKS));
+    assert.deepEqual([tasksOf(answer), answer['retired']], [[], 0]);
+  });
+
+  it("counts the finished tasks a compaction left to the archive, every owner's even with --owner", async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Old gate', 'alpha');
+    await add(kit, 'Live gate', 'bravo');
+    const dropped = await kit.run(['set', 'T1', '--status', 'dropped', '--note', 'no longer wanted', '--session', 'alpha']);
+    assert.equal(dropped.code, EXIT.ok, dropped.stderr.join('\n'));
+    const before = served(await kit.run(READ_TASKS));
+    assert.deepEqual([titlesOf(before), before['retired']], [['Old gate', 'Live gate'], 0]);
+    kit.clock.advance(9 * 24 * 60 * 60 * 1000);
+    await rotateRegister(kit.files, EVENTS_PATH, { now: new Date(kit.clock.now()) });
+    const after = served(await kit.run(READ_TASKS));
+    assert.deepEqual([titlesOf(after), after['retired']], [['Live gate'], 1]);
+    assert.notEqual(after['revision'], before['revision']);
+    assert.equal(served(await kit.run([...READ_TASKS, '--owner', 'bravo']))['retired'], 1);
   });
 
   it('marks text from outside the team and escapes what a terminal would act on', async () => {
@@ -196,7 +215,7 @@ describe('teamrig read inbox', () => {
     const kit = new CliHarness();
     const line = await post(kit, 'lead', 'alpha', 'Ship the gate');
     const answer = served(await kit.run(READ_INBOX));
-    assert.deepEqual([answer['interface'], answer['document'], answer['problems'], answer['cuts']], ['1.5', 'inbox', [], []]);
+    assert.deepEqual([answer['interface'], answer['document'], answer['problems'], answer['cuts']], [INTERFACE_VERSION, 'inbox', [], []]);
     assert.match(String(answer['revision']), REVISION);
     assert.deepEqual([answer['session'], answer['unread']], [{ id: 'alpha', name: 'app-alpha' }, null]);
     assert.deepEqual(linesOf(answer), [
@@ -323,10 +342,10 @@ describe('teamrig read sessions', () => {
       [
         null,
         [
-          { id: 'app', parent: null, active: 3, retired: 0 },
-          { id: 'ops', parent: 'app', active: 2, retired: 0 },
-          { id: 'web', parent: 'app', active: 3, retired: 0 },
-          { id: 'ui', parent: 'web', active: 2, retired: 0 },
+          { id: 'app', parent: null, active: 3, retired: 0, week: null },
+          { id: 'ops', parent: 'app', active: 2, retired: 0, week: null },
+          { id: 'web', parent: 'app', active: 3, retired: 0, week: null },
+          { id: 'ui', parent: 'web', active: 2, retired: 0, week: null },
         ],
         [],
         [],
@@ -399,12 +418,35 @@ describe('teamrig read sessions', () => {
     assert.deepEqual([sessionOf(answer, 'app', 'alpha')['unread'], sessionOf(answer, 'app', 'bravo')['unread']], [1, null]);
   });
 
+  it("serves each team's own week as its hooks wrote it, and none for a missing or damaged file", async () => {
+    const kit = await treeHarness();
+    const resetsAt = Date.parse('2030-01-09T01:00:00.000Z');
+    const at = kit.clock.now();
+    const start = resetsAt - 6 * 24 * 60 * 60 * 1000;
+    await kit.files.write(join(teamHomeOf('web'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    await kit.files.write(join(teamHomeOf('ops'), 'state', ...TEAM_WEEK_IN_STATE), '{"torn');
+    const before = served(await kit.run(READ_SESSIONS));
+    const teams = Array.isArray(before['teams']) ? before['teams'] : [];
+    assert.deepEqual(
+      teams.map((team: unknown) => (isRecord(team) ? [team['id'], team['week']] : [])),
+      [
+        ['app', null],
+        ['ops', null],
+        ['web', { usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt: '2030-01-09T01:00:00.000Z', start: '2030-01-03T01:00:00.000Z', at: new Date(at).toISOString() }],
+        ['ui', null],
+      ],
+    );
+    assert.equal(JSON.stringify(before).includes('"main"'), false, 'the account is not served');
+    await kit.files.write(join(teamHomeOf('app'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 1, plannedPct: 2, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    assert.notEqual(served(await kit.run(READ_SESSIONS))['revision'], before['revision']);
+  });
+
   it('serves a retired session after its team\'s own, on no team and with its retirement', async () => {
     const kit = await treeHarness();
     const at = kit.clock.now();
     await new HiringLog(kit.files, join(TEAM_HOME, 'state', 'hires.jsonl')).append({ kind: 'retire', session: 'gone', reason: 'The job is done', heir: 'alpha', by: 'lead', at });
     const answer = served(await kit.run(READ_SESSIONS));
-    assert.deepEqual(Array.isArray(answer['teams']) ? answer['teams'][0] : undefined, { id: 'app', parent: null, active: 3, retired: 1 });
+    assert.deepEqual(Array.isArray(answer['teams']) ? answer['teams'][0] : undefined, { id: 'app', parent: null, active: 3, retired: 1, week: null });
     assert.deepEqual(
       sessionsOf(answer).map((row) => `${String(row['team'])}/${String(row['id'])}`).slice(0, 5),
       ['app/lead', 'app/alpha', 'app/bravo', 'app/gone', 'ops/lead'],
@@ -639,13 +681,13 @@ describe('teamrig read: what is asked', () => {
     });
   }
 
-  it('answers a reader of the served version or an older minor with the version it serves', async () => {
-    for (const asked of ['1.5', '1.4', '1.3', '1.2', '1.1', '1.0']) {
-      assert.equal(served(await new CliHarness().run([...READ_TASKS, '--interface', asked]))['interface'], '1.5');
+  it('answers a reader of the served version or an older minor, in the version it serves', async () => {
+    for (const asked of ['1.0', INTERFACE_VERSION]) {
+      assert.equal(served(await new CliHarness().run([...READ_TASKS, '--interface', asked]))['interface'], INTERFACE_VERSION, asked);
     }
   });
 
-  for (const version of ['2.0', '0.9', '1.6']) {
+  for (const version of [`${INTERFACE_MAJOR + 1}.0`, `${INTERFACE_MAJOR - 1}.9`, `${INTERFACE_MAJOR}.${INTERFACE_MINOR + 1}`]) {
     it(`refuses --interface ${version} on stderr and prints no document`, async () => {
       const result = await new CliHarness().run([...READ_TASKS, '--interface', version]);
       assert.deepEqual([result.code, result.stdout, result.stderr.length], [EXIT.refused, [], 1]);
@@ -684,7 +726,7 @@ describe('teamrig read --unless', () => {
     assert.ok(tasks !== undefined && meetings !== undefined);
     const again = allServed(await kit.run([...READ_ALL, '--unless', heldOf([meetings, tasks])]));
     assert.deepEqual(unchangedOf(again), [['tasks', true], ['inbox', false], ['sessions', false], ['meetings', true], ['config', false], ['plan', false], ['goals', false], ['history', false], ['stats', false]]);
-    assert.deepEqual(again[0], { interface: '1.5', document: 'tasks', revision: tasks['revision'], unchanged: true });
+    assert.deepEqual(again[0], { interface: INTERFACE_VERSION, document: 'tasks', revision: tasks['revision'], unchanged: true });
     assert.deepEqual(again.slice(1, 3), first.slice(1, 3));
   });
 
@@ -719,7 +761,7 @@ describe('teamrig read --unless', () => {
     const first = served(await kit.run(['read', 'config', '--json']));
     assert.deepEqual(
       served(await kit.run(['read', 'config', '--json', '--unless', heldOf([first])])),
-      { interface: '1.5', document: 'config', revision: first['revision'], unchanged: true },
+      { interface: INTERFACE_VERSION, document: 'config', revision: first['revision'], unchanged: true },
     );
   });
 });

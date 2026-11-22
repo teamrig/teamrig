@@ -14,6 +14,7 @@ import {
   type SessionLauncher,
   type SessionVariables,
   type ShellCall,
+  type TitleSwitch,
 } from '../ports/host/index.ts';
 import { hostDeps } from './adapter-deps.ts';
 import { bareHost } from './bare-host.ts';
@@ -86,6 +87,38 @@ export function hostRunning(program: string): HostSource {
   return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), isSessionProcess: (process) => process.name === program } });
 }
 
+/**
+ * The shipped host, its sessions started by the program named `program` with the arguments `launchArgs` spells, the
+ * shipped host's own unless given: for a spec of a command that must ask the host what starts a session and know no
+ * host's program or flag itself.
+ */
+export function hostStarting(program: string, launchArgs: SessionLauncher['launchArgs'] = shippedLauncher().launchArgs): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), program, launchArgs } });
+}
+
+/**
+ * The shipped host, reading a session's command line with `lines` where given and its own readers elsewhere: for a
+ * spec of a reader that must ask the host which process is a session's fork or background job and know no host's
+ * flag itself.
+ */
+export function hostReadingLines(lines: Partial<Pick<SessionLauncher, 'isForkOf' | 'backgroundJobSession'>>): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), ...lines } });
+}
+
+/**
+ * The shipped host, its hook port naming `titleSwitch` as what leaves the tab's title to hooks, undefined for a host
+ * that writes no title of its own, and its launcher named `TEST_PROGRAM`: for a spec of a reader that must ask the
+ * host which switch holds the title and know no host's variable itself.
+ */
+export function hostTitledBy(titleSwitch: TitleSwitch | undefined): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), hooks: { ...testHooks(given.platform), titleSwitch }, launcher: { ...shippedLauncher(), programName: TEST_PROGRAM } });
+}
+
+/** A switch named `variable` that is on at `value` alone: a test host's own, apart from any shipped host's. */
+export function testTitleSwitch(variable: string, value = 'yes'): TitleSwitch {
+  return { variable, value, on: (env) => env[variable] === value };
+}
+
 /** A host whose launcher names no mark of an agent's run, which no adapter that loaded does: every run there is untold. */
 export const NO_MARK_HOST: HostSource = hostNaming({ marks: [], identity: [] });
 
@@ -99,6 +132,11 @@ function shippedLauncher(): SessionLauncher {
 /** The session variables the shipped host hands a run: the ones its declaration names. */
 export function testSessionVariables(): SessionVariables {
   return shippedLauncher().variables;
+}
+
+/** The shipped host's reading of where a session ran, for a spec of a restore that must ask the host. */
+export function testSessionPlace(): SessionLauncher['sessionPlaceOf'] {
+  return shippedLauncher().sessionPlaceOf;
 }
 
 /** Whether a process is the shipped host's own program running a session, as its launcher port answers. */

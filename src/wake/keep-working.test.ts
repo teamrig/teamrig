@@ -60,6 +60,14 @@ describe('keepWorkingOf', () => {
     const tasks = tasksOf(WAITING, testTask({ id: 'T2' }));
     assert.equal(workOf(tasks, { quiet: true, held: false }), undefined);
     assert.equal(workOf(tasks, { quiet: false, held: true }), undefined);
+    assert.equal(workOf(tasks, { quiet: false, held: true, yields: false }), undefined, 'a stop sends nobody back');
+  });
+
+  it("sends a held session whose hold yields to the work another session's task waits on, and to that alone (T4948)", () => {
+    const waiter = testTask({ id: 'T9', owner: 'bravo', status: 'waiting', waits: [{ kind: 'task', id: 'T3' }] });
+    const tasks = tasksOf(WAITING, testTask({ id: 'T2', priority: 1 }), testTask({ id: 'T3', priority: 3 }), waiter);
+    assert.deepEqual(workOf(tasks, { quiet: false, held: true, yields: true })?.startable.map((task) => task.id), ['T3']);
+    assert.equal(workOf(tasksOf(WAITING, testTask({ id: 'T2' })), { quiet: false, held: true, yields: true }), undefined, 'nothing waited on: nothing to do');
   });
 
   it('leaves the tasks that depend on the waiting one, directly or through another unfinished task', () => {

@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
+  SLOWEST_REPORTER,
   coverageFindings,
   coverageRun,
   coverageTotals,
@@ -169,6 +172,14 @@ describe('suiteArgs', () => {
       assert.ok(args.includes(arg), arg);
     }
     assert.deepEqual(args.slice(-2), ['tools/**/*.test.ts', 'src/**/*.test.ts']);
+  });
+
+  it('ends its output with the slowest files and tests, from the reporter beside it at any root (T5027)', () => {
+    const args = suiteArgs(POLICY, 'out.lcov', 'out.tap', 10);
+    const at = args.indexOf(`--test-reporter=${SLOWEST_REPORTER}`);
+    assert.ok(at >= 0, args.join(' '));
+    assert.equal(args[at + 1], '--test-reporter-destination=stdout');
+    assert.ok(existsSync(fileURLToPath(SLOWEST_REPORTER)), SLOWEST_REPORTER);
   });
 });
 

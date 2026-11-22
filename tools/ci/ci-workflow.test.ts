@@ -53,6 +53,7 @@ const PUBLIC_ONLY = '    if: ${{ !github.event.repository.private }}\n';
 const CODE = "${{ needs.changes.outputs.kind == 'code' }}";
 const NOT_DESIGN = "${{ needs.changes.outputs.kind != 'design' }}";
 const DOCS = "${{ needs.changes.outputs.kind == 'docs' }}";
+const CODE_OFF_UBUNTU = "${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' }}";
 
 describe('ci.yml', () => {
   const jobs = jobsOf(workflow);
@@ -182,7 +183,7 @@ describe('ci.yml', () => {
       { does: 'npm ci --ignore-scripts', when: NOT_DESIGN },
       { does: 'npm run typecheck', when: CODE },
       { does: 'npm run build', when: NOT_DESIGN },
-      { does: 'npm test', when: CODE },
+      { does: 'npm test', when: CODE_OFF_UBUNTU },
       { does: 'node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts', when: DOCS },
       { does: 'node tools/ci/dist-smoke-cli.ts', when: CODE },
       { does: 'node tools/ci/fresh-install-cli.ts', when: CODE },
@@ -193,6 +194,23 @@ describe('ci.yml', () => {
       { does: 'node tools/ci/provider-words-cli.ts', when: CODE },
       { does: 'node tools/docs/doc-check-cli.ts', when: undefined },
     ]);
+  });
+
+  it('runs the suite once on ubuntu, in the coverage gate on the test leg Node, which fails a failing test (T5027)', () => {
+    const nodeOf = (job: string): string | undefined => /^ {10}node-version: (.+)$/m.exec(job)?.[1];
+    const test = jobs.get('test') ?? '';
+    assert.equal(nodeOf(jobs.get('coverage') ?? ''), '22');
+    assert.equal(nodeOf(test), '${{ matrix.node }}');
+    assert.match(test, /^ {8}node: \[22\]$/m, 'the test legs run the Node the coverage gate runs');
+    assert.match(test, /^ {8}os: \$\{\{ fromJSON\(needs\.changes\.outputs\.systems\) \}\}$/m);
+    assert.equal(stepsOf(test).find((step) => step.does === 'npm test')?.when, CODE_OFF_UBUNTU);
+  });
+
+  it('caches npm downloads in each job that installs, keyed on the lockfile by setup-node (T5027)', () => {
+    for (const [id, job] of jobs) {
+      const installs = job.includes('- run: npm ci');
+      assert.equal(/^ {10}cache: npm$/m.test(job), installs, `job ${id} ${installs ? 'installs with no npm cache' : 'caches npm but installs nothing'}`);
+    }
   });
 
   it('runs the commit checks on every change, docs and design included', () => {

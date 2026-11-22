@@ -24,9 +24,10 @@ import { REPLY_TAIL_BYTES } from '../turn-log/reply.ts';
 import { seenLinesOf, unseenLinesOf } from '../inbox/inbox.ts';
 import { asksNowOf, urgentLinesText, WakeAsks, type WakeAsk } from '../wake/asks.ts';
 import { startableTasks } from '../wake/day-start.ts';
+import type { RestExemption } from '../wake/exempt.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { measureTranscript, type LastSession } from './commands/rehire.ts';
-import { sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
+import { hostProgramsOf, sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
 import { teamZone, type Kit } from './kit.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 import { teamRegister } from './team-register.ts';
@@ -78,6 +79,8 @@ export interface IdleFacts {
  */
 export interface IdleOptions {
   readonly maxPriority: number;
+  /** The waited-on work past `maxPriority` that still keeps a held session open (`restExemptionOf`); absent: none. */
+  readonly exemption?: RestExemption | undefined;
   readonly project: string;
 }
 
@@ -222,7 +225,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
     return keep(notRunning);
   }
   const { now, zone, tasks, elsewhere } = facts;
-  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority);
+  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority, options.exemption);
   if (startable.length > 0) {
     return keep(`has work it can start (${startable.map((task) => task.id).join(', ')})`);
   }
@@ -249,8 +252,9 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
     return keep('runs on a host whose transcript teamrig cannot read, so what it still runs is unknown');
   }
   const { tail, cut } = await transcriptTailOf(runtime, last.transcript);
-  // A tail with no timed own entry falls back to the file's last change, which is never earlier.
-  const idleMinutes = Math.floor((now - (lastTurnAtOf(reader, tail, cut) ?? last.changedAt)) / MINUTE_MS);
+  // A tail with no timed own entry falls back to the file's last change, which is never earlier. `now` is read before
+  // the transcript, so an entry the tab wrote meanwhile (or a clock ahead of this host's) is stamped after it: quiet 0 min.
+  const idleMinutes = Math.max(0, Math.floor((now - (lastTurnAtOf(reader, tail, cut) ?? last.changedAt)) / MINUTE_MS));
   const needed = config.open.headroom.closeIdleMinutes;
   if (idleMinutes < needed) {
     return keep(`has been quiet ${idleMinutes} min; it closes after ${needed} (open.headroom.closeIdleMinutes)`);
@@ -284,5 +288,5 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
 
 /** What ends a session's tab and checks what that would cut off, from the runtime. */
 export function enderOf(runtime: CliRuntime): TabEnder {
-  return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform };
+  return { processes: runtime.sessionProcesses, clock: runtime.clock, sleep: runtime.sleep, platform: runtime.platform, hostPrograms: hostProgramsOf(runtime) };
 }

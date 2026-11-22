@@ -133,7 +133,7 @@ export function reopenVerdict(input) {
     if (waiting.length > 0) {
         return { kind: 'needed', waiting };
     }
-    const handed = startableTasks(tasks, elsewhere, session, now, zone, parking, input.maxPriority).filter((task) => isNews(task, session, tasks, elsewhere, zone));
+    const handed = startableTasks(tasks, elsewhere, session, now, zone, parking, input.maxPriority, input.exemption).filter((task) => isNews(task, session, tasks, elsewhere, zone));
     if (handed.length > 0) {
         return { kind: 'handed', tasks: handed };
     }

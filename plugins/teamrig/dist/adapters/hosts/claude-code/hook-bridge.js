@@ -1,4 +1,5 @@
 import { HOOK_EVENTS, isRecord, recordField, stringField, } from "../../../plugin-api/index.js";
+import { TITLE_SWITCH } from "./title-switch.js";
 /** Claude Code's name for each moment teamrig knows: the `hook_event_name` of its hook input and of a reply. */
 const HOST_NAMES = {
     'session-start': 'SessionStart',
@@ -172,5 +173,6 @@ export function hookBridge(shape) {
         reply: replyText,
         // A hook that exits with an error other than 2 is shown to the human and the moment goes on.
         failureRule: 'passes',
+        titleSwitch: TITLE_SWITCH,
     };
 }

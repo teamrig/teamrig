@@ -1,12 +1,12 @@
 import { join } from 'node:path';
 import { isRecord, stringField } from '../../core/guards.ts';
 import { claudeConfigDir, resolveKitHome } from '../../core/home.ts';
-import { findClaude } from '../../open/claude.ts';
+import { findProgram } from '../../open/host-program.ts';
 import { isUnsupported, type HostPlugin } from '../../ports/host/index.ts';
 import { UpdateCheck, type UpdateNotice, type UpdatePaths } from '../../update/check.ts';
 import { applyUpdate, hookGit } from '../../update/runner.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { hostOf } from '../host.ts';
+import { hostOf, launcherIfTold } from '../host.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { parseJson } from './hook-input.ts';
 
@@ -88,7 +88,12 @@ export async function updateApply(args: ParsedArgs, runtime: CliRuntime): Promis
   if (notice === undefined) {
     return answer(runtime, { kind: 'failed', why: `no newer ${plugin ?? 'plugin'} is published` });
   }
-  const claude = await findClaude({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node });
+  // The update runs the host's own program, which the host names: a host telling nothing of its sessions names none.
+  const launcher = launcherIfTold(runtime);
+  if (launcher === undefined) {
+    return answer(runtime, { kind: 'failed', why: 'the host names no program to update a plugin with' });
+  }
+  const claude = await findProgram({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, launcher.program);
   if (claude.kind === 'missing') {
     return answer(runtime, { kind: 'failed', why: 'Claude Code is not on PATH' });
   }

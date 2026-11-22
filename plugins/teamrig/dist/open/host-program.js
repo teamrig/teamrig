@@ -1,12 +1,13 @@
 import { posix, win32 } from 'node:path';
 import { envVariable, pathList } from "../core/path-search.js";
-const PROGRAM = 'claude';
 const WINDOWS_EXTENSIONS = '.COM;.EXE;.BAT;.CMD';
 const SCRIPT = /\.[cm]?js$/i;
 /** npm's cmd-shim ends by running `"%dp0%\<target>" %*`: the target, beside the shim. */
 const SHIM_TARGET = /"%~?dp0%?\\([^"\r\n]+)"\s+%\*/g;
+/** A program's file name: no folder in it, so the search never leaves the folders PATH names. */
+const FILE_NAME = /^[^\\/:]+$/;
 /**
- * The program an npm `claude.cmd` shim runs. Node.js starts a `.cmd` only through cmd.exe, which would
+ * The program an npm `.cmd` shim runs. Node.js starts a `.cmd` only through cmd.exe, which would
  * read the prompt as cmd syntax, so the shim's own target is started instead: a script with Node.js,
  * or a program directly.
  */
@@ -25,12 +26,12 @@ async function shimProgram(deps, shim) {
     }
     return /\.exe$/i.test(path) ? { command: path, prefix: [] } : `${shim} starts ${path}, which is neither a script nor a program`;
 }
-async function windowsSearch(deps) {
+async function windowsSearch(deps, name) {
     const extensions = pathList(envVariable(deps.env, 'PATHEXT', 'win32') ?? WINDOWS_EXTENSIONS, ';').map((extension) => extension.toLowerCase());
     const skipped = [];
     for (const folder of pathList(envVariable(deps.env, 'PATH', 'win32'), ';')) {
         for (const extension of extensions) {
-            const path = win32.join(folder, `${PROGRAM}${extension}`);
+            const path = win32.join(folder, `${name}${extension}`);
             if ((await deps.probe.kind(path)) !== 'file') {
                 continue;
             }
@@ -48,16 +49,22 @@ async function windowsSearch(deps) {
     }
     return { kind: 'missing', skipped };
 }
-async function posixSearch(deps) {
+async function posixSearch(deps, name) {
     for (const folder of pathList(envVariable(deps.env, 'PATH', deps.platform), ':')) {
-        const path = posix.join(folder, PROGRAM);
+        const path = posix.join(folder, name);
         if ((await deps.probe.kind(path)) === 'file') {
             return { kind: 'found', program: { command: path, prefix: [] } };
         }
     }
     return { kind: 'missing', skipped: [] };
 }
-/** Claude Code on PATH, the way a shell finds it: the native `claude.exe`, an npm shim, or `claude`. */
-export function findClaude(deps) {
-    return deps.platform === 'win32' ? windowsSearch(deps) : posixSearch(deps);
+/**
+ * The program a host names (`SessionLauncher.program`) on PATH, the way a shell finds it: a native `<name>.exe`, an
+ * npm shim, or `<name>`. The name is a host adapter's word, so one that is no plain file name is found nowhere.
+ */
+export function findProgram(deps, name) {
+    if (!FILE_NAME.test(name)) {
+        return Promise.resolve({ kind: 'missing', skipped: [`"${name}" is not a program's file name`] });
+    }
+    return deps.platform === 'win32' ? windowsSearch(deps, name) : posixSearch(deps, name);
 }

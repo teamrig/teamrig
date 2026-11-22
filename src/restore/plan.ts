@@ -2,7 +2,7 @@ import { dirname } from 'node:path';
 import { isEffortLevel, type EffortLevel } from '../config/types.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import { PROMPT_MAX } from '../open/prompt.ts';
-import type { EntryKind, TranscriptReader } from '../ports/host/index.ts';
+import type { EntryKind, SessionLauncher, TranscriptReader } from '../ports/host/index.ts';
 import { carryOf } from '../refresh/carry.ts';
 import { runningWorkOf } from '../refresh/running.ts';
 import { INTENTIONAL_END_REASONS, type RestoreEntry } from './entry.ts';
@@ -79,13 +79,16 @@ export interface JudgeFacts {
   readonly transcripts: ReadonlyMap<string, string>;
   /** What each session's transcript says of where it runs now; a session missing here reads as a tab. */
   readonly kinds: ReadonlyMap<string, TranscriptKind>;
+  /** The host's reading of where a session ran, from the words its entry kept; one it says nothing of reads as a tab. */
+  readonly placeOf: SessionLauncher['sessionPlaceOf'];
 }
 
 export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
-  if (entry.entrypoint !== undefined && entry.entrypoint !== 'cli') {
-    return { verdict: 'discard', reason: `not a terminal session (${entry.entrypoint})` };
+  const place = facts.placeOf({ startedAs: entry.entrypoint, sessionKind: entry.sessionKind });
+  if (place === 'elsewhere') {
+    return { verdict: 'discard', reason: entry.entrypoint === undefined ? 'not a terminal session' : `not a terminal session (${entry.entrypoint})` };
   }
-  if (entry.sessionKind === 'bg') {
+  if (place === 'background') {
     return { verdict: 'discard', reason: 'background session' };
   }
   if (entry.restoredAt !== undefined && entry.restoredAt >= entry.updatedAt && facts.now - entry.restoredAt < RESTORE_IN_FLIGHT_MS) {

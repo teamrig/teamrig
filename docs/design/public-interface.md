@@ -94,9 +94,11 @@ A read returns a versioned JSON document built from parsed data, never a file's 
 ### What version 1 ships
 
 `teamrig read <document>... --json` serves the five documents of 1.0 and each one a minor version added since (1.1:
-`plan`, 1.2: `goals`, 1.3: `history`, 1.4: `stats`; 1.5 added a field, `plan`'s `ownerCards`); [the commands
-page](../commands.md) has its usage and the plugin's guide describes every field. What the design above left open
-is settled this way:
+`plan`, 1.2: `goals`, 1.3: `history`, 1.4: `stats`; 1.5 added a field, `plan`'s `ownerCards`; 1.6 added the
+task fields the pane folded itself, `tasks`' `card`, `descriptionCut`, `sizeBase`, `prepares`, `noGoal`, `startedAt`
+and `waitsAt`; 1.8 added `tasks`' `retired`, the count of finished tasks left to the archive, and each `sessions`
+team's `week`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
+the design above left open is settled this way:
 
 - **One line a document.** Each document asked is one JSON object on one line of stdout, in the order asked, and
   nothing else is written there: a refusal is one line on stderr. A run answers every document asked or none. With
@@ -195,6 +197,14 @@ A tool that shows the team learns that something changed from events, then reads
 - **Ids and statuses only**: `task T12 is waiting`, `session alpha has 2 unread lines`, `session bravo is asking`. No
   text, no titles, no inbox lines: those come only through a read, which scans and marks them.
 - A frame carries the interface version; a client ignores frames and fields it does not know.
+
+**What interface 1.7 ships: the follower first, the pipe after it.** `teamrig events --json` is a process the tool
+starts and reads: its stdout is a pipe only that tool holds, so no address is opened and no token is needed. Its
+frames are `hello` (every followed document with its revision) and `changed` (the documents whose revision moved),
+which is less than ids and statuses: a frame names documents and revisions, and the tool reads the document with
+`teamrig read --unless` to learn what changed. It looks at the documents' files once a second and sends at most one
+frame a look. The named pipe or socket, for a tool that cannot keep a child process, and frames that name a task or
+a session come after it, in a later minor version with the same frame envelope.
 
 ## The owner's own acts
 

@@ -12,7 +12,7 @@ import { RestartLog, type RestartRecord } from '../../refresh/restart-log.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { RestoreRegistry, restoreSessionsDir } from '../../restore/registry.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
-import { leadLaunchOf, sessionProcessCheckOf, transcriptsOf } from '../host.ts';
+import { hostProgramsOf, leadLaunchOf, sessionProcessCheckOf, transcriptsOf } from '../host.ts';
 import { openKit, reloadTeamConfig, requireConfig, rosterOf } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { inboxDepsOf } from './inbox.ts';
@@ -90,6 +90,7 @@ export async function restart(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
       clock: runtime.clock,
       sleep: runtime.sleep,
       platform: runtime.platform,
+      hostPrograms: hostProgramsOf(runtime),
       asks: new ClearAsks(runtime.files, clearAskDir(kit.paths.kitHome)),
       restore: new RestoreRegistry(runtime.files, restoreSessionsDir(kit.paths.kitHome)),
       isSessionProcess: sessionProcessCheckOf(runtime),

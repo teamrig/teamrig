@@ -3,8 +3,7 @@ import { KIT_NAME } from "../core/home.js";
 import { KIND_TAIL_BYTES, transcriptKindOf } from "../restore/transcript-kind.js";
 import { measureSessions, runningPlaces } from "../sessions/measure.js";
 import { SessionRecordStore } from "../sessions/record.js";
-import { transcriptsIfKept } from "./host.js";
-import { backgroundJobSessionOf, isForkOf } from "./same-session.js";
+import { sessionCommandLinesOf, transcriptsIfKept } from "./host.js";
 import { RefusedError } from "./runtime.js";
 import { runsHostSession } from "./session-process.js";
 /**
@@ -52,7 +51,7 @@ export async function isLiveRunOwn(runtime, live, pid) {
     if (live.tree.has(pid)) {
         return true;
     }
-    if (isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.claudeSession)) {
+    if (sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.claudeSession)) {
         return true;
     }
     return isHandedOffJob(runtime, live, pid);
@@ -78,5 +77,5 @@ export async function isHandedOffJob(runtime, live, pid) {
         return false;
     }
     const lineage = await runtime.sessionProcesses.lineage(pid);
-    return lineage !== undefined && backgroundJobSessionOf(lineage) === handedTo;
+    return lineage !== undefined && sessionCommandLinesOf(runtime).backgroundJobSession(lineage) === handedTo;
 }

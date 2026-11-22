@@ -40,6 +40,7 @@ function fields(changes: Partial<TaskFields> = {}): TaskFields {
     type: null,
     critical: false,
     pin: null,
+    exempt: null,
     workClass: null,
     prepares: null,
     ...changes,

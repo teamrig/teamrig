@@ -8,6 +8,7 @@ import { DECISION_MARKER } from '../tabs/status.ts';
 import { parkedFacts, TEST_PARKING } from '../testing/ranking.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { testTask } from '../testing/task.ts';
+import { restExemptionOf } from '../wake/exempt.ts';
 import { lastTurnAtOf, reopenVerdict, soonTimeWaitOf, tabActivityOf, TIME_WAIT_GUARD_MINUTES, type ReopenInput, type ReopenVerdict } from './idle.ts';
 
 const reader = shippedTranscripts();
@@ -219,6 +220,16 @@ describe('reopenVerdict', () => {
     const verdict = reopen({ tasks, elsewhere: held('done', '2030-01-08T09:00:00.000Z') });
     assert.equal(verdict.kind, 'handed');
     assert.deepEqual(idsOf(verdict), ['T4']);
+  });
+
+  it("reopens a held session for the news another session's task waits on past maxPriority, and only for that (T4948)", () => {
+    const rest = { held: true, quiet: false, yields: true };
+    const waiter = testTask({ id: 'T12', owner: 'bravo', priority: 1, status: 'waiting', waits: [{ kind: 'task', id: 'T7' }] });
+    const tasks = tasksOf(testTask({ id: 'T7', priority: 1 }), testTask({ id: 'T4', priority: 1 }), waiter);
+    const verdict = reopen({ tasks, rest, maxPriority: 0, exemption: restExemptionOf(rest, 2, tasks, NO_TASKS_ELSEWHERE) });
+    assert.equal(verdict.kind, 'handed');
+    assert.deepEqual(idsOf(verdict), ['T7']);
+    assert.deepEqual(reopen({ tasks, rest, maxPriority: 0 }), { kind: 'stay' }, 'no exemption: the cap holds both');
   });
 
   it('stays closed for work it saw before the close, or less urgent than maxPriority', () => {
