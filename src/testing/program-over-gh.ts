@@ -16,10 +16,16 @@ export class NotGhError extends Error {
   }
 }
 
+/** Whether a request starts gh: by its name, or by a path to it, as `teamrig gh` runs it (`/usr/bin/gh`, `C:\Tools\gh.exe`). */
+function isGh(program: string): boolean {
+  const last = program.split(/[\\/]/u).at(-1) ?? '';
+  return last === GH_PROGRAM || last.toLowerCase() === `${GH_PROGRAM}.exe`;
+}
+
 /**
- * `gh` as a program runner: a request for `gh` goes to it, in the request's environment, an empty one when it sets
+ * `gh` as a program runner: a request for `gh`, by name or path, goes to it, in the request's environment, an empty one when it sets
  * none; a request for any other program rejects with NotGhError, so a spec sees an adapter that runs anything else.
  */
 export function programOverGh(gh: GhRunner): ProgramRunner {
-  return (request) => (request.program === GH_PROGRAM ? gh.run({ args: request.args, env: request.env ?? {} }) : Promise.reject(new NotGhError(request.program)));
+  return (request) => (isGh(request.program) ? gh.run({ args: request.args, env: request.env ?? {} }) : Promise.reject(new NotGhError(request.program)));
 }
