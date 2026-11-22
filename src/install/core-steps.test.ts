@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ConfigLoad } from '../config/load.ts';
+import { compareVersions, parseVersion } from '../core/release-version.ts';
+import { KIT_VERSION } from '../core/version.ts';
 import type { RequirementProblem, RequirementsCheck } from '../requirements/requirements.ts';
 import { testConfig } from '../testing/config.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
@@ -30,6 +32,14 @@ describe('CORE_STEPS', () => {
       CORE_STEPS.map((step) => step.id),
       ['node', 'git', 'cli', 'team'],
     );
+  });
+
+  it('names for each step the release that first needed it, none later than this one', () => {
+    const current = parseVersion(KIT_VERSION);
+    assert.ok(current !== undefined, KIT_VERSION);
+    for (const step of CORE_STEPS) {
+      assert.ok(compareVersions(step.addedIn, current) <= 0, step.id);
+    }
   });
 
   it('all pass on a machine that has everything', async () => {

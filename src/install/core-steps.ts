@@ -3,7 +3,7 @@ import type { ConfigLoad } from '../config/load.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { findProgram, WINDOWS_COMMAND_EXTENSIONS, type PathSearchDeps } from '../core/path-search.ts';
 import { MIN_NODE, versionText, type RequirementProblem, type RequirementsCheck } from '../requirements/requirements.ts';
-import type { InstallStep, StepState } from './steps.ts';
+import { INSTALL_CHECK_BASELINE, type InstallStep, type StepState } from './steps.ts';
 
 /**
  * The install steps every host shares, in install order: Node.js, git, the teamrig CLI on PATH, then the team config.
@@ -48,6 +48,7 @@ async function requirementState(
 
 export const NODE_STEP: InstallStep<CoreStepDeps> = {
   id: 'node',
+  addedIn: INSTALL_CHECK_BASELINE,
   title: `Node.js ${versionText(MIN_NODE)} or later`,
   probe: (deps) =>
     requirementState(
@@ -63,6 +64,7 @@ export const NODE_STEP: InstallStep<CoreStepDeps> = {
 
 export const GIT_STEP: InstallStep<CoreStepDeps> = {
   id: 'git',
+  addedIn: INSTALL_CHECK_BASELINE,
   title: 'git on PATH',
   probe: (deps) =>
     requirementState(
@@ -103,6 +105,7 @@ function sameFolder(a: string, b: string, platform: NodeJS.Platform): boolean {
  */
 export const CLI_STEP: InstallStep<CoreStepDeps> = {
   id: 'cli',
+  addedIn: INSTALL_CHECK_BASELINE,
   title: `the ${KIT_NAME} command on PATH`,
   async probe(deps) {
     const plugin = pluginFolderOf(deps.script, 2, deps.platform);
@@ -124,6 +127,7 @@ export const CLI_STEP: InstallStep<CoreStepDeps> = {
 
 export const TEAM_STEP: InstallStep<CoreStepDeps> = {
   id: 'team',
+  addedIn: INSTALL_CHECK_BASELINE,
   title: 'a team whose config loads',
   async probe({ team }) {
     if (team.kind === 'none') {

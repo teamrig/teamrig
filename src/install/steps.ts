@@ -1,5 +1,6 @@
 import { errorMessage } from '../core/guards.ts';
 import type { Sleep } from '../core/lock.ts';
+import type { Version } from '../core/release-version.ts';
 
 /**
  * The install and update check (T5075): one ordered list of what a working teamrig needs, each step a live probe of
@@ -18,12 +19,23 @@ export type StepState =
   | { readonly kind: 'missing'; readonly detail: string; readonly fix: string }
   | { readonly kind: 'unknown'; readonly why: string };
 
-/** One install step: a stable id, a few words a person reads, and the probe that looks at the machine through `D`. */
+/**
+ * One install step: a stable id, a few words a person reads, the release that first needed it, and the probe that
+ * looks at the machine through `D`. After an update, a step added in a release newer than the one updated from is new
+ * to that person, so the update names it as new.
+ */
 export interface InstallStep<D> {
   readonly id: string;
   readonly title: string;
+  readonly addedIn: Version;
   probe(deps: D): Promise<StepState>;
 }
+
+/**
+ * The release the install check started from. A step for something teamrig needed before the check existed (Node.js,
+ * git, the CLI, a team) carries it, so no update from it or a later release names that step as new.
+ */
+export const INSTALL_CHECK_BASELINE: Version = { major: 0, minor: 504, patch: 0 };
 
 /** A step and what its probe found. */
 export interface StepResult {

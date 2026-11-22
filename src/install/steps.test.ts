@@ -1,14 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Sleep } from '../core/lock.ts';
-import { checkInstall, installLines, type InstallStep, type ProbeLimit, type StepResult } from './steps.ts';
+import { checkInstall, INSTALL_CHECK_BASELINE, installLines, type InstallStep, type ProbeLimit, type StepResult } from './steps.ts';
 
 /** A wait that never ends, so no probe in these specs runs past its limit. */
 const neverEnds: Sleep = () => new Promise<void>(() => undefined);
 const NO_TIMEOUT: ProbeLimit = { timeoutMs: 2_000, sleep: neverEnds };
 
 function step(id: string, probe: InstallStep<string>['probe']): InstallStep<string> {
-  return { id, title: `step ${id}`, probe };
+  return { id, title: `step ${id}`, addedIn: INSTALL_CHECK_BASELINE, probe };
 }
 
 describe('checkInstall', () => {
