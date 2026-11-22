@@ -833,7 +833,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   refresh --ready              the handover the turn end asked to fix is complete as it is (the turn end takes one with both sections itself)
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
-      and a page webhook that gives no https URL
+      and a page webhook that gives no https URL; then INSTALL: each install step, probed live, with the fix for
+      one missing (printed even where no team is found)
   ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
       team, following the session last typed in, or pinned to the team --team or --session names;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
