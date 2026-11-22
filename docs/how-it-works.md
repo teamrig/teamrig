@@ -344,9 +344,10 @@ flowchart LR
   core --- pm
 ```
 
-There is no adapter interface in the code yet: what teamrig knows about Claude Code (its hook fields, its
-environment variables, `~/.claude/skills`) is built in. The interface comes with the second AI tool (T204), so it is
-shaped by two real tools instead of one.
+Each kind of tool is a port in the plugin API (`src/plugin-api`): an AI tool's host, a task tool's connector and a
+terminal. Each tool's adapter sits in its own folder under `src/adapters` (Claude Code's host; the local, GitHub and
+Jira connectors; the six built-in terminals), declares what it supports, and is held to the same contract suites as
+every other adapter of its kind.
 
 A terminal or editor plugs in as a host program that speaks the terminal protocol, with no change to teamrig's code:
 its own guide is [Build your own terminal host](guides/build-a-terminal-host.md).
