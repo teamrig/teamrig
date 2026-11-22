@@ -62,12 +62,12 @@ describe('windowsPathHolds', () => {
 });
 
 describe('the shell block', () => {
-  it('puts the folder first on the PATH once, quoting what sh would expand', () => {
+  it('puts the folder last on the PATH once, so it shadows no program of the user, quoting what sh would expand', () => {
     const block = shellBlock('/srv/pat/$HOME`x`"q"\\b');
     const lines = block.split('\n');
     assert.deepEqual([lines[0], lines[2], lines.length], [SHELL_BLOCK_START, SHELL_BLOCK_END, 3]);
     const quoted = '"/srv/pat/\\$HOME\\`x\\`\\"q\\"\\\\b"';
-    assert.equal(lines[1], `case ":$PATH:" in *:${quoted}:*) ;; *) PATH=${quoted}:"$PATH"; export PATH ;; esac`);
+    assert.equal(lines[1], `case ":$PATH:" in *:${quoted}:*) ;; *) PATH="$PATH":${quoted}; export PATH ;; esac`);
   });
 
   it('is added at the end of a file, a blank line before it, and replaced where it stands', () => {
@@ -83,6 +83,12 @@ describe('the shell block', () => {
   it('is added again at the end when a file holds its start line with no end line', () => {
     const torn = `${SHELL_BLOCK_START}\nexport A=1\n`;
     assert.equal(withShellBlock(torn, shellBlock(BIN)), `${torn}\n${shellBlock(BIN)}\n`);
+  });
+
+  it("rewrites only its own block when a torn start line stands before it, keeping the user's lines between", () => {
+    const torn = `${SHELL_BLOCK_START}\nexport A=1\n\n${shellBlock(BIN)}\n`;
+    const block = shellBlock('/srv/new/bin');
+    assert.equal(withShellBlock(torn, block), `${SHELL_BLOCK_START}\nexport A=1\n\n${block}\n`);
   });
 });
 

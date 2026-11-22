@@ -89,20 +89,27 @@ function doubleQuoted(text: string): string {
   return `"${text.replace(/[\\"$`]/g, (char) => `\\${char}`)}"`;
 }
 
-/** The block that puts `folder` first on the PATH of a shell reading the file, once however often it is read. */
+/**
+ * The block that puts `folder` last on the PATH of a shell reading the file, once however often it is read: last, so
+ * a file written into the folder never shadows a program the user's own folders hold.
+ */
 export function shellBlock(folder: string): string {
   const quoted = doubleQuoted(folder);
   return [
     SHELL_BLOCK_START,
-    `case ":$PATH:" in *:${quoted}:*) ;; *) PATH=${quoted}:"$PATH"; export PATH ;; esac`,
+    `case ":$PATH:" in *:${quoted}:*) ;; *) PATH="$PATH":${quoted}; export PATH ;; esac`,
     SHELL_BLOCK_END,
   ].join('\n');
 }
 
-/** `text` with its teamrig block made `block`: the one there replaced, else added at the end. */
+/**
+ * `text` with its teamrig block made `block`: the one there replaced, else added at the end. The block replaced runs
+ * from the last start line before the last end line, so a start line left with no end (an edit cut it) never makes
+ * the rewrite take the user's lines after it along.
+ */
 export function withShellBlock(text: string, block: string): string {
-  const start = text.indexOf(SHELL_BLOCK_START);
-  const end = start === -1 ? -1 : text.indexOf(SHELL_BLOCK_END, start);
+  const end = text.lastIndexOf(SHELL_BLOCK_END);
+  const start = end === -1 ? -1 : text.lastIndexOf(SHELL_BLOCK_START, end);
   if (start !== -1 && end !== -1) {
     return text.slice(0, start) + block + text.slice(end + SHELL_BLOCK_END.length);
   }
