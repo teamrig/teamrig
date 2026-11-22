@@ -1368,7 +1368,7 @@ the `gh` login in its place.
   instructions.
 
 It does not see an issue closed over `closedDays` ago while its task was open, so that task stays open; nor an issue
-past the first 500 of a list, which a `NOTE` line points out. `TEAMRIG_GITHUB=off` turns the command off on a
+past the first 5000 of a list, which a `NOTE` line points out. `TEAMRIG_GITHUB=off` turns the command off on a
 machine (so does `TEAMRIG_CONNECTOR_GITHUB=off`, the switch every connector has: `TEAMRIG_CONNECTOR_<ID>=off`, the
 id in upper case with `_` for each `-`; wherever this guide names `TEAMRIG_GITHUB=off`, either works and the `OFF`
 line names the one that is set), and with no `github.repos` it prints an `OFF` line; neither reads nor writes

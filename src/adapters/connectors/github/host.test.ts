@@ -128,9 +128,19 @@ describe('GitHubIssueHost.list', () => {
     const gh = new FakeGh().holds('acme/web', [...many, { ...ghIssue('acme/web', 900, { state: 'CLOSED' }), number: 'nine hundred' }]);
     const list = await hostWith(gh).list('acme/web', '2029-12-25');
     assert.deepEqual(list.kind === 'listed' && list.notes, [
-      'the open list reached 500 issues, so it may leave some out',
+      `the open list reached ${ISSUE_LIMIT} issues, so it may leave some out`,
       '1 closed item(s) gh printed did not read as issues and were left out',
     ]);
+  });
+
+  it('lists the newest open issue of a repository past 500 open issues, as the list runs oldest first', async () => {
+    // T4949: a cap of 500 left every newer open issue out of the sync and the status push.
+    const many = Array.from({ length: 600 }, (_, index) => ghIssue('acme/web', index + 1));
+    const list = await hostWith(new FakeGh().holds('acme/web', many)).list('acme/web', '2029-12-25');
+    assert.equal(list.kind, 'listed');
+    assert.equal(list.kind === 'listed' && list.issues.length, 600);
+    assert.ok(list.kind === 'listed' && list.issues.some((issue) => issue.number === 600));
+    assert.deepEqual(list.kind === 'listed' && list.notes, []);
   });
 
   it('gives nothing of the repository when either read fails', async () => {
