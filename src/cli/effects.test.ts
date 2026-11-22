@@ -139,6 +139,7 @@ const EXPECTED = {
   'automode uninstall': 'write',
   'permissions trim': 'write',
   'setup backup': 'write',
+  'setup hooks': 'write',
   'setup restore': 'write',
   'setup scan': 'read',
   'config get': 'read',

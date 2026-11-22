@@ -168,6 +168,8 @@ export interface RunOptions {
   readonly transcripts?: TranscriptSource;
   /** The host ports the run is given; default the shipped host's (the quiet world's). */
   readonly host?: HostSource;
+  /** The host adapters teamrig ships with, as the run sees them; default the shipped host alone (the quiet world's). */
+  readonly shippedHosts?: readonly HostSource[];
   /** The worktrees `worktree remove` sees; default none. */
   readonly worktrees?: WorktreePorts;
   /** The shutdown log and countdown `restore` sees; default no shutdown on record and a countdown that goes at once. */
@@ -265,6 +267,7 @@ export class CliHarness {
       ...(options.requirements === undefined ? {} : { requirements: options.requirements }),
       ...(options.transcripts === undefined ? {} : { transcripts: options.transcripts }),
       ...(options.host === undefined ? {} : { host: options.host }),
+      ...(options.shippedHosts === undefined ? {} : { shippedHosts: options.shippedHosts }),
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
       ...(options.restore === undefined ? {} : { restore: options.restore }),
       ...(options.steps === undefined ? {} : { steps: options.steps }),

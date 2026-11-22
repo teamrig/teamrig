@@ -14,7 +14,7 @@ export const SETTINGS_WRITERS: ReadonlyMap<string, ReadonlySet<string>> = new Ma
   ['config', new Set(['migrate'])],
   ['permissions', new Set(['trim'])],
   ['restore', new Set(['install'])],
-  ['setup', new Set(['restore'])],
+  ['setup', new Set(['restore', 'hooks'])],
   ['statusline', new Set(['install'])],
 ]);
 

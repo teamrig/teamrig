@@ -6,6 +6,7 @@ import {
   type HostPlugin,
   type HostPorts,
   type HostSecrets,
+  type HostUserHooks,
   type SessionIdentity,
   type SessionVariables,
   type StatusLine,
@@ -159,6 +160,26 @@ export function sessionVariablesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHo
     marks: [...new Set(named.flatMap((variables) => variables.marks))],
     identity: [...new Set(named.flatMap((variables) => variables.identity))],
   };
+}
+
+/**
+ * The person's own hooks file of the host named `name` (as `setup hooks --host` takes it), from every host adapter
+ * teamrig ships with and the run's own host: a person sets up the hooks of a host other than the one this run works
+ * in, as from Claude Code for Codex. A name no host answers to refuses, naming those that do.
+ */
+export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostUserHooks {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const offered = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+    const { userHooks } = source(seen);
+    return isUnsupported(userHooks) ? [] : [userHooks];
+  });
+  const found = offered.find((port) => port.host === name);
+  if (found !== undefined) {
+    return found;
+  }
+  const names = [...new Set(offered.map((port) => port.host))];
+  const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
+  throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
 }
 
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
