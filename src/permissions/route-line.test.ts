@@ -39,6 +39,53 @@ describe('plainWordsOf', () => {
     }
   });
 
+  it('lets a # through only inside a bare owner/name#number word, which bash reads as literal text', () => {
+    assert.deepEqual(plainWordsOf('teamrig pr approve acme/web#7 --session tr-x'), ['teamrig', 'pr', 'approve', 'acme/web#7', '--session', 'tr-x']);
+    assert.deepEqual(plainWordsOf('teamrig pr merge my.org/my_repo-2#1234567890'), ['teamrig', 'pr', 'merge', 'my.org/my_repo-2#1234567890']);
+    const head = '0123456789abcdef0123456789abcdef01234567';
+    assert.deepEqual(plainWordsOf(`teamrig pr approve acme/web#7 --head ${head} --session x`), ['teamrig', 'pr', 'approve', 'acme/web#7', '--head', head, '--session', 'x']);
+    for (const line of [
+      'teamrig pr approve a#7',
+      'teamrig pr approve x.y#7',
+      'teamrig pr approve --flag#7',
+      'teamrig pr approve -a/b#7',
+      'teamrig pr approve .a/b#7',
+      'teamrig pr approve a/b#07',
+      'teamrig pr approve a/b#7x',
+      'teamrig pr approve a/b#7#',
+      'teamrig pr approve ${a#b}',
+      'teamrig pr approve $#',
+      'teamrig pr approve --head=a/b#7',
+      'teamrig pr approve @a/b#7',
+      'teamrig pr approve !a/b#7',
+      'teamrig pr approve (a/b#7)',
+      'teamrig pr approve a/b#7;x',
+      'teamrig pr approve x#y',
+    ]) {
+      assert.equal(plainWordsOf(line), undefined, line);
+    }
+    for (const line of [
+      'teamrig pr approve #7',
+      'teamrig pr approve a #7',
+      'teamrig pr approve acme/web #7',
+      'teamrig pr approve x#7',
+      'teamrig pr approve web#7#8',
+      'teamrig pr approve acme/web#7#8',
+      'teamrig pr approve acme/web#x',
+      'teamrig pr approve acme/web#07',
+      'teamrig pr approve acme/web#12345678901',
+      'teamrig pr approve acme/web#',
+      'teamrig pr approve acme/web#7;id',
+      'teamrig pr approve acme/web#7x',
+      `teamrig pr approve 'acme/web#7'`,
+      `teamrig pr approve "acme/web#7"`,
+      `git commit -m '#'`,
+      'git status # acme/web#7',
+    ]) {
+      assert.equal(plainWordsOf(line), undefined, line);
+    }
+  });
+
   it(`refuses $'...' and $"...", whose value is not the text the line shows, and the same two characters inside quotes`, () => {
     for (const line of [
       "git commit -m x $'\\0'--no-verify",

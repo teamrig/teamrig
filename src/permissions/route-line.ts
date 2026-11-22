@@ -12,6 +12,14 @@ import { isStaticWord, parseShell, type ShellCommand, type ShellParse } from '..
 const STDERR_TO_STDOUT = /(?<=^|[ \t])2>&1(?=[ \t]|$)/g;
 
 /**
+ * A whole bare word naming a pull request or issue, `<owner>/<name>#<number>` (parseIssueTarget), whose `#` the scan
+ * lets through (T5070, amending F2): bash and PowerShell start a comment only at a word's start, so a `#` inside a word
+ * is literal, and a route like `teamrig pr approve` takes such a target. The whole word is anchored and bare, from an
+ * owner starting with a letter or digit (T5098 W1, W2); any other `#` stays refused.
+ */
+const PULL_TARGET_WORD = /(?<=^|[ \t])[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]+#[1-9][0-9]{0,9}(?=[ \t]|$)/g;
+
+/**
  * Text that may join, feed, redirect or substitute another command, refused even inside quotes; `#`, whose comment
  * bash skips, so an allowed line never carries text the matcher did not judge; and `$'` and `$"`, whose value is not the
  * text the line shows (T1994), which no route needs.
@@ -75,9 +83,12 @@ function sameWords(one: readonly string[] | undefined, other: readonly string[])
   return one !== undefined && one.length === other.length && one.every((word, at) => word === other[at]);
 }
 
-/** The raw scan: no control character but a tab (a newline included), nothing that joins commands or starts a comment, outside a lone `2>&1`. */
+/**
+ * The raw scan: no control character but a tab (a newline included), nothing that joins commands or starts a comment,
+ * outside a lone `2>&1` and the `#` of a pull target word.
+ */
 function scansPlain(line: string): boolean {
-  const scanned = line.replace(STDERR_TO_STDOUT, ' ');
+  const scanned = line.replace(STDERR_TO_STDOUT, ' ').replace(PULL_TARGET_WORD, (word) => word.replace('#', '-'));
   return !JOINS.test(scanned) && ![...scanned].some(isControl);
 }
 
