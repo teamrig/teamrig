@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { catchUp, ownDiff, type CatchUpDeps, type CatchUpRequest } from './catch-up.ts';
 import { TEAMRIG_REGENERATION, listedPaths, regenerationFor, workPathspec } from './regenerate.ts';
 import { profileFor, readProfiles } from './repos.ts';
@@ -195,16 +195,56 @@ const release = (version: string): string => `{\n  ".": "${version}"\n}\n`;
  * A teamrig-like repo and its bare origin: plugin.json and version.ts carry the version, and the "build" writes one
  * dist file per src file. main and the change each raise the version from the same base, with the dist rebuilt.
  */
-function teamrigRepo(t: { after: (fn: () => void) => void }): { dir: string; git: (...args: string[]) => string; build: () => void; commitFiles: (files: Readonly<Record<string, string>>, message: string) => string; raise: (version: string, message: string) => string } {
+interface TeamrigRepo {
+  readonly dir: string;
+  readonly git: (...args: string[]) => string;
+  readonly build: () => void;
+  readonly commitFiles: (files: Readonly<Record<string, string>>, message: string) => string;
+  readonly raise: (version: string, message: string) => string;
+}
+
+function teamrigRepo(t: { after: (fn: () => void) => void }): TeamrigRepo {
   const root = mkdtempSync(join(tmpdir(), 'catch-up-regen-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  const repo = baseRepo(root);
+  cpSync(templateRoot(), root, { recursive: true });
+  // The copy's remote and hooks folder still name the template's; each test's own copy talks only to its own origin.
+  repo.git('remote', 'set-url', 'origin', join(root, 'origin.git'));
+  repo.git('config', 'core.hooksPath', join(root, 'no-hooks'));
+  return repo;
+}
+
+/**
+ * The base repo every real-git catch-up test starts from, built once for the file and copied per test (T5032): its
+ * fifteen git runs took most of each test's time on a loaded Windows host.
+ */
+let template: string | undefined;
+
+function templateRoot(): string {
+  if (template === undefined) {
+    const root = mkdtempSync(join(tmpdir(), 'catch-up-template-'));
+    template = root;
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', join(root, 'origin.git')]);
+    mkdirSync(join(root, 'work'));
+    const { git, commitFiles, build } = baseRepo(root);
+    git('init', '-q', '-b', 'main');
+    for (const [key, value] of [['user.name', 't'], ['user.email', 't@example.com'], ['commit.gpgsign', 'false'], ['core.hooksPath', join(root, 'no-hooks')], ['core.autocrlf', 'false']] as const) git('config', key, value);
+    git('remote', 'add', 'origin', join(root, 'origin.git'));
+    commitFiles({ 'src/a.ts': 'export const a = 1;\n', [KIT]: "export const KIT_VERSION = '0.1.0';\n", [PLUGIN]: '{\n  "name": "teamrig",\n  "version": "0.1.0"\n}\n', 'README.md': '# r\n', [RELEASE]: release('0.0.5') }, 'base');
+    build();
+    commitFiles({}, 'build: the first dist');
+  }
+  return template;
+}
+
+after(() => {
+  if (template !== undefined) rmSync(template, { recursive: true, force: true });
+});
+
+/** The steps on the repo at `<root>/work`, whatever is in it yet. */
+function baseRepo(root: string): TeamrigRepo {
   const dir = join(root, 'work');
-  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', join(root, 'origin.git')]);
-  mkdirSync(dir);
   const git = (...args: string[]): string => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
-  git('init', '-q', '-b', 'main');
-  for (const [key, value] of [['user.name', 't'], ['user.email', 't@example.com'], ['commit.gpgsign', 'false'], ['core.hooksPath', join(root, 'no-hooks')], ['core.autocrlf', 'false']] as const) git('config', key, value);
-  git('remote', 'add', 'origin', join(root, 'origin.git'));
   const write = (path: string, text: string): void => {
     mkdirSync(join(dir, path, '..'), { recursive: true });
     writeFileSync(join(dir, path), text);
@@ -223,9 +263,6 @@ function teamrigRepo(t: { after: (fn: () => void) => void }): { dir: string; git
     build();
     return commitFiles({}, 'build: rebuild the plugin dist');
   };
-  commitFiles({ 'src/a.ts': 'export const a = 1;\n', [KIT]: "export const KIT_VERSION = '0.1.0';\n", [PLUGIN]: '{\n  "name": "teamrig",\n  "version": "0.1.0"\n}\n', 'README.md': '# r\n', [RELEASE]: release('0.0.5') }, 'base');
-  build();
-  commitFiles({}, 'build: the first dist');
   return { dir, git, build, commitFiles, raise };
 }
 
