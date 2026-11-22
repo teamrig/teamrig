@@ -53,10 +53,17 @@ async function canaryKit(): Promise<CliHarness> {
   return kit;
 }
 
+/** {@link canaryKit} with the hook's tab bound to the canary session, as the pull request landing route asks (C1). */
+async function boundCanaryKit(): Promise<CliHarness> {
+  const kit = await canaryKit();
+  await kit.run(['inbox', 'read', '--session', 'tr-canary'], { env: { CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
+  return kit;
+}
+
 describe('sanctioned route canaries', () => {
   for (const route of SANCTIONED_ROUTES) {
     it(`${route.id}: no Bash guard asks about or refuses its canary`, async () => {
-      const kit = await canaryKit();
+      const kit = await boundCanaryKit();
       for (const guard of GUARDS) {
         const result = await kit.run(['hook', guard], { stdin: payload('PreToolUse', route.canary), env: ENV, git: GIT });
         assert.equal(result.code, EXIT.ok, `${guard}: ${result.stderr.join('\n')}`);
@@ -65,19 +72,19 @@ describe('sanctioned route canaries', () => {
     });
 
     it(`${route.id}: the route allow ${route.preToolUse ? 'runs' : 'leaves to the permission check'} its canary`, async () => {
-      const kit = await canaryKit();
+      const kit = await boundCanaryKit();
       const result = await kit.run(['hook', 'route-allow'], { stdin: payload('PreToolUse', route.canary), env: ENV, git: GIT });
       assert.equal(answerOf(result), route.preToolUse ? 'allow' : undefined);
     });
 
     it(`${route.id}: the permission prompt's answer runs its canary`, async () => {
-      const kit = await canaryKit();
+      const kit = await boundCanaryKit();
       const result = await kit.run(['hook', 'prompt-refuse'], { stdin: payload('PermissionRequest', route.canary), env: ENV, git: GIT });
       assert.equal(answerOf(result), 'allow', result.stdout.join('\n'));
     });
 
     it(`${route.id}: F4: every guard and both answers take its canary piped into a filter as they take it bare`, async () => {
-      const kit = await canaryKit();
+      const kit = await boundCanaryKit();
       const piped = `${route.canary} | tail -n 5`;
       for (const guard of GUARDS) {
         const result = await kit.run(['hook', guard], { stdin: payload('PreToolUse', piped), env: ENV, git: GIT });
@@ -90,6 +97,26 @@ describe('sanctioned route canaries', () => {
       assert.equal(answerOf(asked), 'allow', asked.stdout.join('\n'));
     });
   }
+});
+
+describe('C1: a pull request landing the route allows', () => {
+  const HEAD = '0123456789abcdef0123456789abcdef01234567';
+
+  it('is no route from a tab bound to no session, or for a session the tab is not bound to', async () => {
+    const unbound = await canaryKit();
+    const line = `teamrig pr merge acme/web#7 --head ${HEAD} --session tr-canary`;
+    assert.equal(answerOf(await unbound.run(['hook', 'route-allow'], { stdin: payload('PreToolUse', line), env: ENV, git: GIT })), undefined);
+    const bound = await boundCanaryKit();
+    const other = `teamrig pr merge acme/web#7 --head ${HEAD} --session bravo`;
+    assert.equal(answerOf(await bound.run(['hook', 'route-allow'], { stdin: payload('PreToolUse', other), env: ENV, git: GIT })), undefined);
+  });
+
+  it("is no route for the root team's lead, whose landing no leader approves", async () => {
+    const kit = await canaryKit();
+    await kit.run(['inbox', 'read', '--session', 'lead'], { env: { CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
+    const line = `teamrig pr approve acme/web#7 --head ${HEAD} --session lead`;
+    assert.equal(answerOf(await kit.run(['hook', 'route-allow'], { stdin: payload('PreToolUse', line), env: { TEAMRIG_SESSION: 'lead' }, git: GIT })), undefined);
+  });
 });
 
 describe('C6: a worktree removal the route lets run', () => {

@@ -3,12 +3,15 @@ import { clientRootOf } from '../../exec/client-integrity.ts';
 import { ClientInstalls, ShellPathSearch } from '../../exec/client-launch.ts';
 import { gitContextOf } from '../../permissions/route-context.ts';
 import { ownClientOf, type KitContext } from '../../permissions/route-kit.ts';
+import type { LandingContext } from '../../permissions/route-pr.ts';
 import { shellRouteOf, type RouteContext, type SanctionedRoute } from '../../permissions/sanctioned.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
 import { JsonlEventLog } from '../../register/store.ts';
 import type { CommandTable } from '../../slash/plan.ts';
 import { rosterOf, type Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
+import { approversOf } from '../ship-approval.ts';
+import { tabSessionOf } from '../tab-session.ts';
 import { teamSessionOf } from './hook-input.ts';
 
 /** The folder a tool call runs in: the event's, else the hook's own (the host may start the hook elsewhere). */
@@ -29,13 +32,31 @@ export function kitContextOf(runtime: CliRuntime, event: HookEvent, cli: Command
 }
 
 /**
+ * Who clears a pull request landing by the session `named` (else the session `$TEAMRIG_SESSION` names) on this team
+ * (T5070, security verdict T5072 C1): its leaders, as `teamrig pr` reads them, when the call's tab is bound to that
+ * session alone (`tabSessionOf`); none for a tab bound elsewhere or to nobody, a root team's lead, or a failed read.
+ */
+function landingApproversOf(runtime: CliRuntime, kit: Kit, config: KitConfig, event: HookEvent): LandingContext['approversOf'] {
+  return async (named) => {
+    const claudeSession = event.session;
+    if (claudeSession === undefined) {
+      return [];
+    }
+    const roster = await rosterOf(runtime, kit, config);
+    const bound = await tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, claudeSession, named ?? runtime.env['TEAMRIG_SESSION']);
+    return bound === undefined ? [] : approversOf(runtime, kit.paths.team, config, bound).catch(() => []);
+  };
+}
+
+/**
  * A hook's sanctioned-route lookup (T679): the context `routeOf` needs, read from the hook's runtime and event; the
- * tab's session and the register are read only when a push line asks.
+ * tab's session and the register are read only when a push or landing line asks.
  */
 export function routeContextOf(runtime: CliRuntime, kit: Kit, config: KitConfig, event: HookEvent, cli: CommandTable): RouteContext {
   const cwd = callCwdOf(runtime, event);
   return {
     ...kitContextOf(runtime, event, cli),
+    approversOf: landingApproversOf(runtime, kit, config, event),
     ...gitContextOf({
       cwd,
       home: runtime.userHome,

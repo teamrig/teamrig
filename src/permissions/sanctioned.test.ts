@@ -18,6 +18,8 @@ const CONTEXT: RouteContext = {
   isRemote: async (_folders, name) => name === 'origin',
   pushesToSameName: async () => true,
   protectedBranches: ['main', 'master'],
+  /** Every session here has a leader but `lead`, the root team's lead. */
+  approversOf: async (named) => (named === 'lead' ? [] : ['lead']),
 };
 
 const idOf = async (line: string, context: RouteContext = CONTEXT): Promise<RouteId | undefined> => (await routeOf(line, context))?.id;
@@ -47,6 +49,13 @@ describe('SANCTIONED_ROUTES', () => {
     assert.equal(new Set(ids).size, ids.length);
     const notAtPreToolUse = SANCTIONED_ROUTES.filter((route) => !route.preToolUse).map((route) => route.id);
     assert.deepEqual(notAtPreToolUse, ['register', 'git-push']);
+  });
+
+  it('C1: takes a pull request landing only for a session that has a leader, piped or not', async () => {
+    const head = '0123456789abcdef0123456789abcdef01234567';
+    assert.equal(await idOf(`teamrig pr merge acme/web#7 --head ${head} --session tr-x`), 'pr-landing');
+    assert.equal(await idOf(`teamrig pr approve acme/web#7 --head ${head} --session tr-x | tail -n 3`), 'pr-landing');
+    assert.equal(await idOf(`teamrig pr approve acme/web#7 --head ${head} --session lead`), undefined);
   });
 });
 

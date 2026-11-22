@@ -62,7 +62,8 @@ export async function tabCallerOf(reader: KitReader, team: string, claudeSession
   return bound;
 }
 
-async function approversOf(reader: KitReader, team: string, config: KitConfig, caller: string): Promise<string[]> {
+/** {@link approversIn} for `caller`, reading the parent team's lead when `caller` leads a child team. */
+export async function approversOf(reader: KitReader, team: string, config: KitConfig, caller: string): Promise<string[]> {
   const above = caller === config.roles.lead && config.team?.parent !== undefined ? await leadAboveOf(reader, team, config) : undefined;
   return approversIn(team, config, caller, above);
 }

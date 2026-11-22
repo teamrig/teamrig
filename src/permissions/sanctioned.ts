@@ -1,6 +1,7 @@
 import type { ShellCall } from '../ports/host/index.ts';
 import { matchesGitCommit, matchesGitPush, type GitContext } from './route-git.ts';
 import { KIT_SHAPES, kitCallOf, matchesKit, type KitContext, type KitShape } from './route-kit.ts';
+import { matchesLanding, type LandingContext } from './route-pr.ts';
 import { fitsReadRoute } from './route-read.ts';
 import { isRouteFilter } from './route-filter.ts';
 import { routeLineOf } from './route-line.ts';
@@ -15,9 +16,9 @@ import { routeLineOf } from './route-line.ts';
  */
 
 /** What every route needs beyond the line's words. */
-export type RouteContext = KitContext & GitContext;
+export type RouteContext = KitContext & GitContext & LandingContext;
 
-export type RouteId = 'merge' | 'deploy' | 'exec-request' | 'worktree-remove' | 'read' | 'register' | 'git-commit' | 'git-push';
+export type RouteId = 'merge' | 'deploy' | 'exec-request' | 'worktree-remove' | 'pr-landing' | 'read' | 'register' | 'git-commit' | 'git-push';
 
 export interface SanctionedRoute {
   readonly id: RouteId;
@@ -61,6 +62,13 @@ export const SANCTIONED_ROUTES: readonly SanctionedRoute[] = [
     canary: 'teamrig worktree remove C:/canary/t1-canary --session tr-canary --dry-run',
     preToolUse: true,
     match: kit(KIT_SHAPES.worktreeRemove),
+  },
+  {
+    id: 'pr-landing',
+    purpose: 'approve or merge a pull request at the head your leader approved',
+    canary: 'teamrig pr approve acme/web#7 --head 0123456789abcdef0123456789abcdef01234567 --session tr-canary',
+    preToolUse: true,
+    match: matchesLanding,
   },
   {
     id: 'read',
