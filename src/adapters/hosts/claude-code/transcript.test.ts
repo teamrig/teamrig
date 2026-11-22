@@ -33,6 +33,15 @@ function jobOf(line: string): boolean | undefined {
   return entry.job;
 }
 
+/** The plan slug a line's entry carries; a line that reads as no entry fails the spec. */
+function planSlugOf(line: string): string | undefined {
+  const entry = transcriptReader.entry(line);
+  if (entry === undefined || entry.kind === 'unread') {
+    return assert.fail(`no entry for ${line}`);
+  }
+  return entry.planSlug;
+}
+
 describe("Claude Code's transcript lines as entries", () => {
   it('reads a typed prompt with its ids, its time, its session and its thread', () => {
     const line = userLine({ parentUuid: 'p-1', isSidechain: false, uuid: 'u-1', timestamp: AT, sessionId: 's-1', origin: { kind: 'human' }, turnOrigin: 'human' });
@@ -296,6 +305,13 @@ describe("Claude Code's transcript lines as entries", () => {
     // The kind alone names no turn: only a line stamped with where it ran says it.
     assert.equal(jobOf(userLine({ sessionKind: 'bg' })), undefined);
     assert.equal(jobOf(JSON.stringify({ type: 'system', subtype: 'turn_duration', entrypoint: 'cli', sessionKind: 'bg' })), true);
+  });
+
+  it("reads the plan slug from the line's slug, and none from a line without one or with one that is no text", () => {
+    assert.equal(planSlugOf(userLine({ slug: 'calm-river' })), 'calm-river');
+    assert.equal(planSlugOf(assistantLine({ model: 'model-x' }, { slug: 'calm-river' })), 'calm-river');
+    assert.deepEqual(transcriptReader.entry(userLine({})), { ...BARE, ...PLAIN_INPUT, text: 'go' });
+    assert.equal(planSlugOf(userLine({ slug: 7 })), undefined);
   });
 
   it('reads the mark that a session carries on in another, with the session it names', () => {
