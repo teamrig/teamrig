@@ -47,6 +47,14 @@ describe('FormFields', () => {
     assert.deepEqual(values(join("{'type':'password'} {\"type\":\"password\",\"value\":\"", PASSWORD, '"}')), [PASSWORD]);
   });
 
+  it('takes a camelCase password name as a part', () => {
+    for (const name of ['newPassword', 'confirmPassword', 'passwordConfirm', 'userPwd', 'passWord', 'PassWord', 'passCode', 'PassPhrase', 'passWd', 'user[passWord]', 'login-passCode', 'newPassCode', 'URLPassword']) {
+      assert.deepEqual(values(join('{"type":"text","name":"', name, '","value":"', PASSWORD, '"}')), [PASSWORD], name);
+      assert.deepEqual(values(join('<input type=text id="', name, '" value="', PASSWORD, '">')), [PASSWORD], name);
+      assert.deepEqual(values(join('INPUT|text|', name, '|f|', PASSWORD)), [PASSWORD], name);
+    }
+  });
+
   it('cuts a value holding a JSON escape as the result prints it', () => {
     for (const raw of [join('a\\"', PASSWORD), join('a\\\\', PASSWORD), join('\\u0041', PASSWORD)]) {
       const result = redacted(join('{"type":"password","value":"', raw, '"}'));
@@ -77,6 +85,8 @@ describe('FormFields', () => {
       join('INPUT|text|user|login|', PASSWORD),
       join('{"type":"text","name":"passenger","value":"', PASSWORD, '"}'),
       join('{"type":"email","id":"compass","value":"', PASSWORD, '"}'),
+      join('{"type":"text","name":"Passenger","value":"', PASSWORD, '"}'),
+      join('{"type":"text","name":"myCompass","value":"', PASSWORD, '"}'),
       join('<input type="text" value="', PASSWORD, '">'),
       join('| password | ', PASSWORD, ' |'),
       join('the password field holds ', PASSWORD),

@@ -1,13 +1,32 @@
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { isPlaceholderValue, type SecretShapeHit } from '../core/secret-shapes.ts';
 
+/** Where a field name or id splits into parts: at `-`, `_`, `.` or brackets (`user[password]`, `login-pwd`). */
+const NAME_SEPARATOR = /[-_.[\]]+/;
 /**
- * A field name or id that marks a password input: `password`, `passwd`, `pwd`, `passcode` or `passphrase`, alone or
- * as one part of a name joined by `-`, `_`, `.` or brackets (`user[password]`, `login-pwd`). A part only has to match
- * whole, so `passenger` or `compass` pass. Wider words (`pass`, `secret`, `otp`) name settings and checks as often as
- * fields, and every place a found value appears is cut, so they mark a field only with its type `password`.
+ * Where a part splits into the words of a camelCase name, as JavaScript form code names its fields: a lower-case
+ * letter before an upper-case one (`newPassword`, `userPwd`), or an upper-case run before a capitalised word
+ * (`URLPassword`).
  */
-const PASSWORD_NAME = /(?:^|[-_.[\]])(?:pass(?:word|wd|code|phrase)|pwd)(?:$|[-_.[\]])/i;
+const CAMEL_BREAK = /(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/;
+/**
+ * A part of a name that marks a password input: `password`, `passwd`, `pwd`, `passcode` or `passphrase`, matched whole,
+ * so `passenger` or `compass` pass. Wider words (`pass`, `secret`, `otp`) name settings and checks as often as fields,
+ * and every place a found value appears is cut, so they mark a field only with its type `password`.
+ */
+const PASSWORD_PART = /^(?:pass(?:word|wd|code|phrase)|pwd)$/i;
+
+/**
+ * True when a part of the field name or id `name` marks a password input: a part between separators, or one camelCase
+ * word of it or two in a row, since the password word may itself be written in camelCase (`passWord`, `newPassCode`).
+ */
+function isPasswordName(name: string): boolean {
+  return name.split(NAME_SEPARATOR).some((part) => {
+    const words = part.split(CAMEL_BREAK);
+    return words.some((word, index) => PASSWORD_PART.test(word) || PASSWORD_PART.test(word + (words[index + 1] ?? '')));
+  });
+}
+
 /** One flat JSON-like object, for text that does not parse as JSON (single quotes, a cut-off dump). */
 const OBJECT = /\{[^{}]*\}/g;
 const JSON_TYPE_PASSWORD = /"type"\s*:\s*"password"/i;
@@ -68,7 +87,7 @@ function pipeValues(text: string): string[] {
     const fields = line.trim().split('|');
     if (fields.length < 3) return [];
     const head = fields.length > PIPE_HEAD ? fields.slice(1, PIPE_HEAD) : fields.slice(1, -1);
-    const marks = head.some((field) => field.toLowerCase() === 'password' || PASSWORD_NAME.test(field));
+    const marks = head.some((field) => field.toLowerCase() === 'password' || isPasswordName(field));
     if (!marks) return [];
     return [fields.length > PIPE_HEAD ? fields.slice(PIPE_HEAD).join('|') : (fields[fields.length - 1] ?? '')];
   });
@@ -155,7 +174,7 @@ function walk(node: unknown, depth: number, values: string[], held: string[]): v
 function marksPassword(record: JsonRecord): boolean {
   const type = record['type'];
   if (typeof type === 'string' && type.toLowerCase() === 'password') return true;
-  return [record['name'], record['id']].some((name) => typeof name === 'string' && PASSWORD_NAME.test(name));
+  return [record['name'], record['id']].some((name) => typeof name === 'string' && isPasswordName(name));
 }
 
 /**
@@ -190,7 +209,7 @@ function flatObjectValues(text: string): string[] {
   return [...text.matchAll(OBJECT)].flatMap(([object]) => {
     const value = JSON_VALUE.exec(object)?.[1];
     if (value === undefined) return [];
-    const named = [...object.matchAll(JSON_NAME)].some(([, name = '']) => PASSWORD_NAME.test(jsonText(name)));
+    const named = [...object.matchAll(JSON_NAME)].some(([, name = '']) => isPasswordName(jsonText(name)));
     return JSON_TYPE_PASSWORD.test(object) || named ? [value, jsonText(value)] : [];
   });
 }
@@ -198,7 +217,7 @@ function flatObjectValues(text: string): string[] {
 /** The `value` attribute of each `<input>` tag typed `password` or with a password name or id. */
 function tagValues(text: string): string[] {
   return inputTags(text).flatMap((tag) => {
-    const named = [...tag.matchAll(TAG_NAME)].some((match) => PASSWORD_NAME.test(match[1] ?? match[2] ?? match[3] ?? ''));
+    const named = [...tag.matchAll(TAG_NAME)].some((match) => isPasswordName(match[1] ?? match[2] ?? match[3] ?? ''));
     if (!TAG_TYPE_PASSWORD.test(tag) && !named) return [];
     const match = TAG_VALUE.exec(tag);
     const value = match?.[1] ?? match?.[2] ?? match?.[3];
