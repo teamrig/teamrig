@@ -4917,7 +4917,7 @@ Without the key it runs the released UI this teamrig pins: the first start fetch
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
 gets only PATH, HOME, USERPROFILE, SYSTEMROOT, TERM, COLORTERM, LANG, LANGUAGE, TEAMRIG_HOME, TEAMRIG_TEAM,
-TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.81.0's UI. It is refused when
+TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.82.0's UI. It is refused when
 [ui.path] names no file. As it starts a program,
 `/teamrig ui` runs only when you type it in the tab, never from a session's line; and [ui.path] is the owner's key,
 which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
@@ -4938,7 +4938,7 @@ Output: none of its own while the UI runs, and exit 0 when you quit it. The refu
 fetch the released UI:
 
 ```text
-REFUSED the UI 0.81.0 could not be fetched: <why>
+REFUSED the UI 0.82.0 could not be fetched: <why>
 ```
 
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
