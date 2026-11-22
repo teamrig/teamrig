@@ -6,6 +6,7 @@ import type { HookEvent } from '../../ports/host/index.ts';
 import { dayProbePath, dayProbeReleaseLine, type DayProbeReply } from '../../restore/day-probe.ts';
 import { DayProbeStore } from '../../restore/day-probe-store.ts';
 import { apiGaveUpLine, apiRetriesSpentOn } from '../../restore/api-error.ts';
+import { cliOnPathSteps } from '../../restore/cli-on-path.ts';
 import { applyEvent, type TrackEvent, type TrackFacts } from '../../restore/entry.ts';
 import { LAUNCHER_REFRESH_LOCK, launcherRecordPath, refreshLaunchers } from '../../restore/launcher-refresh.ts';
 import { AUTH_FAILED, LOGIN_LOCK, loginLogLine, loginMarkerPath, type LoginEvent } from '../../restore/login.ts';
@@ -184,13 +185,14 @@ async function trackLaunchers(event: TrackEvent, runtime: CliRuntime, kitHome: s
   if (event.kind !== 'start') {
     return;
   }
-  const { files, restore } = runtime;
+  const { files, restore, platform } = runtime;
   await refreshLaunchers({
     machine: { files, kitHome, node: runtime.self.node, userHome: runtime.userHome, logon: restore.logon, shortcuts: restore.shortcuts },
     others: [
       { path: launcherPath(kitHome), text: LAUNCHER_SCRIPT },
       { path: inboxAddLauncherPath(kitHome), text: INBOX_ADD_LAUNCHER_SCRIPT, create: true },
     ],
+    parts: [() => cliOnPathSteps({ files, kitHome, platform, userPath: restore.userPath, markExecutable: restore.markExecutable })],
     lock: fileLockOf(runtime, `${launcherRecordPath(kitHome)}.lock`, LAUNCHER_REFRESH_LOCK),
     version: KIT_VERSION,
     now: runtime.clock.now(),

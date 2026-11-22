@@ -174,6 +174,24 @@ describe('refreshLaunchers', () => {
     assert.equal(old.files.get(inboxAdd.path), inboxAdd.text);
   });
 
+  it("takes each other part's steps after the launchers and before the restore's own, and logs them", async () => {
+    const taken: string[] = [];
+    const part = (line: string) => async () => [{ line, act: async () => void taken.push(line) }];
+    const { files, logon, refresh } = oldInstall({ [RECORD]: record('0.282.0') });
+    const outcome = await refreshLaunchers({ ...refresh, parts: [part('ADD one'), part('ADD two')] });
+    const lines = [`WRITE ${STATUSLINE.path}`, 'ADD one', 'ADD two', `WRITE ${CHECK.path}`, `WRITE ${RUN.path}`, `SET ${logon.where}: ${OLD_COMMAND} -> ${logon.commandFor(NODE, CHECK.path)}`];
+    assert.deepEqual(outcome.kind === 'refreshed' ? outcome.steps.slice(0, lines.length) : outcome, lines);
+    assert.deepEqual(taken, ['ADD one', 'ADD two']);
+    assert.match(files.get(LOG) ?? '', /: ADD one\n.*: ADD two\n/);
+  });
+
+  it('logs a part it cannot read, changes nothing and keeps the record', async () => {
+    const { files, refresh } = oldInstall({ [RECORD]: record('0.282.0') });
+    const outcome = await refreshLaunchers({ ...refresh, parts: [async () => Promise.reject(new Error('the PATH cannot be read'))] });
+    assert.equal(outcome.kind, 'failed');
+    assert.deepEqual([files.get(CHECK.path), files.get(RECORD)], [OLDER_TEXT, record('0.282.0')]);
+  });
+
   it('only reads the record when it names this version: no lock, no logon read, no scan, no write', async () => {
     const { files, lock, shortcuts, refresh } = oldInstall({ [RECORD]: record('0.282.1') });
     shortcuts.scanFailWith = 'a current record must not scan';

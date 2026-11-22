@@ -1,8 +1,10 @@
+import type { MarkExecutable } from './cli-on-path.ts';
 import type { Countdown } from './countdown.ts';
 import type { LogonEntry } from './logon.ts';
 import type { ShortcutPlace } from './shortcut.ts';
 import type { ShutdownLog } from './shutdowns.ts';
 import type { StopWatch } from './stops.ts';
+import type { UserPath } from './user-path.ts';
 
 /** What the restore after a reboot asks of the system and the person, beyond files and processes. */
 export interface RestorePorts {
@@ -14,4 +16,8 @@ export interface RestorePorts {
   readonly logon: LogonEntry | undefined;
   /** The shortcuts a restore by hand starts from; undefined on a system teamrig cannot write them on yet. */
   readonly shortcuts: ShortcutPlace | undefined;
+  /** The user's PATH, which a session start adds the kit home's bin folder to, so `teamrig` runs from any terminal. */
+  readonly userPath: UserPath;
+  /** Marks the sh launcher in that folder a program. */
+  readonly markExecutable: MarkExecutable;
 }

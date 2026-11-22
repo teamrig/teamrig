@@ -1,9 +1,11 @@
+import type { MarkExecutable } from '../restore/cli-on-path.ts';
 import type { Countdown, RestoreChoice } from '../restore/countdown.ts';
 import { RESTORE_RUN_VALUE, WINDOWS_RUN_KEY, type LogonEntry } from '../restore/logon.ts';
 import type { RestorePorts } from '../restore/ports.ts';
 import { RESTORE_SHORTCUT_NAME, type FoundShortcut, type Shortcut, type ShortcutPlace, type ShortcutScan } from '../restore/shortcut.ts';
 import type { ShutdownLog, ShutdownWindow } from '../restore/shutdowns.ts';
 import type { StopSignal, StopWatch } from '../restore/stops.ts';
+import { WINDOWS_ENVIRONMENT_KEY, type UserPath } from '../restore/user-path.ts';
 
 /** A logon entry held in memory: `command` is what it runs now; with `failWith` set, each write and remove throws it. */
 export class FakeLogonEntry implements LogonEntry {
@@ -140,7 +142,50 @@ export class FakeStopWatch implements StopWatch {
   }
 }
 
-/** No clean shutdown on record, a countdown that goes at once, no stop, and no logon entry or shortcuts, as off Windows. */
+/** The user's PATH held in memory as its folders, in order; with `failWith` set, each add throws it. */
+export class FakeUserPath implements UserPath {
+  readonly where = `${WINDOWS_ENVIRONMENT_KEY} Path`;
+  readonly folders: string[];
+  failWith: string | undefined;
+
+  constructor(folders: readonly string[] = []) {
+    this.folders = [...folders];
+  }
+
+  async holds(folder: string): Promise<boolean> {
+    return this.folders.includes(folder);
+  }
+
+  async add(folder: string): Promise<void> {
+    if (this.failWith !== undefined) {
+      throw new Error(this.failWith);
+    }
+    if (!this.folders.includes(folder)) {
+      this.folders.push(folder);
+    }
+  }
+}
+
+/** A marker that records each file it marks a program, in order. */
+export class FakeExecutables {
+  readonly marked: string[] = [];
+  readonly mark: MarkExecutable = async (path) => {
+    this.marked.push(path);
+  };
+}
+
+/**
+ * No clean shutdown on record, a countdown that goes at once, no stop, no logon entry or shortcuts, as off Windows,
+ * and a user PATH of no folders.
+ */
 export function quietRestore(): RestorePorts {
-  return { shutdowns: new FakeShutdownLog(), countdown: new FakeCountdown(), stops: new FakeStopWatch(), logon: undefined, shortcuts: undefined };
+  return {
+    shutdowns: new FakeShutdownLog(),
+    countdown: new FakeCountdown(),
+    stops: new FakeStopWatch(),
+    logon: undefined,
+    shortcuts: undefined,
+    userPath: new FakeUserPath(),
+    markExecutable: new FakeExecutables().mark,
+  };
 }
