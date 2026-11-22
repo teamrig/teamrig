@@ -112,3 +112,18 @@ describe('teamrig steps run', () => {
     assert.equal(preview.code, EXIT.ok);
   });
 });
+
+describe("the lead's start names each step the person must take", () => {
+  const LINE = `STEP for the person: ${TITLE}; they type: /teamrig steps run config-format --yes (teamrig steps shows what it changes)`;
+
+  it('prints a line per pending step at the lead start, none at another session start or with nothing pending', async () => {
+    const kit = new CliHarness(CURRENT_TEAM);
+    const lead = await kit.run(['start', '--session', 'lead'], { configFormat: NEXT_FORMAT });
+    assert.equal(lead.code, EXIT.ok, lead.stdout.join('\n'));
+    assert.ok(lead.stdout.includes(LINE), lead.stdout.join('\n'));
+    const other = await kit.run(['start', '--session', 'alpha'], { configFormat: NEXT_FORMAT });
+    assert.ok(!other.stdout.some((line) => line.startsWith('STEP ')), other.stdout.join('\n'));
+    const current = await kit.run(['start', '--session', 'lead']);
+    assert.ok(!current.stdout.some((line) => line.startsWith('STEP ')), current.stdout.join('\n'));
+  });
+});

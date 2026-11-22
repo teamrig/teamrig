@@ -67,6 +67,14 @@ export function pendingSteps(inputs: StepInputs, sources: readonly StepSource[] 
   });
 }
 
+/**
+ * The lead's start line for each pending step: a step is the person's to take, so the lead tells them what it is and
+ * what to type, and `steps` shows what it changes.
+ */
+export function startStepLines(steps: readonly PendingStep[]): string[] {
+  return steps.map((step) => `STEP for the person: ${step.title}; they type: ${step.command} (${KIT_NAME} steps shows what it changes)`);
+}
+
 /** The source of the step `id`, or undefined when no kind of step has that id. */
 export function stepSourceOf(id: string, sources: readonly StepSource[] = STEP_SOURCES): StepSource | undefined {
   return sources.find((source) => source.id === id);

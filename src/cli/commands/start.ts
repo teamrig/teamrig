@@ -22,6 +22,7 @@ import { checkReport, list, waitingReport } from './register.ts';
 import { fileLockOf } from '../file-locks.ts';
 import { sweepDeadDetachedRuns } from '../detached-sweep.ts';
 import { sweepOldStepBackups } from '../step-backup-sweep.ts';
+import { pendingSteps, startStepLines } from '../../steps/pending.ts';
 
 /** The most inbox lines one start posts the lead on warnings no session owns; the rest wait for the next start. */
 export const MAX_UNOWNED_NOTICES = 5;
@@ -39,7 +40,8 @@ export const MAX_UNOWNED_NOTICES = 5;
  * each warning no session owns that the lead was not told of yet (T951), at most MAX_UNOWNED_NOTICES per start; a told
  * warning is told again only after no start saw it for a day. Before its inbox lines it tells each of the team's
  * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts), and the lead's removes the step
- * backups kept past `steps.backupDays` (src/cli/step-backup-sweep.ts). It records the flags it showed,
+ * backups kept past `steps.backupDays` (src/cli/step-backup-sweep.ts) and names each step the person must take
+ * (`teamrig steps`). It records the flags it showed,
  * so a later `check --new` prints only those that came since (T2536).
  */
 export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
@@ -69,6 +71,7 @@ export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     if (swept.problem !== undefined) {
       runtime.out.stderr(`WARN ${swept.problem}`);
     }
+    startStepLines(pendingSteps({ config: kit.load })).forEach((line) => runtime.out.stdout(line));
   }
   await read(own, runtime);
   await list(own, runtime);

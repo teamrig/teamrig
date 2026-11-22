@@ -3650,6 +3650,11 @@ the uses left of each kind and when the next one expires
 (`Resets in stock: fable 2 left, the next expiring 2027-03-09 09:59 IST (in 116 days).`), so the lead plans the week
 on them and asks the owner for a reset before one lapses; no other session gets it.
 
+The lead's `start` also names each step teamrig needs the person to take
+(`STEP for the person: teamrig needs to update your team settings; they type: /teamrig steps run config-format --yes
+(teamrig steps shows what it changes)`), so the lead passes it on, and removes the step backups kept past
+[steps.backupDays], printing how many and their paths; no other session's start does either.
+
 A lead with sub-teams runs `teamrig check --tree --session lead` too: `start` reads the lead's own team.
 
 ### teamrig meeting start
