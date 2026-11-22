@@ -1,12 +1,14 @@
-import { GH_PROGRAM } from '../adapters/connectors/github/gh.ts';
 import { NoAccessError, type RepoAccess } from '../adapters/connectors/github/tokens.ts';
+import type { Files } from '../core/files.ts';
 import { errorMessage } from '../core/guards.ts';
 import type { Env } from '../core/home.ts';
+import type { PathSearchDeps } from '../core/path-search.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import { ghRouteOf } from '../hooks/gh-routes.ts';
 import type { GithubRepos } from '../hooks/gh-write-refusals.ts';
 import { apiEndpointOf, apiRepoOf, endpointPath, ghCallOf, ghCommandSlotOf, ghGroupKind, remoteReposOf, repoFlagsOf, repoFlagValue } from '../hooks/gh-writes.ts';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
+import { configDirRefusal, programOutsideCheckout } from './gh-child.ts';
 import type { Output } from './runtime.ts';
 
 /**
@@ -15,7 +17,8 @@ import type { Output } from './runtime.ts';
  * `gh api` path, a `gh repo` command's repository), else `GH_REPO`, else the folder's git remotes; a run that reaches
  * more than one owner, or none teamrig can tell, is refused, as is a group that changes gh itself (auth, config,
  * alias, extension) or runs code that is not gh's (an alias or an extension would hold the key). A write on one of the
- * team's repositories (`github.repos`) stays with teamrig's own commands, which check who may write.
+ * team's repositories (`github.repos`) stays with teamrig's own commands, which check who may write. gh and git run by
+ * an absolute path found outside the checkout, in an environment built for them (cli/gh-child.ts, T4961).
  */
 
 /** The saved key of one GitHub owner. */
@@ -27,7 +30,15 @@ export interface OwnerKeys {
 export interface GhPassPorts {
   /** Runs gh, and git to read the folder's remotes. */
   readonly run: ProgramRunner;
+  /** The owner's key, added to the environment gh runs with: `childEnv` with `GH_TOKEN` set. */
   readonly keys: OwnerKeys;
+  /** The environment git runs with to read the remotes, built as gh's is (`ghChildEnvOf`), with no key. */
+  readonly childEnv: Env;
+  /** Where gh and git are found: the caller's PATH. */
+  readonly search: PathSearchDeps;
+  /** gh's config folder, checked before each run (`configDirRefusal`). */
+  readonly configDir: string;
+  readonly files: Pick<Files, 'read' | 'makeFolder'>;
   /** The caller's environment, for `GH_REPO` and `GH_HOST`. */
   readonly env: Env;
   /** The folder gh runs in. */
@@ -143,7 +154,7 @@ export function namedOwnersOf(words: readonly ShellWord[]): Named {
 /** The repositories gh picks one from when the words name none: `GH_REPO`, else the folder's remotes; undefined when teamrig cannot tell. */
 type FolderRepos = () => Promise<readonly string[] | undefined>;
 
-function folderReposOf(ports: GhPassPorts): FolderRepos {
+function folderReposOf(ports: GhPassPorts, git: string): FolderRepos {
   let read: Promise<readonly string[] | undefined> | undefined;
   return () => {
     read ??= (async () => {
@@ -152,7 +163,7 @@ function folderReposOf(ports: GhPassPorts): FolderRepos {
         const repo = repoFlagValue(ghRepo);
         return repo === undefined ? undefined : [repo];
       }
-      const listing = await ports.run({ program: 'git', args: ['-C', ports.cwd, 'remote', '-v'] }).catch(() => undefined);
+      const listing = await ports.run({ program: git, args: ['-C', ports.cwd, 'remote', '-v'], env: ports.childEnv }).catch(() => undefined);
       return listing === undefined || listing.end.kind !== 'exited' || listing.end.code !== 0 ? [] : remoteReposOf(listing.stdout);
     })();
     return read;
@@ -216,8 +227,24 @@ export async function ghPass(args: readonly string[], ports: GhPassPorts): Promi
     return refused(`GH_HOST names ${host}, and the saved keys are for github.com`);
   }
   const words: readonly ShellWord[] = args.map((text) => ({ text, dynamic: false }));
-  const folder = folderReposOf(ports);
-  const picked = await ownerFor(namedOwnersOf(words), folder);
+  const named = namedOwnersOf(words);
+  if (named.kind === 'refused') {
+    return named;
+  }
+  // Found once, before git reads the remotes, so neither program is ever started by a bare name.
+  const [gh, git] = await Promise.all([programOutsideCheckout('gh', ports.cwd, ports.search), programOutsideCheckout('git', ports.cwd, ports.search)]);
+  if (gh.kind === 'refused') {
+    return gh;
+  }
+  if (git.kind === 'refused') {
+    return git;
+  }
+  const config = await configDirRefusal(ports.configDir, ports.files, ports.search.platform);
+  if (config !== undefined) {
+    return refused(config);
+  }
+  const folder = folderReposOf(ports, git.path);
+  const picked = await ownerFor(named, folder);
   if (picked.kind === 'refused') {
     return picked;
   }
@@ -230,7 +257,7 @@ export async function ghPass(args: readonly string[], ports: GhPassPorts): Promi
     return refused(access.message);
   }
   try {
-    const result = await ports.run({ program: GH_PROGRAM, args, env: access.env });
+    const result = await ports.run({ program: gh.path, args, env: access.env });
     printLines(result.stdout, (line) => ports.out.stdout(line));
     printLines(result.stderr, (line) => ports.out.stderr(line));
     const ok = result.end.kind === 'exited' && result.end.code === 0;
