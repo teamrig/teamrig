@@ -1,7 +1,10 @@
 import type { Check } from './reader.ts';
 import { EFFORT_LEVELS, isEffortLevel, type KitConfig, type LaunchConfig } from './types.ts';
 
-/** Leaves the model to Claude Code: `launch` passes no `--model` for it. */
+/**
+ * The team config's word that leaves the model to the host: a launch passes no model for it. It is teamrig's own
+ * keyword, the same on every host, so a config means one thing wherever it runs.
+ */
 export const DEFAULT_MODEL_ALIAS = 'default';
 
 /**
@@ -54,7 +57,7 @@ export function launchModelProblem(launch: LaunchConfig, host: Pick<LaunchHost, 
   return isDefaultModel(launch.model) ? undefined : host.modelProblem(launch.model);
 }
 
-/** True when the settings leave the model to Claude Code. */
+/** True when the settings leave the model to the host. */
 export function isDefaultModel(model: string | undefined): model is typeof DEFAULT_MODEL_ALIAS | undefined {
   return model === undefined || model === DEFAULT_MODEL_ALIAS;
 }
