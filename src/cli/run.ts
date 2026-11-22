@@ -256,6 +256,8 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'issue similar': { effect: 'read', flags: [], load: async () => (await issueCommands()).issueSimilar },
   'issue assign': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueAssign },
   'pr conflicts': { effect: 'write', flags: ['base'], load: async () => (await prCommands()).prConflicts },
+  'pr approve': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prApprove },
+  'pr merge': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prMerge },
   'issue links': { effect: 'write', flags: ['repo'], switches: ['yes'], load: async () => (await issueLinksCommands()).issueLinks },
   follow: { effect: 'write', flags: ['session'], switches: ['list'], load: async () => (await followCommands()).follow },
   unfollow: { effect: 'write', flags: ['session'], load: async () => (await followCommands()).unfollow },
@@ -875,6 +877,15 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       request's head and prints the files it conflicts on against origin's newest base (its default
       branch unless --base) and the rebase it needs; changes no local branch or file of the clone and
       writes nothing to GitHub; refuses a folder whose origin is another repository
+  pr approve <owner/name#n> --head <sha> [--check]   approves one pull request of the team's repositories
+      at its head, with the token saved for the owner; refused, writing nothing, unless one task holds it
+      (its ref), the caller owns that task, the caller's leader approved it with a note naming the head (a
+      root team's lead needs no one), and the pull request is open, no draft, on its default branch and
+      at the head --head names; --check prints what it would do and writes nothing
+  pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
+      refused while it conflicts or is queued already: into its merge queue where the repository has one,
+      else merged by rebase, both pinned to the head read; GitHub's own required checks and reviews still
+      gate the landing
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links
