@@ -262,18 +262,19 @@ describe('systemClock and realSleep', () => {
 });
 
 describe('idleSleep', () => {
-  it('waits its time', async (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    let woke = false;
-    const slept = idleSleep(50).then(() => {
-      woke = true;
-    });
-    t.mock.timers.tick(49);
-    await Promise.resolve();
-    assert.equal(woke, false);
-    t.mock.timers.tick(1);
-    await slept;
-    assert.equal(woke, true);
+  it('waits its time', async () => {
+    // A real timer, not t.mock.timers: Node 22's mock does not reach node:timers/promises, so a mocked run there
+    // waits on the real unref'd timer with nothing holding the loop and the test is cancelled. The interval below
+    // holds the loop open, as the CLI's own work does while a probe runs.
+    const holdOpen = setInterval(() => undefined, 1_000);
+    try {
+      const started = performance.now();
+      await idleSleep(40);
+      // Windows timers may fire a tick early, so the floor allows a few milliseconds.
+      assert.ok(performance.now() - started >= 30, 'woke before its time');
+    } finally {
+      clearInterval(holdOpen);
+    }
   });
 
   it('holds no process open: one waiting only on it ends before the wait does', () => {
