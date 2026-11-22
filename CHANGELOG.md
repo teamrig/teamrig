@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.504.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.503.0...teamrig-v0.504.0) (2026-11-22)
+
+
+### Features
+
+* **cli:** a run's output says when its stdout reader is gone ([#1983](https://github.com/teamrig/teamrig/issues/1983)) ([479a8b5](https://github.com/teamrig/teamrig/commit/479a8b5fbb63735b87280ba7d95081368f51f823))
+* **cli:** teamrig events --json follows the documents and names the ones that moved ([#1983](https://github.com/teamrig/teamrig/issues/1983)) ([5ae579a](https://github.com/teamrig/teamrig/commit/5ae579a5f02f32dfdffb6896d18404d27e7bb9d5))
+* **cli:** teamrig events follows history only with --task, and takes read's --task and --range ([#1983](https://github.com/teamrig/teamrig/issues/1983)) ([7ba47f5](https://github.com/teamrig/teamrig/commit/7ba47f522a4500108986dac91e3ed3af2d6ef558))
+* **host:** the session launcher port names the host's program and spells the arguments that start a session (T4749) ([8f2d9e6](https://github.com/teamrig/teamrig/commit/8f2d9e643ee555053284a7e123f99e724032a9f6))
+* **host:** the session launcher port reads a fork and a background job from a command line (T4749) ([a327eda](https://github.com/teamrig/teamrig/commit/a327eda0f474241ccf81c8c6110133b8ef483a77))
+* **host:** the session launcher port reads where a session ran, and the restore reopens only what it calls a tab (T4749) ([ceadd5f](https://github.com/teamrig/teamrig/commit/ceadd5f112b840a8a6dacfcfaba8ae9436a6f0f1))
+* **interface:** the event frames hello and changed, as interface 1.7 ([#1983](https://github.com/teamrig/teamrig/issues/1983)) ([4a154cf](https://github.com/teamrig/teamrig/commit/4a154cfd7ebbce187bc6fec3f5b83af84fa95429))
+* **interface:** the served interface is 1.6, the minor that adds the task fields the pane folded itself ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([2beb01a](https://github.com/teamrig/teamrig/commit/2beb01a51f206b3ffd37a5481e6c79e844aabb24))
+* **meeting:** decisions.ownMeetingTeams leaves a team that meets the owner itself out of its parent's DECISIONS ([#1430](https://github.com/teamrig/teamrig/issues/1430)) ([7e2c09f](https://github.com/teamrig/teamrig/commit/7e2c09fb802739ad123c0e74701ab02cb0405004))
+* **owner:** owner decide and owner later answer a card from the pane's Decisions tab (T4078) ([7a3a619](https://github.com/teamrig/teamrig/commit/7a3a619205cac2bd704a1398d1c6845af0e49ffb))
+* **read:** export a decision card's security line, verdictIsCurrent and printable ([#1656](https://github.com/teamrig/teamrig/issues/1656)) ([5ddbbb5](https://github.com/teamrig/teamrig/commit/5ddbbb5a3965635e3fd74cfd9c1ef0209e4ddf65))
+* **read:** sessions serves each team's week, its own part of the account's week ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([6761f65](https://github.com/teamrig/teamrig/commit/6761f65ac820b53f56c68da7593afa67d6e93cb5))
+* **read:** tasks serves retired, the count of finished tasks left to the archive; interface 1.8 ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([946f6b4](https://github.com/teamrig/teamrig/commit/946f6b4d78f58a36165c46c1c05144cad4f5bfa4))
+* **read:** the tasks document serves each task's card, size base, prep marker, goal mark, cut description and its start and wait times ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([afebceb](https://github.com/teamrig/teamrig/commit/afebcebd50071c477f127168275a3b6096c1dfa2))
+* **register:** a leader marks a task --exempt, which a held session still wakes for (T4948) ([08200e2](https://github.com/teamrig/teamrig/commit/08200e2b18682c14a699cbfb9969ae3ad1949f70))
+* **ship:** catch up a release head main moved past only by commits its changelog hides (T5055) ([f8505f2](https://github.com/teamrig/teamrig/commit/f8505f2b4a8afdc159480ac3b1775a49d5e41cfd))
+* **time:** read in-&lt;n&gt;h, tomorrow and monday as a later time on the team's clock (T4078) ([79107a6](https://github.com/teamrig/teamrig/commit/79107a63f7d6442d91a1293279d20d62ddba4df3))
+* **ui:** teamrig ui runs teamrig-pane 0.80.0's released UI, pinned by its sha256 (T4761) ([671281f](https://github.com/teamrig/teamrig/commit/671281f33838e5d5909e328cbef664e8ae076ba7))
+
+
+### Bug Fixes
+
+* **idle:** a quiet time never reads negative ([#1737](https://github.com/teamrig/teamrig/issues/1737)) ([476e1de](https://github.com/teamrig/teamrig/commit/476e1deead4dbfc9aa2f224c7c096f58bb70cb8d))
+* **meeting:** ownMeetingTeams leaves only DECISIONS and DEDICATED, the parent keeps those teams' LATE, INCIDENTS, LATER and DONE rows ([#1430](https://github.com/teamrig/teamrig/issues/1430)) ([92b14ca](https://github.com/teamrig/teamrig/commit/92b14ca26b10fee84c8835d0b3f88e0285d7ed0a))
+* **push-guard:** held text raises a gated doubt only where bash can read it again ([#1471](https://github.com/teamrig/teamrig/issues/1471)) ([fc20d7f](https://github.com/teamrig/teamrig/commit/fc20d7f2399a759425ab2df4baea408a864b0103))
+* **push-guard:** read in-place options by their accepted prefixes, and a sourced file as defining any name ([#1471](https://github.com/teamrig/teamrig/issues/1471)) ([30c667e](https://github.com/teamrig/teamrig/commit/30c667e72e4cdd5649a041e54cf8935666ca878f))
+* **push-guard:** read perl and ruby -di and BSD sed -I as in-place edits ([#1471](https://github.com/teamrig/teamrig/issues/1471)) ([9622486](https://github.com/teamrig/teamrig/commit/9622486aa38616b79e6fba50ff01612dd96d21fb))
+* **queue:** a --small step's purpose names it small, not heavy ([#1511](https://github.com/teamrig/teamrig/issues/1511)) ([c088d1a](https://github.com/teamrig/teamrig/commit/c088d1ae68bddf41ae4967ac1687b66bee30f693))
+* **queue:** a step taking back its share keeps its arrival place over class turns (T4196) ([696ec67](https://github.com/teamrig/teamrig/commit/696ec67a3c6740d8fda2e48612d6fd55566d9400))
+* **secrets:** specs give real git room past the guard's timeouts ([#1261](https://github.com/teamrig/teamrig/issues/1261)) ([03e5a09](https://github.com/teamrig/teamrig/commit/03e5a090d593983d3ad0be0449d53e8f65aa8f70))
+* **ship:** merge --release catches up a head main moved past only by hidden commits (T5055) ([5696b60](https://github.com/teamrig/teamrig/commit/5696b603a83982718272ee6e66829b244875d9f3))
+* **wake:** a held session still wakes for a task another session waits on (T4948) ([37c2b70](https://github.com/teamrig/teamrig/commit/37c2b7041da19ddf213d65e87f7956f4ad5b17ee))
+* **wake:** the rush poke hands the wait on the unfinished task a started one is planned after ([#1516](https://github.com/teamrig/teamrig/issues/1516)) ([5f3c379](https://github.com/teamrig/teamrig/commit/5f3c379886592200e8331473c29bbf43d973513a))
+* **wake:** the rush poke skips a task planned after an unfinished one ([#1516](https://github.com/teamrig/teamrig/issues/1516)) ([523b3bd](https://github.com/teamrig/teamrig/commit/523b3bd2f7067610d792279d12b122f782c10352))
+
+
+### Performance Improvements
+
+* **read:** plan's revision is its files' stamps alone, so a follower's pass parses no usage ([#1983](https://github.com/teamrig/teamrig/issues/1983)) ([196a058](https://github.com/teamrig/teamrig/commit/196a058c2cef51dbbb53df9d1736ae3010c35a74))
+
 ## [0.503.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.502.0...teamrig-v0.503.0) (2026-11-22)
 
 
