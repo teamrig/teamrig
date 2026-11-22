@@ -11,8 +11,9 @@ import { findProgram, type PathSearchDeps } from '../core/path-search.ts';
  */
 
 /**
- * The variables gh gets from its caller: where programs, the home and temp folders are, the locale, the proxy and its
- * certificates, and `GH_REPO`, which places the run's repository as teamrig placed its owner. Names compare without case.
+ * The variables gh gets from its caller: where programs, the home and temp folders are, the locale, the proxy, and
+ * `GH_REPO`, which places the run's repository as teamrig placed its owner. Names compare without case. No certificate
+ * variable (`SSL_CERT_FILE`, `SSL_CERT_DIR`) passes: gh's TLS trusts the system's roots alone.
  */
 export const GH_PASSED_VARIABLES: readonly string[] = [
   'PATH',
@@ -36,8 +37,6 @@ export const GH_PASSED_VARIABLES: readonly string[] = [
   'HTTP_PROXY',
   'HTTPS_PROXY',
   'NO_PROXY',
-  'SSL_CERT_FILE',
-  'SSL_CERT_DIR',
   'GH_REPO',
 ];
 

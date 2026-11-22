@@ -8,7 +8,7 @@ import { configDirRefusal, ghChildEnvOf, ghConfigDirOf, inertCommandOf, programO
 
 const SETUP = { configDir: '/kit/gh-config', inert: '"/usr/bin/node" --eval=process.exit(1)' };
 
-/** What a session may set to make gh start a program of its choosing, or read another config. */
+/** What a session may set to make gh start a program of its choosing, read another config, or trust other roots. */
 const SESSION_SET: Readonly<Record<string, string>> = {
   GH_BROWSER: 'evil',
   BROWSER: 'evil',
@@ -20,6 +20,8 @@ const SESSION_SET: Readonly<Record<string, string>> = {
   GH_CONFIG_DIR: '/session/gh',
   XDG_CONFIG_HOME: '/session',
   GH_DEBUG: 'api',
+  SSL_CERT_FILE: '/session/roots.pem',
+  ssl_cert_dir: '/session/roots',
   SOME_SECRET_NAME_NO_LIST_KNOWS: 'value',
   GH_TOKEN: 'session-held',
   GITHUB_TOKEN: 'session-held',
