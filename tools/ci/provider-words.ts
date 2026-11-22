@@ -1,9 +1,11 @@
 /**
  * The provider-word check of the skills (docs/design/provider-neutral-skills.md): how often a skill names one host's
  * or tool's own words, counted so the count can only fall. A skill tells the step (open a pull request, refresh the
- * context); the adapter that serves the host or tool says how. The terms live here until the declarations carry them
- * (stopgap T4860 slice 3).
+ * context); the adapter that serves the host or tool says how. Each adapter's declaration names its product's terms,
+ * so a new adapter's words are counted from the day it ships.
  */
+
+import type { Declarations } from '../../src/composition/loader.ts';
 
 /** One file of a skill: the skill's folder and the file's path, both from the repo root with `/`, and its text. */
 export interface SkillFile {
@@ -12,12 +14,30 @@ export interface SkillFile {
   readonly text: string;
 }
 
-/** Each provider's own words. A term matches whole words at its word-character edges, so `gh` never hits `high`. */
-export const PROVIDER_TERMS = [
-  { provider: 'GitHub', terms: ['GitHub', 'gh', 'pull request'] },
-  { provider: 'Claude Code', terms: ['Claude Code', 'CLAUDE.md', '.claude/', '/clear'] },
-  { provider: 'Jira', terms: ['Jira', 'JQL'] },
-] as const;
+/**
+ * The terms the check counts: each declaration's own words in the order given, a word two adapters both name kept once
+ * (case-blind, as it matches), so one word in a skill is never counted twice.
+ */
+export function termList(declared: readonly (readonly string[])[]): readonly string[] {
+  const seen = new Set<string>();
+  return declared.flat().filter((term) => {
+    const key = term.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * The words every adapter declares, hosts then connectors then terminals. A declaration the loader refused stops the
+ * check: counting without its words would read as a fall.
+ */
+export function declaredTerms({ hosts, connectors, terminals }: Declarations): readonly string[] {
+  const loads = [...hosts, ...connectors, ...terminals];
+  const refused = loads.flatMap((load) => (load.kind === 'refused' ? [`${load.id} (${load.notices.join('; ')})`] : []));
+  if (refused.length > 0) throw new Error(`cannot read the terms of ${refused.join(', ')}`);
+  return termList(loads.flatMap((load) => (load.kind === 'loaded' ? [load.value.terms ?? []] : [])));
+}
 
 export interface ProviderHit {
   readonly skill: string;
@@ -38,18 +58,17 @@ export function termPattern(term: string): RegExp {
   return new RegExp(`${start}${escaped}${end}`, 'gi');
 }
 
-const PATTERNS: readonly { readonly term: string; readonly pattern: RegExp }[] = PROVIDER_TERMS.flatMap(({ terms }) => terms.map((term) => ({ term, pattern: termPattern(term) })));
-
 /** Every term a file names, one hit per match, by line and then in the terms' order. */
-export function providerHits(files: readonly SkillFile[]): readonly ProviderHit[] {
+export function providerHits(files: readonly SkillFile[], terms: readonly string[]): readonly ProviderHit[] {
+  const patterns = terms.map((term) => ({ term, pattern: termPattern(term) }));
   return files.flatMap((file) =>
-    file.text.split('\n').flatMap((text, index) => PATTERNS.flatMap(({ term, pattern }) => [...text.matchAll(pattern)].map(() => ({ skill: file.skill, path: file.path, line: index + 1, term })))),
+    file.text.split('\n').flatMap((text, index) => patterns.flatMap(({ term, pattern }) => [...text.matchAll(pattern)].map(() => ({ skill: file.skill, path: file.path, line: index + 1, term })))),
   );
 }
 
 /** How many hits each skill has, every skill of the files listed (a skill with none at 0), sorted by its folder. */
-export function skillCounts(files: readonly SkillFile[]): ReadonlyMap<string, number> {
-  const hits = providerHits(files);
+export function skillCounts(files: readonly SkillFile[], terms: readonly string[]): ReadonlyMap<string, number> {
+  const hits = providerHits(files, terms);
   const skills = [...new Set(files.map((file) => file.skill))].sort();
   return new Map(skills.map((skill) => [skill, hits.filter((hit) => hit.skill === skill).length]));
 }

@@ -4,7 +4,8 @@ import { EXIT_CLEAN, EXIT_FINDINGS } from '../lib/exit.ts';
 import { takeRoot } from '../lib/repo-root.ts';
 import { baselineFor, baselineText, compareCounts, takeBase } from '../lib/count-baseline.ts';
 import { runMain } from '../lib/run-main.ts';
-import { BASELINE_FILE, type SkillFile, hitLine, providerHits, skillCounts } from './provider-words.ts';
+import { readDeclarations } from '../../src/composition/loader.ts';
+import { BASELINE_FILE, type SkillFile, declaredTerms, hitLine, providerHits, skillCounts } from './provider-words.ts';
 
 /** The folders whose every subfolder is one skill: the plugin's and this repo's own. */
 const SKILL_ROOTS = ['plugins/teamrig/skills', '.claude/skills'] as const;
@@ -49,10 +50,11 @@ async function main(args: readonly string[]): Promise<number> {
   if (unknown.length > 0) throw new Error(`unknown option ${unknown.join(' ')} (${USAGE})`);
   if (base !== undefined && rest.includes('--write')) throw new Error(`--base holds a check, --write records counts: give one (${USAGE})`);
   const files = skillFiles(root);
+  const terms = declaredTerms(await readDeclarations());
   if (rest.includes('--list')) {
-    for (const hit of providerHits(files)) console.log(hitLine(hit));
+    for (const hit of providerHits(files, terms)) console.log(hitLine(hit));
   }
-  const counts = skillCounts(files);
+  const counts = skillCounts(files, terms);
   const baseline = baselineFor(root, BASELINE, BASELINE_FILE.field, base);
   if (base !== undefined) console.log(`provider-words: each count held to the lower of ${BASELINE} and its copy at ${base}`);
   const { rose, fell, gone } = compareCounts(counts, baseline);
