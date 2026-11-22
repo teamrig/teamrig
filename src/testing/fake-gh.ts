@@ -235,6 +235,8 @@ export interface PullStandSpec {
   readonly mergeQueue?: boolean;
   readonly queued?: boolean;
   readonly mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+  /** The head's statusCheckRollup state, null for a head with no checks; SUCCESS when left out. */
+  readonly checks?: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED' | null;
 }
 
 /** The full head sha a stand reads when a test gives none. */
@@ -253,6 +255,7 @@ export function ghPullStand(spec: PullStandSpec = {}): JsonRecord {
       baseRefName: spec.base ?? 'main',
       mergeable: spec.mergeable ?? 'MERGEABLE',
       mergeQueueEntry: spec.queued === true ? { state: 'QUEUED' } : null,
+      commits: { nodes: [{ commit: { statusCheckRollup: spec.checks === null ? null : { state: spec.checks ?? 'SUCCESS' } } }] },
     },
   };
 }

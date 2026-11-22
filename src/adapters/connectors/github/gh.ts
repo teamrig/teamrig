@@ -765,7 +765,7 @@ const PULL_NODE_ID = /^PR_[A-Za-z0-9_-]{1,100}$/;
  * PullRequest.isMergeQueueEnabled is not served everywhere).
  */
 export const PULL_STAND_QUERY =
-  'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state}}}}';
+  'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}}}';
 
 /** The enqueue of one pull request pinned to its head, word for word as the ship tool's queue landing sends it (tools/ship/merge-queue.ts). */
 export const ENQUEUE_MUTATION =

@@ -12,7 +12,7 @@ describe('pullStandIn (T4817)', () => {
   it('reads an open pull request on a branch with no merge queue', () => {
     assert.deepEqual(pullStandIn(answer(ghPullStand())), {
       kind: 'read',
-      pull: { id: 'PR_kwDOAbc', state: 'open', draft: false, head: STAND_HEAD, base: 'main', defaultBranch: 'main', mergeQueue: false, queued: false, conflicts: false },
+      pull: { id: 'PR_kwDOAbc', state: 'open', draft: false, head: STAND_HEAD, base: 'main', defaultBranch: 'main', mergeQueue: false, queued: false, conflicts: false, checks: 'passing' },
     });
   });
 
@@ -28,6 +28,7 @@ describe('pullStandIn (T4817)', () => {
       mergeQueue: true,
       queued: true,
       conflicts: true,
+      checks: 'passing',
     });
     const closed = pullStandIn(answer(ghPullStand({ state: 'CLOSED' })));
     assert.equal(closed.kind === 'read' && closed.pull.state, 'closed');
@@ -36,6 +37,14 @@ describe('pullStandIn (T4817)', () => {
   it('counts only CONFLICTING as conflicts: GitHub still working it out is left to its own gate', () => {
     const unknown = pullStandIn(answer(ghPullStand({ mergeable: 'UNKNOWN' })));
     assert.equal(unknown.kind === 'read' && unknown.pull.conflicts, false);
+  });
+
+  it("reads the head's check rollup: failed and errored as failing, pending and expected as pending, a null rollup as none", () => {
+    const checks = (state: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED' | null): unknown => {
+      const read = pullStandIn(answer(ghPullStand({ checks: state })));
+      return read.kind === 'read' ? read.pull.checks : read.kind;
+    };
+    assert.deepEqual([checks('SUCCESS'), checks('FAILURE'), checks('ERROR'), checks('PENDING'), checks('EXPECTED'), checks(null)], ['passing', 'failing', 'failing', 'pending', 'pending', 'none']);
   });
 
   it('gives missing when GitHub answers no pull request of that number', () => {
@@ -55,6 +64,10 @@ describe('pullStandIn (T4817)', () => {
       answer({ ...pull, pullRequest: { ...ghPullStandPull(), headRefOid: null } }),
       answer({ ...pull, pullRequest: { ...ghPullStandPull(), mergeable: null } }),
       answer({ ...pull, pullRequest: { ...ghPullStandPull(), mergeQueueEntry: 'QUEUED' } }),
+      answer({ ...pull, pullRequest: { ...ghPullStandPull(), commits: undefined } }),
+      answer({ ...pull, pullRequest: { ...ghPullStandPull(), commits: { nodes: [] } } }),
+      answer({ ...pull, pullRequest: { ...ghPullStandPull(), commits: { nodes: [{ commit: { statusCheckRollup: { state: 'constructor' } } }] } } }),
+      answer({ ...pull, pullRequest: { ...ghPullStandPull(), commits: { nodes: [{ commit: { statusCheckRollup: 'SUCCESS' } }] } } }),
     ];
     for (const stdout of unreadable) {
       assert.deepEqual(pullStandIn(stdout), { kind: 'unreadable' }, stdout);

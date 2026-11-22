@@ -69,8 +69,9 @@ export async function prApprove(args: ParsedArgs, runtime: CliRuntime): Promise<
 /**
  * `pr merge <owner/name#n> --head <sha> [--check]` (T4817): lands one pull request of the team's repositories, through
  * its repository's merge queue when it has one, else merged by rebase, both pinned to the head read, so GitHub
- * refuses it if the head moved. The same gates as `pr approve`, plus no conflicts and not queued already; GitHub's own
- * required checks and reviews still gate the landing. Exit 2 when refused, 1 when the host failed, else 0.
+ * refuses it if the head moved. The same gates as `pr approve`, plus no conflicts, not queued already and the head's
+ * checks all passed: an admin token may bypass the branch's own required checks, so this gate does not leave them to
+ * GitHub (T4958 C3). Exit 2 when refused, 1 when the host failed, else 0.
  */
 export async function prMerge(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   return land(args, runtime, 'merge');
@@ -113,7 +114,8 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
  * and the repository the team's; one task holding the pull request, owned by the caller (only a change's owner lands
  * it); that task approved by the caller's leader with a note naming the full 40-hex head (an approval covers only the head it
  * names, T2788), which a root team's lead needs from no one; and the pull request open, no draft, on its default
- * branch, its head the one `--head` names. A merge also needs no conflicts and not queued already. Ended with exit 0,
+ * branch, its head the one `--head` names. A merge also needs no conflicts, not queued already and its head's checks
+ * passed (pending, failing or none is refused). Ended with exit 0,
  * after an OFF line, while GitHub is off on this machine, and with exit 1 when the read failed. Refused or failed, it
  * writes nothing.
  */
@@ -188,6 +190,9 @@ function standRefusal(pull: PullStand, given: string, step: LandingStep): string
   }
   if (step === 'merge' && pull.queued) {
     return 'it is already in the merge queue';
+  }
+  if (step === 'merge' && pull.checks !== 'passing') {
+    return pull.checks === 'none' ? 'its head has no checks: a merge needs them run and passed' : `its head's checks are ${pull.checks}: a merge needs them all passed`;
   }
   return undefined;
 }

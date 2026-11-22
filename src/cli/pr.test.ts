@@ -165,6 +165,9 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     { name: 'it targets another branch', kit: () => landingKit(), spec: { base: 'release' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it targets release, not the default branch main/u },
     { name: 'a merge conflicts', kit: () => landingKit(), spec: { mergeable: 'CONFLICTING' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it conflicts with main: its author rebases it first/u },
     { name: 'a merge is queued already', kit: () => landingKit(), spec: { mergeQueue: true, queued: true }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it is already in the merge queue/u },
+    { name: "a merge's head checks failed", kit: () => landingKit(), spec: { checks: 'FAILURE' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head's checks are failing: a merge needs them all passed/u },
+    { name: "a merge's head checks are pending", kit: () => landingKit(), spec: { checks: 'PENDING' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head's checks are pending: a merge needs them all passed/u },
+    { name: "a merge's head has no checks", kit: () => landingKit(), spec: { checks: null }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head has no checks: a merge needs them run and passed/u },
     { name: '--head is no sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', 'main'], reason: /--head main is no full commit sha/u },
     { name: '--head is a short sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', STAND_HEAD.slice(0, 12)], reason: /--head a{12} is no full commit sha: give the head the approval names, all 40 hex digits/u },
   ];
@@ -179,8 +182,8 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     });
   }
 
-  it('approves a conflicting pull request: only a merge needs it clean', async () => {
-    const gh = standing({ mergeable: 'CONFLICTING' });
+  it('approves a conflicting pull request with failing checks: only a merge needs it clean and green', async () => {
+    const gh = standing({ mergeable: 'CONFLICTING', checks: 'FAILURE' });
     const result = await (await landingKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.equal(writes(gh).length, 1);

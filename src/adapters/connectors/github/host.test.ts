@@ -749,7 +749,7 @@ describe('GitHubIssueHost.watch', () => {
 
 describe('GitHubIssueHost pull landing (T4817)', () => {
   const PULL = { repo: 'acme/web', number: 12 };
-  const STAND = { id: 'PR_kwDOAbc', state: 'open', draft: false, head: STAND_HEAD, base: 'main', defaultBranch: 'main', mergeQueue: true, queued: false, conflicts: false } as const;
+  const STAND = { id: 'PR_kwDOAbc', state: 'open', draft: false, head: STAND_HEAD, base: 'main', defaultBranch: 'main', mergeQueue: true, queued: false, conflicts: false, checks: 'passing' } as const;
 
   it("reads where a pull request stands with the owner's token: read, missing when GitHub answers Not Found, failed on an answer off its shape", async () => {
     const gh = new FakeGh().holdsPullStand('acme/web', 12, ghPullStand({ mergeQueue: true }));

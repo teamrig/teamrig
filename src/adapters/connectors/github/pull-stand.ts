@@ -1,4 +1,5 @@
-import { isRecord, type PullStand, type PullState } from '../../../plugin-api/index.ts';
+import { isRecord, type PullChecks, type PullStand, type PullState } from '../../../plugin-api/index.ts';
+import { rollupChecks } from './pulls.ts';
 
 /** GraphQL's PullRequestState, as `pr approve` and `pr merge` read it, in teamrig's words. */
 const STATE_OF: ReadonlyMap<string, PullState> = new Map<string, PullState>([
@@ -15,7 +16,8 @@ export type PullStandAnswer = { readonly kind: 'read'; readonly pull: PullStand 
  * queue (null when the branch has none) and the pull request (null when the access sees none). Any field off its
  * shape makes the answer unreadable, so a landing never acts on half a read. GitHub's `mergeable` is MERGEABLE,
  * CONFLICTING or UNKNOWN while it still works it out; only CONFLICTING counts as conflicts, as GitHub's own gate
- * refuses the rest.
+ * refuses the rest. `checks` is the head's check rollup, which `pr merge` holds to passing itself, since an admin
+ * token may bypass the branch's rules (T4958 C3).
  */
 export function pullStandIn(stdout: string): PullStandAnswer {
   let parsed: unknown;
@@ -40,11 +42,13 @@ export function pullStandIn(stdout: string): PullStandAnswer {
   if (!isRecord(pullRequest)) {
     return { kind: 'unreadable' };
   }
-  const { id, state, isDraft, headRefOid, baseRefName, mergeable, mergeQueueEntry } = pullRequest;
+  const { id, state, isDraft, headRefOid, baseRefName, mergeable, mergeQueueEntry, commits } = pullRequest;
   const pullState = typeof state === 'string' ? STATE_OF.get(state) : undefined;
+  const checks = headChecksOf(commits);
   if (
     typeof id !== 'string' ||
     pullState === undefined ||
+    checks === undefined ||
     typeof isDraft !== 'boolean' ||
     typeof headRefOid !== 'string' ||
     typeof baseRefName !== 'string' ||
@@ -65,6 +69,25 @@ export function pullStandIn(stdout: string): PullStandAnswer {
       mergeQueue: mergeQueue !== null,
       queued: isRecord(mergeQueueEntry),
       conflicts: mergeable === 'CONFLICTING',
+      checks,
     },
   };
+}
+
+/**
+ * The head's checks from `commits(last:1)`: its statusCheckRollup's state, `none` when GitHub answers the rollup null
+ * (the head has no checks); undefined when the part is off its shape or names a state GitHub does not send.
+ */
+function headChecksOf(commits: unknown): PullChecks | undefined {
+  const nodes = isRecord(commits) ? commits['nodes'] : undefined;
+  const last: unknown = Array.isArray(nodes) ? nodes.at(-1) : undefined;
+  const commit = isRecord(last) ? last['commit'] : undefined;
+  if (!isRecord(commit)) {
+    return undefined;
+  }
+  const rollup = commit['statusCheckRollup'];
+  if (rollup === null) {
+    return 'none';
+  }
+  return isRecord(rollup) ? rollupChecks(rollup['state']) : undefined;
 }

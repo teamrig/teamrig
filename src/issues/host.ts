@@ -8,7 +8,7 @@
 import type { IssueFields } from './fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
 import type { HostPosts } from './post.ts';
-import type { HostPull, PullState } from './pull.ts';
+import type { HostPull, PullChecks, PullState } from './pull.ts';
 
 /** One issue or pull request: its repository (`owner/name`, in lowercase) and its number. */
 export interface IssueTarget {
@@ -294,7 +294,8 @@ export interface LabelFiles {
  * One pull request as a landing reads it just before it writes: what `pr approve` and `pr merge` check (T4817). `id`
  * is the host's own opaque id of the pull request, which a landing hands back; `head` is the full sha of its head.
  * `mergeQueue` says whether the repository's default branch lands through a queue, `queued` whether this pull
- * request is in it now, and `conflicts` whether the host found it conflicting with its base.
+ * request is in it now, `conflicts` whether the host found it conflicting with its base, and `checks` its head's
+ * checks taken together (`none` when the head has none).
  */
 export interface PullStand {
   readonly id: string;
@@ -306,6 +307,7 @@ export interface PullStand {
   readonly mergeQueue: boolean;
   readonly queued: boolean;
   readonly conflicts: boolean;
+  readonly checks: PullChecks;
 }
 
 /** One read of where a pull request stands: read, missing (none the access can see), or the read failed. */
@@ -316,8 +318,9 @@ export type HostLanding = { readonly kind: 'enqueued' } | { readonly kind: 'merg
 
 /**
  * A code host's landing of a pull request (T4817): read where it stands, approve one head of it, and land it. The
- * approval's body is the adapter's own fixed line naming the head, never text a caller gives; the host's own rules
- * (required checks, reviews) still gate the landing.
+ * approval's body is the adapter's own fixed line naming the head, never text a caller gives. The host's own rules
+ * (required checks, reviews) gate the landing too, unless the token may bypass them, so `pr merge` checks the head's
+ * checks itself first.
  */
 export interface PullLanding {
   /** Where the pull request stands now. */
