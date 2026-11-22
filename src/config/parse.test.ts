@@ -371,6 +371,14 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, meeting: { panel: true } }).issues), ['meeting.panel']);
   });
 
+  it('reads cliOnPath.enabled, on by default, and refuses a value that is not a boolean (T5095)', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.cliOnPath, { enabled: true });
+    assert.deepEqual(parseConfig({ ...ROSTER, cliOnPath: { enabled: false } }).config.cliOnPath, { enabled: false });
+    const bad = parseConfig({ ...ROSTER, cliOnPath: { enabled: 'no' } });
+    assert.deepEqual([paths(bad.issues), bad.config.cliOnPath], [['cliOnPath.enabled'], { enabled: true }]);
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, cliOnPath: false }).issues), ['cliOnPath']);
+  });
+
   it('reads meeting.spotlight, on at 0.6 by default, and refuses a dim outside 0.1 to 0.9 or a non-boolean enabled (T2517, T2523)', () => {
     assert.deepEqual(parseConfig(ROSTER).config.meeting.spotlight, { enabled: true, dim: 0.6, breakthroughSeconds: 120 });
     assert.deepEqual(parseConfig({ ...ROSTER, meeting: { spotlight: { enabled: false, dim: 0.3 } } }).config.meeting.spotlight, {

@@ -16,6 +16,7 @@ import { TURN_TAIL_BYTES, turnErrorOf } from '../../restore/turn-error.ts';
 import { LAUNCHER_SCRIPT, launcherPath } from '../../statusline/launcher.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { fileLockOf } from '../file-locks.ts';
+import { openKit } from '../kit.ts';
 import { identityOf, transcriptsIfKept } from '../host.ts';
 import { loginPageLogLine, loginPageOf, sendLoginPage, type LoginPage } from '../login-page.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -177,22 +178,38 @@ async function trackDayProbe(event: TrackEvent, facts: TrackFacts, runtime: CliR
 }
 
 /**
+ * Whether a session start of `team` puts teamrig on the user's PATH [cliOnPath.enabled]: always for a session of no
+ * team; for a team's, unless its config turns it off or cannot be read, so a broken config writes nothing a user
+ * may have turned off.
+ */
+async function putsCliOnPath(runtime: CliRuntime, team: string | undefined): Promise<boolean> {
+  if (team === undefined) {
+    return true;
+  }
+  const { load } = await openKit(runtime, team);
+  return load.status === 'loaded' && load.config.cliOnPath.enabled;
+}
+
+/**
  * At a session start, brings what a restore install and the status line install left on the machine up to date with
  * this plugin version (src/restore/launcher-refresh.ts): the logon entry and the shortcuts are run by this hook's Node,
  * the stable program Claude Code starts its hooks with.
  */
-async function trackLaunchers(event: TrackEvent, runtime: CliRuntime, kitHome: string): Promise<void> {
+async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
   if (event.kind !== 'start') {
     return;
   }
   const { files, restore, platform } = runtime;
+  const cliOnPath = (await putsCliOnPath(runtime, facts.team))
+    ? [() => cliOnPathSteps({ files, kitHome, platform, userPath: restore.userPath, markExecutable: restore.markExecutable })]
+    : [];
   await refreshLaunchers({
     machine: { files, kitHome, node: runtime.self.node, userHome: runtime.userHome, logon: restore.logon, shortcuts: restore.shortcuts },
     others: [
       { path: launcherPath(kitHome), text: LAUNCHER_SCRIPT },
       { path: inboxAddLauncherPath(kitHome), text: INBOX_ADD_LAUNCHER_SCRIPT, create: true },
     ],
-    parts: [() => cliOnPathSteps({ files, kitHome, platform, userPath: restore.userPath, markExecutable: restore.markExecutable })],
+    parts: cliOnPath,
     lock: fileLockOf(runtime, `${launcherRecordPath(kitHome)}.lock`, LAUNCHER_REFRESH_LOCK),
     version: KIT_VERSION,
     now: runtime.clock.now(),
@@ -229,7 +246,7 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
   const event = await codedEvent(reported, facts, runtime);
   const login = trackLogin(event, facts, runtime, kitHome).catch(() => undefined);
   const dayProbe = trackDayProbe(event, facts, runtime, kitHome).catch(() => undefined);
-  const launchers = trackLaunchers(event, runtime, kitHome).catch(() => undefined);
+  const launchers = trackLaunchers(event, facts, runtime, kitHome).catch(() => undefined);
   try {
     await trackEntry(event, facts, runtime, kitHome);
   } finally {

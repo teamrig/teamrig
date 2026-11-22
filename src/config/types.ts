@@ -1884,6 +1884,13 @@ export interface KitConfig {
    * hours.
    */
   readonly pickerGuard: { readonly enabled: boolean };
+  /**
+   * Puts `teamrig` on the user's PATH: a session start of the team writes the launchers in the kit home's bin folder
+   * and adds that folder to the user's PATH (src/restore/cli-on-path.ts, T5095). On by default: the CLI a team's
+   * docs name must run in any terminal. Off: a session of the team writes neither, so an entry the user removed stays
+   * removed through each new version; a session of another team, or of none, still writes them.
+   */
+  readonly cliOnPath: { readonly enabled: boolean };
   readonly meeting: MeetingConfig;
   readonly turnLog: TurnLogConfig;
   readonly ui: UiConfig;

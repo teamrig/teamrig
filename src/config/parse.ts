@@ -524,6 +524,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
   const lock = read.section(raw, 'lock', '');
   const tabStatus = read.section(raw, 'tabStatus', '');
   const pickerGuard = read.section(raw, 'pickerGuard', '');
+  const cliOnPath = read.section(raw, 'cliOnPath', '');
   const budget = parseBudget(read, read.section(raw, 'budget', ''), sessions, above);
   const decisions = read.section(raw, 'decisions', '');
   // T2256: the question picker stopped the lead's session in the meeting too; the meeting asks only in plain text.
@@ -623,6 +624,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     tabStatus: { enabled: read.boolean(tabStatus, 'enabled', 'tabStatus', false) },
     needsYou: parseNeedsYou(read, read.section(raw, 'needsYou', '')),
     pickerGuard: { enabled: read.boolean(pickerGuard, 'enabled', 'pickerGuard', true) },
+    cliOnPath: { enabled: read.boolean(cliOnPath, 'enabled', 'cliOnPath', true) },
     meeting: parseMeeting(read, read.section(raw, 'meeting', '')),
     turnLog: parseTurnLog(read, read.section(raw, 'turnLog', '')),
     ui: parseUi(read, read.section(raw, 'ui', '')),

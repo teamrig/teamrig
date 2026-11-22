@@ -1773,6 +1773,17 @@
         }
       }
     },
+    "cliOnPath": {
+      "description": "Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Writes the launchers and the PATH entry at a session start of the team. On unless a team sets it false; off, a session of the team writes neither, so an entry the user removed stays removed through each new version, while a session of another team that leaves it on still writes them.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "meeting": {
       "description": "The owner's daily meeting with the lead, in the lead's tab.",
       "type": "object",
