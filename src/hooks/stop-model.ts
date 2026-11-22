@@ -14,7 +14,7 @@ export interface StopModelInput {
   /** Its `launch` entry, with the lead's defaults filled in. */
   readonly launch: LaunchConfig;
   /** The host's session id: each notice shows once per host session. */
-  readonly claude: string;
+  readonly hostSession: string;
   /** The payload's effort level; undefined when it gives none. */
   readonly effort: string | undefined;
   /** The payload's transcript path; undefined when it gives none. */
@@ -62,12 +62,12 @@ export async function stopModelNotices(
   if (found.length === 0) {
     return [];
   }
-  const told = await store.told(input.id, input.claude);
+  const told = await store.told(input.id, input.hostSession);
   const fresh = found.filter((notice) => !told.includes(notice.key));
   if (fresh.length > 0) {
     await store.remember(
       input.id,
-      input.claude,
+      input.hostSession,
       fresh.map((notice) => notice.key),
     );
   }
