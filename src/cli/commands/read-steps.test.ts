@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG_VERSION } from '../../config/types.ts';
 import { CONFIG_MIGRATIONS, type ConfigFormat } from '../../config/migrate.ts';
+import { stepCommandOf, stepSourceOf } from '../../steps/pending.ts';
 import { CliHarness, TEAM } from '../../testing/cli-harness.ts';
 import { problemsOf, rowsOf, served } from '../../testing/read-answers.ts';
 import { EXIT } from '../runtime.ts';
@@ -24,6 +25,16 @@ describe('teamrig read steps', () => {
       [step?.['id'], step?.['title'], step?.['preview'], step?.['command']],
       ['config-format', 'teamrig needs to update your team settings', [`v${CONFIG_VERSION}→v${CONFIG_VERSION + 1}: adds nothing new`], '/teamrig steps run config-format --yes'],
     );
+  });
+
+  it("serves only a known step's own run line, so a reader offers the person no other line to type", async () => {
+    const steps = rowsOf(served(await new CliHarness(TEAM).run(READ_STEPS, { configFormat: NEXT_FORMAT })), 'steps');
+    assert.notEqual(steps.length, 0);
+    for (const step of steps) {
+      const id = step['id'];
+      assert.ok(typeof id === 'string' && stepSourceOf(id) !== undefined, `unknown step ${String(id)}`);
+      assert.equal(step['command'], stepCommandOf(id));
+    }
   });
 
   it('serves no step for a file in the format this teamrig writes', async () => {
