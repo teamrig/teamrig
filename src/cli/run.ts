@@ -132,6 +132,7 @@ const execCommands = () => import('./commands/exec.ts');
 const refsCommands = () => import('./commands/refs.ts');
 const sweepCommands = () => import('./commands/sweep.ts');
 const setupBackupCommands = () => import('./commands/setup-backup.ts');
+const setupHooksCommand = () => import('./commands/setup-hooks.ts');
 const auditCommand = () => import('./commands/audit.ts');
 const readCommand = () => import('./commands/read.ts');
 const eventsCommand = () => import('./commands/events.ts');
@@ -302,6 +303,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'setup backup': { effect: 'write', flags: ['project'], load: async () => (await setupBackupCommands()).backup },
   'setup restore': { effect: 'write', flags: [], switches: ['yes', 'remove-new'], load: async () => (await setupBackupCommands()).restore },
   'setup scan': { effect: 'read', flags: ['project', 'days', 'max-mb'], switches: [], load: async () => (await setupScanCommand()).scan },
+  'setup hooks': { effect: 'write', flags: ['host'], switches: ['yes'], load: async () => (await setupHooksCommand()).hooks },
   'config get': { effect: 'read', flags: [], switches: ['json'], load: async () => (await configCommands()).get },
   'config set': { effect: 'write', flags: ['session'], switches: ['unset', 'yes'], load: async () => (await configCommands()).set },
   'config validate': { effect: 'read', flags: [], load: async () => (await configCommands()).validate },
@@ -991,6 +993,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   setup restore [<stamp>] [--yes] [--remove-new]   lists the backups, or previews putting one back:
       changed and deleted files and files made since; --yes backs the setup up first, then writes and
       prints the restore that undoes it; --remove-new also removes the files made since
+  setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
+      no plugin's hooks (codex: Codex CLI's hooks.json), beside your own handlers, which stay; teamrig's
+      earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
+      it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; it never
+      trusts the hooks for you: trust them in the host after each write (Codex: /hooks)
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
       skill and agent type listings a session loads, with chars and tokens; files over 6,000 chars, skill
