@@ -1950,6 +1950,11 @@ most 64,000 characters, the end of a longer one; `truncated` marks that cut, or 
 the part of the transcript read. A tab that is no session of the team writes nothing, and any error leaves the
 turn as it was.
 
+The same prompt hook also keeps where the person last typed, for the dedicated UI to follow: each prompt the person
+sends in a team session's tab, with `turnLog` on or off, replaces `~/.teamrig/last-typed.json`, one file for every
+team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A wake teamrig
+submitted never moves it, and a failed write leaves the turn log and the prompt as they were.
+
 ## A guard that cannot answer
 
 Claude Code lets a tool call through when a `PreToolUse` command hook ends with any exit code but 0 or 2, or
