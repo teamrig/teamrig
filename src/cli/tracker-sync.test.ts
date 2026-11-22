@@ -17,8 +17,18 @@ import { testConfig } from '../testing/config.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import { teamPaths } from '../core/home.ts';
+import { fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, type TrackerSyncRun } from './commands/tracker-sync.ts';
 import type { ConnectorLoader } from './issue-hosts.ts';
+import { connectorState } from './connector-state.ts';
+import { loadConnector } from '../composition/loader.ts';
+import type { ConnectorPorts, RefCodec, Tracker } from '../plugin-api/index.ts';
+import type { HostIssue } from '../issues/issue.ts';
+import { FakeIssueHost } from '../testing/fake-issue-host.ts';
+import { testHostIssue } from '../testing/host-issue.ts';
+import { connectorDeclarationData } from '../testing/manifests.ts';
+import { trackerOnly } from '../testing/split-hosts.ts';
+import { heldScopeLine, type ScopeRunKind } from '../sync/scope-hold.ts';
 import { EXIT } from './runtime.ts';
 
 const SEARCH = 'https://acme.atlassian.net/rest/api/3/search/jql';
@@ -65,9 +75,13 @@ describe('importConnectors', () => {
   });
 });
 
-/** A writing run of the other trackers' import for a team reading ENG on Jira, whose connector adapters come from `load`. */
-function runWith(load: ConnectorLoader): TrackerSyncRun {
+/**
+ * The import of the other trackers for a team reading ENG on Jira, whose connector adapters come from `load`: each
+ * run of `kind` reads and writes the same register and the same scope files.
+ */
+function importer(load: ConnectorLoader): { readonly files: MemoryFiles; readonly run: (kind: ScopeRunKind) => TrackerSyncRun } {
   const config = testConfig({ connectors: { jira: JIRA } });
+  const files = new MemoryFiles();
   const register = new Register({
     log: new JsonlEventLog(new MemoryFiles(), 'register/events.jsonl'),
     mutex: new InlineMutex(),
@@ -81,7 +95,40 @@ function runWith(load: ConnectorLoader): TrackerSyncRun {
     autoArchive: true,
   });
   const runtime = { run: () => Promise.reject(new Error('no program runs here')), http: new FakeHttp(), credentials: savedToken(), env: {} };
-  return { runtime, config, register, rules: importRules(config), since: '2030-01-01', write: true, load };
+  const scopes = fileScopeStore(files, PATHS);
+  return { files, run: (kind) => ({ runtime, config, register, rules: importRules(config), since: '2030-01-01', kind, scopes, load }) };
+}
+
+/** The team folders the scope files of `importer` are kept under. */
+const PATHS = teamPaths('/kit', 'acme', undefined);
+
+/** A writing run of the other trackers' import for a team reading ENG on Jira, whose connector adapters come from `load`. */
+function runWith(load: ConnectorLoader): TrackerSyncRun {
+  return importer(load).run('yes');
+}
+
+/** The place the fake tracker of `servingTracker` names, as Jira writes ENG of site acme. */
+const ENG = 'acme/eng';
+
+/** Refs `jira:ENG-<n>` for the issues of ENG, and none for any other place. */
+const ENG_REFS: RefCodec = {
+  refOf: (target) => (target.repo === ENG ? `jira:ENG-${target.number}` : undefined),
+  parseRef: (ref) => {
+    const found = /^jira:ENG-(\d+)$/.exec(ref);
+    return found === null ? undefined : { repo: ENG, number: Number(found[1]) };
+  },
+  pageOf: (target) => (target.repo === ENG ? `https://acme.atlassian.net/browse/ENG-${target.number}` : undefined),
+};
+
+/** A loader whose adapter, a sound declaration of the id asked for, builds `tracker` reading the one place ENG. */
+function servingTracker(tracker: Tracker): ConnectorLoader {
+  const ports: ConnectorPorts = { tracker, targets: [ENG], refs: ENG_REFS };
+  return (id) => loadConnector(id, () => Promise.resolve({ default: { declaration: connectorDeclarationData({ id }), configure: () => () => ports } }));
+}
+
+/** Open issue `number` of ENG, labelled for the team and written by an inside author, so the trust rule lets it in. */
+function engIssue(number: number): HostIssue {
+  return testHostIssue(number, { repo: ENG, labels: ['teamrig'] });
 }
 
 describe('syncTrackers', () => {
@@ -91,7 +138,37 @@ describe('syncTrackers', () => {
     const end = await syncTrackers(runWith(load), (line) => lines.push(line));
     const reason = 'the jira connector adapter gave no host: it needs a name';
     assert.deepEqual(lines, [`FAILED the jira import: ${reason}; nothing of it was read or written`]);
-    assert.deepEqual(end, { ends: ['failed'], written: 0, added: [], failures: [{ repo: 'jira', reason }] });
+    assert.deepEqual(end, { ends: ['failed'], written: 0, added: [], failures: [{ repo: 'jira', reason }], scopeHolds: [] });
+  });
+
+  it('holds the adds of a scope no person took on an automatic run, tells the lead once, and adds once --yes takes it (T5013)', async () => {
+    const fake = new FakeIssueHost().lists(engIssue(1));
+    const { files, run } = importer(servingTracker(trackerOnly(fake)));
+    const held = `HELD ${ENG}: 1 issue(s) of a new or wider import scope wait for teamrig issue sync --yes`;
+    const cap = run('auto').config.sync.maxNewPerSync;
+
+    const firstLines: string[] = [];
+    const first = await syncTrackers(run('auto'), (line) => firstLines.push(line));
+    assert.deepEqual(first.added, []);
+    assert.ok(firstLines.includes(held), firstLines.join('\n'));
+    assert.deepEqual(first.scopeHolds, [heldScopeLine('jira', ENG, 1, cap)]);
+
+    const againLines: string[] = [];
+    const again = await syncTrackers(run('auto'), (line) => againLines.push(line));
+    assert.deepEqual(again.added, []);
+    assert.ok(againLines.includes(held), againLines.join('\n'));
+    assert.deepEqual(again.scopeHolds, [], 'the lead was told of this scope already');
+
+    const taken = await syncTrackers(run('yes'), () => undefined);
+    assert.deepEqual(taken.added.map((task) => task.ref), ['jira:ENG-1']);
+    assert.notEqual(await files.read(connectorState(PATHS, 'jira').scope), undefined);
+
+    fake.lists(engIssue(1), engIssue(2));
+    const laterLines: string[] = [];
+    const later = await syncTrackers(run('auto'), (line) => laterLines.push(line));
+    assert.deepEqual(later.added.map((task) => task.ref), ['jira:ENG-2']);
+    assert.deepEqual(later.scopeHolds, []);
+    assert.ok(laterLines.every((line) => !line.startsWith('HELD')), laterLines.join('\n'));
   });
 
   it('lets an error it does not know end the run', async () => {

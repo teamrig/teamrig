@@ -1,11 +1,14 @@
-import { KIT_NAME } from '../../core/home.ts';
+import type { Files } from '../../core/files.ts';
+import { KIT_NAME, type TeamPaths } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
+import { formatScopeFile, gateScope, heldScopeLine, parseScopeFile, scopeMark, type PlaceScope, type ScopeRunKind } from '../../sync/scope-hold.ts';
+import { connectorState } from '../connector-state.ts';
 import type { KitConfig } from '../../config/types.ts';
 import type { Register } from '../../register/register.ts';
 import { GITHUB_SOURCE, isImportSource, type ImportSource } from '../../register/model.ts';
 import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts';
 import type { ImportRules, ImportTracker } from '../../sync/map.ts';
-import { importedTasks, linkedRefs, planSync } from '../../sync/plan.ts';
+import { importedTasks, linkedRefs, planSync, type SyncPlan } from '../../sync/plan.ts';
 import { capPlan, scopeIssues, type CappedPlan, type ImportScope, type ScopeRequest } from '../../sync/scope.ts';
 import { ACTIVE_STATUSES } from '../../register/model.ts';
 import type { Task } from '../../register/fold.ts';
@@ -28,21 +31,42 @@ export interface TrackerSyncRun {
   readonly rules: ImportRules;
   /** The oldest close a list still reads (closedSince). */
   readonly since: string;
-  readonly write: boolean;
+  /** A preview writes nothing; `yes` and `auto` write, and only `auto` holds a new or wider scope's adds (scope-hold.ts). */
+  readonly kind: ScopeRunKind;
+  /** Where each connector's places' taken scopes are kept. */
+  readonly scopes: ScopeStore;
   /** Builds a connector's ports; the adapters teamrig ships unless a test gives its own. */
   readonly load?: ConnectorLoader;
 }
 
-/** How the import of the other trackers ended: each place's end, the writes made, the tasks it added and the places that failed. */
+/** Where the import keeps, per connector, the scope each place last took (scope-hold.ts). */
+export interface ScopeStore {
+  read(id: ImportSource): Promise<ReadonlyMap<string, PlaceScope>>;
+  write(id: ImportSource, places: ReadonlyMap<string, PlaceScope>): Promise<void>;
+}
+
+/** The scope store in each connector's state folder (connector-state.ts). */
+export function fileScopeStore(files: Pick<Files, 'read' | 'write'>, paths: TeamPaths): ScopeStore {
+  return {
+    read: async (id) => parseScopeFile((await files.read(connectorState(paths, id).scope)) ?? ''),
+    write: (id, places) => files.write(connectorState(paths, id).scope, formatScopeFile(places)),
+  };
+}
+
+/**
+ * How the import of the other trackers ended: each place's end, the writes made, the tasks it added, the places that
+ * failed, and the lines for the lead about places whose adds an automatic run held for a new or wider scope.
+ */
 export interface TrackerSyncEnd {
   readonly ends: readonly RepoEnd[];
   readonly written: number;
   readonly added: readonly AddedTask[];
   readonly failures: readonly RepoFailure[];
+  readonly scopeHolds: readonly string[];
 }
 
 /** The end of a run that reads no other tracker, as one given `--repo` does. */
-export const NO_TRACKER_SYNC: TrackerSyncEnd = { ends: [], written: 0, added: [], failures: [] };
+export const NO_TRACKER_SYNC: TrackerSyncEnd = { ends: [], written: 0, added: [], failures: [], scopeHolds: [] };
 
 /**
  * The ids of the connectors, other than GitHub, whose section the team wrote under `connectors` and whose issues the
@@ -55,7 +79,8 @@ export function importConnectors(config: Pick<KitConfig, 'connectors'>): readonl
 /**
  * The inbound half of `issue sync` for every tracker other than GitHub (importConnectors): for each place its section
  * names (ConnectorPorts.targets), it lists the issues, plans the writes as GitHub's import does (sync/plan.ts) and,
- * with `write`, writes them as the connector's source. It reads no pull requests, mentions or security issues, and
+ * unless the run is a preview, writes them as the connector's source; an automatic run adds nothing at a place whose
+ * scope is new or wider than a person last took with `--yes`, and gives the lead a line (scope-hold.ts). It reads no pull requests, mentions or security issues, and
  * pushes nothing: those are a code host's, or GitHub's alone. An issue is routed by the team's area labels, else to
  * the lead: `github.owners` and the sessions of `github.repos` name GitHub logins and repositories, never another
  * tracker's people or places. `TEAMRIG_CONNECTOR_<ID>=off` turns one connector's import off on this machine.
@@ -64,7 +89,9 @@ export async function syncTrackers(run: TrackerSyncRun, say: (line: string) => v
   const ends: RepoEnd[] = [];
   const added: AddedTask[] = [];
   const failures: RepoFailure[] = [];
+  const scopeHolds: string[] = [];
   let written = 0;
+  const write = run.kind !== 'preview';
   const rules: ImportRules = { ...run.rules, owners: new Map(), repoSessions: new Map() };
   for (const id of importConnectors(run.config)) {
     const offBy = connectorOffBy(run.runtime.env, id);
@@ -87,22 +114,28 @@ export async function syncTrackers(run: TrackerSyncRun, say: (line: string) => v
     const tracker: ImportTracker = { source: id, name: ports.tracker.name, refOf: ports.refs.refOf, pageOf: ports.refs.pageOf };
     const told = new Set<string>();
     const planned = { adds: 0 };
+    const taken = await run.scopes.read(id);
+    const places = new Map(taken);
     let wrote = 0;
     for (const target of ports.targets) {
-      const end = await syncTarget(run, { ports, tracker, rules, told, planned }, target, say);
+      const end = await syncTarget(run, { ports, tracker, rules, told, planned, places }, target, say);
       ends.push(end.end);
       added.push(...end.added);
       failures.push(...end.failures);
+      scopeHolds.push(...end.scopeHolds);
       wrote += end.written;
+    }
+    if (write && formatScopeFile(places) !== formatScopeFile(taken)) {
+      await run.scopes.write(id, places);
     }
     written += wrote;
     say(
-      run.write
+      write
         ? `WROTE ${wrote} change(s) to the task list as ${id}; ${ports.tracker.name} was only read`
         : `PREVIEW nothing was written; ${KIT_NAME} issue sync --yes writes the above as ${id}`,
     );
   }
-  return { ends, written, added, failures };
+  return { ends, written, added, failures, scopeHolds };
 }
 
 /** A connector's ports, or why they could not be built: a key of its section refused, or an adapter that gave no tracker. */
@@ -134,6 +167,8 @@ interface TrackerRun {
   readonly told: Set<string>;
   /** The adds this run planned so far across the connector's places, which the caps count (sync.maxNewPerSync). */
   readonly planned: { adds: number };
+  /** The scope each place took, as this run leaves it (scope-hold.ts). */
+  readonly places: Map<string, PlaceScope>;
 }
 
 /** How one place's import ended, and what it wrote. */
@@ -142,12 +177,13 @@ interface TargetEnd {
   readonly written: number;
   readonly added: readonly AddedTask[];
   readonly failures: readonly RepoFailure[];
+  readonly scopeHolds: readonly string[];
 }
 
 async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, say: (line: string) => void): Promise<TargetEnd> {
   const failed = (reason: string): TargetEnd => {
     say(`FAILED ${target}: ${reason}; its tasks stay as they are`);
-    return { end: 'failed', written: 0, added: [], failures: [{ repo: target, reason }] };
+    return { end: 'failed', written: 0, added: [], failures: [{ repo: target, reason }], scopeHolds: [] };
   };
   const reach = await on.ports.tracker.reach(target, 'read');
   if (reach.kind === 'unreachable') {
@@ -170,18 +206,26 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
   const scoped = scopeIssues(read.issues, counted);
   const planned = planSync(scoped.issues, imported, on.rules, on.tracker, linkedRefs(tasks));
   // A preview writes nothing, so the adds this run already planned at earlier places count as held here.
-  const open = active.length + (run.write ? 0 : on.planned.adds);
+  const open = active.length + (run.kind === 'preview' ? on.planned.adds : 0);
   const caps = { maxOpen: run.config.sync.maxOpen, maxNewPerSync: Math.max(0, run.config.sync.maxNewPerSync - on.planned.adds) };
   const capped = capPlan(planned, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number }), counted, caps, open);
-  const plan = capped.plan;
+  const gate = gateScope(run.kind, on.places.get(target), scopeMark(counted), capped.plan);
+  if (gate.place !== undefined) {
+    on.places.set(target, gate.place);
+  }
+  const plan = gate.plan;
   on.planned.adds += plan.steps.filter((step) => step.kind === 'add').length;
+  // The adds the scope hold kept back are told by its own line, so no CAPPED line counts them as well.
+  const waiting = gate.held > 0 ? addsOf(planned) : 0;
   const leftOut = [
-    ...scopeLines(target, scoped.outside, capped),
+    ...scopeLines(target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
+    ...(waiting > 0 ? [`HELD ${target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : []),
     ...leftOutLine(target, plan.leftOut.flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
   ];
-  if (!run.write) {
+  const scopeHolds = gate.tell ? [heldScopeLine(on.tracker.source, target, waiting, run.config.sync.maxNewPerSync)] : [];
+  if (run.kind === 'preview') {
     [...previewLines(target, plan), ...leftOut].forEach(say);
-    return { end: 'ok', written: 0, added: [], failures: [] };
+    return { end: 'ok', written: 0, added: [], failures: [], scopeHolds };
   }
   const outcomes = await applySteps(run.register, on.tracker.source, plan.steps);
   [...resultLines(target, plan, outcomes), ...leftOut].forEach(say);
@@ -191,7 +235,13 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
     written: outcomes.filter((outcome) => outcome.result.ok).length,
     added: addedTasks(outcomes),
     failures: refused === undefined ? [] : [{ repo: target, reason: refused }],
+    scopeHolds,
   };
+}
+
+/** How many tasks `plan` adds. */
+function addsOf(plan: SyncPlan): number {
+  return plan.steps.filter((step) => step.kind === 'add').length;
 }
 
 /**

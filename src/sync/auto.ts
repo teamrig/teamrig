@@ -85,6 +85,8 @@ export interface SyncRun {
   readonly issues: ReadonlyMap<string, ReadonlyMap<number, IssueMark>>;
   /** The issue changes told, each to one session (issue-marks.ts). */
   readonly issueRoutes: readonly IssueChangeRoute[];
+  /** The lines for the lead about places of another tracker whose adds the run held for a new or wider scope (scope-hold.ts). */
+  readonly scopeHolds: readonly string[];
 }
 
 /** A repository a sync could not read, or whose tasks the task list refused, and why. */

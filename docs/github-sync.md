@@ -162,6 +162,12 @@ label. The issues of the team's active tasks there are always read, so a narrowe
 tracker's import holds and `sync.maxNewPerSync` (50) the adds of one run; past either, a `CAPPED` line says how many
 wait for a later run. To read every open issue of a project, as before, set `"sync": { "scope": { "all": true } }`.
 
+A person takes each place's scope: an automatic run (`--auto`) adds no task at a place whose scope is new or wider
+than the one last taken, says `HELD` with how many issues wait, and gives the lead one inbox line per scope; the
+held place's tasks still change and close. `teamrig issue sync` shows what would come in, and `teamrig issue sync
+--yes` takes the scope, after which automatic runs add again. A scope the same or narrower passes on its own. So a
+team upgrading, or widening `sync.scope`, runs `--yes` once.
+
 ## Then it runs on its own
 
 Once the repositories are listed, nobody needs to run it. When a session of the team starts or ends a turn, its hook

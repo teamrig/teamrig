@@ -30,6 +30,8 @@ export interface ConnectorState {
   readonly follows: string;
   /** The issue claims the sync made, the only assignees it may ever take off. */
   readonly claims: string;
+  /** The import scope of each place a person last took with `--yes`, and the wider one the lead was last told of (scope-hold.ts). */
+  readonly scope: string;
 }
 
 /**
@@ -53,5 +55,6 @@ export function connectorState(paths: TeamPaths, id: string): ConnectorState {
     watchLock: join(dir, 'watch.lock'),
     follows: join(dir, 'follows.json'),
     claims: join(dir, 'claims.json'),
+    scope: join(dir, 'scope.json'),
   };
 }

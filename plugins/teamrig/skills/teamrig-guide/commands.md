@@ -1369,7 +1369,9 @@ account or to a person its connector section lists as the team's people, and tho
 never closes a task. A `SCOPE` line counts the issues the tracker gave outside the scope, which were dropped.
 `sync.maxOpen` (200) caps the open imported tasks and `sync.maxNewPerSync` (50) the adds of one run, across a
 tracker's places; a `CAPPED` line says how many adds waited for a later run and which key held them. The one line back
-to the whole project is `sync.scope.all: true`.
+to the whole project is `sync.scope.all: true`. An `--auto` run adds nothing at a place whose scope is new or wider
+than a person last took: a `HELD` line counts the issues waiting, the lead gets one inbox line per scope, and the
+place's tasks still change and close; `teamrig issue sync --yes` takes the scope, and a same or narrower scope passes.
 
 On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by default), the team's
 `teamrig issue watch` runs `teamrig issue sync --auto` within a probe of a change on GitHub. A new issue so reaches its
