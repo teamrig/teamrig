@@ -11,15 +11,20 @@ interface HelperRun {
   readonly exit: number;
 }
 
-function argsOf(positionals: readonly string[]): ParsedArgs {
-  return { command: 'git-credential', positionals, flags: new Map(), switches: new Set(), rest: [], help: false, common: new Map() };
+function argsOf(positionals: readonly string[], common: ReadonlyMap<string, string>): ParsedArgs {
+  return { command: 'git-credential', positionals, flags: new Map(), switches: new Set(), rest: [], help: false, common };
 }
 
-async function helperRun(positionals: readonly string[], stdin: string, store: FakeCredentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key')): Promise<HelperRun> {
+async function helperRun(
+  positionals: readonly string[],
+  stdin: string,
+  store: FakeCredentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key'),
+  common: ReadonlyMap<string, string> = new Map(),
+): Promise<HelperRun> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const out = { stdout: (line: string): void => void stdout.push(line), stderr: (line: string): void => void stderr.push(line) };
-  const exit = await gitCredential(argsOf(positionals), { readStdin: async () => stdin, out, credentials: store });
+  const exit = await gitCredential(argsOf(positionals, common), { readStdin: async () => stdin, out, credentials: store });
   return { stdout, stderr, reads: store.reads, exit };
 }
 
@@ -60,6 +65,14 @@ describe('teamrig git-credential', () => {
   it('refuses any other operation, or more than one word, as a usage error', async () => {
     for (const positionals of [[], ['list'], ['get', 'more']]) {
       await assert.rejects(helperRun(positionals, GET), UsageError, positionals.join(' '));
+    }
+  });
+
+  it('refuses --session or --team as a usage error, reading no key, since git passes no flag', async () => {
+    for (const flag of ['session', 'team']) {
+      const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key');
+      await assert.rejects(helperRun(['get'], GET, store, new Map([[flag, 'x']])), UsageError, flag);
+      assert.deepEqual(store.reads, [], flag);
     }
   });
 });

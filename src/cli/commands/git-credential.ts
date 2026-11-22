@@ -12,7 +12,8 @@ import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
  */
 export async function gitCredential(args: ParsedArgs, runtime: Pick<CliRuntime, 'readStdin' | 'out' | 'credentials'>): Promise<ExitCode> {
   const operation = credentialOperationOf(args.positionals[0]);
-  if (operation === undefined || args.positionals.length !== 1) {
+  // git calls it with the operation word alone; a line with any flag, --session and --team too, is not git's call.
+  if (operation === undefined || args.positionals.length !== 1 || args.common.size > 0) {
     throw new UsageError('usage: teamrig git-credential <get|store|erase> (git runs it as a credential helper)');
   }
   const request = await runtime.readStdin();
