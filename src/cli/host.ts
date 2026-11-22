@@ -275,7 +275,7 @@ export function sessionCommandLinesOf(runtime: Pick<CliRuntime, 'host' | 'shippe
  */
 export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostUserHooks {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const offered = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  const offered = [...Object.values(runtime.shippedHosts), runtime.host].flatMap((source) => {
     const { userHooks } = source(seen);
     return isUnsupported(userHooks) ? [] : [userHooks];
   });

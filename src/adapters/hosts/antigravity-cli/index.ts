@@ -20,9 +20,13 @@ export default defineHost({
       usage: unsupported('Antigravity has no usage meter wired yet'),
       statusLine,
       paths: hostPaths(deps.platform),
+      secrets: { secretFiles: () => [] },
       permissions: unsupported('Antigravity CLI permissions port is not built yet'),
       plugin: unsupported('Antigravity CLI plugin store port is not built yet'),
       launcher: unsupported('Antigravity CLI session launcher port is not built yet'),
+      models: unsupported('Antigravity CLI models port is not built yet'),
+      steps: unsupported('Antigravity CLI steps port is not built yet'),
+      userHooks: unsupported('Antigravity CLI user hooks port is not built yet'),
     };
   },
 });

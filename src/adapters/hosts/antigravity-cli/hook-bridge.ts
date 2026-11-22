@@ -200,5 +200,6 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
     reply: replyText,
     // Unproven: assumes Antigravity lets the call through when a hook fails; verify on a live agy run.
     failureRule: 'passes',
+    titleSwitch: undefined,
   };
 }

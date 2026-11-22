@@ -19,7 +19,6 @@ describe("Antigravity's paths", () => {
     assert.equal(p.skills(home), posix.join(home, '.gemini', 'config', 'skills'));
     assert.equal(p.projectSkills(proj), posix.join(proj, '.agents', 'skills'));
     assert.equal(p.projectAgents(proj), posix.join(proj, '.agents', 'agents'));
-    assert.deepEqual(p.secretFiles(), []);
   });
 
   it('resolves verified user and project paths on win32', () => {
