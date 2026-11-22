@@ -1872,12 +1872,16 @@ ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
 
 ### teamrig ci rerun
 
-Starts every job of one CI run of one of the team's repositories again, with the token saved for its owner, for a
-run a glitch on the code host's side failed (a job reported passed while still running, the run marked failed). Use it
-in place of the code host's own re-run command, which teamrig refuses as a write. It re-runs the whole run, never its
-failed jobs alone, and changes no code, setting or secret, so it needs no task or approval: it is refused only for a
-caller off the team or a repository the team config does not list. The token needs Actions Read and write; a refusal says which
-permission is missing. Exit 1 when the code host failed (a run still going, one too old), 2 when refused, else 0.
+Starts the failed jobs of one CI run of one of the team's repositories again, with the token saved for its owner, for
+a run a glitch on the code host's side failed (a job reported passed while still running, the run marked failed). Use
+it in place of the code host's own re-run command, which teamrig refuses as a write. It reads the run first and
+re-runs its failed jobs only, never the whole run, so a release's publish or tag job that passed does not run again.
+It is refused, with nothing re-run, for a run that passed or has not ended (only failed, cancelled or timed out), one
+started by any event but push, pull_request, merge_group or schedule (a re-run takes the run's old workflow file with
+its token), one that ran 3 times already, a caller off the team or a repository the team config does not list. It
+changes no code, setting or secret, so it needs no task or approval. Its line names the run's workflow file, event and
+new attempt. The token needs Actions Read and write; a refusal says which permission is missing. Exit 1 when the code
+host failed (a run not there, one too old), 2 when refused, else 0.
 
 Flags:
 
@@ -1893,7 +1897,7 @@ teamrig ci rerun acme/web --run 45027704561
 Output:
 
 ```text
-RERUN acme/web run 45027704561: every job started again
+RERUN acme/web run 45027704561 (ci.yml, push): its failed jobs started again as attempt 2
 ```
 
 ### teamrig issue links
