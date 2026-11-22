@@ -38,6 +38,7 @@ describe('docs/guides', () => {
     assert.deepEqual(
       GUIDES.map((guide) => guide.name),
       [
+        'build-a-terminal-host.md',
         'grow-the-team.md',
         'improve-itself.md',
         'keep-it-safe.md',

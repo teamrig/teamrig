@@ -348,6 +348,9 @@ There is no adapter interface in the code yet: what teamrig knows about Claude C
 environment variables, `~/.claude/skills`) is built in. The interface comes with the second AI tool (T204), so it is
 shaped by two real tools instead of one.
 
+A terminal or editor plugs in as a host program that speaks the terminal protocol, with no change to teamrig's code:
+its own guide is [Build your own terminal host](guides/build-a-terminal-host.md).
+
 A program that only shows the team's files, such as the [teamrig-pane](https://github.com/GeneralA6/teamrig-pane)
 task pane, reads them through `src/read/index.ts`: the same parse and replay every teamrig command uses, with no
 `node:` import anywhere behind it, so it runs where Node's built-in modules do not. It takes the text of the task
