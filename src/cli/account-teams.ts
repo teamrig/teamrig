@@ -65,7 +65,7 @@ export async function otherTeamsOnAccount(runtime: CliRuntime, asking: AskingTea
 /** The team that asks with what splits it: its roster, its roles, its lift log and each session's queued work. */
 export interface AskingRoster extends AskingTeam {
   /** Its config's budget, lead tree and roles, whose holders a short day never pauses (src/budget/pause.ts `pausableOf`). */
-  readonly config: Pick<KitConfig, 'budget' | 'leads' | 'roles'>;
+  readonly config: Pick<KitConfig, 'budget' | 'leads' | 'roles' | 'github' | 'serviceRoles'>;
   readonly ids: readonly string[];
   readonly liftsPath: string;
   /** Each session's queued work by priority (src/budget/work.ts `workWeights` or `cachedWork`). */

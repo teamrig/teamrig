@@ -52,6 +52,7 @@ function facts(usedTodayPct: number, weekUsedPct: number, now = DAY, extra: Part
     pace: readPace(WINDOW, PACE, now, weekUsedPct, DailyProfile.even()),
     teamDay: NO_ROOM,
     isLead: false,
+    unheld: false,
     urgent: [],
     awaited: [],
     leader: LEAD,
@@ -167,6 +168,13 @@ describe('isPastDailyBudget and sessionQuietSpan', () => {
   it('holds a session a leader cut once past its own budget, whatever room the team has (T1616)', () => {
     assert.equal(isHeld(facts(1.1, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD })), true);
     assert.equal(isHeld(facts(0.9, BEHIND, DAY, { teamDay: ROOM, cut: cut(), cutBy: LEAD })), false);
+  });
+
+  it('never holds the security reviewer or the GitHub answerer past its budget or under a cut, only under a stop (T4388)', () => {
+    assert.equal(isHeld(facts(5, AHEAD, DAY, { unheld: true })), false);
+    assert.equal(isHeld(facts(5, AHEAD, DAY, { unheld: true, cut: cut(), cutBy: LEAD })), false);
+    assert.equal(isHeld(facts(0, AHEAD, DAY, { unheld: true, cut: { ...cut(), stop: true }, cutBy: LEAD })), true);
+    assert.equal(helperGate(facts(5, AHEAD, DAY, { unheld: true }), DAYTIME).kind, 'allow');
   });
 
   it('holds a session a leader stopped whatever its use, at none too (T3455)', () => {

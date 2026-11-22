@@ -53,6 +53,8 @@ export interface BudgetFacts extends LiftNames {
   readonly teamDay: TeamDay;
   /** The session is the team's lead: it lifts budgets, so its own helpers never ask and it gets no inbox line. */
   readonly isLead: boolean;
+  /** The budget never holds the session (src/budget/unheld.ts `unheldOf`): the security reviewer or the GitHub answerer. */
+  readonly unheld: boolean;
   /** Its open and in-progress p0 task ids: urgent work that goes on past the daily stop, helpers too. */
   readonly urgent: readonly string[];
   /**
@@ -199,11 +201,15 @@ export function isPastDailyBudget(facts: BudgetFacts, extraPct = 0): boolean {
  * team: a session with next to nothing left, idle since the night, is held before its wake, not after the wake's own
  * turn spent it; and as the quiet hours end the in-day pace is the night's use alone, so the team's room is a few
  * seconds of pace, which the wake's turn would spend at once (T1322). A leader's stop (a cut with `stop`) holds it
- * whatever its use, from the day's start on, when it has all its part left (T3455).
+ * whatever its use, from the day's start on, when it has all its part left (T3455). A session the budget never holds
+ * (`unheld`) is held by that stop alone (T4388).
  */
 export function isHeld(facts: BudgetFacts, extraPct = 0): boolean {
   if (facts.cut?.stop === true) {
     return true;
+  }
+  if (facts.unheld) {
+    return false;
   }
   return isPastDailyBudget(facts, extraPct) && holdsPastPart({ ...facts.teamDay, usedPct: facts.teamDay.usedPct + extraPct }, facts.cut !== undefined);
 }

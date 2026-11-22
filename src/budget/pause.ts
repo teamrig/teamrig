@@ -2,6 +2,7 @@ import { roleHolderOf, type Role } from '../config/roster.ts';
 import type { KitConfig } from '../config/types.ts';
 import { formatAddress } from '../core/address.ts';
 import { sessionWeightOf, shareOf, teamTreeOf, type BudgetSplit, type TeamsOnAccount } from './parts.ts';
+import { unheldOf } from './unheld.ts';
 import type { WeekReading } from './week.ts';
 import { workWeightOf, type WorkByPriority } from './work.ts';
 
@@ -10,13 +11,14 @@ const KEPT_ROLES: readonly Role[] = ['lead', 'deliveryOwner'];
 
 /**
  * The sessions of `team` (its roster `ids`) a short day may pause: none while its `budget.pauseByPriority` is off,
- * else all but the holders of the kept roles that the team holds itself (a `<team>/<id>` holder is a team above's).
+ * else all but the holders of the kept roles that the team holds itself (a `<team>/<id>` holder is a team above's)
+ * and the sessions the budget never holds (`unheldOf`).
  */
-export function pausableOf(config: Pick<KitConfig, 'budget' | 'roles'>, team: string, ids: readonly string[]): ReadonlySet<string> {
+export function pausableOf(config: Pick<KitConfig, 'budget' | 'roles' | 'github' | 'serviceRoles'>, team: string, ids: readonly string[]): ReadonlySet<string> {
   if (!config.budget.pauseByPriority) {
     return new Set();
   }
-  const kept = new Set<string>();
+  const kept = new Set<string>(unheldOf(config, team));
   for (const role of KEPT_ROLES) {
     const holder = roleHolderOf(config.roles, role, team);
     if (holder !== undefined && holder.team === team) {

@@ -1,7 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { testConfig } from '../testing/config.ts';
-import { githubWatcher } from './watcher.ts';
+import { githubAnswerer, githubWatcher } from './watcher.ts';
+
+describe('githubAnswerer', () => {
+  it('is no session when the team named none, never the lead', () => {
+    assert.equal(githubAnswerer(testConfig()), undefined);
+  });
+
+  it('is github.watcher, else the holder of a role holding issue close', () => {
+    assert.equal(githubAnswerer(testConfig({ github: { watcher: 'alpha' } })), 'alpha');
+    assert.equal(githubAnswerer(testConfig({ serviceRoles: { gh: { holders: ['bravo'], commands: ['issue close'] } } })), 'bravo');
+  });
+});
 
 describe('githubWatcher', () => {
   it('is the lead when no session is named and no role answers on GitHub', () => {

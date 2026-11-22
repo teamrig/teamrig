@@ -15,6 +15,7 @@ import { runMeter } from '../../budget/meter.ts';
 import { budgetSplitOf, dailyBudgetOf } from '../../budget/parts.ts';
 import { fundForDay, isPaused, pausableOf } from '../../budget/pause.ts';
 import { keepSessionsWeek, sessionsWeekOf } from '../../budget/session-week-file.ts';
+import { unheldOf } from '../../budget/unheld.ts';
 import { UsageStore, type UsageState } from '../../budget/store.ts';
 import { keepTasksWeek, tasksWeekOf } from '../../budget/task-week-file.ts';
 import { teamWeekOf } from '../../budget/team-week.ts';
@@ -206,6 +207,7 @@ export async function budgetFactsOf(runtime: CliRuntime, scope: BudgetScope, tra
     pace: week.pace,
     teamDay,
     isLead,
+    unheld: unheldOf(config, kit.paths.team).has(id),
     urgent: work.urgent.get(id) ?? [],
     awaited: work.awaited.get(id) ?? [],
     leader: budgetLeaderOf(config, roster, id),
