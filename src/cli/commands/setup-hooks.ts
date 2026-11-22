@@ -3,7 +3,7 @@ import { formatConfig, writeConfigWithBackup } from '../../config/load.ts';
 import { errorMessage, type JsonRecord } from '../../core/guards.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { noPositionals, requiredFlag, type ParsedArgs } from '../args.ts';
-import { readClaudeSettings } from '../claude-settings.ts';
+import { readUserSettings } from '../user-settings.ts';
 import { userHooksOf } from '../host.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
@@ -29,7 +29,7 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const pluginRoot = pluginRootOf(runtime.self.script, path);
   const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
   const target = port.file(runtime.userHome);
-  const current = await readClaudeSettings(runtime, target);
+  const current = await readUserSettings(runtime, target);
   const answer = port.merge(current.json, source, pluginRoot);
   if (!answer.ok) {
     throw new RefusedError(`${answer.problem}; nothing written`);

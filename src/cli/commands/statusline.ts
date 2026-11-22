@@ -5,7 +5,7 @@ import { lowerRecordSteps } from '../../restore/launcher-refresh.ts';
 import type { StatusLinePlan } from '../../ports/host/index.ts';
 import { LAUNCHER_SCRIPT, launcherPath } from '../../statusline/launcher.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { checked, readClaudeSettings, settingsTargetOf, writeClaudeSettings, type ClaudeSettings, type SettingsTarget } from '../claude-settings.ts';
+import { checked, readUserSettings, settingsTargetOf, writeUserSettings, type UserSettings, type SettingsTarget } from '../user-settings.ts';
 import { statusLineOf } from '../host.ts';
 import { underRecordLock } from '../launcher-record-lock.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -33,7 +33,7 @@ export async function install(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
   const port = statusLineOf(runtime);
   const machine = machineOf(runtime);
   return underRecordLock(args, runtime, machine.kitHome, async () => {
-    const settings = await readClaudeSettings(runtime, machine.settingsPath);
+    const settings = await readUserSettings(runtime, machine.settingsPath);
     const plan = checked(port.install(settings.json, machine.launcher));
     const launcherStale = (await runtime.files.read(machine.launcher)) !== LAUNCHER_SCRIPT;
     const lower = launcherStale ? await lowerRecordSteps(runtime.files, machine.kitHome, KIT_VERSION, runtime.clock.now()) : [];
@@ -48,7 +48,7 @@ export async function uninstall(args: ParsedArgs, runtime: CliRuntime): Promise<
   const port = statusLineOf(runtime);
   const machine = machineOf(runtime);
   return underRecordLock(args, runtime, machine.kitHome, async () => {
-    const settings = await readClaudeSettings(runtime, machine.settingsPath);
+    const settings = await readUserSettings(runtime, machine.settingsPath);
     const plan = checked(port.uninstall(settings.json, machine.launcher));
     const launcherThere = (await runtime.files.read(machine.launcher)) !== undefined;
     const change: Change = { machine, settings, plan, setting: port.setting, lower: [], launcher: launcherThere ? 'remove' : undefined };
@@ -58,7 +58,7 @@ export async function uninstall(args: ParsedArgs, runtime: CliRuntime): Promise<
 
 interface Change {
   readonly machine: Machine;
-  readonly settings: ClaudeSettings;
+  readonly settings: UserSettings;
   readonly plan: StatusLinePlan;
   /** The setting the plan changes, as the host names it. */
   readonly setting: string;
@@ -91,7 +91,7 @@ async function apply(args: ParsedArgs, runtime: CliRuntime, change: Change, unch
   if (change.launcher === 'write') {
     await runtime.files.write(machine.launcher, LAUNCHER_SCRIPT);
   }
-  const backup = next === undefined ? undefined : await writeClaudeSettings(runtime, machine, change.settings, next);
+  const backup = next === undefined ? undefined : await writeUserSettings(runtime, machine, change.settings, next);
   if (change.launcher === 'remove') {
     await runtime.files.remove(machine.launcher);
   }

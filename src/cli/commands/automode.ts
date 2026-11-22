@@ -3,7 +3,7 @@ import type { JsonRecord } from '../../core/guards.ts';
 import { homeRelative } from '../../core/paths.ts';
 import type { HostPermissions, PermissionsAnswer, TrustedRoutesPlan } from '../../ports/host/index.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { checked, readClaudeSettings, settingsTargetOf, writeClaudeSettings } from '../claude-settings.ts';
+import { checked, readUserSettings, settingsTargetOf, writeUserSettings } from '../user-settings.ts';
 import { permissionsOf } from '../host.ts';
 import { openTeamKit, requireConfig } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -48,7 +48,7 @@ type Planner = (settings: JsonRecord) => PermissionsAnswer<TrustedRoutesPlan>;
 
 async function apply(args: ParsedArgs, runtime: CliRuntime, permissions: HostPermissions, plan: Planner, unchanged: string): Promise<ExitCode> {
   const target = settingsTargetOf(runtime);
-  const settings = await readClaudeSettings(runtime, target.settingsPath);
+  const settings = await readUserSettings(runtime, target.settingsPath);
   const { settings: next, removed, added } = checked(plan(settings.json));
   if (next === undefined) {
     runtime.out.stdout(`UNCHANGED ${target.settingsPath}: ${unchanged}`);
@@ -61,7 +61,7 @@ async function apply(args: ParsedArgs, runtime: CliRuntime, permissions: HostPer
     steps.forEach((line) => runtime.out.stdout(line));
     return EXIT.ok;
   }
-  const backup = await writeClaudeSettings(runtime, target, settings, next);
+  const backup = await writeUserSettings(runtime, target, settings, next);
   runtime.out.stdout(`WROTE the changes below${backup === undefined ? '' : `; the old settings file is at ${backup}`}`);
   steps.forEach((line) => runtime.out.stdout(line));
   return EXIT.ok;
