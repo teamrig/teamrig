@@ -3681,6 +3681,8 @@ as an inbox line. So no session is told the meeting started, and none is woken. 
   that session's own meeting at the slot (a team under the lead's books it from that team's lead); no block when none;
 - `INCIDENTS`: the active bugs and critical tasks of the Maintenance class, the lead's team's first, then those of
   each team under it; no block when none;
+- `STEPS`: each step teamrig needs the person to take, in plain words, with what they type (`teamrig steps` shows
+  what each changes); no block when none;
 - `LATER`: the cards the owner put off to a time still to come, each with its time, back in `DECISIONS` once it
   passed; no block when none;
 - `UNGATED`: each wait on the owner's decision whose card names no owner gate or business decision (`gate:`), left

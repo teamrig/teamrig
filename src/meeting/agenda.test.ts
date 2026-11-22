@@ -6,6 +6,7 @@ import type { Task } from '../register/fold.ts';
 import type { GoalScore } from '../register/goal-board.ts';
 import { ownSizing, treeRanking } from '../register/ranking.ts';
 import { TaskTree } from '../register/tree.ts';
+import type { PendingStep } from '../steps/pending.ts';
 import { TEST_CARD, TEST_OWNER_CARD } from '../testing/card.ts';
 import { testTask } from '../testing/task.ts';
 import { AGENDA_ROWS, agendaLines, askedDecisions, agendaSince, bookedDecisions, cardFacts, DESCRIPTION_CHARS, DONE_WINDOW_DAYS, oneLine, TEAM_ROWS, type AgendaInput, type AgendaTeam } from './agenda.ts';
@@ -42,6 +43,7 @@ function inputOf(tasks: readonly Task[], since = NOW - MS_PER_DAY, requireGate =
     runFiles: new Map(),
     carried: [],
     ownMeetings: [],
+    steps: [],
   };
 }
 
@@ -498,6 +500,32 @@ describe('the meeting agenda: INCIDENTS (T2092)', () => {
     const lines = section(agendaLines(rankedInputOf(bugs)), 'INCIDENTS');
     assert.equal(lines.length, 1 + AGENDA_ROWS + 1);
     assert.equal(lines.at(-1), '  +1 more: teamrig list --tree');
+  });
+});
+
+describe('the meeting agenda: STEPS (T5004)', () => {
+  const STEP: PendingStep = {
+    id: 'config-format',
+    title: 'teamrig needs to update your team settings',
+    why: 'the file is in an older layout',
+    preview: ['adds budget.resets'],
+    command: '/teamrig steps run config-format --yes',
+  };
+
+  it('lists each step for the person with what they type, after the incidents', () => {
+    const bug = testTask({ id: 'T1', type: 'bug', workClass: 'Maintenance' });
+    const all = agendaLines({ ...rankedInputOf([bug]), steps: [STEP] });
+    assert.deepEqual(section(all, 'STEPS'), [
+      'STEPS 1 for the person to take (teamrig steps shows what each changes)',
+      '  teamrig needs to update your team settings: type /teamrig steps run config-format --yes',
+    ]);
+    const heads = all.filter((line) => /^[A-Z]+ /.test(line)).map((line) => line.split(' ')[0]);
+    assert.equal(heads.indexOf('STEPS'), heads.indexOf('INCIDENTS') + 1, heads.join(' '));
+  });
+
+  it('shows no block when no step is pending', () => {
+    const all = agendaLines(inputOf([]));
+    assert.ok(!all.some((line) => line.startsWith('STEPS')), all.join('\n'));
   });
 });
 

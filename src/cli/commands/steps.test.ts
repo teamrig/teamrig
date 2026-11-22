@@ -127,3 +127,14 @@ describe("the lead's start names each step the person must take", () => {
     assert.ok(!current.stdout.some((line) => line.startsWith('STEP ')), current.stdout.join('\n'));
   });
 });
+
+describe("the meeting's agenda lists each step the person must take", () => {
+  it('prints the STEPS block with what to type while a step is pending, none without', async () => {
+    const kit = new CliHarness(CURRENT_TEAM);
+    const pending = await kit.run(['meeting', 'start', '--session', 'lead'], { configFormat: NEXT_FORMAT });
+    assert.equal(pending.code, EXIT.ok, pending.stdout.join('\n'));
+    assert.ok(pending.stdout.includes(`  ${TITLE}: type /teamrig steps run config-format --yes`), pending.stdout.join('\n'));
+    const current = await kit.run(['meeting', 'start', '--session', 'lead']);
+    assert.ok(!current.stdout.some((line) => line.startsWith('STEPS ')), current.stdout.join('\n'));
+  });
+});
