@@ -62,7 +62,7 @@ export function isFullCommitSha(text: string): boolean {
  * grind, so a prefix match could carry the approval over to code no one reviewed.
  */
 export function answerNamesFullHead(task: Pick<Task, 'answer'>, head: string): boolean {
-  const named = task.answer?.note?.match(FULL_COMMIT_SHA_RUN) ?? [];
+  const named: readonly string[] = task.answer?.note?.match(FULL_COMMIT_SHA_RUN) ?? [];
   return named.includes(head);
 }
 
