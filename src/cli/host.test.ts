@@ -369,7 +369,7 @@ describe('launcherOf and launcherIfTold', () => {
     const world = quietWorld();
     const shipped = launcherOf({ host: world.host, env: {}, platform: world.platform });
     assert.equal(shipped.program, 'claude');
-    assert.deepEqual(shipped.launchArgs(START), ['--effort', 'high', '--name', 'app-alpha', 'Go on']);
+    assert.deepEqual(shipped.launchArgs(START), ['--effort', 'high', '--name', 'app-alpha', '--', 'Go on']);
     const desk = hostStarting('agent-desk', (start) => ['start', `--as=${start.name ?? ''}`]);
     for (const launcher of [launcherOf({ host: desk, env: {}, platform: 'linux' }), launcherIfTold({ host: desk, env: {}, platform: 'linux' })]) {
       assert.equal(launcher?.program, 'agent-desk');

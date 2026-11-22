@@ -497,7 +497,7 @@ describe('teamrig launch', () => {
     const processes = new FakeProcesses();
     const result = await launch(processes, ['--encoded-prompt', encodePrompt('Build the "form"; then test')]);
     assert.deepEqual(result, { code: EXIT.ok, stdout: [`Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on the default model and effort`], stderr: [] });
-    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--name', 'app-alpha', 'Build the "form"; then test'], cwd: APP, env: SESSION_ENV }]);
+    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--name', 'app-alpha', '--', 'Build the "form"; then test'], cwd: APP, env: SESSION_ENV }]);
     assert.deepEqual(processes.started, []);
   });
 
@@ -567,8 +567,8 @@ describe('teamrig launch', () => {
     const result = await kit.run([...LAUNCH, '--resume', CLAUDE_SESSION, '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
     assert.equal(result.code, EXIT.ok, result.stderr.join('\n'));
     assert.equal(result.stdout[0], `Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming Claude Code session ${CLAUDE_SESSION}`);
-    assert.deepEqual(processes.ran[0]?.args, ['--resume', CLAUDE_SESSION, '--name', 'app-alpha', 'Go on']);
-    assert.deepEqual(processes.ran[1]?.args, ['--name', 'app-alpha', refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha'))]);
+    assert.deepEqual(processes.ran[0]?.args, ['--resume', CLAUDE_SESSION, '--name', 'app-alpha', '--', 'Go on']);
+    assert.deepEqual(processes.ran[1]?.args, ['--name', 'app-alpha', '--', refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha'))]);
   });
 
   it('ends with Claude Code when no restart ended it for launch', async () => {
@@ -604,11 +604,11 @@ describe('teamrig launch', () => {
     const lead = new FakeProcesses();
     const result = await new CliHarness(TEAM).run(['launch', 'lead', '--team', 'app', '--project', APP], { probe: ON_PATH, processes: lead, env: { PATH: '/usr/local/bin' } });
     assert.deepEqual(result.stdout, [`Starting Claude Code as app-lead (session lead of team app) in ${APP}, on model opus at xhigh effort`]);
-    assert.deepEqual(lead.ran[0]?.args, ['--model', 'opus', '--effort', 'xhigh', '--name', 'app-lead', defaultPrompt('app', 'lead')]);
+    assert.deepEqual(lead.ran[0]?.args, ['--model', 'opus', '--effort', 'xhigh', '--name', 'app-lead', '--', defaultPrompt('app', 'lead')]);
     const alpha = new FakeProcesses();
     const configured = await new CliHarness({ ...TEAM, launch: { alpha: { model: 'sonnet', effort: 'high' } } }).run(LAUNCH, { probe: ON_PATH, processes: alpha, env: { PATH: '/usr/local/bin' } });
     assert.deepEqual(configured.stdout, [`Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on model sonnet at high effort`]);
-    assert.deepEqual(alpha.ran[0]?.args, ['--model', 'sonnet', '--effort', 'high', '--name', 'app-alpha', defaultPrompt('app', 'alpha')]);
+    assert.deepEqual(alpha.ran[0]?.args, ['--model', 'sonnet', '--effort', 'high', '--name', 'app-alpha', '--', defaultPrompt('app', 'alpha')]);
   });
 
   it('runs the script behind an npm claude.cmd with Node.js on Windows, with the default prompt', async () => {
@@ -624,7 +624,7 @@ describe('teamrig launch', () => {
     });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     assert.deepEqual(processes.ran[0]?.command, NODE);
-    assert.deepEqual(processes.ran[0]?.args, [cli, '--name', 'app-alpha', defaultPrompt('app', 'alpha')]);
+    assert.deepEqual(processes.ran[0]?.args, [cli, '--name', 'app-alpha', '--', defaultPrompt('app', 'alpha')]);
   });
 
   it('uses the kit home it is given', async () => {

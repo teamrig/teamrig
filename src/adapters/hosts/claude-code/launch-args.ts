@@ -8,17 +8,34 @@ function flag(name: string, value: string | undefined): readonly string[] {
   return value === undefined ? [] : [name, value];
 }
 
+/** A start whose parts Claude Code would read as something else, refused before the program runs. */
+export class ClaudeLaunchRefusedError extends Error {
+  override readonly name = 'ClaudeLaunchRefusedError';
+}
+
+/**
+ * `--resume` with the session id. An id starting with `-` could read as a flag of Claude Code's rather than the
+ * value; a real Claude Code session id never does, so such an id is refused rather than passed.
+ */
+function resumeArgs(resume: string | undefined): readonly string[] {
+  if (resume !== undefined && resume.startsWith('-')) {
+    throw new ClaudeLaunchRefusedError(`the Claude Code session id to resume, ${JSON.stringify(resume)}, starts with "-" and would read as a flag; give the id Claude Code printed`);
+  }
+  return flag('--resume', resume);
+}
+
 /**
  * The `claude` arguments that start a session as `start` says: each part that is set as its flag, and the first
- * prompt last, as the one argument that is no flag. A part left out passes no flag, so Claude Code keeps its own.
+ * prompt last, after `--`, so a prompt starting with `-` stays the prompt and is never read as a flag. A part left
+ * out passes no flag, so Claude Code keeps its own.
  */
 export function launchArgs(start: SessionStart): readonly string[] {
   return [
     ...flag('--model', start.model),
     ...flag('--effort', start.effort),
     ...flag('--settings', start.settingsFile),
-    ...flag('--resume', start.resume),
+    ...resumeArgs(start.resume),
     ...flag('--name', start.name),
-    ...(start.prompt === undefined ? [] : [start.prompt]),
+    ...(start.prompt === undefined ? [] : ['--', start.prompt]),
   ];
 }
