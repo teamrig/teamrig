@@ -1111,8 +1111,9 @@ function readGithubOwners(read: ConfigReader, raw: JsonRecord, sessions: readonl
   const owners: Record<string, string> = {};
   for (const login of Object.keys(raw)) {
     const path = `github.owners.${login}`;
-    if (!GITHUB_LOGIN.test(login)) {
-      read.report(path, 'expected a GitHub login: letters, digits or -, at most 39 characters');
+    const wrong = isGithubLogin(login);
+    if (wrong !== undefined) {
+      read.report(path, wrong);
       continue;
     }
     const session = read.optionalString(raw, login, 'github.owners', isSessionName);
