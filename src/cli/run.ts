@@ -115,6 +115,7 @@ const issueWatchCommands = () => import('./commands/issue-watch.ts');
 const issueMigrateCommands = () => import('./commands/issue-migrate.ts');
 const issueCommands = () => import('./commands/issue.ts');
 const prCommands = () => import('./commands/pr.ts');
+const ciCommands = () => import('./commands/ci.ts');
 const issueLinksCommands = () => import('./commands/issue-links.ts');
 const startCommands = () => import('./commands/start.ts');
 const meetingCommands = () => import('./commands/meeting.ts');
@@ -265,6 +266,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'pr conflicts': { effect: 'write', flags: ['base'], load: async () => (await prCommands()).prConflicts },
   'pr approve': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prApprove },
   'pr merge': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prMerge },
+  'ci rerun': { effect: 'write', flags: ['session', 'run'], load: async () => (await ciCommands()).ciRerun },
   'issue links': { effect: 'write', flags: ['repo'], switches: ['yes'], load: async () => (await issueLinksCommands()).issueLinks },
   follow: { effect: 'write', flags: ['session'], switches: ['list'], load: async () => (await followCommands()).follow },
   unfollow: { effect: 'write', flags: ['session'], load: async () => (await followCommands()).unfollow },
@@ -915,6 +917,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
       refused while it conflicts, is queued already or its head's checks have not all passed: into its
       merge queue where the repository has one, else merged by rebase, both pinned to the head read
+  ci rerun <owner/name> --run <id>   starts every job of one CI run of one of the team's repositories
+      again, with the token saved for its owner (which needs Actions Read and write), for a run a glitch
+      on the host's side failed; the id is the number after /runs/ in the run's address; changes no
+      code, setting or secret, so it needs no task or approval
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links

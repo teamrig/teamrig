@@ -82,6 +82,7 @@ const EXPECTED = {
   events: 'internal',
   sessions: 'read',
   close: 'write',
+  'ci rerun': 'write',
   'cleanup launchers': 'write',
   rename: 'write',
   queue: 'write',
