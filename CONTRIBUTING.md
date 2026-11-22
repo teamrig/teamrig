@@ -292,6 +292,13 @@ matrix.
   descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the
   stable channel (a `git-subdir` source on ref `release`), which only ever moves along `preview`'s chain, so main
   ignores `plugins/teamrig/dist` and no pull request carries one.
+- Stable moves once a day: `.github/workflows/release-promote.yml` runs hourly and fast-forwards `release`, without
+  force, to the newest preview release published at least `soakHours` before the last `stableAt`
+  (`tools/release/promote.ts`), so every run from one move to the next picks the same release. A version listed in
+  `tools/release/release-hold.json` (`{ "v0.510.0": "why" }`, written through a pull request) is skipped; only that
+  one. A hotfix goes to stable at once, with no soak: once the lead approves its preview tag and sha on the release
+  task, run the workflow by hand with both; it refuses a tag that names another commit, a held one and anything but a
+  fast-forward.
 - Installs take the version in `plugins/teamrig/.claude-plugin/plugin.json`, not the newest commit:
   `claude plugin update` moves an install only when that version rises. A pull request never raises it: the release
   pull request does, from the commit subjects since the last release. While it is 0.x, a `feat` or a breaking

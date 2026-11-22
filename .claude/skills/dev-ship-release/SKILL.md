@@ -29,7 +29,9 @@ without the App: read that summary first, and fix the cause before approving.
    merge <abs main checkout> --release T<id> --approved <full sha>`, it is a ship role call the route allow lets run
    with no permission prompt (T4672); any other shape goes to the permission check.
 4. The next run of the release workflow tags main and publishes the plugin to the `preview` branch: check that the
-   new tag and release exist before you set the task done.
+   new tag and release exist before you set the task done. Stable takes it at its next daily move
+   (`release-promote.yml`); a hotfix goes at once when you approve its preview tag and sha and the workflow runs by
+   hand with both.
 
 ## Traps
 

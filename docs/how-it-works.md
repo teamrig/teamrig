@@ -76,8 +76,8 @@ Claude Code installs the version that the plugin's `plugin.json` gives and moves
 rises, so every change to the plugin raises it. It installs from the repository's `release` branch, the stable
 channel, where each release is main's commit with the built plugin on top. Each release is published first on the
 `preview` branch, at most one per preview slot (09:00, 12:00, 15:00, 18:00 and 21:00 Israel time,
-`tools/release/channels.json`), and `release` only ever moves to a commit `preview` already holds. To take the
-newest one:
+`tools/release/channels.json`), and `release` only ever moves to a commit `preview` already holds: once a day at
+20:00 Israel time, to the newest preview release out for at least 3 hours. To take the newest one:
 
 ```sh
 claude plugin marketplace update teamrig
