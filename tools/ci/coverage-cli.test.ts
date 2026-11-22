@@ -76,7 +76,7 @@ describe('coverage-cli', () => {
   it('exits 2 on an unknown option before it runs anything', () => {
     const result = spawnSync(process.execPath, [CLI, '--fix'], { cwd: tmpdir(), encoding: 'utf8' });
     assert.equal(result.status, 2, result.stdout);
-    assert.equal(result.stderr, 'coverage: unknown option --fix (usage: coverage-cli.ts [--root <repo>])\n');
+    assert.equal(result.stderr, 'coverage: unknown option --fix (usage: coverage-cli.ts [--root <repo>] [--alone])\n');
   });
 
   it('fails a new file that no test loads, before it is committed', () => {

@@ -152,7 +152,8 @@ jobs:
       # Specs load the built plugin (its hooks, launcher and integrity list), which main does not carry.
       - run: npm run build
         if: ${{ needs.changes.outputs.kind == 'code' }}
-      - run: node tools/ci/coverage-cli.ts
+      # The runner's VM runs this job alone: a test file a core at once, not the half a shared host keeps (T5027).
+      - run: node tools/ci/coverage-cli.ts --alone
         if: ${{ needs.changes.outputs.kind == 'code' }}
 
   test:
