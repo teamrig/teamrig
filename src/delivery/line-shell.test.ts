@@ -4,11 +4,13 @@ import { lineShellOf, powerShellSpec, type LineShellSpec } from './line-shell.ts
 
 /**
  * A line shell made of Node, so the specs run on every OS: `say <text>` prints the text, `mark <m>` prints m alone,
- * `hang` stops reading (the marker after it never prints), `quit` exits, `flood` prints past any cap, and anything else prints `ran <line>`.
+ * `hang` stops reading (the marker after it never prints), `quit` exits, `flood` prints past any cap in the same write
+ * as the marker after it, so both reach the reader in one chunk, and anything else prints `ran <line>`.
  */
 const PROGRAM = `
 let pending = '';
 let hung = false;
+let flood = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   if (hung) return;
@@ -17,11 +19,14 @@ process.stdin.on('data', (chunk) => {
   while (!hung && (at = pending.indexOf('\\n')) >= 0) {
     const line = pending.slice(0, at);
     pending = pending.slice(at + 1);
-    if (line.startsWith('mark ')) process.stdout.write(line.slice(5) + '\\r\\n');
+    if (line.startsWith('mark ')) {
+      process.stdout.write(flood + line.slice(5) + '\\r\\n');
+      flood = '';
+    }
     else if (line.startsWith('say ')) process.stdout.write(line.slice(4) + '\\r\\n');
     else if (line === 'hang') hung = true;
     else if (line === 'quit') process.exit(3);
-    else if (line === 'flood') process.stdout.write('x'.repeat(4096));
+    else if (line === 'flood') flood = 'x'.repeat(4096);
     else process.stdout.write('ran ' + line + '\\r\\n');
   }
 });
@@ -44,8 +49,8 @@ describe('lineShellOf', () => {
   });
 
   it('settles a hung script with nothing at its time limit, and starts a fresh shell for the next one', async () => {
-    // The limit covers the fresh shell's start too, which takes Node well over 300 ms on a loaded host.
-    const shell = lineShellOf(nodeShell(2_000));
+    // The limit covers the fresh shell's start too, which took Node over 2 s while the whole suite ran.
+    const shell = lineShellOf(nodeShell());
     try {
       assert.equal(await shell.run('hang'), undefined);
       assert.equal(await shell.run('say back'), 'back\r\n');

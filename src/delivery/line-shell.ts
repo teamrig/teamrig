@@ -84,12 +84,13 @@ export function lineShellOf(spec: LineShellSpec): ScriptShell {
     output += chunk;
     const marker = waiting?.marker;
     const at = marker === undefined ? -1 : output.indexOf(marker);
-    if (marker !== undefined && at >= 0) {
+    // The cap holds whether or not the marker came in the same chunk: a pipe may join a flood and its marker.
+    if ((at >= 0 ? at : output.length) > spec.maxBytes) {
+      fail();
+    } else if (marker !== undefined && at >= 0) {
       const printed = output.slice(0, at);
       output = output.slice(at + marker.length).replace(/^\r?\n/, '');
       finish(printed);
-    } else if (output.length > spec.maxBytes) {
-      fail();
     }
   };
   const started = (): ShellChild => {
