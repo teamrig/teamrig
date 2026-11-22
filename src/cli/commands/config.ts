@@ -1,11 +1,11 @@
 import { extname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { migrationBackupName } from '../../config/load.ts';
 import { settingAt, settingValueOf, withSetting } from '../../config/setting-edit.ts';
 import { rowsUnder, settingRows, type SettingRow } from '../../config/settings.ts';
 import { isRecord, type JsonRecord } from '../../core/guards.ts';
 import { clientRootOf } from '../../exec/client-integrity.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
+import { writeConfigMigration } from '../config-migration.ts';
 import { callerOf } from '../inputs.ts';
 import {
   checkedNextConfig,
@@ -14,7 +14,6 @@ import {
   issueText,
   leadOnly,
   openTeamKit,
-  reloadTeamConfig,
   requireConfig,
   rosterOf,
   type LoadedConfig,
@@ -252,17 +251,12 @@ export async function migrate(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
     );
     return EXIT.ok;
   }
-  return configLockOf(runtime, kit, config).run(async (writer) => {
-    // Read again under the lock: a change written meanwhile is migrated with the rest, and a migration done meanwhile
-    // is not written twice.
-    const now = await reloadTeamConfig(runtime, kit);
-    if (now.status !== 'loaded' || now.pending === undefined) {
-      runtime.out.stdout(`UNCHANGED ${load.path} needs no migration`);
-      return EXIT.ok;
-    }
-    const backup = await writer.write(now.pending.migrated, migrationBackupName(now.pending));
-    runtime.out.stdout(`MIGRATED ${load.path} from version ${now.pending.fromVersion} to ${now.pending.toVersion}; the old file is at ${backup}`);
-    now.pending.changes.forEach((change) => runtime.out.stdout(`  ${change}`));
+  const written = await writeConfigMigration(runtime, kit, config);
+  if (written.status === 'unchanged') {
+    runtime.out.stdout(`UNCHANGED ${load.path} needs no migration`);
     return EXIT.ok;
-  });
+  }
+  runtime.out.stdout(`MIGRATED ${load.path} from version ${written.pending.fromVersion} to ${written.pending.toVersion}; the old file is at ${written.backup}`);
+  written.pending.changes.forEach((change) => runtime.out.stdout(`  ${change}`));
+  return EXIT.ok;
 }
