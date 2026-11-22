@@ -10,8 +10,6 @@ import { importModule, loadConnector, loadHost, loadTerminal, readDeclarations, 
 const HOST_ENTRY = '../adapters/hosts/claude-code/index.ts';
 const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator'];
 const TERMINAL_LIST = TERMINAL_IDS.join(', ');
-/** The built-in terminals whose adapter builds a terminal port; the rest build none yet. */
-const BUILDS_PORT: ReadonlySet<string> = new Set(['tmux', 'windows-terminal', 'macos-terminal']);
 const terminalDeclarationFile = (id: string): string => `../adapters/terminals/${id}/declaration.ts`;
 /** The declaration module of each built-in terminal, by its specifier. */
 const terminalDeclarations = (): Record<string, unknown> => Object.fromEntries(TERMINAL_IDS.map((id) => [terminalDeclarationFile(id), { declaration: terminalDeclarationData({ id }) }]));
@@ -51,13 +49,13 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     assert.equal(local.kind === 'loaded' && local.value.declaration.refPrefix, 'local:');
   });
 
-  it('loads each terminal through the real importer, a port built only by the terminals that have one', async () => {
+  it('loads each terminal through the real importer, each building its terminal port', async () => {
     assert.deepEqual(Object.keys(TERMINAL_ADAPTERS), TERMINAL_IDS);
     for (const id of TERMINAL_IDS) {
       const load = await loadTerminal(id);
       assert.equal(load.kind === 'loaded' && load.value.declaration.id, id);
       const ports = load.kind === 'loaded' ? load.value.create(terminalDeps()) : undefined;
-      assert.deepEqual(Object.keys(ports ?? {}), BUILDS_PORT.has(id) ? ['terminal'] : [], id);
+      assert.deepEqual(Object.keys(ports ?? {}), ['terminal'], id);
     }
   });
 

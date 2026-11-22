@@ -20,9 +20,11 @@ describe('the x-terminal-emulator adapter', () => {
     assert.deepEqual(claimed, [['pane.open', 'supported']]);
   });
 
-  it('enters through defineTerminal with that declaration, and builds no port yet', () => {
+  it('enters through defineTerminal with that declaration, and builds its terminal port', async () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(terminalAdapterProblems(adapter), []);
-    assert.deepEqual(adapter.create(terminalDeps()), {});
+    const port = adapter.create(terminalDeps()).terminal;
+    assert.notEqual(port, undefined);
+    assert.deepEqual((await port?.capabilities())?.requests, ['open']);
   });
 });

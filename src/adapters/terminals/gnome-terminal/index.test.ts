@@ -22,9 +22,11 @@ describe('the GNOME Terminal adapter', () => {
     assert.equal(open.kind === 'partial' ? open.missing : '', 'an id of the pane it opened');
   });
 
-  it('enters through defineTerminal with that declaration, and builds no port yet', () => {
+  it('enters through defineTerminal with that declaration, and builds its terminal port', async () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(terminalAdapterProblems(adapter), []);
-    assert.deepEqual(adapter.create(terminalDeps()), {});
+    const port = adapter.create(terminalDeps()).terminal;
+    assert.notEqual(port, undefined);
+    assert.deepEqual((await port?.capabilities())?.requests, ['open']);
   });
 });
