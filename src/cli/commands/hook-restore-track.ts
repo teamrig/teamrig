@@ -6,13 +6,14 @@ import type { HookEvent } from '../../ports/host/index.ts';
 import { dayProbePath, dayProbeReleaseLine, type DayProbeReply } from '../../restore/day-probe.ts';
 import { DayProbeStore } from '../../restore/day-probe-store.ts';
 import { apiGaveUpLine, apiRetriesSpentOn } from '../../restore/api-error.ts';
-import { cliOnPathSteps } from '../../restore/cli-on-path.ts';
+import { cliOnPathNote, cliOnPathSteps } from '../../restore/cli-on-path.ts';
 import { applyEvent, type TrackEvent, type TrackFacts } from '../../restore/entry.ts';
 import { LAUNCHER_REFRESH_LOCK, launcherRecordPath, refreshLaunchers } from '../../restore/launcher-refresh.ts';
 import { AUTH_FAILED, LOGIN_LOCK, loginLogLine, loginMarkerPath, type LoginEvent } from '../../restore/login.ts';
 import { LoginStore } from '../../restore/login-store.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../../restore/registry.ts';
 import { TURN_TAIL_BYTES, turnErrorOf } from '../../restore/turn-error.ts';
+import type { UserPath } from '../../restore/user-path.ts';
 import { LAUNCHER_SCRIPT, launcherPath } from '../../statusline/launcher.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { fileLockOf } from '../file-locks.ts';
@@ -20,7 +21,7 @@ import { openKit } from '../kit.ts';
 import { identityOf, transcriptsIfKept } from '../host.ts';
 import { loginPageLogLine, loginPageOf, sendLoginPage, type LoginPage } from '../login-page.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { readHookInput } from './hook-input.ts';
+import { readHookInput, writeReply } from './hook-input.ts';
 
 /**
  * What a hook event reports to the tracker; undefined for one the tracker skips. A session start that follows a
@@ -190,18 +191,33 @@ async function putsCliOnPath(runtime: CliRuntime, team: string | undefined): Pro
   return load.status === 'loaded' && load.config.cliOnPath.enabled;
 }
 
+/** `userPath`, keeping in `added` each folder its `add` put on the PATH. */
+function addRecorded(userPath: UserPath, added: string[]): UserPath {
+  return {
+    where: userPath.where,
+    holds: (folder) => userPath.holds(folder),
+    add: async (folder) => {
+      await userPath.add(folder);
+      added.push(folder);
+    },
+  };
+}
+
 /**
  * At a session start, brings what a restore install and the status line install left on the machine up to date with
  * this plugin version (src/restore/launcher-refresh.ts): the logon entry and the shortcuts are run by this hook's Node,
- * the stable program Claude Code starts its hooks with.
+ * the stable program Claude Code starts its hooks with. Returns the note saying this start put teamrig on the user's
+ * PATH, only on the start that did: a later one finds the folder there and adds nothing.
  */
-async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
+async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<string | undefined> {
   if (event.kind !== 'start') {
-    return;
+    return undefined;
   }
   const { files, restore, platform } = runtime;
+  const added: string[] = [];
+  const userPath = addRecorded(restore.userPath, added);
   const cliOnPath = (await putsCliOnPath(runtime, facts.team))
-    ? [() => cliOnPathSteps({ files, kitHome, platform, userPath: restore.userPath, markExecutable: restore.markExecutable })]
+    ? [() => cliOnPathSteps({ files, kitHome, platform, userPath, markExecutable: restore.markExecutable })]
     : [];
   await refreshLaunchers({
     machine: { files, kitHome, node: runtime.self.node, userHome: runtime.userHome, logon: restore.logon, shortcuts: restore.shortcuts },
@@ -214,19 +230,22 @@ async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: Cli
     version: KIT_VERSION,
     now: runtime.clock.now(),
   });
+  const folder = added[0];
+  return folder === undefined ? undefined : cliOnPathNote(folder, userPath.where);
 }
 
 /**
  * Records what the hook event `hook` reports in its session's restore entry, at a turn's end in the login marker, at
  * a reply in the day-start probe, and at a session start refreshes the launchers; an event of no session, or one it
  * skips, writes nothing. A marker, probe or refresh that cannot be written (its lock busy) never keeps the entry from
- * its update; an entry that cannot be written fails the call once they are done.
+ * its update; an entry that cannot be written fails the call once they are done. Returns the note of a start that put
+ * teamrig on the user's PATH (`trackLaunchers`), else undefined.
  */
-export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promise<void> {
+export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promise<string | undefined> {
   const claudeSession = hook.session;
   const reported = trackEventOf(hook);
   if (claudeSession === undefined || reported === undefined) {
-    return;
+    return undefined;
   }
   const told = identityOf(runtime);
   const facts: TrackFacts = {
@@ -252,6 +271,7 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
   } finally {
     await Promise.all([login, dayProbe, launchers]);
   }
+  return launchers;
 }
 
 /**
@@ -264,14 +284,19 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
  * (`<kit home>/restore/day-probe.json`), as does the probe tab's tool end. A turn that failed on a transient API error
  * after the wake check's last retry logs `api-error: gave up on <tab>` to the restore log. The first session start of a
  * newer plugin version rewrites the launchers, logon entry and shortcuts an install left that are out of date, and
- * logs each change as `launchers: <old> -> <new>: <change>` (src/restore/launcher-refresh.ts). It prints nothing, and on any
- * error it exits 0 having written nothing: a tracker must never hold up a turn.
+ * logs each change as `launchers: <old> -> <new>: <change>` (src/restore/launcher-refresh.ts). It prints nothing but the
+ * note of the start that put teamrig on the user's PATH, to the person and the model once, and on any error it exits 0
+ * having written nothing: a tracker must never hold up a turn.
  */
 export async function restoreTrack(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
   const { event } = await readHookInput(runtime);
   if (event !== undefined) {
-    await trackRestore(event, runtime).catch(() => undefined);
+    const note = await trackRestore(event, runtime).catch(() => undefined);
+    if (note !== undefined) {
+      // Only a start returns a note (`trackLaunchers`).
+      writeReply(runtime, 'session-start', { context: note, notice: note });
+    }
   }
   return EXIT.ok;
 }

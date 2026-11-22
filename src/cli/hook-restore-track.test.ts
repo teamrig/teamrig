@@ -9,6 +9,7 @@ import type { ChatWebhook } from '../core/webhook.ts';
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import { cliLauncherFolder, cliLaunchers } from '../restore/cli-launcher.ts';
+import { cliOnPathNote } from '../restore/cli-on-path.ts';
 import { restoreLaunchers } from '../restore/install-plan.ts';
 import { RESTORE_CHECK_LAUNCHER_SCRIPT } from '../restore/launcher.ts';
 import { LAUNCHER_RECORD_FORMAT, launcherRecordPath } from '../restore/launcher-refresh.ts';
@@ -484,29 +485,50 @@ describe('hook restore-track: the launcher refresh', () => {
     return kit;
   }
 
-  /** Starts a session of `env` on a user PATH of no folders; the PATH it leaves and whether a launcher was written. */
-  async function startOnEmptyPath(kit: CliHarness, env: Env): Promise<{ readonly path: readonly string[]; readonly launcher: boolean }> {
+  /**
+   * Starts a session of `env` on `userPath`, a user PATH of no folders unless given; the PATH it leaves, whether a
+   * launcher was written and what the start printed.
+   */
+  async function startOnEmptyPath(
+    kit: CliHarness,
+    env: Env,
+    userPath = new FakeUserPath(),
+  ): Promise<{ readonly path: readonly string[]; readonly launcher: boolean; readonly stdout: readonly string[] }> {
     const restore = quietRestore();
-    const userPath = new FakeUserPath();
     const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32' });
-    assert.deepEqual([result.code, result.stdout, result.stderr], [0, [], []]);
+    assert.deepEqual([result.code, result.stderr], [0, []]);
     const launchers = cliLaunchers(KIT, 'win32');
     const written = await Promise.all(launchers.map(async (launcher) => (await kit.files.read(launcher.path)) !== undefined));
-    return { path: userPath.folders, launcher: written.some(Boolean) };
+    return { path: userPath.folders, launcher: written.some(Boolean), stdout: result.stdout };
   }
 
   it('puts teamrig on the PATH at a start of a team that leaves cliOnPath on, and of no team (T5095)', async () => {
-    assert.deepEqual(await startOnEmptyPath(await oldLauncherKit(), LAUNCHED), { path: [cliLauncherFolder(KIT)], launcher: true });
-    assert.deepEqual(await startOnEmptyPath(await oldLauncherKit(), { CLAUDE_PROJECT_DIR: APP }), { path: [cliLauncherFolder(KIT)], launcher: true });
+    for (const env of [LAUNCHED, { CLAUDE_PROJECT_DIR: APP }]) {
+      const { path, launcher } = await startOnEmptyPath(await oldLauncherKit(), env);
+      assert.deepEqual({ path, launcher }, { path: [cliLauncherFolder(KIT)], launcher: true });
+    }
+  });
+
+  it('says once, to the person and the model, that the start put teamrig on the PATH; a later start says nothing (T5095)', async () => {
+    const kit = await oldLauncherKit();
+    const userPath = new FakeUserPath();
+    const first = await startOnEmptyPath(kit, LAUNCHED, userPath);
+    const note = cliOnPathNote(cliLauncherFolder(KIT), userPath.where);
+    assert.equal(first.stdout.length, 1, first.stdout.join('\n'));
+    const reply: unknown = JSON.parse(first.stdout[0] ?? '');
+    assert.ok(JSON.stringify(reply).includes(JSON.stringify(note).slice(1, -1)), first.stdout[0]);
+    await kit.files.write(RECORD, OLDER_RECORD);
+    const later = await startOnEmptyPath(kit, LAUNCHED, userPath);
+    assert.deepEqual([later.path, later.stdout], [[cliLauncherFolder(KIT)], []]);
   });
 
   it('writes no launcher and no PATH entry at a start of a team that turns cliOnPath off, or whose config cannot be read (T5095)', async () => {
     const off = await oldLauncherKit({ ...TEAM, cliOnPath: { enabled: false } });
-    assert.deepEqual(await startOnEmptyPath(off, LAUNCHED), { path: [], launcher: false });
+    assert.deepEqual(await startOnEmptyPath(off, LAUNCHED), { path: [], launcher: false, stdout: [] });
     assert.equal(await off.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT, 'the other launchers are still refreshed');
     const broken = new CliHarness('{ not json');
     await broken.files.write(RECORD, OLDER_RECORD);
-    assert.deepEqual(await startOnEmptyPath(broken, LAUNCHED), { path: [], launcher: false });
+    assert.deepEqual(await startOnEmptyPath(broken, LAUNCHED), { path: [], launcher: false, stdout: [] });
   });
 
   it('rewrites an old launcher at the first session start after a version change, logs it and records the version', async () => {

@@ -33,6 +33,14 @@ function markedStep(step: MachineStep, path: string, markExecutable: MarkExecuta
 }
 
 /**
+ * What the session start that added `folder` to the user's PATH (kept in `where`) tells the person and the model once:
+ * a terminal open already keeps its PATH, and the key that turns the step off.
+ */
+export function cliOnPathNote(folder: string, where: string): string {
+  return `teamrig: this start added ${folder} to your user PATH (${where}), so terminals opened from now on run teamrig; a team turns this off with cliOnPath.enabled false`;
+}
+
+/**
  * The steps that make `teamrig` run from any terminal: write each launcher missing or out of date in the kit home's
  * bin folder (cli-launcher.ts), the sh shim marked a program, then add that folder to the user's PATH when it lacks
  * it, last, so the PATH never names a folder with no launcher in it. None when all are in place. Terminals open
