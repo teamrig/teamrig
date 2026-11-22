@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LeadTree } from '../config/lead-tree.ts';
 import { testConfig } from '../testing/config.ts';
 import { testTask } from '../testing/task.ts';
-import { answerNamesHead, answerTo, approvalCleared, approvedTaskOf, isCommitSha, waitAnswerersOf } from './approval.ts';
+import { answerNamesFullHead, answerNamesHead, answerTo, approvalCleared, approvedTaskOf, isCommitSha, isFullCommitSha, waitAnswerersOf } from './approval.ts';
 import type { ApprovalAnswer } from './fold.ts';
 import type { WaitReason } from './waits.ts';
 
@@ -98,5 +98,21 @@ describe('approvedTaskOf (T684, T781)', () => {
       testTask({ id: 'T4', ...waiting, status: 'verifying', answer: APPROVED }),
     ];
     assert.equal(approvedTaskOf(tasks, 'alpha', ['lead']), undefined);
+  });
+});
+
+describe('isFullCommitSha and answerNamesFullHead (T4958 C1)', () => {
+  const head = 'ab'.repeat(20);
+  it('takes only a full 40-hex sha', () => {
+    assert.equal(isFullCommitSha(head), true);
+    assert.equal(isFullCommitSha(head.slice(0, 12)), false, 'a prefix');
+    assert.equal(isFullCommitSha(`${head}a`), false, 'too long');
+    assert.equal(isFullCommitSha(head.toUpperCase()), false, 'uppercase');
+  });
+  it('holds an approval to the head it names in full, never a prefix of it', () => {
+    assert.equal(answerNamesFullHead(testTask({ answer: { ...APPROVED, note: `ok at ${head}` } }), head), true);
+    assert.equal(answerNamesFullHead(testTask({ answer: { ...APPROVED, note: `ok at ${head.slice(0, 7)}` } }), head), false);
+    assert.equal(answerNamesFullHead(testTask({ answer: { ...APPROVED, note: `ok at ${'c'.repeat(40)}` } }), head), false);
+    assert.equal(answerNamesFullHead(testTask({ answer: null }), head), false);
   });
 });

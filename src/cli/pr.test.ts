@@ -66,7 +66,7 @@ describe('teamrig pr conflicts', () => {
 
 describe('teamrig pr approve and pr merge (T4817)', () => {
   const AS_ALPHA = { env: { TEAMRIG_SESSION: 'alpha' } };
-  const HEAD = STAND_HEAD.slice(0, 12);
+  const HEAD = STAND_HEAD;
 
   /** A team on acme/web with T1, `owner`'s, holding acme/web#12; unless `approval` is null, waiting on the lead, who approved it with that note. */
   async function landingKit(approval: string | null = `head ${HEAD} checked`, owner = 'alpha'): Promise<CliHarness> {
@@ -157,14 +157,16 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     { name: 'no task holds the pull request', kit: () => landingKit(), args: ['pr', 'approve', 'acme/web#13', '--head', HEAD], reason: /no task holds acme\/web#13/u },
     { name: 'another session owns the task', kit: () => landingKit(null, 'bravo'), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /T1, which holds acme\/web#12, is bravo's/u },
     { name: 'the task has no approval', kit: () => landingKit(null), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /T1 has no approval of lead/u },
-    { name: 'the approval names another head', kit: () => landingKit('head bbbbbbbbbbbb checked'), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 names no sha its head aaaaaaa starts with/u },
-    { name: 'the head moved past --head', kit: () => landingKit(), spec: { head: 'c'.repeat(40) }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /its head is ccccccc, not aaaaaaaaaaaa: a newer head needs its own approval/u },
+    { name: 'the approval names another head', kit: () => landingKit(`head ${'b'.repeat(40)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name its head a{40} in full/u },
+    { name: 'the approval names the head only by a short sha', kit: () => landingKit(`head ${STAND_HEAD.slice(0, 12)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name its head a{40} in full/u },
+    { name: 'the head moved past --head', kit: () => landingKit(), spec: { head: 'c'.repeat(40) }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /its head is ccccccc, not a{40}: a newer head needs its own approval/u },
     { name: 'it is a draft', kit: () => landingKit(), spec: { isDraft: true }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /it is a draft/u },
     { name: 'it is closed', kit: () => landingKit(), spec: { state: 'CLOSED' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it is closed/u },
     { name: 'it targets another branch', kit: () => landingKit(), spec: { base: 'release' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it targets release, not the default branch main/u },
     { name: 'a merge conflicts', kit: () => landingKit(), spec: { mergeable: 'CONFLICTING' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it conflicts with main: its author rebases it first/u },
     { name: 'a merge is queued already', kit: () => landingKit(), spec: { mergeQueue: true, queued: true }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it is already in the merge queue/u },
-    { name: '--head is no sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', 'main'], reason: /--head main is no commit sha/u },
+    { name: '--head is no sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', 'main'], reason: /--head main is no full commit sha/u },
+    { name: '--head is a short sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', STAND_HEAD.slice(0, 12)], reason: /--head a{12} is no full commit sha: give the head the approval names, all 40 hex digits/u },
   ];
 
   for (const refusal of refusals) {

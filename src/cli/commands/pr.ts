@@ -1,7 +1,7 @@
 import { parseIssueTarget, targetText, type IssueTarget, type PullStand } from '../../issues/host.ts';
 import { printable } from '../../core/printable.ts';
 import { holderOf } from '../../issues/status-push.ts';
-import { answerNamesHead, approvedTaskOf, isCommitSha } from '../../register/approval.ts';
+import { answerNamesFullHead, approvedTaskOf, isFullCommitSha } from '../../register/approval.ts';
 import type { Task } from '../../register/fold.ts';
 import { pullConflicts } from '../../sync/pull-conflicts.ts';
 import { onePositional, requiredFlag } from '../args.ts';
@@ -111,7 +111,7 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
 /**
  * The pull request `args` names once every gate of a landing passes, reads before any write: the caller on the team
  * and the repository the team's; one task holding the pull request, owned by the caller (only a change's owner lands
- * it); that task approved by the caller's leader with a note naming the head (an approval covers only the head it
+ * it); that task approved by the caller's leader with a note naming the full 40-hex head (an approval covers only the head it
  * names, T2788), which a root team's lead needs from no one; and the pull request open, no draft, on its default
  * branch, its head the one `--head` names. A merge also needs no conflicts and not queued already. Ended with exit 0,
  * after an OFF line, while GitHub is off on this machine, and with exit 1 when the read failed. Refused or failed, it
@@ -124,8 +124,8 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
     throw new RefusedError(`${text} names no pull request: give it as owner/name#number, such as acme/web#7`);
   }
   const given = requiredFlag(args.flags, 'head').trim().toLowerCase();
-  if (!isCommitSha(given)) {
-    throw new RefusedError(`--head ${given} is no commit sha: give the head the approval names, at least 7 hex digits`);
+  if (!isFullCommitSha(given)) {
+    throw new RefusedError(`--head ${given} is no full commit sha: give the head the approval names, all 40 hex digits`);
   }
   const name = targetText(target);
   const checked = await checkedRepo(args, runtime, target.repo);
@@ -146,7 +146,7 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
   if (read.kind === 'missing') {
     throw new RefusedError(`${target.repo} has no pull request #${target.number} this access can see; nothing was written`);
   }
-  const refused = standRefusal(read.pull, given, step) ?? (approvers.length > 0 && !answerNamesHead(task, read.pull.head) ? `the approval of ${task.id} names no sha its head ${read.pull.head.slice(0, SHORT_SHA)} starts with: ask for an approval of that head` : undefined);
+  const refused = standRefusal(read.pull, given, step) ?? (approvers.length > 0 && !answerNamesFullHead(task, read.pull.head) ? `the approval of ${task.id} does not name its head ${read.pull.head} in full: ask for an approval naming all 40 hex digits of that head` : undefined);
   if (refused !== undefined) {
     throw new RefusedError(`${name}: ${refused}; nothing was written`);
   }
@@ -177,7 +177,7 @@ function standRefusal(pull: PullStand, given: string, step: LandingStep): string
   if (pull.draft) {
     return 'it is a draft';
   }
-  if (!pull.head.startsWith(given)) {
+  if (pull.head !== given) {
     return `its head is ${pull.head.slice(0, SHORT_SHA)}, not ${given}: a newer head needs its own approval`;
   }
   if (pull.base !== pull.defaultBranch) {

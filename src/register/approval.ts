@@ -48,6 +48,24 @@ export function answerNamesHead(task: Pick<Task, 'answer'>, head: string): boole
   return named.some((sha) => head.startsWith(sha));
 }
 
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/;
+const FULL_COMMIT_SHA_RUN = /\b[0-9a-f]{40}\b/g;
+
+/** Whether `text` is a full 40-hex commit sha. */
+export function isFullCommitSha(text: string): boolean {
+  return FULL_COMMIT_SHA.test(text);
+}
+
+/**
+ * Whether the task's answer note names `head` in full: what `teamrig pr` holds an outside pull request's approval to
+ * (T4958 C1). Its author picks the commits, and a commit sharing a 7-hex prefix with the approved head is cheap to
+ * grind, so a prefix match could carry the approval over to code no one reviewed.
+ */
+export function answerNamesFullHead(task: Pick<Task, 'answer'>, head: string): boolean {
+  const named = task.answer?.note?.match(FULL_COMMIT_SHA_RUN) ?? [];
+  return named.includes(head);
+}
+
 /** A task of the owner's that one of its approvers approved, with who did. */
 export interface ApprovedTask {
   readonly task: Task;
