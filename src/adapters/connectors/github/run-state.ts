@@ -1,4 +1,4 @@
-import { isRecord, stringField } from '../../../core/guards.ts';
+import { isRecord, stringField } from '../../../plugin-api/index.ts';
 
 /**
  * One CI run as `gh api repos/<owner>/<name>/actions/runs/<id>` prints it: where it is, how it ended once it has, the

@@ -11,8 +11,8 @@ const RUN_ID = /^[1-9][0-9]{0,15}$/u;
  * reported passed while still running) with no person's click. The host reads the run first and re-runs only one
  * that ended failed, cancelled or timed out, started by a push, pull request, merge queue or schedule, before its third
  * attempt (T5077): a passed release run is never started again. It changes no code, setting or secret, so it takes
- * the checks every host write takes (the caller on the team, the repository in github.repos) and no task's approval.
- * Exit 2 when refused, 1 when the host failed, else 0, after an OFF line while GitHub is off on this machine.
+ * the checks every host write takes (the caller on the team, the repository in the team's repository list) and no task's approval.
+ * Exit 2 when refused, 1 when the host failed, else 0, after an OFF line while the code host is off on this machine.
  */
 export async function ciRerun(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const repo = onePositional(args, 'owner/name').trim().toLowerCase();
