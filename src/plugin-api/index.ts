@@ -174,6 +174,8 @@ export type { Env } from '../core/home.ts';
 export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/http.ts';
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from '../core/printable.ts';
+// The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
+export { INTERFACE_MAJOR, INTERFACE_VERSION, parseInterfaceVersion } from '../interface/version.ts';
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter, type StampCredit } from '../core/stamp.ts';
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
