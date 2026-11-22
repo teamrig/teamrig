@@ -24,17 +24,23 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(claimed, []);
   });
 
-  it('enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools and secret files', () => {
+  it("enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools, secret files and the person's hooks file", () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(hostAdapterProblems(adapter), []);
     const ports = adapter.create(hostDeps());
-    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'secrets', 'permissions', 'plugin', 'launcher']);
+    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'secrets', 'permissions', 'plugin', 'launcher', 'userHooks']);
     assert.deepEqual(
       Object.entries(ports)
         .filter(([, port]) => !isUnsupported(port))
         .map(([name]) => name),
-      ['hooks', 'toolCall', 'secrets'],
+      ['hooks', 'toolCall', 'secrets', 'userHooks'],
     );
+  });
+
+  it("finds the person's hooks file from the environment and platform it is handed", () => {
+    const { userHooks } = adapter.create(hostDeps({ env: { CODEX_HOME: 'D:\\agents\\codex' }, platform: 'win32' }));
+    assert.ok(!isUnsupported(userHooks));
+    assert.equal(userHooks.file('D:\\home\\ada'), 'D:\\agents\\codex\\hooks.json');
   });
 
   it("reads a hook's tool call through its own tools on the platform it is handed", () => {

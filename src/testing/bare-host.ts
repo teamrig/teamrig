@@ -16,5 +16,6 @@ export function bareHost(): HostPorts {
     permissions: unsupported('no permission rule is kept'),
     plugin: unsupported('no plugin is installed'),
     launcher: unsupported('no session of the host is told'),
+    userHooks: unsupported('no hooks file of the person is kept'),
   };
 }

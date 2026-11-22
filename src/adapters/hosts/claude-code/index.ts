@@ -1,4 +1,4 @@
-import { defineHost } from '../../../plugin-api/index.ts';
+import { defineHost, unsupported } from '../../../plugin-api/index.ts';
 import { declaration } from './declaration.ts';
 import { hookBridge } from './hook-bridge.ts';
 import { hostPaths } from './paths.ts';
@@ -16,6 +16,9 @@ import { usageMeter } from './usage.ts';
  * status line, where it keeps its files, which of them are secrets, its permission rules, its plugin store and who it says a run is. Each further
  * port moves here from the core as the port split names it.
  */
+
+/** Claude Code runs teamrig's hooks from the installed plugin itself, so no hooks file of the person's needs them. */
+const PLUGIN_HOOKS = unsupported("Claude Code runs teamrig's hooks from its plugin");
 export default defineHost({
   declaration,
   create: (deps) => {
@@ -31,6 +34,7 @@ export default defineHost({
       permissions: hostPermissions,
       plugin: hostPlugin,
       launcher: sessionLauncher(deps.env),
+      userHooks: PLUGIN_HOOKS,
     };
   },
 });
