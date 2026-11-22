@@ -288,8 +288,10 @@ matrix.
   --approved <sha>` merges it (skill `dev-ship-release`). That merge refuses a head holding anything but the version
   raises and the changelog's new notes, never opens the pull request, and asks for a new head's approval when main
   gained a commit the changelog shows, since release-please then rewrites the head; when main gained only commits it
-  hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
-  merged, the next run tags
+  hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once
+  cleared, it opens the release lane (`tools/ship/landing-turn.ts`): the repo's other merges whose checks passed wait
+  until the release lands or fails, at most `release.laneMinutes` in `tools/ship/repos.json` (20 when not listed, 0
+  for none), so they stop restarting the release head's checks. Once it merged, the next run tags
   main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
   the dist on top to the `preview` branch, tagged `v<version>` (`tools/release/publish.ts`; its first commit
   descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the

@@ -848,6 +848,12 @@ function releaseHead(deps: MergeDeps, profile: RepoProfile, repo: string): Merge
   return { head: release.head, sha, opens: false, refusal: deps.releaseRefusal(profile, release, sha) };
 }
 
+/** Opens the release lane of `task` on the merge's turn, once, saying how long it holds the repo's other merges at most. */
+function openLane(deps: MergeDeps, task: string, minutes: number): void {
+  // A catch-up's run keeps the lane its first run opened, and says nothing again.
+  if (deps.turn.openLane(task, minutes * 60_000)) deps.out(`release lane of ${task} open: the repo's other merges wait until this release lands or fails, at most ${minutes} min`);
+}
+
 /** The merge itself; prints every outcome but a move of main past the head, which it returns to the caller. */
 export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate): Promise<MergeExit> {
   const { git } = deps;
@@ -867,6 +873,9 @@ export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate
     deps.err(`REFUSED ${unapproved}`);
     return done(1);
   }
+  // A cleared release holds the repo's other merges while its checks run, which each of them would restart (T5132);
+  // only merges that take a landing turn read the lane, so a repo on GitHub's merge queue opens none.
+  if (args.release !== null && profile.release !== null && profile.release.laneMinutes > 0 && profile.gate === 'ci' && !profile.queue) openLane(deps, args.release, profile.release.laneMinutes);
   const callers = deps.renamedCallers(`refs/remotes/origin/${profile.main}`, sha, repo);
   if (callers !== null) {
     deps.err(`REFUSED ${callers}`);

@@ -44,6 +44,9 @@ without the App: read that summary first, and fix the cause before approving.
   approval once its checks pass (T5055). When release-please wrote the head again on a newer main, the merge keeps the
   approval of the head `--approved` names as long as both heads hold only a release, and prints both (T5117): keep
   `--approved` at the approved sha and wait for the new head's checks. The repo dir must be clean for the rebase.
+- Other merges of the repo say "held by the release lane of T<id>" once the release merge is cleared (T5132): they go
+  on when it lands or fails, or after `release.laneMinutes` (`repos.json`, 20 by default, 0 opens no lane). A merge
+  queue repo opens none.
 - A hand edit on the release branch (a fixed note, a stray file) is refused like any other path; release-please
   writes the head again on the next push to main, dropping the edit.
 - The approval clears only the task's owner, from its own tab, at the approved sha; a merge from another session is

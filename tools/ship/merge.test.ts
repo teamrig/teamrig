@@ -568,7 +568,8 @@ interface RunFixture {
    * The repo's release pull request (T4645), on RELEASE at SHA as origin has it: whether it is open (yes unless given)
    * and why the release check refuses its head (it never does unless given). Unset, repos.json lists none.
    */
-  release?: { open?: boolean; refusal?: string };
+  /** `laneMinutes` is written into repos.json's release entry when given (T5132). */
+  release?: { open?: boolean; refusal?: string; laneMinutes?: number };
   /**
    * What catching up the release head main moved past answers, in turn (the last repeats; T5055); refused unless
    * given. A rebased answer moves the release branch on origin to its sha, or to `releaseRewritten` when given, as the
@@ -747,7 +748,9 @@ function runFixture(fixture: RunFixture = {}): {
   const clearTaskMerge = mock.fn<MergeDeps['clearTaskMerge']>(() => Promise.resolve(fixture.clearance ?? { kind: 'approved', by: 'lead' }));
   const pullTask = mock.fn<MergeDeps['pullTask']>(() => Promise.resolve(fixture.task === null ? undefined : (fixture.task ?? TASK)));
   const releaseRefusal = mock.fn<MergeDeps['releaseRefusal']>(() => fixture.release?.refusal ?? null);
-  const releaseProfile = fixture.release === undefined ? '' : `,"release":{"head":"${RELEASE}","changelog":"CHANGELOG.md"}`;
+  const laneKey = fixture.release?.laneMinutes === undefined ? '' : `,"laneMinutes":${fixture.release.laneMinutes}`;
+  const releaseProfile = fixture.release === undefined ? '' : `,"release":{"head":"${RELEASE}","changelog":"CHANGELOG.md"${laneKey}}`;
+  let laneOpen = false;
   const answersOfCatchUp = fixture.catchUp ?? [CAUGHT_UP_REFUSED];
   let caughtUp = 0;
   let landedWaits = 0;
@@ -807,6 +810,12 @@ function runFixture(fixture: RunFixture = {}): {
         return Promise.resolve();
       },
       waited: () => landedWaits,
+      openLane: (task, capMs) => {
+        gitCalls.push(`turn open lane ${task} ${capMs} ms${laneOpen ? ' (kept)' : ''}`);
+        const opened = !laneOpen;
+        laneOpen = true;
+        return opened;
+      },
       beat: () => undefined,
       end: () => undefined,
     },
@@ -1071,7 +1080,7 @@ test("the release pull request merges on its release task's approval, its head r
   assert.equal(await runMerge(RELEASE_ARGS, deps), 0, err.join('\n'));
   assert.deepEqual(clearTaskMerge.mock.calls.map(call => call.arguments), [['T7', SHA, 'abc1234']]);
   assert.equal(clearMerge.mock.callCount(), 0, 'the release branch names no task to clear on');
-  assert.deepEqual(releaseRefusal.mock.calls.map(call => call.arguments.slice(1)), [[{ head: RELEASE, changelog: 'CHANGELOG.md' }, SHA]]);
+  assert.deepEqual(releaseRefusal.mock.calls.map(call => call.arguments.slice(1)), [[{ head: RELEASE, changelog: 'CHANGELOG.md', laneMinutes: 20 }, SHA]]);
   assert.equal(out[0], `merge of the release pull request ${RELEASE} abc1234de: approved by lead on T7`);
   assert.equal(out.at(-1), 'MERGED #3 into main, now at main999');
   assert.ok(!gitCalls.some(call => call === 'rev-parse --abbrev-ref HEAD' || call.startsWith('rev-parse refs/heads/')), 'no local branch is read');
@@ -1155,6 +1164,31 @@ test('an approval carries to a rewritten release head only from an approved head
   assert.equal(await runMerge({ ...RELEASE_ARGS, approved: gone }, fetched.deps), 1);
   assert.ok(fetched.gitCalls.includes(`fetch --quiet origin ${gone}`), 'a full sha missing here is fetched from origin');
   assert.equal(fetched.clearTaskMerge.mock.callCount(), 0);
+});
+
+test('a cleared release opens its lane for 20 min before its checks are waited on, once across a catch-up, saying so (T5132)', async () => {
+  const { deps, gitCalls, out } = runFixture({ release: {}, mainTip: MOVED, releaseCatchUp: [RELEASE_CAUGHT_UP] });
+  assert.equal(await runMerge(RELEASE_ARGS, deps), 0);
+  const turnCalls = gitCalls.filter(call => call.startsWith('turn '));
+  // The first run finds main moved past the head and catches it up before waiting; the caught-up run keeps the lane.
+  assert.deepEqual(turnCalls, ['turn open lane T7 1200000 ms', 'turn open lane T7 1200000 ms (kept)', 'turn wait']);
+  assert.deepEqual(out.filter(line => line.startsWith('release lane')), ["release lane of T7 open: the repo's other merges wait until this release lands or fails, at most 20 min"]);
+});
+
+test('a release opens no lane when refused, when repos.json sets laneMinutes 0, or on the merge queue; a change merge never opens one (T5132)', async () => {
+  const opensLane = (run: ReturnType<typeof runFixture>): boolean => run.gitCalls.some(call => call.startsWith('turn open lane'));
+  const unapproved = runFixture({ release: {}, clearance: { kind: 'refused', reason: 'T7 has no approval of abc1234de by lead' } });
+  assert.equal(await runMerge(RELEASE_ARGS, unapproved.deps), 1);
+  assert.equal(opensLane(unapproved), false, 'refused');
+  const off = runFixture({ release: { laneMinutes: 0 } });
+  assert.equal(await runMerge(RELEASE_ARGS, off.deps), 0, off.err.join('\n'));
+  assert.equal(opensLane(off), false, 'laneMinutes 0');
+  const queued = runFixture({ release: {}, queue: true });
+  await runMerge(RELEASE_ARGS, queued.deps);
+  assert.equal(opensLane(queued), false, 'merge queue');
+  const change = runFixture();
+  assert.equal(await runMerge(ARGS, change.deps), 0, change.err.join('\n'));
+  assert.equal(opensLane(change), false, 'change merge');
 });
 
 test('--release on a repo whose repos.json lists no release pull request is refused before any GitHub call (T4645)', async () => {

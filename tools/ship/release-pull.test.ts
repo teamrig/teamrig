@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { teamrigShipWritesOf } from './approval.ts';
 import { releaseRefusal } from './release-pull.ts';
-import { profileFor, readProfiles, type ReleasePull } from './repos.ts';
+import { profileFor, readProfiles, RELEASE_LANE_MINUTES, type ReleasePull } from './repos.ts';
 import { TEAMRIG_SHIP_VERSION_FILES } from './version-bump.ts';
 
 const PLUGIN = 'plugins/teamrig/.claude-plugin/plugin.json';
 const VERSION_TS = 'src/core/version.ts';
 const RELEASE_MANIFEST = '.release-please-manifest.json';
 const CHANGELOG = 'CHANGELOG.md';
-const RELEASE: ReleasePull = { head: 'release-please--branches--main', changelog: CHANGELOG };
+const RELEASE: ReleasePull = { head: 'release-please--branches--main', changelog: CHANGELOG, laneMinutes: RELEASE_LANE_MINUTES };
 
 const plugin = (version: string, more = ''): string => `{\n  "name": "teamrig",\n  "version": "${version}"${more}\n}\n`;
 const versionTs = (version: string): string => `export const KIT_VERSION = '${version}';\n`;

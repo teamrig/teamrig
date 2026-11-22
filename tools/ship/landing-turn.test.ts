@@ -46,10 +46,13 @@ function fakeLine(start = 1_000_000): FakeLine {
 const alive = (pids: ReadonlySet<number>) => (pid: number): boolean => pids.has(pid);
 
 /** A merge whose checks passed when it started. */
-const ready = (pid: number, startedAt: number, beatAt: number): Ticket => ({ pid, startedAt, beatAt, readyAt: startedAt });
+const ready = (pid: number, startedAt: number, beatAt: number): Ticket => ({ pid, startedAt, beatAt, readyAt: startedAt, lane: null });
 
 /** A merge still waiting on its checks. */
-const inChecks = (pid: number, startedAt: number, beatAt: number): Ticket => ({ pid, startedAt, beatAt, readyAt: null });
+const inChecks = (pid: number, startedAt: number, beatAt: number): Ticket => ({ pid, startedAt, beatAt, readyAt: null, lane: null });
+
+/** A release merge of task T9 waiting on its checks, its lane open until `until` (T5132). */
+const releasing = (pid: number, startedAt: number, beatAt: number, until: number): Ticket => ({ ...inChecks(pid, startedAt, beatAt), lane: { task: 'T9', until } });
 
 test('a merge takes its place in line when it starts, not ready, and leaves it as it ends', () => {
   const line = fakeLine();
@@ -220,6 +223,113 @@ test('a merge turns ready as it first waits, and stays ready through its catch-u
   assert.equal(line.tickets.get(7)?.readyAt, 1_005_000, 'it keeps its first ready time');
 });
 
+test("a release lane holds a merge whose checks passed, a newer release too, until the release lands (T5132)", async () => {
+  const line = fakeLine();
+  const pids = new Set([7, 9]);
+  line.tickets.set(9, releasing(9, 1_000_500, 1_000_500, 1_000_000 + 20 * 60_000));
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: alive(pids), clock: line.clock }, TIMES);
+  for (let ms = 1000; ms < 5000; ms += 1000) line.clock.at(ms, () => line.tickets.set(9, releasing(9, 1_000_500, 1_000_000 + ms, 1_000_000 + 20 * 60_000)));
+  line.clock.at(5000, () => {
+    line.tickets.delete(9);
+    pids.delete(9);
+  });
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.deepEqual(said, [
+    'checks passed; held by the release lane of T9 until it lands or fails, at most until 00:36:40 UTC',
+    'the release lane of T9 ended, its release landed or failed: going on after 5 s',
+  ]);
+  assert.deepEqual(line.clock.slept, [1000, 1000, 1000, 1000, 1000]);
+  assert.equal(turn.waited(), 1, 'the release that landed moved main by design (T4280)');
+});
+
+test('a release merge that fails frees the lane at once: its process ended, so its ticket is dead (T5132)', async () => {
+  const line = fakeLine();
+  const pids = new Set([7, 9]);
+  line.tickets.set(9, releasing(9, 999_000, 1_000_000, 1_000_000 + 20 * 60_000));
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: alive(pids), clock: line.clock }, TIMES);
+  // Its checks failed: the merge exits without removing its ticket.
+  line.clock.at(2000, () => pids.delete(9));
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.equal(said.at(-1), 'the release lane of T9 ended, its release landed or failed: going on after 2 s');
+  assert.equal(line.tickets.has(9), false, 'the dead ticket is removed');
+});
+
+test('the release lane holds at most its cap, then the merge goes on, saying so and not counting a landed wait (T5132)', async () => {
+  const line = fakeLine();
+  const until = 1_000_000 + 2500;
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: () => true, clock: line.clock }, TIMES);
+  for (let ms = 0; ms <= 4000; ms += 500) line.clock.at(ms, () => line.tickets.set(9, releasing(9, 999_000, 1_000_000 + ms, until)));
+  line.tickets.set(9, releasing(9, 999_000, 1_000_000, until));
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.deepEqual(line.clock.slept, [1000, 1000, 500], 'the last look falls on the cap');
+  assert.deepEqual(said, [
+    'checks passed; held by the release lane of T9 until it lands or fails, at most until 00:16:42 UTC',
+    'the release lane of T9 reached its cap at 00:16:42 UTC: going on after 3 s',
+  ]);
+  assert.equal(turn.waited(), 0);
+});
+
+test('a lane opened while a merge waits on an older one holds it too, and the older merge is waited on after (T5132)', async () => {
+  const line = fakeLine();
+  const pids = new Set([5, 7, 9]);
+  line.tickets.set(5, ready(5, 999_000, 1_000_000));
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: alive(pids), clock: line.clock }, TIMES);
+  const until = 1_000_000 + 20 * 60_000;
+  for (let ms = 1000; ms < 4000; ms += 1000) {
+    line.clock.at(ms, () => {
+      line.tickets.set(5, ready(5, 999_000, 1_000_000 + ms));
+      line.tickets.set(9, releasing(9, 1_000_500, 1_000_000 + ms, until));
+    });
+  }
+  line.clock.at(4000, () => {
+    line.tickets.delete(9);
+    pids.delete(9);
+  });
+  line.clock.at(5000, () => line.tickets.delete(5));
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.deepEqual(said, [
+    'checks passed; waiting for 1 older merge(s) of this repo to land first: pid 5 started 00:16:39 UTC',
+    'checks passed; held by the release lane of T9 until it lands or fails, at most until 00:36:40 UTC',
+    'the release lane of T9 ended, its release landed or failed: going on after 3 s',
+    'checks passed; waiting for 1 older merge(s) of this repo to land first: pid 5 started 00:16:39 UTC',
+    'older merges landed or ended: going on after 1 s',
+  ]);
+  assert.equal(turn.waited(), 1, 'one wait, counted once');
+});
+
+test('the release merge opens its lane once, waits on no older merge, and a cap of 0 opens none (T5132)', async () => {
+  const line = fakeLine();
+  line.tickets.set(5, ready(5, 999_000, 1_000_000));
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: () => true, clock: line.clock }, TIMES);
+  assert.equal(turn.openLane('T9', 0), false);
+  assert.equal(line.tickets.get(7)?.lane, null, 'a cap of 0 opens no lane');
+  assert.equal(turn.openLane('T9', 60_000), true);
+  assert.deepEqual(line.tickets.get(7)?.lane, { task: 'T9', until: 1_060_000 });
+  await line.clock.sleep(5000);
+  assert.equal(turn.openLane('T9', 60_000), false);
+  assert.deepEqual(line.tickets.get(7)?.lane, { task: 'T9', until: 1_060_000 }, 'a catch-up keeps the first lane');
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.deepEqual(said, [], 'the older merge is held by this lane: waiting on it would wait on itself');
+  assert.deepEqual(line.clock.slept, [5000]);
+  assert.equal(line.tickets.get(7)?.readyAt, 1_005_000);
+});
+
+test('a lane past its cap or on a dead ticket holds nobody (T5132)', async () => {
+  const line = fakeLine();
+  line.tickets.set(8, releasing(8, 999_000, 1_000_000, 1_000_000));
+  line.tickets.set(9, releasing(9, 999_500, 1_000_000, 2_000_000));
+  const turn = landingTurn({ store: line.store, pid: 7, pidAlive: alive(new Set([7, 8])), clock: line.clock }, TIMES);
+  const said: string[] = [];
+  await turn.wait(text => said.push(text));
+  assert.deepEqual(said, []);
+  assert.deepEqual(line.clock.slept, []);
+});
+
 test('parseTicket reads a written ticket, one written before readyAt as not ready, and refuses a torn or foreign one', () => {
   assert.deepEqual(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"readyAt":1}'), ready(5, 1, 2));
   assert.deepEqual(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"readyAt":null}'), inChecks(5, 1, 2));
@@ -228,6 +338,14 @@ test('parseTicket reads a written ticket, one written before readyAt as not read
   assert.equal(parseTicket('{"pid":5,"startedAt":1'), null);
   assert.equal(parseTicket('{"pid":"5","startedAt":1,"beatAt":2}'), null);
   assert.equal(parseTicket('[1,2]'), null);
+});
+
+test('parseTicket reads a release lane, a ticket written before lanes as none, and refuses a malformed lane (T5132)', () => {
+  assert.deepEqual(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"readyAt":null,"lane":{"task":"T9","until":3}}'), releasing(5, 1, 2, 3));
+  assert.deepEqual(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"readyAt":null,"lane":null}'), inChecks(5, 1, 2));
+  assert.equal(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"lane":{"task":"T9"}}'), null);
+  assert.equal(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"lane":{"task":9,"until":3}}'), null);
+  assert.equal(parseTicket('{"pid":5,"startedAt":1,"beatAt":2,"lane":true}'), null);
 });
 
 test('the file store writes, lists and removes tickets, skipping files that are not one', () => {

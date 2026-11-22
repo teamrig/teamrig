@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
-import { profileFor, readProfiles, type RepoProfile } from '../ship/repos.ts';
+import { profileFor, readProfiles, RELEASE_LANE_MINUTES, type RepoProfile } from '../ship/repos.ts';
 import { TEAMRIG_SHIP_VERSION_FILES } from '../ship/version-bump.ts';
 import type { AppKey, Fetch, GateDeps, GateOutcome, GateTarget, MergeDeps, MergeOutcome, MergeTarget } from './release-merge.ts';
 import { epochSeconds, gateCommand, gateSummary, mergeCommand, type Env } from './release-merge-commands.ts';
@@ -23,7 +23,7 @@ const PROFILE: RepoProfile = {
   ...profileFor(readProfiles(), 'teamrig/teamrig'),
   main: 'main',
   summary: 'every check passed',
-  release: { head: HEAD_BRANCH, changelog: CHANGELOG },
+  release: { head: HEAD_BRANCH, changelog: CHANGELOG, laneMinutes: RELEASE_LANE_MINUTES },
   regenerated: TEAMRIG_SHIP_VERSION_FILES.map((file) => file.path),
 };
 const PROFILES: ReadonlyMap<string, RepoProfile> = new Map([[REPO, PROFILE]]);

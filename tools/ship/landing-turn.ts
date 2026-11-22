@@ -18,7 +18,21 @@ import { isRecord } from './json.ts';
  * one within seconds under load (T990), so a running id alone could hold every newer merge back. A process that
  * ended without removing its ticket frees the turn at once, one whose id was reused at most `staleMs` after its
  * last beat. A wait gives up after `timeoutMs` and lands as before, saying so.
+ *
+ * A release merge opens the release lane once its head is cleared (T5132): each merge to main makes the release tool
+ * rewrite the release head, restarting its checks, so the release could keep losing its turn to newer merges. While
+ * a live lane is open, every other merge of the repo whose checks passed is held, older ones too, until the release
+ * merge ends (it landed or failed) or the lane's cap passes, so a stuck release never holds the team for longer. The
+ * release merge itself waits on nobody: a merge it waited on would be held by its lane.
  */
+
+/** The release lane a release merge opened: other merges of the repo wait until it ends or `until` passes. */
+export interface Lane {
+  /** The release task whose merge opened it, named on each held merge. */
+  readonly task: string;
+  /** When the hold ends at the latest, in ms since the epoch. */
+  readonly until: number;
+}
 
 /** One merge's place in line. */
 export interface Ticket {
@@ -29,6 +43,8 @@ export interface Ticket {
   readonly beatAt: number;
   /** When its checks first passed, in ms since the epoch; null while it waits on them, and in a ticket written before readyAt. */
   readonly readyAt: number | null;
+  /** The release lane this merge opened; null for any other merge, and in a ticket written before lanes. */
+  readonly lane: Lane | null;
 }
 
 /** Where the repo's tickets are kept, one per process. */
@@ -75,6 +91,11 @@ export interface LandingTurn {
    * likely moved main by design, so the move a merge reads next is not one it lost a race to (T4280).
    */
   waited(): number;
+  /**
+   * Opens the release lane of `task` for at most `capMs` from now, once; a later call keeps the first lane, so a
+   * catch-up never extends the hold. A cap of 0 opens none. True when this call opened it.
+   */
+  openLane(task: string, capMs: number): boolean;
   /** Marks this merge live now. */
   beat(): void;
   /** Leaves the line. */
@@ -100,19 +121,38 @@ export function landingTurn(deps: TurnDeps, times: TurnTimes = TURN_TIMES): Land
     }
   };
   let readyAt: number | null = null;
-  const beat = (): void => tried(() => store.write({ pid, startedAt, beatAt: clock.now(), readyAt }));
+  let lane: Lane | null = null;
+  const beat = (): void => tried(() => store.write({ pid, startedAt, beatAt: clock.now(), readyAt, lane }));
   beat();
   const own = { pid, startedAt };
 
-  /** The older live tickets that are ready; a dead one is removed, so the next reader skips it at once. */
-  const ahead = (): Ticket[] => {
+  /** The other live tickets; a dead one is removed, so the next reader skips it at once. */
+  const live = (): Ticket[] => {
     const now = clock.now();
     return store.list().filter(ticket => {
-      if (ticket.pid === pid || !olderThan(ticket, own)) return false;
-      if (pidAlive(ticket.pid) && now - ticket.beatAt <= times.staleMs) return ticket.readyAt !== null;
+      if (ticket.pid === pid) return false;
+      if (pidAlive(ticket.pid) && now - ticket.beatAt <= times.staleMs) return true;
       tried(() => store.remove(ticket.pid));
       return false;
     });
+  };
+
+  /** The open release lane of another live merge, the one that holds longest; null when none is open now. */
+  const laneOf = (tickets: readonly Ticket[]): Lane | null => {
+    const now = clock.now();
+    const open = tickets.flatMap(ticket => (ticket.lane !== null && now < ticket.lane.until ? [ticket.lane] : []));
+    return open.reduce<Lane | null>((longest, next) => (longest === null || next.until > longest.until ? next : longest), null);
+  };
+
+  /** How a hold by a release lane ended: `ended` when its release merge ended, which likely moved main by design (T4280). */
+  const laneEnd = (held: Lane, heldSince: number, log: (line: string) => void): 'ended' | 'capped' => {
+    const after = Math.round((clock.now() - heldSince) / 1000);
+    if (clock.now() >= held.until) {
+      log(`the release lane of ${held.task} reached its cap at ${clockOf(held.until)} UTC: going on after ${after} s`);
+      return 'capped';
+    }
+    log(`the release lane of ${held.task} ended, its release landed or failed: going on after ${after} s`);
+    return 'ended';
   };
 
   let landedWaits = 0;
@@ -120,21 +160,55 @@ export function landingTurn(deps: TurnDeps, times: TurnTimes = TURN_TIMES): Land
     beat,
     end: () => tried(() => store.remove(pid)),
     waited: () => landedWaits,
+    openLane: (task, capMs) => {
+      if (lane !== null || capMs <= 0) return false;
+      lane = { task, until: clock.now() + capMs };
+      beat();
+      return true;
+    },
     wait: async log => {
-      const since = clock.now();
-      readyAt ??= since;
+      readyAt ??= clock.now();
+      // The release merge holds the others: waiting on any of them would wait on a merge its own lane holds.
+      if (lane !== null) {
+        beat();
+        return;
+      }
+      let movedByDesign = false;
+      let held: Lane | null = null;
+      let heldSince = 0;
+      // The time out for older merges counts from the end of the last hold by a lane, which has its own cap.
+      let since = clock.now();
       let said = '';
       for (;;) {
         beat();
-        const older = ahead();
+        const tickets = live();
+        const open = laneOf(tickets);
+        if (open !== null) {
+          if (held === null) heldSince = clock.now();
+          if (held?.task !== open.task || held.until !== open.until) {
+            log(`checks passed; held by the release lane of ${open.task} until it lands or fails, at most until ${clockOf(open.until)} UTC`);
+          }
+          held = open;
+          await clock.sleep(Math.min(times.pollMs, Math.max(open.until - clock.now(), 1)));
+          continue;
+        }
+        if (held !== null) {
+          if (laneEnd(held, heldSince, log) === 'ended') movedByDesign = true;
+          held = null;
+          since = clock.now();
+          said = '';
+        }
+        const older = tickets.filter(ticket => olderThan(ticket, own) && ticket.readyAt !== null);
         if (older.length === 0) {
           if (said !== '') {
-            landedWaits += 1;
+            movedByDesign = true;
             log(`older merges landed or ended: going on after ${Math.round((clock.now() - since) / 1000)} s`);
           }
+          if (movedByDesign) landedWaits += 1;
           return;
         }
         if (clock.now() - since >= times.timeoutMs) {
+          if (movedByDesign) landedWaits += 1;
           log(`waited ${times.timeoutMs / 60_000} min for older merges (${said}): landing anyway`);
           return;
         }
@@ -156,10 +230,12 @@ export function parseTicket(text: string): Ticket | null {
     return null;
   }
   if (!isRecord(body)) return null;
-  const { pid, startedAt, beatAt, readyAt = null } = body;
+  const { pid, startedAt, beatAt, readyAt = null, lane = null } = body;
   if (typeof pid !== 'number' || typeof startedAt !== 'number' || typeof beatAt !== 'number') return null;
   if (readyAt !== null && typeof readyAt !== 'number') return null;
-  return { pid, startedAt, beatAt, readyAt };
+  if (lane === null) return { pid, startedAt, beatAt, readyAt, lane };
+  if (!isRecord(lane) || typeof lane['task'] !== 'string' || typeof lane['until'] !== 'number') return null;
+  return { pid, startedAt, beatAt, readyAt, lane: { task: lane['task'], until: lane['until'] } };
 }
 
 /** Tickets as `<pid>.json` files in `dir`, each written whole by a rename, so a reader never sees half of one. */

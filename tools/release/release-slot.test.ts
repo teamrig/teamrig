@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { profileFor, readProfiles, type RepoProfile } from '../ship/repos.ts';
+import { profileFor, readProfiles, RELEASE_LANE_MINUTES, type RepoProfile } from '../ship/repos.ts';
 import { parseChannels } from './channels.ts';
 import type { Fetch } from './release-merge.ts';
 import { slotCommand, slotDecision } from './release-slot.ts';
@@ -83,7 +83,7 @@ describe('slotDecision', () => {
 });
 
 describe('slotCommand', () => {
-  const PROFILE: RepoProfile = { ...profileFor(readProfiles(), 'teamrig/teamrig'), main: 'main', release: { head: HEAD, changelog: 'CHANGELOG.md' } };
+  const PROFILE: RepoProfile = { ...profileFor(readProfiles(), 'teamrig/teamrig'), main: 'main', release: { head: HEAD, changelog: 'CHANGELOG.md', laneMinutes: RELEASE_LANE_MINUTES } };
   const PROFILES: ReadonlyMap<string, RepoProfile> = new Map([[REPO, PROFILE]]);
   let dir: string;
   let output: string;

@@ -32,7 +32,16 @@ export interface ReleasePull {
   head: string;
   /** The release notes file, relative to the repo dir, to which the release pull request adds its version's notes. */
   changelog: string;
+  /**
+   * How long, in minutes, the release lane holds the repo's other merges at most once `ship.ts merge --release` cleared
+   * the release head (landing-turn.ts, T5132): each merge to main restarts the release head's checks. 20 when not
+   * listed, so a stuck release never holds the team longer; 0 opens no lane.
+   */
+  laneMinutes: number;
 }
+
+/** The release lane's cap when repos.json names none: about one CI run of the release head and its landing (T5132). */
+export const RELEASE_LANE_MINUTES = 20;
 
 export interface RepoProfile {
   slug: string;
@@ -146,7 +155,13 @@ function parseRelease(slug: string, value: unknown): ReleasePull | null {
   if (!isText(head) || !BRANCH.test(head) || !isText(changelog) || changelog.startsWith('/') || changelog.split('/').includes('..')) {
     throw new Error(`repos.json: ${slug} "release" needs a "head" branch name and a "changelog" path inside the repo`);
   }
-  return { head, changelog };
+  // Only a missing key takes the default: a null is a typo to refuse, not "no lane".
+  const listed = isRecord(value) ? value['laneMinutes'] : undefined;
+  const laneMinutes = listed === undefined ? RELEASE_LANE_MINUTES : listed;
+  if (typeof laneMinutes !== 'number' || !Number.isInteger(laneMinutes) || laneMinutes < 0 || laneMinutes > 120) {
+    throw new Error(`repos.json: ${slug} "release" "laneMinutes" is a whole number of minutes from 0 (no release lane) to 120`);
+  }
+  return { head, changelog, laneMinutes };
 }
 
 function parseRegenerated(slug: string, value: unknown): readonly string[] {

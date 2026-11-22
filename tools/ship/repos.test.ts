@@ -40,10 +40,19 @@ test('reads the sections a pull request note must hold, and refuses a list that 
 
 test('reads the release pull request\'s branch and changelog, none when not listed, and refuses a bad branch or a path outside the repo (T4645)', () => {
   const release = (value: string): string => `{"O/R":{"main":"main","gate":"ci","checks":["a"],"release":${value}}}`;
-  assert.deepEqual(profileFor(parseProfiles(release('{"head":"release-please--main","changelog":"CHANGELOG.md"}')), 'O/R').release, { head: 'release-please--main', changelog: 'CHANGELOG.md' });
+  assert.deepEqual(profileFor(parseProfiles(release('{"head":"release-please--main","changelog":"CHANGELOG.md"}')), 'O/R').release, { head: 'release-please--main', changelog: 'CHANGELOG.md', laneMinutes: 20 });
   assert.equal(profileFor(parseProfiles('{"O/R":{"main":"main","gate":"ci","checks":["a"]}}'), 'O/R').release, null);
   for (const value of ['"x"', '{"head":"r"}', '{"changelog":"C.md"}', '{"head":"r b","changelog":"C.md"}', '{"head":"r","changelog":"/C.md"}', '{"head":"r","changelog":"../C.md"}', '{"head":"","changelog":"C.md"}']) {
     assert.throws(() => parseProfiles(release(value)), /O\/R "release" needs a "head" branch name and a "changelog" path inside the repo/, value);
+  }
+});
+
+test('reads the release lane cap in minutes, 20 when not listed and 0 for none, and refuses anything but a whole 0 to 120 (T5132)', () => {
+  const lane = (value: string): string => `{"O/R":{"main":"main","gate":"ci","checks":["a"],"release":{"head":"r","changelog":"C.md","laneMinutes":${value}}}}`;
+  assert.equal(profileFor(parseProfiles(lane('0')), 'O/R').release?.laneMinutes, 0);
+  assert.equal(profileFor(parseProfiles(lane('45')), 'O/R').release?.laneMinutes, 45);
+  for (const value of ['-1', '121', '2.5', '"20"', 'null']) {
+    assert.throws(() => parseProfiles(lane(value)), /O\/R "release" "laneMinutes" is a whole number of minutes from 0 \(no release lane\) to 120/, value);
   }
 });
 
@@ -52,12 +61,12 @@ test('the shipped repos.json names teamrig\'s release-please pull request branch
   const config = readFileSync(new URL('../../release-please-config.json', import.meta.url), 'utf8');
   const component = /"component":\s*"([^"]+)"/.exec(config)?.[1];
   const changelog = /"changelog-path":\s*"([^"]+)"/.exec(config)?.[1];
-  assert.deepEqual(readProfiles().get('teamrig/teamrig')?.release, { head: `release-please--branches--main--components--${component ?? ''}`, changelog });
+  assert.deepEqual(readProfiles().get('teamrig/teamrig')?.release, { head: `release-please--branches--main--components--${component ?? ''}`, changelog, laneMinutes: 20 });
 });
 
 test('the shipped repos.json names teamrig-pane\'s release-please branch, from its component teamrig-pane, and its CHANGELOG (T4821)', () => {
   // The pane's release-please-config.json lives in its own repo: component teamrig-pane, changelog-path CHANGELOG.md.
-  assert.deepEqual(readProfiles().get('teamrig/teamrig-pane')?.release, { head: 'release-please--branches--main--components--teamrig-pane', changelog: 'CHANGELOG.md' });
+  assert.deepEqual(readProfiles().get('teamrig/teamrig-pane')?.release, { head: 'release-please--branches--main--components--teamrig-pane', changelog: 'CHANGELOG.md', laneMinutes: 20 });
 });
 
 test('refuses a missing or unknown gate', () => {
