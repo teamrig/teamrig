@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -57,6 +57,18 @@ export class TempRepo {
     this.git('init', '-q');
     this.git('config', 'user.name', AUTHOR.name);
     this.git('config', 'user.email', AUTHOR.email);
+    return this;
+  }
+
+  /**
+   * Copies `template`'s working and outside folders here, so a spec builds its repos once and each test starts from
+   * its own copy: copying files costs far less than the git runs that made them, which take seconds per test on a
+   * loaded Windows host (T5032). A remote the template names by path still points at the template's folder; a test
+   * that talks to it re-points it here (`git remote set-url`).
+   */
+  copyFrom(template: TempRepo): this {
+    cpSync(template.dir, this.dir, { recursive: true });
+    cpSync(template.outside, this.outside, { recursive: true });
     return this;
   }
 

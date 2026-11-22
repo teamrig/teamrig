@@ -1,19 +1,40 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { TempRepo } from '../../tools/lib/temp-repo.ts';
 import { catFileBatchOf, GIT_MERGE as git, ORIGIN, rebaseStopReason } from './git.ts';
 
-/** A repo on `main`, pushed to a bare origin beside it, with `origin/HEAD` set; returns the repo and the origin's folder. */
-function repoWithOrigin(prefix: string): { repo: TempRepo; origin: string } {
-  const repo = new TempRepo(prefix).init();
-  const origin = join(repo.outside, 'origin.git');
+/** The bare origin's folder inside a repo's outside folder. */
+const ORIGIN_FOLDER = 'origin.git';
+
+/**
+ * A repo on `main`, pushed to a bare origin beside it, with `origin/HEAD` set; built once per file, since its nine git
+ * runs took most of each test's time on a loaded Windows host (T5032).
+ */
+let template: TempRepo | undefined;
+
+before(() => {
+  const repo = new TempRepo('merge-template').init();
+  const origin = join(repo.outside, ORIGIN_FOLDER);
   repo.git('init', '-q', '--bare', '-b', 'main', origin);
   repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
   commit(repo, 'app.txt', 'one\n', 'one');
   repo.git('remote', 'add', 'origin', origin);
   repo.git('push', '-q', '-u', 'origin', 'main');
   repo.git('remote', 'set-head', 'origin', 'main');
+  template = repo;
+});
+
+after(() => {
+  template?.remove();
+});
+
+/** A copy of the template repo of its own, its origin re-pointed at its own copy of the bare origin. */
+function repoWithOrigin(prefix: string): { repo: TempRepo; origin: string } {
+  assert.ok(template !== undefined, 'the template repo is built before any test');
+  const repo = new TempRepo(prefix).copyFrom(template);
+  const origin = join(repo.outside, ORIGIN_FOLDER);
+  repo.git('remote', 'set-url', 'origin', origin);
   return { repo, origin };
 }
 
