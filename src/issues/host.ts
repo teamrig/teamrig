@@ -269,10 +269,12 @@ export interface PullRequests {
   pulls(repo: string, since: string | undefined): Promise<HostPulls>;
 }
 
-/** A code host's CI checks: a failed job's log, read. */
+/** A code host's CI checks: a failed job's log, read, and a whole run started again. */
 export interface Checks {
   /** The end of the log of the failed CI job `jobId` of `repo` (a pull request's FailedJob id). */
   jobLog(repo: string, jobId: number): Promise<HostJobLog>;
+  /** Starts every job of the CI run `runId` of `repo` again, as `ci rerun` asks after a glitch on the host's side (T5063). */
+  rerunRun(repo: string, runId: number): Promise<HostEnd>;
 }
 
 /** A code host's posts: what was written on its pull requests and issues, read. */

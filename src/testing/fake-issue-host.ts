@@ -29,7 +29,8 @@ export type HostCall =
   | { readonly kind: 'field'; readonly target: IssueTarget; readonly field: string; readonly value: FieldValue }
   | { readonly kind: 'type'; readonly target: IssueTarget; readonly type: string }
   | { readonly kind: 'approve'; readonly target: IssueTarget; readonly head: string }
-  | { readonly kind: 'land'; readonly target: IssueTarget; readonly pull: PullStand };
+  | { readonly kind: 'land'; readonly target: IssueTarget; readonly pull: PullStand }
+  | { readonly kind: 'rerun'; readonly repo: string; readonly runId: number };
 
 /**
  * An issue host that reaches nothing: a list gives the issues a test gave it, none until then, a pull request read gives what a test set,
@@ -355,6 +356,19 @@ export class FakeIssueHost implements IssueHost {
   jobLog(repo: string, jobId: number): Promise<HostJobLog> {
     this.jobLogReads.push({ repo, jobId });
     return Promise.resolve(this.jobLogs.get(jobId) ?? { kind: 'read', step: undefined, lines: [] });
+  }
+
+  private rerunEnd: HostEnd = { kind: 'done' };
+
+  /** From now on, a run's re-run fails for `reason`. */
+  failsRerun(reason: string): this {
+    this.rerunEnd = { kind: 'failed', reason };
+    return this;
+  }
+
+  rerunRun(repo: string, runId: number): Promise<HostEnd> {
+    this.calls.push({ kind: 'rerun', repo, runId });
+    return Promise.resolve(this.rerunEnd);
   }
 
   pulls(repo: string, since: string | undefined): Promise<HostPulls> {

@@ -189,6 +189,46 @@ describe('GitHubIssueHost.jobLog', () => {
   });
 });
 
+describe('GitHubIssueHost.rerunRun', () => {
+  const failing = (code: number, stderr: string): GhResult => ({ end: { kind: 'exited', code }, stdout: '', stderr });
+
+  it('re-runs the whole run with the saved token', async () => {
+    const gh = new FakeGh();
+    const end = await hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'tok_zzzzzzzz')).rerunRun('acme/web', 45027704561);
+    assert.deepEqual(end, { kind: 'done' });
+    assert.deepEqual(
+      gh.ran.map((request) => [request.args, request.env['GH_TOKEN']]),
+      [[['api', 'repos/acme/web/actions/runs/45027704561/rerun', '-X', 'POST'], 'tok_zzzzzzzz']],
+    );
+  });
+
+  it('names the Actions write, a run not there, or gh\'s own line with any secret shape redacted, when GitHub refuses', async () => {
+    const reasonOf = async (result: GhResult): Promise<string> => {
+      const end = await hostWith(new FakeGh().failsWrite(result), new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+      return end.kind === 'failed' ? end.reason : 'done';
+    };
+    assert.equal(
+      await reasonOf(failing(1, 'HTTP 403: Resource not accessible by personal access token\n')),
+      'the token saved as teamrig-gh-acme may not re-run run 7 of acme/web: on GitHub, edit that token and set Actions to Read and write; its text stays the same, so nothing needs saving again',
+    );
+    assert.equal(
+      await reasonOf(failing(1, 'HTTP 404: Not Found\n')),
+      'run 7 of acme/web is not there for the token saved as teamrig-gh-acme: check the run id (the number after /runs/ in its address), and that the token reaches acme/web',
+    );
+    const odd = await reasonOf(failing(1, 'HTTP 403: This workflow is already running tok_abcdefgh\n'));
+    assert.equal(odd.startsWith('gh api to re-run run 7 of acme/web') && odd.includes('already running') && !odd.includes('tok_abcdefgh'), true, odd);
+  });
+
+  it('says to look on GitHub after a signal, and fails with no saved token, running nothing', async () => {
+    const stopped = await hostWith(new FakeGh().failsWrite({ end: { kind: 'signal', signal: 'SIGTERM' }, stdout: '', stderr: '' })).rerunRun('acme/web', 7);
+    assert.deepEqual(stopped, { kind: 'failed', reason: 'gh was stopped (SIGTERM) on its way to re-run run 7 of acme/web: look on GitHub before a rerun' });
+    const gh = new FakeGh();
+    const none = await hostWith(gh, new FakeCredentials()).rerunRun('acme/web', 7);
+    assert.equal(none.kind, 'failed');
+    assert.deepEqual(gh.ran, []);
+  });
+});
+
 describe('GitHubIssueHost.posts', () => {
   it('reads the posts with the saved token and says how many items it left out', async () => {
     const gh = new FakeGh().holdsPosts('acme/web', 'issues/comments', [restComment('acme/web', 3, 11, { body: 'hi @octocat' }), { id: 12, updated_at: '2030-01-10T00:00:00Z' }]);

@@ -55,7 +55,9 @@ import {
   isLinkAdd,
   isMentionRead,
   isReviewRead,
+  isRunRerun,
   isWatchProbe,
+  runRerunArgs,
   issueAssignArgs,
   issueAssigneeReadArgs,
   issueBodyArgs,
@@ -909,6 +911,39 @@ describe('isJobLogRead', () => {
   });
 });
 
+describe('isRunRerun', () => {
+  it('takes the re-run of one whole run, as runRerunArgs makes it', () => {
+    const args = runRerunArgs('acme/web', 45027704561);
+    assert.deepEqual(args, ['api', 'repos/acme/web/actions/runs/45027704561/rerun', '-X', 'POST']);
+    assert.equal(isRunRerun(args), true);
+    assert.equal(isAllowedGh(args), true);
+  });
+
+  it("refuses the failed jobs alone, one job, a cancel, another method or flag, gh's own rerun, or a run or repository that is not one", () => {
+    const RERUN = runRerunArgs('acme/web', 7);
+    const refused: string[][] = [
+      ['api', 'repos/acme/web/actions/runs/7/rerun-failed-jobs', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/jobs/7/rerun', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/runs/7/cancel', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/runs/7/rerun', '-X', 'DELETE'],
+      ['api', 'repos/acme/web/actions/runs/7/rerun', '--method', 'POST'],
+      [...RERUN, '-F', 'enable_debug_logging=true'],
+      ['run', 'rerun', '7', '--repo', 'acme/web'],
+      ['api', 'repos/acme/web/actions/runs/07/rerun', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/runs/-7/rerun', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/runs/0/rerun', '-X', 'POST'],
+      ['api', 'repos/acme/../actions/runs/7/rerun', '-X', 'POST'],
+      ['api', 'repos/acme/web/actions/runs/7/rerun/', '-X', 'POST'],
+      ['api', '/repos/acme/web/actions/runs/7/rerun', '-X', 'POST'],
+      RERUN.slice(0, 3),
+    ];
+    for (const args of refused) {
+      assert.equal(isRunRerun(args), false, args.join(' '));
+      assert.equal(isAllowedGh(args), false, args.join(' '));
+    }
+  });
+});
+
 describe('isMentionRead', () => {
   const SINCE = '2030-01-10T08:00:00Z';
 
@@ -999,7 +1034,7 @@ describe('ghRunnerOver', () => {
     }
     await assert.rejects(
       ghRunnerOver(run).run({ args: ['issue', 'close', '7'], env: {} }),
-      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh issue close with these arguments/,
+      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh issue close with these arguments/,
     );
     assert.deepEqual(asked, []);
   });

@@ -30,6 +30,7 @@ import {
   isPullMerge,
   isPullStandRead,
   isReviewRead,
+  isRunRerun,
   isWatchProbe,
   LabelFileReads,
   labelFileRepoOf,
@@ -551,7 +552,7 @@ export class FakeGh implements GhRunner {
     return this;
   }
 
-  /** From now on, a comment on, a body edit or the close of, a label added to or taken off, an assignee or a link added to an issue, and a label made, end as given. */
+  /** From now on, a comment on, a body edit or the close of, a label added to or taken off, an assignee or a link added to an issue, a label made, a pull request's approval or landing and a run's re-run, end as given. */
   failsWrite(result: GhResult): this {
     this.writeFailure = result;
     return this;
@@ -643,7 +644,7 @@ export class FakeGh implements GhRunner {
       const repository = this.stands.get(`${repo}#${(request.args[9] ?? '').slice('number='.length)}`);
       return this.canned.get(repo) ?? (repository === undefined ? notVisible(repo) : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ data: { repository } }), stderr: '' });
     }
-    if (isPullApprove(request.args) || isPullEnqueue(request.args) || isPullMerge(request.args)) {
+    if (isPullApprove(request.args) || isPullEnqueue(request.args) || isPullMerge(request.args) || isRunRerun(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };
     }
     const repo = ghRepoOf(request.args);

@@ -621,6 +621,26 @@ export function isJobLogRead(args: readonly string[]): boolean {
   );
 }
 
+/** The command line that re-runs every job of one Actions run of `repo`, the run named by its id (T5063). */
+export function runRerunArgs(repo: string, runId: number): string[] {
+  return ['api', `repos/${repo}/actions/runs/${String(runId)}/rerun`, '-X', 'POST'];
+}
+
+/** `repos/<owner>/<name>/actions/runs/<id>/rerun`: the whole run, never its failed jobs alone or one job. */
+const RUN_RERUN_PATH = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/([^/]+)\/rerun$/u;
+
+/**
+ * True for runRerunArgs's line and nothing more: one whole run of one repository started again, a write that changes
+ * no code, setting or secret. A run id is shaped as a job's (JOB_ID). Re-running the failed jobs alone, one job, a
+ * cancel, the debug log flag or any other flag is refused.
+ */
+export function isRunRerun(args: readonly string[]): boolean {
+  const match = RUN_RERUN_PATH.exec(args[1] ?? '');
+  const repo = match?.[1] ?? '';
+  const runId = match?.[2] ?? '';
+  return REPO_NAME.test(repo) && JOB_ID.test(runId) && sameArgs(args, runRerunArgs(repo, Number(runId)));
+}
+
 /** One `gh` run: its arguments, passed as a list and never read by a shell, and the environment. */
 export interface GhRequest {
   readonly args: readonly string[];
@@ -856,12 +876,12 @@ export function isPullMerge(args: readonly string[]): boolean {
   return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullMergeArgs(target, head));
 }
 
-/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a mention scan's read, or a pull request's stand read, approval or landing. */
+/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a CI run's re-run, a mention scan's read, or a pull request's stand read, approval or landing. */
 export class GhRefusedError extends Error {
   override readonly name = 'GhRefusedError';
 
   constructor(args: readonly string[]) {
-    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
   }
 }
 
@@ -892,6 +912,7 @@ export function isAllowedGh(args: readonly string[]): boolean {
     isIssueTypeSet(args) ||
     isWatchProbe(args) ||
     isJobLogRead(args) ||
+    isRunRerun(args) ||
     isMentionRead(args) ||
     isReviewRead(args) ||
     isPullStandRead(args) ||

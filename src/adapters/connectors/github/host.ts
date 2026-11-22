@@ -65,6 +65,7 @@ import {
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
+  runRerunArgs,
   labelReadArgs,
   labelCreateArgs,
   labelFileReadArgs,
@@ -200,6 +201,31 @@ export class GitHubIssueHost implements IssueHost {
       return { kind: 'failed', reason: this.scanner.redact(run.reason) };
     }
     return { kind: 'read', ...failedLogExcerpt(run.stdout, (text) => this.scanner.redact(text)) };
+  }
+
+  /**
+   * Starts every job of the run again (gh.ts isRunRerun), with the owner's saved token, which needs Actions Read and
+   * write. A run stopped by a signal may still have started it, so its line says to look first; GitHub's own refusal
+   * (a run still going, one too old) is the reason, any secret shape redacted.
+   */
+  async rerunRun(repo: string, runId: number): Promise<HostEnd> {
+    const access = await this.tokens.accessFor(repo);
+    if (access instanceof NoAccessError) {
+      return { kind: 'failed', reason: access.message };
+    }
+    let result: GhResult;
+    try {
+      result = await this.gh.run({ args: runRerunArgs(repo, runId), env: access.env });
+    } catch (error) {
+      return { kind: 'failed', reason: startFailureText(error) };
+    }
+    if (result.end.kind === 'signal') {
+      return { kind: 'failed', reason: `gh was stopped (${result.end.signal}) on its way to re-run run ${String(runId)} of ${repo}: look on GitHub before a rerun` };
+    }
+    if (result.end.code !== 0) {
+      return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access)) };
+    }
+    return { kind: 'done' };
   }
 
   /** The posts of `repo` changed since `since` (posts.ts), as the owner's saved token reads them. */
@@ -637,6 +663,22 @@ export function writeFailureText(target: IssueTarget, what: string, code: number
       return `${shown} is not there for ${token}: check the number, and that the token reaches ${target.repo}`;
     case undefined:
       return plainLine(`gh api to ${what} ${shown} ${exitText(code, stderr)}`);
+  }
+}
+
+/** Why a run's re-run failed, with the fix when it is a known one: a refused token, a missing Actions write, no such run. */
+export function rerunFailureText(repo: string, runId: number, code: number, stderr: string, access: RepoAccess): string {
+  const shown = `run ${String(runId)} of ${repo}`;
+  const token = `the token saved as ${access.credential}`;
+  switch (ghFailureKind(code, stderr)) {
+    case 'no-login':
+      return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
+    case 'no-permission':
+      return `${token} may not re-run ${shown}: on GitHub, edit that token and set Actions to Read and write; its text stays the same, so nothing needs saving again`;
+    case 'not-visible':
+      return `${shown} is not there for ${token}: check the run id (the number after /runs/ in its address), and that the token reaches ${repo}`;
+    case undefined:
+      return plainLine(`gh api to re-run ${shown} ${exitText(code, stderr)}`);
   }
 }
 
