@@ -36,6 +36,7 @@ import { configSource, teamlessConfigSource } from './read-config.ts';
 import { goalsSource } from './read-goals.ts';
 import { historySource } from './read-history.ts';
 import { statsSource } from './read-stats.ts';
+import { stepsSource } from './read-steps.ts';
 import { rangeOf } from './stats.ts';
 import { meetingsSource } from './read-meetings.ts';
 import { planSource } from './read-plan.ts';
@@ -83,6 +84,7 @@ const SOURCES: Record<DocumentName, (scope: ReadScope) => DocumentSource> = {
   goals: goalsSource,
   history: historySource(DOCUMENT_CONNECTORS),
   stats: statsSource(DOCUMENT_CONNECTORS),
+  steps: stepsSource,
 };
 
 /** The documents a run with no team is still answered: what a setup screen reads before there is a team to read. */

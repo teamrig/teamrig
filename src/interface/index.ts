@@ -94,6 +94,7 @@ export {
   type StatsBodyInput,
 } from './stats.ts';
 export { sourceOf,type ServedSource, type SourceKind, type SourceNames } from './source.ts';
+export { stepsBody, type ServedStep, type StepInput, type StepsBody, type StepsInput } from './steps.ts';
 export {
   tasksBody,
   type ServedAnswer,
