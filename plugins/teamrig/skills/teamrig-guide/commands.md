@@ -6764,7 +6764,12 @@ or `users/`, a `repo` command's repository; else `GH_REPO`; else the folder's gi
 to the tool for that one run and never printed. No key saved for that owner prints the teamrig command that saves
 one; there is no fallback to the machine's login.
 
-REFUSED, before any key is read: a call that reaches more than one owner (one run uses one owner's key: name one
+The tool runs on an environment teamrig builds, not the session's own: only the variables it needs, its pager,
+prompts and update check off, and its config folder `gh-config` in the teamrig home, which never holds a login. The
+tool and `git` (for the remotes) run by the absolute path PATH finds them at, outside the folder's checkout.
+
+REFUSED, before any key is read: the tool or `git` not on PATH, found by a relative folder or inside the checkout;
+a `gh-config` folder holding a login (`hosts.yml`) or any setting but the format's version; a call that reaches more than one owner (one run uses one owner's key: name one
 repository with `-R`), or none teamrig can tell (a remote in a form it cannot read, such as an SSH alias); the
 `auth`, `config`, `alias` and `extension` groups and any alias or extension, which would change the tool or run
 code with the key; a `GH_HOST` other than the host the keys are for; and a write on one of the team's
