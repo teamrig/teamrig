@@ -17,8 +17,12 @@ type CarryEnd = Exclude<PullCarry, { readonly kind: 'carried' }>;
 /** The work commits of one read, or the end that keeps a carry from resting on it. */
 function workOf(read: HostPullWork, which: string): { readonly kind: 'work'; readonly commits: readonly WorkCommit[] } | CarryEnd {
   switch (read.kind) {
-    case 'read':
-      return { kind: 'work', commits: hostWorkCommits(read.commits) };
+    case 'read': {
+      const work = hostWorkCommits(read.commits);
+      return work.kind === 'work'
+        ? work
+        : { kind: 'refused', reason: `the code host shows ${work.commit.sha.slice(0, 9)} "${work.commit.subject}" of ${which} with no files: an approval carries only over commits read whole, so rebase the empty commit away` };
+    }
     case 'missing':
       return { kind: 'refused', reason: `the code host shows no commits of ${which}: an approval carries only to a head whose work it can read` };
     case 'partial':

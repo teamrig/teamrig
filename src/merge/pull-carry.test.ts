@@ -39,7 +39,12 @@ describe('pullCarry (T5117)', () => {
     { name: 'the commits reordered', live: read(TWO_REBASED, ONE_REBASED), reason: /reordered, now 444444444, 333333333/u },
     { name: 'a merge commit came in', live: read(ONE_REBASED, TWO_REBASED, commit('7'.repeat(40), 'Merge main', 'm', 1, 2)), reason: /merge commit 777777777/u },
     { name: 'the live head is not readable', live: { kind: 'missing' }, reason: /shows no commits of its head ccccccccc over main/u },
-    { name: 'the live head reads only in part', live: { kind: 'partial', reason: 'it carries 120 commits' }, reason: /it carries 120 commits: an approval carries only over commits read whole/u },
+    {
+      name: 'the live head gained a commit the host shows with no files (T5130 M2)',
+      live: read(ONE_REBASED, TWO_REBASED, { sha: '8'.repeat(40), subject: 'chore: empty', parents: 1, files: [] }),
+      reason: /shows 888888888 "chore: empty" of its head ccccccccc over main with no files: .*rebase the empty commit away/u,
+    },
+    { name: 'the live head reads only in part',live: { kind: 'partial', reason: 'it carries 120 commits' }, reason: /it carries 120 commits: an approval carries only over commits read whole/u },
   ];
 
   for (const refusal of refusals) {
