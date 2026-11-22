@@ -1737,7 +1737,7 @@ With `budget.pauseByPriority` on, a short day (what is left of the week gives th
 funds the queued work in priority order, and a session none of it reaches has a daily budget of 0: its line reads
 `its daily budget is 0.0% (paused)`. Room or not, only p0 work wakes it, keeps its idle tab open or sends it back to
 work at a turn end, and once the team has no room it is held like any session past its part. The
-lead, the delivery owner and lifted sessions are never paused, and a burst's floor still holds a paused session up.
+lead, the delivery owner, the security reviewer, the GitHub answerer and lifted sessions are never paused, and a burst's floor still holds a paused session up.
 Past its part while the team has room, a session is not held, and its line says so: `The team has room today: 2.0%
 of the week used, below its in-day pace of 4.0%, so nothing more happens.` Past its part once the team has no room,
 it is held: only p0 work wakes it or keeps its idle tab open, and it is escalated when `budget.escalate` is `session`, or, with
@@ -1763,6 +1763,12 @@ A session held by the daily cap or a plain cut, never a stop, quiet hours or a s
 two kinds of task up to its configured wake priority, since a waited-on answer is never budget-held: a task another
 session's active task waits on (`--waits task:T<id>`, in this register or another of the team tree), and a task a
 leader above its owner marked with [teamrig update](commands.md#teamrig-update) `--exempt`.
+
+The budget never holds two sessions, as other work waits on them: the security reviewer (`roles.securityReviewer`,
+when the team holds it itself) and the GitHub answerer (`github.watcher`, else the holder of a service role with
+`issue close`; a team that names neither has none, and the lead is not one by default). Past their part, under a
+cut or on a short day they wake, work and launch helpers as if within it; only a leader's stop
+(`--stop`) holds them.
 
 While escalated, the model is told with the next prompt, once per level: `teamrig budget: you are past today's
 budget and the team has no room left today, and it is ahead of its pace line. Finish the step in hand and start

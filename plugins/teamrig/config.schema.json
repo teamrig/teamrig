@@ -1204,7 +1204,7 @@
           "default": {}
         },
         "pauseByPriority": {
-          "description": "On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team and lifted sessions are never paused. Off: no session of the team is paused.",
+          "description": "On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team, the sessions the budget never holds (the security reviewer held in the team and the GitHub answerer) and lifted sessions are never paused. Off: no session of the team is paused.",
           "type": "boolean",
           "default": false
         },

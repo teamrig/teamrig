@@ -1020,7 +1020,8 @@ export interface BudgetConfig {
   /**
    * On a short day (what is left of the week gives less than the pace line plans for the day), fund the team's
    * sessions in the priority order of their top queued task and pause the sessions none of it reaches. The lead, the delivery owner
-   * held in the team and lifted sessions are never paused. Off: no session of the team is paused.
+   * held in the team, the sessions the budget never holds (the security reviewer held in the team and the GitHub
+   * answerer) and lifted sessions are never paused. Off: no session of the team is paused.
    */
   readonly pauseByPriority: boolean;
   /** The live warning shows a line as a session passes each of these % of its daily budget. */
