@@ -1,3 +1,5 @@
+import type { RunningProgram } from '../../../plugin-api/index.ts';
+
 /**
  * Whether a running process is Codex CLI running a session. teamrig ends a recorded session's process by this check
  * (restart, idle close, close), so it matches Codex's own program exactly and no loose substring: a process id the
@@ -7,12 +9,6 @@
  * `@openai/codex/bin/codex.js` (Codex 0.170.0, `codex-cli/bin/codex.js`): on Windows the wrapper stays the native
  * binary's parent; elsewhere it replaces itself with the binary.
  */
-
-/** A running process by its program's file name and its whole command line, empty when the system shows none. */
-export interface CodexProcessView {
-  readonly name: string;
-  readonly commandLine: string;
-}
 
 const CODEX_PROGRAM = /^codex(\.exe)?$/i;
 const NODE_PROGRAM = /^node(\.exe)?$/i;
@@ -34,7 +30,7 @@ function leadingWords(commandLine: string, count: number): readonly string[] {
 }
 
 /** Codex's own binary, or Node.js whose first argument is Codex's wrapper script. */
-export function isCodexSessionProcess(process: CodexProcessView): boolean {
+export function isCodexSessionProcess(process: RunningProgram): boolean {
   if (CODEX_PROGRAM.test(process.name)) {
     return true;
   }
