@@ -1811,14 +1811,14 @@ To land it: rebase its branch onto origin/main and resolve these files.
 
 ### teamrig pr approve
 
-Approves one pull request of the team's repositories at its head, with the token saved for the repository's owner,
-so the session holding an outside pull request's task reviews it on GitHub with no person's hand. It writes only once
-every gate passes, reading them all first: exactly one task holds the pull request (its `--ref gh:owner/name#n`), the
-caller owns that task (only a change's owner lands it), the caller's leader approved it with a note naming the head
-(an approval covers only the head it names; a root team's lead needs no one's), and the pull request is open, no
-draft, targets its repository's default branch and is at the head `--head` names. A refusal writes nothing and says
-which gate failed: a newer head needs its own approval. With `TEAMRIG_GITHUB=off` it prints an `OFF` line and
-writes nothing. Exit 1 when GitHub failed, 2 when refused, else 0.
+Approves one PR of the team's repositories at its head on the code host, with the token saved for the repository's
+owner, so the session holding an outside PR's task reviews it there with no person's hand. It writes only once every
+gate passes, reading them all first: exactly one task holds the PR (its ref), the caller owns that task (only a
+change's owner lands it), the caller's leader approved it with a note naming the head (an approval covers only the
+head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's default
+branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
+own approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
+when the code host failed, 2 when refused, else 0.
 
 Flags:
 
@@ -1840,10 +1840,10 @@ APPROVED acme/web#12 at d00d5ee
 
 ### teamrig pr merge
 
-Lands one pull request of the team's repositories with the gates of `teamrig pr approve`, also refused while it
-conflicts with its base or is in the merge queue already. Where the repository has a merge queue it enters it
-(`ENQUEUED`), else it is merged by rebase (`MERGED`); both are pinned to the head read, so GitHub refuses the landing
-if the head moved since. GitHub's own required checks and reviews still gate it. Exit 1 when GitHub failed, 2 when
+Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
+its base or is in the merge queue already. Where the repository has a merge queue it enters it (`ENQUEUED`), else it
+is merged by rebase (`MERGED`); both are pinned to the head read, so the code host refuses the landing if the head
+moved since. The code host's own required checks and reviews still gate it. Exit 1 when the code host failed, 2 when
 refused, else 0.
 
 Flags:
