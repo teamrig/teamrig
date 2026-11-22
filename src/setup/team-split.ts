@@ -96,6 +96,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   loops: 'copy',
   wake: 'copy',
   tests: 'copy',
+  steps: 'copy',
   alerts: 'copy',
   decisions: 'copy',
   tabStatus: 'copy',

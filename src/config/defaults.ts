@@ -35,6 +35,7 @@ import type {
   ScaleOutConfig,
   SkillsConfig,
   StatusLineConfig,
+  StepsConfig,
   SyncConfig,
   TestsConfig,
   TurnLogConfig,
@@ -311,6 +312,9 @@ export const DEFAULT_MEETING: MeetingConfig = {
 
 /** About a screenful: two or three failing tests with their errors and first stack frames. */
 export const DEFAULT_TESTS: TestsConfig = { maxFailureChars: 4000 };
+
+/** A week: time to notice a step went wrong and take its backup back. */
+export const DEFAULT_STEPS: StepsConfig = { backupDays: 7 };
 
 /**
  * GitHub's own field names and default issue types. A goal is a Feature, as an issue opened for one is typed

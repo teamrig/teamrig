@@ -62,6 +62,7 @@ import {
   DEFAULT_SKILLS,
   DEFAULT_STATUS_LINE,
   DEFAULT_FOCUS,
+  DEFAULT_STEPS,
   DEFAULT_TESTS,
   DEFAULT_WAKE,
   DEFAULT_STABLE_PERIODS,
@@ -612,6 +613,9 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     wake: parseWake(read, read.section(raw, 'wake', ''), budget.quietHours),
     tests: {
       maxFailureChars: read.integer(read.section(raw, 'tests', ''), 'maxFailureChars', 'tests', DEFAULT_TESTS.maxFailureChars, CONFIG_LIMITS.maxFailureChars),
+    },
+    steps: {
+      backupDays: read.integer(read.section(raw, 'steps', ''), 'backupDays', 'steps', DEFAULT_STEPS.backupDays, CONFIG_LIMITS.stepBackupDays),
     },
     github: parseGithub(read, read.section(raw, 'github', ''), sessions),
     sync: parseSync(read, read.section(raw, 'sync', '')),

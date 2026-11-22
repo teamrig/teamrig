@@ -1389,6 +1389,19 @@
         }
       }
     },
+    "steps": {
+      "description": "The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run.",
+      "type": "object",
+      "properties": {
+        "backupDays": {
+          "description": "Days the backup a step takes is kept; the lead's teamrig start then removes it, removing only backups teamrig recorded for a step.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 7
+        }
+      }
+    },
     "github": {
       "description": "The team's GitHub repositories. teamrig issue sync reads their issues into the register as tasks of source github, and never writes to GitHub; local tasks stay local. teamrig issue migrate, teamrig issue reply, teamrig issue assign, teamrig issue label, teamrig issue edit and teamrig issue close, run by hand, write only to these repositories. Each owner's repositories are reached with the token saved as teamrig-gh-<owner> in the system's credential store, never the gh login; no saved token, or one that cannot be read, stops the read or write for that owner (docs/github-sync.md).",
       "type": "object",

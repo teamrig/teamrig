@@ -711,6 +711,12 @@ export interface TestsConfig {
   readonly maxFailureChars: number;
 }
 
+/** The one-time steps teamrig needs its person to take (`teamrig steps`). */
+export interface StepsConfig {
+  /** Days a step's backup is kept before the lead's `teamrig start` removes it. */
+  readonly backupDays: number;
+}
+
 /** The kinds of issue a task's issue is typed as (T3406): a design issue, a goal (a task planned after its parts), a bug, else a task. */
 export const ISSUE_KINDS = ['task', 'bug', 'goal', 'design'] as const;
 export type IssueKind = (typeof ISSUE_KINDS)[number];
@@ -1871,6 +1877,7 @@ export interface KitConfig {
   readonly loops: LoopsConfig;
   readonly wake: WakeConfig;
   readonly tests: TestsConfig;
+  readonly steps: StepsConfig;
   readonly github: GithubConfig;
   readonly sync: SyncConfig;
   /** Each service role by name: the teamrig commands it holds and the sessions that hold it (T2984). */

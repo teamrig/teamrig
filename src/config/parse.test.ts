@@ -29,6 +29,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.needsYou, { enabled: true, kinds: ['permission', 'question', 'elicitation', 'decision'], osToast: false });
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
+    assert.deepEqual(config.steps, { backupDays: 7 });
     assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
@@ -467,6 +468,16 @@ describe('parseConfig', () => {
       const { config, issues } = parseConfig({ ...ROSTER, tests: { maxFailureChars: wrong } });
       assert.deepEqual(paths(issues), ['tests.maxFailureChars']);
       assert.equal(config.tests.maxFailureChars, 4000);
+    }
+  });
+
+  it('reads steps.backupDays, and refuses a value under 1, past 365 or not a whole number', () => {
+    assert.equal(parseConfig({ ...ROSTER, steps: { backupDays: 1 } }).config.steps.backupDays, 1);
+    assert.equal(parseConfig({ ...ROSTER, steps: { backupDays: 365 } }).config.steps.backupDays, 365);
+    for (const wrong of [0, 366, 2.5, '7']) {
+      const { config, issues } = parseConfig({ ...ROSTER, steps: { backupDays: wrong } });
+      assert.deepEqual(paths(issues), ['steps.backupDays']);
+      assert.equal(config.steps.backupDays, 7);
     }
   });
 

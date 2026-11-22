@@ -5185,7 +5185,8 @@ With nothing pending it prints `NONE teamrig needs no step from you`.
 Takes one step `teamrig steps` lists. Without `--yes` it shows what the step changes and where its backup goes, and
 changes nothing. With `--yes` it first copies what the step changes into `backups/`, takes the step, prints the
 backup's path and removes the backups an earlier run of the same step left: teamrig removes only backups it recorded
-for a step, never a file you made. Its `--yes` is for the person alone: it is refused where Claude Code runs it (an
+for a step, never a file you made. A backup kept past 7 days [steps.backupDays] goes at the lead's next
+`teamrig start`, which prints how many it removed and their paths. Its `--yes` is for the person alone: it is refused where Claude Code runs it (an
 agent's tool call, a `!` line, a script it runs or a hook), and the
 [exec guard](hooks.md#before-a-shell-command-the-exec-guard) refuses a tool call that runs it. Type
 `/teamrig steps run <id> --yes` in a tab, or run it in your own terminal.

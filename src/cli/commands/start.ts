@@ -21,6 +21,7 @@ import { startMeetingLine } from './meetings.ts';
 import { checkReport, list, waitingReport } from './register.ts';
 import { fileLockOf } from '../file-locks.ts';
 import { sweepDeadDetachedRuns } from '../detached-sweep.ts';
+import { sweepOldStepBackups } from '../step-backup-sweep.ts';
 
 /** The most inbox lines one start posts the lead on warnings no session owns; the rest wait for the next start. */
 export const MAX_UNOWNED_NOTICES = 5;
@@ -37,7 +38,8 @@ export const MAX_UNOWNED_NOTICES = 5;
  * --all` and `check --all` do, and every task waiting on it. Any session's start also posts the lead one inbox line on
  * each warning no session owns that the lead was not told of yet (T951), at most MAX_UNOWNED_NOTICES per start; a told
  * warning is told again only after no start saw it for a day. Before its inbox lines it tells each of the team's
- * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts). It records the flags it showed,
+ * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts), and the lead's removes the step
+ * backups kept past `steps.backupDays` (src/cli/step-backup-sweep.ts). It records the flags it showed,
  * so a later `check --new` prints only those that came since (T2536).
  */
 export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
@@ -61,6 +63,13 @@ export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   }
   // Before the inbox read, so a death it tells this session of is in this start's lines.
   (await sweepDeadDetachedRuns(runtime, kit, config)).problems.forEach((problem) => runtime.out.stderr(`WARN ${problem}`));
+  if (id === tree.lead) {
+    const swept = await sweepOldStepBackups(runtime, kit, config);
+    swept.lines.forEach((line) => runtime.out.stdout(line));
+    if (swept.problem !== undefined) {
+      runtime.out.stderr(`WARN ${swept.problem}`);
+    }
+  }
   await read(own, runtime);
   await list(own, runtime);
   (await waitingReport(own, runtime)).forEach((line) => runtime.out.stdout(line));
