@@ -28,7 +28,7 @@ export const SHOWN_UNROWED = 20;
  * owner, never the gh login; no saved token, or one the store could not read, stops the run), then points
  * the task's ref at it as `update <id> --ref` by the caller would, so the sync adds no second
  * task for it; a ref that is no issue gives way, named in the update's note. A design issue it opens is assigned to
- * `github.designAssignees`; an assign that fails is reported and stops nothing, as the status push assigns it later.
+ * the team's design assignees; an assign that fails is reported and stops nothing, as the status push assigns it later.
  * It stops at the first failure, and a rerun skips each task already holding its issue. Exit 1 when
  * gh failed, 2 when the register refused a ref, else 0.
  */

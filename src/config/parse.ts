@@ -859,7 +859,7 @@ function parseSync(read: ConfigReader, raw: JsonRecord): SyncConfig {
   };
 }
 
-/** `github.designAssignees`: GitHub logins, kept in lowercase as GitHub matches them; one listed twice is reported and read once. */
+/** The design assignees: logins kept in lowercase, as the host matches them; one listed twice is reported and read once. */
 function readDesignAssignees(read: ConfigReader, raw: JsonRecord): readonly string[] {
   const logins: string[] = [];
   const listed = read.stringList(raw, 'designAssignees', 'github', DEFAULT_GITHUB.designAssignees, isGithubLogin, CONFIG_LIMITS.githubDesignAssignees.maxItems);

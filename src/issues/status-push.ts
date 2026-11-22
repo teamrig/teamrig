@@ -15,7 +15,7 @@ import { parseRef } from './ref.ts';
  * An open issue with no assignee gets one (T2999): the login of the task's owning session, else the login the sync runs
  * as (T4581), else none; never the repository's owner, which may be an organization no one can be assigned as. An
  * issue a person assigned keeps its assignees, and the push takes none off. An open design issue with no assignee gets
- * every login of `github.designAssignees` that the repository may assign (#1491), else none.
+ * every design assignee the team names that the repository may assign (#1491), else none.
  * An open task no session has scheduled leaves its issue open to anyone (T3021): `status:open` and no assignee, so a
  * contributor sees what is free to take. A scheduled one, or one a person took, shows `status:claimed`. A goal, a
  * task planned after its parts, shows no status label: its parts' issues carry theirs (T3056).
@@ -196,14 +196,14 @@ function viewerLogin(viewer: ViewerLogin): string | undefined {
 
 /**
  * Whom the push may assign in one repository: each session's login, the login the sync runs as, the design assignees,
- * and what the host answered for each login read so far. GitHub logins match whatever their case, so both sets key by
+ * and what the host answered for each login read so far. The host's logins match whatever their case, so both sets key by
  * the lowercase.
  */
 export interface PushAssignees {
   readonly logins: SessionLogins;
   /** The login the sync's access belongs to, the one it runs as (ViewerLogin). */
   readonly viewer: ViewerLogin;
-  /** The logins an open design issue with no assignee is assigned to (`github.designAssignees`), in their order. */
+  /** The logins an open design issue with no assignee is assigned to (the team's design assignees), in their order. */
   readonly design: readonly string[];
   /** Logins the repository may not assign, lowercase: each is passed over for the next in line. */
   readonly refused: ReadonlySet<string>;

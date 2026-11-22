@@ -7,7 +7,7 @@ export type AssignableRead =
 
 /**
  * Reads once each whether `logins` may be assigned in `repo`, stopping at the first failed read. An assign goes out
- * only for a login that may, as the host spells it: GitHub silently drops an assign of a login that may not, or one in
+ * only for a login that may, as the host spells it: the host silently drops an assign of a login that may not, or one in
  * another case than its own, so it would be sent again on every run.
  */
 export async function readAssignable(host: Assignees, repo: string, logins: Iterable<string>): Promise<AssignableRead> {

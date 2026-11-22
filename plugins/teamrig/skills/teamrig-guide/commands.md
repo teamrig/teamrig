@@ -1443,7 +1443,7 @@ Flags:
   carry theirs, and so does a design issue (labelled `design`: talk, not work to take until agreed), which is
   assigned to every login of `[github.designAssignees]` while it is open and no one is assigned (one write; none
   by default, and an assignee a person set stays); a done task closes it as completed, a
-  dropped one as not planned. It plans against the issues as GitHub lists them now, so a label someone changed by
+  dropped one as not planned. It plans against the issues as the host lists them now, so a label someone changed by
   hand is set back and a run that stopped half way is planned again whole. It never reopens an issue a person
   closed: a `KEPT` line names it, an `UNLISTED` line an active task's issue that is not open on GitHub, and a `PULL`
   line a task on an open pull request, which the push leaves as it is. A run
@@ -1546,8 +1546,8 @@ work then the priority), with the token saved for the repository's owner as `tea
 login` account (an `ACCESS` line per owner says which; a saved token the store cannot read stops the run, never the
 `gh` login in its place), then sets the task's ref to `gh:<owner>/<name>#<number>` as an `update --ref` by you would, so `teamrig gh
 sync` adds no second task for it. Each opened issue gives an `OPENED` line and the run ends with `DONE`. A `design`
-row opens a design issue (labelled `design`, then its priority), which is then assigned to the logins of
-`[github.designAssignees]` that may be assigned there: an `ASSIGNED` line, or an `UNASSIGNED` line for a login that
+row opens a design issue (labelled `design`, then its priority), which is then assigned to the design assignees
+(as `issue push` names them) that may be assigned there: an `ASSIGNED` line, or an `UNASSIGNED` line for a login that
 may not be or an assign that failed, which stops nothing, as the status push assigns it later. The first
 failure stops the run: `FAILED` when gh failed (a stopped gh or one that printed no number may still have opened
 the issue: look before a rerun), `REFUSED` when the register refused the ref (the issue is open: the line gives the

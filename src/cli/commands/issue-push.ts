@@ -91,7 +91,7 @@ export interface PushRun {
   readonly limits: PushLimits;
   /** Each session's GitHub login, so an unassigned issue is assigned (status-push.ts assigneeOf); else the login the sync runs as. */
   readonly logins: SessionLogins;
-  /** The logins an open design issue with no assignee is assigned to, `github.designAssignees` (status-push.ts designAssigneesOf). */
+  /** The logins an open design issue with no assignee is assigned to, the team's design assignees (status-push.ts designAssigneesOf). */
   readonly design: readonly string[];
   /** The scopes whose ACCESS line was already printed, so each is printed once per command. */
   readonly told: Set<string>;
