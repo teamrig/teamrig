@@ -35,7 +35,7 @@ describe('settings writers where Claude Code runs them (T3083)', () => {
     }
     assert.match(
       settingsWriteRefusal('permissions trim', 'CLAUDECODE'),
-      /^`teamrig permissions trim --yes` changes Claude Code's settings, .* refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
+      /^`teamrig permissions trim --yes` changes Claude Code's settings, a host's hooks, .* refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
     );
     assert.match(settingsWriteRefusal('permissions trim', undefined), / refused where Claude Code runs it \(an agent's tool call, a script it runs or a hook\); /);
   });
