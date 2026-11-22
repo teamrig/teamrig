@@ -642,6 +642,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       config is checked before it is written, the old one kept as a backup; REFUSED for a read-only key
   config validate | config migrate [--yes]   migrate shows an older config rewritten in this format and
       the first teamrig that reads it, as a tab on an older one refuses every write after; --yes writes it
+  steps | steps run <id> [--yes]   the one-time steps teamrig needs you to take, such as updating the
+      team settings' layout: what each changes and what to type; run without --yes shows the change and
+      where its backup goes, --yes takes it after the backup, removing the step's earlier backups; --yes
+      is for the person alone, REFUSED where an agent runs it
   commits check --base <ref> [--tip <ref>]   commits in base..tip (default HEAD) over the size rule
       with no reason line; any is REFUSED, for a merge script or CI
   changes --since <version|date> [--until <version|date>] [--file <path>] [--area <area>]   what changed

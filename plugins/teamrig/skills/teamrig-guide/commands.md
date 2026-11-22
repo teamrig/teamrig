@@ -5155,6 +5155,61 @@ NOTE every command reads it as version 4 already; once written, a tab on a teamr
 
 A current config prints `UNCHANGED <path> needs no migration`, and one from a newer teamrig is refused.
 
+### teamrig steps
+
+Lists the one-time steps teamrig needs its person to take, in plain words: what each is, why it is needed, what it
+changes and the line to type. The first is updating the team settings to the current layout, needed before
+`config set` can change a setting. Reading the list changes nothing.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig steps
+```
+
+Output:
+
+```text
+STEP config-format: teamrig needs to update your team settings
+  why: the team settings file is in an older layout, so changing a setting is refused until it is updated; a backup is kept first
+  v3→v4: budget.dailyPct removed: the daily budget is recomputed from what is left of the week
+  take it: /teamrig steps run config-format --yes
+```
+
+With nothing pending it prints `NONE teamrig needs no step from you`.
+
+### teamrig steps run
+
+Takes one step `teamrig steps` lists. Without `--yes` it shows what the step changes and where its backup goes, and
+changes nothing. With `--yes` it first copies what the step changes into `backups/`, takes the step, prints the
+backup's path and removes the backups an earlier run of the same step left: teamrig removes only backups it recorded
+for a step, never a file you made. Its `--yes` is for the person alone: it is refused where Claude Code runs it (an
+agent's tool call, a `!` line, a script it runs or a hook), and the
+[exec guard](hooks.md#before-a-shell-command-the-exec-guard) refuses a tool call that runs it. Type
+`/teamrig steps run <id> --yes` in a tab, or run it in your own terminal.
+
+Flags:
+
+- `--yes`: takes the step after the backup. Without it the command shows the step and changes nothing.
+
+Example:
+
+```sh
+teamrig steps run config-format --yes
+```
+
+Output:
+
+```text
+DONE teamrig needs to update your team settings; the backup is at /home/you/.teamrig/teams/shop/backups/config.v3.json
+  v3→v4: budget.dailyPct removed: the daily budget is recomputed from what is left of the week
+REMOVED the earlier backup /home/you/.teamrig/teams/shop/backups/config.v2.json
+```
+
+A step no longer needed prints `UNCHANGED <id> is not needed now`; an unknown id is refused.
+
 ### teamrig automode install
 
 Writes the team's lines into Claude Code's `autoMode.environment` setting on this machine: the facts auto mode's
