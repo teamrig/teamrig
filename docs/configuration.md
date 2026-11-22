@@ -54,7 +54,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `cliOnPath` | [object](#clionpath) |  | Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH. |
 | `meeting` | [object](#meeting) |  | The owner's daily meeting with the lead, in the lead's tab. |
 | `turnLog` | [object](#turnlog) |  | Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour>.jsonl for the task pane, so a /clear or a compaction never takes away what the person was reading in the tab. Secret shapes are redacted. |
-| `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts in the terminal it is run in. |
+| `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts. |
 | `meetingNotices` | [object](#meetingnotices) |  | What a booked meeting (teamrig meeting schedule) tells the person, and when: a notice some minutes before its slot, one at the slot, and an alert once it is some minutes past its slot with no meeting start. Each notice goes out once, by whichever tab of the team looks first, on each channel left on. |
 | `readonlyShell` | [object](#readonlyshell) |  | Lets a Bash or PowerShell line run without a permission prompt when every command in it provably only reads: known readers (grep, cat, Get-Content, Select-Object...), git and kubectl reading subcommands, and no write, file redirection, command that runs code, or variable a program reads. It only ever allows: any other line gets Claude Code's own permission check. |
 | `permissions` | [object](#permissions) |  | Which local allow rules stay. An allow rule in a Claude Code settings file approves a call before auto mode's classifier sees it, so a rule that approves a whole tool or a program with any arguments skips the one check that stops an injected or mistaken action. teamrig permissions trim removes the rules off keepAllow (the owner runs it with --yes); doctor flags the ones that approve a whole tool or program, or hold a credential (text in a secret's shape) that Claude Code saved with an approved command. |
@@ -795,10 +795,11 @@ Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour
 
 ## `ui`
 
-The dedicated UI that teamrig ui starts in the terminal it is run in.
+The dedicated UI that teamrig ui starts.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
+| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
 
 ## `meetingNotices`

@@ -299,7 +299,7 @@ describe('config guard: every owner-gated key (T3083)', () => {
       ['delivery.passEnv', changed((c) => ({ ...c, delivery: { ...c.delivery, passEnv: ['GH_TOKEN'] } }))],
       ['pushGuard', changed((c) => ({ ...c, pushGuard: { pushToProtected: 'allow' } }))],
       ['alerts', changed((c) => ({ ...c, alerts: { webhookEnv: 'X' } }))],
-      ['ui', changed((c) => ({ ...c, ui: { path: 'C:/work/ui/main.js' } }))],
+      ['ui.path', changed((c) => ({ ...c, ui: { path: 'C:/work/ui/main.js' } }))],
     ];
     for (const [key, content] of changes) {
       const output = decisionOf(await outputOf(call('Write', { file_path: CONFIG, content }), env({ text })));
@@ -322,6 +322,7 @@ describe('config guard: every owner-gated key (T3083)', () => {
       register: { ...c.register, staleDays: 5 },
       github: { ...c.github, everyMinutes: 15 },
       delivery: { ...c.delivery, checkTimeoutSeconds: 90 },
+      ui: { mode: 'window' },
     }));
     assert.equal(await decide(call('Write', { file_path: CONFIG, content: other }), env({ text })), undefined);
   });

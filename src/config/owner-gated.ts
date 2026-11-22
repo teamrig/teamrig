@@ -29,5 +29,6 @@ export const OWNER_GATED_KEYS: readonly (readonly string[])[] = [
   ['packageGuard'],
   ['dbWriteGuard'],
   ['commitGuard'],
-  ['ui'],
+  // ui.mode, only where the UI shows, is the lead's (T5105).
+  ['ui', 'path'],
 ];

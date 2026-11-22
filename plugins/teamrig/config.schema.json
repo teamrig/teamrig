@@ -1870,9 +1870,15 @@
       }
     },
     "ui": {
-      "description": "The dedicated UI that teamrig ui starts in the terminal it is run in.",
+      "description": "The dedicated UI that teamrig ui starts.",
       "type": "object",
       "properties": {
+        "mode": {
+          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
+          "type": "string",
+          "enum": ["terminal", "window", "both"],
+          "default": "terminal"
+        },
         "path": {
           "description": "The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI.",
           "type": "string",

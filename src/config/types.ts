@@ -593,8 +593,20 @@ export interface TurnLogConfig {
   readonly keepHours: number;
 }
 
+export const UI_MODES = ['terminal', 'window', 'both'] as const;
+/**
+ * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, `window` in a window of its own,
+ * `both` in the two at once.
+ */
+export type UiMode = (typeof UI_MODES)[number];
+
+export function isUiMode(value: unknown): value is UiMode {
+  return UI_MODES.some((mode) => mode === value);
+}
+
 /** The dedicated UI `teamrig ui` starts (T4761). */
 export interface UiConfig {
+  readonly mode: UiMode;
   /**
    * The absolute path of a UI entry script to start in place of the released UI: a build of one's own, for work on
    * the UI itself. Absent: the released UI.

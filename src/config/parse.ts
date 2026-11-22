@@ -68,6 +68,7 @@ import {
   DEFAULT_BRANCHES,
   DEFAULT_MEETING,
   QUEUE_TTL_MARGIN_MINUTES,
+  DEFAULT_UI,
 } from './defaults.ts';
 import { isEffort, isModel } from './launch.ts';
 import {
@@ -213,6 +214,8 @@ import {
   type TeamLink,
   type TurnLogConfig,
   type UiConfig,
+  UI_MODES,
+  isUiMode,
   type NeedsYouConfig,
   type MeetingNoticesConfig,
   type WakeConfig,
@@ -1745,10 +1748,15 @@ function parseExec(read: ConfigReader, raw: JsonRecord): ExecConfig {
   };
 }
 
-/** `ui`: a bad path is dropped, so `teamrig ui` starts the released UI rather than a file nobody named. */
+/**
+ * `ui`: a bad path is dropped, so `teamrig ui` starts the released UI rather than a file nobody named; a bad mode
+ * keeps the default, the UI in the terminal it is run in.
+ */
 function parseUi(read: ConfigReader, raw: JsonRecord): UiConfig {
+  const named = read.string(raw, 'mode', 'ui', DEFAULT_UI.mode, oneOf(UI_MODES));
+  const mode = isUiMode(named) ? named : DEFAULT_UI.mode;
   const path = read.optionalString(raw, 'path', 'ui', isAbsoluteFile);
-  return path === undefined ? {} : { path };
+  return path === undefined ? { mode } : { mode, path };
 }
 
 function parseAlerts(read: ConfigReader, raw: JsonRecord): AlertsConfig {

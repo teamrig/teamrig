@@ -28,6 +28,7 @@ import type {
   PromptsConfig,
   SecretGuardConfig,
   PushGuardConfig,
+  UiConfig,
   ReadonlyShellConfig,
   RefreshConfig,
   RegisterConfig,
@@ -254,6 +255,9 @@ export const DEFAULT_BUDGET: BudgetConfig = {
 export const DEFAULT_SESSION_SHARE = 1;
 
 export const DEFAULT_ALERTS: AlertsConfig = { persistentFailureHours: 24 };
+
+/** The UI shows in the terminal `teamrig ui` is run in, as it did before `ui.mode` (T5105). */
+export const DEFAULT_UI: UiConfig = { mode: 'terminal' };
 
 /** The remote a repository's merge command merges into when `merge.remote` is unset. */
 export const DEFAULT_MERGE_REMOTE = 'origin';

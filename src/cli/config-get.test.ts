@@ -47,11 +47,11 @@ describe('config get', () => {
     assert.ok(result.stdout.some((line) => /^budget\.targetPct .*\(.*read-only: owner gate: budget\)$/.test(line)));
   });
 
-  it('shows ui.path as the owner gate the config guard holds it to, as teamrig ui runs the script it names', async () => {
+  it('shows ui.path as the owner gate the config guard holds it to, as teamrig ui runs the script it names, and ui.mode as the lead’s', async () => {
     const result = await (await teamWithSchema()).run(['config', 'get', 'ui', '--json'], { self: SELF });
     assert.equal(result.code, EXIT.ok);
     const rows = rowsOf(result.stdout);
-    assert.deepEqual(rows.map((row) => [row['path'], row['editable']]), [['ui.path', false]]);
+    assert.deepEqual(rows.map((row) => [row['path'], row['editable']]), [['ui.mode', true], ['ui.path', false]]);
   });
 
   it('gives a settings screen one JSON document of the rows under a key', async () => {

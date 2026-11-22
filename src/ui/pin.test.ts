@@ -21,6 +21,6 @@ describe('RELEASED_UI', () => {
   it('is never set or replaced by the team config', () => {
     const pin = { version: '9.9.9', url: 'https://example.com/teamrig-ui.json', sha256: 'ab'.repeat(32) };
     const raw = { sessions: ['alpha'], roles: { lead: 'alpha' }, ui: { pin, ...pin, released: pin } };
-    assert.deepEqual(parseConfig(raw).config.ui, {});
+    assert.deepEqual(parseConfig(raw).config.ui, { mode: 'terminal' });
   });
 });

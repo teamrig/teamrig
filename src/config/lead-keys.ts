@@ -40,7 +40,7 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'turnLog.enabled', 'turnLog.keepHours',
   'meetingNotices.enabled', 'meetingNotices.beforeMinutes', 'meetingNotices.atStart', 'meetingNotices.missedAfterMinutes',
   'meetingNotices.osToast', 'meetingNotices.tabToast', 'meetingNotices.leadInbox',
-  'open.terminal', 'open.teamWindow',
+  'open.terminal', 'open.teamWindow', 'ui.mode',
   'statusLine.folder', 'statusLine.branch', 'statusLine.pace',
   'focus.classes', 'focus.roadmapClass', 'focus.maintenanceClass', 'focus.defaultClass', 'focus.maxActiveKeyResults',
   'focus.slicesPerSession', 'focus.maxOwnerDecisions', 'focus.score.rankValues', 'focus.score.roadmapUnranked',

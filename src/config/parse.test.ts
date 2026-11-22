@@ -302,17 +302,31 @@ describe('parseConfig', () => {
   });
 
   it('reads ui.path as an absolute file, absent by default, and drops one that is not (T4761)', () => {
-    assert.deepEqual(parseConfig(ROSTER).config.ui, {});
+    assert.deepEqual(parseConfig(ROSTER).config.ui, { mode: 'terminal' });
     for (const path of ['D:\\pane\\out\\ui\\main.js', '/srv/pane/out/ui/main.js']) {
       const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
-      assert.deepEqual(config.ui, { path });
+      assert.deepEqual(config.ui, { mode: 'terminal', path });
       assert.deepEqual(issues, []);
     }
     for (const path of ['out/ui/main.js', 'C:out', '/a\n/b', 'https://example.com/main.js', 7]) {
       const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
       assert.deepEqual(paths(issues), ['ui.path'], String(path));
-      assert.deepEqual(config.ui, {}, String(path));
+      assert.deepEqual(config.ui, { mode: 'terminal' }, String(path));
     }
+  });
+
+  it('reads ui.mode as terminal, window or both, terminal by default, and keeps the default for any other value (T5105)', () => {
+    for (const mode of ['terminal', 'window', 'both'] as const) {
+      const { config, issues } = parseConfig({ ...ROSTER, ui: { mode } });
+      assert.deepEqual(config.ui, { mode });
+      assert.deepEqual(issues, []);
+    }
+    for (const mode of ['Window', 'tab', '', 7, true]) {
+      const { config, issues } = parseConfig({ ...ROSTER, ui: { mode } });
+      assert.deepEqual(paths(issues), ['ui.mode'], String(mode));
+      assert.deepEqual(config.ui, { mode: 'terminal' }, String(mode));
+    }
+    assert.match(parseConfig({ ...ROSTER, ui: { mode: 'tab' } }).issues[0]?.message ?? '', /expected one of terminal, window, both/);
   });
 
   it('reads needsYou, leaves out an unknown kind, and refuses a list that is no list or names more kinds than there are', () => {
