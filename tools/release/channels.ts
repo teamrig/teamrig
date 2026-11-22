@@ -111,3 +111,8 @@ export function slotHold(now: Date, lastMerge: Date | null, channels: Channels):
   if (lastMerge === null || lastMerge.getTime() < start.getTime()) return null;
   return `a preview release already merged in the ${clockText(currentSlot(now, channels))} slot: the next starts at ${clockText(nextSlot(now, channels))} ${channels.zone}`;
 }
+
+/** `slotHold` at a fixed `now`, as the release merge gate asks it with the last merge it read from GitHub. */
+export function slotHoldAt(now: Date, channels: Channels): (lastMerge: Date | null) => string | null {
+  return (lastMerge) => slotHold(now, lastMerge, channels);
+}

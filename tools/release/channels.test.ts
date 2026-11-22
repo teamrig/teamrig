@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { clockText, currentSlot, minutesIn, nextSlot, parseChannels, readChannels, slotHold, slotStart, type Channels } from './channels.ts';
+import { clockText, currentSlot, minutesIn, nextSlot, parseChannels, readChannels, slotHold, slotHoldAt, slotStart, type Channels } from './channels.ts';
 
 const TEXT = JSON.stringify({ zone: 'Asia/Jerusalem', previewSlots: ['09:00', '12:00', '21:00'], stableAt: '20:00', soakHours: 3 });
 const CHANNELS: Channels = parseChannels(TEXT);
@@ -72,5 +72,13 @@ describe('slotHold', () => {
   it('holds a second release in the same slot, naming the slot and the next', () => {
     assert.equal(slotHold(at('09:55:00'), at('07:00:00'), CHANNELS), 'a preview release already merged in the 09:00 slot: the next starts at 12:00 Asia/Jerusalem');
     assert.equal(slotHold(at('22:00:00'), at('19:30:00'), CHANNELS), 'a preview release already merged in the 21:00 slot: the next starts at 09:00 Asia/Jerusalem');
+  });
+});
+
+describe('slotHoldAt', () => {
+  it('asks slotHold at the time it was made', () => {
+    const hold = slotHoldAt(at('09:55:00'), CHANNELS);
+    assert.equal(hold(null), null);
+    assert.equal(hold(at('07:00:00')), slotHold(at('09:55:00'), at('07:00:00'), CHANNELS));
   });
 });
