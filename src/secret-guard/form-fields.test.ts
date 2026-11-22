@@ -47,6 +47,25 @@ describe('FormFields', () => {
     assert.deepEqual(values(join("{'type':'password'} {\"type\":\"password\",\"value\":\"", PASSWORD, '"}')), [PASSWORD]);
   });
 
+  it('walks a nested password-field object after a stray brace that never closes', () => {
+    const text = join('a { opens here\n{"type":"password","attrs":{"a":1},"value":"', PASSWORD, '"}');
+    assert.deepEqual(values(text), [PASSWORD]);
+    assert.deepEqual(redacted(text).stdout, 'a { opens here\n{"type":"password","attrs":{"a":1},"value":"[redacted value of a password field]"}');
+  });
+
+  it('reads a long result full of open braces in about two passes', () => {
+    for (const text of ['{'.repeat(1_000_000), '{"a":'.repeat(200_000), '{"'.repeat(500_000)]) {
+      const started = performance.now();
+      assert.deepEqual(values(text), []);
+      assert.ok(performance.now() - started < 1500, `${text.slice(0, 5)}: ${Math.round(performance.now() - started)} ms`);
+    }
+  });
+
+  it('stops resuming after 32 unclosed braces, and the flat patterns still read a flat object', () => {
+    const strays = '{ '.repeat(40);
+    assert.deepEqual(values(join(strays, '{"type":"password","value":"', PASSWORD, '"}')), [PASSWORD]);
+  });
+
   it('takes a camelCase password name as a part', () => {
     for (const name of ['newPassword', 'confirmPassword', 'passwordConfirm', 'userPwd', 'passWord', 'PassWord', 'passCode', 'PassPhrase', 'passWd', 'user[passWord]', 'login-passCode', 'newPassCode', 'URLPassword']) {
       assert.deepEqual(values(join('{"type":"text","name":"', name, '","value":"', PASSWORD, '"}')), [PASSWORD], name);

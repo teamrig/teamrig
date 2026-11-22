@@ -95,8 +95,8 @@ function pipeValues(text: string): string[] {
 
 /**
  * The `value` of each JSON object whose `type` is `password` or whose `name` or `id` marks one. Each balanced
- * `{...}` of the text that parses is walked, nested objects and JSON held as a string included; the rest of the text
- * (a span that does not parse, or objects after a stray `{` that never closes) is read by the flat-object patterns.
+ * `{...}` of the text that parses is walked, nested objects and JSON held as a string included, after a stray `{`
+ * that never closes too; the rest of the text (a span that does not parse) is read by the flat-object patterns.
  */
 function jsonValues(text: string): string[] {
   const found: string[] = [];
@@ -177,16 +177,36 @@ function marksPassword(record: JsonRecord): boolean {
   return [record['name'], record['id']].some((name) => typeof name === 'string' && isPasswordName(name));
 }
 
+/** How often the brace scan starts over past a `{` that never closes before the flat patterns read the rest. */
+const MAX_RESUMES = 32;
+/** How many times the text's length the brace scan reads in all, its resumes included. */
+const MAX_SCAN_PASSES = 2;
+
 /**
- * The start and end of each outermost balanced `{...}` of `text`, a brace inside a JSON string not counted, in one pass. An object left
- * open at the end is not a span.
+ * The start and end of each outermost balanced `{...}` of `text`, a brace inside a JSON string not counted. A `{` left
+ * open at the end is not a span: the scan starts over just after it, so objects after a stray brace are still walked.
+ * It starts over at most `MAX_RESUMES` times and reads at most `MAX_SCAN_PASSES` times the text's length in all, so a
+ * long result full of open braces (a cut-off nested dump) costs about two passes; the flat patterns read what is left.
  */
 function objectSpans(text: string): Array<[number, number]> {
   const spans: Array<[number, number]> = [];
+  let from = 0;
+  let scanned = 0;
+  for (let resumes = 0; resumes <= MAX_RESUMES && scanned < MAX_SCAN_PASSES * text.length; resumes += 1) {
+    const open = scanSpans(text, from, spans);
+    scanned += text.length - from;
+    if (open === undefined) break;
+    from = open + 1;
+  }
+  return spans;
+}
+
+/** Adds each outermost balanced `{...}` of `text` from `from` on to `spans`; the start of one left open, if any. */
+function scanSpans(text: string, from: number, spans: Array<[number, number]>): number | undefined {
   let depth = 0;
-  let start = 0;
+  let start = from;
   let inString = false;
-  for (let index = 0; index < text.length; index += 1) {
+  for (let index = from; index < text.length; index += 1) {
     const char = text[index];
     if (inString) {
       if (char === '\\') index += 1;
@@ -201,7 +221,7 @@ function objectSpans(text: string): Array<[number, number]> {
       if (depth === 0) spans.push([start, index + 1]);
     }
   }
-  return spans;
+  return depth > 0 ? start : undefined;
 }
 
 /** The `value` of each flat object in text that is not JSON, by the patterns, as printed and unescaped. */
