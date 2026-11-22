@@ -111,6 +111,7 @@ export {
   type HostSteps,
   type HostPorts,
   type HostSecrets,
+  type HostUserHooks,
   type InputEntry,
   type InputOrigin,
   type InstallReach,
@@ -160,6 +161,9 @@ export {
   type UnreadLine,
   type Unsupported,
   type UsageMeter,
+  type UserHooksAnswer,
+  type UserHooksCounts,
+  type UserHooksPlan,
   type WebCall,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';

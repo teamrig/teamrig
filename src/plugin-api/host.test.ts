@@ -61,6 +61,7 @@ describe('defineHost', () => {
         launcher: unsupported('no session is told'),
         models: unsupported('no models are known'),
         steps: unsupported('no steps are known'),
+        userHooks: unsupported('no hooks file is kept'),
       }),
     });
     assert.equal(adapter.declaration, data);
@@ -77,6 +78,7 @@ describe('defineHost', () => {
       launcher: { kind: 'unsupported', notice: 'no session is told' },
       models: { kind: 'unsupported', notice: 'no models are known' },
       steps: { kind: 'unsupported', notice: 'no steps are known' },
+      userHooks: { kind: 'unsupported', notice: 'no hooks file is kept' },
     });
     assert.equal(isHostAdapter(adapter), true);
   });

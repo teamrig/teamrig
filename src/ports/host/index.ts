@@ -16,6 +16,7 @@ import type { ToolCallShape } from './tool-call.ts';
 import type { TranscriptReader } from './transcript-reader.ts';
 import type { Unsupported } from './unsupported.ts';
 import type { UsageMeter } from './usage-meter.ts';
+import type { HostUserHooks } from './user-hooks.ts';
 
 export { HOOK_EVENTS, isHookEventName, type HookBridge, type HookEvent, type HookEventName, type HookHelper, type HookReply, type HookVerdict, type TitleSwitch } from './hook-bridge.ts';
 export {
@@ -58,6 +59,7 @@ export type {
   SessionStart,
   SessionVariables,
 } from './session-launcher.ts';
+export type { HostUserHooks, UserHooksAnswer, UserHooksCounts, UserHooksPlan } from './user-hooks.ts';
 
 /** Every host port by its name. Each line is required: an adapter names every port, filled or not. */
 export interface HostPorts {
@@ -73,10 +75,11 @@ export interface HostPorts {
   readonly launcher: SessionLauncher | Unsupported;
   readonly models: HostModels | Unsupported;
   readonly steps: HostSteps | Unsupported;
+  readonly userHooks: HostUserHooks | Unsupported;
 }
 
 /** The name of every host port, held to {@link HostPorts} by its type: a port added there is a line missing here. */
-const NAMED = { hooks: true, toolCall: true, transcripts: true, usage: true, statusLine: true, paths: true, secrets: true, permissions: true, plugin: true, launcher: true, models: true, steps: true } as const satisfies Readonly<Record<keyof HostPorts, true>>;
+const NAMED = { hooks: true, toolCall: true, transcripts: true, usage: true, statusLine: true, paths: true, secrets: true, permissions: true, plugin: true, launcher: true, models: true, steps: true, userHooks: true } as const satisfies Readonly<Record<keyof HostPorts, true>>;
 
 export const HOST_PORT_NAMES: readonly string[] = Object.keys(NAMED);
 
