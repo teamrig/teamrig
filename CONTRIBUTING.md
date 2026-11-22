@@ -191,7 +191,8 @@ is no base to compare with). It runs the base commit's copy of that tool, never 
 that edits `tools/ci` cannot name itself docs; a base from before the tool is `code`. A `docs` change runs the commit checks (scrub, DCO, size rule, subjects, dependency
 review) and, on ubuntu alone, the build, the docs' specs, the pictures, the config reference, the parity page and the doc links; a
 `design` change runs the commit checks and the doc links; a `code` change runs everything on every OS (the test
-matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). Each job still runs and skips only its steps,
+matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
+gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the

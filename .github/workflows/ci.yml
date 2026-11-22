@@ -182,8 +182,10 @@ jobs:
       # Before the tests: specs load the built plugin (its hooks, launcher and integrity list).
       - run: npm run build
         if: ${{ needs.changes.outputs.kind != 'design' }}
+      # On ubuntu the coverage gate runs the whole suite on the same Node and fails on any failing test, so this leg
+      # leaves it there rather than run it twice (T5027).
       - run: npm test
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' }}
       # A docs change runs only the specs that hold the docs to the code: tools/docs/, and SECURITY.md's.
       - run: node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts
         if: ${{ needs.changes.outputs.kind == 'docs' }}
