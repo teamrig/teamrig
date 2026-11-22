@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 import type { HelperScope, HelperSkip } from '../core/git-credential.ts';
 import { isAtOrBelow } from '../core/paths.ts';
+import { foreignNodeOptions } from '../exec/node-launch.ts';
 import { posixQuote } from '../open/quote.ts';
 import type { WorktreeGit } from './git.ts';
 
@@ -55,9 +56,9 @@ export async function wireCredentialHelper(request: HelperRequest, ports: { read
   if ('skip' in scope) {
     return { kind: 'skipped', why: scope.skip };
   }
-  const placeProblem = programPlaceProblem(request, ports.git.worktrees(mainDir));
-  if (placeProblem !== undefined) {
-    return { kind: 'refused', why: placeProblem };
+  const problem = optionsProblem(request.execArgv) ?? programPlaceProblem(request, ports.git.worktrees(mainDir));
+  if (problem !== undefined) {
+    return { kind: 'refused', why: problem };
   }
   const key = `credential.${scope.urlPrefix}`;
   const steps: readonly (readonly [string, readonly [string, ...string[]]])[] = [
@@ -71,6 +72,20 @@ export async function wireCredentialHelper(request: HelperRequest, ports: { read
     }
   }
   return { kind: 'wired', line: `git in ${mainDir} now takes the key saved for ${scope.owner} for ${scope.urlPrefix}, through teamrig git-credential` };
+}
+
+/**
+ * Why the helper may not carry node's launch options, or undefined when each is on `teamrig exec`'s list of options
+ * that load no code. The line is saved in the repository's config and runs at every later fetch and push with the key
+ * in hand, so an option that loads code (`--import`, `--require`, `--inspect`, a relative path git's folder resolves)
+ * would run beside it each time.
+ */
+function optionsProblem(execArgv: readonly string[]): string | undefined {
+  const foreign = foreignNodeOptions(execArgv, undefined);
+  if (foreign.length === 0) {
+    return undefined;
+  }
+  return `node runs with ${foreign.map(({ option }) => option).join(', ')}, which the helper line would run at every git fetch and push: run teamrig without them`;
 }
 
 /** Why the helper may not run the program or script it would name, or undefined when both are absolute and outside every worktree. */

@@ -85,6 +85,25 @@ describe('wireCredentialHelper', () => {
     });
   }
 
+  for (const execArgv of [['--import', './x.mjs'], ['--require=/src/app-t4/x.js'], ['--inspect'], ['--no-warnings', '--env-file=.env']]) {
+    it(`refuses node launched with ${execArgv.join(' ')}, changing nothing`, async () => {
+      const git = new FakeWorktreeGit({ origin: ORIGIN, worktrees: WORKTREES });
+      const end = await wireCredentialHelper({ ...REQUEST, execArgv }, { git, scopeOf: scopeReader(SCOPE).scopeOf });
+      if (end.kind !== 'refused') {
+        assert.fail(`expected a refusal, got ${end.kind}`);
+      }
+      assert.match(end.why, /^node runs with .+ at every git fetch and push: run teamrig without them$/u);
+      assert.doesNotMatch(end.why, /--no-warnings/u);
+      assert.deepEqual(git.steps, []);
+    });
+  }
+
+  it('wires node launched with options that load no code', async () => {
+    const git = new FakeWorktreeGit({ origin: ORIGIN, worktrees: WORKTREES });
+    const end = await wireCredentialHelper({ ...REQUEST, execArgv: ['--no-warnings', '--max-old-space-size=4096'] }, { git, scopeOf: scopeReader(SCOPE).scopeOf });
+    assert.equal(end.kind, 'wired');
+  });
+
   it('refuses when git cannot list the worktrees, since it cannot tell where teamrig runs from', async () => {
     const git = new FakeWorktreeGit({ origin: ORIGIN });
     const end = await wireCredentialHelper(REQUEST, { git, scopeOf: scopeReader(SCOPE).scopeOf });
