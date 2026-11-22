@@ -73,8 +73,11 @@ child teams, hires and retires, and setting up a team with a tab for each sessio
 ## Updating the plugin
 
 Claude Code installs the version that the plugin's `plugin.json` gives and moves an install only when that version
-rises, so every change to the plugin raises it. It installs from the repository's `release` branch, where each
-release is main's commit with the built plugin on top. To take the newest one:
+rises, so every change to the plugin raises it. It installs from the repository's `release` branch, the stable
+channel, where each release is main's commit with the built plugin on top. Each release is published first on the
+`preview` branch, at most one per preview slot (09:00, 12:00, 15:00, 18:00 and 21:00 Israel time,
+`tools/release/channels.json`), and `release` only ever moves to a commit `preview` already holds. To take the
+newest one:
 
 ```sh
 claude plugin marketplace update teamrig

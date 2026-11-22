@@ -28,7 +28,7 @@ without the App: read that summary first, and fix the cause before approving.
    Written as `teamrig queue --kind merge --detach --session <you> --what "..." --task T<id> -- node <abs shipTool>
    merge <abs main checkout> --release T<id> --approved <full sha>`, it is a ship role call the route allow lets run
    with no permission prompt (T4672); any other shape goes to the permission check.
-4. The next run of the release workflow tags main and publishes the plugin to the `release` branch: check that the
+4. The next run of the release workflow tags main and publishes the plugin to the `preview` branch: check that the
    new tag and release exist before you set the task done.
 
 ## Traps

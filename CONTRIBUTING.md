@@ -275,7 +275,11 @@ matrix.
   `RELEASE_APP_ID` variable, its key in the `release-merge` environment), the `release merge` workflow
   (`.github/workflows/release-merge.yml`, `tools/release/release-merge.ts`) merges it on its own when ci passed on its
   head: its gate passes only one commit holding the version raises and the notes, with every check green, and the
-  merge leaves a comment naming the head, paths and checks. Until then, or when the gate refuses, it merges like any
+  merge leaves a comment naming the head, paths and checks. The gate also holds a second release in one preview slot
+  (`tools/release/channels.json`: the slots, the zone, the stable time and the soak): the first green release head
+  after a slot starts merges, even late in it, and the hourly `release slot` workflow
+  (`.github/workflows/release-slot.yml`, `tools/release/release-slot.ts`) runs ci again on a held head once its next
+  slot opens, so the gate sees it pass there. Until then, or when the gate refuses, it merges like any
   pull request, through `tools/ship`: the lead approves
   a release task at the release pull request's head, and `node tools/ship/ship.ts merge <repo dir> --release T<id>
   --approved <sha>` merges it (skill `dev-ship-release`). That merge refuses a head holding anything but the version
@@ -284,9 +288,10 @@ matrix.
   hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
   merged, the next run tags
   main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
-  the dist on top to the `release` branch, tagged `v<version>` (`tools/release/publish.ts`). The marketplace entry
-  installs from that branch (a `git-subdir` source on ref `release`), so main ignores `plugins/teamrig/dist` and no
-  pull request carries one.
+  the dist on top to the `preview` branch, tagged `v<version>` (`tools/release/publish.ts`; its first commit
+  descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the
+  stable channel (a `git-subdir` source on ref `release`), which only ever moves along `preview`'s chain, so main
+  ignores `plugins/teamrig/dist` and no pull request carries one.
 - Installs take the version in `plugins/teamrig/.claude-plugin/plugin.json`, not the newest commit:
   `claude plugin update` moves an install only when that version rises. A pull request never raises it: the release
   pull request does, from the commit subjects since the last release. While it is 0.x, a `feat` or a breaking
@@ -385,8 +390,8 @@ as how teamrig works today.
   approve the last push. The maintainer and the `teamrig-release` App, which merges the release pull request, may
   skip `main` and `main review` through a pull request only; no one skips `main checks`, since a bypass skips every
   rule of its ruleset. `tools/ci/rulesets.test.ts` holds them to `ci.yml` and `.github/CODEOWNERS`.
-- **Rules on releases**: the `release` branch, which every install reads, and a `v<version>` tag, which an install
-  can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
+- **Rules on releases**: the `release` and `preview` branches, which installs read, and a `v<version>` tag, which an
+  install can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
   deploy key, the rulesets' one bypass actor, whose private half is a secret of the `release` environment, which only
   `main` may use. No one moves or deletes a `v<version>` tag, nor the `teamrig-v<version>` tag release-please puts
   on `main` (`release-please tags`).
