@@ -9,6 +9,7 @@ import type { IssueFields } from './fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
 import type { HostPosts } from './post.ts';
 import type { HostPull, PullChecks, PullState } from './pull.ts';
+import type { ScopeRequest } from '../sync/scope.ts';
 
 /** One issue or pull request: its repository (`owner/name`, in lowercase) and its number. */
 export interface IssueTarget {
@@ -102,7 +103,16 @@ export type HostComments = { readonly kind: 'read'; readonly comments: readonly 
  * a reader should know about the read; or why it could not be read, in which case nothing of it was.
  */
 export type HostList =
-  | { readonly kind: 'listed'; readonly issues: readonly HostIssue[]; readonly notes: readonly string[] }
+  | {
+      readonly kind: 'listed';
+      readonly issues: readonly HostIssue[];
+      readonly notes: readonly string[];
+      /**
+       * The accounts the tracker counted as the team's people for a scoped list, as its issues name assignees (its
+       * connector's `people` key and the signed-in account): the core's scope check counts them beside the request's.
+       */
+      readonly people?: readonly string[];
+    }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /**
@@ -167,8 +177,12 @@ export interface HostAccess {
 
 /** A tracker's issues: listed, opened, their body replaced, closed, named by the host's own id, and one read as it is now. */
 export interface IssueStore {
-  /** The open issues of `repo` and those closed on or after `closedSince` (`YYYY-MM-DD`, UTC), the newest state of each. */
-  list(repo: string, closedSince: string): Promise<HostList>;
+  /**
+   * The open issues of `repo` and those closed on or after `closedSince` (`YYYY-MM-DD`, UTC), the newest state of each.
+   * With `request`, a tracker may ask only for the issues in its scope and the held ones (sync/scope.ts), so a large
+   * place is never read whole; the core checks each issue against the scope again, so listing more is safe.
+   */
+  list(repo: string, closedSince: string, request?: ScopeRequest): Promise<HostList>;
   /** Opens one issue. */
   open(draft: IssueDraft): Promise<HostOpen>;
   /** Replaces the body (the description) of the issue or pull request with `body`; its title, state and the rest stay. */

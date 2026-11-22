@@ -11,7 +11,7 @@ export function trackerOnly(fake: FakeIssueHost): Tracker {
   return {
     name: fake.name,
     reach: (repo, use) => fake.reach(repo, use),
-    list: (repo) => fake.list(repo),
+    list: (repo, closedSince, request) => fake.list(repo, closedSince, request),
     open: (draft) => fake.open(draft),
     editBody: (target, body) => fake.editBody(target, body),
     close: (target, reason, duplicateId) => fake.close(target, reason, duplicateId),

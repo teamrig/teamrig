@@ -232,6 +232,8 @@ export {
   type Tracker,
   type WatchMarks,
 } from '../issues/host.ts';
+// The scope a tracker's list may be asked with: which of a place's issues the import takes (sync/scope.ts).
+export type { AssignedScope, ImportScope, ScopeRequest } from '../sync/scope.ts';
 export type { HostIssue, IssueComment, IssueState, IssueThread, LabelEvent, LinkedIssue, ReadComment } from '../issues/issue.ts';
 // A repository's label file, and the labels teamrig keeps: the only labels a tracker may make.
 export { LABEL_FILE, parseLabelFile } from '../issues/label-file.ts';

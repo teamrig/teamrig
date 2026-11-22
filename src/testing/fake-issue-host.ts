@@ -3,6 +3,7 @@ import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issue
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
 import type { HostPull } from '../issues/pull.ts';
+import type { ScopeRequest } from '../sync/scope.ts';
 
 /** The login a fake host's access, and FakeGh's token, belong to until a test says otherwise: the account the sync runs as. */
 export const FAKE_VIEWER = 'sync-bot';
@@ -53,6 +54,8 @@ export class FakeIssueHost implements IssueHost {
   private readonly removeEnds = new Map<string, HostEnd>();
   private labelReadFailure: string | undefined;
   private listed: readonly HostIssue[] = [];
+  /** The scope request of each list, in order, undefined for a list asked with none. */
+  readonly listRequests: (ScopeRequest | undefined)[] = [];
   private readonly labels = new Set<string>();
   /** How it names a label; as it is, until a test says otherwise. */
   private naming: LabelNaming = (label) => label;
@@ -274,7 +277,8 @@ export class FakeIssueHost implements IssueHost {
     return this;
   }
 
-  list(repo: string): Promise<HostList> {
+  list(repo: string, _closedSince: string, request?: ScopeRequest): Promise<HostList> {
+    this.listRequests.push(request);
     return Promise.resolve({ kind: 'listed', issues: this.listed.filter((issue) => issue.repo === repo), notes: [] });
   }
 
