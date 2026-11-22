@@ -3,8 +3,8 @@
 ## Development
 
 ```sh
-npm ci                # also points git at .githooks (scrub + DCO sign-off checks, the local gate before each push, no push to main)
-npm run setup         # the same hook setup, for a clone installed with --ignore-scripts (npm run check fails until it runs)
+npm ci                # installs the lockfile; the repo's .npmrc sets ignore-scripts, so no install script runs
+npm run setup         # points git at .githooks (scrub + DCO sign-off checks, the local gate before each push, no push to main); npm run check fails until it runs
 npm run check         # that git runs the repo hooks, then CI's gates on your tree: typecheck, build, tests with the coverage gate, dist smoke, fresh install, pictures, config reference, parity page, layer boundaries, doc links, scrub
 npm run docs:images   # redraws the pictures in docs/images
 npm run docs:config   # redraws docs/configuration.md from the config schema
@@ -109,7 +109,7 @@ Every commit must carry a `Signed-off-by:` line that matches the commit author, 
 git commit -s
 ```
 
-The `commit-msg` hook (set by `npm ci` or `npm run setup`) and the local gate both reject a commit without it.
+The `commit-msg` hook (set by `npm run setup`) and the local gate both reject a commit without it.
 
 ## Tests
 Every change ships tests, so the next change cannot break it unnoticed:
@@ -138,7 +138,7 @@ Every change ships tests, so the next change cannot break it unnoticed:
   `src/testing/contracts.ts`: its manifest picks the cases, and the spec fails when it binds less than it claims.
 
 `npm run check` runs every gate CI runs on the tree; the local gate also checks each pushed commit's sign-off and scrubs it,
-which the git hooks `npm ci` sets do before each commit. Its coverage gate (`npm run coverage`) fails when:
+which the git hooks `npm run setup` sets do before each commit. Its coverage gate (`npm run coverage`) fails when:
 - any test fails, or is skipped or todo;
 - a source file under `src/` or `tools/` is loaded by no test, new and uncommitted files included;
 - a file, or the total, falls below the floors in `tools/ci/coverage.json`;
@@ -192,7 +192,7 @@ review) and, on ubuntu alone, the build, the docs' specs, the pictures, the conf
 `design` change runs the commit checks and the doc links; a `code` change runs everything on every OS (the test
 matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
-`pre-push` hook that `npm ci` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
+`pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
 dependency review, which reads GitHub's dependency graph ([Security checks](#security-checks)):
 - It refuses a push to `main`, before any check: every change lands through a pull request. On GitHub,
