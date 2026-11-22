@@ -224,8 +224,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   update <id> [--title ..] [--description ..|none] [--owner ..] [--priority p<n>|blocker] [--ref ..|none]
       [--due <date>|none] [--goals a,b|none] [--week <date>|none] [--after T5,T6|none] [--size <pct>|none]
       [--type task|bug] [--class <name>|none] [--critical|--not-critical] [--pin|--unpin]
-      [--prepares <goal>:<slice>|none] [--note ..]
-      the lead may change owner, priority, due, week, after, size, type, class, critical and pin on any task
+      [--exempt|--not-exempt] [--prepares <goal>:<slice>|none] [--note ..]
+      the lead may change owner, priority, due, week, after, size, type, class, critical, pin and exempt on any
+      task
+      --exempt: a held owner still wakes for the task past the daily cap or a plain budget cut, never a stop;
+      set only by a leader above the owner (the lead on its own tasks too)
       --pin: puts the task above every other task on its owner's list, set by the owner's leaders (the lead
       on its own tasks too); it moves the owner's earlier pin, and handing the task on clears it
       --prepares <goal>:<slice>|none: marks a design, study or prep plan for that slice of a goal, set only by

@@ -373,6 +373,11 @@ Flags:
 - `--pin`: pins the task to the top of its owner's list; the pin names who set it, which `show` prints
   (`pinned by lead: above every other task of api`), and its `list` row says `pinned`.
 - `--unpin`: clears the task's pin.
+- `--exempt`: exempts the task from its owner's rest: while the daily cap or a plain budget cut holds the owner,
+  it still wakes for this task (up to its configured wake priority), never past a stop. Only a leader above the owner
+  sets it (the lead on its own tasks too), never the owner itself; the mark names who set it, which `show` prints
+  (`exempted by lead: ...`). A task another session's task waits on is exempt without the mark.
+- `--not-exempt`: clears the exemption.
 - `--prepares <goal>:<slice>|none`: marks the task as a design, study or prep plan for that slice of a goal
   (`--prepares G1:2`), or `none` to clear it. Only a leader above the owner sets or clears it (the lead on its own
   tasks too), never the owner: while the slice is the goal's open one (`goal set --slice`) or the next, the task runs

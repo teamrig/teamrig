@@ -1756,6 +1756,11 @@ gave the cut, and the model reads `you are past today's budget and the lead cut 
 the budget day)`. A stop (`--stop`) holds the session whatever its use: the wake check and the idle pass wake and
 reopen it for p0 work only from the day's start, and past its part the model reads `the lead stopped you until ...`.
 
+A session held by the daily cap or a plain cut, never a stop, quiet hours or a short day's pause, still wakes for
+two kinds of task up to its configured wake priority, since a waited-on answer is never budget-held: a task another
+session's active task waits on (`--waits task:T<id>`, in this register or another of the team tree), and a task a
+leader above its owner marked with [teamrig update](commands.md#teamrig-update) `--exempt`.
+
 While escalated, the model is told with the next prompt, once per level: `teamrig budget: you are past today's
 budget and the team has no room left today, and it is ahead of its pace line. Finish the step in hand and start
 no new work items or helpers.
