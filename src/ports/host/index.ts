@@ -24,6 +24,7 @@ export {
   isToolKind,
   type AskCall,
   type EditCall,
+  type EditedFile,
   type HelperCall,
   type MessageCall,
   type PlainCall,

@@ -4,6 +4,7 @@ import {
   isUnsupported,
   unsupported,
   type ChildEnvironment,
+  type EditedFile,
   type HookBridge,
   type HookEvent,
   type HookEventName,
@@ -184,6 +185,14 @@ export function hookEventOf(payload: JsonRecord, platform: NodeJS.Platform = 'li
   const event = testHooks(platform).parse(JSON.stringify(payload));
   if (event === undefined) throw new Error('the hook bridge read no event out of the payload');
   return event;
+}
+
+/**
+ * The event the shipped host reads out of `payload`, its call made one edit of `files`: the shipped host's file tools
+ * touch one file each, so a spec of a guard on a patch that touches several builds the call itself.
+ */
+export function editEventOf(payload: JsonRecord, files: readonly EditedFile[], platform: NodeJS.Platform = 'linux'): HookEvent {
+  return { ...hookEventOf(payload, platform), call: { kind: 'edit', name: 'apply_patch', input: {}, files } };
 }
 
 /**
