@@ -116,3 +116,12 @@ export function slotHold(now: Date, lastMerge: Date | null, channels: Channels):
 export function slotHoldAt(now: Date, channels: Channels): (lastMerge: Date | null) => string | null {
   return (lastMerge) => slotHold(now, lastMerge, channels);
 }
+
+/**
+ * The instant stable last moved at or before `now`: today's `stableAt` on the zone's clock once it passed, else
+ * yesterday's. The promote job measures the soak back from it, so every run from one `stableAt` to the next picks the
+ * same release, and a late or repeated run changes nothing.
+ */
+export function stableStart(now: Date, channels: Channels): Date {
+  return slotStart(now, { ...channels, previewSlots: [channels.stableAt] });
+}

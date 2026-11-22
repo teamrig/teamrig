@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { clockText, currentSlot, minutesIn, nextSlot, parseChannels, readChannels, slotHold, slotHoldAt, slotStart, type Channels } from './channels.ts';
+import { clockText, currentSlot, minutesIn, nextSlot, parseChannels, readChannels, slotHold, slotHoldAt, slotStart, stableStart, type Channels } from './channels.ts';
 
 const TEXT = JSON.stringify({ zone: 'Asia/Jerusalem', previewSlots: ['09:00', '12:00', '21:00'], stableAt: '20:00', soakHours: 3 });
 const CHANNELS: Channels = parseChannels(TEXT);
@@ -80,5 +80,13 @@ describe('slotHoldAt', () => {
     const hold = slotHoldAt(at('09:55:00'), CHANNELS);
     assert.equal(hold(null), null);
     assert.equal(hold(at('07:00:00')), slotHold(at('09:55:00'), at('07:00:00'), CHANNELS));
+  });
+});
+
+describe('stableStart', () => {
+  it("is today's stable time once it passed, else yesterday's", () => {
+    assert.deepEqual(stableStart(at('18:00:00'), CHANNELS), at('18:00:00'));
+    assert.deepEqual(stableStart(at('23:59:00'), CHANNELS), at('18:00:00'));
+    assert.deepEqual(stableStart(at('17:59:00'), CHANNELS), new Date('2026-11-21T18:00:00Z'));
   });
 });
