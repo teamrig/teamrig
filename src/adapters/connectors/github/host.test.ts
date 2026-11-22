@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { MANAGED_LABEL_SPECS, MAX_COMMENT, withStampFooter, type HostPull, type IssueDraft, type JsonRecord } from '../../../plugin-api/index.ts';
 import { secretScanner } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials, TEST_OWNERS } from '../../../testing/fake-credentials.ts';
-import { commentNode, FakeGh, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
+import { commentNode, FakeGh, ghCommit, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
 import {
   assigneeReadArgs,
+  commitReadArgs,
   isAssigneeRead,
   isCommentsRead,
   isIssueAssign,
@@ -32,6 +33,7 @@ import {
   LabelFileReads,
   labelCreateArgs,
   pullApproveArgs,
+  pullCompareArgs,
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
@@ -44,6 +46,7 @@ import { GitHubIssueHost, issueIdIn, labelNamesIn, loginIn, threadIn } from './h
 import { ISSUE_LIMIT, issuePageArgs } from './issues.ts';
 import { CLOSED_ISSUES_QUERY, PULL_PAGE_SIZE } from './queries.ts';
 import { PULL_LIMIT } from './pulls.ts';
+import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX } from './pull-work.ts';
 import { RepoTokens } from './tokens.ts';
 
 const ENV = { HOME: '/u' };
@@ -839,6 +842,59 @@ describe('GitHubIssueHost pull landing (T4817)', () => {
     assert.deepEqual(await host.pullStand({ repo: 'acme/web', number: 13 }), { kind: 'missing' });
     const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"data":{}}', stderr: '' });
     assert.deepEqual(await hostWith(odd).pullStand(PULL), { kind: 'failed', reason: 'gh printed no pull request for acme/web#12' });
+  });
+
+  describe('pullWork (T5117)', () => {
+    const HEAD = 'c'.repeat(40);
+    const ONE = ghCommit('1'.repeat(40), 'feat: one', [{ path: 'b.ts' }, { path: 'a.ts', status: 'added', patch: '@@ -0,0 +1 @@\n+x' }]);
+    const TWO = ghCommit('2'.repeat(40), 'fix: two', [{ path: 'logo.png', patch: null, blob: 'd'.repeat(40) }]);
+
+    it('reads the compare, then each commit oldest first, with their files as GitHub lists them', async () => {
+      const gh = new FakeGh().holdsCompare('acme/web', 'main', HEAD, [ONE, TWO]);
+      assert.deepEqual(await hostWith(gh).pullWork(PULL, 'main', HEAD), {
+        kind: 'read',
+        commits: [
+          {
+            sha: '1'.repeat(40),
+            subject: 'feat: one',
+            parents: 1,
+            files: [
+              { path: 'b.ts', previousPath: null, status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b', blob: 'b'.repeat(40) },
+              { path: 'a.ts', previousPath: null, status: 'added', patch: '@@ -0,0 +1 @@\n+x', blob: 'b'.repeat(40) },
+            ],
+          },
+          { sha: '2'.repeat(40), subject: 'fix: two', parents: 1, files: [{ path: 'logo.png', previousPath: null, status: 'modified', patch: null, blob: 'd'.repeat(40) }] },
+        ],
+      });
+      assert.deepEqual(
+        gh.ran.map((request) => request.args),
+        [pullCompareArgs('acme/web', 'main', HEAD), commitReadArgs('acme/web', '1'.repeat(40)), commitReadArgs('acme/web', '2'.repeat(40))],
+      );
+      assert.ok(gh.ran.every((request) => typeof request.env['GH_TOKEN'] === 'string'));
+    });
+
+    it('reads partial when GitHub lists fewer commits than the head carries, more than a landing compares, or a commit at the file cap', async () => {
+      const short = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, [ONE], 2)).pullWork(PULL, 'main', HEAD);
+      assert.equal(short.kind, 'partial');
+      const many = Array.from({ length: COMPARE_COMMITS_MAX + 1 }, (_, index) => ghCommit(String(index).padStart(40, 'e'), 'chore: n', [{ path: 'a.ts' }]));
+      const tooMany = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, many)).pullWork(PULL, 'main', HEAD);
+      assert.equal(tooMany.kind, 'partial');
+      const wide = ghCommit('3'.repeat(40), 'feat: wide', Array.from({ length: COMMIT_FILES_MAX }, (_, index) => ({ path: `f${String(index)}.ts` })));
+      const capped = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, [wide])).pullWork(PULL, 'main', HEAD);
+      assert.ok(capped.kind === 'partial' && capped.reason.includes('333333333'), JSON.stringify(capped));
+    });
+
+    it('reads partial for a base name a compare path cannot take, running no gh', async () => {
+      const gh = new FakeGh();
+      assert.equal((await hostWith(gh).pullWork(PULL, 'main..evil', HEAD)).kind, 'partial');
+      assert.deepEqual(gh.ran, []);
+    });
+
+    it('reads missing when GitHub knows no such head, and failed on an answer off its shape', async () => {
+      assert.deepEqual(await hostWith(new FakeGh()).pullWork(PULL, 'main', HEAD), { kind: 'missing' });
+      const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"commits":"no"}', stderr: '' });
+      assert.deepEqual(await hostWith(odd).pullWork(PULL, 'main', HEAD), { kind: 'failed', reason: `gh printed no compare for ccccccccc over main in acme/web` });
+    });
   });
 
   it('gives missing when GitHub answers the pull request null', async () => {

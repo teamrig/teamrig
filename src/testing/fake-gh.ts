@@ -29,6 +29,8 @@ import {
   isPullEnqueue,
   isPullMerge,
   isPullStandRead,
+  isPullCompareRead,
+  isCommitRead,
   isReviewRead,
   isRunRead,
   isRunRerun,
@@ -241,6 +243,40 @@ export interface PullStandSpec {
   readonly checks?: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED' | null;
 }
 
+/** One file of a commit as a test sets it; each part left out takes ghCommit's default. */
+export interface CommitFileSpec {
+  readonly path: string;
+  readonly previousPath?: string;
+  readonly status?: string;
+  /** The file's patch; null leaves it out, as GitHub does for a binary file or a diff too large to show. */
+  readonly patch?: string | null;
+  readonly blob?: string;
+}
+
+/** A commit as GitHub's commit read prints it (gh.ts commitReadArgs): one parent unless `parents` says otherwise. */
+export function ghCommit(sha: string, subject: string, files: readonly CommitFileSpec[], parents = 1): JsonRecord {
+  return {
+    sha,
+    commit: { message: `${subject}\n\nbody` },
+    parents: Array.from({ length: parents }, (_, index) => ({ sha: String(index).repeat(40) })),
+    files: files.map((file) => ({
+      filename: file.path,
+      ...(file.previousPath === undefined ? {} : { previous_filename: file.previousPath }),
+      status: file.status ?? 'modified',
+      ...(file.patch === null ? {} : { patch: file.patch ?? '@@ -1 +1 @@\n-a\n+b' }),
+      sha: file.blob ?? 'b'.repeat(40),
+    })),
+  };
+}
+
+/** What GitHub's REST API answers for a path it does not show, as gh prints it. */
+const REST_NOT_FOUND: GhResult = { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' };
+
+/** A REST read's answer: `record` printed, or Not Found when there is none. */
+function restAnswer(record: JsonRecord | undefined): GhResult {
+  return record === undefined ? REST_NOT_FOUND : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(record), stderr: '' };
+}
+
 /** The full head sha a stand reads when a test gives none. */
 export const STAND_HEAD = 'a'.repeat(40);
 
@@ -399,6 +435,9 @@ export class FakeGh implements GhRunner {
   private readonly reviews = new Map<string, readonly JsonRecord[]>();
   /** Pull stand answers' `repository` by `<repo>#<number>`. */
   private readonly stands = new Map<string, JsonRecord>();
+  /** Compare answers by `<repo> <base>...<head>`, and commit answers by `<repo> <sha>`. */
+  private readonly compares = new Map<string, JsonRecord>();
+  private readonly commits = new Map<string, JsonRecord>();
   private readonly postFailures = new Map<string, GhResult>();
   /** Set by `pages`; else each query's own page size. */
   private pageSize: number | undefined;
@@ -515,6 +554,19 @@ export class FakeGh implements GhRunner {
   /** From now on, a stand read of pull request `number` of `repo` answers this repository (as ghPullStand builds it); one a test gave none is Not Found. */
   holdsPullStand(repo: string, number: number, repository: JsonRecord): this {
     this.stands.set(`${repo}#${number}`, repository);
+    return this;
+  }
+
+  /**
+   * From now on, a compare of `head` over `base` in `repo` lists these commits (ghCommit's records, oldest first) and
+   * counts `total` of them (their number when left out); each listed commit's own read answers it. A compare a test
+   * gave none, and a commit no compare lists, is Not Found.
+   */
+  holdsCompare(repo: string, base: string, head: string, commits: readonly JsonRecord[], total: number = commits.length): this {
+    this.compares.set(`${repo} ${base}...${head}`, { total_commits: total, commits: commits.map((commit) => ({ sha: stringField(commit, 'sha') ?? '' })) });
+    for (const commit of commits) {
+      this.commits.set(`${repo} ${stringField(commit, 'sha') ?? ''}`, commit);
+    }
     return this;
   }
 
@@ -668,6 +720,14 @@ export class FakeGh implements GhRunner {
       const repo = ghRepoOf(request.args);
       const repository = this.stands.get(`${repo}#${(request.args[9] ?? '').slice('number='.length)}`);
       return this.canned.get(repo) ?? (repository === undefined ? notVisible(repo) : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ data: { repository } }), stderr: '' });
+    }
+    if (isPullCompareRead(request.args)) {
+      const [, repo = '', range = ''] = /^repos\/([^/]+\/[^/]+)\/compare\/(.+)$/u.exec(request.args[1] ?? '') ?? [];
+      return this.canned.get(repo) ?? restAnswer(this.compares.get(`${repo} ${range}`));
+    }
+    if (isCommitRead(request.args)) {
+      const [, repo = '', sha = ''] = /^repos\/([^/]+\/[^/]+)\/commits\/(.+)$/u.exec(request.args[1] ?? '') ?? [];
+      return this.canned.get(repo) ?? restAnswer(this.commits.get(`${repo} ${sha}`));
     }
     if (isPullApprove(request.args) || isPullEnqueue(request.args) || isPullMerge(request.args) || isRunRerun(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };

@@ -27,7 +27,9 @@ import {
   type HostLanding,
   type HostPosts,
   type HostPulls,
+  type HostCommit,
   type HostPullStand,
+  type HostPullWork,
   type HostReach,
   type HostRerun,
   type HostThread,
@@ -66,6 +68,9 @@ import {
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
+  BASE_BRANCH,
+  commitReadArgs,
+  pullCompareArgs,
   runReadArgs,
   runRerunArgs,
   labelReadArgs,
@@ -87,6 +92,7 @@ import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
 import { readPosts } from './posts.ts';
 import { pullStandIn } from './pull-stand.ts';
+import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX, commitIn, compareIn } from './pull-work.ts';
 import { listPulls, PULL_LIMIT } from './pulls.ts';
 import { PULL_PAGE_SIZE } from './queries.ts';
 import { rerunRefusal, runStateOf } from './run-state.ts';
@@ -632,6 +638,45 @@ export class GitHubIssueHost implements IssueHost {
     }
     const answer = pullStandIn(read.stdout);
     return answer.kind === 'unreadable' ? { kind: 'failed', reason: `gh printed no pull request for ${shown}` } : answer;
+  }
+
+  /**
+   * The commits `head` carries over `base` (T5117): the compare's list, then each commit read for its files' patches.
+   * Partial when GitHub lists fewer commits than the head carries, more than COMPARE_COMMITS_MAX, or a commit at
+   * COMMIT_FILES_MAX files; missing on Not Found; failed on any other end or an answer off its shape.
+   */
+  async pullWork(target: IssueTarget, base: string, head: string): Promise<HostPullWork> {
+    const shown = `${head.slice(0, 9)} over ${base} in ${target.repo}`;
+    if (!BASE_BRANCH.test(base)) {
+      return { kind: 'partial', reason: `the branch name ${base} is not one a compare read takes` };
+    }
+    const read = await this.read(target.repo, pullCompareArgs(target.repo, base, head), `the commits of ${shown}`);
+    if (read.kind !== 'found') {
+      return read;
+    }
+    const compare = compareIn(read.stdout);
+    if (compare === undefined) {
+      return { kind: 'failed', reason: `gh printed no compare for ${shown}` };
+    }
+    if (compare.total > compare.shas.length || compare.total > COMPARE_COMMITS_MAX) {
+      return { kind: 'partial', reason: `${shown} carries ${String(compare.total)} commits, more than one landing compares (${String(Math.min(compare.shas.length, COMPARE_COMMITS_MAX))})` };
+    }
+    const commits: HostCommit[] = [];
+    for (const sha of compare.shas) {
+      const one = await this.read(target.repo, commitReadArgs(target.repo, sha), `the commit ${sha.slice(0, 9)} of ${target.repo}`);
+      if (one.kind !== 'found') {
+        return one.kind === 'missing' ? { kind: 'failed', reason: `GitHub listed the commit ${sha.slice(0, 9)} of ${shown} but no longer shows it` } : one;
+      }
+      const commit = commitIn(one.stdout);
+      if (commit === undefined) {
+        return { kind: 'failed', reason: `gh printed no commit ${sha.slice(0, 9)} of ${target.repo}` };
+      }
+      if (commit.files.length >= COMMIT_FILES_MAX) {
+        return { kind: 'partial', reason: `the commit ${sha.slice(0, 9)} changes ${String(COMMIT_FILES_MAX)} files or more, more than GitHub lists in one read` };
+      }
+      commits.push(commit);
+    }
+    return { kind: 'read', commits };
   }
 
   /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */

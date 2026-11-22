@@ -346,6 +346,38 @@ export type HostPullStand = { readonly kind: 'read'; readonly pull: PullStand } 
 export type HostLanding = { readonly kind: 'enqueued' } | { readonly kind: 'merged' } | { readonly kind: 'failed'; readonly reason: string };
 
 /**
+ * One file one commit changes, as a code host reads it: its path (and the one it had, for a rename), how it changed,
+ * and its patch, the diff's hunks with their `@@` lines; null when the host shows none (a binary file, or a diff too
+ * large to send), when `blob`, the id of its content after the commit, stands in for it.
+ */
+export interface HostCommitFile {
+  readonly path: string;
+  readonly previousPath: string | null;
+  readonly status: string;
+  readonly patch: string | null;
+  readonly blob: string;
+}
+
+/** One commit a head carries over a base, as a code host reads it: `parents` counts its parents, so 2 or more is a merge. */
+export interface HostCommit {
+  readonly sha: string;
+  readonly subject: string;
+  readonly parents: number;
+  readonly files: readonly HostCommitFile[];
+}
+
+/**
+ * The commits a head carries over a base, oldest first (T5117): read; missing, when the host knows no such commit;
+ * partial, when the host would show only some of the commits or of a commit's files, so no comparison may rest on it;
+ * or failed.
+ */
+export type HostPullWork =
+  | { readonly kind: 'read'; readonly commits: readonly HostCommit[] }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'partial'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/**
  * A code host's landing of a pull request (T4817): read where it stands, approve one head of it, and land it. The
  * approval's body is the adapter's own fixed line naming the head, never text a caller gives. The host's own rules
  * (required checks, reviews) gate the landing too, unless the token may bypass them, so `pr merge` checks the head's
@@ -354,6 +386,11 @@ export type HostLanding = { readonly kind: 'enqueued' } | { readonly kind: 'merg
 export interface PullLanding {
   /** Where the pull request stands now. */
   pullStand(target: IssueTarget): Promise<HostPullStand>;
+  /**
+   * The commits `head` (a full sha) carries over the branch `base` of the pull request's repository, each with its
+   * files' patches, so a landing can tell a head rebased with the same work from one with new work (T5117).
+   */
+  pullWork(target: IssueTarget, base: string, head: string): Promise<HostPullWork>;
   /** Approves the pull request at `head` (its full sha), so the approval covers only that head. */
   approvePull(target: IssueTarget, head: string): Promise<HostEnd>;
   /** Lands the pull request as `pull` read it: into its repository's merge queue when it has one, else merged at its head. */

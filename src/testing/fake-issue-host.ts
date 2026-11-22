@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostReach, type HostRerun, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -322,12 +322,20 @@ export class FakeIssueHost implements IssueHost {
   }
 
   private readonly stands = new Map<string, HostPullStand>();
+  /** Work reads by `<target> <base>...<head>`. */
+  private readonly works = new Map<string, HostPullWork>();
   private approveEnd: HostEnd = { kind: 'done' };
   private landing: HostLanding | undefined;
 
   /** From now on, a read of where `target` stands gives `stand`; a pull request a test gave none reads as missing. */
   standsAt(target: IssueTarget, stand: HostPullStand): this {
     this.stands.set(targetText(target), stand);
+    return this;
+  }
+
+  /** From now on, a read of the commits `head` carries over `base` in `target`'s repository gives `work`; one a test gave none reads as missing. */
+  carries(target: IssueTarget, base: string, head: string, work: HostPullWork): this {
+    this.works.set(`${targetText(target)} ${base}...${head}`, work);
     return this;
   }
 
@@ -345,6 +353,10 @@ export class FakeIssueHost implements IssueHost {
 
   pullStand(target: IssueTarget): Promise<HostPullStand> {
     return Promise.resolve(this.stands.get(targetText(target)) ?? { kind: 'missing' });
+  }
+
+  pullWork(target: IssueTarget, base: string, head: string): Promise<HostPullWork> {
+    return Promise.resolve(this.works.get(`${targetText(target)} ${base}...${head}`) ?? { kind: 'missing' });
   }
 
   approvePull(target: IssueTarget, head: string): Promise<HostEnd> {

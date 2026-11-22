@@ -26,6 +26,10 @@ import {
   isPullEnqueue,
   isPullMerge,
   isPullStandRead,
+  isPullCompareRead,
+  isCommitRead,
+  commitReadArgs,
+  pullCompareArgs,
   PULL_STAND_QUERY,
   pullApproveArgs,
   pullEnqueueArgs,
@@ -1070,7 +1074,7 @@ describe('ghRunnerOver', () => {
     }
     await assert.rejects(
       ghRunnerOver(run).run({ args: ['issue', 'close', '7'], env: {} }),
-      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh issue close with these arguments/,
+      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh issue close with these arguments/,
     );
     assert.deepEqual(asked, []);
   });
@@ -1119,6 +1123,34 @@ describe('pull request landing lines (T4817)', () => {
     assert.equal(isPullMerge(merge), true);
     for (const args of [stand, approve, enqueue, merge]) {
       assert.equal(isAllowedGh(args), true, args.join(' '));
+    }
+  });
+
+  it("takes the compare of a base branch with a full head and one commit's read, and refuses anything more (T5117)", () => {
+    const compare = pullCompareArgs('acme/web', 'main', HEAD);
+    const commit = commitReadArgs('acme/web', HEAD);
+    assert.deepEqual(compare, ['api', `repos/acme/web/compare/main...${HEAD}`]);
+    assert.deepEqual(commit, ['api', `repos/acme/web/commits/${HEAD}`]);
+    for (const args of [compare, commit, pullCompareArgs('acme/web', 'release/v1.2', HEAD)]) {
+      assert.equal(isAllowedGh(args), true, args.join(' '));
+    }
+    assert.equal(isPullCompareRead(compare), true);
+    assert.equal(isCommitRead(commit), true);
+    const refused: string[][] = [
+      pullCompareArgs('acme/web', 'main', HEAD.slice(0, 12)),
+      pullCompareArgs('acme/web', 'main..x', HEAD),
+      pullCompareArgs('acme/web', '-x', HEAD),
+      pullCompareArgs('acme/web', 'main?per_page=1', HEAD),
+      pullCompareArgs('acme/web', 'main', `${HEAD}?x=1`),
+      [...compare, '--paginate'],
+      [...compare, '-X', 'POST'],
+      commitReadArgs('acme/web', 'main'),
+      commitReadArgs('acme/web', `${HEAD}/comments`),
+      commitReadArgs('../acme/web', HEAD),
+      [...commit, '-X', 'DELETE'],
+    ];
+    for (const args of refused) {
+      assert.equal(isAllowedGh(args), false, args.join(' '));
     }
   });
 

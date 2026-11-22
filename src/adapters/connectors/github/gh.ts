@@ -835,6 +835,48 @@ export function isPullStandRead(args: readonly string[]): boolean {
 }
 
 /**
+ * A base branch's name as a compare read puts it in its path: git's own characters, no `..` (which would split the
+ * range), no leading dash or slash, no query or further path part.
+ */
+export const BASE_BRANCH = /^(?![-/])(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/u;
+
+/**
+ * The command line that reads the commits `head` (a full sha) carries over the branch `base` (T5117): GitHub's compare
+ * of the two, its commits oldest first and their total, so a reader can tell when GitHub listed only some.
+ */
+export function pullCompareArgs(repo: string, base: string, head: string): string[] {
+  return ['api', `repos/${repo}/compare/${base}...${head}`];
+}
+
+/** `repos/<owner>/<name>/compare/<base>...<sha>`: one compare of a branch with one commit. */
+const COMPARE_PATH = /^repos\/([^/]+\/[^/]+)\/compare\/(.+)\.\.\.([^.]+)$/u;
+
+/** True for pullCompareArgs's line and nothing more: one compare read, a GET, a branch name to a full sha. */
+export function isPullCompareRead(args: readonly string[]): boolean {
+  const match = COMPARE_PATH.exec(args[1] ?? '');
+  const repo = match?.[1] ?? '';
+  const base = match?.[2] ?? '';
+  const head = match?.[3] ?? '';
+  return REPO_NAME.test(repo) && BASE_BRANCH.test(base) && FULL_SHA.test(head) && sameArgs(args, pullCompareArgs(repo, base, head));
+}
+
+/** The command line that reads one commit of `repo` (T5117): its parents, message and each file's patch. */
+export function commitReadArgs(repo: string, sha: string): string[] {
+  return ['api', `repos/${repo}/commits/${sha}`];
+}
+
+/** `repos/<owner>/<name>/commits/<sha>`: one commit, never a list, its statuses or its comments. */
+const COMMIT_PATH = /^repos\/([^/]+\/[^/]+)\/commits\/([^/]+)$/u;
+
+/** True for commitReadArgs's line and nothing more: one commit read by its full sha, a GET. */
+export function isCommitRead(args: readonly string[]): boolean {
+  const match = COMMIT_PATH.exec(args[1] ?? '');
+  const repo = match?.[1] ?? '';
+  const sha = match?.[2] ?? '';
+  return REPO_NAME.test(repo) && FULL_SHA.test(sha) && sameArgs(args, commitReadArgs(repo, sha));
+}
+
+/**
  * The body of the review `pr approve` posts: a fixed line saying it is automated and lead-reviewed, naming the head it
  * approves and no session or task (an outside repository shows it), built here and never from a caller's text, so
  * the runner can hold the write to it word for word.
@@ -903,7 +945,7 @@ export class GhRefusedError extends Error {
   override readonly name = 'GhRefusedError';
 
   constructor(args: readonly string[]) {
-    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
   }
 }
 
@@ -939,6 +981,8 @@ export function isAllowedGh(args: readonly string[]): boolean {
     isMentionRead(args) ||
     isReviewRead(args) ||
     isPullStandRead(args) ||
+    isPullCompareRead(args) ||
+    isCommitRead(args) ||
     isPullApprove(args) ||
     isPullEnqueue(args) ||
     isPullMerge(args)
