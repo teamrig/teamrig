@@ -2216,6 +2216,7 @@ function parseCommits(read: ConfigReader, raw: JsonRecord): CommitsConfig {
       CONFIG_LIMITS.sourcePatterns.maxItems,
     ),
     gate: isCommitGate(gate) ? gate : defaults.gate,
+    stamp: read.boolean(raw, 'stamp', path, defaults.stamp),
   };
 }
 

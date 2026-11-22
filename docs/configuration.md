@@ -336,6 +336,7 @@ The small-commits rule: one logical change per commit; a commit over either boun
 | `testPatterns` | array (at most 8 items) of string (at most 100 characters) | `["(^\|/)(tests?\|__tests__\|spec)/","\\.(test\|spec)\\.[^/]+$","(^\|/)test_[^/]+\\.py$"]` | Regular expressions over /-separated paths; a file that matches one is a test and never counts. |
 | `sourcePatterns` | array (at most 8 items) of string (at most 100 characters) | `["\\.([cm]?[jt]sx?\|py\|go\|rs\|java\|kt\|cs\|c\|cc\|cpp\|h\|hpp\|rb\|swift\|vue\|svelte\|sh\|ps1)$"]` | Regular expressions over /-separated paths; a non-test file that matches one is source. A change of source with no test changed misses the self-merge gate (pushGuard.pushToProtected gated). |
 | `gate` | one of `"off"`, `"warn"`, `"refuse"` | `"warn"` | A push to a protected branch: off ignores large commits, warn lists them in the push guard's refusal, refuse refuses the push for them. |
+| `stamp` | boolean | `true` | The commit-msg hook adds a Made-by trailer naming the program, model and effort that made the commit, beside the Made-with trailer naming teamrig's version. false leaves the message as written. |
 
 ## `delivery`
 

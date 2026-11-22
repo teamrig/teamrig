@@ -655,6 +655,11 @@
           "type": "string",
           "enum": ["off", "warn", "refuse"],
           "default": "warn"
+        },
+        "stamp": {
+          "description": "The commit-msg hook adds a Made-by trailer naming the program, model and effort that made the commit, beside the Made-with trailer naming teamrig's version. false leaves the message as written.",
+          "type": "boolean",
+          "default": true
         }
       }
     },

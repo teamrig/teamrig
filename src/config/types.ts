@@ -852,6 +852,11 @@ export interface CommitsConfig {
    */
   readonly sourcePatterns: readonly string[];
   readonly gate: CommitGate;
+  /**
+   * The commit-msg hook adds a Made-by trailer naming the program, model and effort that made the commit, beside the
+   * Made-with one (core/stamp.ts). On by default; false leaves the message as written.
+   */
+  readonly stamp: boolean;
 }
 
 export const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;

@@ -1453,12 +1453,14 @@ describe('parseConfig', () => {
   it('reads the commits rule, refusing a bad gate, trailer key, bound or pattern', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,
-      commits: { maxLines: 10, maxFiles: 20, largeCommitTrailer: 'Large commit', testPatterns: ['^fixtures/', '(('], sourcePatterns: ['^lib/', '['], gate: 'block' },
+      commits: { maxLines: 10, maxFiles: 20, largeCommitTrailer: 'Large commit', testPatterns: ['^fixtures/', '(('], sourcePatterns: ['^lib/', '['], gate: 'block', stamp: 'no' },
     });
-    assert.deepEqual(paths(issues).sort(), ['commits.gate', 'commits.largeCommitTrailer', 'commits.maxLines', 'commits.sourcePatterns[1]', 'commits.testPatterns[1]']);
+    assert.deepEqual(paths(issues).sort(), ['commits.gate', 'commits.largeCommitTrailer', 'commits.maxLines', 'commits.sourcePatterns[1]', 'commits.stamp', 'commits.testPatterns[1]']);
     assert.deepEqual(config.commits, { ...DEFAULT_COMMITS, maxFiles: 20, testPatterns: ['^fixtures/'], sourcePatterns: ['^lib/'] });
     const refuse = parseConfig({ ...ROSTER, commits: { gate: 'refuse', largeCommitTrailer: 'Big-change' } }).config.commits;
     assert.deepEqual([refuse.gate, refuse.largeCommitTrailer], ['refuse', 'Big-change']);
+    assert.equal(parseConfig(ROSTER).config.commits.stamp, true);
+    assert.equal(parseConfig({ ...ROSTER, commits: { stamp: false } }).config.commits.stamp, false);
   });
 
   it('reads what a normal push to a protected branch does, defaulting to ask and refusing another word', () => {

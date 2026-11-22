@@ -222,6 +222,7 @@ export const DEFAULT_COMMITS: CommitsConfig = {
   testPatterns: ['(^|/)(tests?|__tests__|spec)/', '\\.(test|spec)\\.[^/]+$', '(^|/)test_[^/]+\\.py$'],
   sourcePatterns: ['\\.([cm]?[jt]sx?|py|go|rs|java|kt|cs|c|cc|cpp|h|hpp|rb|swift|vue|svelte|sh|ps1)$'],
   gate: 'warn',
+  stamp: true,
 };
 
 /**

@@ -23,7 +23,7 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'contextFiles.maxClaudeMdChars', 'contextFiles.maxMemoryIndexChars', 'contextFiles.maxSkillListingChars',
   'contextFiles.maxSessionListsChars',
   'lock.ttlMs', 'lock.pollMs', 'lock.waitMs',
-  'commits.maxLines', 'commits.maxFiles', 'commits.largeCommitTrailer', 'commits.testPatterns', 'commits.sourcePatterns',
+  'commits.maxLines', 'commits.maxFiles', 'commits.largeCommitTrailer', 'commits.testPatterns', 'commits.sourcePatterns', 'commits.stamp',
   'delivery.checkTimeoutSeconds', 'delivery.freezes.maxMinutes', 'delivery.stablePeriods.settleMinutes',
   'delivery.stablePeriods.assumedDeployMinutes', 'delivery.stablePeriods.minMinutes', 'delivery.wait.pollSeconds',
   'delivery.wait.maxMinutes', 'delivery.schedule.resetBlackoutHours', 'delivery.schedule.queueCutoffUtc',
