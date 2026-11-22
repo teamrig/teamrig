@@ -34,6 +34,7 @@ import type {
   ScaleOutConfig,
   SkillsConfig,
   StatusLineConfig,
+  SyncConfig,
   TestsConfig,
   TurnLogConfig,
   NeedsYouConfig,
@@ -43,6 +44,7 @@ import type {
   BranchesConfig,
   MeetingConfig,
 } from './types.ts';
+import { DEFAULT_CAPS, DEFAULT_SCOPE } from '../sync/scope.ts';
 
 /** Defaults for every key except the roster (`sessions`, `roles.lead`), which each team supplies. */
 export const DEFAULT_OWNER_GATES: readonly string[] = [
@@ -327,6 +329,12 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
  * named after the tool so it does not clash with a repository's own triage labels.
  */
 export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS };
+
+/**
+ * The import a team gets with no setup (T5013): its people's issues and those labelled `teamrig`, at most 200 open
+ * tasks per tracker and 50 new ones a run, so a large project never floods the register.
+ */
+export const DEFAULT_SYNC: SyncConfig = { scope: DEFAULT_SCOPE, ...DEFAULT_CAPS };
 
 /**
  * Claude Code compacts a 200k window at about 167k, so 120k refreshes before that; every 3 tasks catches a

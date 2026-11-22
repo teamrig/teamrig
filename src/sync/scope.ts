@@ -1,6 +1,15 @@
 import type { HostIssue } from '../issues/issue.ts';
 import type { SyncPlan, SyncStep } from './plan.ts';
 
+/** How an issue's assignees bring it into scope: `team`, one of the team's people; `none`, never (labels only). */
+export const ASSIGNED_SCOPES = ['team', 'none'] as const;
+
+export type AssignedScope = (typeof ASSIGNED_SCOPES)[number];
+
+export function isAssignedScope(value: unknown): value is AssignedScope {
+  return ASSIGNED_SCOPES.some((scope) => scope === value);
+}
+
 /**
  * Which issues of a place (a repository, a project) the import reads, the same model for every tracker: every open
  * one (`all`), else those assigned to one of the team's people or carrying one of `labels`. A connector turns it into
@@ -11,7 +20,7 @@ export interface ImportScope {
   /** Every open issue of the place, the import's reach before scopes; off by default. */
   readonly all: boolean;
   /** `team` takes an issue assigned to one of the team's people; `none` takes labels only. */
-  readonly assigned: 'team' | 'none';
+  readonly assigned: AssignedScope;
   /** An issue carrying one of these (matched without case) is in scope, whoever it is assigned to. */
   readonly labels: readonly string[];
 }

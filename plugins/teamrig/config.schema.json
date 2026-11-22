@@ -1578,6 +1578,55 @@
         }
       }
     },
+    "sync": {
+      "description": "What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand.",
+      "type": "object",
+      "properties": {
+        "scope": {
+          "description": "Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig.",
+          "type": "object",
+          "properties": {
+            "all": {
+              "description": "Every open issue of each place, whoever it is assigned to and whatever its labels. Off by default, so a large project never floods the register.",
+              "type": "boolean",
+              "default": false
+            },
+            "assigned": {
+              "description": "team takes an issue assigned to one of the team's people (GitHub logins in github.owners, Jira account ids in connectors.jira.people, else the saved token's own account); none takes labelled issues only.",
+              "type": "string",
+              "enum": ["team", "none"],
+              "default": "team"
+            },
+            "labels": {
+              "description": "An issue carrying one of these labels is in scope, whoever it is assigned to. Matched without case.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[^\r\n]+$"
+              },
+              "maxItems": 20,
+              "default": ["teamrig"]
+            }
+          }
+        },
+        "maxOpen": {
+          "description": "The most open tasks one tracker's import holds; past it a run adds none and prints a CAPPED line. 0 adds none.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "default": 200
+        },
+        "maxNewPerSync": {
+          "description": "The most tasks one run adds per tracker; the rest wait for the next run, assigned issues first, then the oldest change. 0 adds none.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 50
+        }
+      }
+    },
     "serviceRoles": {
       "description": "Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused.",
       "type": "object",

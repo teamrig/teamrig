@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES } from './defaults.ts';
+import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
@@ -30,6 +30,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
+    assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
     assert.deepEqual(config.delivery, {
@@ -460,6 +461,40 @@ describe('parseConfig', () => {
       const parsed = parseConfig({ ...ROSTER, github: { followMax: wrong } });
       assert.deepEqual(paths(parsed.issues), ['github.followMax']);
       assert.equal(parsed.config.github.followMax, 20);
+    }
+  });
+
+  it('reads sync: the scope switch, its assigned word, its labels kept once whatever their case, and the caps within bounds (T5013)', () => {
+    const set = parseConfig({ ...ROSTER, sync: { scope: { all: true, assigned: 'none', labels: ['Ops', 'ops', 'triage'] }, maxOpen: 0, maxNewPerSync: 1000 } });
+    assert.deepEqual(set.issues, []);
+    assert.deepEqual(set.config.sync, { scope: { all: true, assigned: 'none', labels: ['Ops', 'triage'] }, maxOpen: 0, maxNewPerSync: 1000 });
+    assert.deepEqual(parseConfig({ ...ROSTER, sync: { scope: { labels: [] } } }).config.sync.scope.labels, []);
+  });
+
+  it('reports each wrong sync value and keeps its default (T5013)', () => {
+    const cases: readonly (readonly [Record<string, unknown>, string])[] = [
+      [{ scope: { all: 'yes' } }, 'sync.scope.all'],
+      [{ scope: { assigned: 'everyone' } }, 'sync.scope.assigned'],
+      [{ scope: { labels: 'teamrig' } }, 'sync.scope.labels'],
+      [{ scope: { labels: Array.from({ length: 21 }, (_, index) => 'l' + String(index)) } }, 'sync.scope.labels'],
+      [{ scope: 'all' }, 'sync.scope'],
+      [{ maxOpen: -1 }, 'sync.maxOpen'],
+      [{ maxOpen: 5001 }, 'sync.maxOpen'],
+      [{ maxNewPerSync: 2.5 }, 'sync.maxNewPerSync'],
+      [{ maxNewPerSync: 1001 }, 'sync.maxNewPerSync'],
+    ];
+    for (const [sync, path] of cases) {
+      const { config, issues } = parseConfig({ ...ROSTER, sync });
+      assert.deepEqual(paths(issues), [path], path);
+      assert.deepEqual(config.sync, DEFAULT_SYNC, path);
+    }
+  });
+
+  it('reports a wrong sync label and drops it alone, keeping the good ones (T5013)', () => {
+    for (const wrong of ['a\nb', 'x'.repeat(256)]) {
+      const { config, issues } = parseConfig({ ...ROSTER, sync: { scope: { labels: [wrong, 'ops'] } } });
+      assert.deepEqual(paths(issues), ['sync.scope.labels[0]']);
+      assert.deepEqual(config.sync.scope.labels, ['ops']);
     }
   });
 

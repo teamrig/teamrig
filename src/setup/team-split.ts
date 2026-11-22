@@ -56,9 +56,10 @@ type ChildTake = 'split' | 'own' | 'copy';
 /**
  * How the child takes every other key of the parent's config, so a key added to the config cannot be left out without
  * a choice here: `github` is the parent's alone, as each repository's issues go to one team, and so is `connectors`,
- * as a connector's section names the tracker one team's tasks go to; `paths` are a team's own folders, and
- * `serviceRoles` stay the parent's, as a grant is the owner's for one team and a moved session holds none until the
- * owner grants it there; every setting is copied, so the child runs as its parent did.
+ * as a connector's section names the tracker one team's tasks go to, and `sync` with them, as it scopes those imports;
+ * `paths` are a team's own folders, and `serviceRoles` stay the parent's, as a grant is the owner's for one team and a
+ * moved session holds none until the owner grants it there; every setting is copied, so the child runs as its parent
+ * did.
  */
 const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKED>, ChildTake>> = {
   configVersion: 'split',
@@ -70,6 +71,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   launch: 'split',
   github: 'own',
   connectors: 'own',
+  sync: 'own',
   serviceRoles: 'own',
   paths: 'own',
   timeZone: 'copy',

@@ -1,4 +1,5 @@
 import { ADMISSION_MODES, isAdmissionMode } from '../delivery/admission.ts';
+import { ASSIGNED_SCOPES, isAssignedScope } from '../sync/scope.ts';
 import { CHANGE_SOURCE_IDS, isChangeSourceId } from '../changes/ids.ts';
 import { deployTargetsOf } from '../delivery/targets.ts';
 import { ADDRESS_PATTERN, splitAddress } from '../core/address.ts';
@@ -27,6 +28,7 @@ import {
   DEFAULT_CHECK_TIMEOUT_SECONDS,
   DEFAULT_PASS_ENV,
   DEFAULT_GITHUB,
+  DEFAULT_SYNC,
   DEFAULT_ISSUE_FIELDS,
   DEFAULT_QUEUE,
   DEFAULT_HIRING,
@@ -171,6 +173,7 @@ import {
   type DeployCheckConfig,
   type CommitsConfig,
   type GithubConfig,
+  type SyncConfig,
   type IssueFieldsConfig,
   type IssueKind,
   type HiringConfig,
@@ -607,6 +610,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
       maxFailureChars: read.integer(read.section(raw, 'tests', ''), 'maxFailureChars', 'tests', DEFAULT_TESTS.maxFailureChars, CONFIG_LIMITS.maxFailureChars),
     },
     github: parseGithub(read, read.section(raw, 'github', ''), sessions),
+    sync: parseSync(read, read.section(raw, 'sync', '')),
     serviceRoles: parseServiceRoles(read, read.section(raw, 'serviceRoles', ''), sessions),
     connectors: parseConnectors(read, read.section(raw, 'connectors', '')),
     alerts: parseAlerts(read, read.section(raw, 'alerts', '')),
@@ -779,6 +783,31 @@ function parseGithub(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     ...readGithubWatcher(read, raw, sessions),
     ...(issueAtAdd === undefined ? {} : { issueAtAdd }),
     stamp: read.boolean(raw, 'stamp', 'github', DEFAULT_GITHUB.stamp),
+  };
+}
+
+/**
+ * `sync` (T5013): the import scope, `assigned` one of its words and each label one line, kept once whatever its case
+ * (the scope matches labels without case), and the caps within their bounds.
+ */
+function parseSync(read: ConfigReader, raw: JsonRecord): SyncConfig {
+  const scope = read.section(raw, 'scope', 'sync');
+  const { maxItems, maxLength } = CONFIG_LIMITS.syncScopeLabels;
+  const labels: string[] = [];
+  for (const label of read.stringList(scope, 'labels', 'sync.scope', DEFAULT_SYNC.scope.labels, shortLine(maxLength), maxItems)) {
+    if (!labels.some((kept) => kept.toLowerCase() === label.toLowerCase())) {
+      labels.push(label);
+    }
+  }
+  const assigned = read.string(scope, 'assigned', 'sync.scope', DEFAULT_SYNC.scope.assigned, oneOf(ASSIGNED_SCOPES));
+  return {
+    scope: {
+      all: read.boolean(scope, 'all', 'sync.scope', DEFAULT_SYNC.scope.all),
+      assigned: isAssignedScope(assigned) ? assigned : DEFAULT_SYNC.scope.assigned,
+      labels,
+    },
+    maxOpen: read.integer(raw, 'maxOpen', 'sync', DEFAULT_SYNC.maxOpen, CONFIG_LIMITS.syncMaxOpen),
+    maxNewPerSync: read.integer(raw, 'maxNewPerSync', 'sync', DEFAULT_SYNC.maxNewPerSync, CONFIG_LIMITS.syncMaxNewPerSync),
   };
 }
 

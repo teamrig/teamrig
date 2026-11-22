@@ -43,6 +43,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `wake` | [object](#wake) |  | Waking a session idle at its prompt when work is handed to it, instead of at its next prompt. Only work the session can go on with wakes (open or started past every task it comes after, or waiting with every wait cleared or answered), tasks handed together wake once, and each wake says what it costs. |
 | `tests` | [object](#tests) |  | What teamrig test prints of a failed run. |
 | `github` | [object](#github) |  | The team's GitHub repositories. teamrig issue sync reads their issues into the register as tasks of source github, and never writes to GitHub; local tasks stay local. teamrig issue migrate, teamrig issue reply, teamrig issue assign, teamrig issue label, teamrig issue edit and teamrig issue close, run by hand, write only to these repositories. Each owner's repositories are reached with the token saved as teamrig-gh-\<owner> in the system's credential store, never the gh login; no saved token, or one that cannot be read, stops the read or write for that owner (docs/github-sync.md). |
+| `sync` | [object](#sync) |  | What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand. |
 | `serviceRoles` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9-]{0,31}$`) to [object](#serviceroles) | `{}` | Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused. |
 | `connectors` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`) to object | `{}` | Each connector's own settings, by the connector's id: a connector is the adapter that reaches an outside tool holding issues or code. The keys under an id are that connector's, so it reads and checks them itself, and a key it does not take is refused by the command that reaches the connector, naming the keys it takes. Only the owner changes it, since it says what outside tool a connector reaches and how. |
 | `alerts` | [object](#alerts) |  | The alerting rule the core rules state, and where a page to the owner goes. |
@@ -658,6 +659,26 @@ The issue types each kind of task is set as, the first one the repository has wi
 | `bug` | array (at most 5 items) of string (1 to 100 characters) | `["Bug"]` | The types a bug is set as. |
 | `goal` | array (at most 5 items) of string (1 to 100 characters) | `["Feature","Goal"]` | The types a goal is set as: a Feature, as an issue opened for one is typed, else a Goal where the organization made that type. |
 | `design` | array (at most 5 items) of string (1 to 100 characters) | `["Design"]` | The types a design issue is set as. |
+
+## `sync`
+
+What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `scope` | [object](#syncscope) |  | Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig. |
+| `maxOpen` | integer (0 to 5000) | `200` | The most open tasks one tracker's import holds; past it a run adds none and prints a CAPPED line. 0 adds none. |
+| `maxNewPerSync` | integer (0 to 1000) | `50` | The most tasks one run adds per tracker; the rest wait for the next run, assigned issues first, then the oldest change. 0 adds none. |
+
+## `sync.scope`
+
+Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `all` | boolean | `false` | Every open issue of each place, whoever it is assigned to and whatever its labels. Off by default, so a large project never floods the register. |
+| `assigned` | one of `"team"`, `"none"` | `"team"` | team takes an issue assigned to one of the team's people (GitHub logins in github.owners, Jira account ids in connectors.jira.people, else the saved token's own account); none takes labelled issues only. |
+| `labels` | array (at most 20 items) of string (1 to 255 characters, matching `^[^ ]+$`) | `["teamrig"]` | An issue carrying one of these labels is in scope, whoever it is assigned to. Matched without case. |
 
 ## `serviceRoles.*`
 

@@ -6,6 +6,7 @@ import type { AdmissionMode } from '../delivery/admission.ts';
 import type { NeedKind } from '../tabs/need-kind.ts';
 import type { ServiceCommand } from '../permissions/service-commands.ts';
 import type { ChangeSourceId } from '../changes/ids.ts';
+import type { ImportScope } from '../sync/scope.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 9;
@@ -793,6 +794,19 @@ export interface GithubConfig {
    * (core/stamp.ts, #1102). On by default; false posts the text as given.
    */
   readonly stamp: boolean;
+}
+
+/**
+ * What `teamrig issue sync` takes from each tracker, the same for every one (T5013): the scope each place's list is read
+ * with, and the caps on the tasks one tracker's import adds. A changed scope adds nothing on an automatic run until a
+ * session runs `issue sync --yes` once by hand; tasks the register already imports keep following meanwhile.
+ */
+export interface SyncConfig {
+  readonly scope: ImportScope;
+  /** The most open tasks one tracker's import holds: past it a run adds none and prints a CAPPED line; 0 adds none. */
+  readonly maxOpen: number;
+  /** The most tasks one run adds per tracker, the rest left for the next run; 0 adds none. */
+  readonly maxNewPerSync: number;
 }
 
 /**
@@ -1844,6 +1858,7 @@ export interface KitConfig {
   readonly wake: WakeConfig;
   readonly tests: TestsConfig;
   readonly github: GithubConfig;
+  readonly sync: SyncConfig;
   /** Each service role by name: the teamrig commands it holds and the sessions that hold it (T2984). */
   readonly serviceRoles: Readonly<Record<string, ServiceRoleConfig>>;
   /**

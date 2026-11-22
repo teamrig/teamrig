@@ -31,6 +31,7 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'wake.enabled', 'wake.priority', 'wake.batchSeconds', 'wake.minGapMinutes', 'wake.maxGapMinutes', 'wake.dayStartUtc',
   'tests.maxFailureChars',
   'github.repos', 'github.watcher', 'github.closedDays', 'github.probeSeconds', 'github.similarThreshold', 'github.acceptLabel',
+  'sync.scope.all', 'sync.scope.assigned', 'sync.scope.labels', 'sync.maxOpen', 'sync.maxNewPerSync',
   'decisions.batchTimesUtc', 'decisions.batchAt',
   'tabStatus.enabled',
   'needsYou.enabled', 'needsYou.kinds', 'needsYou.osToast',
