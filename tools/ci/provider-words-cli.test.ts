@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TOOLS_REPO } from '../lib/repo-root.ts';
 import { type CliRun, TempRepo } from '../lib/temp-repo.ts';
-import { baselineText, parseBaseline } from './provider-words.ts';
+import { baselineText, parseBaseline } from '../lib/count-baseline.ts';
+import { BASELINE_FILE } from './provider-words.ts';
 
 const CLI = fileURLToPath(new URL('./provider-words-cli.ts', import.meta.url));
 const BASELINE = 'tools/ci/provider-words.json';
@@ -17,9 +18,9 @@ describe('provider-words-cli', () => {
   let repo: TempRepo;
   const check = (args: readonly string[] = []): CliRun => repo.runOutside(CLI, [...args, '--root', repo.dir]);
   const baseline = (entries: readonly (readonly [string, number])[]): void => {
-    repo.write(BASELINE, baselineText(new Map(entries)));
+    repo.write(BASELINE, baselineText(BASELINE_FILE.comment, BASELINE_FILE.field, new Map(entries)));
   };
-  const written = (): ReadonlyMap<string, number> => parseBaseline(JSON.parse(readFileSync(join(repo.dir, BASELINE), 'utf8')));
+  const written = (): ReadonlyMap<string, number> => parseBaseline(JSON.parse(readFileSync(join(repo.dir, BASELINE), 'utf8')), BASELINE_FILE.field);
   /** Two skills: the plugin's with 2 words over two files, this repo's own with 1, plus files the check must skip. */
   const skills = (): void => {
     repo.write(`${PLUGIN}/SKILL.md`, 'Open a pull request.\n');

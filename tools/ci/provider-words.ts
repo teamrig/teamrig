@@ -1,5 +1,3 @@
-import { isRecord, recordField } from '../lib/guards.ts';
-
 /**
  * The provider-word check of the skills (docs/design/provider-neutral-skills.md): how often a skill names one host's
  * or tool's own words, counted so the count can only fall. A skill tells the step (open a pull request, refresh the
@@ -56,51 +54,12 @@ export function skillCounts(files: readonly SkillFile[]): ReadonlyMap<string, nu
   return new Map(skills.map((skill) => [skill, hits.filter((hit) => hit.skill === skill).length]));
 }
 
-/** What the counts did against the baseline. A skill the baseline lacks has a baseline of 0. */
-export interface CountChange {
-  readonly skill: string;
-  readonly count: number;
-  readonly baseline: number;
-}
-
-export interface Comparison {
-  /** Counts above their baseline: the check fails on each. */
-  readonly rose: readonly CountChange[];
-  /** Counts below their baseline: `--write` lowers it. */
-  readonly fell: readonly CountChange[];
-  /** Baseline entries of skills no longer there. */
-  readonly gone: readonly string[];
-}
-
-export function compareCounts(counts: ReadonlyMap<string, number>, baseline: ReadonlyMap<string, number>): Comparison {
-  const changes = [...counts].map(([skill, count]) => ({ skill, count, baseline: baseline.get(skill) ?? 0 }));
-  return {
-    rose: changes.filter((change) => change.count > change.baseline),
-    fell: changes.filter((change) => change.count < change.baseline),
-    gone: [...baseline.keys()].filter((skill) => !counts.has(skill)).sort(),
-  };
-}
-
-const BASELINE_COMMENT =
-  'The provider-word check (tools/ci/provider-words-cli.ts): how many host or tool words each skill names. A count may fall, never rise; `--write` records the counts and refuses a rise.';
-
-/** The baseline file's skill counts; throws on anything but `{ skills: { <folder>: <whole count> } }`. */
-export function parseBaseline(value: unknown): ReadonlyMap<string, number> {
-  const skills = isRecord(value) ? recordField(value, 'skills') : undefined;
-  if (skills === undefined) throw new Error('the baseline needs a "skills" object');
-  return new Map(
-    Object.entries(skills).map(([skill, count]) => {
-      if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) throw new Error(`the baseline count of ${skill} is not a whole number`);
-      return [skill, count];
-    }),
-  );
-}
-
-/** The baseline file's text for these counts, skills sorted, so each OS writes the same bytes. */
-export function baselineText(counts: ReadonlyMap<string, number>): string {
-  const skills = Object.fromEntries([...counts].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  return `${JSON.stringify({ $comment: BASELINE_COMMENT, skills }, null, 2)}\n`;
-}
+/** The baseline file of the check, the field that holds its counts and the comment it opens with. */
+export const BASELINE_FILE = {
+  field: 'skills',
+  comment:
+    'The provider-word check (tools/ci/provider-words-cli.ts): how many host or tool words each skill names. A count may fall, never rise; `--write` records the counts and refuses a rise.',
+} as const;
 
 export function hitLine(hit: ProviderHit): string {
   return `${hit.path}:${hit.line}: ${hit.term}`;
