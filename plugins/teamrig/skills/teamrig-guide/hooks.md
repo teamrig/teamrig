@@ -805,9 +805,9 @@ them (`echo "exec approve R1"`). A command word only known when it runs counts o
   the owner whoever runs it. The owner runs it in their own terminal, or types `/teamrig owner next T<n>` in a tab,
   which [the mod](#the-mod-the-teamrig-command) runs as a write only when the person types it.
 - **a settings writer's write**: `automode install` or `uninstall`, `permissions trim`, `statusline install`,
-  `setup restore`, `config migrate` or `restore install` with `--yes` (or a word only known when the line runs
-  after the command), whatever client starts it: each changes Claude Code's settings, the team config's format or
-  what runs at login, permissions only the owner changes. The CLI refuses the same `--yes` wherever `$CLAUDECODE`
+  `setup restore`, `setup hooks`, `config migrate` or `restore install` with `--yes` (or a word only known when the
+  line runs after the command), whatever client starts it: each changes Claude Code's settings, a host's hooks, the
+  team config's format or what runs at login, permissions only the owner changes. The CLI refuses the same `--yes` wherever `$CLAUDECODE`
   is set, and on a host whose adapter names no such mark, where an agent's run cannot be told from the owner's (the
   refusal says what the adapter must name). Its preview, without `--yes`, runs; the owner types
   `/teamrig permissions trim --yes` in a tab, or runs it in their own terminal.
