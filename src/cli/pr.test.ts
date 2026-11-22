@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPullApprove, isPullEnqueue, isPullMerge } from '../adapters/connectors/github/gh.ts';
+import { isPullApprove, isPullEnqueue, isPullMerge, pullApproveArgs } from '../adapters/connectors/github/gh.ts';
+import type { JsonRecord } from '../core/guards.ts';
 import { CliHarness, TEAM } from '../testing/cli-harness.ts';
-import { FakeGh, ghPullStand, STAND_HEAD, type PullStandSpec } from '../testing/fake-gh.ts';
+import { FakeGh, ghCommit, ghPullStand, STAND_HEAD, type PullStandSpec } from '../testing/fake-gh.ts';
 import { FakePullGit } from '../testing/fake-pull-git.ts';
 import { EXIT } from './runtime.ts';
 
@@ -157,9 +158,9 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     { name: 'no task holds the pull request', kit: () => landingKit(), args: ['pr', 'approve', 'acme/web#13', '--head', HEAD], reason: /no task holds acme\/web#13/u },
     { name: 'another session owns the task', kit: () => landingKit(null, 'bravo'), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /T1, which holds acme\/web#12, is bravo's/u },
     { name: 'the task has no approval', kit: () => landingKit(null), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /T1 has no approval of lead/u },
-    { name: 'the approval names another head', kit: () => landingKit(`head ${'b'.repeat(40)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name its head a{40} in full/u },
-    { name: 'the approval names the head only by a short sha', kit: () => landingKit(`head ${STAND_HEAD.slice(0, 12)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name its head a{40} in full/u },
-    { name: 'the head moved past --head', kit: () => landingKit(), spec: { head: 'c'.repeat(40) }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /its head is ccccccc, not a{40}: a newer head needs its own approval/u },
+    { name: 'the approval names another head', kit: () => landingKit(`head ${'b'.repeat(40)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name the head a{40} in full/u },
+    { name: 'the approval names the head only by a short sha', kit: () => landingKit(`head ${STAND_HEAD.slice(0, 12)} checked`), args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the approval of T1 does not name the head a{40} in full/u },
+    { name: 'the head moved past --head and GitHub shows no work of it', kit: () => landingKit(), spec: { head: 'c'.repeat(40) }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /the code host shows no commits of the approved head aaaaaaaaa over main/u },
     { name: 'it is a draft', kit: () => landingKit(), spec: { isDraft: true }, args: ['pr', 'approve', 'acme/web#12', '--head', HEAD], reason: /it is a draft/u },
     { name: 'it is closed', kit: () => landingKit(), spec: { state: 'CLOSED' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it is closed/u },
     { name: 'it targets another branch', kit: () => landingKit(), spec: { base: 'release' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /it targets release, not the default branch main/u },
@@ -181,6 +182,66 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
       assert.deepEqual(writes(gh), []);
     });
   }
+
+  describe('an approved head rebased onto a newer base (T5117)', () => {
+    const LIVE = 'c'.repeat(40);
+    const ONE = ghCommit('1'.repeat(40), 'feat: one', [{ path: 'src/a.ts', patch: '@@ -1,2 +1,3 @@ f()\n x\n+one\n y' }]);
+    const TWO = ghCommit('2'.repeat(40), 'fix: two', [{ path: 'src/b.ts', patch: '@@ -5,2 +5,3 @@\n x\n+two\n y' }]);
+    /** ONE and TWO rebased: new shas, their hunks moved down by the newer base's lines. */
+    const ONE_REBASED = ghCommit('3'.repeat(40), 'feat: one', [{ path: 'src/a.ts', patch: '@@ -9,2 +9,3 @@ g()\n x\n+one\n y' }]);
+    const TWO_REBASED = ghCommit('4'.repeat(40), 'fix: two', [{ path: 'src/b.ts', patch: '@@ -50,2 +50,3 @@\n x\n+two\n y' }]);
+
+    /** GitHub with acme/web#12 at LIVE as `spec` says, the approved HEAD carrying ONE and TWO, and LIVE carrying `live`. */
+    function rebased(live: readonly JsonRecord[], spec: PullStandSpec = {}): FakeGh {
+      return standing({ head: LIVE, ...spec }).holdsCompare('acme/web', 'main', HEAD, [ONE, TWO]).holdsCompare('acme/web', 'main', LIVE, live);
+    }
+
+    it('approves the live head, printing the approved head it carried from', async () => {
+      const gh = rebased([ONE_REBASED, TWO_REBASED]);
+      const result = await (await landingKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+      assert.deepEqual(result.stdout.slice(-2), [
+        "CARRIED acme/web#12 at ccccccc: it carries the approved aaaaaaaaa's 2 commits, patch for patch, onto a newer base",
+        'APPROVED acme/web#12 at ccccccc',
+      ]);
+      assert.deepEqual(writes(gh), [pullApproveArgs({ repo: 'acme/web', number: 12 }, LIVE)]);
+    });
+
+    it('merges the live head once its own checks passed', async () => {
+      const gh = rebased([ONE_REBASED, TWO_REBASED]);
+      const result = await (await landingKit()).run(['pr', 'merge', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+      assert.equal(result.stdout.at(-1), 'MERGED acme/web#12 at ccccccc');
+      const made = writes(gh);
+      assert.equal(made.length, 1);
+      assert.ok(made.every(isPullMerge) && made.every((args) => args.some((arg) => arg.includes(LIVE))), JSON.stringify(made));
+    });
+
+    it('refuses, writing nothing, a merge whose live head checks are pending, though the work carried', async () => {
+      const gh = rebased([ONE_REBASED, TWO_REBASED], { checks: 'PENDING' });
+      const result = await (await landingKit()).run(['pr', 'merge', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+      assert.match(result.stdout.join('\n'), /its head's checks are pending/u);
+      assert.deepEqual(writes(gh), []);
+    });
+
+    it('refuses, writing nothing, a live head whose work changed, naming the commit', async () => {
+      const changed = ghCommit('5'.repeat(40), 'fix: two', [{ path: 'src/b.ts', patch: '@@ -50,2 +50,3 @@\n x\n+other\n y' }]);
+      const gh = rebased([ONE_REBASED, changed]);
+      const result = await (await landingKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+      assert.match(result.stdout.join('\n'), /its head ccccccc is not the approved aaaaaaaaa rebased \(changed 222222222 "fix: two", now 555555555\): a head with other work needs its own approval/u);
+      assert.deepEqual(writes(gh), []);
+    });
+
+    it('refuses, writing nothing, a live head whose patch GitHub left out, comparing only the content ids', async () => {
+      const big = ghCommit('6'.repeat(40), 'fix: two', [{ path: 'src/b.ts', patch: null, blob: 'e'.repeat(40) }]);
+      const gh = rebased([ONE_REBASED, big]);
+      const result = await (await landingKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+      assert.deepEqual(writes(gh), []);
+    });
+  });
 
   it('approves a conflicting pull request with failing checks: only a merge needs it clean and green', async () => {
     const gh = standing({ mergeable: 'CONFLICTING', checks: 'FAILURE' });
