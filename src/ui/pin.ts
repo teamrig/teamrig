@@ -7,7 +7,7 @@
 import type { UiPin } from './released.ts';
 
 export const RELEASED_UI: UiPin | undefined = {
-  version: '0.80.0',
-  url: 'https://github.com/teamrig/teamrig-pane/releases/download/teamrig-pane-v0.80.0/teamrig-ui.json',
-  sha256: '8d2d2d024c1656dc8eb64dfdcc1a8c08a31c2ced2aa8dfcac4abaec153271591',
+  version: '0.81.0',
+  url: 'https://github.com/teamrig/teamrig-pane/releases/download/teamrig-pane-v0.81.0/teamrig-ui.json',
+  sha256: '4f9407401cd6198a3fee490d10492d6bc7e28a421eef4a177c2bd22828230efd',
 };
