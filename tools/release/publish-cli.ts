@@ -11,18 +11,19 @@ async function main(): Promise<number> {
       version: { type: 'string' },
       source: { type: 'string' },
       branch: { type: 'string', default: 'release' },
+      seed: { type: 'string' },
       dist: { type: 'string', default: 'plugins/teamrig/dist' },
       remote: { type: 'string', default: 'origin' },
     },
     strict: true,
     allowPositionals: false,
   });
-  const { version, source, branch, dist, remote } = values;
+  const { version, source, branch, seed, dist, remote } = values;
   if (version === undefined || source === undefined) {
-    console.log('release: pass --version <MAJOR.MINOR.PATCH> and --source <main commit sha>');
+    console.log('release: pass --version <MAJOR.MINOR.PATCH> and --source <main commit sha> [--branch <name> --seed <branch it starts from>]');
     return EXIT_USAGE;
   }
-  await publishRelease(createGit(process.cwd()), { version, source, branch, dist, remote }, (line) => console.log(line));
+  await publishRelease(createGit(process.cwd()), { version, source, branch, seed, dist, remote }, (line) => console.log(line));
   return EXIT_CLEAN;
 }
 
