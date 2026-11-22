@@ -99,6 +99,22 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
       ['jira', ['Jira', 'JQL']],
     ]);
   });
+
+  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, and the rest still loads', async () => {
+    assert.equal(API_VERSION, '0.2.0');
+    const { hosts, connectors, terminals } = await readDeclarations();
+    const loads = [...hosts, ...connectors, ...terminals];
+    assert.deepEqual(
+      loads.filter((load) => load.kind !== 'loaded').map((load) => load.id),
+      [],
+    );
+    const newer = loads.flatMap((load) => (load.kind === 'loaded' && (load.value.terms !== undefined || load.value.steps !== undefined) ? [[load.id, load.value.apiVersion]] : []));
+    assert.deepEqual(newer, [
+      ['claude-code', '0.2.0'],
+      ['github', '0.2.0'],
+      ['jira', '0.2.0'],
+    ]);
+  });
 });
 
 describe('reading the declarations', () => {

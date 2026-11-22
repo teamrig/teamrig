@@ -38,7 +38,7 @@ const ERROR_KINDS: Support = {
 };
 
 export const declaration: HostDeclaration = {
-  apiVersion: '0.1.0',
+  apiVersion: '0.2.0',
   id: 'claude-code',
   name: 'Claude Code',
   sessionVariables: SESSION_VARIABLES,

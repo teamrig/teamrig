@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.1.0',
+  apiVersion: '0.2.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],

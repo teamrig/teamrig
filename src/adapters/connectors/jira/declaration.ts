@@ -30,7 +30,7 @@ function unsupported(notice: string): Support {
 const ONE_ASSIGNEE: Support = partial('a second assignee', 'a Jira issue holds one assignee, named by its account id, so an assign replaces who held it');
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.1.0',
+  apiVersion: '0.2.0',
   id: 'jira',
   name: 'Jira',
   kinds: ['tracker'],
