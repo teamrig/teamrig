@@ -1831,13 +1831,16 @@ owner, so the session holding an outside PR's task reviews it there with no pers
 gate passes, reading them all first: exactly one task holds the PR (its ref), the caller owns that task (only a
 change's owner lands it), the caller's leader approved it with a note naming the full 40-hex head (an approval covers
 only the head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's
-default branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
-own approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
+default branch and is at the head `--head` names. A head that only moved onto a newer base keeps the approval: when
+the PR's head holds the approved head's commits, the same in number, order and patch, rebased onto a newer base, a
+`CARRIED` line says so before the write. A head the code host cannot read whole, with a merge commit, or with any
+other change is refused. A refusal writes nothing and says which gate failed: a head with new work needs its own
+approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
 when the code host failed, 2 when refused, else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits, even after a rebase moved the PR's head.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
@@ -1853,6 +1856,13 @@ Output:
 APPROVED acme/web#12 at d00d5ee
 ```
 
+After the PR was rebased onto a newer base with no other change:
+
+```text
+CARRIED acme/web#12 at 7c41a90: it carries the approved d00d5eed1's 2 commits, patch for patch, onto a newer base
+APPROVED acme/web#12 at 7c41a90
+```
+
 ### teamrig pr merge
 
 Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
@@ -1864,7 +1874,8 @@ else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits; a head rebased onto a newer base with the
+  same commits carries it, as in `teamrig pr approve`.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 

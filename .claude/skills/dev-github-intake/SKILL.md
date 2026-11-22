@@ -53,8 +53,9 @@ page you point them to.
    not (CONTRIBUTING.md, Tests).
 5. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
    leader's approval with a note naming the full 40-hex head, then `teamrig pr approve <owner/name#n> --head <sha>` and
-   `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a push after the
-   approval needs a new one. Its author keeps the credit as the commits' author.
+   `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a rebase onto a
+   newer base with the same commits keeps the approval (`--head` stays the approved head), any other push needs a new
+   one. Its author keeps the credit as the commits' author.
    Otherwise land it with credit by hand: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its
    version and dist commits, which the release workflow makes, and land the rest with `dev-ship-change` and the plan
    `{ "chunks": [] }`, which lands the picked commits as they are; a chunk naming them would commit them again under

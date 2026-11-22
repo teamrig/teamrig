@@ -467,7 +467,10 @@ every gate before writing anything: one task holds the pull request, the caller 
 names the full 40-hex head (a root team's lead needs no one's), and the pull request is open, no draft, on its
 default branch and still at `--head`; a merge also needs it free of conflicts, not queued already and every check on
 its head passed, which teamrig reads itself, since an admin token may bypass the branch's own rules. Each write is pinned to the
-head read, so a push after the approval makes GitHub refuse it, and a newer head needs its own approval.
+head read, so a push between the read and the write makes GitHub refuse it. `--head` stays the approved head: a pull
+request rebased onto a newer base after the approval keeps it when its commits are the approved head's, the same in
+number, order and patch, and a `CARRIED` line says so; a head with any other change, a merge commit, or commits
+GitHub cannot show whole needs its own approval.
 
 ```sh
 teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef --check   # every gate, nothing written

@@ -528,7 +528,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       at its head, with the token saved for the owner; refused, writing nothing, unless one task holds it
       (its ref), the caller owns that task, the caller's leader approved it with a note naming the full
       40-hex head (a root team's lead needs no one), and the pull request is open, no draft, on its default
-      branch and at the full head --head names; --check prints what it would do and writes nothing
+      branch and at the full head --head names, or at that head's same commits rebased onto a newer base,
+      patch for patch (a CARRIED line says so); --check prints what it would do and writes nothing
   pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
       refused while it conflicts, is queued already or its head's checks have not all passed: into its
       merge queue where the repository has one, else merged by rebase, both pinned to the head read
