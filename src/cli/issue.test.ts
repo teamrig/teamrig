@@ -408,7 +408,7 @@ describe('teamrig issue edit', () => {
   it('refuses, before reading it, a file the secret guard keeps, naming the flag and never the text', async () => {
     const kit = new CliHarness(GITHUB_TEAM);
     const gh = new FakeGh();
-    // The last one is a file of the host's own, which the run's host names (`HostPaths.secretFiles`).
+    // The last one is a file of the host's own, which the run's host names (`HostSecrets.secretFiles`).
     for (const given of ['.env', join('deploy', 'id_rsa'), join('.claude', 'settings.local.json')]) {
       const result = await kit.run(['issue', 'edit', 'acme/web#7', '--body-file', given], { ...AS_LEAD, gh });
       const printed = [...result.stdout, ...result.stderr].join('\n');

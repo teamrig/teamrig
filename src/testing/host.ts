@@ -9,6 +9,7 @@ import {
   type HookEventName,
   type HookReply,
   type HostPaths,
+  type HostSecrets,
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
@@ -154,6 +155,13 @@ export function testPaths(env: Readonly<Record<string, string | undefined>> = {}
   const { paths } = SHIPPED_HOST({ env, platform });
   if (isUnsupported(paths)) throw new Error(`the shipped host tells none of its folders: ${paths.notice}`);
   return paths;
+}
+
+/** The shipped host's secret files in the environment `env` on `platform`, as a run would be told them. */
+export function testSecrets(env: Readonly<Record<string, string | undefined>> = {}, platform: NodeJS.Platform = 'linux'): HostSecrets {
+  const { secrets } = SHIPPED_HOST({ env, platform });
+  if (isUnsupported(secrets)) throw new Error(`the shipped host tells none of its secret files: ${secrets.notice}`);
+  return secrets;
 }
 
 /** The shipped host's hook bridge on `platform`. */

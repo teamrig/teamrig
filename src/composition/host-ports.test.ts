@@ -22,7 +22,7 @@ function building(ports: unknown): ModuleImporter {
 describe('loadHostPorts', () => {
   it('gives the shipped host adapter a filled transcript reader, usage meter, status line, permissions, plugin store, models and steps', async () => {
     const ports = (await loadHostPorts(run))({ env: {}, platform: 'linux' });
-    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher', 'models', 'steps']);
+    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'secrets', 'permissions', 'plugin', 'launcher', 'models', 'steps']);
     assert.equal(isUnsupported(ports.models), false);
     assert.equal(isUnsupported(ports.steps), false);
     assert.equal(isUnsupported(ports.plugin), false);
@@ -108,10 +108,10 @@ describe('loadShippedHosts', () => {
     );
   });
 
-  it('loads the shipped adapters as they are, each with its paths', async () => {
+  it('loads the shipped adapters as they are, each with its secret files', async () => {
     const sources = await loadShippedHosts(run);
     assert.equal(sources.length, Object.keys(HOST_ADAPTERS).length);
-    assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).paths)), sources.map(() => false));
+    assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
   });
 
   it('throws when one of them does not load, as the running one does: none is left out in silence', async () => {

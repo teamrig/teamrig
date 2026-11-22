@@ -109,6 +109,7 @@ export {
   type HostPlugin,
   type HostSteps,
   type HostPorts,
+  type HostSecrets,
   type InputEntry,
   type InputOrigin,
   type InstallReach,

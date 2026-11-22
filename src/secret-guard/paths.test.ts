@@ -5,14 +5,14 @@ import { generateKeyPairSync } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TempRepo } from '../../tools/lib/temp-repo.ts';
-import { testPaths } from '../testing/host.ts';
+import { testSecrets } from '../testing/host.ts';
 import { DEFAULT_SECRET_PATHS, normalisePath, SecretPaths, wordPath, type WordPlace, type WordReading } from './paths.ts';
 import { PUBLIC_KEY_MAX_BYTES, readKeyText } from './public-key.ts';
 
 const HOME = 'C:/u';
 const REPO = 'C:/work/app';
 /** The list a run on the shipped host reads (`secretRulesOf`): the defaults, the host's own secret files, then a team's globs. */
-const secrets = new SecretPaths([...DEFAULT_SECRET_PATHS, ...testPaths().secretFiles(), 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'], HOME, true);
+const secrets = new SecretPaths([...DEFAULT_SECRET_PATHS, ...testSecrets().secretFiles(), 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'], HOME, true);
 /** A bash word, whose wildcards never reach a leading dot, and a word whose wildcards do (PowerShell, a script's glob). */
 const BASH_WORD: WordReading = { dotfiles: false, sets: 'bash' };
 const ANY_WORD: WordReading = { dotfiles: true, sets: 'bash' };
@@ -82,7 +82,7 @@ describe('SecretPaths.listed', () => {
 
   it("lists the shipped host's secret files in the folder its variable moves its own to, read as that folder alone", () => {
     const movedTo = (value: string, platform: NodeJS.Platform, home: string): SecretPaths =>
-      new SecretPaths([...DEFAULT_SECRET_PATHS, ...testPaths({ CLAUDE_CONFIG_DIR: value }, platform).secretFiles()], home, platform === 'win32');
+      new SecretPaths([...DEFAULT_SECRET_PATHS, ...testSecrets({ CLAUDE_CONFIG_DIR: value }, platform).secretFiles()], home, platform === 'win32');
     const windows = movedTo('D:\\agents\\cfg [1]', 'win32', HOME);
     assert.deepEqual(['D:/agents/cfg [1]/history.jsonl', 'd:/agents/CFG [1]/.credentials.json', `${HOME}/.claude/history.jsonl`].filter((path) => !windows.listed(path)), []);
     assert.deepEqual(['D:/agents/cfg 1/history.jsonl', 'D:/agents/history.jsonl', 'E:/agents/cfg [1]/history.jsonl'].filter((path) => windows.listed(path)), []);
@@ -109,7 +109,7 @@ describe('SecretPaths.listed', () => {
       `${HOME}/.claude-work/app/.credentials.json`,
     ];
     assert.deepEqual(readable.filter((path) => secrets.listed(path)), []);
-    assert.equal(new SecretPaths(testPaths().secretFiles(), '/u', false).listed('/u/.Claude-work/.credentials.json'), false, 'a name in another case is another folder where case counts');
+    assert.equal(new SecretPaths(testSecrets().secretFiles(), '/u', false).listed('/u/.Claude-work/.credentials.json'), false, 'a name in another case is another folder where case counts');
   });
 
   it('lets a later !glob keep a default readable, and reads Windows paths in any case', () => {

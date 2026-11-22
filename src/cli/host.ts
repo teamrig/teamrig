@@ -7,6 +7,7 @@ import {
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
+  type HostSecrets,
   type HostSteps,
   type RunningProgram,
   type SessionIdentity,
@@ -19,7 +20,6 @@ import {
 import type { LaunchHost } from '../config/launch.ts';
 import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
 import type { ContextSource } from '../refresh/usage.ts';
-import type { HostSecretFiles } from '../secret-guard/rules.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
 /**
@@ -134,13 +134,13 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
  * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
  * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
  * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
- * its folders adds none.
+ * its secret files adds none.
  */
-export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecretFiles {
+export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecrets {
   const seen = { env: runtime.env, platform: runtime.platform };
   const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
-    const { paths } = source(seen);
-    return isUnsupported(paths) ? [] : paths.secretFiles();
+    const { secrets } = source(seen);
+    return isUnsupported(secrets) ? [] : secrets.secretFiles();
   });
   const once: readonly string[] = [...new Set(named)];
   return { secretFiles: () => once };

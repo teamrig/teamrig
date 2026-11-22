@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { HostSource } from '../composition/host-ports.ts';
-import { isUnsupported, type HostPorts } from '../ports/host/index.ts';
+import { isUnsupported, unsupported, type HostPorts } from '../ports/host/index.ts';
 import type { SecretGuardConfig } from '../config/types.ts';
 import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
@@ -261,13 +261,16 @@ const DEFAULTS_BEFORE_THE_PORT = [
 ];
 
 /** A host that names secret files of its own, one of them a shipped host's too. */
-const OWN_FILES_HOST: HostSource = () => ({ ...BARE, paths: { ...testPaths(), secretFiles: () => ['~/.agent/login.json', '~/.claude/history.jsonl'] } });
+const OWN_FILES_HOST: HostSource = () => ({ ...BARE, secrets: { secretFiles: () => ['~/.agent/login.json', '~/.claude/history.jsonl'] } });
 
-/** The hosts a run may work in: the shipped one, ones telling none of their folders, and one naming files of its own. */
+/** The shipped host, telling none of its secret files: every other port is the shipped one. */
+const NO_SECRETS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), secrets: unsupported('no secret file of the host is known') });
+
+/** The hosts a run may work in: the shipped one, ones telling none of their secret files, and one naming files of its own. */
 const RUNNING_HOSTS: readonly (readonly [string, HostSource])[] = [
   ['the shipped host', SHIPPED_HOST],
   ['a host with no port filled', bare],
-  ['the shipped host telling no folder', NO_PATHS_HOST],
+  ['the shipped host telling no secret file', NO_SECRETS_HOST],
   ['a host with hooks only', HOOKS_ONLY_HOST],
   ['a host naming its own files', OWN_FILES_HOST],
 ];
@@ -284,10 +287,10 @@ describe('secretFilesOf', () => {
     const { shippedHosts, platform } = quietWorld();
     assert.deepEqual(secretFilesOf({ host: OWN_FILES_HOST, shippedHosts, env: {}, platform }).secretFiles(), [...SHIPPED_SECRET_FILES, '~/.agent/login.json']);
     assert.deepEqual(secretFilesOf({ host: OWN_FILES_HOST, shippedHosts: [], env: {}, platform }).secretFiles(), ['~/.agent/login.json', '~/.claude/history.jsonl']);
-    assert.deepEqual(secretFilesOf({ host: bare, shippedHosts: [bare, NO_PATHS_HOST], env: {}, platform }).secretFiles(), []);
+    assert.deepEqual(secretFilesOf({ host: bare, shippedHosts: [bare, NO_SECRETS_HOST], env: {}, platform }).secretFiles(), []);
   });
 
-  it("gives the files a shipped host keeps in a folder the run's environment moves, under a host telling none of its folders too", () => {
+  it("gives the files a shipped host keeps in a folder the run's environment moves, under a host telling none of its secret files too", () => {
     const { shippedHosts } = quietWorld();
     const env = { CLAUDE_CONFIG_DIR: '/cfg' };
     for (const [name, host] of RUNNING_HOSTS.slice(0, 4)) {
