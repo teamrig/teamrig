@@ -1,4 +1,4 @@
-import type { StepTexts } from '../../../features/steps.ts';
+import type { StepTexts } from '../../../plugin-api/index.ts';
 
 /** How Claude Code does the steps its declaration lists, printed by `teamrig skills step <id>`. */
 export const stepTexts: StepTexts<'host'> = {

@@ -75,6 +75,8 @@ export {
   type TerminalFeatureId,
   type Toggle,
 } from '../features/registry.ts';
+// The steps an adapter may serve as text, and the record of its texts a declaration's `steps` need.
+export type { StepId, StepIdOf, StepTexts } from '../features/steps.ts';
 export {
   HOOK_EVENTS,
   INPUT_ORIGINS,
