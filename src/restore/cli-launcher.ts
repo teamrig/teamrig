@@ -47,7 +47,7 @@ ${FIND_TEAMRIG_CLI}
 
 const main = teamrigCli();
 if (main === undefined) {
-  process.stderr.write("teamrig: not found: no teamrig plugin in Claude Code's plugin list\n");
+  process.stderr.write('teamrig: not found: no installed teamrig plugin; install it, then run this again\n');
   process.exit(1);
 }
 await import(pathToFileURL(main).href);
@@ -56,6 +56,8 @@ await import(pathToFileURL(main).href);
 /**
  * The cmd shim, as the plugin's own (plugins/teamrig/bin/teamrig.cmd): cmd ends `%*` at a line break, so it also hands
  * the CLI cmd's whole command line, read with delayed expansion, which keeps the line breaks (src/cli/cmd-shim.ts).
+ * cmd looks for a bare `node` in the current folder before the PATH, so a repo's own `node.cmd` would run instead:
+ * `NoDefaultCurrentDirectoryInExePath`, set inside the setlocal so it ends with the shim, makes it skip that folder.
  */
 export const CMD_SHIM_SCRIPT = [
   '@echo off',
@@ -63,6 +65,7 @@ export const CMD_SHIM_SCRIPT = [
   'setlocal EnableDelayedExpansion',
   'set "TEAMRIG_CMD_LINE=!CMDCMDLINE!"',
   'setlocal DisableDelayedExpansion',
+  'set "NoDefaultCurrentDirectoryInExePath=1"',
   'node "%~dp0teamrig.mjs" %*',
   '',
 ].join('\r\n');

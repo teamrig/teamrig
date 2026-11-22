@@ -67,8 +67,7 @@ describe('the teamrig launchers in the kit home (T5095)', () => {
     assert.deepEqual([refused.status, refused.stderr], [3, 'no session zulu\n']);
     for (const fixture of [{ noPluginList: true }, { lookalike: true }] satisfies PluginListFixture[]) {
       const missing = launch(fixture, ['check']);
-      assert.equal(missing.status, 1);
-      assert.match(missing.stderr, /^teamrig: not found/);
+      assert.deepEqual([missing.status, missing.stderr], [1, 'teamrig: not found: no installed teamrig plugin; install it, then run this again\n']);
     }
   });
 
@@ -86,6 +85,16 @@ describe('the teamrig launchers in the kit home (T5095)', () => {
     }
     assert.equal(lines.at(-2), 'node "%~dp0teamrig.mjs" %*');
     assert.equal(CMD_SHIM_SCRIPT.replaceAll('\r\n', '').includes('\n'), false);
+  });
+
+  it('finds node on the PATH alone, never in the current folder, setting that inside its setlocal', () => {
+    const lines = CMD_SHIM_SCRIPT.split('\r\n');
+    const skip = lines.indexOf('set "NoDefaultCurrentDirectoryInExePath=1"');
+    assert.ok(skip > lines.indexOf('setlocal DisableDelayedExpansion') && skip < lines.indexOf('node "%~dp0teamrig.mjs" %*'), CMD_SHIM_SCRIPT);
+    const pluginLines = PLUGIN_CMD_SHIM.split(/\r?\n/);
+    const pluginSkip = pluginLines.indexOf('set "NoDefaultCurrentDirectoryInExePath=1"');
+    const pluginNode = pluginLines.indexOf('node "%~dp0..\\dist\\cli\\main.js" %*');
+    assert.ok(pluginSkip > pluginLines.indexOf('setlocal DisableDelayedExpansion') && pluginSkip < pluginNode, PLUGIN_CMD_SHIM);
   });
 
   it('keeps the Node launcher and the sh shim everywhere, and the cmd shim on Windows, each written when missing', () => {
