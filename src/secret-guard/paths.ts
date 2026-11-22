@@ -9,8 +9,8 @@ import { fitsSecret, type WalkedGlob } from './secret-walk.ts';
 /**
  * The files whose content is a secret, and how a word on a command line names one. A team's own globs come after
  * these, in order, and the last glob that matches a path decides, as in a `.gitignore`: `!glob` keeps a path readable.
- * The shells' histories are among them: a secret typed once stays in them. The host's own stores are not: its paths
- * tell them (`HostPaths.secretFiles`), and `secretRulesOf` reads those after these and before the team's.
+ * The shells' histories are among them: a secret typed once stays in them. The host's own stores are not: its secrets
+ * port tells them (`HostSecrets.secretFiles`), and `secretRulesOf` reads those after these and before the team's.
  */
 export const DEFAULT_SECRET_PATHS: readonly string[] = [
   '**/.env',

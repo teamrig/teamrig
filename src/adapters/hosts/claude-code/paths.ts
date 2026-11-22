@@ -1,5 +1,5 @@
 import { basename, dirname, join, posix, win32 } from 'node:path';
-import { movedFolderSecrets, type HostDeps, type HostPaths } from '../../../plugin-api/index.ts';
+import type { HostDeps, HostPaths } from '../../../plugin-api/index.ts';
 
 /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
 const CONFIG_DIR = 'CLAUDE_CONFIG_DIR';
@@ -17,20 +17,6 @@ const FOLDER_SETTINGS = [
 const FOLDER_INSTRUCTIONS: readonly (readonly string[])[] = [['CLAUDE.md'], ['CLAUDE.local.md'], [PROJECT_DIR, 'CLAUDE.md']];
 /** The index of a project's memory, the one memory file Claude Code loads at a session's start. */
 const MEMORY_INDEX = 'MEMORY.md';
-/** The files in Claude Code's own folder whose content is a secret: its login, and every prompt a person typed. */
-const OWN_FOLDER_SECRETS = ['.credentials.json', 'history.jsonl'] as const;
-/**
- * Claude Code's files whose content is a secret, as the secret guard's globs: those of its own folder where it is
- * by default, a folder's local settings, whose allow rules keep a command allowed once, a credential in it too, and
- * its login in any folder named like its own (`.claude-work`, `.claude2`): a second account's folder, or one this
- * run's environment does not name. The login is not named in every folder: the guard would then read each search
- * of `*.json` files as one of a login.
- */
-const SECRET_FILES: readonly string[] = [
-  ...OWN_FOLDER_SECRETS.map((name) => `~/.claude/${name}`),
-  `**/${PROJECT_DIR}/settings.local.json`,
-  `**/${PROJECT_DIR}*/.credentials.json`,
-];
 
 /** Claude Code's folder name for a project: its path with every character but a letter or digit made `-`. */
 function projectSlug(project: string): string {
@@ -94,7 +80,5 @@ export function hostPaths(env: HostDeps['env'], platform: HostDeps['platform']):
     scratchpadOf: (transcript, systemTemp) => join(temp(systemTemp), basename(dirname(transcript)), basename(transcript, '.jsonl'), 'scratchpad'),
     planFile: (userHome, slug) => join(home(userHome), 'plans', `${slug}.md`),
     shellSnapshots: (userHome) => join(home(userHome), 'shell-snapshots'),
-    // The default place stays named when the folder is moved: the files of an earlier run may still be there.
-    secretFiles: () => [...SECRET_FILES, ...movedFolderSecrets(env[CONFIG_DIR], OWN_FOLDER_SECRETS, platform)],
   };
 }

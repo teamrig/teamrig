@@ -105,6 +105,7 @@ export {
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
+  type HostSecrets,
   type InputEntry,
   type InputOrigin,
   type InstallReach,

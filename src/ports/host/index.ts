@@ -7,6 +7,7 @@ import type { HookBridge } from './hook-bridge.ts';
 import type { HostPaths } from './paths.ts';
 import type { HostPermissions } from './permissions.ts';
 import type { HostPlugin } from './plugin.ts';
+import type { HostSecrets } from './secrets.ts';
 import type { SessionLauncher } from './session-launcher.ts';
 import type { StatusLine } from './status-line.ts';
 import type { ToolCallShape } from './tool-call.ts';
@@ -42,6 +43,7 @@ export type { HostPlugin, InstallReach, MarketplaceSource, PluginInstall } from 
 export type { StatusLine, StatusLineAnswer, StatusLinePlan, StatusReading } from './status-line.ts';
 export type { RateLimits, RateWindow, TokenWeights, UsageMeter } from './usage-meter.ts';
 export type { FolderSettings, HostPaths } from './paths.ts';
+export type { HostSecrets } from './secrets.ts';
 export type { SessionIdentity, SessionLauncher, SessionVariables } from './session-launcher.ts';
 
 /** Every host port by its name. Each line is required: an adapter names every port, filled or not. */
@@ -52,13 +54,14 @@ export interface HostPorts {
   readonly usage: UsageMeter | Unsupported;
   readonly statusLine: StatusLine | Unsupported;
   readonly paths: HostPaths | Unsupported;
+  readonly secrets: HostSecrets | Unsupported;
   readonly permissions: HostPermissions | Unsupported;
   readonly plugin: HostPlugin | Unsupported;
   readonly launcher: SessionLauncher | Unsupported;
 }
 
 /** The name of every host port, held to {@link HostPorts} by its type: a port added there is a line missing here. */
-const NAMED = { hooks: true, toolCall: true, transcripts: true, usage: true, statusLine: true, paths: true, permissions: true, plugin: true, launcher: true } as const satisfies Readonly<Record<keyof HostPorts, true>>;
+const NAMED = { hooks: true, toolCall: true, transcripts: true, usage: true, statusLine: true, paths: true, secrets: true, permissions: true, plugin: true, launcher: true } as const satisfies Readonly<Record<keyof HostPorts, true>>;
 
 export const HOST_PORT_NAMES: readonly string[] = Object.keys(NAMED);
 

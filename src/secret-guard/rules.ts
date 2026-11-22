@@ -1,6 +1,6 @@
 import type { SecretGuardConfig } from '../config/types.ts';
 import { SecretShapes } from '../core/secret-shapes.ts';
-import type { HostPaths } from '../ports/host/index.ts';
+import type { HostSecrets } from '../ports/host/index.ts';
 import { DEFAULT_SECRET_COMMANDS } from './commands.ts';
 import { DEFAULT_SECRET_ENV_NAMES, SecretNames } from './names.ts';
 import { DEFAULT_SECRET_PATHS, SecretPaths } from './paths.ts';
@@ -19,14 +19,11 @@ export interface SecretRules {
   readonly home: string;
 }
 
-/** Who tells the host's own secret files: its paths, or a stand-in naming none where no folder of the host is known. */
-export type HostSecretFiles = Pick<HostPaths, 'secretFiles'>;
-
 /**
  * The globs `host` names. A `!glob` among them is left out: a host adds secret files, and only a team's own `!glob`
  * keeps a file readable, so no host can open what the defaults or another host keeps.
  */
-function hostGlobs(host: HostSecretFiles): readonly string[] {
+function hostGlobs(host: HostSecrets): readonly string[] {
   return host.secretFiles().filter((glob) => !glob.startsWith('!'));
 }
 
@@ -41,7 +38,7 @@ export function secretRulesOf(
   config: SecretGuardConfig,
   home: string,
   platform: NodeJS.Platform,
-  host: HostSecretFiles,
+  host: HostSecrets,
   secretPatterns: readonly string[] = [],
 ): SecretRules {
   const ignoreCase = platform === 'win32' || platform === 'darwin';

@@ -4,6 +4,7 @@ import { hookBridge } from './hook-bridge.ts';
 import { hostPaths } from './paths.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
+import { hostSecrets } from './secret-files.ts';
 import { sessionLauncher } from './session-launcher.ts';
 import { statusLine } from './status-line.ts';
 import { toolCallShape } from './tool-call.ts';
@@ -12,7 +13,7 @@ import { usageMeter } from './usage.ts';
 
 /**
  * The Claude Code adapter: its hook input and replies, its tools by kind, its transcripts, what its calls cost, its
- * status line, where it keeps its files, its permission rules, its plugin store and who it says a run is. Each further
+ * status line, where it keeps its files, which of them are secrets, its permission rules, its plugin store and who it says a run is. Each further
  * port moves here from the core as the port split names it.
  */
 export default defineHost({
@@ -26,6 +27,7 @@ export default defineHost({
       usage: usageMeter,
       statusLine,
       paths: hostPaths(deps.env, deps.platform),
+      secrets: hostSecrets(deps.env, deps.platform),
       permissions: hostPermissions,
       plugin: hostPlugin,
       launcher: sessionLauncher(deps.env),
