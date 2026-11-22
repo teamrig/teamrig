@@ -158,8 +158,10 @@ function objectOf(input: string): JsonRecord | undefined {
 }
 
 /**
- * The reading of agy's status input. The folder is `cwd`. agy has no named agents and no effort field (the model's
- * name carries the effort), so both stay undefined; the input names no version of agy, so the host version does too.
+ * The reading of agy's status input. The folder is `cwd`. The model is an object, `{ id, display_name, effort }`, null
+ * until one is picked; its `display_name` is the name a person sees. That name already carries the effort, as in
+ * `Gemini 4 Argon (Medium)`, so the effort stays undefined rather than shown twice; agy has no named agents either.
+ * The host version waits for the live read (T4770), as the docs page does not say how `version` is written.
  * `cost.total_usd` is a list-price estimate (it carries `estimated`), not a bill, so it is not read as one. Context
  * tokens wait for the live read: the docs name the totals' fields only as such.
  */
@@ -172,7 +174,7 @@ function parse(input: string): StatusReading | undefined {
     sessionId: told(status['session_id']),
     cwd: stringField(status, 'cwd') ?? '',
     agentName: undefined,
-    model: told(status['model']),
+    model: told(recordField(status, 'model')?.['display_name']),
     effort: undefined,
     hostVersion: undefined,
     costUsd: undefined,
