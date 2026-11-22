@@ -71,6 +71,8 @@ describe('rulesets for main', () => {
     assert.deepEqual(main['bypass_actors'], PULL_REQUEST_BYPASS);
     assert.equal(rules.get('merge_queue')?.['merge_method'], 'REBASE');
     assert.deepEqual(rules.get('pull_request')?.['allowed_merge_methods'], ['rebase'], 'rebase merges keep the history linear');
+    // Set by the file, as live has it, so a re-import never falls back to GitHub's default for the key.
+    assert.equal(rules.get('pull_request')?.['require_extra_approval_for_unattributed_changes'], true);
   });
 
   it('main checks lands only a pull request whose summary check from GitHub Actions passed, on a linear history', () => {
@@ -92,6 +94,7 @@ describe('rulesets for main', () => {
     assert.equal(pull['require_code_owner_review'], true);
     assert.equal(pull['require_last_push_approval'], true);
     assert.equal(pull['dismiss_stale_reviews_on_push'], true);
+    assert.equal(pull['require_extra_approval_for_unattributed_changes'], true);
     assert.deepEqual(pull['allowed_merge_methods'], ['rebase']);
     assert.deepEqual(review['bypass_actors'], PULL_REQUEST_BYPASS);
   });
