@@ -162,6 +162,31 @@ describe('admissionOrder', () => {
     assert.deepEqual(idsOf(admissionOrder(line, NOW, PIPELINE, turns)), ['roadmap', 'new-class']);
   });
 
+  it('keeps a step taking back its share ahead of later arrivals a turn or a priority ranks first, never of fronted or more urgent ones (T4196)', () => {
+    const back = (id: string, asked: Asked): InLine => {
+      const entry = ticket(id, asked);
+      return { ...entry, waiter: { ...entry.waiter, back: true } };
+    };
+    const line = [
+      ticket('earlier-roadmap', { waitedMinutes: 30, priority: 3, class: 'Roadmap' }),
+      back('merge', { waitedMinutes: 20, priority: 3, class: 'Maintenance' }),
+      ticket('later-roadmap', { waitedMinutes: 10, priority: 1, class: 'Roadmap' }),
+      ticket('later-p0', { waitedMinutes: 5, priority: 0, class: 'Improvements' }),
+      ticket('later-fronted', { waitedMinutes: 4, priority: 2, class: 'Improvements', frontedMinutes: 1 }),
+    ];
+    const turns = new Map([['Roadmap', 0], ['Maintenance', 60], ['Improvements', 60]]);
+    assert.deepEqual(idsOf(admissionOrder(line, NOW, PIPELINE, turns)), ['later-fronted', 'later-p0', 'earlier-roadmap', 'merge', 'later-roadmap']);
+  });
+
+  it('keeps two steps taking back their shares in arrival order between them (T4196)', () => {
+    const back = (id: string, asked: Asked): InLine => {
+      const entry = ticket(id, asked);
+      return { ...entry, waiter: { ...entry.waiter, back: true } };
+    };
+    const line = [back('first', { waitedMinutes: 20, priority: 3, class: 'Maintenance' }), back('second', { waitedMinutes: 10, priority: 1, class: 'Roadmap' })];
+    assert.deepEqual(idsOf(admissionOrder(line, NOW, PIPELINE, new Map([['Roadmap', 0], ['Maintenance', 60]]))), ['first', 'second']);
+  });
+
   it('leaves the line it was given as it was', () => {
     const line = [ticket('b', { waitedMinutes: 1 }), ticket('a', { waitedMinutes: 2 })];
     admissionOrder(line, NOW, PIPELINE, NO_TURNS);
