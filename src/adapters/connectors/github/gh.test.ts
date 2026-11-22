@@ -1038,7 +1038,7 @@ describe('pull request landing lines (T4817)', () => {
     assert.deepEqual(stand, ['api', 'graphql', '-f', `query=${PULL_STAND_QUERY}`, '-f', 'owner=acme', '-f', 'name=web', '-F', 'number=12']);
     const approve = pullApproveArgs(PULL, HEAD);
     assert.deepEqual(approve, ['api', 'repos/acme/web/pulls/12/reviews', '-X', 'POST', '-f', `commit_id=${HEAD}`, '-f', 'event=APPROVE', '-f', `body=${approvalBody(HEAD)}`]);
-    assert.equal(approvalBody(HEAD), `Approved by teamrig at ${HEAD}.`);
+    assert.equal(approvalBody(HEAD), `Automated approval by teamrig at ${HEAD}, after the team lead reviewed and approved this head.`);
     const enqueue = pullEnqueueArgs('PR_kwDOAbc', HEAD);
     const merge = pullMergeArgs(PULL, HEAD);
     assert.deepEqual(merge, ['api', 'repos/acme/web/pulls/12/merge', '-X', 'PUT', '-f', 'merge_method=rebase', '-f', `sha=${HEAD}`]);

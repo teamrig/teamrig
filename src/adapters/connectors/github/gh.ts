@@ -793,11 +793,12 @@ export function isPullStandRead(args: readonly string[]): boolean {
 }
 
 /**
- * The body of the review `pr approve` posts: a fixed line naming the head it approves, built here and never from a
- * caller's text, so the runner can hold the write to it word for word.
+ * The body of the review `pr approve` posts: a fixed line saying it is automated and lead-reviewed, naming the head it
+ * approves and no session or task (an outside repository shows it), built here and never from a caller's text, so
+ * the runner can hold the write to it word for word.
  */
 export function approvalBody(head: string): string {
-  return `Approved by teamrig at ${head}.`;
+  return `Automated approval by teamrig at ${head}, after the team lead reviewed and approved this head.`;
 }
 
 /** `repos/<owner>/<name>/pulls/<number>/` then reviews or merge. */
