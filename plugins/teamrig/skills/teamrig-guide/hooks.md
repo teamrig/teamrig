@@ -580,7 +580,8 @@ a session that only captures a key (`T=$(gh auth token)`) holds it all the same:
 `find-internet-password`, `dump-keychain`), `secret-tool lookup` or `search`, `cmdkey /list`, `vaultcmd /listcreds`,
 `keyring get` and `Get-Secret`; and a line that anywhere names a store API (`CredRead`, `CredEnumerate`,
 `PasswordVault`, `Get-StoredCredential`, `keyring.get_password`, `keytar`) or a credential teamrig saves its GitHub
-tokens under (`teamrig-gh-<owner>`, `teamrig-ship-gh`). Without this any session could read every key its user saved,
+tokens under (`teamrig-gh-<owner>`, `teamrig-ship-gh`), or asks teamrig's own git credential helper for a key
+(`git-credential get`, however teamrig is launched; a `git config` line that only names the helper passes). Without this any session could read every key its user saved,
 so a key kept for one tool drew no line between sessions; teamrig's own commands still read theirs, in their own
 process. A line that only mentions one of these words is refused as well (`grep -rn teamrig-gh- src`): search with the
 Grep tool instead, which runs no shell. `secretGuard.secretReads` settles it; no `!pattern` lets one through. The

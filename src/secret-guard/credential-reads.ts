@@ -38,9 +38,13 @@ function literally(text: string): string {
  * What a line reads a saved credential with wherever it stands, matched over the whole line: an API that inline code,
  * a PowerShell type or a script calls (`CredReadW`, `PasswordVault`, `keyring.get_password`, `keytar`), and the names
  * teamrig saves its GitHub tokens under, so no session reads or replaces another's key by name. Reading the whole line
- * finds them in a `node -e` script or a PowerShell `Add-Type` block the program reading never opens.
+ * finds them in a `node -e` script or a PowerShell `Add-Type` block the program reading never opens. teamrig's own git
+ * credential helper prints a saved key when asked `get` (T4897), so the word `git-credential` followed by `get` is a
+ * read under any launcher (`teamrig`, `teamrig.cmd`, `node <path>/main.js`) and with any stdin; a line that only names
+ * the helper, as `git config ... credential.helper` does, asks nothing (T5104).
  */
 const STORE_TEXTS: readonly CredentialRead[] = [
+  { label: 'teamrig git-credential get', pattern: /(?<![\w-])git-credential["']?\s+["']?get(?![\w-])/i },
   { label: 'CredRead', pattern: /\bCred(?:Read|Enumerate)[AW]?\b/i },
   { label: 'PasswordVault', pattern: /\bPasswordVault\b/i },
   { label: 'Get-StoredCredential', pattern: /\bGet-StoredCredential\b/i },
