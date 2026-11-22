@@ -71,7 +71,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
     }
     assert.deepEqual(
       skipped.filter((entry) => entry.reason === 'rewake Codex lacks'),
-      [{ event: 'SessionStart', matcher: 'clear', words: ['node', '${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'refresh-wake'], reason: 'rewake Codex lacks' }],
+      [{ event: 'SessionStart', matcher: 'clear', words: ['node', '${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'refresh-wake', '--host', 'claude-code'], reason: 'rewake Codex lacks' }],
     );
     assert.deepEqual([...new Set(skipped.map((entry) => entry.event))].sort(), ['Elicitation', 'ElicitationResult', 'PostToolUseFailure', 'SessionStart', 'StopFailure']);
   });
@@ -85,7 +85,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 
   it('keeps every guard of a shell call under the matcher it had', () => {
     const shell = file.hooks.PreToolUse?.find((group) => group.matcher === 'Bash|PowerShell');
-    assert.deepEqual(shell?.hooks.map((handler) => handler.command.split(' ').at(-1)), [
+    assert.deepEqual(shell?.hooks.map((handler) => handler.command.split(' ').at(-3)), [
       'push-guard',
       'package-guard',
       'secret-guard',
@@ -99,7 +99,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 
   it("runs each hook by the plugin's real path, with no variable left for a shell to fill", () => {
     for (const handler of handlers) {
-      assert.match(handler.command, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+$/u);
+      assert.match(handler.command, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host claude-code$/u);
       assert.equal(handler.commandWindows, handler.command);
     }
   });
