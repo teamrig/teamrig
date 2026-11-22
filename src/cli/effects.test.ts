@@ -153,6 +153,8 @@ const EXPECTED = {
   'config set': 'write',
   'config validate': 'read',
   'config migrate': 'write',
+  steps: 'read',
+  'steps run': 'write',
   'commits check': 'read',
   changes: 'read',
   'secrets staged': 'read',

@@ -15,7 +15,7 @@ const WRITERS = [...SETTINGS_WRITERS].flatMap(([group, actions]) => [...actions]
 
 describe('settings writers where Claude Code runs them (T3083)', () => {
   it('names only write commands of the CLI that take --yes, and knows none else', () => {
-    assert.equal(WRITERS.length, 8);
+    assert.equal(WRITERS.length, 9);
     for (const command of WRITERS) {
       assert.equal(COMMAND_EFFECTS[command], 'write', command);
       assert.ok(COMMAND_SWITCHES[command]?.includes(WRITE_SWITCH), command);

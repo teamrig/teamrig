@@ -40,6 +40,7 @@ const reportCommands = () => import('./commands/report.ts');
 const goalCommands = () => import('./commands/goal.ts');
 const inboxCommands = () => import('./commands/inbox.ts');
 const configCommands = () => import('./commands/config.ts');
+const stepsCommands = () => import('./commands/steps.ts');
 const hookCommands = () => import('./commands/hook.ts');
 const loopNudgeCommand = () => import('./commands/hook-loop-nudge.ts');
 const secretRedactCommand = () => import('./commands/hook-secret-redact.ts');
@@ -312,6 +313,8 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'config set': { effect: 'write', flags: ['session'], switches: ['unset', 'yes'], load: async () => (await configCommands()).set },
   'config validate': { effect: 'read', flags: [], load: async () => (await configCommands()).validate },
   'config migrate': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await configCommands()).migrate },
+  steps: { effect: 'read', flags: [], load: async () => (await stepsCommands()).list },
+  'steps run': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await stepsCommands()).run },
   'commits check': { effect: 'read', flags: ['base', 'tip'], load: async () => (await commitsCommands()).check },
   changes: { effect: 'read', flags: ['since', 'until', 'file', 'area'], load: async () => (await changesCommands()).changes },
   'secrets staged': { effect: 'read', flags: [], load: async () => (await secretsCommands()).staged },
@@ -1031,6 +1034,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       config is checked before it is written, the old one kept as a backup; REFUSED for a read-only key
   config validate | config migrate [--yes]   migrate shows an older config rewritten in this format and
       the first teamrig that reads it, as a tab on an older one refuses every write after; --yes writes it
+  steps | steps run <id> [--yes]   the one-time steps teamrig needs you to take, such as updating the
+      team settings' layout: what each changes and what to type; run without --yes shows the change and
+      where its backup goes, --yes takes it after the backup, removing the step's earlier backups; --yes
+      is for the person alone, REFUSED where an agent runs it
   commits check --base <ref> [--tip <ref>]   commits in base..tip (default HEAD) over the size rule
       with no reason line; any is REFUSED, for a merge script or CI
   changes --since <version|date> [--until <version|date>] [--file <path>] [--area <area>]   what changed

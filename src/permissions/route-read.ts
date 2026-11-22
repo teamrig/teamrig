@@ -49,6 +49,7 @@ export const READ_ROUTE_COMMANDS: ReadonlyMap<string, ReadPositionals> = new Map
   ['pipeline', 'none'],
   ['stable-periods', 'none'],
   ['deploy-status', 'none'],
+  ['steps', 'none'],
 ]);
 
 /** The read commands that are no route, each with why: a person's prompt or the classifier still judges them. */

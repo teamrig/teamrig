@@ -17,6 +17,7 @@ export const SETTINGS_WRITERS: ReadonlyMap<string, ReadonlySet<string>> = new Ma
   ['restore', new Set(['install'])],
   ['setup', new Set(['restore', 'hooks'])],
   ['statusline', new Set(['install'])],
+  ['steps', new Set(['run'])],
 ]);
 
 /** The switch that turns a settings writer's preview into its write. */

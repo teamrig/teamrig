@@ -41,8 +41,16 @@ describe('fitsReadRoute', () => {
       'sessions',
       'setup scan',
       'commits check --base main',
+      'steps',
     ]) {
       assert.equal(fits(line), true, line);
+    }
+  });
+
+  it('passes steps, which lists the pending steps, and never steps run, which takes one', () => {
+    assert.equal(fits('steps --session tr-x'), true);
+    for (const line of ['steps run config-format', 'steps run config-format --yes', 'steps config-format']) {
+      assert.equal(fits(line), false, line);
     }
   });
 
