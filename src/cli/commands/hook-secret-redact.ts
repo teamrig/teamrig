@@ -1,6 +1,7 @@
 import { secretGuardOf, secretPatternsOf } from '../../hooks/secret-guard.ts';
 import { redactableResultOf, redactedLine, rotationText, rotatorOf } from '../../hooks/secret-redact.ts';
 import { EnvAssignments } from '../../secret-guard/env-assignments.ts';
+import { FormFields } from '../../secret-guard/form-fields.ts';
 import { ToolOutputRedactor } from '../../secret-guard/redactor.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -12,7 +13,8 @@ import { fileRotations } from './secret-rotation.ts';
 
 /**
  * PostToolUse on Bash, PowerShell, Read and Grep (T1369 R7): replaces each secret the tool's result holds before the
- * model and the transcript see it, by the write-time shapes, the team's own patterns and the value of a secret variable.
+ * model and the transcript see it, by the write-time shapes, the team's own patterns, the value of a secret variable
+ * and the value of a password field in a form dump.
  * A helper's calls are redacted too. Each kind found gets a rotation task (R8, see `fileRotations`), named in the line
  * for the model. A broken config keeps the defaults; outside a team's projects, or with `secretGuard.redact` off, it
  * prints nothing.
@@ -30,7 +32,7 @@ export async function secretRedact(args: ParsedArgs, runtime: CliRuntime): Promi
     return EXIT.ok;
   }
   const rules = secretRulesOf(config, runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(guard.load));
-  const redaction = new ToolOutputRedactor([rules.shapes, new EnvAssignments(rules.names)]).redact(result.response);
+  const redaction = new ToolOutputRedactor([rules.shapes, new EnvAssignments(rules.names), new FormFields()]).redact(result.response);
   if (redaction.classes.length === 0) {
     return EXIT.ok;
   }

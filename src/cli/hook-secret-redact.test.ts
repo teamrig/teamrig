@@ -68,6 +68,17 @@ describe('teamrig hook secret-redact: rotation tasks', () => {
     }
   });
 
+  it("redacts a password field's value in a form dump and files its rotation task", async () => {
+    const kit = new CliHarness(REVIEWED);
+    const result = await kit.run(['hook', 'secret-redact'], { stdin: ran(`INPUT|text|u|user|carl\nINPUT|password|pw|pass|${PASSWORD}\n`), ...AS_ALPHA });
+    const output = JSON.parse(result.stdout[0] ?? '') as { hookSpecificOutput: { updatedToolOutput: { stdout: string }; additionalContext: string } };
+    assert.equal(output.hookSpecificOutput.updatedToolOutput.stdout, 'INPUT|text|u|user|carl\nINPUT|password|pw|pass|[redacted value of a password field]\n');
+    assert.equal(output.hookSpecificOutput.additionalContext, leakLine('bravo rotates it in T1.', 'value of a password field'));
+    for (const path of [EVENTS_PATH, INCIDENTS, teamInboxOf('app', 'bravo')]) {
+      assert.ok(!(kit.files.get(path) ?? '').includes(PASSWORD), `${path} holds the password`);
+    }
+  });
+
   it("names a URL credential's account in the task and the incident line, never the value, port, path or query", async () => {
     const kit = new CliHarness(REVIEWED);
     lineOf(await kit.run(['hook', 'secret-redact'], { stdin: ran(`remote https://app:${PASSWORD}@git.Example.com:8443/o/r.git?ref=main`), ...AS_ALPHA }));
