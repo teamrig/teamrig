@@ -445,6 +445,29 @@ request is rebased by its owner onto the newest base and pushed back to the same
 (`--force-with-lease`), never under a new branch name. `--base` names the branch the pull request targets when it is
 not `origin`'s default; the fetch uses git's own access to `origin`, not a token.
 
+## Landing an outside pull request
+
+The session holding an outside pull request's task reviews and lands it itself, with the token saved for the
+repository's owner, once its leader approved the exact head: `teamrig pr approve` posts the approving review and
+`teamrig pr merge` lands it, into the repository's merge queue where it has one, else merged by rebase. Both read
+every gate before writing anything: one task holds the pull request, the caller owns it, the leader's approval note
+names the head (a root team's lead needs no one's), and the pull request is open, no draft, on its default branch
+and still at `--head`; a merge also needs it free of conflicts and not queued already. Each write is pinned to the
+head read, so a push after the approval makes GitHub refuse it, and a newer head needs its own approval.
+
+```sh
+teamrig pr approve acme/web#12 --head d00d5eed --check   # every gate, nothing written
+teamrig pr approve acme/web#12 --head d00d5eed
+teamrig pr merge acme/web#12 --head d00d5eed
+```
+
+```text
+APPROVED acme/web#12 at d00d5ee
+ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
+```
+
+GitHub's own required checks and reviews still gate the landing; these commands only take a person's hand out of it.
+
 ## Showing each task's status on its issue
 
 `teamrig issue sync --push` plans the other way: for each issue a task holds (its ref `gh:owner/name#number`), what

@@ -51,7 +51,11 @@ page you point them to.
 4. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).
-5. Land it with credit: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its
+5. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
+   leader's approval with a note naming the head, then `teamrig pr approve <owner/name#n> --head <sha>` and
+   `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a push after the
+   approval needs a new one. Its author keeps the credit as the commits' author.
+   Otherwise land it with credit by hand: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its
    version and dist commits, which the release workflow makes, and land the rest with `dev-ship-change` and the plan
    `{ "chunks": [] }`, which lands the picked commits as they are; a chunk naming them would commit them again under
    our name. Comment on the pull request naming the landed commit, and close it.
@@ -102,4 +106,4 @@ reply` refuses a secret it finds, the rest is on you. A security hole someone po
 discussed there: tell the maintainer at once, so the comment is hidden and the report moves to a private advisory
 ([SECURITY.md](../../../SECURITY.md)), and reply only with a pointer to it.
 
-Last verified: 2026-11-16
+Last verified: 2026-11-22
