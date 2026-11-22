@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOUNDARY_RULES, type SourceFile, boundaryCounts, boundaryFindings, findingLine } from './boundaries.ts';
+import { BOUNDARY_RULES, type SourceFile, boundaryCounts, boundaryFindings, findingLine, ruleCounts } from './boundaries.ts';
 
 const file = (path: string, ...lines: readonly string[]): SourceFile => ({ path, text: lines.join('\n') });
 /** One file's findings, each as `<line> <rule> <detail>`. */
@@ -141,5 +141,18 @@ describe('boundaryCounts', () => {
 
   it('gives every rule a line when nothing is found', () => {
     assert.deepEqual(boundaryCounts([]), BOUNDARY_RULES.map((rule) => `0 ${rule.title}`));
+  });
+});
+
+describe('ruleCounts', () => {
+  it('maps each rule id to its count, every rule listed, in the rules order', () => {
+    const findings = boundaryFindings([file('src/core/run.ts', "import { b } from '../cli/b.ts';", 'const jiraKey = 1;', 'const grokKey = 2;')]);
+    assert.deepEqual([...ruleCounts(findings)], [
+      ['core-imports', 1],
+      ['adapter-reach', 0],
+      ['adapter-imports', 0],
+      ['fakes-reach', 0],
+      ['tool-names', 2],
+    ]);
   });
 });

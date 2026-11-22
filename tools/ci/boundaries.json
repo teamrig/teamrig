@@ -1,0 +1,10 @@
+{
+  "$comment": "The layer boundary check (tools/ci/boundaries-cli.ts): how many findings each rule has. A count may fall, never rise; `--write` records the counts and refuses a rise.",
+  "rules": {
+    "adapter-imports": 1,
+    "adapter-reach": 3,
+    "core-imports": 5,
+    "fakes-reach": 0,
+    "tool-names": 2297
+  }
+}
