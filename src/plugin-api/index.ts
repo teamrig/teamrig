@@ -143,6 +143,7 @@ export {
   type TextChange,
   type TextReplacement,
   type TitleEntry,
+  type TitleSwitch,
   type RateLimits,
   type RateWindow,
   type TokenWeights,

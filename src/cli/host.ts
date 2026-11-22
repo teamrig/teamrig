@@ -43,6 +43,15 @@ export function hooksOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
 }
 
 /**
+ * The run's hook bridge, or undefined on a host that calls no hook: for a caller that goes on without hooks, such as
+ * a note on what the hooks would show.
+ */
+export function hooksIfRun(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HookBridge | undefined {
+  const { hooks } = hostOf(runtime);
+  return isUnsupported(hooks) ? undefined : hooks;
+}
+
+/**
  * The run's transcript reader, or undefined on a host that keeps no transcript teamrig can read: for a caller that
  * goes on without what a transcript would tell, such as a hook that must never answer by a refusal.
  */

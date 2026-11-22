@@ -16,7 +16,7 @@ import type { TranscriptReader } from './transcript-reader.ts';
 import type { Unsupported } from './unsupported.ts';
 import type { UsageMeter } from './usage-meter.ts';
 
-export { HOOK_EVENTS, isHookEventName, type HookBridge, type HookEvent, type HookEventName, type HookHelper, type HookReply, type HookVerdict } from './hook-bridge.ts';
+export { HOOK_EVENTS, isHookEventName, type HookBridge, type HookEvent, type HookEventName, type HookHelper, type HookReply, type HookVerdict, type TitleSwitch } from './hook-bridge.ts';
 export {
   SHELL_DIALECTS,
   TOOL_KINDS,

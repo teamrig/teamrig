@@ -102,6 +102,19 @@ export interface HookReply {
   readonly toolOutput?: JsonRecord | undefined;
 }
 
+/**
+ * The switch in a session's environment that makes a host stop writing the terminal tab's title of its own, so the
+ * title a hook writes (`HookReply.tabTitle`) stays.
+ */
+export interface TitleSwitch {
+  /** The environment variable the host reads. */
+  readonly variable: string;
+  /** A value that turns it on: the one a note tells the person to set. */
+  readonly value: string;
+  /** Whether `env` has the switch on, read the way the host reads it. */
+  on(env: Readonly<Record<string, string | undefined>>): boolean;
+}
+
 /** The port that turns a host's hook call into a {@link HookEvent} and a {@link HookReply} into what the host reads. */
 export interface HookBridge {
   /** The event a hook's input holds; undefined when it is not the host's hook input at all. */
@@ -110,4 +123,6 @@ export interface HookBridge {
   reply(on: HookEventName, reply: HookReply): string;
   /** What the host does when a hook itself fails: `blocks` stops the moment, `passes` lets it go on. */
   readonly failureRule: 'blocks' | 'passes';
+  /** The switch that leaves the tab's title to hooks; undefined when the host writes no title of its own, so hooks always have it. */
+  readonly titleSwitch: TitleSwitch | undefined;
 }

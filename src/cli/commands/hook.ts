@@ -797,7 +797,7 @@ async function askBlockOf(runtime: CliRuntime, scope: SessionScope, stopActive: 
  * own title, at a block, whose turn goes on, and on an error.
  */
 async function stopTabTitleOf(runtime: CliRuntime, team: TeamScope, roster: Roster | undefined, event: HookEvent, decision: StopDecision): Promise<string | undefined> {
-  if (!tabStatusOn(runtime.env, team.config) || decision.kind === 'block') {
+  if (!tabStatusOn(runtime, team.config) || decision.kind === 'block') {
     return undefined;
   }
   const own = { team: team.kit.paths.team, roster: roster ?? (await rosterOf(runtime, team.kit, team.config)) };
