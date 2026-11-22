@@ -10,6 +10,8 @@ export interface ProgramRequest {
   readonly program: string;
   readonly args: readonly string[];
   readonly env?: Env;
+  /** Text written to the program's standard input, which is then closed; without it the program gets no stdin. */
+  readonly input?: string;
 }
 
 export interface ProgramResult {
@@ -18,7 +20,7 @@ export interface ProgramResult {
   readonly stderr: string;
 }
 
-/** Runs a program to its end with no stdin. It rejects when the program cannot start, such as when it is not installed. */
+/** Runs a program to its end, with the request's input as its stdin or none. It rejects when the program cannot start, such as when it is not installed. */
 export type ProgramRunner = (request: ProgramRequest) => Promise<ProgramResult>;
 
 /** A run stopped for printing more than its cap; nothing it printed is used. */
@@ -31,15 +33,20 @@ export class ProgramOutputCapError extends Error {
 }
 
 /**
- * The real runner: `spawn` with no shell, stdin closed, and the caller's time limit. With `maxBytes`, a run that
- * prints more than that, stdout and stderr together, is stopped and rejects with ProgramOutputCapError: the cap of a
- * tool whose output holds text people post, so no run's memory grows without bound. Without it nothing is capped.
+ * The real runner: `spawn` with no shell, stdin holding only the request's input, else closed at once, and the
+ * caller's time limit. With `maxBytes`, a run that prints more than that, stdout and stderr together, is stopped and
+ * rejects with ProgramOutputCapError: the cap of a tool whose output holds text people post, so no run's memory grows
+ * without bound. Without it nothing is capped.
  */
 export function nodeProgramRunner(timeoutMs: number, maxBytes: number = Number.POSITIVE_INFINITY): ProgramRunner {
   return (request) =>
     new Promise((resolve, reject) => {
       const env = request.env === undefined ? {} : { env: request.env };
-      const child = spawn(request.program, [...request.args], { ...env, stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, windowsHide: true });
+      const child = spawn(request.program, [...request.args], { ...env, stdio: ['pipe', 'pipe', 'pipe'], timeout: timeoutMs, windowsHide: true });
+      // A program may end without reading its input; the broken pipe that leaves is its end's business, not a crash.
+      child.stdin.on('error', () => undefined);
+      // Closed at once without input: the program reads end of file, as from a closed stdin.
+      child.stdin.end(request.input ?? '');
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       let printed = 0;
