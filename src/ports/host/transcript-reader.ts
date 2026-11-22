@@ -41,6 +41,8 @@ interface EntryBase {
    * undefined when the line does not say.
    */
   readonly job: boolean | undefined;
+  /** The name the host files the session's plan under, as the line gives it; absent when the line names none. */
+  readonly planSlug?: string;
 }
 
 /** Who or what an input came from, as the host marks it; `unknown` for a mark the adapter has no name for. */

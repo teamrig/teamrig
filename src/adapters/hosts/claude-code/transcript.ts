@@ -76,7 +76,7 @@ const ORIGIN_NAMES: ReadonlyMap<string, InputOrigin> = new Map<string, InputOrig
 const DAMAGED: UnreadLine = { kind: 'unread', reason: 'damaged' };
 const NOT_AN_OBJECT: UnreadLine = { kind: 'unread', reason: 'not-an-object' };
 
-type Base = Pick<TranscriptEntry, 'at' | 'id' | 'parent' | 'session' | 'thread' | 'meta' | 'job'>;
+type Base = Pick<TranscriptEntry, 'at' | 'id' | 'parent' | 'session' | 'thread' | 'meta' | 'job' | 'planSlug'>;
 
 function threadOf(entry: JsonRecord): Base['thread'] {
   const sidechain = entry['isSidechain'];
@@ -94,7 +94,9 @@ function jobOf(entry: JsonRecord): Base['job'] {
   return stringField(entry, 'entrypoint') === undefined ? undefined : stringField(entry, 'sessionKind') === 'bg';
 }
 
+/** Claude Code names a session's plan file by the `slug` it stamps on the session's lines. */
 function baseOf(entry: JsonRecord): Base {
+  const planSlug = stringField(entry, 'slug');
   return {
     at: instantField(entry, 'timestamp'),
     id: stringField(entry, 'uuid'),
@@ -103,6 +105,7 @@ function baseOf(entry: JsonRecord): Base {
     thread: threadOf(entry),
     meta: entry['isMeta'] === true,
     job: jobOf(entry),
+    ...(planSlug === undefined ? {} : { planSlug }),
   };
 }
 
