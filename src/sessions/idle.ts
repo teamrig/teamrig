@@ -10,6 +10,7 @@ import { replyOf } from '../turn-log/reply.ts';
 import type { WakeAsk } from '../wake/asks.ts';
 import { startableTasks } from '../wake/day-start.ts';
 import { isNews, type WakeRest } from '../wake/decide.ts';
+import type { RestExemption } from '../wake/exempt.ts';
 
 /**
  * Whether an idle session closes and a closed one reopens, pure (T1100). One rule serves both: a session closes when
@@ -141,6 +142,8 @@ export interface ReopenInput {
   readonly closedAt: number;
   /** The least urgent priority that wakes it now (`effectivePriority`). */
   readonly maxPriority: number;
+  /** The waited-on work past `maxPriority` its rest still reopens it for (`restExemptionOf`); absent: none. */
+  readonly exemption?: RestExemption | undefined;
   readonly parking: ParkRules;
   readonly rest: WakeRest;
   /**
@@ -205,7 +208,7 @@ export function reopenVerdict(input: ReopenInput): ReopenVerdict {
   if (waiting.length > 0) {
     return { kind: 'needed', waiting };
   }
-  const handed = startableTasks(tasks, elsewhere, session, now, zone, parking, input.maxPriority).filter((task) => isNews(task, session, tasks, elsewhere, zone));
+  const handed = startableTasks(tasks, elsewhere, session, now, zone, parking, input.maxPriority, input.exemption).filter((task) => isNews(task, session, tasks, elsewhere, zone));
   if (handed.length > 0) {
     return { kind: 'handed', tasks: handed };
   }

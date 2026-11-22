@@ -6,13 +6,14 @@ import { isRightNow } from '../config/priorities.ts';
 import type { Task } from '../register/fold.ts';
 import { parkRulesOf } from '../register/park.ts';
 import { isActive } from '../register/stats.ts';
-import { TaskTree } from '../register/tree.ts';
+import { TaskTree, type TasksElsewhere } from '../register/tree.ts';
 import { waitingOnYouText } from '../register/views.ts';
 import { noRoomText } from '../sessions/headroom.ts';
 import { reopenVerdict, type ReopenInput, type ReopenVerdict } from '../sessions/idle.ts';
 import { closedOf, SessionLog, type SessionLogRecord } from '../sessions/log.ts';
 import { urgentLinesText } from '../wake/asks.ts';
 import { byUrgency, COLD_WAKE_W, effectivePriority, HELD_PRIORITY, wakeRestOf, type WakeRest } from '../wake/decide.ts';
+import { restExemptionOf, type RestExemption } from '../wake/exempt.ts';
 import { budgetFactsOf } from './commands/hook-budget.ts';
 import { dayStartFor } from './day-schedule.ts';
 import { headroomOf } from './headroom.ts';
@@ -119,11 +120,26 @@ export type JudgedStep = Exclude<PassStep, { readonly kind: 'reopen' }> | Reopen
  * The session's rest and the least urgent priority up to `configured` that wakes it now, as `hook wake-check` weighs
  * them: a session its budget holds or a short day pauses wakes, and so stays open, for p0 only, one in the budget's
  * quiet hours for p1 and p0, p0 alone when they block (`effectivePriority`). The wake it weighs is counted cold: a closed session reopens cold,
- * and a running one the pass would close has been quiet `open.headroom.closeIdleMinutes`.
+ * and a running one the pass would close has been quiet `open.headroom.closeIdleMinutes`. A rest that yields lets
+ * the work another session waits on past that cap (`restExemptionOf`, T4948).
  */
-async function wakeWeightOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, id: string, configured: number): Promise<{ readonly rest: WakeRest; readonly maxPriority: number }> {
+async function wakeWeightOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, work: RestWork, configured: number): Promise<RestCap & { readonly rest: WakeRest }> {
+  const { id } = work;
   const rest = config.budget.enabled ? wakeRestOf(await budgetFactsOf(runtime, { kit, config, roster, id }, undefined), config.budget.quietHours, runtime.clock.now(), COLD_WAKE_W) : AWAKE;
-  return { rest, maxPriority: effectivePriority(configured, rest, config.budget.quietHours) };
+  return { rest, maxPriority: effectivePriority(configured, rest, config.budget.quietHours), exemption: restExemptionOf(rest, configured, work.tasks, work.elsewhere) };
+}
+
+/** The session a rest is weighed for, and the register it reads who waits on its work in. */
+export interface RestWork {
+  readonly id: string;
+  readonly tasks: ReadonlyMap<string, Task>;
+  readonly elsewhere: TasksElsewhere;
+}
+
+/** The least urgent priority that wakes a session now, and the waited-on work its rest lets past it. */
+export interface RestCap {
+  readonly maxPriority: number;
+  readonly exemption: RestExemption | undefined;
 }
 
 /**
@@ -135,18 +151,22 @@ function hasWorkARestCuts(tasks: ReadonlyMap<string, Task>, id: string, configur
 }
 
 /**
- * The least urgent priority up to `configured` whose work keeps the running session `id` open, weighed as `hook
- * wake-check` weighs it ({@link wakeWeightOf}). Its budget takes thousands of file reads, so it counts as awake
- * unless its rest can change the verdict: when it has work a rest cuts ({@link hasWorkARestCuts}).
+ * The least urgent priority up to `configured` whose work keeps the running session open, and the waited-on work past
+ * it, weighed as `hook wake-check` weighs them ({@link wakeWeightOf}). Its budget takes thousands of file reads, so it
+ * counts as awake unless its rest can change the verdict: when it has work a rest cuts ({@link hasWorkARestCuts}).
  */
-export async function restCappedPriority(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, tasks: ReadonlyMap<string, Task>, id: string, configured: number): Promise<number> {
-  return hasWorkARestCuts(tasks, id, configured) ? (await wakeWeightOf(runtime, kit, config, roster, id, configured)).maxPriority : configured;
+export async function restCapOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, work: RestWork, configured: number): Promise<RestCap> {
+  if (!hasWorkARestCuts(work.tasks, work.id, configured)) {
+    return { maxPriority: configured, exemption: undefined };
+  }
+  const { maxPriority, exemption } = await wakeWeightOf(runtime, kit, config, roster, work, configured);
+  return { maxPriority, exemption };
 }
 
 /** Whether the running session `id` closes, its work weighed as `hook wake-check` weighs it: work that would wake it keeps it open. */
 export async function runningVerdictOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, facts: IdleFacts, id: string, project: string): Promise<IdleVerdict> {
-  const maxPriority = await restCappedPriority(runtime, kit, config, roster, facts.tasks, id, config.wake.priority);
-  return idleVerdictOf(runtime, config, roster, facts, id, { maxPriority, project });
+  const cap = await restCapOf(runtime, kit, config, roster, { id, tasks: facts.tasks, elsewhere: facts.elsewhere }, config.wake.priority);
+  return idleVerdictOf(runtime, config, roster, facts, id, { ...cap, project });
 }
 
 /**
@@ -184,7 +204,7 @@ export async function judgeSession(runtime: CliRuntime, kit: Kit, config: KitCon
   if (asAwake.kind === 'needed') {
     return wishOf(folderOf, id, asAwake, asAwake.waiting[0]?.task);
   }
-  const reopening = asAwake.kind === 'stay' ? asAwake : reopenVerdict({ ...input, ...(await wakeWeightOf(runtime, kit, config, roster, id, config.wake.priority)) });
+  const reopening = asAwake.kind === 'stay' ? asAwake : reopenVerdict({ ...input, ...(await wakeWeightOf(runtime, kit, config, roster, { id, tasks, elsewhere }, config.wake.priority)) });
   // Never asked or needed here: a session with either reopened for it above.
   if (reopening.kind === 'stay' || reopening.kind === 'asked' || reopening.kind === 'needed') {
     return { kind: 'closed', id };

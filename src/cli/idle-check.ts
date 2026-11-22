@@ -24,6 +24,7 @@ import { REPLY_TAIL_BYTES } from '../turn-log/reply.ts';
 import { seenLinesOf, unseenLinesOf } from '../inbox/inbox.ts';
 import { asksNowOf, urgentLinesText, WakeAsks, type WakeAsk } from '../wake/asks.ts';
 import { startableTasks } from '../wake/day-start.ts';
+import type { RestExemption } from '../wake/exempt.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { measureTranscript, type LastSession } from './commands/rehire.ts';
 import { sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
@@ -78,6 +79,8 @@ export interface IdleFacts {
  */
 export interface IdleOptions {
   readonly maxPriority: number;
+  /** The waited-on work past `maxPriority` that still keeps a held session open (`restExemptionOf`); absent: none. */
+  readonly exemption?: RestExemption | undefined;
   readonly project: string;
 }
 
@@ -222,7 +225,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
     return keep(notRunning);
   }
   const { now, zone, tasks, elsewhere } = facts;
-  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority);
+  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority, options.exemption);
   if (startable.length > 0) {
     return keep(`has work it can start (${startable.map((task) => task.id).join(', ')})`);
   }

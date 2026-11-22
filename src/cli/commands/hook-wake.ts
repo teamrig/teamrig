@@ -36,6 +36,7 @@ import {
   type DayStartVerdict,
 } from '../../wake/day-start.ts';
 import { decideWake, effectivePriority, HELD_PRIORITY, wakeCost, wakeRestOf, type WakeDecision, type WakeInput, type WakeState, type WakeVerdict } from '../../wake/decide.ts';
+import { isExemptFromRest, restExemptionOf } from '../../wake/exempt.ts';
 import { apiRetryPrompt, apiRetryToast, type ApiRetryFacts } from '../../wake/api-retry.ts';
 import { loginRetryPrompt, loginRetryToast } from '../../wake/login-retry.ts';
 import { WakePrompts } from '../../wake/prompts.ts';
@@ -162,6 +163,7 @@ function dueIdsOf(verdict: WakeVerdict): ReadonlySet<string> {
  * the budget's quiet hours (unless its lift
  * exempts it) for p1 and p0, p0 alone when they block (`effectivePriority`). Then it decides again at that priority, which wakes for a part of
  * what was due, and leaves the tasks the rest cut out of what the session knows, so they wake it once the rest ends.
+ * A task another session waits on is never cut by a rest that yields (`restExemptionOf`, T4948).
  */
 async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, input: WakeInput): Promise<WakeDecision> {
   const { config } = scope;
@@ -175,11 +177,12 @@ async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope,
   const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [scope.tab]);
   const rest = wakeRestOf(facts, config.budget.quietHours, input.now, wakeWOf(config, lastTurnAt, input.now));
   const maxPriority = effectivePriority(input.maxPriority, rest, config.budget.quietHours);
-  const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority).map((task) => task.id));
+  const exemption = restExemptionOf(rest, input.maxPriority, input.tasks, input.elsewhere);
+  const cut = new Set(dueTasks.filter((task) => task.priority > maxPriority && !isExemptFromRest(task, exemption)).map((task) => task.id));
   if (cut.size === 0) {
     return decision;
   }
-  const capped = decideWake({ ...input, maxPriority });
+  const capped = decideWake({ ...input, maxPriority, exemption });
   return { verdict: capped.verdict, state: { ...capped.state, known: decision.state.known.filter((id) => !cut.has(id)) } };
 }
 

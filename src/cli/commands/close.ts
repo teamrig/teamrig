@@ -2,7 +2,7 @@ import { KIT_NAME } from '../../core/home.ts';
 import { onePositional, type ParsedArgs } from '../args.ts';
 import { closeSession } from '../close-session.ts';
 import { closableText, idleFactsOf, idleVerdictOf } from '../idle-check.ts';
-import { restCappedPriority } from '../idle-pass.ts';
+import { restCapOf } from '../idle-pass.ts';
 import { callerOf } from '../inputs.ts';
 import { findTeam, openKit, requireConfig, rosterOf, sessionIdOf } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -13,7 +13,7 @@ import { sessionProjectOf } from './setup.ts';
  * and its tab to free the host, and logs the close (`state/session-log.jsonl`); `teamrig open` then resumes its
  * last Claude Code session. It refuses what `idleVerdictOf` keeps open (src/cli/idle-check.ts): the lead and the
  * delivery owner, a session not running, one with work its budget lets it start (p0 only while its budget holds
- * or a short day pauses it, p1 and p0 in the budget's quiet hours, p0 alone when they block: `restCappedPriority`) or a time wait of its own
+ * or a short day pauses it, p1 and p0 in the budget's quiet hours, p0 alone when they block, plus the work another session waits on unless a stop holds it: `restCapOf`) or a time wait of its own
  * ending soon, one quiet under `open.headroom.closeIdleMinutes`, one in a turn, at a tool call or waiting on a
  * decision it put to the person, one running background work or shells, and one whose last session is too big or old
  * to resume.
@@ -33,8 +33,8 @@ export async function close(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const name = roster.nameOf(id) ?? id;
   const project = await sessionProjectOf(runtime, config, id, args.flags.get('project'), found.from);
   const facts = await idleFactsOf(runtime, kit, config, roster);
-  const maxPriority = await restCappedPriority(runtime, kit, config, roster, facts.tasks, id, Number.POSITIVE_INFINITY);
-  const verdict = await idleVerdictOf(runtime, config, roster, facts, id, { maxPriority, project });
+  const cap = await restCapOf(runtime, kit, config, roster, { id, tasks: facts.tasks, elsewhere: facts.elsewhere }, Number.POSITIVE_INFINITY);
+  const verdict = await idleVerdictOf(runtime, config, roster, facts, id, { ...cap, project });
   if (verdict.kind === 'keep') {
     throw new RefusedError(verdict.why);
   }
