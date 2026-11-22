@@ -105,7 +105,7 @@ describe('statusLine', () => {
     conversation_title: 'Fix the build',
     transcript_path: '/work/.gemini/brain/conversation-1/transcript.jsonl',
     cwd: '/work/project',
-    model: 'gemini-3-pro-high',
+    model: { id: 'Gemini 4 Argon (Medium)', display_name: 'Gemini 4 Argon (Medium)', effort: 'medium' },
     cost: { total_usd: 1.25, subagent_usd: 0, estimated: true },
     context_window: { used_percentage: 42, context_window_size: 1_000_000 },
     agent_state: 'working',
@@ -123,7 +123,7 @@ describe('statusLine', () => {
       sessionId: 'session-1',
       cwd: '/work/project',
       agentName: undefined,
-      model: 'gemini-3-pro-high',
+      model: 'Gemini 4 Argon (Medium)',
       effort: undefined,
       hostVersion: undefined,
       costUsd: undefined,
@@ -137,6 +137,12 @@ describe('statusLine', () => {
     assert.deepEqual(statusLine.parse('{}'), bare);
     const wrong = { session_id: ' ', cwd: 3, model: { name: 'gemini' }, context_window: { used_percentage: Number.NaN } };
     assert.deepEqual(statusLine.parse(JSON.stringify(wrong)), bare);
+    assert.deepEqual(statusLine.parse(JSON.stringify({ model: null })), bare);
+  });
+
+  it('reads the model from its object, not as a text: the live agy status line showed no model (T5033)', () => {
+    assert.equal(statusLine.parse(JSON.stringify({ model: { id: 'g', display_name: 'Gemini 4 Argon (Medium)' } }))?.model, 'Gemini 4 Argon (Medium)');
+    assert.equal(statusLine.parse(JSON.stringify({ model: 'Gemini 4 Argon' }))?.model, undefined);
   });
 
   it('reads nothing from a text that is no JSON object', () => {
