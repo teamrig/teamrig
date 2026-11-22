@@ -187,8 +187,9 @@ const MAX_SCAN_PASSES = 2;
  * open at the end is not a span: the scan starts over just after it, so objects after a stray brace are still walked.
  * It starts over at most `MAX_RESUMES` times and reads at most `MAX_SCAN_PASSES` times the text's length in all, so a
  * long result full of open braces (a cut-off nested dump) costs about two passes; the flat patterns read what is left.
+ * `cost`, when given, gets the characters the scan read, so a test bounds the work rather than the time it took.
  */
-function objectSpans(text: string): Array<[number, number]> {
+export function objectSpans(text: string, cost?: { scanned: number }): Array<[number, number]> {
   const spans: Array<[number, number]> = [];
   let from = 0;
   let scanned = 0;
@@ -198,6 +199,7 @@ function objectSpans(text: string): Array<[number, number]> {
     if (open === undefined) break;
     from = open + 1;
   }
+  if (cost !== undefined) cost.scanned = scanned;
   return spans;
 }
 

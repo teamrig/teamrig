@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FormFields } from './form-fields.ts';
+import { FormFields, objectSpans } from './form-fields.ts';
 import { ToolOutputRedactor } from './redactor.ts';
 
 const join = (...parts: string[]): string => parts.join('');
@@ -54,10 +54,12 @@ describe('FormFields', () => {
   });
 
   it('reads a long result full of open braces in about two passes', () => {
+    // The work, not the time: a time bound fails under a loaded host or coverage. One resume per stray brace read 33 times the length.
     for (const text of ['{'.repeat(1_000_000), '{"a":'.repeat(200_000), '{"'.repeat(500_000)]) {
-      const started = performance.now();
+      const cost = { scanned: 0 };
+      assert.deepEqual(objectSpans(text, cost), []);
+      assert.ok(cost.scanned <= 3 * text.length, `${text.slice(0, 5)}: read ${cost.scanned} of ${text.length}`);
       assert.deepEqual(values(text), []);
-      assert.ok(performance.now() - started < 1500, `${text.slice(0, 5)}: ${Math.round(performance.now() - started)} ms`);
     }
   });
 
