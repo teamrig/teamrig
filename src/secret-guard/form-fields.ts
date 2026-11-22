@@ -1,3 +1,4 @@
+import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { isPlaceholderValue, type SecretShapeHit } from '../core/secret-shapes.ts';
 
 /**
@@ -28,7 +29,8 @@ const MASK = /^[•●·]+$/;
 /** Undoes the JSON string escapes a name may hold, to test it as the page has it. */
 function jsonText(raw: string): string {
   try {
-    return JSON.parse(`"${raw}"`) as string;
+    const parsed: unknown = JSON.parse(`"${raw}"`);
+    return typeof parsed === 'string' ? parsed : raw;
   } catch {
     return raw;
   }
@@ -124,7 +126,8 @@ const MAX_DEPTH = 16;
 
 function parseJson(text: string): unknown {
   try {
-    return JSON.parse(text) as unknown;
+    const parsed: unknown = JSON.parse(text);
+    return parsed;
   } catch {
     return undefined;
   }
@@ -144,13 +147,12 @@ function walk(node: unknown, depth: number, values: string[], held: string[]): v
     for (const item of node) walk(item, depth + 1, values, held);
     return;
   }
-  if (node === null || typeof node !== 'object') return;
-  const record = node as Record<string, unknown>;
-  if (typeof record['value'] === 'string' && marksPassword(record)) values.push(record['value']);
-  for (const child of Object.values(record)) walk(child, depth + 1, values, held);
+  if (!isRecord(node)) return;
+  if (typeof node['value'] === 'string' && marksPassword(node)) values.push(node['value']);
+  for (const child of Object.values(node)) walk(child, depth + 1, values, held);
 }
 
-function marksPassword(record: Record<string, unknown>): boolean {
+function marksPassword(record: JsonRecord): boolean {
   const type = record['type'];
   if (typeof type === 'string' && type.toLowerCase() === 'password') return true;
   return [record['name'], record['id']].some((name) => typeof name === 'string' && PASSWORD_NAME.test(name));
