@@ -11,7 +11,7 @@ const HOST_ENTRY = '../adapters/hosts/claude-code/index.ts';
 const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator'];
 const TERMINAL_LIST = TERMINAL_IDS.join(', ');
 /** The built-in terminals whose adapter builds a terminal port; the rest build none yet. */
-const BUILDS_PORT: ReadonlySet<string> = new Set(['tmux', 'windows-terminal']);
+const BUILDS_PORT: ReadonlySet<string> = new Set(['tmux', 'windows-terminal', 'macos-terminal']);
 const terminalDeclarationFile = (id: string): string => `../adapters/terminals/${id}/declaration.ts`;
 /** The declaration module of each built-in terminal, by its specifier. */
 const terminalDeclarations = (): Record<string, unknown> => Object.fromEntries(TERMINAL_IDS.map((id) => [terminalDeclarationFile(id), { declaration: terminalDeclarationData({ id }) }]));
