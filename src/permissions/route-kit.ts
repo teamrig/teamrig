@@ -3,6 +3,7 @@ import { REGISTER_COMMANDS, REGISTER_POSTING_FLAGS } from '../automode/lines.ts'
 import { KIT_NAME } from '../core/home.ts';
 import { placeProgram, type ClientInstalls, type ClientSearch, type WordAt } from '../exec/client-launch.ts';
 import { readable, type CommandTable } from '../slash/plan.ts';
+import { READ_ROUTE_COMMANDS } from './route-read.ts';
 
 /**
  * The teamrig commands a sanctioned route may run (T679, security rulings C2 and C3). A line matches only as the CLI
@@ -38,8 +39,16 @@ export const KIT_SHAPES = {
   execRequest: { commands: ['exec request'], options: ['session', 'file'], positionals: 'none' },
   /** Narrower than the CLI: no `--base`. */
   worktreeRemove: { commands: ['worktree remove'], options: ['session', 'delete-branch', 'dry-run'], positionals: 'one' },
-  /** The commands every session runs on the team's own files; an add that posts its GitHub issue is none. */
-  register: { commands: REGISTER_COMMANDS, options: undefined, refusedOptions: REGISTER_POSTING_FLAGS, positionals: 'any' },
+  /**
+   * The commands every session runs on the team's own files; an add that posts its GitHub issue is none. The read
+   * route (route-read.ts) takes the reads, so no line matches both.
+   */
+  register: {
+    commands: REGISTER_COMMANDS.filter((command) => !READ_ROUTE_COMMANDS.has(command)),
+    options: undefined,
+    refusedOptions: REGISTER_POSTING_FLAGS,
+    positionals: 'any',
+  },
 } as const satisfies Readonly<Record<string, KitShape>>;
 
 /** A path from the root of a drive or of the file system, as bash or Windows writes it. */

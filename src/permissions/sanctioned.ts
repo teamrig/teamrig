@@ -1,12 +1,15 @@
 import type { ShellCall } from '../ports/host/index.ts';
 import { matchesGitCommit, matchesGitPush, type GitContext } from './route-git.ts';
-import { KIT_SHAPES, matchesKit, type KitContext, type KitShape } from './route-kit.ts';
-import { plainWordsOf } from './route-line.ts';
+import { KIT_SHAPES, kitCallOf, matchesKit, type KitContext, type KitShape } from './route-kit.ts';
+import { fitsReadRoute } from './route-read.ts';
+import { isRouteFilter } from './route-filter.ts';
+import { routeLineOf } from './route-line.ts';
 
 /**
  * The sanctioned-route table (T679, design M1, security rulings C1-C8): the teamrig and git commands a session runs as
  * its own job, which no refusal or prompt should leave a dead end. A Bash line is a route when it is one plain command
- * (C1) that an entry matches; nothing in config widens the table. The PermissionRequest answer reads every entry, the
+ * (C1) that an entry matches, alone or piped into one read-only filter (T5070, F1-F4); nothing in config widens the
+ * table. The PermissionRequest answer reads every entry, the
  * PreToolUse allow only those marked `preToolUse` (Q7.3), the refusal texts each `purpose`, the canary spec each
  * `canary`.
  */
@@ -14,7 +17,7 @@ import { plainWordsOf } from './route-line.ts';
 /** What every route needs beyond the line's words. */
 export type RouteContext = KitContext & GitContext;
 
-export type RouteId = 'merge' | 'deploy' | 'exec-request' | 'worktree-remove' | 'register' | 'git-commit' | 'git-push';
+export type RouteId = 'merge' | 'deploy' | 'exec-request' | 'worktree-remove' | 'read' | 'register' | 'git-commit' | 'git-push';
 
 export interface SanctionedRoute {
   readonly id: RouteId;
@@ -60,9 +63,19 @@ export const SANCTIONED_ROUTES: readonly SanctionedRoute[] = [
     match: kit(KIT_SHAPES.worktreeRemove),
   },
   {
-    id: 'register',
-    purpose: 'read and write the task register and the inbox',
+    id: 'read',
+    purpose: "read the team's register, plans, budget, checks and inbox status",
     canary: 'teamrig list --session tr-canary',
+    preToolUse: true,
+    match: async (words, context) => {
+      const call = kitCallOf(words, context.cli);
+      return call !== undefined && fitsReadRoute(call.parsed) && context.ownClient(call.program);
+    },
+  },
+  {
+    id: 'register',
+    purpose: 'write the task register and the inbox',
+    canary: 'teamrig inbox read --session tr-canary',
     preToolUse: false,
     match: kit(KIT_SHAPES.register),
   },
@@ -82,26 +95,51 @@ export const SANCTIONED_ROUTES: readonly SanctionedRoute[] = [
   },
 ];
 
-/** The route `line` runs, when it is one plain command an entry matches; else undefined. */
-export async function routeOf(line: string, context: RouteContext): Promise<SanctionedRoute | undefined> {
-  const words = plainWordsOf(line);
-  if (words === undefined) {
+/** The route a line runs, and the filter words it pipes into, if any. */
+interface LineRoute {
+  readonly route: SanctionedRoute;
+  readonly filter: readonly string[] | undefined;
+}
+
+/** The route `line` runs, when it is a route line (C1 as amended by F1-F2) whose command an entry matches. */
+async function lineRouteOf(line: string, context: RouteContext): Promise<LineRoute | undefined> {
+  const routeLine = routeLineOf(line);
+  if (routeLine === undefined || (routeLine.filter !== undefined && !isRouteFilter(routeLine.filter))) {
     return undefined;
   }
   for (const route of SANCTIONED_ROUTES) {
-    if (await route.match(words, context)) {
-      return route;
+    if (await route.match(routeLine.words, context)) {
+      return { route, filter: routeLine.filter };
     }
   }
   return undefined;
 }
 
 /**
- * The route a shell call runs: one only when each text its shell may run (the call's `readings`) is that route. Where
- * the host rewrites a line on its way to the shell, which can split or join its words, a line that is a route only as
- * written is judged as the shell runs it (T2332).
+ * The route `line` runs, when it is one plain command an entry matches, alone or piped into one read-only filter
+ * (T5070 F1); else undefined.
+ */
+export async function routeOf(line: string, context: RouteContext): Promise<SanctionedRoute | undefined> {
+  return (await lineRouteOf(line, context))?.route;
+}
+
+/**
+ * The route a shell call runs: one only when each text its shell may run (the call's `readings`) is that route, piped
+ * into the same filter words or none (F3). Where the host rewrites a line on its way to the shell, which can split or
+ * join its words, a line that is a route only as written is judged as the shell runs it (T2332).
  */
 export async function shellRouteOf(call: ShellCall, context: RouteContext): Promise<SanctionedRoute | undefined> {
-  const [first, ...rest] = await Promise.all(call.readings.map((reading) => routeOf(reading, context)));
-  return first !== undefined && rest.every((route) => route === first) ? first : undefined;
+  const [first, ...rest] = await Promise.all(call.readings.map((reading) => lineRouteOf(reading, context)));
+  return first !== undefined && rest.every((reading) => reading !== undefined && sameReading(reading, first)) ? first.route : undefined;
+}
+
+function sameReading(one: LineRoute, other: LineRoute): boolean {
+  if (one.route !== other.route) {
+    return false;
+  }
+  if (one.filter === undefined || other.filter === undefined) {
+    return one.filter === other.filter;
+  }
+  const otherFilter = other.filter;
+  return one.filter.length === otherFilter.length && one.filter.every((word, at) => word === otherFilter[at]);
 }

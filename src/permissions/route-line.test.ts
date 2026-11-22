@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { plainWordsOf } from './route-line.ts';
+import { plainWordsOf, routeLineOf } from './route-line.ts';
 
 describe('plainWordsOf', () => {
   it('gives the words of one plain command, after quote removal', () => {
@@ -78,5 +78,46 @@ describe('plainWordsOf', () => {
 
   it('refuses a word that holds a substitution an expansion may run again', () => {
     assert.equal(plainWordsOf(`printf -v 'a[$(id)]' x`), undefined);
+  });
+});
+
+describe('routeLineOf', () => {
+  it('gives a plain line with no filter', () => {
+    assert.deepEqual(routeLineOf('teamrig list --session tr-x'), { words: ['teamrig', 'list', '--session', 'tr-x'], filter: undefined });
+  });
+
+  it('F2: splits a line at one top-level | into the route and its filter', () => {
+    assert.deepEqual(routeLineOf('teamrig list --session tr-x | tail -n 5'), {
+      words: ['teamrig', 'list', '--session', 'tr-x'],
+      filter: ['tail', '-n', '5'],
+    });
+    assert.deepEqual(routeLineOf(`teamrig list 2>&1 | grep -i 'open task'`), { words: ['teamrig', 'list'], filter: ['grep', '-i', 'open task'] });
+    assert.deepEqual(routeLineOf('teamrig list|wc -l'), { words: ['teamrig', 'list'], filter: ['wc', '-l'] });
+  });
+
+  it('F2: finds no route line where the | is quoted, escaped, doubled, joined to & or not alone', () => {
+    for (const line of [
+      `teamrig set T1 --note 'a | b'`,
+      'teamrig set T1 --note "a | b"',
+      'teamrig set T1 --note a\\|b',
+      'teamrig list || tail',
+      'teamrig list |& tail',
+      'teamrig list | tail | sh',
+      'teamrig list | tail -n 5 2>&1',
+      'teamrig list | tail > out.txt',
+      'teamrig list | grep "$HOME"',
+      'teamrig list | grep "x"',
+      'teamrig list | tail; rm x',
+      'teamrig list | tail &',
+      'teamrig list | $(echo tail)',
+      'teamrig list | tail\nrm x',
+      'teamrig list | X=1 tail',
+      'teamrig list |',
+      '| tail',
+      'teamrig list > out.txt | tail',
+      '(teamrig list) | tail',
+    ]) {
+      assert.equal(routeLineOf(line), undefined, line);
+    }
   });
 });

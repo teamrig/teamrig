@@ -75,6 +75,20 @@ describe('sanctioned route canaries', () => {
       const result = await kit.run(['hook', 'prompt-refuse'], { stdin: payload('PermissionRequest', route.canary), env: ENV, git: GIT });
       assert.equal(answerOf(result), 'allow', result.stdout.join('\n'));
     });
+
+    it(`${route.id}: F4: every guard and both answers take its canary piped into a filter as they take it bare`, async () => {
+      const kit = await canaryKit();
+      const piped = `${route.canary} | tail -n 5`;
+      for (const guard of GUARDS) {
+        const result = await kit.run(['hook', guard], { stdin: payload('PreToolUse', piped), env: ENV, git: GIT });
+        assert.equal(result.code, EXIT.ok, `${guard}: ${result.stderr.join('\n')}`);
+        assert.ok(answerOf(result) === undefined || answerOf(result) === 'allow', `${guard}: ${result.stdout.join('\n')}`);
+      }
+      const allowed = await kit.run(['hook', 'route-allow'], { stdin: payload('PreToolUse', piped), env: ENV, git: GIT });
+      assert.equal(answerOf(allowed), route.preToolUse ? 'allow' : undefined);
+      const asked = await kit.run(['hook', 'prompt-refuse'], { stdin: payload('PermissionRequest', piped), env: ENV, git: GIT });
+      assert.equal(answerOf(asked), 'allow', asked.stdout.join('\n'));
+    });
   }
 });
 
