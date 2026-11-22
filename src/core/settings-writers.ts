@@ -2,7 +2,7 @@ import { KIT_NAME } from './home.ts';
 
 /**
  * The commands whose write changes a permission: Claude Code's settings (the permission and auto-mode rules, the
- * status line), the settings a backup restores, a host's hooks file the person keeps (Codex CLI's, which runs each
+ * status line), the settings a backup restores, a host's hooks file the person keeps (one whose host runs each
  * handler it lists), the team config's own format, or what runs at login (T3083;
  * core rule 6 makes permissions an owner gate). Each previews without `--yes` and writes with it. Their write is
  * refused where an agent's host runs it (a mark of the host's is set: an agent's tool call, a script it runs, a hook)

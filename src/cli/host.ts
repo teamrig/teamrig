@@ -271,7 +271,7 @@ export function sessionCommandLinesOf(runtime: Pick<CliRuntime, 'host' | 'shippe
 /**
  * The person's own hooks file of the host named `name` (as `setup hooks --host` takes it), from every host adapter
  * teamrig ships with and the run's own host: a person sets up the hooks of a host other than the one this run works
- * in, as from Claude Code for Codex. A name no host answers to refuses, naming those that do.
+ * in, as from one host for another. A name no host answers to refuses, naming those that do.
  */
 export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostUserHooks {
   const seen = { env: runtime.env, platform: runtime.platform };

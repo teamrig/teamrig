@@ -611,10 +611,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       changed and deleted files and files made since; --yes backs the setup up first, then writes and
       prints the restore that undoes it; --remove-new also removes the files made since
   setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
-      no plugin's hooks (codex: Codex CLI's hooks.json), beside your own handlers, which stay; teamrig's
+      no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
       earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; it never
-      trusts the hooks for you: trust them in the host after each write (Codex: /hooks)
+      trusts the hooks for you: trust them in the host's own hooks review after each write
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
       skill and agent type listings a session loads, with chars and tokens; files over 6,000 chars, skill

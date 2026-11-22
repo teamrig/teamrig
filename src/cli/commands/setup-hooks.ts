@@ -9,8 +9,8 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
 
 /**
  * `setup hooks --host <name> [--yes]`: puts teamrig's hooks into the person's own hooks file of a host that loads no
- * plugin's hooks (Codex CLI), beside the person's own handlers, which stay as they are. teamrig's earlier handlers
- * are replaced, so the same command after an update rewrites them. Without --yes it only counts what would be
+ * plugin's hooks (its adapter names the file), beside the person's own handlers, which stay. teamrig's earlier
+ * handlers are replaced, so the same command after an update rewrites them. Without --yes it only counts what would be
  * inserted, unchanged, changed and removed; with it, the old file is kept in the kit's backups folder first. It never
  * writes the host's trust in a handler: the person gives that in the host, after every write.
  */
