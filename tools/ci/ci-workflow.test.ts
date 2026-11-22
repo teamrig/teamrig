@@ -206,6 +206,13 @@ describe('ci.yml', () => {
     assert.equal(stepsOf(test).find((step) => step.does === 'npm test')?.when, CODE_OFF_UBUNTU);
   });
 
+  it('caches npm downloads in each job that installs, keyed on the lockfile by setup-node (T5027)', () => {
+    for (const [id, job] of jobs) {
+      const installs = job.includes('- run: npm ci');
+      assert.equal(/^ {10}cache: npm$/m.test(job), installs, `job ${id} ${installs ? 'installs with no npm cache' : 'caches npm but installs nothing'}`);
+    }
+  });
+
   it('runs the commit checks on every change, docs and design included', () => {
     for (const id of ['gates', 'size-rule', 'commit-subjects']) {
       const job = jobs.get(id) ?? '';
