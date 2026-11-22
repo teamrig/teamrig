@@ -658,7 +658,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       {type}/{id}-{slug}, such as feat/t12-parse-input: a task's feat, a bug's fix); --type: its
       branch type instead, such as docs or chore. REFUSED before any change for a branch or folder
       already there, a task the register lacks, or a pattern word the task has none of; FAILED when
-      its setup fails, the worktree kept
+      its setup fails, the worktree kept. Then makes teamrig git-credential git's credential helper
+      in the repository's config when origin is an https URL a connector serves and a key is saved
+      for its owner (the host's helper list reset first, teamrig run by absolute path, refused from
+      inside a worktree); otherwise a NOTE, git left as it was. Undo: git config --local
+      --remove-section credential.https://<host>
   worktree remove <path> [--delete-branch [--base <ref>]] [--dry-run] [--session <id|name>]   removes a linked git worktree:
       unlinks each link in it (such as a node_modules junction) and sees it gone, so git cannot follow
       one and empty its target, then runs git worktree remove; a folder git no longer lists, directly in

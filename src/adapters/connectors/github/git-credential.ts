@@ -1,4 +1,4 @@
-import { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk } from '../../../core/git-credential.ts';
+import { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../../../core/git-credential.ts';
 import { NoAccessError, type RepoTokens } from './tokens.ts';
 
 /** The user name GitHub takes with a token as the password over https. */
@@ -65,6 +65,29 @@ export async function githubGitAnswer(ask: CredentialAsk, keys: Pick<RepoTokens,
   const key = access.env['GH_TOKEN'];
   const answer = key === undefined ? undefined : credentialAnswer(GITHUB_GIT_USER, key);
   return answer === undefined ? quit(`the key saved as ${access.credential} is no single line of text: save it again with: ${access.save}`) : { stdout: answer, note: undefined };
+}
+
+/**
+ * Where teamrig's git helper answers for a remote URL: `https://github.com`, when the URL is https to github.com itself
+ * (no user, password or port), names an `<owner>/<name>` repository, and the store holds a key for its owner. Any
+ * other URL, or an owner with no key, is skipped, so git there keeps the helper it had: wiring a helper that could only
+ * answer `quit=1` would break a push that works today.
+ */
+export async function githubHelperScope(remoteUrl: string, keys: Pick<RepoTokens, 'accessForOwner'>): Promise<HelperScope | HelperSkip> {
+  // The raw prefix too: URL drops a default `:443`, which git would still send as the host, so the helper would quit there.
+  const url = URL.canParse(remoteUrl) && remoteUrl.toLowerCase().startsWith(`https://${GITHUB_HOST}/`) ? new URL(remoteUrl) : undefined;
+  if (url === undefined || url.protocol !== 'https:' || url.hostname !== GITHUB_HOST || url.port !== '' || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
+    return { skip: `origin ${remoteUrl} is no https://${GITHUB_HOST}/<owner>/<name> URL` };
+  }
+  const repo = repoOfGitPath(url.pathname.slice(1));
+  if (repo === undefined) {
+    return { skip: `origin ${remoteUrl} names no <owner>/<name> repository` };
+  }
+  const access = await keys.accessForOwner(repo.owner);
+  if (access instanceof NoAccessError) {
+    return { skip: access.message };
+  }
+  return { urlPrefix: `https://${GITHUB_HOST}`, owner: repo.owner };
 }
 
 function quit(why: string): GitAnswer {

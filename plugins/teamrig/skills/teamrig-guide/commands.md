@@ -5685,6 +5685,17 @@ task has none of, such as `{issue}` for a task with no issue ref. A fetch or `gi
 (exit 1). A setup that fails is FAILED too, and the worktree stays, so you can finish its setup by hand or remove it
 with `teamrig worktree remove <path> --delete-branch`.
 
+Last, it makes [teamrig git-credential](#teamrig-git-credential) git's credential helper in the repository's own
+config, when the repository's `origin` is an https URL of a host a connector serves and a key is saved for the
+repository's owner, so git there pushes on that key and never on the machine's login. It resets the host's helper
+list first, so no helper from the user's or the system's config answers after it, and has git send the repository's
+path. The helper line runs the Node.js program and the teamrig script running now, by absolute path; it is refused
+when either is relative or inside one of the repository's worktrees, where a branch could change it. The config is
+shared by every worktree of the repository, so the first `worktree add` wires them all and the next ones change
+nothing. Any other origin, an owner with no saved key, or a refused program leaves git as it was, said as a `NOTE`
+line, the worktree made; a config write git refuses is FAILED (exit 1). To undo it, run
+`git config --local --remove-section credential.https://<host>` in the repository.
+
 Flags:
 
 - `--task <T id>`: names the new branch from this task by [delivery.branches], in place of a branch name.
@@ -5705,6 +5716,7 @@ added the worktree /home/you/app/.claude/worktrees/t12-parser on the new branch 
 linked node_modules
 ran its setup node tools/link-modules.ts
 OK added /home/you/app/.claude/worktrees/t12-parser
+NOTE git's credential helper left as it was: /home/you/app has no origin remote git could read
 ```
 
 ### teamrig worktree remove

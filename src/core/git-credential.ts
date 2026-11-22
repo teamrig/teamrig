@@ -91,3 +91,15 @@ export function credentialAnswer(username: string, password: string): string | u
 
 /** The answer that gives git no key and stops it asking any later helper, or the person, for one. */
 export const CREDENTIAL_QUIT = 'quit=1\n';
+
+/** Where a helper answers: the URL prefix git's `credential.<url>.*` keys take, such as `https://host`. */
+export interface HelperScope {
+  readonly urlPrefix: string;
+  /** Who the key is saved for, as the line that reports the wiring names it. */
+  readonly owner: string;
+}
+
+/** Why a helper serves no scope for a remote URL: git there is left as it was. */
+export interface HelperSkip {
+  readonly skip: string;
+}
