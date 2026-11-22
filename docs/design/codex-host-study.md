@@ -61,6 +61,11 @@ metered, and no line wakes a session: each session reads its own inbox.
 5. Make teamrig's skills visible: copy or link the folders under `plugins/teamrig/skills/` into `~/.agents/skills/`.
 6. Start each work block with `teamrig start --session <name>`, and read the inbox with `teamrig inbox read --session
    <name>`: no hook shows the lines.
+7. Optional, from an installed plugin: `teamrig setup hooks --host codex` previews putting teamrig's hooks into
+   `~/.codex/hooks.json` beside your own, and `--yes` writes them. Then open `/hooks` in Codex and trust them.
+   **Every teamrig update changes them**: run the command again and trust them again in `/hooks` after each update,
+   until slice 3's launcher does it. They are not yet proved to guard anything on Codex, so step 7 counts for none of
+   the guards below.
 
 Missing on this route, all named again below: the guards (pushes, packages, secrets, database writes, privileged
 commands), the inbox shown at each prompt, wakes, the week meter and pace line, refresh and restore, and tab titles.

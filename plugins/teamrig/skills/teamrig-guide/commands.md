@@ -5185,6 +5185,40 @@ WROTE 2 of 2 file(s) from setup backup 20261025T120000Z; 212 unchanged
 UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 ```
 
+### teamrig setup hooks
+
+Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
+`hooks.json` in `$CODEX_HOME` (default `~/.codex`). Your own handlers stay as they are, in their order; teamrig's
+earlier handlers are replaced, so running it again after a teamrig update rewrites them. Each handler points at the
+installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
+dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
+`PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
+`SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
+file already holds the same handlers, one `UNCHANGED` line. It never writes `config.toml` and never trusts a handler
+for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
+every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
+refused where an agent runs it; the preview stays open.
+
+Flags:
+
+- `--host <name>`: required: the host whose hooks file it writes (`codex`).
+- `--yes`: write the file, keeping the old one in the kit's `backups` folder first; without it, only count.
+
+Example:
+
+```sh
+teamrig setup hooks --host codex
+```
+
+Output:
+
+```text
+PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
+  SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
+  NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
+  NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
+```
+
 ### teamrig commits check
 
 Checks the commits in `base..tip` against the small-commits rule: a commit over 400 changed non-test lines or 15
