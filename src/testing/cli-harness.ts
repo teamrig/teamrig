@@ -6,6 +6,7 @@ import type { CliRuntime, ExitCode, Output, SelfLocation } from '../cli/runtime.
 import { CONFIG_LIMITS, RULE_CONFLICT_LIMITS } from '../config/limits.ts';
 import { formatConfig } from '../config/load.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
+import { CONFIG_VERSION } from '../config/types.ts';
 import type { FileBytes } from '../core/file-bytes.ts';
 import type { Files } from '../core/files.ts';
 import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
@@ -75,7 +76,8 @@ export const POINTER = join(APP, '.teamrig.json');
 export const CLAUDE_SESSION = '0123abcd-0000-4000-8000-00000000000a';
 /** The pid of every run of the CLI. */
 export const CLI_PID = 4242;
-export const TEAM: JsonRecord = { sessions: ['lead', 'alpha', 'bravo'], roles: { lead: 'lead' } };
+/** A team in the current config format, as `team create` writes it: an older one has a pending step. */
+export const TEAM: JsonRecord = { configVersion: CONFIG_VERSION, sessions: ['lead', 'alpha', 'bravo'], roles: { lead: 'lead' } };
 /** {@link TEAM} with the context refresh's automatic restart on (`refresh.autoRestart`, on for the lead only by default). */
 export const AUTO_RESTART_TEAM: JsonRecord = { ...TEAM, refresh: { autoRestart: true } };
 const longestList = (limit: { readonly maxItems: number; readonly maxLength: number }, letter: string) =>
