@@ -38,6 +38,7 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pull-news': SUPPORTED,
     'codehost.ci-excerpt': SUPPORTED,
     'codehost.pr-conflicts': SUPPORTED,
+    'codehost.pr-land': SUPPORTED,
     'codehost.review-posts': SUPPORTED,
     'codehost.linked-pulls': SUPPORTED,
   },
