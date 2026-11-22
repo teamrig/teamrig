@@ -248,7 +248,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'roles list': { effect: 'read', flags: [], load: async () => (await rolesCommands()).list },
   refresh: { effect: 'write', flags: ['session'], switches: ['ready'], load: async () => (await refreshCommands()).refresh },
   doctor: { effect: 'read', flags: [], load: async () => (await doctorCommands()).doctor },
-  ui: { effect: 'write', flags: ['session', 'team'], load: async () => (await uiCommands()).ui },
+  ui: { effect: 'write', flags: ['session', 'team', 'mode'], load: async () => (await uiCommands()).ui },
   'page test': { effect: 'write', flags: [], load: async () => (await pageCommands()).pageTest },
   compact: { effect: 'write', flags: [], switches: ['dry-run', 'from-history'], load: async () => (await compactCommands()).compact },
   'issue sync': { effect: 'write', flags: ['repo'], switches: ['yes', 'auto', 'push'], load: async () => (await issueSyncCommands()).issueSync },
@@ -816,11 +816,13 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL
-  ui [--session <id|name>] [--team <team>]   starts the dedicated UI in this terminal, for the team here or the
-      one named, on that session's view; it runs the entry script ui.path names, else the released UI
-      this teamrig pins, fetched once into the kit home's ui folder, held to its sha256 at each start
-      and given only a few variables; refused while neither is there, ui.path names no file or the
-      release speaks an interface version this teamrig does not serve
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
+      team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
+      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
+      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+      the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
+      at each start and given only a few variables; refused while neither is there, ui.path names no
+      file or the release speaks an interface version this teamrig does not serve
   page test                    posts one page marked TEST through the team's page webhook, as an expired login's
       page goes; prints which team's alerts key paged, or why none went and fails, never the URL
   compact [--dry-run] [--from-history]   archives the task list's log and rewrites its snapshot, so reads

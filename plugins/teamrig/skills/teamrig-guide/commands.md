@@ -4921,8 +4921,12 @@ WARN cli-path C:\Users\you\.teamrig\bin is not on the user's PATH (HKCU\Environm
 
 ### teamrig ui
 
-Starts the dedicated UI in the terminal it is run in, with its input and output on that terminal, and ends when the
-UI does. Run it yourself in a terminal tab: it draws the whole screen, so it shows nothing through `/teamrig` or a
+Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. In `terminal` it shows in the terminal
+it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens a terminal
+window of its own running the same UI, the way `teamrig open` opens a session's tab ([open.terminal],
+[open.teamWindow]), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
+shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
+the UI in this terminal instead. Run it yourself in a terminal tab: it draws the whole screen, so it shows nothing through `/teamrig` or a
 session's shell. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
 Without the key it runs the released UI this teamrig pins: the first start fetches its archive over https into
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
@@ -4938,6 +4942,7 @@ Flags:
 
 - `--session <id|name>`: the session whose view it opens on. Without it: the team's.
 - `--team <team>`: the team to show. Without it: the team of this folder.
+- `--mode <terminal|window|both>`: where to show the UI this once, over [ui.mode]. Any other word is a usage error.
 
 Example:
 

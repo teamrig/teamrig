@@ -429,11 +429,13 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL
-  ui [--session <id|name>] [--team <team>]   starts the dedicated UI in this terminal, for the team here or the
-      one named, on that session's view; it runs the entry script ui.path names, else the released UI
-      this teamrig pins, fetched once into the kit home's ui folder, held to its sha256 at each start
-      and given only a few variables; refused while neither is there, ui.path names no file or the
-      release speaks an interface version this teamrig does not serve
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
+      team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
+      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
+      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+      the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
+      at each start and given only a few variables; refused while neither is there, ui.path names no
+      file or the release speaks an interface version this teamrig does not serve
   page test                    posts one page marked TEST through the team's page webhook, as an expired login's
       page goes; prints which team's alerts key paged, or why none went and fails, never the URL
   compact [--dry-run] [--from-history]   archives the task list's log and rewrites its snapshot, so reads

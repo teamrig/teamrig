@@ -151,6 +151,66 @@ describe('teamrig ui', () => {
     });
   });
 
+  describe('--mode and ui.mode (T5105)', () => {
+    const IN_TMUX = { ...WITH_UI, open: { terminal: 'tmux' } };
+    // The window's UI carries this kit home, so it reads the same teams as the command that opened it.
+    const WINDOW_ARGV = [NODE, SCRIPT, 'ui', '--mode', 'terminal', '--team', 'app', '--home', resolve(APP, KIT)];
+
+    function opening(): { processes: FakeProcesses; probe: FakePathProbe } {
+      return { processes: new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' }), probe: new FakePathProbe({ files: [ENTRY] }) };
+    }
+
+    it('window opens a terminal window running the UI in terminal mode, on the session named, and runs nothing here', async () => {
+      const { processes, probe } = opening();
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window', '--session', 'alpha'], { processes, probe });
+      assert.deepEqual(result, { code: 0, stdout: ['OPENED the UI in a tmux window'], stderr: [] });
+      assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
+        ['tmux', ['new-window', '-c', APP, '-n', 'teamrig ui app', ...WINDOW_ARGV, '--session', 'alpha']],
+      ]);
+      assert.deepEqual(processes.ran, []);
+    });
+
+    it('takes the mode from ui.mode when --mode is absent, and --mode wins over it', async () => {
+      const windowed = { ...IN_TMUX, ui: { path: ENTRY, mode: 'window' } };
+      const fromConfig = opening();
+      assert.equal((await new CliHarness(windowed).run(['ui'], fromConfig)).code, 0);
+      assert.deepEqual([fromConfig.processes.started.length, fromConfig.processes.ran.length], [1, 0]);
+      const overridden = opening();
+      assert.equal((await new CliHarness(windowed).run(['ui', '--mode', 'terminal'], overridden)).code, 0);
+      assert.deepEqual([overridden.processes.started.length, overridden.processes.ran.length], [0, 1]);
+    });
+
+    it('both opens the window and then shows the UI here too', async () => {
+      const { processes, probe } = opening();
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe });
+      assert.deepEqual([result.code, result.stdout], [0, ['OPENED the UI in a tmux window']]);
+      assert.deepEqual(processes.started[0]?.args.slice(5), WINDOW_ARGV);
+      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+    });
+
+    it('falls back to this terminal, saying why, when no window can open', async () => {
+      const processes = new FakeProcesses();
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
+      assert.deepEqual([result.code, result.stdout], [0, ['NOTE no terminal window opened (tmux is not installed); the UI shows in this terminal']]);
+      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+    });
+
+    it('opens no window on a UI that cannot start', async () => {
+      const processes = new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' });
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe() });
+      assert.equal(result.code, 2);
+      assert.deepEqual([processes.started, processes.ran], [[], []]);
+    });
+
+    it('refuses a --mode that is no mode, starting nothing', async () => {
+      const { processes, probe } = opening();
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'tab'], { processes, probe });
+      assert.equal(result.code, 64);
+      assert.match(result.stderr.join('\n'), /--mode tab is no UI mode: expected one of terminal, window, both/);
+      assert.deepEqual([processes.started, processes.ran], [[], []]);
+    });
+  });
+
   it('takes no positional word', async () => {
     const { processes, probe } = world();
     const result = await new CliHarness(WITH_UI).run(['ui', 'alpha'], { processes, probe });
