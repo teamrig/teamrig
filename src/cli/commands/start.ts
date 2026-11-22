@@ -68,6 +68,7 @@ export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   if (id === tree.lead) {
     const swept = await sweepOldStepBackups(runtime, kit, config);
     swept.lines.forEach((line) => runtime.out.stdout(line));
+    swept.warnings.forEach((warning) => runtime.out.stderr(`WARN ${warning}`));
     if (swept.problem !== undefined) {
       runtime.out.stderr(`WARN ${swept.problem}`);
     }

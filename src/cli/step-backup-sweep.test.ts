@@ -24,8 +24,8 @@ async function teamWithBackups(team = TEAM): Promise<CliHarness> {
   const kit = new CliHarness(team);
   const rows = [
     { v: 1, step: 'config-format', path: OLD, at: stampDaysAgo(8) },
-    { v: 1, step: 'other-step', path: FRESH, at: stampDaysAgo(6) },
-    { v: 1, step: 'third-step', path: UNDATED, at: 'not a stamp' },
+    { v: 1, step: 'config-format', path: FRESH, at: stampDaysAgo(6) },
+    { v: 1, step: 'config-format', path: UNDATED, at: 'not a stamp' },
   ];
   await kit.files.write(LEDGER, rows.map(toJsonlLine).join(''));
   await Promise.all([OLD, FRESH, UNDATED, OWN].map((path) => kit.files.write(path, '{}')));
@@ -60,6 +60,22 @@ describe("the lead's start removes the step backups kept past steps.backupDays",
     const started = await kit.run(['start', '--session', 'lead']);
     assert.ok(started.stdout.includes('CLEANED 2 step backup(s) older than 5 days [steps.backupDays]'), started.stdout.join('\n'));
     assert.deepEqual([OLD, FRESH, UNDATED].map((path) => kit.files.get(path) !== undefined), [false, false, true]);
+  });
+
+  it('leaves a due row naming a file outside the backups folder, warns and drops the row', async () => {
+    const kit = await teamWithBackups();
+    const outside = join(TEAM_HOME, 'state', 'config.v2.json');
+    await kit.files.write(outside, '{}');
+    await kit.files.append(LEDGER, toJsonlLine({ v: 1, step: 'config-format', path: outside, at: stampDaysAgo(9) }));
+    const started = await kit.run(['start', '--session', 'lead']);
+    assert.equal(started.code, EXIT.ok, started.stdout.join('\n'));
+    assert.ok(
+      started.stderr.includes(`WARN the step backup ledger named ${outside}, which is not a step backup in the backups folder; left it and dropped its row`),
+      started.stderr.join('\n'),
+    );
+    assert.ok(started.stdout.includes('CLEANED 1 step backup(s) older than 7 days [steps.backupDays]'), started.stdout.join('\n'));
+    assert.equal(kit.files.get(outside), '{}');
+    assert.doesNotMatch(kit.files.get(LEDGER) ?? '', /config\.v2/);
   });
 
   it("leaves every backup at another session's start", async () => {

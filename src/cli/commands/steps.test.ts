@@ -93,6 +93,21 @@ describe('teamrig steps run', () => {
     assert.equal(kit.files.get(BACKUP), undefined);
   });
 
+  it("leaves an earlier row's file outside the backups folder, says so and drops the row", async () => {
+    const kit = new CliHarness(CURRENT_TEAM);
+    const outside = join(TEAM_HOME, 'state', 'config.v2.json');
+    await kit.files.write(outside, '{}');
+    await kit.files.write(LEDGER, `${JSON.stringify({ v: 1, step: 'config-format', path: outside, at: '2030-01-01T10:00:00.000Z' })}\n`);
+    const done = await kit.run(['steps', 'run', 'config-format', '--yes'], { configFormat: NEXT_FORMAT });
+    assert.deepEqual(done.stdout, [
+      `DONE ${TITLE}; the backup is at ${BACKUP}`,
+      CHANGE,
+      `NOTE the step backup ledger named ${outside}, which is not a step backup in the backups folder; left it and dropped its row`,
+    ]);
+    assert.equal(kit.files.get(outside), '{}');
+    assert.deepEqual(JSON.parse(kit.files.get(LEDGER) ?? ''), { v: 1, step: 'config-format', path: BACKUP, at: '2030-01-08T10:00:00.000Z' });
+  });
+
   it('says a step not needed now is unchanged, and refuses a step it has no kind of', async () => {
     const kit = new CliHarness(CURRENT_TEAM);
     assert.deepEqual((await kit.run(['steps', 'run', 'config-format', '--yes'])).stdout, ['UNCHANGED config-format is not needed now']);

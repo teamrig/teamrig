@@ -1,4 +1,4 @@
-import type { ConfigLoad } from '../config/load.ts';
+import { isMigrationBackupFile, type ConfigLoad } from '../config/load.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { WRITE_SWITCH } from '../core/settings-writers.ts';
 
@@ -27,6 +27,8 @@ export interface StepInputs {
 export interface StepSource {
   readonly id: string;
   pendingOf(inputs: StepInputs): PendingStep | undefined;
+  /** Whether `name` is a file name this step gives its backups, so teamrig removes no other file as one. */
+  isBackupFile(name: string): boolean;
 }
 
 /** What the person types to take the step `id`. */
@@ -54,6 +56,7 @@ export const CONFIG_FORMAT_STEP: StepSource = {
       command: stepCommandOf(CONFIG_FORMAT),
     };
   },
+  isBackupFile: isMigrationBackupFile,
 };
 
 /** Every kind of step, in the order they are shown and taken. */
@@ -78,4 +81,9 @@ export function startStepLines(steps: readonly PendingStep[]): string[] {
 /** The source of the step `id`, or undefined when no kind of step has that id. */
 export function stepSourceOf(id: string, sources: readonly StepSource[] = STEP_SOURCES): StepSource | undefined {
   return sources.find((source) => source.id === id);
+}
+
+/** Whether `name` is a backup file name of the step `id`; false for a step no source has. */
+export function isStepBackupFile(id: string, name: string, sources: readonly StepSource[] = STEP_SOURCES): boolean {
+  return stepSourceOf(id, sources)?.isBackupFile(name) ?? false;
 }

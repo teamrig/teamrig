@@ -1,10 +1,9 @@
 import { KIT_NAME } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
-import { StepBackupLedger } from '../../steps/backups.ts';
 import { pendingSteps, stepSourceOf, STEP_SOURCES, type PendingStep } from '../../steps/pending.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
 import { writeConfigMigration } from '../config-migration.ts';
-import { fileLockOf } from '../file-locks.ts';
+import { refusedBackupLine, stepBackupLedgerOf } from '../step-backup-sweep.ts';
 import { openTeamKit, requireConfig, type Kit } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
@@ -70,11 +69,11 @@ export async function run(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
     return EXIT.ok;
   }
   const config = requireConfig(kit, runtime, 'read');
-  const ledger = new StepBackupLedger(runtime.files, kit.paths.stepBackups, fileLockOf(runtime, kit.paths.stepBackupsLock, config.lock));
-  const removed = await ledger.replace({ step: id, path: done.backup, at: new Date(runtime.clock.now()).toISOString() });
+  const { removed, refused } = await stepBackupLedgerOf(runtime, kit, config).replace({ step: id, path: done.backup, at: new Date(runtime.clock.now()).toISOString() });
   runtime.out.stdout(`DONE ${step.title}; the backup is at ${done.backup}`);
   done.changes.forEach((line) => runtime.out.stdout(`  ${line}`));
   removed.forEach((path) => runtime.out.stdout(`REMOVED the earlier backup ${path}`));
+  refused.forEach((path) => runtime.out.stdout(`NOTE ${refusedBackupLine(path)}`));
   return EXIT.ok;
 }
 

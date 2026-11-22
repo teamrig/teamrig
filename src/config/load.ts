@@ -41,6 +41,14 @@ export function migrationBackupName(pending: PendingMigration): string {
   return `config.v${pending.fromVersion}`;
 }
 
+/**
+ * Whether `name` is a file name `writeConfigWithBackup` gives a migration's backup: `config.v<N>.json`, or with the
+ * minute's stamp and a count when that name was taken (`config.v<N>.<YYYYMMDDHHMM>[-<k>].json`).
+ */
+export function isMigrationBackupFile(name: string): boolean {
+  return /^config\.v\d+(\.\d{12}(-\d+)?)?\.json$/.test(name);
+}
+
 /** Where a config change is written, and the name its backup starts with (`config.v1` keeps `config.v1.json`). */
 export interface ConfigTarget {
   readonly configPath: string;
