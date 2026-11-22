@@ -279,7 +279,9 @@ matrix.
   a release task at the release pull request's head, and `node tools/ship/ship.ts merge <repo dir> --release T<id>
   --approved <sha>` merges it (skill `dev-ship-release`). That merge refuses a head holding anything but the version
   raises and the changelog's new notes, never opens the pull request, and asks for a new head's approval when main
-  moved, since release-please rewrites the head on each push to main. Once it merged, the next run tags
+  gained a commit the changelog shows, since release-please then rewrites the head; when main gained only commits it
+  hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
+  merged, the next run tags
   main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
   the dist on top to the `release` branch, tagged `v<version>` (`tools/release/publish.ts`). The marketplace entry
   installs from that branch (a `git-subdir` source on ref `release`), so main ignores `plugins/teamrig/dist` and no
