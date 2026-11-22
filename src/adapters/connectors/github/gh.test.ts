@@ -21,6 +21,16 @@ import {
   commentsReadArgs,
   GH_PROGRAM,
   ghRunnerOver,
+  approvalBody,
+  isPullApprove,
+  isPullEnqueue,
+  isPullMerge,
+  isPullStandRead,
+  PULL_STAND_QUERY,
+  pullApproveArgs,
+  pullEnqueueArgs,
+  pullMergeArgs,
+  pullStandArgs,
   GhRefusedError,
   isAllowedGh,
   isAreaLabelCreate,
@@ -989,7 +999,7 @@ describe('ghRunnerOver', () => {
     }
     await assert.rejects(
       ghRunnerOver(run).run({ args: ['issue', 'close', '7'], env: {} }),
-      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, and to read the posts that may mention a user: it refuses gh issue close with these arguments/,
+      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh issue close with these arguments/,
     );
     assert.deepEqual(asked, []);
   });
@@ -1016,5 +1026,84 @@ describe('ghRunnerOver', () => {
   it("passes the program runner's rejection on, as when gh is not installed", async () => {
     const missing = new Error('spawn gh ENOENT');
     await assert.rejects(ghRunnerOver(() => Promise.reject(missing)).run({ args: READ, env: {} }), missing);
+  });
+});
+
+describe('pull request landing lines (T4817)', () => {
+  const PULL = { repo: 'acme/web', number: 12 };
+  const HEAD = '0123456789abcdef0123456789abcdef01234567';
+
+  it("takes one pull request's stand read, its approval at a full head with the fixed body, and its landing pinned to that head", () => {
+    const stand = pullStandArgs(PULL);
+    assert.deepEqual(stand, ['api', 'graphql', '-f', `query=${PULL_STAND_QUERY}`, '-f', 'owner=acme', '-f', 'name=web', '-F', 'number=12']);
+    const approve = pullApproveArgs(PULL, HEAD);
+    assert.deepEqual(approve, ['api', 'repos/acme/web/pulls/12/reviews', '-X', 'POST', '-f', `commit_id=${HEAD}`, '-f', 'event=APPROVE', '-f', `body=${approvalBody(HEAD)}`]);
+    assert.equal(approvalBody(HEAD), `Approved by teamrig at ${HEAD}.`);
+    const enqueue = pullEnqueueArgs('PR_kwDOAbc', HEAD);
+    const merge = pullMergeArgs(PULL, HEAD);
+    assert.deepEqual(merge, ['api', 'repos/acme/web/pulls/12/merge', '-X', 'PUT', '-f', 'merge_method=rebase', '-f', `sha=${HEAD}`]);
+    assert.equal(isPullStandRead(stand), true);
+    assert.equal(isPullApprove(approve), true);
+    assert.equal(isPullEnqueue(enqueue), true);
+    assert.equal(isPullMerge(merge), true);
+    for (const args of [stand, approve, enqueue, merge]) {
+      assert.equal(isAllowedGh(args), true, args.join(' '));
+    }
+  });
+
+  it('refuses a stand read of another query, a number that is no number or an @file, or an extra flag', () => {
+    const stand = pullStandArgs(PULL);
+    const refused: string[][] = [
+      [...stand.slice(0, 9), 'number=@secret.txt'],
+      [...stand.slice(0, 9), 'number=012'],
+      [...stand.slice(0, 8), '-f', 'number=12'],
+      [...stand, '--paginate'],
+      [...stand.slice(0, 3), 'query=query{viewer{login}}', ...stand.slice(4)],
+      [...stand.slice(0, 5), 'owner=../acme', ...stand.slice(6)],
+    ];
+    for (const args of refused) {
+      assert.equal(isPullStandRead(args), false, args.join(' '));
+      assert.equal(isAllowedGh(args), false, args.join(' '));
+    }
+  });
+
+  it('refuses an approval with another body, event, a short or missing sha, inline comments or an extra flag', () => {
+    const approve = pullApproveArgs(PULL, HEAD);
+    const refused: string[][] = [
+      [...approve.slice(0, 9), 'body=LGTM'],
+      [...approve.slice(0, 7), 'event=REQUEST_CHANGES', ...approve.slice(8)],
+      [...approve.slice(0, 7), 'event=COMMENT', ...approve.slice(8)],
+      pullApproveArgs(PULL, HEAD.slice(0, 12)),
+      pullApproveArgs(PULL, HEAD.toUpperCase()),
+      [...approve, '-f', 'comments[][body]=x'],
+      ['api', 'repos/acme/web/pulls/12/reviews', '-X', 'POST', '-f', 'event=APPROVE'],
+      ['api', 'repos/acme/web/issues/12/reviews', ...approve.slice(2)],
+      ['api', 'repos/acme/web/pulls/12/merge', ...approve.slice(2)],
+    ];
+    for (const args of refused) {
+      assert.equal(isPullApprove(args), false, args.join(' '));
+      assert.equal(isAllowedGh(args), false, args.join(' '));
+    }
+  });
+
+  it('refuses a landing with another mutation, id or method, no pinned full sha, a title or message, or an extra flag', () => {
+    const enqueue = pullEnqueueArgs('PR_kwDOAbc', HEAD);
+    const merge = pullMergeArgs(PULL, HEAD);
+    const refused: string[][] = [
+      pullEnqueueArgs('PR_kwDOAbc', HEAD.slice(0, 7)),
+      pullEnqueueArgs('I_kwDOAbc', HEAD),
+      [...enqueue.slice(0, 3), 'query=mutation($id:ID!){dequeuePullRequest(input:{id:$id}){clientMutationId}}', ...enqueue.slice(4)],
+      [...enqueue, '-f', 'jump=true'],
+      [...merge.slice(0, 5), 'merge_method=squash', ...merge.slice(6)],
+      [...merge.slice(0, 5), 'merge_method=merge', ...merge.slice(6)],
+      merge.slice(0, 6),
+      pullMergeArgs(PULL, HEAD.slice(0, 12)),
+      [...merge, '-f', 'commit_title=x'],
+      [...merge.slice(0, 3), 'POST', ...merge.slice(4)],
+    ];
+    for (const args of refused) {
+      assert.equal(isPullEnqueue(args) || isPullMerge(args), false, args.join(' '));
+      assert.equal(isAllowedGh(args), false, args.join(' '));
+    }
   });
 });

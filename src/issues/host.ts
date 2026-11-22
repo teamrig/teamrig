@@ -8,7 +8,7 @@
 import type { IssueFields } from './fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
 import type { HostPosts } from './post.ts';
-import type { HostPull } from './pull.ts';
+import type { HostPull, PullState } from './pull.ts';
 
 /** One issue or pull request: its repository (`owner/name`, in lowercase) and its number. */
 export interface IssueTarget {
@@ -290,8 +290,46 @@ export interface LabelFiles {
   labelFile(repo: string): Promise<HostLabelFile>;
 }
 
+/**
+ * One pull request as a landing reads it just before it writes: what `pr approve` and `pr merge` check (T4817). `id`
+ * is the host's own opaque id of the pull request, which a landing hands back; `head` is the full sha of its head.
+ * `mergeQueue` says whether the repository's default branch lands through a queue, `queued` whether this pull
+ * request is in it now, and `conflicts` whether the host found it conflicting with its base.
+ */
+export interface PullStand {
+  readonly id: string;
+  readonly state: PullState;
+  readonly draft: boolean;
+  readonly head: string;
+  readonly base: string;
+  readonly defaultBranch: string;
+  readonly mergeQueue: boolean;
+  readonly queued: boolean;
+  readonly conflicts: boolean;
+}
+
+/** One read of where a pull request stands: read, missing (none the access can see), or the read failed. */
+export type HostPullStand = { readonly kind: 'read'; readonly pull: PullStand } | { readonly kind: 'missing' } | { readonly kind: 'failed'; readonly reason: string };
+
+/** How landing a pull request ended: put in the merge queue, merged at once, or one plain line saying why not. */
+export type HostLanding = { readonly kind: 'enqueued' } | { readonly kind: 'merged' } | { readonly kind: 'failed'; readonly reason: string };
+
+/**
+ * A code host's landing of a pull request (T4817): read where it stands, approve one head of it, and land it. The
+ * approval's body is the adapter's own fixed line naming the head, never text a caller gives; the host's own rules
+ * (required checks, reviews) still gate the landing.
+ */
+export interface PullLanding {
+  /** Where the pull request stands now. */
+  pullStand(target: IssueTarget): Promise<HostPullStand>;
+  /** Approves the pull request at `head` (its full sha), so the approval covers only that head. */
+  approvePull(target: IssueTarget, head: string): Promise<HostEnd>;
+  /** Lands the pull request as `pull` read it: into its repository's merge queue when it has one, else merged at its head. */
+  landPull(target: IssueTarget, pull: PullStand): Promise<HostLanding>;
+}
+
 /** A code host: where a team's pull requests live, with every capability over them and the repository's files. */
-export interface CodeHost extends HostAccess, PullRequests, Checks, ReviewPosts, LabelFiles {}
+export interface CodeHost extends HostAccess, PullRequests, Checks, ReviewPosts, LabelFiles, PullLanding {}
 
 /** A host of both kinds, as GitHub is: one adapter that is the tracker and the code host of its repositories. */
 export interface IssueHost extends Tracker, CodeHost {}

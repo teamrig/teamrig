@@ -50,5 +50,8 @@ export function codeHostOnly(fake: FakeIssueHost): CodeHost {
     jobLog: (repo, jobId) => fake.jobLog(repo, jobId),
     posts: (repo, since) => fake.posts(repo, since),
     labelFile: (repo) => fake.labelFile(repo),
+    pullStand: (target) => fake.pullStand(target),
+    approvePull: (target, head) => fake.approvePull(target, head),
+    landPull: (target, pull) => fake.landPull(target, pull),
   };
 }

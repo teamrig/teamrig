@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostOpen, type HostPulls, type HostReach, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostReach, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -27,7 +27,9 @@ export type HostCall =
   | { readonly kind: 'assign'; readonly target: IssueTarget; readonly logins: readonly string[] }
   | { readonly kind: 'unassign'; readonly target: IssueTarget; readonly login: string }
   | { readonly kind: 'field'; readonly target: IssueTarget; readonly field: string; readonly value: FieldValue }
-  | { readonly kind: 'type'; readonly target: IssueTarget; readonly type: string };
+  | { readonly kind: 'type'; readonly target: IssueTarget; readonly type: string }
+  | { readonly kind: 'approve'; readonly target: IssueTarget; readonly head: string }
+  | { readonly kind: 'land'; readonly target: IssueTarget; readonly pull: PullStand };
 
 /**
  * An issue host that reaches nothing: a list gives the issues a test gave it, none until then, a pull request read gives what a test set,
@@ -312,6 +314,42 @@ export class FakeIssueHost implements IssueHost {
     }
     const posts = (this.postsOf.get(repo) ?? []).filter((post) => Date.parse(post.updatedAt) >= Date.parse(since));
     return Promise.resolve({ kind: 'read', posts, cutAt: undefined, notes: [] });
+  }
+
+  private readonly stands = new Map<string, HostPullStand>();
+  private approveEnd: HostEnd = { kind: 'done' };
+  private landing: HostLanding | undefined;
+
+  /** From now on, a read of where `target` stands gives `stand`; a pull request a test gave none reads as missing. */
+  standsAt(target: IssueTarget, stand: HostPullStand): this {
+    this.stands.set(targetText(target), stand);
+    return this;
+  }
+
+  /** From now on, an approval fails for `reason`. */
+  failsApprove(reason: string): this {
+    this.approveEnd = { kind: 'failed', reason };
+    return this;
+  }
+
+  /** From now on, a landing ends as `end`; until then it is enqueued in a repository with a queue, else merged. */
+  landsAs(end: HostLanding): this {
+    this.landing = end;
+    return this;
+  }
+
+  pullStand(target: IssueTarget): Promise<HostPullStand> {
+    return Promise.resolve(this.stands.get(targetText(target)) ?? { kind: 'missing' });
+  }
+
+  approvePull(target: IssueTarget, head: string): Promise<HostEnd> {
+    this.calls.push({ kind: 'approve', target, head });
+    return Promise.resolve(this.approveEnd);
+  }
+
+  landPull(target: IssueTarget, pull: PullStand): Promise<HostLanding> {
+    this.calls.push({ kind: 'land', target, pull });
+    return Promise.resolve(this.landing ?? { kind: pull.mergeQueue ? 'enqueued' : 'merged' });
   }
 
   jobLog(repo: string, jobId: number): Promise<HostJobLog> {
