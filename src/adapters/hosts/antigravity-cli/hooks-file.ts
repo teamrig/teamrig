@@ -11,12 +11,14 @@
  *
  * A hooks file that lost a guard on the way would look like a working one, so a source this module does not know in
  * full is refused whole with a reason: a key, an event or a handler field it has no rule for, or a word the shell
- * cannot carry unchanged. What is left out on purpose is listed in `skipped`, never dropped silently. Matchers are
- * kept as they are: which agy tool a matcher's name stands for is the host port's rule, not this file's.
+ * cannot carry unchanged, or a tool matcher naming a tool `tool-matchers.ts` has no rule for. What is left out on
+ * purpose is listed in `skipped`, never dropped silently. A tool matcher is rewritten in agy's tool names, since agy
+ * matches its own tools' names and a Claude Code name never fires there.
  */
 
 import { declaration } from './declaration.ts';
 import type { AntigravityHookEvent } from './events.ts';
+import { agyMatcherOf } from './tool-matchers.ts';
 
 /** One command hook as agy reads it. */
 export interface AntigravityHookHandler {
@@ -45,7 +47,7 @@ export type AntigravityHookGroup = Readonly<
 export type AntigravityHooksFile = Readonly<Record<string, AntigravityHookGroup>>;
 
 /** Why a handler of teamrig's file is not in the agy one. */
-export type SkipReason = 'event agy lacks' | 'rewake agy lacks' | 'matcher agy cannot hold';
+export type SkipReason = 'event agy lacks' | 'rewake agy lacks' | 'matcher agy cannot hold' | 'tool agy lacks';
 
 export interface SkippedHandler {
   readonly event: string;
@@ -311,10 +313,23 @@ interface Rewrite {
   readonly skipped: readonly SkippedHandler[];
 }
 
+/** agy's matcher for a group of a tool event: every tool when the source names none, undefined when agy has no such tool. */
+function agyMatcher(group: SourceGroup, what: string): string | undefined {
+  if (group.matcher === undefined) {
+    return EVERY_TOOL;
+  }
+  const rewritten = agyMatcherOf(group.matcher);
+  if (!rewritten.ok) {
+    throw new UnknownSource(`${what}: ${rewritten.reason}`);
+  }
+  return rewritten.matcher;
+}
+
 function rewriteEvent(source: SourceEvent, event: AntigravityHookEvent, options: AntigravityHooksFileOptions): Rewrite {
   const groups: AntigravityMatcherGroup[] = [];
   const skipped: SkippedHandler[] = [];
   source.groups.forEach((group, groupIndex) => {
+    const matcher = isToolEvent(event) ? agyMatcher(group, `${source.name} group ${groupIndex + 1}`) : EVERY_TOOL;
     const hooks: AntigravityHookHandler[] = [];
     group.handlers.forEach((handler, handlerIndex) => {
       if (handler.rewake) {
@@ -326,11 +341,15 @@ function rewriteEvent(source: SourceEvent, event: AntigravityHookEvent, options:
         skipped.push(skippedHandler(source.name, group, handler, 'matcher agy cannot hold'));
         return;
       }
+      if (matcher === undefined) {
+        skipped.push(skippedHandler(source.name, group, handler, 'tool agy lacks'));
+        return;
+      }
       const what = `${source.name} group ${groupIndex + 1}, handler ${handlerIndex + 1}`;
       hooks.push({ type: 'command', command: commandLine(handler.words, event, options, what), timeout: handler.timeout });
     });
-    if (hooks.length > 0) {
-      groups.push({ matcher: group.matcher ?? EVERY_TOOL, hooks });
+    if (hooks.length > 0 && matcher !== undefined) {
+      groups.push({ matcher, hooks });
     }
   });
   return { groups, skipped };
