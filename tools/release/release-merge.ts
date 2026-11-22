@@ -157,8 +157,7 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
   const sha = fieldString(run, 'head_sha', 'run');
   if (!FULL_SHA.test(sha)) return { kind: 'refused', reason: 'the ci run names no full commit sha' };
 
-  const owner = target.repo.split('/')[0] ?? '';
-  const open = listOf(await get(`/pulls?state=open&base=${encodeURIComponent(target.main)}&head=${encodeURIComponent(`${owner}:${target.head}`)}&per_page=${PAGE}`), 'pull list');
+  const open = await releasePulls(get, target, 'open');
   const [listed] = open;
   if (listed === undefined) return { kind: 'stale', reason: 'no release pull request is open' };
   if (open.length > 1) return { kind: 'refused', reason: `${open.length} open pull requests come from the release branch` };
@@ -168,11 +167,7 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
   if (fieldString(pullHead, 'sha', 'pull.head') !== sha) return { kind: 'stale', reason: `the release branch moved past ${codeSpan(sha)}: the ci run on its new head decides` };
   const pullRefusal = releasePullRefusal(pull, target);
   if (pullRefusal !== null) return { kind: 'refused', reason: pullRefusal };
-  const closed = listOf(
-    await get(`/pulls?state=closed&base=${encodeURIComponent(target.main)}&head=${encodeURIComponent(`${owner}:${target.head}`)}&sort=updated&direction=desc&per_page=${PAGE}`),
-    'closed pull list',
-  );
-  const hold = deps.clockHold(lastMergeOf(closed));
+  const hold = deps.clockHold(lastMergeOf(await releasePulls(get, target, 'closed')));
   if (hold !== null) return { kind: 'held', reason: hold };
 
   const files = deps.filesRefusal(sha);
@@ -187,6 +182,23 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
     return { kind: 'refused', reason: `the head's commit status is ${codeSpan(fieldString(status, 'state', 'combined status'))}` };
   }
   return { kind: 'pass', pr, sha, checks: runs.filter((one) => one.conclusion === 'success').length };
+}
+
+/** Where release-please keeps its pull request: the repository, its main branch and the release branch. */
+export type ReleaseBranch = Pick<GateTarget, 'repo' | 'main' | 'head'>;
+
+/** Reads one GitHub path under the repository, query included. */
+export type RepoGet = (path: string) => Promise<unknown>;
+
+/**
+ * The release branch's pull requests into main: the open ones, or the closed ones newest updated first. Not paged:
+ * release-please keeps one open, and `lastMergeOf` needs only the newest closed.
+ */
+export async function releasePulls(get: RepoGet, branch: ReleaseBranch, state: 'open' | 'closed'): Promise<readonly JsonRecord[]> {
+  const owner = branch.repo.split('/')[0] ?? '';
+  const order = state === 'closed' ? '&sort=updated&direction=desc' : '';
+  const path = `/pulls?state=${state}&base=${encodeURIComponent(branch.main)}&head=${encodeURIComponent(`${owner}:${branch.head}`)}${order}&per_page=${PAGE}`;
+  return listOf(await get(path), state === 'open' ? 'pull list' : 'closed pull list');
 }
 
 /**
