@@ -6,7 +6,7 @@ import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
 import { JiraClient } from './client.ts';
 import { NOT_BUILT } from './declaration.ts';
-import { COMMENT_PAGE, JiraTracker, LISTED_TYPES, MAX_PAGES, PAGE_SIZE } from './tracker.ts';
+import { BULK_KEYS, COMMENT_PAGE, JiraTracker, LISTED_MISSING, LISTED_TYPES, MAX_PAGES, PAGE_SIZE } from './tracker.ts';
 
 const API = 'https://acme.atlassian.net/rest/api/3';
 const SEARCH = `${API}/search/jql`;
@@ -26,13 +26,13 @@ interface Kit {
 
 /**
  * A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config
- * names, `site` the site it names.
+ * names, `site` the site it names, `people` the account ids it counts as the team's.
  */
-function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string): Kit {
+function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string, people: readonly string[] = []): Kit {
   const http = new FakeHttp();
   const credentials = saved ? new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token') : new FakeCredentials();
   const client = new JiraClient(http, credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
-  return { tracker: new JiraTracker(client, stamp, { site, issueType }), http };
+  return { tracker: new JiraTracker(client, stamp, { site, issueType, people }), http };
 }
 
 function parsedJson(text: string): unknown {
@@ -259,6 +259,126 @@ describe('listing a Jira project', () => {
     assert.deepEqual(await tracker.list(REPO, 'yesterday'), failed('"yesterday" is not a day (YYYY-MM-DD)'));
     assert.deepEqual(await tracker.list(REPO, '2026-99-99'), failed('"2026-99-99" is not a day (YYYY-MM-DD)'));
     assert.deepEqual(http.requests, []);
+  });
+});
+
+describe('listing a Jira project in an import scope (T5013)', () => {
+  const MYSELF = `${API}/myself`;
+  const BULK = `${API}/issue/bulkfetch`;
+  const BASE = 'project = "ENG" AND (statusCategory != Done OR statusCategoryChangedDate >= "2026-11-09")';
+  const TEAM = { all: false, assigned: 'team', labels: ['teamrig'] } as const;
+
+  it("asks one search for the signed-in account's, the people's and the labelled issues, and names the people", async () => {
+    const { tracker, http } = kit(false, true, undefined, undefined, ['p-config']);
+    http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')]));
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: ['p-asked'], held: [1] }), {
+      kind: 'listed',
+      issues: [hostIssue(1)],
+      notes: [],
+      people: ['p-asked', 'p-config', 'me'],
+    });
+    assert.deepEqual(sent(http), [
+      ['GET', '/myself'],
+      ['POST', '/search/jql', { jql: `${BASE} AND (assignee in (currentUser(), "p-asked", "p-config") OR labels in ("teamrig"))`, fields: LIST_FIELDS, maxResults: PAGE_SIZE }],
+    ]);
+  });
+
+  it('reads the signed-in account once per site, across lists', async () => {
+    const { tracker, http } = kit();
+    http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([]));
+    await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [] });
+    await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [] });
+    assert.equal(sent(http).filter(([, path]) => path === '/myself').length, 1);
+  });
+
+  it('reads the held issues the search left out by key, whatever their close day, and names the keys Jira did not give', async () => {
+    const { tracker, http } = kit();
+    http
+      .answers('GET', MYSELF, 200, '{"accountId":"me"}')
+      .answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')]))
+      .answers('POST', BULK, 200, JSON.stringify({ issues: [jiraIssue('ENG-3', { status: CLOSED, statuscategorychangedate: '2026-01-01T00:00:00.000+0000' }), 'text'], issueErrors: [] }));
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [1, 3, 4, 3] }), {
+      kind: 'listed',
+      issues: [hostIssue(1), hostIssue(3, { state: 'closed', closedAt: '2026-01-01T00:00:00.000Z' })],
+      notes: [
+        "Jira gave no issue for 1 held key(s), deleted, moved or out of the sign-in's sight: ENG-4",
+        '1 held item(s) Jira gave did not read as issues of ENG and were left out',
+      ],
+      people: ['me'],
+    });
+    assert.deepEqual(sent(http).slice(2), [['POST', '/issue/bulkfetch', { issueIdsOrKeys: ['ENG-3', 'ENG-4'], fields: LIST_FIELDS }]]);
+  });
+
+  it('reads held keys in batches of the bulk bound, and counts past the keys a note names', async () => {
+    const { tracker, http } = kit();
+    http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([])).answers('POST', BULK, 200, '{"issues":[]}');
+    const held = Array.from({ length: BULK_KEYS + 1 }, (_, index) => index + 1);
+    const list = await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held });
+    const named = held
+      .slice(0, LISTED_MISSING)
+      .map((number) => `ENG-${number}`)
+      .join(', ');
+    assert.deepEqual(list, {
+      kind: 'listed',
+      issues: [],
+      notes: [`Jira gave no issue for ${BULK_KEYS + 1} held key(s), deleted, moved or out of the sign-in's sight: ${named} and ${BULK_KEYS + 1 - LISTED_MISSING} more`],
+      people: ['me'],
+    });
+    const batches = sent(http)
+      .filter(([, path]) => path === '/issue/bulkfetch')
+      .map(([, , body]) => (typeof body === 'object' && body !== null && 'issueIdsOrKeys' in body && Array.isArray(body.issueIdsOrKeys) ? body.issueIdsOrKeys.length : 0));
+    assert.deepEqual(batches, [BULK_KEYS, 1]);
+  });
+
+  it('searches nothing for a scope with no assignee and no label, reading only the held issues', async () => {
+    const { tracker, http } = kit();
+    http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', BULK, 200, JSON.stringify({ issues: [jiraIssue('ENG-2')] }));
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: { all: false, assigned: 'none', labels: [] }, people: [], held: [2] }), {
+      kind: 'listed',
+      issues: [hostIssue(2)],
+      notes: [],
+      people: ['me'],
+    });
+    assert.deepEqual(
+      sent(http).map(([method, path]) => `${String(method)} ${String(path)}`),
+      ['GET /myself', 'POST /issue/bulkfetch'],
+    );
+  });
+
+  it('lists the whole project, with no read of the account, for a scope of all', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')]));
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: { ...TEAM, all: true }, people: [], held: [9] }), { kind: 'listed', issues: [hostIssue(1)], notes: [] });
+    assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: BASE, fields: LIST_FIELDS, maxResults: PAGE_SIZE }]]);
+  });
+
+  it('gives nothing when the account, a label, the search or the held read fails', async () => {
+    const noAccount = kit();
+    noAccount.http.answers('GET', MYSELF, 200, '{}');
+    assert.deepEqual(await noAccount.tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [] }), failed("Jira's answer on acme names no account for the sign-in"));
+
+    const badLabel = kit();
+    badLabel.http.answers('GET', MYSELF, 200, '{"accountId":"me"}');
+    assert.deepEqual(
+      await badLabel.tracker.list(REPO, '2026-11-10', { scope: { ...TEAM, labels: ['a\nb'] }, people: [], held: [] }),
+      failed('the label "a\\nb" cannot be searched in Jira: it holds a control character'),
+    );
+    assert.equal(badLabel.http.requests.length, 1);
+
+    const badSearch = kit();
+    badSearch.http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 500);
+    assert.deepEqual(await badSearch.tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [1] }), failed('Jira answered 500'));
+
+    const NOT_HELD = "Jira's answer to the read of acme/eng's held issues did not read as a list of issues";
+    for (const [status, body, reason] of [
+      [500, '', 'Jira answered 500'],
+      [200, '{"issueErrors":[]}', NOT_HELD],
+      [404, '', NOT_HELD],
+    ] as const) {
+      const { tracker, http } = kit();
+      http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([])).answers('POST', BULK, status, body);
+      assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [1] }), failed(reason), `${status} ${body}`);
+    }
   });
 });
 

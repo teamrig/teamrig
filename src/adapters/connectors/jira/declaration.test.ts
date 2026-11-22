@@ -66,7 +66,7 @@ describe('the Jira declaration', () => {
   });
 
   it("declares the keys of its config section, each with its line (T4766)", () => {
-    assert.deepEqual(Object.keys(declaration.configKeys), ['site', 'projects', 'issueType']);
+    assert.deepEqual(Object.keys(declaration.configKeys), ['site', 'projects', 'issueType', 'people']);
   });
 
   it("says an issue opens as the type the team's config names, else a Task or the first type that can stand alone, its body as plain text (T4754, T4766)", () => {
