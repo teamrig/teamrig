@@ -28,7 +28,7 @@ describe("Codex CLI's launch arguments", () => {
   });
 
   it('keeps a prompt starting with "-" behind `--`, so Codex never reads it as a flag', () => {
-    assert.deepEqual(launchArgs({ ...NEW, prompt: '--dangerously-bypass-approvals-and-sandbox' }), ['--', '--dangerously-bypass-approvals-and-sandbox']);
+    assert.deepEqual(launchArgs({ ...NEW, prompt: '--some-flag' }), ['--', '--some-flag']);
   });
 
   it('refuses a resume id starting with "-" rather than pass it where Codex reads a flag', () => {
