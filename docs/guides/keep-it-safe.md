@@ -196,8 +196,9 @@ the prompt
 ([what it cannot see](../../plugins/teamrig/skills/teamrig-guide/hooks.md#before-a-shell-command-or-a-read-the-secret-guard)).
 
 A secret a call prints anyway, from a script, a log or a file the guard could not see, is redacted before Claude reads
-it: after each Bash, PowerShell, Read or Grep call, the secret redactor replaces each token, credential and secret
-variable's value in the result with `[redacted <kind>]`, so it stays out of the transcript too, and tells the session
+it: after each Bash, PowerShell, Read or Grep call, the secret redactor replaces each token, credential, secret
+variable's value and password field's value in a form dump in the result with `[redacted <kind>]`, so it stays
+out of the transcript too, and tells the session
 which kinds it held, never a value. It files a task for the security reviewer, else the lead, to rotate each kind,
 one per kind, session and day while that task is open (once it is closed, a later leak that day gets a new one), and
 names it to the session. For credentials in a URL the task names the account they were for (`login app at
