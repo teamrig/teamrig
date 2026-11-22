@@ -14,19 +14,35 @@ describe('teamrig ci rerun (T5063)', () => {
     return gh.ran.map((request) => request.args).filter((args) => isRunRerun(args));
   }
 
-  it('re-runs every job of the named run of a team repository, with its saved key', async () => {
-    const gh = new FakeGh();
+  it('re-runs the failed jobs of the named run of a team repository, with its saved key, naming its workflow, event and attempt', async () => {
+    const gh = new FakeGh().holdsRun(45027704561, 'completed', 'failure');
     const result = await kit().run(['ci', 'rerun', 'Acme/Web', '--run', '45027704561'], { ...AS_ALPHA, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, ['RERUN acme/web run 45027704561: every job started again']);
-    assert.deepEqual(reruns(gh), [['api', 'repos/acme/web/actions/runs/45027704561/rerun', '-X', 'POST']]);
+    assert.deepEqual(result.stdout, ['RERUN acme/web run 45027704561 (ci.yml, push): its failed jobs started again as attempt 2']);
+    assert.deepEqual(reruns(gh), [['api', 'repos/acme/web/actions/runs/45027704561/rerun-failed-jobs', '-X', 'POST']]);
   });
 
-  it("fails with the host's reason when GitHub refuses the re-run", async () => {
-    const gh = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' });
+  it('refuses, re-running nothing, a run that passed', async () => {
+    const gh = new FakeGh().holdsRun(7, 'completed', 'success', { workflow: '.github/workflows/release.yml' });
+    const result = await kit().run(['ci', 'rerun', 'acme/web', '--run', '7'], { ...AS_ALPHA, gh });
+    assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+    assert.match(result.stdout.join('\n'), /run 7 of acme\/web \(release\.yml, push, attempt 1\) ended success: .*nothing was re-run/u);
+    assert.deepEqual(reruns(gh), []);
+  });
+
+  it("fails with the host's reason when the run is not there", async () => {
+    const gh = new FakeGh();
     const result = await kit().run(['ci', 'rerun', 'acme/web', '--run', '7'], { ...AS_ALPHA, gh });
     assert.equal(result.code, EXIT.failed);
     assert.match(result.stderr.join('\n'), /^FAILED acme\/web run 7: run 7 of acme\/web is not there for the token saved as /u);
+    assert.deepEqual(reruns(gh), []);
+  });
+
+  it("fails with the host's reason when GitHub refuses the re-run", async () => {
+    const gh = new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 403: Resource not accessible by personal access token\n' });
+    const result = await kit().run(['ci', 'rerun', 'acme/web', '--run', '7'], { ...AS_ALPHA, gh });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stderr.join('\n'), /^FAILED acme\/web run 7: the token saved as .* may not re-run run 7 of acme\/web/u);
   });
 
   it('writes nothing, after an OFF line, while GitHub is off on this machine', async () => {

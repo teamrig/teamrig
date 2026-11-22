@@ -30,6 +30,7 @@ import {
   isPullMerge,
   isPullStandRead,
   isReviewRead,
+  isRunRead,
   isRunRerun,
   isWatchProbe,
   LabelFileReads,
@@ -391,6 +392,8 @@ export class FakeGh implements GhRunner {
   private viewerAnswer: GhResult | undefined;
   private commentsAnswer: GhResult | undefined;
   private readonly jobLogs = new Map<number, string>();
+  /** CI runs by id, as a run read prints them. */
+  private readonly runs = new Map<number, JsonRecord>();
   /** REST posts by `<repo> <list>`, and reviews by `<repo>#<number>`. */
   private readonly posts = new Map<string, readonly JsonRecord[]>();
   private readonly reviews = new Map<string, readonly JsonRecord[]>();
@@ -474,6 +477,23 @@ export class FakeGh implements GhRunner {
   /** From now on, a failed-log read of job `jobId` prints `stdout`; a job with none set is Not Found. */
   holdsJobLog(jobId: number, stdout: string): this {
     this.jobLogs.set(jobId, stdout);
+    return this;
+  }
+
+  /**
+   * From now on, a read of CI run `runId` prints that run with `status` and `conclusion`, a push run of ci.yml on its
+   * first attempt unless `more` says otherwise; a run with none set is Not Found.
+   */
+  holdsRun(runId: number, status: string, conclusion: string | null, more: { readonly workflow?: string; readonly event?: string; readonly attempt?: number } = {}): this {
+    this.runs.set(runId, {
+      id: runId,
+      name: 'ci',
+      status,
+      conclusion,
+      path: more.workflow ?? '.github/workflows/ci.yml',
+      event: more.event ?? 'push',
+      run_attempt: more.attempt ?? 1,
+    });
     return this;
   }
 
@@ -632,6 +652,11 @@ export class FakeGh implements GhRunner {
       const repo = request.args[6] ?? '';
       const log = this.jobLogs.get(Number(request.args[3]));
       return this.canned.get(repo) ?? (log === undefined ? notVisible(repo) : { end: { kind: 'exited', code: 0 }, stdout: log, stderr: '' });
+    }
+    if (isRunRead(request.args)) {
+      const [, repo = '', runId = ''] = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)$/u.exec(request.args[1] ?? '') ?? [];
+      const run = this.runs.get(Number(runId));
+      return this.canned.get(repo) ?? (run === undefined ? { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' } : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(run), stderr: '' });
     }
     if (isIssueComment(request.args) || isIssueBodyEdit(request.args) || isIssueClose(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };

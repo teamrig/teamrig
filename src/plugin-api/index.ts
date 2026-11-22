@@ -213,6 +213,7 @@ export {
   type HostLabelFile,
   type HostLinks,
   type HostList,
+  type HostRerun,
   type HostLanding,
   type HostOpen,
   type HostPulls,

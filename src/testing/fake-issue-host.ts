@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostReach, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostReach, type HostRerun, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -358,7 +358,7 @@ export class FakeIssueHost implements IssueHost {
     return Promise.resolve(this.jobLogs.get(jobId) ?? { kind: 'read', step: undefined, lines: [] });
   }
 
-  private rerunEnd: HostEnd = { kind: 'done' };
+  private rerunEnd: HostRerun = { kind: 'done', workflow: 'ci.yml', event: 'push', attempt: 2 };
 
   /** From now on, a run's re-run fails for `reason`. */
   failsRerun(reason: string): this {
@@ -366,7 +366,13 @@ export class FakeIssueHost implements IssueHost {
     return this;
   }
 
-  rerunRun(repo: string, runId: number): Promise<HostEnd> {
+  /** From now on, a run's re-run is refused for `reason`, as a run that did not end failed is. */
+  refusesRerun(reason: string): this {
+    this.rerunEnd = { kind: 'refused', reason };
+    return this;
+  }
+
+  rerunRun(repo: string, runId: number): Promise<HostRerun> {
     this.calls.push({ kind: 'rerun', repo, runId });
     return Promise.resolve(this.rerunEnd);
   }

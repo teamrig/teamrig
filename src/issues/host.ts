@@ -130,6 +130,16 @@ export type HostJobLog =
   | { readonly kind: 'read'; readonly step: string | undefined; readonly lines: readonly string[] }
   | { readonly kind: 'failed'; readonly reason: string };
 
+/**
+ * One CI run's re-run (T5063): its failed jobs started again, as the attempt named, of the workflow file and event
+ * the run read showed; refused before any write, the run read first and found not to be one a re-run may follow (it
+ * passed or has not ended, a privileged event started it, or it ran three times); or the read or the write failed.
+ */
+export type HostRerun =
+  | { readonly kind: 'done'; readonly workflow: string; readonly event: string; readonly attempt: number }
+  | { readonly kind: 'refused'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string };
+
 /** One issue to open: its repository (`owner/name`), title, body and labels. */
 export interface IssueDraft {
   readonly repo: string;
@@ -273,8 +283,11 @@ export interface PullRequests {
 export interface Checks {
   /** The end of the log of the failed CI job `jobId` of `repo` (a pull request's FailedJob id). */
   jobLog(repo: string, jobId: number): Promise<HostJobLog>;
-  /** Starts every job of the CI run `runId` of `repo` again, as `ci rerun` asks after a glitch on the host's side (T5063). */
-  rerunRun(repo: string, runId: number): Promise<HostEnd>;
+  /**
+   * Starts the failed jobs of the CI run `runId` of `repo` again, as `ci rerun` asks after a glitch on the host's side
+   * (T5063), only once a read shows the run may be re-run (HostRerun); any other run is refused unwritten.
+   */
+  rerunRun(repo: string, runId: number): Promise<HostRerun>;
 }
 
 /** A code host's posts: what was written on its pull requests and issues, read. */

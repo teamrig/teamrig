@@ -29,6 +29,7 @@ import {
   type HostPulls,
   type HostPullStand,
   type HostReach,
+  type HostRerun,
   type HostThread,
   type HostUse,
   type HostViewer,
@@ -65,6 +66,7 @@ import {
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
+  runReadArgs,
   runRerunArgs,
   labelReadArgs,
   labelCreateArgs,
@@ -79,7 +81,7 @@ import {
   type WatchPath,
 } from './gh.ts';
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
-import { createdNumber, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
 import { readFields } from './fields.ts';
 import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
@@ -87,10 +89,14 @@ import { readPosts } from './posts.ts';
 import { pullStandIn } from './pull-stand.ts';
 import { listPulls, PULL_LIMIT } from './pulls.ts';
 import { PULL_PAGE_SIZE } from './queries.ts';
+import { rerunRefusal, runStateOf } from './run-state.ts';
 import { NoAccessError, type RepoAccess, type RepoTokens } from './tokens.ts';
 
 /** A failed job's log read, as a failure line words it: the Actions permission lets a token read it. */
 const JOB_LOG_READ: ReadKind = { noun: 'failed job logs', permission: 'Actions', command: 'gh run view' };
+
+/** A CI run's read before its re-run, as a failure line words it: the Actions permission lets a token read it. */
+const RUN_READ: ReadKind = { noun: 'CI runs', permission: 'Actions', command: 'gh api' };
 
 /** What each use does with an access, as its ACCESS line words it. */
 const USE_VERB: Readonly<Record<HostUse, string>> = { read: 'read with', open: 'opens issues with', write: 'writes with' };
@@ -204,14 +210,39 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   /**
-   * Starts every job of the run again (gh.ts isRunRerun), with the owner's saved token, which needs Actions Read and
-   * write. A run stopped by a signal may still have started it, so its line says to look first; GitHub's own refusal
-   * (a run still going, one too old) is the reason, any secret shape redacted.
+   * Reads the run first (gh.ts isRunRead) and refuses, writing nothing, unless run-state.ts rerunRefusal lets it be
+   * re-run: ended failed, cancelled or timed out (a passed release run re-run would publish again), started by a push,
+   * pull request, merge queue or schedule, before its third attempt. Then starts its failed jobs again (gh.ts
+   * isRunRerun), with the owner's saved token, which needs Actions Read and write. A run stopped by a signal may still
+   * have started it, so its line says to look first; GitHub's own refusal (one too old) is the reason, any secret
+   * shape redacted.
    */
-  async rerunRun(repo: string, runId: number): Promise<HostEnd> {
+  async rerunRun(repo: string, runId: number): Promise<HostRerun> {
     const access = await this.tokens.accessFor(repo);
     if (access instanceof NoAccessError) {
       return { kind: 'failed', reason: access.message };
+    }
+    let read: GhResult;
+    try {
+      read = await this.gh.run({ args: runReadArgs(repo, runId), env: access.env });
+    } catch (error) {
+      return { kind: 'failed', reason: startFailureText(error) };
+    }
+    const readEnd = read.end;
+    if (readEnd.kind === 'exited' && readEnd.code !== 0 && ghFailureKind(readEnd.code, read.stderr) === 'not-visible') {
+      // A team repository the token reaches answers Not Found for a wrong run id: the line names the id first.
+      return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, readEnd.code, read.stderr, access)) };
+    }
+    if (readEnd.kind !== 'exited' || readEnd.code !== 0) {
+      return { kind: 'failed', reason: this.scanner.redact(failureText(repo, read, access, RUN_READ)) };
+    }
+    const state = runStateOf(read.stdout);
+    if (state === undefined) {
+      return { kind: 'failed', reason: `the read of run ${String(runId)} of ${repo} printed no status and conclusion; nothing was re-run` };
+    }
+    const refusal = rerunRefusal(repo, runId, state);
+    if (refusal !== undefined) {
+      return { kind: 'refused', reason: refusal };
     }
     let result: GhResult;
     try {
@@ -225,7 +256,7 @@ export class GitHubIssueHost implements IssueHost {
     if (result.end.code !== 0) {
       return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access)) };
     }
-    return { kind: 'done' };
+    return { kind: 'done', workflow: state.workflow, event: state.event, attempt: state.attempt + 1 };
   }
 
   /** The posts of `repo` changed since `since` (posts.ts), as the owner's saved token reads them. */
