@@ -48,7 +48,16 @@ describe('hook route-allow', () => {
     ]);
   });
 
-  it('leaves a push and the register commands to the permission check, even where they are routes', async () => {
+  it("allows a teamrig read of the register, as the owner granted (T5070), logging only its route", async () => {
+    const kit = new CliHarness(ASKS_OFF);
+    await kit.run(['add', '--title', 'Ship the CLI', '--description', 'what and why', '--priority', 'p1', '--session', 'alpha']);
+    assert.equal(decisionOf(await kit.run(HOOK, { stdin: call('teamrig list --session alpha'), env: { TEAMRIG_SESSION: 'alpha' } })), 'allow');
+    assert.deepEqual(await answersOf(kit), [
+      { v: 1, at: '2030-01-08T10:00:00.000Z', session: 'alpha', claudeSession: CLAUDE_SESSION, tool: 'Bash', event: 'PreToolUse', answer: 'route', route: 'read', command: null },
+    ]);
+  });
+
+  it('leaves a push and the register writes to the permission check, even where they are routes', async () => {
     const kit = new CliHarness(ASKS_OFF);
     await kit.run(['add', '--title', 'Ship the CLI', '--description', 'what and why', '--priority', 'p1', '--session', 'alpha']);
     const git: RunOptions['git'] = {
@@ -59,7 +68,7 @@ describe('hook route-allow', () => {
     };
     const env = { TEAMRIG_SESSION: 'alpha' };
     assert.deepEqual(await kit.run(HOOK, { stdin: call('git push -u origin t1-x'), env, git }), NOTHING);
-    assert.deepEqual(await kit.run(HOOK, { stdin: call('teamrig list --session alpha'), env }), NOTHING);
+    assert.deepEqual(await kit.run(HOOK, { stdin: call('teamrig inbox read --session alpha'), env }), NOTHING);
     assert.deepEqual(await answersOf(kit), []);
   });
 
