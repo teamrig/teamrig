@@ -21,9 +21,9 @@ describe('release-promote.yml', () => {
     assert.match(workflow, /^concurrency:\n {2}group: release-promote\n {2}cancel-in-progress: false\n/m);
   });
 
-  it('has the one job, skipped on a private copy, stopped within 10 minutes', () => {
+  it('has the one job, skipped on a private copy or off main, stopped within 10 minutes', () => {
     assert.deepEqual([...jobs.keys()].filter((id) => id !== ''), ['promote']);
-    assert.match(promote, /^ {4}if: \$\{\{ !github\.event\.repository\.private \}\}$/m);
+    assert.match(promote, /^ {4}if: \$\{\{ !github\.event\.repository\.private && github\.ref == 'refs\/heads\/main' \}\}$/m);
     assert.match(promote, /^ {4}timeout-minutes: 10$/m);
   });
 

@@ -29,7 +29,8 @@ concurrency:
 jobs:
   promote:
     name: promote to stable
-    if: ${{ !github.event.repository.private }}
+    # Main's tools alone move stable: a run by hand from another branch is skipped, beside the environment's own limit.
+    if: ${{ !github.event.repository.private && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The release ruleset lets one actor move the release branch: a deploy key, whose private half is a secret of the
