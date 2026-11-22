@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { GITHUB_REPOS_HOST } from '../issues/host.ts';
 import { refOf } from '../issues/ref.ts';
 import type { ConnectorDeclaration } from '../plugin-api/index.ts';
-import { ISSUE_REF_PREFIX } from '../register/model.ts';
+import { IMPORT_SOURCE_IDS, IMPORT_SOURCES, ISSUE_REF_PREFIX } from '../register/model.ts';
+import { CONNECTOR_ADAPTERS } from './adapters.ts';
 import { loadConnector } from './loader.ts';
 
 /**
@@ -34,4 +35,20 @@ describe("the core's names for the host of github.repos", () => {
     assert.equal(ISSUE_REF_PREFIX, refPrefix);
     assert.equal(refOf({ repo: 'acme/web', number: 7 }), `${refPrefix}acme/web#7`);
   });
+});
+
+describe("the core's import sources", () => {
+  for (const source of IMPORT_SOURCE_IDS) {
+    it(`names ${source} by a shipped tracker connector whose refPrefix is ${IMPORT_SOURCES[source]}`, async () => {
+      assert.ok(Object.hasOwn(CONNECTOR_ADAPTERS, source), `${source} is no shipped connector`);
+      const load = await loadConnector(source);
+      if (load.kind === 'refused') {
+        assert.fail(`no connector adapter loads as ${source}: ${load.notices.join('; ')}`);
+      }
+      const { declaration } = load.value;
+      assert.equal(declaration.id, source);
+      assert.ok(declaration.kinds.includes('tracker'), `${source} is not a tracker`);
+      assert.equal(declaration.refPrefix, IMPORT_SOURCES[source]);
+    });
+  }
 });

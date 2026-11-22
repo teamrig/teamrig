@@ -31,6 +31,7 @@ export const declaration = {
         'codehost.pull-news': NONE,
         'codehost.ci-excerpt': NONE,
         'codehost.pr-conflicts': NONE,
+        'codehost.pr-land': NONE,
         'codehost.review-posts': NONE,
         'codehost.linked-pulls': NONE,
     },

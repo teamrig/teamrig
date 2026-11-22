@@ -7,5 +7,7 @@ export const AGENT_MARK = 'CLAUDECODE';
 export const SESSION_ID = 'CLAUDE_CODE_SESSION_ID';
 /** The folder Claude Code started the session in; its hooks and what its tools run inherit it. */
 export const PROJECT_DIR = 'CLAUDE_PROJECT_DIR';
+/** How Claude Code was started: `cli` for a terminal tab. */
+export const ENTRYPOINT = 'CLAUDE_CODE_ENTRYPOINT';
 /** What Claude Code tells a run about its session by: its one mark, then which session it is and where it started. */
 export const SESSION_VARIABLES = { marks: [AGENT_MARK], identity: [SESSION_ID, PROJECT_DIR] };

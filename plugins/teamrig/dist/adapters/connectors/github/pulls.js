@@ -53,7 +53,17 @@ const STATES = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' };
 const MERGEABLE = { MERGEABLE: 'mergeable', CONFLICTING: 'conflicting', UNKNOWN: 'unknown' };
 const REVIEWS = { APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', REVIEW_REQUIRED: 'review-required' };
 /** GitHub's rollup of a commit's checks; a cancelled check run rolls up as FAILURE. */
-const CHECKS = { SUCCESS: 'passing', FAILURE: 'failing', ERROR: 'failing', PENDING: 'pending', EXPECTED: 'pending' };
+const CHECKS = new Map([
+    ['SUCCESS', 'passing'],
+    ['FAILURE', 'failing'],
+    ['ERROR', 'failing'],
+    ['PENDING', 'pending'],
+    ['EXPECTED', 'pending'],
+]);
+/** A commit's check rollup `state` in teamrig's words; undefined for no state or one GitHub does not send. */
+export function rollupChecks(state) {
+    return typeof state === 'string' ? CHECKS.get(state) : undefined;
+}
 /** One pull request as the shipped query gives it; null when a field the monitor needs is missing or not what GitHub sends. */
 export function pullOf(item, repo) {
     if (!isRecord(item)) {
@@ -90,7 +100,7 @@ export function pullOf(item, repo) {
         head,
         fork: item['isCrossRepository'] === true,
         mergeable: MERGEABLE[stringField(item, 'mergeable') ?? ''] ?? 'unknown',
-        checks: CHECKS[rollupStateOf(item) ?? ''] ?? 'none',
+        checks: rollupChecks(rollupStateOf(item)) ?? 'none',
         review: REVIEWS[stringField(item, 'reviewDecision') ?? ''] ?? 'none',
         failedJobs: failedJobsOf(rollupOf(item)),
         closes: closedIssuesOf(recordField(item, 'closingIssuesReferences'), repo),

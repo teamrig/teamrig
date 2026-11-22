@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { NAME_PATTERN, RESERVED_NAMES } from '../core/ids.ts';
-import { MODEL_ALIASES, MODEL_ID_MAX_LENGTH, MODEL_ID_PATTERN } from './launch.ts';
+import { MODEL_NAME_MAX_LENGTH, MODEL_NAME_PATTERN } from './launch.ts';
 import {
   APPLY_FLAG_PATTERN,
   BUDGET_ACCOUNT_MAX_LENGTH,
@@ -411,10 +411,7 @@ describe('config.schema.json', () => {
     assert.ok(launch !== undefined);
     const { model, effort } = properties(launch);
     assert.ok(isRecord(model) && isRecord(effort));
-    assert.deepEqual(model['anyOf'], [
-      { enum: [...MODEL_ALIASES] },
-      { type: 'string', pattern: MODEL_ID_PATTERN.source, maxLength: MODEL_ID_MAX_LENGTH },
-    ]);
+    assert.deepEqual([model['type'], model['pattern'], model['maxLength']], ['string', MODEL_NAME_PATTERN.source, MODEL_NAME_MAX_LENGTH]);
     assert.deepEqual(effort['enum'], [...EFFORT_LEVELS]);
   });
 

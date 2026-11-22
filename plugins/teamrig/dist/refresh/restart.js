@@ -1,7 +1,6 @@
 import { typedEffortsOf } from "../effort/typed-effort.js";
 import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isClaudeSessionId } from "../mod/clear-hand.js";
 import { endAndWait, tabProcessOf, workCutOffBy } from "../open/end-tab.js";
-import { isClaudeProcess } from "../open/session-processes.js";
 import { readRunningWork } from "./running.js";
 import { TURN_TAIL_BYTES, turnRunning } from "./turn.js";
 /** The team's `refresh.countdownSeconds` and `refresh.holdAfterActivityMinutes` as the hold an ask carries, in ms. */
@@ -29,15 +28,6 @@ const QUIET_TAIL_BYTES = 4_096;
 const CANCELLED = { kind: 'cancelled', why: 'the restart was cancelled or replaced' };
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */
 export const CLAIM_WAIT_MS = 10_000;
-/** How far up from a hook Claude Code may be: a hook run through a shell has the shell between. */
-const CLAUDE_HOPS = 3;
-/**
- * The Claude Code that runs `pid`: `pid` itself or one of its first parents, from one listing of every process (each
- * look starts a PowerShell on Windows, and a slow hook is killed at Claude Code's timeout); undefined when none is.
- */
-export async function claudeProcessOf(processes, pid) {
-    return (await processes.lineage(pid))?.slice(0, CLAUDE_HOPS).find(isClaudeProcess)?.pid;
-}
 /** The pending request this restart was started for; undefined once it was cancelled, taken or replaced. */
 async function pendingOf(deps, plan) {
     const request = await deps.store.restart(plan.id);
@@ -288,7 +278,7 @@ export async function runRestart(deps, plan) {
             }
             continue;
         }
-        if (!isClaudeProcess(claude)) {
+        if (!deps.isSessionProcess(claude)) {
             await deps.store.clearRestart(plan.id);
             return { kind: 'failed', why: `process ${claude.pid} is ${claude.name}, not Claude Code` };
         }

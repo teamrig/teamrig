@@ -162,6 +162,12 @@ describe('parseConfig', () => {
     assert.deepEqual(config.launch, { alpha: { model: 'opus', effort: 'max' }, bravo: { model: 'claude-haiku-5-5' } });
   });
 
+  it("keeps another host's model name: which names run is the host's models port, asked where a name is used", () => {
+    const { config, issues } = parseConfig({ ...ROSTER, launch: { alpha: { model: 'gpt-5' }, bravo: { model: 'gemini-2.5-pro' } } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.launch, { alpha: { model: 'gpt-5' }, bravo: { model: 'gemini-2.5-pro' } });
+  });
+
   it("keeps a session's project folder, and refuses one that is relative or on more than one line", () => {
     const kept = parseConfig({ ...ROSTER, launch: { alpha: { project: '/srv/app' } } });
     assert.deepEqual(kept.issues, []);
@@ -180,12 +186,12 @@ describe('parseConfig', () => {
   it('reports launch settings of strangers and wrong models and efforts, and leaves each out', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,
-      launch: { alpha: { model: 'gpt-5', effort: 'high' }, bravo: { model: 'sonnet', effort: 'turbo' }, zulu: { model: 'opus' }, constructor: {}, charlie: 'opus' },
+      launch: { alpha: { model: 'opus; rm -rf /', effort: 'high' }, bravo: { model: 'sonnet', effort: 'turbo' }, zulu: { model: 'opus' }, constructor: {}, charlie: 'opus' },
     });
     assert.deepEqual(
       issues.map((issue) => `${issue.path}: ${issue.message}`),
       [
-        'launch.alpha.model: expected a model alias (default, best, fable, opus, sonnet, haiku, opusplan, fable[1m], opus[1m], sonnet[1m], opusplan[1m]) or a model id starting claude- (got "gpt-5")',
+        'launch.alpha.model: expected a model name: a letter or digit, then letters, digits or . _ @ : / -, at most 100 characters (got "opus; rm -rf /")',
         'launch.bravo.effort: expected one of low, medium, high, xhigh, max (got "turbo")',
         'launch.zulu: is not one of the sessions',
         'launch.constructor: is not one of the sessions',
@@ -214,6 +220,16 @@ describe('parseConfig', () => {
     const { config, issues } = parseConfig({ ...ROSTER, leadBoundary: { searchNudgeAt: 51 } });
     assert.deepEqual(paths(issues), ['leadBoundary.searchNudgeAt']);
     assert.equal(config.leadBoundary.searchNudgeAt, 3);
+  });
+
+  it('reads changes.sources as known source ids, every source by default, and refuses an unknown one', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.changes, { sources: [] });
+    assert.deepEqual(parseConfig({ ...ROSTER, changes: { sources: ['git', 'notes', 'git'] } }).config.changes.sources, ['git', 'notes']);
+    const { config, issues } = parseConfig({ ...ROSTER, changes: { sources: ['git', 'jira'] } });
+    assert.deepEqual(paths(issues), ['changes.sources[1]']);
+    assert.match(issues[0]?.message ?? '', /one of notes, register, git/);
+    assert.deepEqual(config.changes.sources, ['git']);
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, changes: { sources: 'auto' } }).issues), ['changes.sources']);
   });
 
   it('reads exec.path as absolute folders, empty by default, and refuses one against the cwd or holding a PATH separator', () => {

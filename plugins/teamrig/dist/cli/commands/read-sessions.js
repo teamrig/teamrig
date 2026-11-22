@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { describeLaunch, launchOf } from "../../config/launch.js";
+import { leadLaunchOf } from "../host.js";
 import { LeadTree } from "../../config/lead-tree.js";
 import { Roster } from "../../config/roster.js";
 import { PlainLogFile } from "../../core/log-file.js";
@@ -90,9 +91,11 @@ async function teamInputOf(runtime, tree, own, { kit, config }) {
     const tabs = new TabNeedStore(files, kit.paths);
     const records = await new SessionRecordStore(files, kit.paths).readEach(config.sessions);
     const members = [];
+    // Resolved as the session starts: the lead's unset keys show the host's lead default, so a reader hard-codes none.
+    const leadDefault = leadLaunchOf(runtime);
     for (const id of config.sessions) {
         const mark = marks.get(id);
-        const launch = launchOf(config, id);
+        const launch = launchOf(config, id, leadDefault);
         members.push({
             id,
             name: roster.nameOf(id) ?? id,

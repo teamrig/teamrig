@@ -3,6 +3,7 @@ import { dispatchedEnvOf } from "../../core/child-env.js";
 import { errorMessage, isRecord, numberField, stringField } from "../../core/guards.js";
 import { claimParked, hasParked, park, parkedDirOf } from "../../delivery/parked.js";
 import { parseArgs, UsageError } from "../args.js";
+import { childEnvOf } from "../host.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { QUEUE_FLAGS, QUEUE_SWITCHES } from "./queue-args.js";
 /** The dispatcher's record in the detached folder: its pid, written only by the dispatcher that holds the folder. */
@@ -109,7 +110,7 @@ function stepRuntimeOf(runtime, step, out) {
     return {
         ...runtime,
         cwd: step.cwd,
-        env: dispatchedEnvOf(runtime.env, step.env),
+        env: dispatchedEnvOf(runtime.env, step.env, childEnvOf(runtime).session),
         out,
         steps: { run: (request) => runtime.steps.run({ ...request, log: request.log ?? step.log }) },
     };

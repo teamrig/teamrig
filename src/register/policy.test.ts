@@ -1362,17 +1362,17 @@ describe('RegisterPolicy, the GitHub import', () => {
 
   it('adds a task sourced github, keyed by its ref, even under a title the team already tracks', () => {
     const team = testTask({ title: 'Fix login', ref: 'gh:acme/web#8' });
-    assert.deepEqual(policy.importAdd(ISSUE, stateOf(team)), {
+    assert.deepEqual(policy.importAdd('github', ISSUE, stateOf(team)), {
       ok: true,
       value: { title: 'Fix login', description: null, owner: 'bravo', source: 'github', ref: 'gh:acme/web#7', priority: 1, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, workClass: null, prepares: null },
     });
-    assert.equal(error(policy.importAdd(ISSUE, stateOf(team, IMPORTED))), 'T2 already has ref gh:acme/web#7');
-    assert.equal(error(policy.importAdd({ ...ISSUE, owner: 'octocat' }, EMPTY)), 'owner octocat is not a session on this team');
+    assert.equal(error(policy.importAdd('github', ISSUE, stateOf(team, IMPORTED))), 'T2 already has ref gh:acme/web#7');
+    assert.equal(error(policy.importAdd('github', { ...ISSUE, owner: 'octocat' }, EMPTY)), 'owner octocat is not a session on this team');
   });
 
   it('refuses a task for an issue a team task links to: that task tracks it', () => {
     const linked = testTask({ id: 'T5', title: 'Login fails', ref: 'gh:acme/web#7' });
-    assert.equal(error(policy.importAdd(ISSUE, stateOf(linked))), 'T5 already has ref gh:acme/web#7');
+    assert.equal(error(policy.importAdd('github', ISSUE, stateOf(linked))), 'T5 already has ref gh:acme/web#7');
   });
 
   it('keeps the github source for the import: a session can neither add nor move a task to it', () => {
@@ -1382,39 +1382,39 @@ describe('RegisterPolicy, the GitHub import', () => {
   });
 
   it('updates only the title and priority that differ, on its own tasks only', () => {
-    assert.deepEqual(policy.importUpdate(IMPORTED, { title: 'Fix the login', priority: 1 }, 'title changed on GitHub'), {
+    assert.deepEqual(policy.importUpdate('github', IMPORTED, { title: 'Fix the login', priority: 1 }, 'title changed on GitHub'), {
       ok: true,
       value: { changes: { title: 'Fix the login' }, note: 'title changed on GitHub' },
     });
-    assert.equal(error(policy.importUpdate(IMPORTED, { title: 'Fix login', priority: 1 }, 'again')), 'nothing to change');
-    assert.equal(error(policy.importUpdate(IMPORTED, { priority: 9 }, 'p9')), 'priority p9 is not one of blocker, p0, p1, p2, p3, p4, p5');
-    assert.equal(error(policy.importUpdate(TASK, { title: 'Other' }, 'x')), 'T1 is not a GitHub task (source lead): the import changes only its own');
+    assert.equal(error(policy.importUpdate('github', IMPORTED, { title: 'Fix login', priority: 1 }, 'again')), 'nothing to change');
+    assert.equal(error(policy.importUpdate('github', IMPORTED, { priority: 9 }, 'p9')), 'priority p9 is not one of blocker, p0, p1, p2, p3, p4, p5');
+    assert.equal(error(policy.importUpdate('github', TASK, { title: 'Other' }, 'x')), 'T1 is not a github task (source lead): the github import changes only its own');
   });
 
   it('carries the issue body as the description, and follows it, emptied too, whatever the add demands', () => {
-    const added = policy.importAdd({ ...ISSUE, description: 'Steps:\n1. log in' }, EMPTY);
+    const added = policy.importAdd('github', { ...ISSUE, description: 'Steps:\n1. log in' }, EMPTY);
     assert.equal(added.ok && added.value.description, 'Steps:\n1. log in');
-    assert.deepEqual(policy.importUpdate(IMPORTED, { description: 'Now with steps.' }, 'description as on GitHub'), {
+    assert.deepEqual(policy.importUpdate('github', IMPORTED, { description: 'Now with steps.' }, 'description as on GitHub'), {
       ok: true,
       value: { changes: { description: 'Now with steps.' }, note: 'description as on GitHub' },
     });
     const described = testTask({ ...IMPORTED, description: 'Now with steps.' });
-    assert.deepEqual(policy.importUpdate(described, { description: null }, 'description as on GitHub'), {
+    assert.deepEqual(policy.importUpdate('github', described, { description: null }, 'description as on GitHub'), {
       ok: true,
       value: { changes: { description: null }, note: 'description as on GitHub' },
     });
-    assert.equal(error(policy.importUpdate(described, { description: 'Now with steps.' }, 'again')), 'nothing to change');
+    assert.equal(error(policy.importUpdate('github', described, { description: 'Now with steps.' }, 'again')), 'nothing to change');
   });
 
   it('judges a task whose line left the description out by its mark: the same body changes nothing, an edited one is written', () => {
     const cut = cutTask(testTask({ ...IMPORTED, description: 'Now with steps.' }));
     assert.equal(cut.description, null);
-    assert.equal(error(policy.importUpdate(cut, { description: 'Now with steps.' }, 'again')), 'nothing to change');
-    assert.deepEqual(policy.importUpdate(cut, { description: 'Now with stops.' }, 'description as on GitHub'), {
+    assert.equal(error(policy.importUpdate('github', cut, { description: 'Now with steps.' }, 'again')), 'nothing to change');
+    assert.deepEqual(policy.importUpdate('github', cut, { description: 'Now with stops.' }, 'description as on GitHub'), {
       ok: true,
       value: { changes: { description: 'Now with stops.' }, note: 'description as on GitHub' },
     });
-    assert.deepEqual(policy.importUpdate(cut, { description: null }, 'description as on GitHub'), {
+    assert.deepEqual(policy.importUpdate('github', cut, { description: null }, 'description as on GitHub'), {
       ok: true,
       value: { changes: { description: null }, note: 'description as on GitHub' },
     });
@@ -1422,21 +1422,46 @@ describe('RegisterPolicy, the GitHub import', () => {
 
   it('opens, finishes or drops its own tasks, a done with the issue url and no skill', () => {
     const working = testTask({ ...IMPORTED, status: 'in-progress' });
-    assert.deepEqual(policy.importStatus(working, { status: 'done', note: 'closed on GitHub as completed', evidence: URL }), {
+    assert.deepEqual(policy.importStatus('github', working, { status: 'done', note: 'closed on GitHub as completed', evidence: URL }), {
       ok: true,
       value: { status: 'done', note: 'closed on GitHub as completed', evidence: URL, skill: null },
     });
-    assert.equal(policy.importStatus({ ...IMPORTED, status: 'done' }, { status: 'open', note: 'reopened on GitHub' }).ok, true);
-    assert.equal(policy.importStatus(IMPORTED, { status: 'dropped', note: 'closed on GitHub as not planned' }).ok, true);
-    assert.equal(error(policy.importStatus(IMPORTED, { status: 'done', note: 'closed' })), 'done needs evidence: the issue url');
-    assert.equal(error(policy.importStatus(IMPORTED, { status: 'open', note: 'again' })), 'T2 is already open');
-    assert.equal(error(policy.importStatus(IMPORTED, { status: 'in-progress' })), 'the GitHub import sets only open, done, dropped, not in-progress');
+    assert.equal(policy.importStatus('github', { ...IMPORTED, status: 'done' }, { status: 'open', note: 'reopened on GitHub' }).ok, true);
+    assert.equal(policy.importStatus('github', IMPORTED, { status: 'dropped', note: 'closed on GitHub as not planned' }).ok, true);
+    assert.equal(error(policy.importStatus('github', IMPORTED, { status: 'done', note: 'closed' })), 'done needs evidence: the issue url');
+    assert.equal(error(policy.importStatus('github', IMPORTED, { status: 'open', note: 'again' })), 'T2 is already open');
+    assert.equal(error(policy.importStatus('github', IMPORTED, { status: 'in-progress' })), 'the github import sets only open, done, dropped, not in-progress');
   });
 
   it('refuses the github actor on any task that is not the import own, on both status paths', () => {
-    assert.equal(error(policy.importStatus(TASK, { status: 'done', evidence: URL })), 'T1 is not a GitHub task (source lead): the import changes only its own');
+    assert.equal(error(policy.importStatus('github', TASK, { status: 'done', evidence: URL })), 'T1 is not a github task (source lead): the github import changes only its own');
     assert.equal(error(policy.setStatus(TASK, GITHUB_ACTOR, { status: 'done', evidence: URL, skill: 'none' }, CTX)), 'only the owner (alpha) sets the status of T1');
     assert.equal(error(policy.setStatus(IMPORTED, GITHUB_ACTOR, { status: 'done', evidence: URL, skill: 'none' }, CTX)), 'only the owner (bravo) sets the status of T2');
+  });
+});
+
+describe('RegisterPolicy, an import per tracker', () => {
+  const policy = new RegisterPolicy(testConfig());
+  const JIRA_ISSUE: ImportInput = { title: 'Fix login', description: null, owner: 'bravo', ref: 'jira:ENG-12', priority: 1 };
+  const JIRA_TASK: Task = testTask({ id: 'T3', title: 'Fix login', owner: 'bravo', source: 'jira', ref: 'jira:ENG-12', priority: 1 });
+  const GITHUB_TASK: Task = testTask({ id: 'T2', title: 'Fix login', owner: 'bravo', source: 'github', ref: 'gh:acme/web#7', priority: 1 });
+
+  it('sources a Jira task jira, and refuses a ref of another tracker for it', () => {
+    const added = policy.importAdd('jira', JIRA_ISSUE, EMPTY);
+    assert.equal(added.ok && added.value.source, 'jira');
+    assert.equal(error(policy.importAdd('jira', { ...JIRA_ISSUE, ref: 'gh:acme/web#7' }, EMPTY)), 'ref gh:acme/web#7 is not a jira ref: it starts with jira:');
+    assert.equal(error(policy.importAdd('github', JIRA_ISSUE, EMPTY)), 'ref jira:ENG-12 is not a github ref: it starts with gh:');
+  });
+
+  it("changes only its own tracker's tasks, never another import's", () => {
+    assert.equal(policy.importUpdate('jira', JIRA_TASK, { title: 'Fix the login' }, 'title as on Jira').ok, true);
+    assert.equal(error(policy.importUpdate('jira', GITHUB_TASK, { title: 'Other' }, 'x')), 'T2 is not a jira task (source github): the jira import changes only its own');
+    assert.equal(error(policy.importStatus('github', JIRA_TASK, { status: 'dropped' })), 'T3 is not a github task (source jira): the github import changes only its own');
+    assert.equal(error(policy.importStatus('jira', JIRA_TASK, { status: 'in-progress' })), 'the jira import sets only open, done, dropped, not in-progress');
+  });
+
+  it('keeps the jira source for the import too', () => {
+    assert.equal(error(policy.add({ ...INPUT, source: 'jira' }, EMPTY)), 'source jira is kept for the tasks teamrig issue sync imports');
   });
 });
 /** True when the reasons ask a decision or an approval, which take a card. */

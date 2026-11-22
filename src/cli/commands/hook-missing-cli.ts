@@ -1,6 +1,7 @@
 import { KIT_NAME } from '../../core/home.ts';
 import { missingCliLine, missingCliOf } from '../../hooks/missing-cli.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
+import { stepsIfKnown } from '../host.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readHookInput, writeReply } from './hook-input.ts';
 
@@ -14,7 +15,7 @@ export async function missingCli(args: ParsedArgs, runtime: CliRuntime): Promise
   const { event } = await readHookInput(runtime);
   const on = event === undefined ? undefined : missingCliOf(event);
   if (on !== undefined) {
-    writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME) });
+    writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) });
   }
   return EXIT.ok;
 }

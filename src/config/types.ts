@@ -5,6 +5,7 @@ import type { CoreRuleKey } from '../rules/keys.ts';
 import type { AdmissionMode } from '../delivery/admission.ts';
 import type { NeedKind } from '../tabs/need-kind.ts';
 import type { ServiceCommand } from '../permissions/service-commands.ts';
+import type { ChangeSourceId } from '../changes/ids.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 9;
@@ -220,6 +221,12 @@ export interface LockConfig {
   readonly ttlMs: number;
   readonly pollMs: number;
   readonly waitMs: number;
+}
+
+/** Where `teamrig changes` reads what changed in the project (src/changes/). */
+export interface ChangesConfig {
+  /** The change sources to read, in the order their entries win; empty: every source that applies to the project. */
+  readonly sources: readonly ChangeSourceId[];
 }
 
 /** Privileged commands a reviewer approved, run by `teamrig exec` (src/exec/). */
@@ -1708,8 +1715,8 @@ export function isEffortLevel(value: unknown): value is EffortLevel {
 
 /**
  * The Claude Code model and effort a session starts on (`claude --model`, `claude --effort`), and the folder it
- * starts in; an unset key leaves Claude Code's own choice. The lead takes `DEFAULT_LEAD_LAUNCH` for each model
- * and effort key it leaves unset.
+ * starts in; an unset key leaves Claude Code's own choice. The lead takes its host's lead default for each
+ * model and effort key it leaves unset (src/config/launch.ts `launchOf`).
  */
 export interface LaunchConfig {
   /** A Claude Code model alias, such as `best` or `opus`, or a full model id starting `claude-`. */
@@ -1814,6 +1821,7 @@ export interface KitConfig {
   readonly contextFiles: ContextFilesConfig;
   readonly lock: LockConfig;
   readonly exec: ExecConfig;
+  readonly changes: ChangesConfig;
   readonly pushGuard: PushGuardConfig;
   readonly packageGuard: PackageGuardConfig;
   readonly commitGuard: CommitGuardConfig;
@@ -1873,7 +1881,7 @@ export interface KitConfig {
   readonly statusLine: StatusLineConfig;
   /** Goal-first ranking: work classes, the WSJF score, the WIP rule and the class allocation (T2076). */
   readonly focus: FocusConfig;
-  /** Each session's Claude Code model and effort, by id; the lead's unset keys take `DEFAULT_LEAD_LAUNCH`. */
+  /** Each session's Claude Code model and effort, by id; the lead's unset keys take its host's lead default. */
   readonly launch: Readonly<Record<string, LaunchConfig>>;
   readonly paths: PathsConfig;
 }

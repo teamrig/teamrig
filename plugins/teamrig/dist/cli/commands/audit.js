@@ -1,7 +1,7 @@
 import { formatAddress } from "../../core/address.js";
 import { shortSha256 } from "../../register/hand-step.js";
 import { onePositional, UsageError } from "../args.js";
-import { handStepPin } from "../hand-step-file.js";
+import { auditPin } from "../hand-step-file.js";
 import { callerOf, taskIdOf } from "../inputs.js";
 import { findTeam, openKit, sessionIdOf } from "../kit.js";
 import { RefusedError } from "../runtime.js";
@@ -62,7 +62,7 @@ async function subjectOf(args, runtime) {
     if ((file === undefined) === (verdict === undefined)) {
         throw new UsageError('audit takes one of --file <the hand step file> or --verdict "<the security verdict on the task\'s card>"');
     }
-    return file === undefined ? { kind: 'verdict', text: verdict ?? '' } : { kind: 'file', pin: await handStepPin(runtime, 'file', file) };
+    return file === undefined ? { kind: 'verdict', text: verdict ?? '' } : { kind: 'file', pin: await auditPin(runtime, file) };
 }
 /**
  * `audit T<n> --file <path>|--verdict ".." [--note ".."] [--team <child>]`: the security reviewer read a hand step

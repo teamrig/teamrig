@@ -14,11 +14,14 @@ export const GH_PROGRAM = 'gh';
  * assignees (a claim the sync made that ran out), the creation of one of the labels teamrig makes (the status push
  * and issue label), one sub-issue or blocked-by link added (issue links), and `issue watch`'s two probes,
  * conditional reads that tell whether a repository changed (isWatchProbe), the read of one failed Actions job's log
- * (the pull request monitor names its failed step), and the reads of a repository's comments, review comments, issue
- * and pull request bodies changed since a time and of one pull request's reviews (the mention scan). The runner
- * refuses any other command line before it starts: no title or state edit besides the close, no reopen, removal of
- * more than one assignee at once, label create but teamrig's own, label edit or delete, link removal, merge, branch
- * delete, run rerun or cancel, or log download.
+ * (the pull request monitor names its failed step), the reads of a repository's comments, review comments, issue
+ * and pull request bodies changed since a time and of one pull request's reviews (the mention scan), and `pr approve`
+ * and `pr merge`'s lines (T4817): one pull request's stand read, its APPROVE review pinned to a full head sha with a
+ * fixed body, and its landing pinned to that sha, by enqueue where the repository has a merge queue, else a rebase
+ * merge. The runner refuses any other command line before it starts: no title or state edit besides the close, no
+ * reopen, removal of more than one assignee at once, label create but teamrig's own, label edit or delete, link
+ * removal, a merge not pinned to a head, a review other than that approval, branch delete, run rerun or cancel, or
+ * log download.
  *
  * isIssueQuery is true for `gh api graphql -f query=<a text of queries.ts> -f <variable>=<value> ...` and nothing more: the query
  * word for word, each variable one it declares and given once, every field raw (`-f`). Any other flag (`-F`,
@@ -607,11 +610,97 @@ export function isIssueTypeSet(args) {
     const pair = pairs?.length === 1 ? pairs[0] : undefined;
     return call?.method === 'PATCH' && call.part === 'issue' && pair?.[0] === 'type' && FIELD_TEXT.test(pair[1]);
 }
-/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, or a mention scan's read. */
+/** A full commit sha, as a landing pins one: GitHub's own `expectedHeadOid` and `sha` take only these. */
+const FULL_SHA = /^[0-9a-f]{40}$/;
+/** A pull request's GraphQL node id as GitHub writes one: `PR_` then a bounded run of base64url characters. */
+const PULL_NODE_ID = /^PR_[A-Za-z0-9_-]{1,100}$/;
+/**
+ * The read of where one pull request stands before `pr approve` or `pr merge` writes (T4817): its node id, state,
+ * draft, head, base, whether GitHub finds it conflicting and whether it is queued, and the repository's default branch
+ * and whether that branch lands through a merge queue (Repository.mergeQueue, which names the default branch's queue;
+ * PullRequest.isMergeQueueEnabled is not served everywhere).
+ */
+export const PULL_STAND_QUERY = 'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}}}';
+/** The enqueue of one pull request pinned to its head, word for word as the ship tool's queue landing sends it (tools/ship/merge-queue.ts). */
+export const ENQUEUE_MUTATION = 'mutation($id:ID!,$head:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}';
+/**
+ * The command line that reads where one pull request stands: PULL_STAND_QUERY with its owner and name raw, and its
+ * number typed (`-F`), since GraphQL takes an Int; isPullStandRead holds the number to digits, so no `@file` rides on it.
+ */
+export function pullStandArgs(target) {
+    const [owner = '', name = ''] = target.repo.split('/');
+    return ['api', 'graphql', RAW_FIELD, `query=${PULL_STAND_QUERY}`, RAW_FIELD, `owner=${owner}`, RAW_FIELD, `name=${name}`, TYPED_FIELD, `number=${target.number}`];
+}
+/** `number=<n>`: a pull request's number, digits only. */
+const NUMBER_PAIR = /^number=([1-9][0-9]{0,9})$/u;
+/** True for pullStandArgs's line and nothing more: the one query, a repository name, a number of digits. */
+export function isPullStandRead(args) {
+    const owner = (args[5] ?? '').startsWith('owner=') ? (args[5] ?? '').slice('owner='.length) : '';
+    const name = (args[7] ?? '').startsWith('name=') ? (args[7] ?? '').slice('name='.length) : '';
+    const number = NUMBER_PAIR.exec(args[9] ?? '')?.[1];
+    const repo = `${owner}/${name}`;
+    return number !== undefined && REPO_NAME.test(repo) && sameArgs(args, pullStandArgs({ repo, number: Number(number) }));
+}
+/**
+ * The body of the review `pr approve` posts: a fixed line saying it is automated and lead-reviewed, naming the head it
+ * approves and no session or task (an outside repository shows it), built here and never from a caller's text, so
+ * the runner can hold the write to it word for word.
+ */
+export function approvalBody(head) {
+    return `Automated approval by teamrig at ${head}, after the team lead reviewed and approved this head.`;
+}
+/** `repos/<owner>/<name>/pulls/<number>/` then reviews or merge. */
+const PULL_WRITE_PATH = /^repos\/([^/]+\/[^/]+)\/pulls\/([1-9][0-9]{0,9})\/(reviews|merge)$/u;
+/** The repository and number a pull request write's path names, for its `tail`; undefined when it names none. */
+function pullWriteOf(args, tail) {
+    const match = PULL_WRITE_PATH.exec(args[1] ?? '');
+    const repo = match?.[1];
+    return match === null || repo === undefined || match[3] !== tail || !REPO_NAME.test(repo) ? undefined : { repo, number: Number(match[2]) };
+}
+/** The command line that approves one pull request at `head` (a full sha), with approvalBody as the review's text. */
+export function pullApproveArgs(target, head) {
+    return ['api', `repos/${target.repo}/pulls/${target.number}/reviews`, '-X', 'POST', RAW_FIELD, `commit_id=${head}`, RAW_FIELD, 'event=APPROVE', RAW_FIELD, `body=${approvalBody(head)}`];
+}
+/**
+ * True for pullApproveArgs's line and nothing more: one APPROVE review of one pull request, pinned to a full sha, its
+ * body approvalBody of that sha word for word. A comment or changes-requested review, inline comments, another body
+ * or another flag is refused.
+ */
+export function isPullApprove(args) {
+    const target = pullWriteOf(args, 'reviews');
+    const field = args[5] ?? '';
+    const head = field.startsWith('commit_id=') ? field.slice('commit_id='.length) : '';
+    return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullApproveArgs(target, head));
+}
+/** The command line that puts one pull request, by its node id, in its repository's merge queue, pinned to `head`. */
+export function pullEnqueueArgs(id, head) {
+    return ['api', 'graphql', RAW_FIELD, `query=${ENQUEUE_MUTATION}`, RAW_FIELD, `id=${id}`, RAW_FIELD, `head=${head}`];
+}
+/** True for pullEnqueueArgs's line and nothing more: the one mutation, a pull request's node id, a full sha. */
+export function isPullEnqueue(args) {
+    const id = (args[5] ?? '').startsWith('id=') ? (args[5] ?? '').slice('id='.length) : '';
+    const head = (args[7] ?? '').startsWith('head=') ? (args[7] ?? '').slice('head='.length) : '';
+    return PULL_NODE_ID.test(id) && FULL_SHA.test(head) && sameArgs(args, pullEnqueueArgs(id, head));
+}
+/**
+ * The command line that merges one pull request of a repository with no merge queue, by rebase, pinned to `head`
+ * (GitHub refuses the merge when the head moved).
+ */
+export function pullMergeArgs(target, head) {
+    return ['api', `repos/${target.repo}/pulls/${target.number}/merge`, '-X', 'PUT', RAW_FIELD, 'merge_method=rebase', RAW_FIELD, `sha=${head}`];
+}
+/** True for pullMergeArgs's line and nothing more: one rebase merge pinned to a full sha. A title, message or other method is refused. */
+export function isPullMerge(args) {
+    const target = pullWriteOf(args, 'merge');
+    const field = args[7] ?? '';
+    const head = field.startsWith('sha=') ? field.slice('sha='.length) : '';
+    return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullMergeArgs(target, head));
+}
+/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a mention scan's read, or a pull request's stand read, approval or landing. */
 export class GhRefusedError extends Error {
     name = 'GhRefusedError';
     constructor(args) {
-        super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, and to read the posts that may mention a user: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+        super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
     }
 }
 /** True for each fixed command line the runner starts, an area label's create among them; it also makes a label a read label file named (isFileLabelCreate). */
@@ -641,7 +730,11 @@ export function isAllowedGh(args) {
         isWatchProbe(args) ||
         isJobLogRead(args) ||
         isMentionRead(args) ||
-        isReviewRead(args));
+        isReviewRead(args) ||
+        isPullStandRead(args) ||
+        isPullApprove(args) ||
+        isPullEnqueue(args) ||
+        isPullMerge(args));
 }
 /** The lists the mention scan pages through, each changed since a time: comments on issues and pull requests, inline review comments, and the issues and pull requests themselves for their bodies. */
 export const MENTION_LISTS = ['issues/comments', 'pulls/comments', 'issues'];

@@ -290,7 +290,7 @@ A guard hook that cannot answer blocks the call instead of letting it through
 
 | Output | Fix |
 | --- | --- |
-| teamrig `blocked this call: its <hook> guard could not load (...)`, `crashed (...)`, `ended with exit <n>` or `printed something other than its JSON answer (...)` | The install is broken: run `claude plugin update teamrig@teamrig` and restart the session; if that does not clear it, tell your lead. |
+| teamrig `blocked this call: its <hook> guard could not load (...)`, `crashed (...)`, `ended with exit <n>` or `printed something other than its JSON answer (...)` | The install is broken: update the teamrig plugin and restart the session; if that does not clear it, tell your lead. |
 | teamrig `blocked this call: its <hook> guard gave no answer within 12 s` | Retry the call; if every call times out, the host is overloaded or the guard hangs: tell your lead. |
 
 ## Failures (exit 1)

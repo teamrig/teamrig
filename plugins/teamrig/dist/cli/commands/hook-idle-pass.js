@@ -6,6 +6,7 @@ import { hooklessReader } from "../../restore/hookless.js";
 import { SessionLog } from "../../sessions/log.js";
 import { SessionRecordStore } from "../../sessions/record.js";
 import { postToHolder, sessionNameOn } from "../holder-team.js";
+import { stepsIfKnown } from "../host.js";
 import { hooklessReopenLine, hooklessReopensOf } from "../hookless-reopen.js";
 import { idlePassOf, passLineOf } from "../idle-pass.js";
 import { readIdlePassState } from "../idle-pass-check.js";
@@ -39,8 +40,13 @@ async function runPass(runtime, kit, config, roster, folderOf, now) {
  * lead, or the delivery owner for the lead's own tab (`hooklessReader`), on its team, a team above included,
  * and in both modes as a log record, with why the line was not posted. One not posted is still marked told, so a
  * refusing inbox gets no line a minute. Returns each hookless reopen's time by session, for the next pass to skip.
+ * A host that names no steps gets no line, as it has no restart to name: the pass's acts go on without it.
  */
 async function tellHookless(runtime, kit, config, roster, hookless, previous, now) {
+    const steps = stepsIfKnown(runtime);
+    if (steps === undefined) {
+        return {};
+    }
     const { mode } = config.open.idle;
     const zone = teamZone(config, runtime);
     const told = {};
@@ -50,7 +56,7 @@ async function tellHookless(runtime, kit, config, roster, hookless, previous, no
             continue;
         }
         const to = hooklessReader({ session: reopen.id }, config.roles, kit.paths.team);
-        const line = hooklessReopenLine(reopen, sessionNameOn(to.team, kit.paths.team, reopen.id), roster, zone, now);
+        const line = hooklessReopenLine(reopen, sessionNameOn(to.team, kit.paths.team, reopen.id), roster, steps, zone, now);
         const problem = mode === 'on' ? await postToHolder(runtime, { kit, config }, to, { from: KIT_NAME, text: line }, postUrgentLine) : undefined;
         await runtime.files.append(kit.paths.idlePassLog, formatIdlePassRecord({ kind: 'hookless', at: now, mode, id: reopen.id, line, problem }));
     }

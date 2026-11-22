@@ -264,13 +264,19 @@ function routingEnvFindings({ env, settingsEnv }) {
     const unreadable = settingsEnv.flatMap((settings) => settings.kind === 'unreadable' ? [{ kind: 'settings-json', detail: `${settings.path} is not a JSON object, so doctor could not check its env block for ${names}` }] : []);
     return [...overrides, ...unreadable];
 }
-/** A session whose launch names a model but no effort: it starts at that model's default effort, whatever the team meant. */
+/**
+ * A session whose launch names a model the host does not run, which `open` refuses; else one that names a model but no
+ * effort: it starts at that model's default effort, whatever the team meant.
+ */
 function launchFindings({ launches, roster }) {
-    return launches.flatMap(({ id, launch }) => {
+    return launches.flatMap(({ id, launch, modelProblem }) => {
+        const name = roster.nameOf(id) ?? id;
+        if (modelProblem !== undefined) {
+            return [{ kind: 'launch-model', detail: `${name} (session ${id}) launches on model ${launch.model ?? ''}, which this host does not run (${modelProblem}): \`open\` refuses it until launch.${id}.model is fixed in the team config` }];
+        }
         if (isDefaultModel(launch.model) || launch.effort !== undefined) {
             return [];
         }
-        const name = roster.nameOf(id) ?? id;
         const detail = `${name} (session ${id}) launches on model ${launch.model} with no effort, so it runs at that model's default effort (medium on Opus, Sonnet and Haiku 5.5): set launch.${id}.effort in the team config`;
         return [{ kind: 'launch-effort', detail }];
     });

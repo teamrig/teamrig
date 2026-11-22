@@ -25,6 +25,10 @@ import {
   isLabelRemove,
   isLinkAdd,
   isMentionRead,
+  isPullApprove,
+  isPullEnqueue,
+  isPullMerge,
+  isPullStandRead,
   isReviewRead,
   isWatchProbe,
   LabelFileReads,
@@ -220,6 +224,42 @@ export function ghPull(repo: string, number: number, spec: PullSpec = {}): JsonR
   };
 }
 
+/** How one pull request stands, as a test sets it; each part left out takes ghPullStand's default. */
+export interface PullStandSpec {
+  readonly id?: string;
+  readonly state?: 'OPEN' | 'CLOSED' | 'MERGED';
+  readonly isDraft?: boolean;
+  readonly head?: string;
+  readonly base?: string;
+  readonly defaultBranch?: string;
+  readonly mergeQueue?: boolean;
+  readonly queued?: boolean;
+  readonly mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+  /** The head's statusCheckRollup state, null for a head with no checks; SUCCESS when left out. */
+  readonly checks?: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED' | null;
+}
+
+/** The full head sha a stand reads when a test gives none. */
+export const STAND_HEAD = 'a'.repeat(40);
+
+/** The `repository` of an answer to the pull stand query (gh.ts PULL_STAND_QUERY): open on main with no queue unless `spec` says otherwise. */
+export function ghPullStand(spec: PullStandSpec = {}): JsonRecord {
+  return {
+    defaultBranchRef: { name: spec.defaultBranch ?? 'main' },
+    mergeQueue: spec.mergeQueue === true ? { id: 'MQ_1' } : null,
+    pullRequest: {
+      id: spec.id ?? 'PR_kwDOAbc',
+      state: spec.state ?? 'OPEN',
+      isDraft: spec.isDraft ?? false,
+      headRefOid: spec.head ?? STAND_HEAD,
+      baseRefName: spec.base ?? 'main',
+      mergeable: spec.mergeable ?? 'MERGEABLE',
+      mergeQueueEntry: spec.queued === true ? { state: 'QUEUED' } : null,
+      commits: { nodes: [{ commit: { statusCheckRollup: spec.checks === null ? null : { state: spec.checks ?? 'SUCCESS' } } }] },
+    },
+  };
+}
+
 /** A closing reference as GitHub sends it: a number in `repo`, or `owner/name#n` in another repository. */
 function closingNode(repo: string): (closes: number | string) => JsonRecord {
   return (closes) => {
@@ -353,6 +393,8 @@ export class FakeGh implements GhRunner {
   /** REST posts by `<repo> <list>`, and reviews by `<repo>#<number>`. */
   private readonly posts = new Map<string, readonly JsonRecord[]>();
   private readonly reviews = new Map<string, readonly JsonRecord[]>();
+  /** Pull stand answers' `repository` by `<repo>#<number>`. */
+  private readonly stands = new Map<string, JsonRecord>();
   private readonly postFailures = new Map<string, GhResult>();
   /** Set by `pages`; else each query's own page size. */
   private pageSize: number | undefined;
@@ -446,6 +488,12 @@ export class FakeGh implements GhRunner {
   /** From now on, pull request `number` of `repo` has these reviews (as restReview builds them). */
   holdsReviews(repo: string, number: number, reviews: readonly JsonRecord[]): this {
     this.reviews.set(`${repo}#${number}`, reviews);
+    return this;
+  }
+
+  /** From now on, a stand read of pull request `number` of `repo` answers this repository (as ghPullStand builds it); one a test gave none is Not Found. */
+  holdsPullStand(repo: string, number: number, repository: JsonRecord): this {
+    this.stands.set(`${repo}#${number}`, repository);
     return this;
   }
 
@@ -589,6 +637,14 @@ export class FakeGh implements GhRunner {
     }
     if (isLinkAdd(request.args)) {
       return this.writeFailure ?? this.link(request.args);
+    }
+    if (isPullStandRead(request.args)) {
+      const repo = ghRepoOf(request.args);
+      const repository = this.stands.get(`${repo}#${(request.args[9] ?? '').slice('number='.length)}`);
+      return this.canned.get(repo) ?? (repository === undefined ? notVisible(repo) : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ data: { repository } }), stderr: '' });
+    }
+    if (isPullApprove(request.args) || isPullEnqueue(request.args) || isPullMerge(request.args)) {
+      return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };
     }
     const repo = ghRepoOf(request.args);
     const canned = this.canned.get(repo);

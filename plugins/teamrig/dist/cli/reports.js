@@ -21,6 +21,10 @@ export const MAX_FLAGS_PER_KIND = 5;
 export const MAX_WAITING_ROWS = 5;
 /** The order of the status counts on a short `list` owner line: what moves first, what waits last. */
 const SUMMARY_STATUSES = ['in-progress', 'verifying', 'waiting', 'open', 'done', 'dropped'];
+/** The flags `session` acts on, as its `start` and `check --new` print them: every one for the lead, else {@link ownCheck}'s. */
+export function sessionCheck(report, session, tree) {
+    return session === tree.lead ? report : ownCheck(report, session, tree.groupOf(session));
+}
 /**
  * A report narrowed to what one session acts on, for `start`: the flags of the tasks it owns, of the skills
  * it fixes (only a task's owner sets its status), on itself as a hired session and a SCALE-OUT on its area. A sub-lead

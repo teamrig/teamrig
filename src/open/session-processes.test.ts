@@ -11,7 +11,6 @@ import { FakeSweepHost } from '../testing/fake-sweep-host.ts';
 import { FakeWindowsPowerShell } from '../testing/fake-windows-powershell.ts';
 import {
   EXEC_STUB_MS,
-  isClaudeProcess,
   lineageOf,
   nodeSessionProcesses,
   parsePosixChildren,
@@ -20,25 +19,61 @@ import {
   parseWindowsListing,
   parseWindowsProcess,
   parseWindowsProcesses,
-  runsClaude,
+  runsSession,
+  sessionProcessOf,
   type ListedProcess,
+  type ProcessInfo,
 } from './session-processes.ts';
 
-describe('isClaudeProcess', () => {
-  it('knows Claude Code by its binary, or by Node.js running its script', () => {
-    const info = (name: string, commandLine: string) => ({ pid: 1, parentPid: 0, name, commandLine });
-    assert.equal(isClaudeProcess(info('claude.exe', '')), true);
-    assert.equal(isClaudeProcess(info('Claude', '')), true);
-    assert.equal(isClaudeProcess(info('node', 'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js')), true);
-    assert.equal(isClaudeProcess(info('node.exe', 'node C:/tools/build.js')), false);
-    assert.equal(isClaudeProcess(info('claude-helper', '')), false);
+describe('runsSession', () => {
+  it("tells a pid that still runs a session's host program from none, a gone one and one another program has since", async () => {
+    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'agent-desk', commandLine: '' }).add({ pid: 42, parentPid: 1, name: 'notepad.exe', commandLine: '' });
+    const asked: string[] = [];
+    const isSessionProcess = (info: ProcessInfo): boolean => {
+      asked.push(info.name);
+      return info.name === 'agent-desk';
+    };
+    assert.deepEqual(await Promise.all([41, 42, 43, undefined].map((pid) => runsSession(processes, pid, isSessionProcess))), [true, false, false, false]);
+    assert.deepEqual(asked, ['agent-desk', 'notepad.exe'], 'the host is asked of a running process alone');
+  });
+
+  it('knows no program itself: a process no host calls its own runs no session', async () => {
+    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'claude.exe', commandLine: '' });
+    assert.equal(await runsSession(processes, 41, () => false), false);
   });
 });
 
-describe('runsClaude', () => {
-  it('tells a pid that still runs Claude Code from none, a gone one and one another program has since', async () => {
-    const processes = new FakeSessionProcesses().add({ pid: 41, parentPid: 1, name: 'claude.exe', commandLine: '' }).add({ pid: 42, parentPid: 1, name: 'notepad.exe', commandLine: '' });
-    assert.deepEqual(await Promise.all([41, 42, 43, undefined].map((pid) => runsClaude(processes, pid))), [true, false, false, false]);
+describe('sessionProcessOf', () => {
+  const process = (pid: number, parentPid: number, name: string, commandLine: string): ProcessInfo => ({ pid, parentPid, name, commandLine });
+  const isDesk = (info: ProcessInfo): boolean => info.name === 'agent-desk' || (info.name === 'node' && info.commandLine.includes('agent-desk'));
+
+  it("finds the session's host program a hook runs under: its parent, or past a shell between", async () => {
+    const processes = new FakeSessionProcesses()
+      .add(process(10, 1, 'agent-desk', 'agent-desk'))
+      .add(process(11, 10, 'bash.exe', 'bash -c "node main.js hook stop"'))
+      .add(process(20, 1, 'node', 'node /usr/lib/node_modules/agent-desk/cli.js'));
+    assert.equal(await sessionProcessOf(processes, 10, isDesk), 10);
+    assert.equal(await sessionProcessOf(processes, 11, isDesk), 10);
+    assert.equal(await sessionProcessOf(processes, 20, isDesk), 20, 'the host run by a runtime');
+    assert.deepEqual([processes.described, processes.lineages], [[], [10, 11, 20]], 'one listing per look');
+  });
+
+  it('finds none when a process is gone, or the host is further up than a hook would be', async () => {
+    const processes = new FakeSessionProcesses()
+      .add(process(30, 31, 'bash', 'bash'))
+      .add(process(31, 32, 'bash', 'bash'))
+      .add(process(32, 33, 'bash', 'bash'))
+      .add(process(33, 1, 'agent-desk', 'agent-desk'));
+    assert.equal(await sessionProcessOf(processes, 31, isDesk), 33);
+    assert.equal(await sessionProcessOf(processes, 30, isDesk), undefined, 'three parents up');
+    assert.equal(await sessionProcessOf(processes, 99, isDesk), undefined, 'gone');
+    assert.equal(await sessionProcessOf(new FakeSessionProcesses().add(process(40, 41, 'bash', 'bash')), 40, isDesk), undefined, 'its parent is gone');
+    assert.equal(await sessionProcessOf(processes.hideLineage(), 33, isDesk), undefined, 'the system would not list the processes');
+  });
+
+  it('knows no program itself: under a process no host calls its own, none is found', async () => {
+    const processes = new FakeSessionProcesses().add(process(10, 1, 'claude.exe', 'claude')).add(process(11, 10, 'bash', 'bash'));
+    assert.equal(await sessionProcessOf(processes, 11, () => false), undefined);
   });
 });
 

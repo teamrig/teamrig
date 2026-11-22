@@ -1,4 +1,4 @@
-import { isDefaultModel, isModel, launchOf } from "../config/launch.js";
+import { isDefaultModel, isModel, launchModelProblem, launchOf } from "../config/launch.js";
 import { LeadTree } from "../config/lead-tree.js";
 import { ownerAsk } from "../config/tree.js";
 import { isRecord } from "../core/guards.js";
@@ -65,7 +65,7 @@ function policyProblem(config, request) {
  * it, so a burst hire stays on the lead's (src/hiring/burst-hire.ts). It gets no fixed daily budget: like any session,
  * its part of the team's daily budget follows its share and its queued work (src/budget/parts.ts).
  */
-export function planHire(file, config, request) {
+export function planHire(file, config, request, host) {
     const refusal = hirerProblem(config, request.by) ?? policyProblem(config, request);
     if (refusal !== undefined) {
         return { ok: false, problem: refusal };
@@ -83,7 +83,8 @@ export function planHire(file, config, request) {
     if (!Array.isArray(sessions)) {
         return { ok: false, problem: 'the config has no sessions list to add to' };
     }
-    const modelProblem = request.model === undefined ? undefined : isModel(request.model);
+    // The name's shape first, then whether this host runs it: a name of another provider's would not start.
+    const modelProblem = request.model === undefined ? undefined : (isModel(request.model) ?? launchModelProblem({ model: request.model }, host));
     if (modelProblem !== undefined) {
         return { ok: false, problem: `--model ${request.model}: ${modelProblem}` };
     }
@@ -92,7 +93,7 @@ export function planHire(file, config, request) {
         return reviewBy;
     }
     const lead = config.roles.lead;
-    const leads = lead === undefined ? {} : launchOf(config, lead);
+    const leads = lead === undefined ? {} : launchOf(config, lead, host.leadDefault);
     const model = request.model ?? leads.model;
     const effort = request.effort ?? leads.effort;
     const launch = { ...(isDefaultModel(model) ? {} : { model }), ...(effort === undefined ? {} : { effort }) };

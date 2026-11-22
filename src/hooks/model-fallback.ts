@@ -1,5 +1,5 @@
 import type { Files } from '../core/files.ts';
-import type { EntryKind, TranscriptReader } from '../ports/host/index.ts';
+import type { EntryKind, HostModels, TranscriptReader } from '../ports/host/index.ts';
 
 /**
  * A model switch the host made on its own and wrote to the session's transcript: its safeguards
@@ -60,10 +60,10 @@ export async function readLastFallback(reader: TranscriptReader, files: Files, t
 }
 
 /**
- * The line that tells the user the host switched the session's model, with the command that
+ * The line that tells the user the host switched the session's model, with the step that
  * switches back: to `wanted`, the team config's model, else the model the session ran before.
  */
-export function fallbackLine(name: string, fallback: ModelFallback, wanted: string | undefined): string {
+export function fallbackLine(models: HostModels, name: string, fallback: ModelFallback, wanted: string | undefined): string {
   const why = fallback.category === undefined ? '' : ` (${fallback.category})`;
-  return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: Claude Code switched after its safeguards stopped a reply${why} and keeps it for this session; type /model ${wanted ?? fallback.from} to switch back`;
+  return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: the host switched after its safeguards stopped a reply${why} and keeps it for this session; type ${models.switchModelStep(wanted ?? fallback.from)} to switch back`;
 }

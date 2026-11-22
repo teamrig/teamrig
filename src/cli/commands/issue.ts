@@ -3,26 +3,22 @@ import { SecretScanner } from '../../core/secrets.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { issueRef } from '../../sync/map.ts';
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from '../../issues/assign.ts';
-import { CLOSE_REASONS, hostKindOf, parseIssueTarget, targetText, type CloseReason, type HostKind, type IssueTarget } from '../../issues/host.ts';
+import { CLOSE_REASONS, parseIssueTarget, targetText, type CloseReason, type IssueTarget } from '../../issues/host.ts';
 import { bareRef, refOf } from '../../issues/ref.ts';
 import { checkReply, sendReply, type FollowUp, type ReplyWrite } from '../../issues/reply.ts';
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from '../../issues/similar.ts';
 import { holderOf, sessionLogins } from '../../issues/status-push.ts';
 import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue, type IssueWrite } from '../../issues/write.ts';
 import type { Task } from '../../register/fold.ts';
-import { RegisterPolicy } from '../../register/policy.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
 import { onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
 import { withDescriptions } from '../card-texts.ts';
 import { secretFilesOf } from '../host.ts';
-import { callerOf } from '../inputs.ts';
-import { hostsOf, type Hosts } from '../issue-hosts.ts';
-import { sessionIdOf } from '../kit.ts';
+import type { Hosts } from '../issue-hosts.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { CONNECTOR_OFF } from '../connector-off.ts';
-import { githubOffBy } from './issue-sync-auto.ts';
 import { set } from './register.ts';
 import { openTeam } from './register-team.ts';
+import { checkedRepo, hostsAfter, type Posted } from './team-repo.ts';
 
 /**
  * `issue reply <owner/name#n> --body-file <path> [--status <status>] [--pr <n>] [--followup <title>
@@ -396,45 +392,3 @@ async function hostsFor(args: ParsedArgs, runtime: CliRuntime, repo: string, pos
   return hostsAfter(await checkedRepo(args, runtime, repo), runtime, posted);
 }
 
-/** A text to post and the flag that gave it, which a refusal names. */
-interface Posted {
-  readonly flag: string;
-  readonly text: string;
-}
-
-/** The team's config and the host kind of a repository the caller may write to. */
-interface CheckedRepo {
-  readonly config: KitConfig;
-  readonly kind: HostKind;
-}
-
-/** The team's config and `repo`'s host kind once the caller is on the team and the repository is one of the team's. */
-async function checkedRepo(args: ParsedArgs, runtime: CliRuntime, repo: string): Promise<CheckedRepo> {
-  const team = await openTeam(runtime, 'read');
-  const notOnTeam = new RegisterPolicy(team.config, team.above).checkCaller(sessionIdOf(team.roster, callerOf(args.flags, runtime.env)));
-  if (notOnTeam !== undefined) {
-    throw new RefusedError(notOnTeam);
-  }
-  const kind = hostKindOf(repo, team.config);
-  if (kind === undefined) {
-    const listed = team.config.github.repos.join(', ');
-    throw new RefusedError(`${repo} is not one of the team's repositories: list it under github.repos in the team config${listed === '' ? '' : ` (now ${listed})`}`);
-  }
-  return { config: team.config, kind };
-}
-
-/** The hosts of a checked repository once the text to post (if any) may be posted; undefined, after an OFF line, while GitHub is off. */
-async function hostsAfter(checked: CheckedRepo, runtime: CliRuntime, posted: Posted | undefined): Promise<Hosts | undefined> {
-  const { config, kind } = checked;
-  const scanner = new SecretScanner(config.register.secretPatterns);
-  const refused = posted === undefined ? undefined : postRefusal(posted.flag, posted.text, scanner);
-  if (refused !== undefined) {
-    throw new RefusedError(refused);
-  }
-  const offBy = githubOffBy(runtime.env);
-  if (offBy !== undefined) {
-    runtime.out.stdout(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was written`);
-    return undefined;
-  }
-  return hostsOf(kind, runtime, scanner, config.github.stamp, config.connectors);
-}

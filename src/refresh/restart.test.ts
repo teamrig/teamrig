@@ -5,6 +5,7 @@ import { SHELL_RECHECK_MS } from '../open/end-tab.ts';
 import type { ProcessInfo } from '../open/session-processes.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
+import { testSessionProcess } from '../testing/host.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { RestoreRegistry, restoreSessionsDir } from '../restore/registry.ts';
@@ -12,7 +13,7 @@ import type { EffortLevel } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
 import { askFileOf, holdWhyFileOf, outcomeFileOf, type ClearMode } from '../mod/clear-hand.ts';
 import { ClearAsks, type ClearAsk, type PostedClearAsk } from './clear-asks.ts';
-import { CLAIM_WAIT_MS, claudeProcessOf, GIVE_UP_MS, LOOKUP_FAILED, NO_HOLD_REASON, personHoldOf, restartMayAct, runRestart, SILENT_MOD, type RestartDeps, type RestartPlan, type TabOpening } from './restart.ts';
+import { CLAIM_WAIT_MS, GIVE_UP_MS, LOOKUP_FAILED, NO_HOLD_REASON, personHoldOf, restartMayAct, runRestart, SILENT_MOD, type RestartDeps, type RestartPlan, type TabOpening } from './restart.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import type { RestartRequest } from './state.ts';
 import { RefreshStore } from './store.ts';
@@ -114,6 +115,7 @@ class World {
       asks: this.asks,
       restore: new RestoreRegistry(this.files, restoreSessionsDir(join('/', 'kit'))),
       processes: this.processes,
+      isSessionProcess: testSessionProcess,
       clock: this.clock,
       sleep: async (ms) => {
         this.sleeps += 1;
@@ -355,6 +357,15 @@ describe('runRestart', () => {
     const node: ProcessInfo = { ...CLAUDE, name: 'node.exe', commandLine: 'node C:\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js' };
     const script = await new World({ running: [node] }).arm();
     assert.equal((await runRestart(script.deps, PLAN)).kind, 'restarted');
+  });
+
+  it("ends the program the hosts call a session's, whatever its name, and none that no host does", async () => {
+    const desk: ProcessInfo = { ...CLAUDE, name: 'agent-desk', commandLine: 'agent-desk' };
+    const told = await new World({ running: [desk] }).arm();
+    assert.equal((await runRestart({ ...told.deps, isSessionProcess: (process) => process.name === desk.name }, PLAN)).kind, 'restarted');
+    const untold = await new World({ running: [desk] }).arm();
+    assert.deepEqual(await runRestart(untold.deps, PLAN), { kind: 'failed', why: 'process 4100 is agent-desk, not Claude Code' });
+    assert.deepEqual(untold.processes.ends, []);
   });
 
   it('cancels when its Claude Code has already ended', async () => {
@@ -756,33 +767,5 @@ describe('runRestart with shells under its Claude Code', () => {
     const world = await new World({ running: [TAB_SHELL, CLAUDE, mcp, cmd, deeper] }).arm();
     assert.equal((await runRestart(world.deps, PLAN)).kind, 'restarted');
     assert.equal(world.clock.now() - START, DELAY_MS + CLAIM_WAIT_MS, 'no second look');
-  });
-});
-
-describe('claudeProcessOf', () => {
-  const process = (pid: number, parentPid: number, name: string, commandLine: string): ProcessInfo => ({ pid, parentPid, name, commandLine });
-
-  it('finds the Claude Code a hook runs under: its parent, or past a shell between', async () => {
-    const processes = new FakeSessionProcesses()
-      .add(process(10, 1, 'claude.exe', 'claude'))
-      .add(process(11, 10, 'bash.exe', 'bash -c "node main.js hook stop"'))
-      .add(process(20, 1, 'node', 'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js'));
-    assert.equal(await claudeProcessOf(processes, 10), 10);
-    assert.equal(await claudeProcessOf(processes, 11), 10);
-    assert.equal(await claudeProcessOf(processes, 20), 20, 'Claude Code run by Node.js');
-    assert.deepEqual([processes.described, processes.lineages], [[], [10, 11, 20]], 'one listing per look');
-  });
-
-  it('finds none when a process is gone, or Claude Code is further up than a hook would be', async () => {
-    const processes = new FakeSessionProcesses()
-      .add(process(30, 31, 'bash', 'bash'))
-      .add(process(31, 32, 'bash', 'bash'))
-      .add(process(32, 33, 'bash', 'bash'))
-      .add(process(33, 1, 'claude', 'claude'));
-    assert.equal(await claudeProcessOf(processes, 31), 33);
-    assert.equal(await claudeProcessOf(processes, 30), undefined, 'three parents up');
-    assert.equal(await claudeProcessOf(processes, 99), undefined, 'gone');
-    assert.equal(await claudeProcessOf(new FakeSessionProcesses().add(process(40, 41, 'bash', 'bash')), 40), undefined, 'its parent is gone');
-    assert.equal(await claudeProcessOf(processes.hideLineage(), 33), undefined, 'the system would not list the processes');
   });
 });

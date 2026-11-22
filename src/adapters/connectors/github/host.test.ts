@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MANAGED_LABEL_SPECS, MAX_COMMENT, withStampFooter, type HostPull, type IssueDraft, type JsonRecord } from '../../../plugin-api/index.ts';
 import { secretScanner } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials, TEST_OWNERS } from '../../../testing/fake-credentials.ts';
-import { commentNode, FakeGh, ghIssue, ghPull, restComment } from '../../../testing/fake-gh.ts';
+import { commentNode, FakeGh, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
 import {
   assigneeReadArgs,
   isAssigneeRead,
@@ -31,6 +31,10 @@ import {
   isUserRead,
   LabelFileReads,
   labelCreateArgs,
+  pullApproveArgs,
+  pullEnqueueArgs,
+  pullMergeArgs,
+  pullStandArgs,
   userReadArgs,
   type GhRequest,
   type GhResult,
@@ -740,5 +744,50 @@ describe('GitHubIssueHost.watch', () => {
   it('drops the mark of a path whose answer has no usable tag, so the next probe reads it whole', async () => {
     const untagged: GhRunner = { run: async () => ({ end: { kind: 'exited', code: 0 }, stdout: 'HTTP/2.0 200 OK\r\n\r\n[]', stderr: '' }) };
     assert.deepEqual(await hostWith(untagged).watch('acme/web', new Map([[ISSUES, '"o"']])), { kind: 'changed', marks: new Map() });
+  });
+});
+
+describe('GitHubIssueHost pull landing (T4817)', () => {
+  const PULL = { repo: 'acme/web', number: 12 };
+  const STAND = { id: 'PR_kwDOAbc', state: 'open', draft: false, head: STAND_HEAD, base: 'main', defaultBranch: 'main', mergeQueue: true, queued: false, conflicts: false, checks: 'passing' } as const;
+
+  it("reads where a pull request stands with the owner's token: read, missing when GitHub answers Not Found, failed on an answer off its shape", async () => {
+    const gh = new FakeGh().holdsPullStand('acme/web', 12, ghPullStand({ mergeQueue: true }));
+    const host = hostWith(gh);
+    assert.deepEqual(await host.pullStand(PULL), { kind: 'read', pull: STAND });
+    assert.deepEqual(gh.ran.map((request) => request.args), [pullStandArgs(PULL)]);
+    assert.equal(typeof gh.ran[0]?.env['GH_TOKEN'], 'string');
+    assert.deepEqual(await host.pullStand({ repo: 'acme/web', number: 13 }), { kind: 'missing' });
+    const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"data":{}}', stderr: '' });
+    assert.deepEqual(await hostWith(odd).pullStand(PULL), { kind: 'failed', reason: 'gh printed no pull request for acme/web#12' });
+  });
+
+  it('gives missing when GitHub answers the pull request null', async () => {
+    const gh = new FakeGh().holdsPullStand('acme/web', 12, { ...ghPullStand(), pullRequest: null });
+    assert.deepEqual(await hostWith(gh).pullStand(PULL), { kind: 'missing' });
+  });
+
+  it('approves at the head through the allowlisted review, and gives the refusal in plain words', async () => {
+    const gh = new FakeGh();
+    assert.deepEqual(await hostWith(gh).approvePull(PULL, STAND_HEAD), { kind: 'done' });
+    assert.deepEqual(gh.ran.map((request) => request.args), [pullApproveArgs(PULL, STAND_HEAD)]);
+    const refused = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Can not approve your own pull request (HTTP 422)\n' });
+    const end = await hostWith(refused).approvePull(PULL, STAND_HEAD);
+    assert.equal(end.kind === 'failed' && end.reason.includes('approve acme/web#12') && end.reason.includes('Can not approve your own pull request'), true, JSON.stringify(end));
+  });
+
+  it('lands through the merge queue where the repository has one, else merges by rebase, each pinned to the head read', async () => {
+    const queued = new FakeGh();
+    assert.deepEqual(await hostWith(queued).landPull(PULL, STAND), { kind: 'enqueued' });
+    assert.deepEqual(queued.ran.map((request) => request.args), [pullEnqueueArgs('PR_kwDOAbc', STAND_HEAD)]);
+    const merged = new FakeGh();
+    assert.deepEqual(await hostWith(merged).landPull(PULL, { ...STAND, mergeQueue: false }), { kind: 'merged' });
+    assert.deepEqual(merged.ran.map((request) => request.args), [pullMergeArgs(PULL, STAND_HEAD)]);
+  });
+
+  it("gives gh's own line when the landing is refused, as for a head that moved or a check GitHub still requires", async () => {
+    const moved = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Head branch was modified. Review and try the merge again. (HTTP 409)\n' });
+    const end = await hostWith(moved).landPull(PULL, { ...STAND, mergeQueue: false });
+    assert.equal(end.kind === 'failed' && end.reason.includes('merge acme/web#12') && end.reason.includes('Head branch was modified'), true, JSON.stringify(end));
   });
 });

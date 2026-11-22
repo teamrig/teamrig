@@ -1,10 +1,12 @@
 import { stringField, type JsonRecord } from '../../core/guards.ts';
 import { ENV, KIT_NAME } from '../../core/home.ts';
+import type { HostSteps } from '../../ports/host/index.ts';
 import { planSlash, SESSION_FLAG, sessionReads, withSession, type CommandTable } from '../../slash/plan.ts';
 import { joinWords, splitWords } from '../../slash/words.ts';
 import { refuseUnlessPerson } from '../agent-run.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import type { CommandHelp } from '../help.ts';
+import { hostNameOf, stepsOf } from '../host.ts';
 import { openKit, rosterOf } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readModRequest, sessionTeam, teamSessionOf, type HookOrigin } from './hook-input.ts';
@@ -74,10 +76,10 @@ function tabRuntime(runtime: CliRuntime, tab: Tab): CliRuntime {
   return { ...runtime, env, readStdin: () => Promise.resolve('') };
 }
 
-/** The lines `/teamrig` alone adds under the short help: what runs as the tab's session, and what asks first. */
-export function slashRule(table: CommandTable): string {
+/** The lines `/teamrig` alone adds under the short help, in the host's own words: what runs as the tab's session, and what asks first. */
+export function slashRule(table: CommandTable, steps: HostSteps, cli: string): string {
   return [
-    `In a Claude Code tab, /${KIT_NAME} <command> runs it there. Without --${SESSION_FLAG}, ${sessionReads(table).join(', ')}`,
+    `In a ${cli} tab, ${steps.pluginCommand(KIT_NAME)} <command> runs it there. Without --${SESSION_FLAG}, ${sessionReads(table).join(', ')}`,
     `run as this tab's session; a command that changes the team's files shows the line with this tab's session`,
     `and asks first. Those run only when you type them, never when another session, a channel or claude -p sends them.`,
   ].join('\n');
@@ -121,7 +123,7 @@ export function slashCommand(deps: SlashDeps): (args: ParsedArgs, runtime: CliRu
     }
     const plan = planSlash(words.words, deps.table);
     if (plan.kind === 'help') {
-      runtime.out.stdout(`${deps.help.forCommand(undefined)}\n${slashRule(deps.table)}`);
+      runtime.out.stdout(`${deps.help.forCommand(undefined)}\n${slashRule(deps.table, stepsOf(runtime), hostNameOf(runtime))}`);
       return EXIT.ok;
     }
     if (plan.kind === 'internal') {

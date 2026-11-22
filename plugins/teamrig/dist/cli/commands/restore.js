@@ -12,7 +12,6 @@ import { teamWindowOf } from "../../open/terminals.js";
 import { encodePrompt } from "../../open/prompt.js";
 import { shellCommand } from "../../open/quote.js";
 import { plainSessionEnv } from "../../open/session-env.js";
-import { runsClaude } from "../../open/session-processes.js";
 import { RestoreArchive, restoreArchiveDir } from "../../restore/archive.js";
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from "../../restore/registry.js";
 import { checkRestore, previewRestore, runRestore } from "../../restore/run.js";
@@ -21,7 +20,8 @@ import { noRoomText } from "../../sessions/headroom.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
-import { cacheBinOf, transcriptsOf } from "../host.js";
+import { cacheBinOf, childEnvOf, transcriptsOf } from "../host.js";
+import { runsHostSession } from "../session-process.js";
 import { loadTree } from "../tree.js";
 import { claudeExit, claudeProgramOf, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
 /** The title of the tab `restore check` opens for the restore. */
@@ -161,7 +161,7 @@ function roomWaitMsOf(teams) {
  */
 async function endSession(runtime, entry) {
     const { pid } = entry;
-    if (pid === undefined || !(await runsClaude(runtime.sessionProcesses, pid))) {
+    if (pid === undefined || !(await runsHostSession(runtime, pid))) {
         return { kind: 'gone' };
     }
     return runtime.sessionProcesses.end(pid, 'force');
@@ -187,7 +187,7 @@ async function restoreDepsOf(runtime, terminal) {
         projectsDir,
         platform: runtime.platform,
         roomWaitMs: roomWaitMsOf(teams),
-        stillRunning: (entry) => runsClaude(runtime.sessionProcesses, entry.pid),
+        stillRunning: (entry) => runsHostSession(runtime, entry.pid),
         transcriptOf: (entry) => finder.find(entry),
         modifiedAt: (path) => runtime.files.modifiedAt(path),
         end: (entry) => endSession(runtime, entry),
@@ -303,7 +303,7 @@ export async function restoreResume(args, runtime) {
     const effort = effortFlag(args.flags.get('effort'));
     const encoded = args.flags.get('encoded-prompt');
     const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
-    const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime));
+    const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
     const { command, prefix } = await claudeProgramOf(runtime, env);
     runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
     const claudeArgs = [...prefix, '--resume', claudeSession, ...(effort === undefined ? [] : ['--effort', effort]), ...(prompt === undefined ? [] : [prompt])];

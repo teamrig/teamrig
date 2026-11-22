@@ -9,7 +9,7 @@ import { EXIT } from "../runtime.js";
 import { teamRegister } from "../team-register.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
 import { githubOffBy } from "./issue-sync-auto.js";
-import { shown } from "./issue-sync.js";
+import { shown } from "./issue-sync-lines.js";
 /**
  * `issue links [--repo <owner/name>] [--yes]`: puts the task tree on the GitHub issues of the team's `github.repos`.
  * Each `after` edge between two tasks mirrored in one repository (issues/links.ts) makes the whole blocked by the

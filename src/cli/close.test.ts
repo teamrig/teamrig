@@ -14,6 +14,7 @@ import { SessionRecordStore } from '../sessions/record.ts';
 import { HOLDING_BUDGET, holdAlpha } from '../testing/budget-hold.ts';
 import { APP, CLAUDE_SESSION, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { ok } from '../testing/hired-team.ts';
+import { hostRunning } from '../testing/host.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
@@ -217,6 +218,16 @@ describe('teamrig close', () => {
     const unlisted = await close({ ...alpha, options: { ...alpha.options, memory: new FakeHostMemory().lists(undefined) } }, ['alpha', '--yes', '--session', 'lead']);
     assertRefused(unlisted, /could not list the host's processes/);
     assert.deepEqual(alpha.processes.ends, []);
+  });
+
+  it("closes a session running in the program its host names, and none whose process no host calls a session's", async () => {
+    const alpha = await runningAlpha();
+    alpha.processes.add({ ...CLAUDE, name: 'agent-desk', commandLine: 'agent-desk' });
+    assertRefused(await close(alpha, ['alpha', '--yes', '--session', 'lead']), /alpha \(session alpha\) is not running: nothing to close/);
+    assert.deepEqual(alpha.processes.ends, []);
+    const told = await close({ ...alpha, options: { ...alpha.options, host: hostRunning('agent-desk') } }, ['alpha', '--session', 'lead']);
+    assert.equal(told.code, 0, told.stdout.join('\n'));
+    assert.match(told.stdout[0] ?? '', /^CLOSE app-alpha \(session alpha\): quiet 75 min/);
   });
 
   it('keeps open a session with work it can start, one quiet too briefly, and one running background work', async () => {

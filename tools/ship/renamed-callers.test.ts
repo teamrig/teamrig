@@ -49,6 +49,8 @@ interface World {
   origins?: Readonly<Record<string, string>>;
   /** `<rev>:<file>` to its text. */
   shows?: Readonly<Record<string, string>>;
+  /** `<left> <right>` to their merge-base; a pair not listed has `left` as its merge-base, as a tip cut from main does. */
+  mergeBases?: Readonly<Record<string, string | null>>;
 }
 
 /** Files, folders and git from plain records: a folder is any prefix of a file's path. */
@@ -79,6 +81,10 @@ function fakeWorld(world: World): { deps: RenamedCallersDeps; logs: string[]; li
       },
       originOf: checkout => world.origins?.[checkout] ?? null,
       gitShow: (rev, file) => world.shows?.[`${rev}:${file}`] ?? null,
+      mergeBase: (left, right) => {
+        const pair = `${left} ${right}`;
+        return world.mergeBases !== undefined && pair in world.mergeBases ? (world.mergeBases[pair] ?? null) : left;
+      },
       log: line => logs.push(line),
     },
     logs,
@@ -221,6 +227,29 @@ test('finds every consumer still calling only an old name: checkouts, their hook
   assert.deepEqual(logs.slice(2), [`renamed callers: git grep failed in ${WEB}: its files are not scanned`]);
 });
 
+test('a branch cut before main dropped a rename measures from the merge-base, so only its own rename counts (T4956)', () => {
+  const FORK = 'f0f0f0f0f0';
+  const forkText = renamedText([
+    ['integrate', 'merge'],
+    ['heavy', 'queue'],
+  ]);
+  const { deps, logs } = fakeWorld({
+    ...CONSUMERS,
+    shows: { ...shows(BASE_TEXT, TIP_TEXT), [`${FORK}:${RENAMED_FILE}`]: forkText },
+    mergeBases: { [`${BASE} ${TIP}`]: FORK },
+  });
+  const scan = scanRenamedCallers(REQUEST, deps);
+  assert.equal(scan.kind, 'callers');
+  assert.deepEqual(scan.kind === 'callers' ? scan.renames : null, new Map([['claim', 'freeze']]), 'heavy, dropped on main after the fork, is not the branch adding it');
+  assert.equal(logs[0], 'renamed callers: this change renames claim to freeze; reading consumer checkouts, skills and memory');
+});
+
+test('with no merge-base the gate logs it and measures from main, the stricter read', () => {
+  const { deps, logs } = fakeWorld({ shows: shows(TIP_TEXT, TIP_TEXT), mergeBases: { [`${BASE} ${TIP}`]: null } });
+  assert.deepEqual(scanRenamedCallers(REQUEST, deps), { kind: 'none' });
+  assert.deepEqual(logs, [`renamed callers: no merge-base of ${BASE} and abc1234, so renames are measured from ${BASE}`]);
+});
+
 test('the refusal names the renames called, counts files and lists the first callers', () => {
   const caller = (path: string, line: number): Caller => ({ path, line, old: 'heavy', renamed: 'queue' });
   const renames = new Map([
@@ -296,6 +325,15 @@ test('the real gate reads git repos, a kit home and a Claude Code folder found f
   );
   assert.deepEqual(logs.slice(1), [`renamed callers: git grep failed in ${gone}: its files are not scanned`]);
   assert.equal(renamedCallersRefusal({ base: tip, tip, repo: 'owner/teamrig' }, home, deps), null);
+
+  // T4956: main drops both renames after a branch was cut from tip; the branch, renaming nothing, still merges.
+  git(shipped, 'checkout', '-q', '-b', 'older', tip);
+  put(join(shipped, 'docs', 'branch.md'), 'a branch change\n');
+  const older = commit(shipped, 'older branch');
+  git(shipped, 'checkout', '-q', '-');
+  put(join(shipped, RENAMED_FILE), BASE_TEXT);
+  const dropped = commit(shipped, 'main drops the renames');
+  assert.equal(renamedCallersRefusal({ base: dropped, tip: older, repo: 'owner/teamrig' }, home, deps), null);
 });
 
 test('reads git grep -n -z output: path, line and the line text, which may hold a NUL', () => {

@@ -6,11 +6,11 @@ const LAUNCHER = '/kit/bin/statusline.mjs';
 /** A status line the person had before, a single command a pipe in front does not split. */
 const THEIRS = 'node "/u/scripts/own-status.cjs"';
 /** Two sessions no liar's fixed answer equals. */
-const FIRST = { sessionId: 'session-7', cwd: '/work/repo', model: 'Model Seven', effort: 'high' };
-const SECOND = { sessionId: 'session-8', cwd: '/work/other', model: 'Model Eight', effort: 'low' };
+const FIRST = { sessionId: 'session-7', cwd: '/work/repo', model: 'Model Seven', effort: 'high', hostVersion: '7.0.1' };
+const SECOND = { sessionId: 'session-8', cwd: '/work/other', model: 'Model Eight', effort: 'low', hostVersion: '8.2.0' };
 /** The fields of a reading a case tells through the world; undefined when the port read nothing. */
 function toldOf(reading) {
-    return reading === undefined ? undefined : { sessionId: reading.sessionId, cwd: reading.cwd, model: reading.model, effort: reading.effort };
+    return reading === undefined ? undefined : { sessionId: reading.sessionId, cwd: reading.cwd, model: reading.model, effort: reading.effort, hostVersion: reading.hostVersion };
 }
 /** The plan of a change that must go through, with the settings it leaves: the plan's own, else the ones it was given. */
 function planned(port, change, settings) {
@@ -21,7 +21,7 @@ function planned(port, change, settings) {
 const CASES = [
     {
         id: 'status-line.reads-input',
-        title: "reads the session's id, folder, model and effort the status input tells",
+        title: "reads the session's id, folder, model, effort and host version the status input tells",
         features: ['budget.status-line'],
         run: ({ port, world }) => {
             for (const told of [FIRST, SECOND]) {
@@ -34,7 +34,7 @@ const CASES = [
         title: 'leaves a field the status input did not tell undefined, the folder empty, never a value of its own making',
         features: ['budget.status-line'],
         run: ({ port, world }) => {
-            assert.deepEqual(toldOf(port.parse(world.status({ sessionId: FIRST.sessionId }))), { sessionId: FIRST.sessionId, cwd: '', model: undefined, effort: undefined });
+            assert.deepEqual(toldOf(port.parse(world.status({ sessionId: FIRST.sessionId }))), { sessionId: FIRST.sessionId, cwd: '', model: undefined, effort: undefined, hostVersion: undefined });
         },
     },
     {
@@ -103,7 +103,7 @@ export function nothingStatusLine() {
  * by writing settings with no status line in them.
  */
 export function yesStatusLine() {
-    const reading = { sessionId: 'session', cwd: '/', agentName: 'agent', model: 'model', effort: 'max', costUsd: 1, contextUsedPct: 1, contextInputTokens: 1 };
+    const reading = { sessionId: 'session', cwd: '/', agentName: 'agent', model: 'model', effort: 'max', hostVersion: '1.0.0', costUsd: 1, contextUsedPct: 1, contextInputTokens: 1 };
     const emptied = () => ({ ok: true, value: { settings: {}, before: undefined, after: undefined } });
     return { world: WORLD, port: { setting: 'line', parse: () => reading, install: emptied, uninstall: emptied } };
 }

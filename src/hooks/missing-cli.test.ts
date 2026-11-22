@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { HookEvent } from '../ports/host/index.ts';
 import { hookEventOf, replyText } from '../testing/host.ts';
+import { OTHER_STEPS, shippedSteps } from '../testing/shipped-steps.ts';
 import { missingCliLine, missingCliOf } from './missing-cli.ts';
 
 function succeeded(toolResponse: unknown, toolName = 'Bash'): HookEvent {
@@ -75,11 +76,16 @@ describe('missingCliOf', () => {
 
 describe('missingCliLine', () => {
   it('names the copy the hooks run, by a path both shells take, and the reload that brings the bare name back', () => {
-    const line = missingCliLine(String.raw`C:\plugins\teamrig\0.9.0\dist\cli\main.js`, 'teamrig');
+    const line = missingCliLine(String.raw`C:\plugins\teamrig\0.9.0\dist\cli\main.js`, 'teamrig', shippedSteps());
     assert.ok(line.startsWith('teamrig: the shell did not find the bare `teamrig` command'));
     assert.ok(line.includes('run the installed copy by its path: `node "C:/plugins/teamrig/0.9.0/dist/cli/main.js" <command> ...`'));
     assert.ok(line.includes('never another copy from the plugin cache'));
     assert.ok(line.endsWith("The user's /reload-plugins brings the bare name back."));
+  });
+
+  it("names the reload as the host's person types it, and none on a host that names no steps", () => {
+    assert.ok(missingCliLine('/opt/teamrig/main.js', 'teamrig', OTHER_STEPS).endsWith("The user's :reload brings the bare name back."));
+    assert.ok(missingCliLine('/opt/teamrig/main.js', 'teamrig', undefined).endsWith('never another copy from the plugin cache (another version).'));
   });
 
   it('hands the line to the model under the event it answers', () => {

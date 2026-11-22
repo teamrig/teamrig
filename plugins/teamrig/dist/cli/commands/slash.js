@@ -4,6 +4,7 @@ import { planSlash, SESSION_FLAG, sessionReads, withSession } from "../../slash/
 import { joinWords, splitWords } from "../../slash/words.js";
 import { refuseUnlessPerson } from "../agent-run.js";
 import { noPositionals } from "../args.js";
+import { hostNameOf, stepsOf } from "../host.js";
 import { openKit, rosterOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { readModRequest, sessionTeam, teamSessionOf } from "./hook-input.js";
@@ -41,10 +42,10 @@ function tabRuntime(runtime, tab) {
     const env = tab.kind === 'no-team' ? runtime.env : { ...runtime.env, [ENV.team]: tab.team };
     return { ...runtime, env, readStdin: () => Promise.resolve('') };
 }
-/** The lines `/teamrig` alone adds under the short help: what runs as the tab's session, and what asks first. */
-export function slashRule(table) {
+/** The lines `/teamrig` alone adds under the short help, in the host's own words: what runs as the tab's session, and what asks first. */
+export function slashRule(table, steps, cli) {
     return [
-        `In a Claude Code tab, /${KIT_NAME} <command> runs it there. Without --${SESSION_FLAG}, ${sessionReads(table).join(', ')}`,
+        `In a ${cli} tab, ${steps.pluginCommand(KIT_NAME)} <command> runs it there. Without --${SESSION_FLAG}, ${sessionReads(table).join(', ')}`,
         `run as this tab's session; a command that changes the team's files shows the line with this tab's session`,
         `and asks first. Those run only when you type them, never when another session, a channel or claude -p sends them.`,
     ].join('\n');
@@ -81,7 +82,7 @@ export function slashCommand(deps) {
         }
         const plan = planSlash(words.words, deps.table);
         if (plan.kind === 'help') {
-            runtime.out.stdout(`${deps.help.forCommand(undefined)}\n${slashRule(deps.table)}`);
+            runtime.out.stdout(`${deps.help.forCommand(undefined)}\n${slashRule(deps.table, stepsOf(runtime), hostNameOf(runtime))}`);
             return EXIT.ok;
         }
         if (plan.kind === 'internal') {

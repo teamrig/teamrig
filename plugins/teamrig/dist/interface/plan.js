@@ -1,6 +1,7 @@
 import { MS_PER_DAY, parseDeadline } from "../core/time.js";
 import { taskNumber } from "../register/fold.js";
 import { ACTIVE_STATUSES } from "../register/model.js";
+import { ownerCardsBySession } from "../register/owner-waits.js";
 import { planBand } from "../register/tree.js";
 /** The `plan` document's body. */
 export function planBody(input) {
@@ -19,7 +20,22 @@ export function planBody(input) {
             .filter((task) => !isActive(task) && asked(task))
             .sort((a, b) => taskNumber(a.id) - taskNumber(b.id))
             .map((task) => ({ id: task.id, workClass: rankedOf(tree.placeOf(task)).workClass })),
+        ownerCards: servedOwnerCards(tasks, input).filter((cards) => input.owner === null || cards.session === input.owner),
     };
+}
+/** Each session's cards on the owner (ownerCardsBySession), a Later card soonest back first; one that reads as no time last. */
+function servedOwnerCards(tasks, input) {
+    const { tree } = input;
+    const served = [];
+    for (const [session, cards] of ownerCardsBySession(tasks, tree, input.ownerMarker, input.requireGate)) {
+        const later = cards.later.map(({ task, until }) => ({ id: task.id, until, back: parseDeadline(until, tree.zone)?.getTime() ?? Number.POSITIVE_INFINITY }));
+        served.push({
+            session,
+            due: cards.due.map((task) => task.id),
+            later: later.sort((a, b) => a.back - b.back).map(({ id, until, back }) => ({ id, until, at: Number.isFinite(back) ? new Date(back).toISOString() : null })),
+        });
+    }
+    return served;
 }
 function plannedTask(task, tree) {
     const place = tree.placeOf(task);

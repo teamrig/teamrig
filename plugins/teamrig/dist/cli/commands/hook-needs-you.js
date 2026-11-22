@@ -4,12 +4,12 @@ import { LockBusyError } from "../../core/lock.js";
 import { showNotice } from "../../meeting/notify.js";
 import { MeetingStore, phaseOf } from "../../meeting/state.js";
 import { focusTab } from "../../open/focus.js";
-import { runsClaude } from "../../open/session-processes.js";
 import { TabNeedStore } from "../../tabs/need.js";
 import { asksFor, NeedsYouSent, offersFocus } from "../../tabs/needs-you.js";
 import { noPositionals } from "../args.js";
 import { fileLockOf } from "../file-locks.js";
 import { EXIT } from "../runtime.js";
+import { runsHostSession } from "../session-process.js";
 import { teamRegister } from "../team-register.js";
 import { readHookInput, readModRequest } from "./hook-input.js";
 import { wakeScopeOf } from "./hook-wake.js";
@@ -34,7 +34,7 @@ async function liveAsks(runtime, scope, own) {
     const tabs = await new TabNeedStore(runtime.files, scope.kit.paths).readAll();
     const members = new Set(scope.roster.ids);
     const asks = asksFor(tabs, own, scope.config.needsYou.kinds).filter((need) => members.has(need.session));
-    const live = await Promise.all(asks.map(async (need) => need.pid === null || (await runsClaude(runtime.sessionProcesses, need.pid))));
+    const live = await Promise.all(asks.map(async (need) => need.pid === null || (await runsHostSession(runtime, need.pid))));
     return asks.filter((_, index) => live[index] === true);
 }
 async function meetingOpen(runtime, scope) {

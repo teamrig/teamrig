@@ -7,7 +7,7 @@ import { effortChangeLine, effortChangeText, effortWriteback, withLaunchEffort, 
 import type { HookEvent } from '../../ports/host/index.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { postToHolder, sessionNameOn } from '../holder-team.ts';
-import { transcriptsIfKept } from '../host.ts';
+import { leadLaunchOf, transcriptsIfKept } from '../host.ts';
 import { checkedNextConfig, configFileJson, configLockOf, requireConfig, teamZone } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { leadAboveOf } from '../tree.ts';
@@ -41,7 +41,7 @@ async function writeLaunchEffort(runtime: CliRuntime, scope: SessionScope, level
   const config = requireConfig(scope.kit, runtime, 'write');
   return configLockOf(runtime, scope.kit, config).run(async (writer) => {
     const file = await configFileJson(runtime, scope.kit.load.path);
-    const from = launchOf(checkedNextConfig(file), scope.id).effort;
+    const from = launchOf(checkedNextConfig(file), scope.id, leadLaunchOf(runtime)).effort;
     if (from === level) {
       return undefined;
     }
@@ -115,7 +115,7 @@ export async function effortWritebackOf(runtime: CliRuntime, scope: SessionScope
     claude,
     transcript: event.transcript,
     running: event.effort,
-    config: launchOf(scope.config, scope.id).effort,
+    config: launchOf(scope.config, scope.id, leadLaunchOf(runtime)).effort,
   });
   if (change === undefined) {
     return { config: updated, lines: [] };

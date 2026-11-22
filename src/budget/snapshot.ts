@@ -19,6 +19,7 @@ import type { RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/ho
  * - `session_id`: the Claude Code session id, also the file name;
  * - `cwd`: the session's folder;
  * - `agent_name`, `model`: the agent's name and the model's display name, or null;
+ * - `effort`, `host_version`: the session's effort level and the version of the host's program, or null or absent;
  * - `rate_limits`: null, or `{ five_hour, seven_day }`, each null or absent, or
  *   `{ used_percentage, resets_at }` (percent used, and the reset in epoch seconds);
  * - `rate_limits_since`: when the session's snapshots began to show these rate limits, ISO 8601 UTC, so
@@ -47,6 +48,10 @@ export interface StatusSnapshot {
   readonly cwd: string;
   readonly agentName: string | null;
   readonly model: string | null;
+  /** The session's effort level, on a host and a model that take one. */
+  readonly effort: string | null;
+  /** The version of the host's program running the session. */
+  readonly hostVersion: string | null;
   readonly rateLimits: RateLimits | null;
   /** When the session's snapshots began to show `rateLimits`: the reading was taken by then; null: by `ts`. */
   readonly rateLimitsSince: string | null;
@@ -114,6 +119,8 @@ export function snapshotOfStatus(source: StatusSource, input: string, now: numbe
     cwd: reading.cwd,
     agentName: reading.agentName ?? null,
     model: reading.model ?? null,
+    effort: reading.effort ?? null,
+    hostVersion: reading.hostVersion ?? null,
     rateLimits,
     rateLimitsSince: rateLimits === null ? null : ts,
     rateLimitsAfter: null,
@@ -125,7 +132,7 @@ export function snapshotOfStatus(source: StatusSource, input: string, now: numbe
 
 /**
  * The session's effort level as the host's status line reads it in its status input; undefined without one, as for
- * a model that takes none. The status line shows it; the snapshot does not keep it.
+ * a model that takes none. The status line shows it, and the snapshot keeps it for the commit stamp.
  */
 export function effortOfStatus(statusLine: Pick<StatusLine, 'parse'>, input: string): string | undefined {
   return statusLine.parse(input)?.effort;
@@ -144,6 +151,8 @@ export function formatSnapshot(snapshot: StatusSnapshot): string {
     cwd: snapshot.cwd,
     agent_name: snapshot.agentName,
     model: snapshot.model,
+    effort: snapshot.effort,
+    host_version: snapshot.hostVersion,
     rate_limits: limits === null ? null : { five_hour: storedWindow(limits.fiveHour), seven_day: storedWindow(limits.sevenDay) },
     rate_limits_since: snapshot.rateLimitsSince,
     rate_limits_after: snapshot.rateLimitsAfter,
@@ -172,6 +181,8 @@ export function parseSnapshot(text: string): StatusSnapshot | undefined {
     cwd: stringField(stored, 'cwd') ?? '',
     agentName: textOrNull(stored['agent_name']),
     model: textOrNull(stored['model']),
+    effort: textOrNull(stored['effort']),
+    hostVersion: textOrNull(stored['host_version']),
     rateLimits,
     rateLimitsSince: since,
     rateLimitsAfter: rateLimits === null ? null : timeUpTo(stored['rate_limits_after'], since ?? ts, false),

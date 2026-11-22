@@ -4,6 +4,8 @@
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
 import { PERMISSIONS_CONTRACT } from './host/permissions.ts';
+import { MODELS_CONTRACT } from './host/models.ts';
+import { STEPS_CONTRACT } from './host/steps.ts';
 import { PLUGIN_CONTRACT } from './host/plugin.ts';
 import { STATUS_LINE_CONTRACT } from './host/status-line.ts';
 import { TRANSCRIPT_CONTRACT } from './host/transcript.ts';
@@ -21,6 +23,8 @@ export { nothingUsage, USAGE_CONTRACT, yesUsage, type UsageCase, type UsageSubje
 export { nothingStatusLine, STATUS_LINE_CONTRACT, yesStatusLine, type StatusLineCase, type StatusLineSubject, type StatusLineWorld, type WorldStatus } from './host/status-line.ts';
 export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions, type PermissionsCase, type PermissionsSubject, type PermissionsWorld, type WorldRules } from './host/permissions.ts';
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin, type PluginCase, type PluginSubject, type PluginWorld, type WorldInstall, type WorldMarketplace } from './host/plugin.ts';
+export { MODELS_CONTRACT, nothingModels, yesModels, type ModelsCase, type ModelsSubject, type ModelsWorld } from './host/models.ts';
+export { STEPS_CONTRACT, nothingSteps, yesSteps, type StepsCase, type StepsSubject, type StepsWorld } from './host/steps.ts';
 
 /**
  * Every contract of the kit. A port's contract lives in its own file, under `host/`, `connector/` or `terminal/`,
@@ -34,4 +38,6 @@ export const CONTRACTS: readonly KitEntry[] = [
   entryOf(STATUS_LINE_CONTRACT),
   entryOf(PERMISSIONS_CONTRACT),
   entryOf(PLUGIN_CONTRACT),
+  entryOf(MODELS_CONTRACT),
+  entryOf(STEPS_CONTRACT),
 ];

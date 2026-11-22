@@ -150,6 +150,11 @@ repositories are read on. A `LEFT OUT` line names, by number only, the open issu
 that no one accepted yet (at most 20, then how many more); their text is never printed. `teamrig issue sync --repo
 acme/web` reads one repository only.
 
+The same run first imports any other tracker your team config has a `connectors` section for: today Jira's projects
+(`connectors.jira`), each with its own `ACCESS`, `REPO` and `PREVIEW` lines and tasks of source `jira`. Until Jira's
+trust rule ships, every Jira issue is left out, so it adds no task yet. A Jira section that is wrong or cannot be read
+gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub alone.
+
 ## Then it runs on its own
 
 Once the repositories are listed, nobody needs to run it. When a session of the team starts or ends a turn, its hook
@@ -439,6 +444,30 @@ For an outside pull request, post those files and the rebase in a comment (`team
 request is rebased by its owner onto the newest base and pushed back to the same branch and pull request with a lease
 (`--force-with-lease`), never under a new branch name. `--base` names the branch the pull request targets when it is
 not `origin`'s default; the fetch uses git's own access to `origin`, not a token.
+
+## Landing an outside pull request
+
+The session holding an outside pull request's task reviews and lands it itself, with the token saved for the
+repository's owner, once its leader approved the exact head: `teamrig pr approve` posts the approving review and
+`teamrig pr merge` lands it, into the repository's merge queue where it has one, else merged by rebase. Both read
+every gate before writing anything: one task holds the pull request, the caller owns it, the leader's approval note
+names the full 40-hex head (a root team's lead needs no one's), and the pull request is open, no draft, on its
+default branch and still at `--head`; a merge also needs it free of conflicts, not queued already and every check on
+its head passed, which teamrig reads itself, since an admin token may bypass the branch's own rules. Each write is pinned to the
+head read, so a push after the approval makes GitHub refuse it, and a newer head needs its own approval.
+
+```sh
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef --check   # every gate, nothing written
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
+teamrig pr merge acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
+```
+
+```text
+APPROVED acme/web#12 at d00d5ee
+ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
+```
+
+GitHub's own required checks and reviews still gate the landing; these commands only take a person's hand out of it.
 
 ## Showing each task's status on its issue
 

@@ -1,4 +1,4 @@
-import { launchOf } from "../../config/launch.js";
+import { ownLaunchOf } from "../../config/launch.js";
 import { errorMessage } from "../../core/guards.js";
 import { SessionLog } from "../../sessions/log.js";
 import { readIdlePassState } from "../idle-pass-check.js";
@@ -24,7 +24,7 @@ function lastClosedFolderOf(records, id) {
  */
 function treeFoldersOf(runtime, config, records) {
     return async (id) => {
-        const named = launchOf(config, id).project ?? config.team?.project ?? lastClosedFolderOf(records, id);
+        const named = ownLaunchOf(config, id).project ?? config.team?.project ?? lastClosedFolderOf(records, id);
         if (named === undefined) {
             throw new RefusedError(`no folder is known for session ${id}: set launch.${id}.project or team.project`);
         }

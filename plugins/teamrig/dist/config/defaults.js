@@ -86,6 +86,8 @@ export const DEFAULT_CONTEXT_FILES = {
     maxSessionListsChars: 16_000,
 };
 export const DEFAULT_LOCK = { ttlMs: 300_000, pollMs: 50, waitMs: 20_000 };
+/** No change sources named: `teamrig changes` reads every one that applies to the project. */
+export const DEFAULT_CHANGES = { sources: [] };
 /** No exec PATH: a privileged command names its program by absolute path until the team lists its tool folders. */
 export const DEFAULT_EXEC = { path: [] };
 export const DEFAULT_PUSH_GUARD = { protectedBranches: ['main', 'master'], pushToProtected: 'ask', reviewPaths: [] };
@@ -397,11 +399,3 @@ export const DEFAULT_HIRING = {
     resumeMaxIdleDays: 7,
     scaleOut: DEFAULT_SCALE_OUT,
 };
-/**
- * The lead's model and effort for each key its `launch` entry leaves unset: Opus (Claude Code's `opus`
- * alias, its newest Opus) at xhigh effort, since the lead plans, splits and judges the whole team's work.
- * Not `best`: in a lead A/B, Fable at xhigh judged no better than Opus and cost 2.4 times as much. A team
- * sets `launch.<lead id>.model` to `best` or a full model id to change it. The other sessions default to
- * Claude Code's own.
- */
-export const DEFAULT_LEAD_LAUNCH = { model: 'opus', effort: 'xhigh' };

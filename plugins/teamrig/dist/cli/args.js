@@ -107,6 +107,13 @@ export function noPositionals(args) {
         throw new UsageError(`unexpected "${extra}"`);
     }
 }
+/** The command's positional words, at least one, such as task ids. */
+export function somePositionals(args, name) {
+    if (args.positionals.length === 0) {
+        throw new UsageError(`${args.command} needs <${name}>`);
+    }
+    return args.positionals;
+}
 /** The command's single positional word, such as a task id. */
 export function onePositional(args, name) {
     const [value, extra] = args.positionals;

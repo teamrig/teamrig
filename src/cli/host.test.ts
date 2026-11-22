@@ -3,23 +3,36 @@ import assert from 'node:assert/strict';
 import type { HostSource } from '../composition/host-ports.ts';
 import { isUnsupported, type HostPorts } from '../ports/host/index.ts';
 import type { SecretGuardConfig } from '../config/types.ts';
+import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, hostRunning, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
+import { shippedSteps } from '../testing/shipped-steps.ts';
 import { join } from 'node:path';
 import {
+  childEnvOf,
   contextSourceIfTold,
   hooksOf,
   hostHomeIfKnown,
   hostHomeOf,
+  hostNameOf,
   hostOf,
   identityOf,
+  launchHostFrom,
+  launchHostOf,
+  leadLaunchFrom,
+  leadLaunchOf,
+  modelsIfKnown,
   pathsIfKnown,
   pathsOf,
   secretFilesOf,
+  sessionProcessCheckOf,
   sessionVariablesOf,
+  stepsIfKnown,
+  stepsOf,
   transcriptsIfKept,
   transcriptsOf,
   usageIfMetered,
@@ -70,6 +83,55 @@ describe('transcriptsIfKept', () => {
     const world = quietWorld();
     assert.deepEqual(transcriptsIfKept({ host: world.host, env: {}, platform: world.platform })?.entry('not a transcript line'), { kind: 'unread', reason: 'damaged' });
     assert.equal(transcriptsIfKept({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('stepsIfKnown', () => {
+  it('gives the steps of a host that names them, and nothing for a host that names none', () => {
+    const world = quietWorld();
+    assert.equal(stepsIfKnown({ host: world.host, env: {}, platform: world.platform })?.exit, shippedSteps().exit);
+    assert.equal(stepsIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('modelsIfKnown', () => {
+  it('gives the models of a host that knows them, and nothing for a host that knows none', () => {
+    const world = quietWorld();
+    const known = modelsIfKnown({ host: world.host, env: {}, platform: world.platform });
+    assert.equal(known?.defaultName, shippedModels().defaultName);
+    assert.equal(modelsIfKnown({ host: bare, env: {}, platform: 'linux' }), undefined);
+  });
+});
+
+describe('leadLaunchOf', () => {
+  it("gives the host's lead default, and nothing on a host that knows no models", () => {
+    const world = quietWorld();
+    const { model, effort } = shippedModels().leadDefault;
+    assert.deepEqual(leadLaunchOf({ host: world.host, env: {}, platform: world.platform }), { model, effort });
+    assert.deepEqual(leadLaunchOf({ host: bare, env: {}, platform: 'linux' }), {});
+  });
+
+  it("keeps the model but drops an effort that is no level on teamrig's scale", () => {
+    const models = { ...shippedModels(), leadDefault: { model: 'model-one', effort: 'turbo' } };
+    assert.deepEqual(leadLaunchFrom(models), { model: 'model-one' });
+  });
+});
+
+describe('launchHostOf', () => {
+  it("gives the host's lead default and its check of a model name", () => {
+    const world = quietWorld();
+    const host = launchHostOf({ host: world.host, env: {}, platform: world.platform });
+    assert.deepEqual(host.leadDefault, leadLaunchFrom(shippedModels()));
+    assert.equal(host.modelProblem('gpt-5'), shippedModels().problemOf('gpt-5'));
+    assert.notEqual(host.modelProblem('gpt-5'), undefined);
+    assert.equal(host.modelProblem('opus'), undefined);
+  });
+
+  it('takes any model name and gives no lead default on a host that knows no models', () => {
+    const host = launchHostOf({ host: bare, env: {}, platform: 'linux' });
+    assert.deepEqual(host.leadDefault, {});
+    assert.equal(host.modelProblem('gpt-5'), undefined);
+    assert.deepEqual(launchHostFrom(undefined).leadDefault, {});
   });
 });
 
@@ -261,11 +323,12 @@ describe('secretFilesOf', () => {
 describe('identityOf', () => {
   const PROJECT = join('/', 'work', 'app');
   const TOLD = { CLAUDE_PROJECT_DIR: PROJECT, CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_KIND: 'bg' };
-  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined };
+  const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
 
   it('gives who the host says the run is, read from the environment of the run', () => {
     const world = quietWorld();
-    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg', sessionId: undefined });
+    assert.deepEqual(identityOf({ host: world.host, env: TOLD, platform: world.platform }), { ...UNTOLD, projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg' });
+    assert.equal(identityOf({ host: world.host, env: { CLAUDE_CODE_EFFORT_LEVEL: 'low' }, platform: world.platform }).forcedEffort, 'low');
     assert.equal(identityOf({ host: world.host, env: { CLAUDE_CODE_SESSION_ID: 's-1' }, platform: world.platform }).sessionId, 's-1');
     assert.deepEqual(identityOf({ host: world.host, env: {}, platform: world.platform }), UNTOLD);
   });
@@ -279,14 +342,15 @@ describe('identityOf', () => {
     const seen: Parameters<HostSource>[0][] = [];
     const telling: HostSource = (given) => {
       seen.push(given);
-      const identity = { projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionKind: undefined, sessionId: given.env['AGENT_SESSION'] };
-      return { ...BARE, launcher: { variables: { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] }, identity: () => identity } };
+      const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
+      const childEnv = { session: [], parked: [], login: [] };
+      const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
+      return { ...BARE, launcher: { programName: 'Agent', variables, childEnv, identity: () => identity, isSessionProcess: () => false } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
+      ...UNTOLD,
       projectDir: PROJECT,
       startedAs: 'desk',
-      sessionKind: undefined,
-      sessionId: undefined,
     });
     assert.deepEqual(seen, [{ env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }]);
   });
@@ -315,6 +379,87 @@ describe('sessionVariablesOf', () => {
   });
 });
 
+describe('childEnvOf', () => {
+  const SHIPPED_SESSION = [
+    'CLAUDECODE',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_ENTRYPOINT',
+    'CLAUDE_CODE_EXECPATH',
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_CODE_SESSION_ATTENDED',
+    'CLAUDE_PID',
+    'CLAUDE_PROJECT_DIR',
+  ];
+  const SHIPPED_PARKED = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_PROJECT_DIR'];
+  const SHIPPED_LOGIN = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
+  const OTHER = hostNaming({ marks: ['OTHER_AGENT'], identity: ['OTHER_SESSION', 'OTHER_ROOT'] }, {}, { session: ['OTHER_SOCKET', 'CLAUDE_PID'], parked: ['OTHER_SESSION', 'OTHER_TAB'], login: ['OTHER_KEY'] });
+
+  it("leaves a child none of a shipped host's session variables and parks its marks, whatever host the run works in", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      const { session, parked } = childEnvOf({ host, shippedHosts, env: {}, platform });
+      assert.deepEqual([session, parked], [SHIPPED_SESSION, SHIPPED_PARKED], name);
+    }
+  });
+
+  it("keeps the running host's login alone: the shipped host's own, and none on a host that tells nothing of its sessions", () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(childEnvOf({ host: SHIPPED_HOST, shippedHosts, env: {}, platform }).login, SHIPPED_LOGIN);
+    assert.deepEqual(childEnvOf({ host: OTHER, shippedHosts, env: {}, platform }).login, ['OTHER_KEY']);
+    assert.deepEqual(childEnvOf({ host: bare, shippedHosts, env: {}, platform }).login, []);
+    assert.deepEqual(childEnvOf({ host: HOOKS_ONLY_HOST, shippedHosts, env: {}, platform }).login, []);
+  });
+
+  it('adds what the running host names after the shipped names, each once: its marks and identity variables are session variables, and its marks are parked', () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(childEnvOf({ host: OTHER, shippedHosts, env: {}, platform }), {
+      session: [...SHIPPED_SESSION, 'OTHER_SOCKET', 'OTHER_AGENT', 'OTHER_SESSION', 'OTHER_ROOT', 'OTHER_TAB'],
+      parked: [...SHIPPED_PARKED, 'OTHER_SESSION', 'OTHER_TAB', 'OTHER_AGENT'],
+      login: ['OTHER_KEY'],
+    });
+    assert.deepEqual(childEnvOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { session: [], parked: [], login: [] });
+  });
+
+  it('ships no host whose login is not a credential variable, nor one that parks a credential', () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.ok(shippedHosts.length > 0);
+    for (const host of shippedHosts) {
+      const { login, parked } = childEnvOf({ host, shippedHosts: [], env: {}, platform });
+      assert.ok(login.length > 0 && login.every((name) => CREDENTIAL_VARIABLES.includes(name)), login.join(' '));
+      assert.ok(parked.every((name) => !CREDENTIAL_VARIABLES.includes(name)), parked.join(' '));
+    }
+  });
+});
+
+describe('sessionProcessCheckOf', () => {
+  const SHIPPED_PROGRAM = { name: 'claude.exe', commandLine: '' };
+  const OTHER_PROGRAM = { name: 'agent-desk', commandLine: 'agent-desk --resume' };
+  const SHELL = { name: 'bash', commandLine: 'bash -l' };
+
+  it("knows a shipped host's session process whatever host the run works in, and no other program", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of RUNNING_HOSTS) {
+      const isSessionProcess = sessionProcessCheckOf({ host, shippedHosts, env: {}, platform });
+      assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(isSessionProcess), [true, false, false], name);
+    }
+  });
+
+  it('adds the program the running host says runs its sessions, and takes none of the shipped ones away', () => {
+    const { shippedHosts, platform } = quietWorld();
+    const isSessionProcess = sessionProcessCheckOf({ host: hostRunning('agent-desk'), shippedHosts, env: {}, platform });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(isSessionProcess), [true, true, false]);
+  });
+
+  it('knows the running host alone when no host is shipped, and no process at all where no host tells of its sessions', () => {
+    const alone = sessionProcessCheckOf({ host: hostRunning('agent-desk'), shippedHosts: [], env: {}, platform: 'linux' });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(alone), [false, true, false]);
+    const none = sessionProcessCheckOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
+    assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(none), [false, false, false]);
+  });
+});
+
 describe('hostHomeOf', () => {
   it("gives the host's own folder for the person of the run", () => {
     const world = quietWorld();
@@ -336,5 +481,27 @@ describe('hostHomeIfKnown', () => {
     const world = quietWorld();
     assert.equal(hostHomeIfKnown({ host: world.host, env: {}, platform: world.platform, userHome: USER_HOME }), join(USER_HOME, '.claude'));
     assert.equal(hostHomeIfKnown({ host: bare, env: {}, platform: 'linux', userHome: USER_HOME }), undefined);
+  });
+});
+
+describe('stepsOf', () => {
+  it('gives the steps of the host the run is in', () => {
+    const world = quietWorld();
+    assert.equal(stepsOf({ host: world.host, env: {}, platform: world.platform }).exit, shippedSteps().exit);
+  });
+
+  it('refuses with the reason of a host that names no steps', () => {
+    assert.throws(() => stepsOf({ host: bare, env: {}, platform: 'linux' }), (error) => error instanceof RefusedError && error.message === 'no steps are known');
+  });
+});
+
+describe('hostNameOf', () => {
+  it('gives the name of the host the run is in', () => {
+    const world = quietWorld();
+    assert.equal(hostNameOf({ host: world.host, env: {}, platform: world.platform }), 'Claude Code');
+  });
+
+  it('refuses with the reason of a host that does not say who it is', () => {
+    assert.throws(() => hostNameOf({ host: bare, env: {}, platform: 'linux' }), (error) => error instanceof RefusedError && error.message === 'no session of the host is told');
   });
 });

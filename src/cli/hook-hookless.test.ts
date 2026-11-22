@@ -12,6 +12,7 @@ import { HOOKLESS_CHECK_MS, HOOKLESS_MS, HOOKLESS_TAIL_BYTES, parseHooklessState
 import { RestoreRegistry, restoreSessionsDir } from '../restore/registry.ts';
 import { APP, CLAUDE_SESSION, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME } from '../testing/cli-harness.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
+import { steplessHost } from '../testing/shipped-steps.ts';
 import { teamConfigOf, teamInboxOf } from '../testing/team-tree.ts';
 import { promptLine, replyLine, systemLine, transcript } from '../testing/transcript-lines.ts';
 import { EXIT } from './runtime.ts';
@@ -108,6 +109,16 @@ describe('the Stop hook checks for tabs that run without their hooks', () => {
     await stop(kit, transcripts, 'bravo');
     assert.equal(hooklessLines(kit, 'lead').length, 1, 'a tab still hookless is named once');
     assert.equal(parseHooklessState(kit.files.get(STATE) ?? '')?.checkedAt, kit.clock.now());
+  });
+
+  it('names no tab and claims no check on a host that names no steps, as it has no restart to ask for', async () => {
+    const kit = new CliHarness(ROLES_TEAM);
+    await writeTab(kit, 'alpha', 2 * HOOKLESS_MS);
+    const transcripts = tabTranscript(kit, [reply(kit, MS_PER_MINUTE)], MS_PER_MINUTE);
+    const result = await kit.run(['hook', 'stop'], { stdin: STOP, env: { TEAMRIG_SESSION: 'bravo' }, transcripts, host: steplessHost() });
+    assert.deepEqual([result.code, result.stdout], [EXIT.ok, []]);
+    assert.deepEqual(hooklessLines(kit, 'lead'), []);
+    assert.equal(kit.files.get(STATE), undefined, 'no check is marked done');
   });
 
   it('names a tab started by hand, which carries no team variables, as the session whose inbox it last read (T1002)', async () => {

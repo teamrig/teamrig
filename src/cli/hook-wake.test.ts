@@ -33,6 +33,7 @@ import { holdFileLock } from '../testing/held-file-lock.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
+import { steplessHost } from '../testing/shipped-steps.ts';
 import { teamConfigOf, teamHomeOf, teamInboxOf } from '../testing/team-tree.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
@@ -1018,6 +1019,17 @@ describe('hook wake-check runs the idle pass', () => {
       const state: unknown = JSON.parse(kit.files.get(PASS_STATE) ?? '');
       assert.equal(JSON.stringify(state).includes('told'), false, `${mode}: its mark dropped`);
     }
+  });
+
+  it('names no reopened tab on a host that names no steps, and its pass still runs', async () => {
+    const kit = await idleTeam(ON);
+    await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'reopen', session: 'bravo', at: new Date(kit.clock.now()).toISOString(), resumed: 'claude-bravo' });
+    kit.clock.advance(5 * MINUTE);
+    await kit.run(['hook', 'wake-check'], { stdin: payload(), probe: new FakePathProbe({ folders: [APP] }), memory: new FakeHostMemory().lists([], COMMIT), host: steplessHost() });
+    const records = await logLines(kit, PASS_LOG);
+    assert.equal(records.some((record) => JSON.stringify(record).includes('"kind":"hookless"')), false);
+    assert.equal(records.some((record) => JSON.stringify(record).includes('"kind":"failed"')), false, 'the pass did not fail');
+    assert.deepEqual(await new WakeAsks(kit.files, ASKS).read('lead'), []);
   });
 
   it("in mode on names a reopened lead tab to the delivery owner on a team above, with a wake there (T1143)", async () => {

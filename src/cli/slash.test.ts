@@ -5,6 +5,7 @@ import { ASK_EXIT } from '../mod/slash-hand.ts';
 import { APP, CLAUDE_SESSION, CliHarness, TEAM, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { OTHER_STEPS, shippedSteps, steplessHost } from '../testing/shipped-steps.ts';
 import { slashRule } from './commands/slash.ts';
 import { COMMAND_HELP, COMMAND_TABLE } from './run.ts';
 import { EXIT } from './runtime.ts';
@@ -28,9 +29,20 @@ describe('/teamrig with nothing after it', () => {
   it('prints the short help, what runs as the tab session and what asks first', async () => {
     const result = await slash(new CliHarness(), '  ');
     assert.equal(result.code, EXIT.ok);
-    const rule = slashRule(COMMAND_TABLE);
+    const rule = slashRule(COMMAND_TABLE, shippedSteps(), 'Claude Code');
     assert.deepEqual(result.stdout, [`${COMMAND_HELP.forCommand(undefined)}\n${rule}`]);
+    assert.match(rule, /^In a Claude Code tab, \/teamrig <command> runs it there\./);
     assert.match(rule, /Without --session, list, show, check, plan, verify, stats, report done, goal list, goal show, inbox status, rules, meeting list, decisions, read, schedule\nrun as this tab's session; a command that changes the team's files/);
+  });
+
+  it('names the host and the step that runs a plugin command in its own words', () => {
+    assert.match(slashRule(COMMAND_TABLE, OTHER_STEPS, 'Other CLI'), /^In a Other CLI tab, :teamrig <command> runs it there\./);
+  });
+
+  it('refuses on a host that names no steps, since it cannot say how to run a command there', async () => {
+    const result = await slash(new CliHarness(), '  ', { host: steplessHost() });
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout.join('\n'), /^REFUSED .*no steps are known/);
   });
 
   it('prints the same help when stdin holds no JSON', async () => {

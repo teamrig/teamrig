@@ -1,6 +1,6 @@
 /**
  * The reader of the dedicated UI's archive (T4761): the one file a teamrig-pane release carries the UI's scripts in,
- * a JSON document `{ format, version, entry, files: [{ path, text }] }`. `teamrig ui` fetches it over the network, so
+ * a JSON document `{ format, version, interface, entry, files: [{ path, text }] }`. `teamrig ui` fetches it over the network, so
  * nothing in it is trusted. Its bytes are held to the sha256 this teamrig release pins before a single one is parsed,
  * and what parses is then held to its shape: a path that could leave the folder the files are written into, two
  * paths one disk would write as one file, or an entry that is not among the files refuses the whole archive. Nothing
@@ -8,6 +8,7 @@
  */
 import { createHash } from 'node:crypto';
 import { isRecord } from "../core/guards.js";
+import { parseInterfaceVersion } from "../interface/version.js";
 /** The archive shape read here; an archive of another one is refused. */
 export const ARCHIVE_FORMAT = 1;
 /** The name a teamrig-pane release carries the archive under. */
@@ -95,11 +96,16 @@ export function readArchive(bytes, pin) {
     const document = parsed(text);
     if (!isRecord(document))
         return refused('it is not a JSON object');
-    const { format, version, entry, files } = document;
+    const { format, version, interface: speaks, entry, files } = document;
     if (format !== ARCHIVE_FORMAT)
         return refused(`its format is ${JSON.stringify(format)}, and this teamrig reads format ${ARCHIVE_FORMAT}`);
     if (typeof version !== 'string' || !isSegment(version))
         return refused('its version is not a plain name');
+    const range = typeof speaks === 'string' ? parseInterfaceVersion(speaks) : undefined;
+    if (speaks === undefined)
+        return refused('it names no interface version');
+    if (range === undefined)
+        return refused(`its interface ${JSON.stringify(speaks)} is no <major>.<minor> version`);
     if (typeof entry !== 'string')
         return refused('it names no entry');
     if (!Array.isArray(files))
@@ -118,5 +124,5 @@ export function readArchive(bytes, pin) {
         return refused(`its files cannot all be written: ${clash}`);
     if (!read.some((file) => file.path === entry))
         return refused(`its entry ${JSON.stringify(entry)} is not among its files`);
-    return { ok: true, archive: { version, entry, files: read } };
+    return { ok: true, archive: { version, interface: range, entry, files: read } };
 }

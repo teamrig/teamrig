@@ -88,7 +88,7 @@ describe('the read entry', () => {
       JSON.stringify({ configVersion: read.CONFIG_VERSION, sessions: ['lead', 'alpha', 'beta'], roles: { lead: 'lead' }, launch: { alpha: { model: 'sonnet' }, lead: { effort: 'high' } } }),
     );
     assert.ok(config.status === 'loaded');
-    const launches: read.LaunchConfig[] = ['lead', 'alpha', 'beta'].map((id) => read.launchOf(config.config, id));
+    const launches: read.LaunchConfig[] = ['lead', 'alpha', 'beta'].map((id) => read.launchOf(config.config, id, { model: 'opus', effort: 'xhigh' }));
     assert.deepEqual(launches, [{ model: 'opus', effort: 'high' }, { model: 'sonnet' }, {}]);
     assert.deepEqual(launches.map(read.describeLaunch), ['model opus at high effort', 'model sonnet at the default effort', 'the default model and effort']);
   });

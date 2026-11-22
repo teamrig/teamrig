@@ -9,6 +9,7 @@ import { hooklessReader } from '../../restore/hookless.ts';
 import { SessionLog } from '../../sessions/log.ts';
 import { SessionRecordStore } from '../../sessions/record.ts';
 import { postToHolder, sessionNameOn } from '../holder-team.ts';
+import { stepsIfKnown } from '../host.ts';
 import { hooklessReopenLine, hooklessReopensOf, type HooklessReopen } from '../hookless-reopen.ts';
 import { idlePassOf, passLineOf, type PassStep, type SessionFolderOf } from '../idle-pass.ts';
 import { readIdlePassState } from '../idle-pass-check.ts';
@@ -64,8 +65,13 @@ async function runPass(runtime: CliRuntime, kit: Kit, config: KitConfig, roster:
  * lead, or the delivery owner for the lead's own tab (`hooklessReader`), on its team, a team above included,
  * and in both modes as a log record, with why the line was not posted. One not posted is still marked told, so a
  * refusing inbox gets no line a minute. Returns each hookless reopen's time by session, for the next pass to skip.
+ * A host that names no steps gets no line, as it has no restart to name: the pass's acts go on without it.
  */
 async function tellHookless(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, hookless: readonly HooklessReopen[], previous: IdlePassState | undefined, now: number): Promise<Record<string, number>> {
+  const steps = stepsIfKnown(runtime);
+  if (steps === undefined) {
+    return {};
+  }
   const { mode } = config.open.idle;
   const zone = teamZone(config, runtime);
   const told: Record<string, number> = {};
@@ -75,7 +81,7 @@ async function tellHookless(runtime: CliRuntime, kit: Kit, config: KitConfig, ro
       continue;
     }
     const to = hooklessReader({ session: reopen.id }, config.roles, kit.paths.team);
-    const line = hooklessReopenLine(reopen, sessionNameOn(to.team, kit.paths.team, reopen.id), roster, zone, now);
+    const line = hooklessReopenLine(reopen, sessionNameOn(to.team, kit.paths.team, reopen.id), roster, steps, zone, now);
     const problem = mode === 'on' ? await postToHolder(runtime, { kit, config }, to, { from: KIT_NAME, text: line }, postUrgentLine) : undefined;
     await runtime.files.append(kit.paths.idlePassLog, formatIdlePassRecord({ kind: 'hookless', at: now, mode, id: reopen.id, line, problem }));
   }

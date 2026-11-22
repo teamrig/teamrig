@@ -4,7 +4,7 @@ import { EVENT_VERSION, TASK_LINE_VERSION } from "./events.js";
 import { foldEvents, taskNumber } from "./fold.js";
 import { NO_SLICED_GOALS } from "./focus.js";
 import { NO_GOAL_TAGS } from "./goals.js";
-import { GITHUB_ACTOR, NO_SKILL } from "./policy.js";
+import { NO_SKILL } from "./policy.js";
 import { ACTIVE_STATUSES } from "./model.js";
 import { isWritable } from "./snapshot.js";
 import { needsElsewhere, NO_TASKS_ELSEWHERE } from "./tree.js";
@@ -95,23 +95,23 @@ export class Register {
         }));
     }
     /**
-     * The GitHub import's writes (sync/sync.ts): each is judged again under the lock, on the register as it
-     * then stands, and written by GITHUB_ACTOR, which is on no roster. The policy limits them to the import's
-     * own tasks: a new one per issue, its title and priority, and open, done or dropped as GitHub has it.
+     * An import's writes (sync/sync.ts): each is judged again under the lock, on the register as it then stands,
+     * and written by its source (`github`, `jira`), which is on no roster. The policy limits them to that import's
+     * own tasks: a new one per issue, its title and priority, and open, done or dropped as the tracker has it.
      */
-    importAdd(input) {
-        return this.writeNew(({ state }, id) => single(this.created(GITHUB_ACTOR, id, this.deps.policy.importAdd(input, state))));
+    importAdd(source, input) {
+        return this.writeNew(({ state }, id) => single(this.created(source, id, this.deps.policy.importAdd(source, input, state))));
     }
-    importUpdate(id, changes, note) {
+    importUpdate(source, id, changes, note) {
         return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => {
-            const change = this.deps.policy.importUpdate(task, changes, note);
-            return single(change.ok ? { ok: true, value: { ...this.base(id, GITHUB_ACTOR), type: 'update', ...change.value } } : change);
+            const change = this.deps.policy.importUpdate(source, task, changes, note);
+            return single(change.ok ? { ok: true, value: { ...this.base(id, source), type: 'update', ...change.value } } : change);
         }));
     }
-    importStatus(id, input) {
+    importStatus(source, id, input) {
         return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => {
-            const change = this.deps.policy.importStatus(task, input);
-            return single(change.ok ? { ok: true, value: { ...this.base(id, GITHUB_ACTOR), type: 'status', ...change.value } } : change);
+            const change = this.deps.policy.importStatus(source, task, input);
+            return single(change.ok ? { ok: true, value: { ...this.base(id, source), type: 'status', ...change.value } } : change);
         }));
     }
     async setStatus(caller, id, input) {

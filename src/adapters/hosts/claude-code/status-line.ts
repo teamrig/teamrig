@@ -150,7 +150,7 @@ function sessionIdOf(status: JsonRecord): string | undefined {
 
 /**
  * The reading of Claude Code's status line input, the JSON object it writes to the command's stdin. The folder is
- * `workspace.current_dir`, else `cwd`; `effort.level` comes only for a model that takes one.
+ * `workspace.current_dir`, else `cwd`; `effort.level` comes only for a model that takes one; `version` is Claude Code's.
  */
 function parse(input: string): StatusReading | undefined {
   const status = objectOf(input);
@@ -165,6 +165,7 @@ function parse(input: string): StatusReading | undefined {
     agentName: told(recordField(status, 'agent')?.['name']),
     model: told(recordField(status, 'model')?.['display_name']),
     effort: told(recordField(status, 'effort')?.['level']),
+    hostVersion: told(status['version']),
     costUsd: finite(recordField(status, 'cost')?.['total_cost_usd']),
     contextUsedPct: finite(context?.['used_percentage']),
     contextInputTokens: finite(context?.['total_input_tokens']),

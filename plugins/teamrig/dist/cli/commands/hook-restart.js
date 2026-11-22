@@ -1,11 +1,12 @@
 import { isEffortLevel } from "../../config/types.js";
 import { ENV } from "../../core/home.js";
 import { noticeOf } from "../../refresh/decide.js";
-import { claudeProcessOf, restartMayAct } from "../../refresh/restart.js";
+import { restartMayAct } from "../../refresh/restart.js";
 import { parkRulesOf } from "../../register/park.js";
 import { startableTasks } from "../../wake/day-start.js";
 import { identityOf } from "../host.js";
 import { teamZone } from "../kit.js";
+import { hostSessionAbove } from "../session-process.js";
 import { teamRegister } from "../team-register.js";
 /** The restart's target; undefined when the event names no session, no transcript or no folder. */
 export function restartTargetOf(runtime, event) {
@@ -77,7 +78,7 @@ export async function restartOrPark(runtime, store, scope, notice, register) {
 async function armFromTab(runtime, store, scope, tab) {
     const { team, id, cwd } = scope;
     // Looked up on this rare path only: each look at a process starts a PowerShell on Windows.
-    const claude = await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid);
+    const claude = await hostSessionAbove(runtime);
     const project = identityOf(runtime).projectDir ?? tab.cwd ?? cwd;
     if (claude !== undefined && project !== undefined) {
         const at = new Date(runtime.clock.now()).toISOString();

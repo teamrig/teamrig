@@ -46,6 +46,7 @@ const STATUS_INPUT = {
   cwd: '/work/app/sub',
   model: { id: 'claude-opus-5-5', display_name: 'Opus 5.5' },
   workspace: { current_dir: '/work/app', project_dir: '/work/app' },
+  effort: { level: 'high' },
   version: '2.1.0',
   cost: { total_cost_usd: 857.79, total_duration_ms: 1000 },
   context_window: { used_percentage: 15, total_input_tokens: 153654 },
@@ -57,7 +58,7 @@ const STATUS = JSON.stringify(STATUS_INPUT);
 /** The pinned file format: a status line of any make that writes this is read by `teamrig budget`. */
 const STORED =
   '{"ts":"2026-10-15T12:00:50.598Z","session_id":"0b6f9c2e-5d1a-4c3e-9f7a-2e8d4b1c6a90","cwd":"/work/app",' +
-  '"agent_name":"reviewer","model":"Opus 5.5","rate_limits":{"five_hour":{"used_percentage":6,"resets_at":1792081200},' +
+  '"agent_name":"reviewer","model":"Opus 5.5","effort":"high","host_version":"2.1.0","rate_limits":{"five_hour":{"used_percentage":6,"resets_at":1792081200},' +
   '"seven_day":{"used_percentage":57,"resets_at":1792544400}},"rate_limits_since":"2026-10-15T12:00:50.598Z","rate_limits_after":null,' +
   '"cost_usd":857.79,"context_used_pct":15,"context_input_tokens":153654}';
 
@@ -68,6 +69,8 @@ function snapshot(overrides: Partial<StatusSnapshot> = {}): StatusSnapshot {
     cwd: '/work/app',
     agentName: null,
     model: 'Opus 5.5',
+    effort: null,
+    hostVersion: null,
     rateLimits: { fiveHour: null, sevenDay: { usedPct: 57, resetsAt: WEEK_RESET_S * 1000 } },
     rateLimitsSince: null,
     rateLimitsAfter: null,
@@ -100,6 +103,7 @@ describe('snapshotOfStatus and formatSnapshot', () => {
     assert.equal(taken?.sessionId, SID);
     assert.equal(taken?.cwd, '/work/app/sub');
     assert.equal(taken?.model, null);
+    assert.deepEqual([taken?.effort, taken?.hostVersion], [null, null]);
     assert.equal(taken?.rateLimits, null);
     assert.equal(snapshotOfStatus(SOURCE, JSON.stringify({ session_id: SID }), NOW)?.cwd, '');
   });
@@ -119,7 +123,7 @@ describe('snapshotOfStatus and formatSnapshot', () => {
   });
 
   describe('on a host that reads its status input otherwise', () => {
-    const read = { sessionId: OTHER, cwd: '/else', agentName: undefined, model: 'Other 1', effort: 'low', costUsd: 2, contextUsedPct: undefined, contextInputTokens: 7 };
+    const read = { sessionId: OTHER, cwd: '/else', agentName: undefined, model: 'Other 1', effort: 'low', hostVersion: '9.1', costUsd: 2, contextUsedPct: undefined, contextInputTokens: 7 };
     const told: StatusSource = {
       statusLine: { parse: () => read },
       usage: { weekReading: () => ({ fiveHour: null, sevenDay: { usedPct: 3, resetsAt: 5000 } }) },
@@ -133,6 +137,8 @@ describe('snapshotOfStatus and formatSnapshot', () => {
         cwd: '/else',
         agentName: null,
         model: 'Other 1',
+        effort: 'low',
+        hostVersion: '9.1',
         rateLimits: { fiveHour: null, sevenDay: { usedPct: 3, resetsAt: 5000 } },
         rateLimitsSince: ts,
         rateLimitsAfter: null,
@@ -180,6 +186,8 @@ describe('parseSnapshot', () => {
       cwd: 'C:\\work',
       agentName: null,
       model: null,
+      effort: null,
+      hostVersion: null,
       rateLimits: { fiveHour: null, sevenDay: { usedPct: 47, resetsAt: WEEK_RESET_S * 1000 } },
       rateLimitsSince: null,
       rateLimitsAfter: null,
@@ -401,17 +409,23 @@ describe('effortOfStatus', () => {
   });
 
   it('is undefined without a level: no effort, an empty or non-text level, or an input that is not JSON', () => {
-    assert.equal(effortOfStatus(SOURCE.statusLine, STATUS), undefined);
+    assert.equal(effortOfStatus(SOURCE.statusLine, withEffort(undefined)), undefined);
     assert.equal(effortOfStatus(SOURCE.statusLine, withEffort({ level: ' ' })), undefined);
     assert.equal(effortOfStatus(SOURCE.statusLine, withEffort({ level: 3 })), undefined);
     assert.equal(effortOfStatus(SOURCE.statusLine, withEffort('high')), undefined);
     assert.equal(effortOfStatus(SOURCE.statusLine, 'not json'), undefined);
   });
 
-  it('is not kept in the saved snapshot, whose format stays pinned', () => {
+  it('is kept in the saved snapshot with the host version, for the commit stamp', () => {
     const snapshot = snapshotOfStatus(SOURCE, withEffort({ level: 'high' }), NOW);
     assert.ok(snapshot);
     assert.equal(formatSnapshot(snapshot), STORED);
+    assert.deepEqual([parseSnapshot(STORED)?.effort, parseSnapshot(STORED)?.hostVersion], ['high', '2.1.0']);
+  });
+
+  it('reads as null from a snapshot written before the effort and host version were kept', () => {
+    const older = STORED.replace('"effort":"high","host_version":"2.1.0",', '');
+    assert.deepEqual([parseSnapshot(older)?.effort, parseSnapshot(older)?.hostVersion], [null, null]);
   });
 });
 

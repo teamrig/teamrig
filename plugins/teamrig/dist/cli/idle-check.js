@@ -5,7 +5,6 @@ import { KIT_NAME } from "../core/home.js";
 import { resumeVerdict } from "../hiring/rehire.js";
 import { bookedMeetingOf, MeetingSchedule } from "../meeting/schedule.js";
 import { workCutOffBy } from "../open/end-tab.js";
-import { isClaudeProcess } from "../open/session-processes.js";
 import { readRunningWork } from "../refresh/running.js";
 import { RefreshStore } from "../refresh/store.js";
 import { parkRulesOf } from "../register/park.js";
@@ -21,7 +20,7 @@ import { asksNowOf, urgentLinesText, WakeAsks } from "../wake/asks.js";
 import { startableTasks } from "../wake/day-start.js";
 import { inboxDepsOf } from "./commands/inbox.js";
 import { measureTranscript } from "./commands/rehire.js";
-import { transcriptsIfKept } from "./host.js";
+import { sessionProcessCheckOf, transcriptsIfKept } from "./host.js";
 import { teamZone } from "./kit.js";
 import { RefusedError } from "./runtime.js";
 import { teamRegister } from "./team-register.js";
@@ -212,7 +211,7 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
         return keep(`could not be resumed once closed (${resume.detail}); retire it with its handover instead`);
     }
     const claude = await runtime.sessionProcesses.describe(record.claudePid);
-    if (claude === undefined || !isClaudeProcess(claude)) {
+    if (claude === undefined || !sessionProcessCheckOf(runtime)(claude)) {
         return keep(notRunning);
     }
     const cutOff = await workCutOffBy(enderOf(runtime), claude);

@@ -22,6 +22,23 @@ describe('nodeProgramRunner', () => {
     assert.equal(own.stdout, 'unset');
   });
 
+  it('writes the request input to the program stdin and closes it', async () => {
+    const echo = ['-e', 'let s = ""; process.stdin.on("data", (c) => { s += c; }); process.stdin.on("end", () => process.stdout.write(`[${s}]`))'];
+    const result = await nodeProgramRunner(LIMIT_MS)({ program: process.execPath, args: echo, input: '{"id":1}\n' });
+    assert.equal(result.stdout, '[{"id":1}\n]');
+  });
+
+  it('gives a program no stdin when the request sets no input', async () => {
+    const probe = ['-e', 'let s = ""; process.stdin.on("data", (c) => { s += c; }); process.stdin.on("end", () => process.stdout.write(`[${s}]`))'];
+    const result = await nodeProgramRunner(LIMIT_MS)({ program: process.execPath, args: probe });
+    assert.equal(result.stdout, '[]');
+  });
+
+  it('ends a program that exits without reading its input like any other', async () => {
+    const result = await nodeProgramRunner(LIMIT_MS)({ program: process.execPath, args: ['-e', 'process.exitCode = 4'], input: 'x'.repeat(1024 * 1024) });
+    assert.deepEqual(result.end, { kind: 'exited', code: 4 });
+  });
+
   it('rejects when the program is not there', async () => {
     await assert.rejects(nodeProgramRunner(LIMIT_MS)({ program: 'teamrig-no-such-program', args: [] }), { code: 'ENOENT' });
   });

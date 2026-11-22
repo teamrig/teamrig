@@ -25,7 +25,7 @@ import { TASK_ID } from "../../register/model.js";
 import { commandLine } from "../../test-run/shell.js";
 import { requiredFlag, UsageError } from "../args.js";
 import { hostLockOf, logLineOf, teamAdmissionOf } from "../delivery-ports.js";
-import { identityOf } from "../host.js";
+import { childEnvOf, identityOf } from "../host.js";
 import { sessionRef, shellWordsOf } from "../inputs.js";
 import { openTeamKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { parentLockOf } from "../parent-lock.js";
@@ -353,7 +353,7 @@ async function startDetached(runtime, places, args, run) {
         log: places.log,
         argv: detachedArgsOf(args, words, session, id, arrivedAt),
         cwd: runtime.cwd,
-        env: parkedEnvOf(runtime.env),
+        env: parkedEnvOf(runtime.env, childEnvOf(runtime).parked),
         parkedAt: new Date(runtime.clock.now()).toISOString(),
     });
     runtime.out.stdout(`QUEUED ${id}: ${what} runs detached; log ${places.log}; ${session}'s inbox gets a line when it starts and when it ends`);

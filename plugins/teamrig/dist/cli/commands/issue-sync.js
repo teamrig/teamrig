@@ -4,7 +4,7 @@ import { activityRoutes } from "../../sync/activity.js";
 import { addedTasks } from "../../sync/auto.js";
 import { followersOf, parseFollows } from "../../sync/follows.js";
 import { issueMarkStep } from "../../sync/issue-marks.js";
-import { importRules, issueOwner, issueRef } from "../../sync/map.js";
+import { GITHUB_TRACKER, importRules, issueOwner, issueRef } from "../../sync/map.js";
 import { importedTasks, linkedRefs, planSync, refHolders } from "../../sync/plan.js";
 import { withCiExcerpts } from "../../sync/ci-excerpt.js";
 import { firstMentionWatch, mentionItems, mentionReadSince, mentionStep, mentionTime, } from "../../sync/mention-route.js";
@@ -14,12 +14,12 @@ import { ourLogins } from "../../sync/trust.js";
 import { applySteps, closedSince } from "../../sync/sync.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
 import { sessionLogins } from "../../issues/status-push.js";
-import { priorityText } from "../../register/model.js";
+import { GITHUB_SOURCE } from "../../register/model.js";
 import { GITHUB_ACTOR } from "../../register/policy.js";
 import { noPositionals } from "../args.js";
 import { hostsOf, reposOf } from "../issue-hosts.js";
 import { openTeamKit, requireConfig } from "../kit.js";
-import { EXIT, RefusedError } from "../runtime.js";
+import { RefusedError } from "../runtime.js";
 import { teamRegister } from "../team-register.js";
 import { claimBudget, recordClaims } from "./issue-claim.js";
 import { pullThreads, recordClocks, repoThreads } from "./issue-clock.js";
@@ -28,11 +28,9 @@ import { reserveHour, settleHour } from "./issue-push-hour.js";
 import { issuePush, pushEndLine, pushRepos } from "./issue-push.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
 import { githubOffBy, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
+import { leftOutLines, previewLines, refusedReason, resultLines, syncExit } from "./issue-sync-lines.js";
+import { NO_TRACKER_SYNC, syncTrackers } from "./tracker-sync.js";
 import { githubWatcher } from "../../sync/watcher.js";
-/** The rows of steps a repository prints; the rest are counted. */
-export const SHOWN_STEPS = 10;
-/** The left-out issue numbers a repository's LEFT OUT line names; the rest are counted. */
-export const SHOWN_LEFT_OUT = 20;
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
  * `github.repos`, inbound; `--push` plans the outbound half instead (issue-push.ts). Each repository is listed through the issue host port (issues/host.ts; on GitHub
@@ -47,8 +45,11 @@ export const SHOWN_LEFT_OUT = 20;
  * `--auto` read of them (pull-news.ts): a PULL NEWS line per session names what happened since, but only `--auto`
  * keeps what it read and tells each session's inbox, so a run by hand changes nothing there. `--auto` also reads each
  * repository's posts changed since its last read and routes each new mention of one of ours to a session
- * (mention-route.ts); a run by hand reads none. Exit 1 when a repository could not be read (its tasks stay as they are,
- * and its pull request and mention watches), 2 when the register refused a step, else 0.
+ * (mention-route.ts); a run by hand reads none. First, unless `--repo` is given, it imports the issues of every other
+ * tracker the team's `connectors` map names (tracker-sync.ts, Jira), each written as its own source, even when GitHub's
+ * import is off; their failures and added tasks join GitHub's for `--auto`'s report. Exit 1 when a repository or
+ * another tracker's place could not be read (its tasks stay as they are, and its pull request and mention watches), 2
+ * when the register refused a step or another tracker's section, else 0.
  */
 export async function issueSync(args, runtime) {
     noPositionals(args);
@@ -63,19 +64,21 @@ export async function issueSync(args, runtime) {
     const kit = await openTeamKit(runtime);
     const config = requireConfig(kit, runtime, write ? 'write' : 'read');
     const say = (line) => runtime.out.stdout(line);
-    const offBy = githubOffBy(runtime.env);
-    if (offBy !== undefined) {
-        say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing was read or written`);
-        return EXIT.ok;
-    }
-    if (config.github.repos.length === 0) {
-        say('OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing was read or written');
-        return EXIT.ok;
-    }
     const register = teamRegister(runtime, kit.paths, config);
     const rules = importRules(config);
     const started = runtime.clock.now();
     const since = closedSince(new Date(started), config.github.closedDays);
+    // --repo names one GitHub repository, so a run given it reads no other tracker.
+    const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, write }, say);
+    const offBy = githubOffBy(runtime.env);
+    if (offBy !== undefined) {
+        say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing of it was read or written`);
+        return syncExit(others.ends);
+    }
+    if (config.github.repos.length === 0) {
+        say('OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written');
+        return syncExit(others.ends);
+    }
     const pushing = auto && config.github.statusPush;
     /** The issues of each repository read, for the claim pass, which writes to GitHub only when the run pushes. */
     const claimRead = new Map();
@@ -83,9 +86,9 @@ export async function issueSync(args, runtime) {
     // pull requests, checks, posts and label file on the code host.
     const { tracker: host, codeHost } = await hostsOf(GITHUB_REPOS_HOST, runtime, new SecretScanner(config.register.secretPatterns), config.github.stamp, config.connectors);
     const told = new Set();
-    const ends = [];
-    const added = [];
-    const failures = [];
+    const ends = [...others.ends];
+    const added = [...others.added];
+    const failures = [...others.failures];
     const leftOut = new Map();
     const unread = new Set();
     const last = await readSyncState(runtime, kit);
@@ -133,8 +136,8 @@ export async function issueSync(args, runtime) {
         }
         read.notes.forEach((note) => say(`NOTE ${repo}: ${note}`));
         const tasks = [...(await register.snapshot()).state.tasks.values()];
-        const imported = importedTasks(tasks);
-        const plan = planSync(read.issues, imported, rules, linkedRefs(tasks));
+        const imported = importedTasks(tasks, GITHUB_SOURCE);
+        const plan = planSync(read.issues, imported, rules, GITHUB_TRACKER, linkedRefs(tasks));
         // A security issue goes to its task's owner, else where the import would route it; an outsider's left-out report too.
         security.set(repo, securityIssues(read.issues, (issue) => imported.get(issueRef(issue.repo, issue.number))?.owner ?? issueOwner(issue, rules)));
         leftOut.set(repo, plan.leftOut);
@@ -151,7 +154,7 @@ export async function issueSync(args, runtime) {
         let end = 'ok';
         let issueThreads = [];
         if (write) {
-            const outcomes = await applySteps(register, plan.steps);
+            const outcomes = await applySteps(register, GITHUB_SOURCE, plan.steps);
             // Against the tasks as written, so an issue the import just took is held by its new task.
             issueThreads = repoThreads(read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
             claimRead.set(repo, read.issues);
@@ -268,7 +271,7 @@ export async function issueSync(args, runtime) {
     say(write
         ? `WROTE ${written} change(s) to the task list as ${GITHUB_ACTOR}${pushing ? '' : '; GitHub was only read'}`
         : `PREVIEW nothing was written; ${KIT_NAME} issue sync --yes writes the above as ${GITHUB_ACTOR}`);
-    return ends.includes('failed') ? EXIT.failed : ends.includes('refused') ? EXIT.refused : EXIT.ok;
+    return syncExit(ends);
 }
 /**
  * Reads `repo`'s pull requests and compares them with `before`, the watch the last `--auto` run kept (pull-news.ts).
@@ -316,66 +319,6 @@ async function readMentions(host, repo, before, at) {
             ...(read.cutAt === undefined ? [] : [`NOTE ${repo}: the mention read was cut off; it read through ${read.cutAt} and the next run goes on from there`]),
         ],
     };
-}
-/** Why the task list refused some of a repository's steps: how many, and the first one's error; undefined when none was. */
-function refusedReason(outcomes) {
-    const errors = outcomes.flatMap((outcome) => (outcome.result.ok ? [] : [outcome.result.error]));
-    return errors.length === 0 ? undefined : `the task list refused ${errors.length} step(s), first: ${errors[0]}`;
-}
-function previewLines(repo, plan) {
-    return [
-        `REPO ${repo}: ${plan.inserted} to add, ${plan.changed} to change, ${plan.unchanged} unchanged`,
-        ...shown(plan.steps.map((step) => stepLine(step, step.kind === 'add' ? 'new' : step.id))),
-    ];
-}
-function resultLines(repo, plan, outcomes) {
-    const done = outcomes.filter((outcome) => outcome.result.ok);
-    const added = done.filter((outcome) => outcome.step.kind === 'add').length;
-    const changed = new Set(done.filter((outcome) => outcome.step.kind !== 'add').map((outcome) => outcome.step.ref)).size;
-    const refused = outcomes.length - done.length;
-    return [
-        `REPO ${repo}: ${added} added, ${changed} changed, ${plan.unchanged} unchanged${refused > 0 ? `, ${refused} refused` : ''}`,
-        ...shown(done.map((outcome) => stepLine(outcome.step, outcome.result.ok ? outcome.result.value : ''))),
-        ...outcomes.flatMap((outcome) => (outcome.result.ok ? [] : [`SKIPPED ${outcome.step.ref}: ${outcome.result.error}`])),
-    ];
-}
-/**
- * The line naming the open issues the trust rule (trust.ts) left out of a repository, and the label that lets
- * one in: their numbers only, as their text is an outsider's, at most SHOWN_LEFT_OUT and then how many more;
- * none when it left none out.
- */
-function leftOutLines(repo, leftOut, acceptLabel) {
-    if (leftOut.length === 0) {
-        return [];
-    }
-    const more = leftOut.length - SHOWN_LEFT_OUT;
-    const numbers = leftOut.slice(0, SHOWN_LEFT_OUT).map((number) => `#${number}`).join(' ');
-    return [
-        `LEFT OUT ${repo}: ${leftOut.length} open issue(s) by people outside the repository wait for someone to add the ${JSON.stringify(acceptLabel)} label: ${numbers}${more > 0 ? ` and ${more} more` : ''}`,
-    ];
-}
-/** The first SHOWN_STEPS lines, then how many more there are. */
-export function shown(lines) {
-    const more = lines.length - SHOWN_STEPS;
-    return more > 0 ? [...lines.slice(0, SHOWN_STEPS), `... and ${more} more`] : [...lines];
-}
-/** One step on one line; a title is outside input, so it is printed quoted, as data, and a description only by its length. */
-export function stepLine(step, id) {
-    switch (step.kind) {
-        case 'add':
-            return `ADD ${id} ${step.ref} ${priorityText(step.input.priority)} ${step.input.owner}: ${JSON.stringify(step.input.title)}`;
-        case 'update': {
-            const { title, description, priority } = step.changes;
-            const fields = [
-                ...(title === undefined ? [] : [`title ${JSON.stringify(title)}`]),
-                ...(description === undefined ? [] : [description === null ? 'description none' : `description (${description.length} characters)`]),
-                ...(priority === undefined ? [] : [`priority ${priorityText(priority)}`]),
-            ];
-            return `UPDATE ${id} ${step.ref}: ${fields.join(', ')}`;
-        }
-        case 'status':
-            return `SET ${id} ${step.ref} ${step.input.status}: ${step.input.note ?? ''}`;
-    }
 }
 /** Who hears of an issue's close, reopen and labels: the owner of the task holding it, finished once done or dropped, and its followers. */
 function issueAudience(task, followers) {

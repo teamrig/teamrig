@@ -29,7 +29,7 @@ function isJsonObject(text) {
         return false;
     }
 }
-const UPDATE_FIX = 'run `claude plugin update teamrig@teamrig` and restart the session; if that does not clear it, tell your lead.';
+const UPDATE_FIX = 'update the teamrig plugin and restart the session; if that does not clear it, tell your lead.';
 const SLOW_FIX = 'retry the call; if every call times out, the host is overloaded or the guard hangs: tell your lead.';
 /** The most of a wrong answer the block line quotes. */
 const QUOTE_CHARS = 200;

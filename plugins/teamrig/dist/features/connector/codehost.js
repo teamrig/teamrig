@@ -3,6 +3,7 @@ export const CODEHOST_FEATURES = {
     'codehost.pull-news': { kind: 'codehost', doc: 'opened, merged, conflicting, failing and reviewed pull requests reach their session', byDefault: 'on' },
     'codehost.ci-excerpt': { kind: 'codehost', doc: "the end of a failed CI job's log", byDefault: 'on' },
     'codehost.pr-conflicts': { kind: 'codehost', doc: 'the files a pull request conflicts on (`pr conflicts`)', byDefault: 'on' },
+    'codehost.pr-land': { kind: 'codehost', doc: 'approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`)', byDefault: 'on' },
     'codehost.review-posts': { kind: 'codehost', doc: 'review comments and reviews in the mention scan', byDefault: 'on' },
     'codehost.linked-pulls': { kind: 'codehost', doc: 'how many open pull requests close an issue', byDefault: 'on' },
 };

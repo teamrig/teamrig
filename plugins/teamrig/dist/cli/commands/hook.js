@@ -30,14 +30,14 @@ import { TRANSCRIPT_TAIL_BYTES } from "../../names/title.js";
 import { decideStart, decideStop, reaskGrowth, thousands, thresholdOf, } from "../../refresh/decide.js";
 import { ownerTurnsLine, ownerTurnsText } from "../../refresh/owner-turns.js";
 import { carryLines, carryStartOf, readCarry } from "../../refresh/carry.js";
-import { claudeProcessOf } from "../../refresh/restart.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { readContextTokens } from "../../refresh/usage.js";
 import { noPositionals } from "../args.js";
 import { hookLogOf } from "../hook-logs.js";
-import { contextSourceIfTold, hostHomeIfKnown, pathsIfKnown, transcriptsIfKept, transcriptsOf } from "../host.js";
+import { contextSourceIfTold, hostHomeIfKnown, leadLaunchFrom, modelsIfKnown, pathsIfKnown, transcriptsIfKept, transcriptsOf } from "../host.js";
 import { openKit, renameDepsOf, rosterOf, rulesClockOf, teamZone } from "../kit.js";
 import { EXIT } from "../runtime.js";
+import { hostSessionAbove } from "../session-process.js";
 import { keptRulesAboveOf, readTeamRules } from "../team-rules.js";
 import { loadTree } from "../tree.js";
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle } from "./hook-bind.js";
@@ -423,7 +423,7 @@ async function teamPartsOf(runtime, kit, config, start) {
         titleNote,
         refreshNote: refresh.note,
         liveTasksNote: await liveTasksPartOf(runtime, kit, config, id, start.source, refresh),
-        modelNote: modelNoteOf(config, roster, id, start.model),
+        modelNote: modelNoteOf(modelsIfKnown(runtime), config, roster, id, start.model),
         verifyNote: await verifyStartNoteOf(runtime, kit.paths, id),
         worktreeNote: worktreeNoteOf(start.cwd, pathsIfKnown(runtime)),
         session,
@@ -445,15 +445,15 @@ async function startBindNoteOf(runtime, kit, config, source, hostSession, title)
 }
 /**
  * The line for a session of the team that runs on another model than its `launch` entry (for the
- * lead, unset: `opus`), from the model the start's event names; Claude Code leaves it out at some starts, and then
- * nothing is checked. The effort is checked at the first Stop: SessionStart gets no effort level, and
+ * lead, unset: the host's lead default), from the model the start's event names; Claude Code leaves it out at some starts, and then
+ * nothing is checked, as on a host that knows no models. The effort is checked at the first Stop: SessionStart gets no effort level, and
  * `$CLAUDE_EFFORT` here can be the value of the session whose shell started this one.
  */
-function modelNoteOf(config, roster, id, model) {
-    if (id === undefined) {
+function modelNoteOf(models, config, roster, id, model) {
+    if (models === undefined || id === undefined) {
         return undefined;
     }
-    return modelCheckLine(roster.nameOf(id) ?? id, launchOf(config, id), { model, effort: undefined });
+    return modelCheckLine(models, roster.nameOf(id) ?? id, launchOf(config, id, leadLaunchFrom(models)), { model, effort: undefined });
 }
 /** The team session an id or any name it has had finds; undefined for none, or a name the team does not know. */
 function rosterIdOf(roster, session) {
@@ -670,7 +670,7 @@ async function refreshDecisionOf(runtime, scope, event) {
     const decided = facts !== undefined && measured.kind === 'measure' ? decideStop(state, context, { ...facts, due: await dueFactsAt(runtime, store, id, event.transcript) }) : measured;
     // Looked up once for the restart and the state: each look at a process starts a PowerShell on Windows, and a Stop
     // hook past Claude Code's timeout is killed with every process it started.
-    const claude = decided.kind === 'notice' ? await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid) : undefined;
+    const claude = decided.kind === 'notice' ? await hostSessionAbove(runtime) : undefined;
     const decision = decided.kind === 'notice' && decided.restart && target !== undefined
         ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, claude }, decided, { paths: kit.paths, config })
         : decided;
@@ -697,10 +697,11 @@ async function modelNoticesOf(runtime, scope, event) {
         return [];
     }
     const { kit, config, roster, id } = scope;
-    return stopModelNotices(transcriptsIfKept(runtime), runtime.files, new ModelNoticeStore(runtime.files, kit.paths.modelNotices), {
+    const models = modelsIfKnown(runtime);
+    return stopModelNotices(transcriptsIfKept(runtime), models, runtime.files, new ModelNoticeStore(runtime.files, kit.paths.modelNotices), {
         id,
         name: roster.nameOf(id) ?? id,
-        launch: launchOf(config, id),
+        launch: launchOf(config, id, leadLaunchFrom(models)),
         claude,
         effort: event.effort,
         transcript: event.transcript,

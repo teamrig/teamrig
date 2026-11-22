@@ -3,7 +3,6 @@ import { SecretScanner } from "../../core/secrets.js";
 import { KIT_VERSION } from "../../core/version.js";
 import { formatWatchLease, idleDone, leaseHeld, LIFETIME_MS, leaseOutdated, lifetimeDone, parseWatchLease, readDue, } from "../../sync/watch.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
-import { runsClaude } from "../../open/session-processes.js";
 import { SessionRecordStore } from "../../sessions/record.js";
 import { noPositionals } from "../args.js";
 import { fileLockOf } from "../file-locks.js";
@@ -11,6 +10,7 @@ import { hostsOf } from "../issue-hosts.js";
 import { openTeamKit, requireConfig } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
+import { runsHostSession } from "../session-process.js";
 import { githubOffBy } from "./issue-sync-auto.js";
 import { issueSync } from "./issue-sync.js";
 /**
@@ -176,7 +176,7 @@ async function beat(runtime, kit, config) {
 async function anySessionRuns(runtime, kit, config) {
     const records = await new SessionRecordStore(runtime.files, kit.paths).readEach(config.sessions);
     for (const record of records.values()) {
-        if (record !== undefined && (await runsClaude(runtime.sessionProcesses, record.claudePid))) {
+        if (record !== undefined && (await runsHostSession(runtime, record.claudePid))) {
             return true;
         }
     }

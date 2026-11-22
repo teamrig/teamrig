@@ -1,5 +1,5 @@
 import { claudeProjectsDir } from "../../budget/discover.js";
-import { launchOf } from "../../config/launch.js";
+import { launchModelProblem, launchOf, ownLaunchOf } from "../../config/launch.js";
 import { Roster } from "../../config/roster.js";
 import { KIT_NAME } from "../../core/home.js";
 import { readContextFiles } from "../../doctor/context-files.js";
@@ -14,7 +14,7 @@ import { inboxStatus } from "../../inbox/inbox.js";
 import { JsonlRenameLog } from "../../names/log.js";
 import { readWideAllow } from "../allow-scope.js";
 import { noPositionals } from "../args.js";
-import { pathsIfKnown, permissionsIfKept } from "../host.js";
+import { launchHostOf, pathsIfKnown, permissionsIfKept } from "../host.js";
 import { openTeamKit, projectFolder, requireConfig, teamZone } from "../kit.js";
 import { readLeadStart } from "../lead-start.js";
 import { pageCheckOf } from "../login-page.js";
@@ -41,7 +41,7 @@ async function configuredProjects(probe, config, ids) {
     const named = [
         ...(team === undefined ? [] : [{ session: undefined, path: team }]),
         ...ids.flatMap((id) => {
-            const path = launchOf(config, id).project;
+            const path = ownLaunchOf(config, id).project;
             return path === undefined ? [] : [{ session: id, path }];
         }),
     ];
@@ -86,6 +86,14 @@ function pageProblemOf(check) {
  * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed). It reads only and exits 0
  * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
  */
+/** Each session's launch as it starts on this host, with why the host would not run its model. */
+function sessionLaunches(config, ids, host) {
+    return ids.map((id) => {
+        const launch = launchOf(config, id, host.leadDefault);
+        const modelProblem = launchModelProblem(launch, host);
+        return { id, launch, ...(modelProblem === undefined ? {} : { modelProblem }) };
+    });
+}
 export async function doctor(args, runtime) {
     noPositionals(args);
     const kit = await openTeamKit(runtime);
@@ -112,7 +120,7 @@ export async function doctor(args, runtime) {
         settingsEnv: await readSettingsEnv(runtime.files, sessionSettingsOf(runtime, project)),
         settingsDeny: await readSecretDeny(runtime, project),
         wideAllow: await readWideAllow(runtime, { paths, config, project }),
-        launches: roster.ids.map((id) => ({ id, launch: launchOf(config, id) })),
+        launches: sessionLaunches(config, roster.ids, launchHostOf(runtime)),
         projects: await configuredProjects(runtime.probe, config, roster.ids),
         shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
         page: pageProblemOf(await pageCheckOf(runtime, paths.team)),

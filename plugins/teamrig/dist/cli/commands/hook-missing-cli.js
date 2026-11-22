@@ -1,6 +1,7 @@
 import { KIT_NAME } from "../../core/home.js";
 import { missingCliLine, missingCliOf } from "../../hooks/missing-cli.js";
 import { noPositionals } from "../args.js";
+import { stepsIfKnown } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { readHookInput, writeReply } from "./hook-input.js";
 /**
@@ -13,7 +14,7 @@ export async function missingCli(args, runtime) {
     const { event } = await readHookInput(runtime);
     const on = event === undefined ? undefined : missingCliOf(event);
     if (on !== undefined) {
-        writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME) });
+        writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) });
     }
     return EXIT.ok;
 }

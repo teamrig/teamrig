@@ -2,25 +2,20 @@ import { resolve } from 'node:path';
 import { SecretScanner } from "../../core/secrets.js";
 import { issueRef } from "../../sync/map.js";
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from "../../issues/assign.js";
-import { CLOSE_REASONS, hostKindOf, parseIssueTarget, targetText } from "../../issues/host.js";
+import { CLOSE_REASONS, parseIssueTarget, targetText } from "../../issues/host.js";
 import { bareRef, refOf } from "../../issues/ref.js";
 import { checkReply, sendReply } from "../../issues/reply.js";
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from "../../issues/similar.js";
 import { holderOf, sessionLogins } from "../../issues/status-push.js";
 import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue } from "../../issues/write.js";
-import { RegisterPolicy } from "../../register/policy.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { onePositional, requiredFlag } from "../args.js";
 import { withDescriptions } from "../card-texts.js";
 import { secretFilesOf } from "../host.js";
-import { callerOf } from "../inputs.js";
-import { hostsOf } from "../issue-hosts.js";
-import { sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
-import { CONNECTOR_OFF } from "../connector-off.js";
-import { githubOffBy } from "./issue-sync-auto.js";
 import { set } from "./register.js";
 import { openTeam } from "./register-team.js";
+import { checkedRepo, hostsAfter } from "./team-repo.js";
 /**
  * `issue reply <owner/name#n> --body-file <path> [--status <status>] [--pr <n>] [--followup <title>
  * [--followup-body-file <path>]] [--assign <login,...>]` (T3169, replacing `issue comment`): a maintainer's reply that
@@ -371,33 +366,4 @@ async function writeOn(args, runtime, write, textFlag) {
  */
 async function hostsFor(args, runtime, repo, posted) {
     return hostsAfter(await checkedRepo(args, runtime, repo), runtime, posted);
-}
-/** The team's config and `repo`'s host kind once the caller is on the team and the repository is one of the team's. */
-async function checkedRepo(args, runtime, repo) {
-    const team = await openTeam(runtime, 'read');
-    const notOnTeam = new RegisterPolicy(team.config, team.above).checkCaller(sessionIdOf(team.roster, callerOf(args.flags, runtime.env)));
-    if (notOnTeam !== undefined) {
-        throw new RefusedError(notOnTeam);
-    }
-    const kind = hostKindOf(repo, team.config);
-    if (kind === undefined) {
-        const listed = team.config.github.repos.join(', ');
-        throw new RefusedError(`${repo} is not one of the team's repositories: list it under github.repos in the team config${listed === '' ? '' : ` (now ${listed})`}`);
-    }
-    return { config: team.config, kind };
-}
-/** The hosts of a checked repository once the text to post (if any) may be posted; undefined, after an OFF line, while GitHub is off. */
-async function hostsAfter(checked, runtime, posted) {
-    const { config, kind } = checked;
-    const scanner = new SecretScanner(config.register.secretPatterns);
-    const refused = posted === undefined ? undefined : postRefusal(posted.flag, posted.text, scanner);
-    if (refused !== undefined) {
-        throw new RefusedError(refused);
-    }
-    const offBy = githubOffBy(runtime.env);
-    if (offBy !== undefined) {
-        runtime.out.stdout(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was written`);
-        return undefined;
-    }
-    return hostsOf(kind, runtime, scanner, config.github.stamp, config.connectors);
 }

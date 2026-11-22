@@ -20,6 +20,7 @@ export {
   type ConnectorDeps,
   type ConnectorPorts,
   type ConnectorSpec,
+  type RefCodec,
 } from './connector.ts';
 export {
   PANE_STATES,
@@ -86,6 +87,7 @@ export {
   type AskCall,
   type BackgroundMark,
   type CallUsage,
+  type ChildEnvironment,
   type CompactEntry,
   type ContinuedEntry,
   type EditCall,
@@ -101,9 +103,11 @@ export {
   type HookNoteEntry,
   type HookReply,
   type HookVerdict,
+  type HostModels,
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
+  type HostSteps,
   type HostPorts,
   type InputEntry,
   type InputOrigin,
@@ -120,6 +124,7 @@ export {
   type ReadCall,
   type ReplyCall,
   type ReplyEntry,
+  type RunningProgram,
   type ScheduledCarryEntry,
   type ScheduledJob,
   type SearchCall,
@@ -171,6 +176,8 @@ export type { Env } from '../core/home.ts';
 export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/http.ts';
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from '../core/printable.ts';
+// The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
+export { INTERFACE_MAJOR, INTERFACE_VERSION, parseInterfaceVersion } from '../interface/version.ts';
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter, type StampCredit } from '../core/stamp.ts';
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
@@ -195,8 +202,10 @@ export {
   type HostLabelFile,
   type HostLinks,
   type HostList,
+  type HostLanding,
   type HostOpen,
   type HostPulls,
+  type HostPullStand,
   type HostReach,
   type HostThread,
   type HostUse,
@@ -206,6 +215,8 @@ export {
   type IssueHost,
   type IssueTarget,
   type LabelSpec,
+  type PullLanding,
+  type PullStand,
   type Tracker,
   type WatchMarks,
 } from '../issues/host.ts';

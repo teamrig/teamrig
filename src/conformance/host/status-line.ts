@@ -8,6 +8,7 @@ export interface WorldStatus {
   readonly cwd?: string;
   readonly model?: string;
   readonly effort?: string;
+  readonly hostVersion?: string;
 }
 
 /**
@@ -33,12 +34,12 @@ const LAUNCHER = '/kit/bin/statusline.mjs';
 const THEIRS = 'node "/u/scripts/own-status.cjs"';
 
 /** Two sessions no liar's fixed answer equals. */
-const FIRST: Required<WorldStatus> = { sessionId: 'session-7', cwd: '/work/repo', model: 'Model Seven', effort: 'high' };
-const SECOND: Required<WorldStatus> = { sessionId: 'session-8', cwd: '/work/other', model: 'Model Eight', effort: 'low' };
+const FIRST: Required<WorldStatus> = { sessionId: 'session-7', cwd: '/work/repo', model: 'Model Seven', effort: 'high', hostVersion: '7.0.1' };
+const SECOND: Required<WorldStatus> = { sessionId: 'session-8', cwd: '/work/other', model: 'Model Eight', effort: 'low', hostVersion: '8.2.0' };
 
 /** The fields of a reading a case tells through the world; undefined when the port read nothing. */
-function toldOf(reading: StatusReading | undefined): Pick<StatusReading, 'sessionId' | 'cwd' | 'model' | 'effort'> | undefined {
-  return reading === undefined ? undefined : { sessionId: reading.sessionId, cwd: reading.cwd, model: reading.model, effort: reading.effort };
+function toldOf(reading: StatusReading | undefined): Pick<StatusReading, 'sessionId' | 'cwd' | 'model' | 'effort' | 'hostVersion'> | undefined {
+  return reading === undefined ? undefined : { sessionId: reading.sessionId, cwd: reading.cwd, model: reading.model, effort: reading.effort, hostVersion: reading.hostVersion };
 }
 
 /** The plan of a change that must go through, with the settings it leaves: the plan's own, else the ones it was given. */
@@ -51,7 +52,7 @@ function planned(port: StatusLine, change: 'install' | 'uninstall', settings: Js
 const CASES: readonly StatusLineCase[] = [
   {
     id: 'status-line.reads-input',
-    title: "reads the session's id, folder, model and effort the status input tells",
+    title: "reads the session's id, folder, model, effort and host version the status input tells",
     features: ['budget.status-line'],
     run: ({ port, world }) => {
       for (const told of [FIRST, SECOND]) {
@@ -64,7 +65,7 @@ const CASES: readonly StatusLineCase[] = [
     title: 'leaves a field the status input did not tell undefined, the folder empty, never a value of its own making',
     features: ['budget.status-line'],
     run: ({ port, world }) => {
-      assert.deepEqual(toldOf(port.parse(world.status({ sessionId: FIRST.sessionId }))), { sessionId: FIRST.sessionId, cwd: '', model: undefined, effort: undefined });
+      assert.deepEqual(toldOf(port.parse(world.status({ sessionId: FIRST.sessionId }))), { sessionId: FIRST.sessionId, cwd: '', model: undefined, effort: undefined, hostVersion: undefined });
     },
   },
   {
@@ -136,7 +137,7 @@ export function nothingStatusLine(): StatusLineSubject {
  * by writing settings with no status line in them.
  */
 export function yesStatusLine(): StatusLineSubject {
-  const reading: StatusReading = { sessionId: 'session', cwd: '/', agentName: 'agent', model: 'model', effort: 'max', costUsd: 1, contextUsedPct: 1, contextInputTokens: 1 };
+  const reading: StatusReading = { sessionId: 'session', cwd: '/', agentName: 'agent', model: 'model', effort: 'max', hostVersion: '1.0.0', costUsd: 1, contextUsedPct: 1, contextInputTokens: 1 };
   const emptied = (): { ok: true; value: StatusLinePlan } => ({ ok: true, value: { settings: {}, before: undefined, after: undefined } });
   return { world: WORLD, port: { setting: 'line', parse: () => reading, install: emptied, uninstall: emptied } };
 }

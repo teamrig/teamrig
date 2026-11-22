@@ -16,6 +16,8 @@ export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName
 export { errorCode, errorMessage, instantField, isNonNegativeInteger, isRecord, isStringArray, numberField, recordField, stringField, } from "../core/guards.js";
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from "../core/printable.js";
+// The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
+export { INTERFACE_MAJOR, INTERFACE_VERSION, parseInterfaceVersion } from "../interface/version.js";
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter } from "../core/stamp.js";
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.

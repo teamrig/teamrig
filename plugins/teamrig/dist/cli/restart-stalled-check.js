@@ -2,7 +2,6 @@ import { autoRestartOf } from "../config/refresh.js";
 import { MS_PER_MINUTE } from "../core/time.js";
 import { RestartLog } from "../refresh/restart-log.js";
 import { RefreshStore } from "../refresh/store.js";
-import { runsClaude } from "../open/session-processes.js";
 import { lastTurnAtOf, tabActivityOf } from "../sessions/idle.js";
 import { REPLY_TAIL_BYTES } from "../turn-log/reply.js";
 /**
@@ -25,7 +24,7 @@ async function quietSinceOf(reader, files, transcript, readyAt) {
     const activity = tabActivityOf(reader, tail, cut);
     return activity === 'turn' || activity === 'call' ? undefined : Math.max(readyAt, lastTurnAtOf(reader, tail, cut) ?? readyAt);
 }
-async function stalledOf({ reader, files, processes }, store, log, session, now, waitMs) {
+async function stalledOf({ reader, files, sessionRuns }, store, log, session, now, waitMs) {
     const state = await store.state(session);
     if (state?.phase !== 'ready' || !state.noticed || (await store.restart(session)) !== undefined || (await store.parked(session)) !== undefined) {
         return undefined;
@@ -37,7 +36,7 @@ async function stalledOf({ reader, files, processes }, store, log, session, now,
     }
     // A ready state outlives its tab (closed by a person, the idle pass or a reboot); with no Claude Code left, the next
     // start reads the handover, so nothing is stalled. Looked up last: it costs a process read.
-    if (state.claudePid !== null && !(await runsClaude(processes, state.claudePid))) {
+    if (state.claudePid !== null && !(await sessionRuns(state.claudePid))) {
         return undefined;
     }
     return { session, readyAt, quietSince, row: await log.lastRowOf(session) };
@@ -58,13 +57,13 @@ function rowText(row, zone) {
  * ready state, so the lead is told once per handover. A session whose recorded Claude Code no longer runs is left out:
  * its tab is gone, and its next start takes the handover.
  */
-export async function restartStalledWarnings(reader, files, processes, paths, config, zone, now) {
+export async function restartStalledWarnings(reader, files, sessionRuns, paths, config, zone, now) {
     const store = new RefreshStore(files, paths);
     const log = new RestartLog(files, paths);
     const { restartDelaySeconds } = config.refresh;
     const waitMs = restartDelaySeconds * 1000 + STALLED_MARGIN_MINUTES * MS_PER_MINUTE;
     const covered = config.sessions.filter((session) => autoRestartOf(config, session));
-    const stalled = await Promise.all(covered.map((session) => stalledOf({ reader, files, processes }, store, log, session, now, waitMs)));
+    const stalled = await Promise.all(covered.map((session) => stalledOf({ reader, files, sessionRuns }, store, log, session, now, waitMs)));
     return stalled.flatMap((each) => {
         if (each === undefined) {
             return [];

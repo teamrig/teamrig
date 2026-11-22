@@ -39,10 +39,10 @@ export async function readLastFallback(reader, files, transcript) {
     return text === undefined ? undefined : lastFallbackOf(reader, text, Buffer.byteLength(text, 'utf8') >= FALLBACK_TAIL_BYTES);
 }
 /**
- * The line that tells the user the host switched the session's model, with the command that
+ * The line that tells the user the host switched the session's model, with the step that
  * switches back: to `wanted`, the team config's model, else the model the session ran before.
  */
-export function fallbackLine(name, fallback, wanted) {
+export function fallbackLine(models, name, fallback, wanted) {
     const why = fallback.category === undefined ? '' : ` (${fallback.category})`;
-    return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: Claude Code switched after its safeguards stopped a reply${why} and keeps it for this session; type /model ${wanted ?? fallback.from} to switch back`;
+    return `MODEL ${name} now runs model ${fallback.to}, not ${fallback.from}: the host switched after its safeguards stopped a reply${why} and keeps it for this session; type ${models.switchModelStep(wanted ?? fallback.from)} to switch back`;
 }

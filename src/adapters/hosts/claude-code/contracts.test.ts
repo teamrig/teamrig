@@ -1,13 +1,17 @@
 import {
   bind,
+  MODELS_CONTRACT,
   PERMISSIONS_CONTRACT,
   PLUGIN_CONTRACT,
   STATUS_LINE_CONTRACT,
+  STEPS_CONTRACT,
   TRANSCRIPT_CONTRACT,
   USAGE_CONTRACT,
+  type ModelsWorld,
   type PermissionsWorld,
   type PluginWorld,
   type StatusLineWorld,
+  type StepsWorld,
   type TranscriptWorld,
   type UsageWorld,
   type WorldInstall,
@@ -16,6 +20,8 @@ import { isStringArray, recordField, stringField, type JsonRecord, type RateWind
 import { describeContracts } from '../../../testing/contracts.ts';
 import { promptLine, resultsLine } from '../../../testing/transcript-lines.ts';
 import { declaration } from './declaration.ts';
+import { hostModels } from './models.ts';
+import { hostSteps } from './steps.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
 import { statusLine } from './status-line.ts';
@@ -57,12 +63,13 @@ const usageWorld: UsageWorld = {
 
 /** Claude Code's status input for what a case tells, and its settings, the status line under `statusLine.command`. */
 const statusLineWorld: StatusLineWorld = {
-  status: ({ sessionId, cwd, model, effort }) =>
+  status: ({ sessionId, cwd, model, effort, hostVersion }) =>
     JSON.stringify({
       session_id: sessionId,
       ...(cwd === undefined ? {} : { workspace: { current_dir: cwd } }),
       ...(model === undefined ? {} : { model: { display_name: model } }),
       ...(effort === undefined ? {} : { effort: { level: effort } }),
+      ...(hostVersion === undefined ? {} : { version: hostVersion }),
     }),
   settings: (command) => (command === undefined ? { theme: 'dark' } : { theme: 'dark', statusLine: { type: 'command', command } }),
   commandOf: (settings) => {
@@ -90,6 +97,12 @@ const permissionsWorld: PermissionsWorld = {
   routes: (lines) => (lines === undefined ? { theme: 'dark' } : { theme: 'dark', autoMode: { environment: [...lines] } }),
   routesOf: (settings) => listIn(recordField(settings, 'autoMode'), 'environment'),
 };
+
+/** Two models of different families, and one of a family Claude Code does not name. */
+const modelsWorld: ModelsWorld = { model: 'claude-opus-5-5', otherModel: 'claude-haiku-5-5', unplaced: 'claude-zeta-9' };
+
+/** A Claude Code session id, and teamrig's own plugin and marketplace. */
+const stepsWorld: StepsWorld = { session: '0f3c2a1b-9d4e-4c7a-8b21-5e6f7a8b9c0d', plugin: 'teamrig', marketplace: 'teamrig' };
 
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';
 
@@ -139,5 +152,7 @@ describeContracts({
     bind({ contract: STATUS_LINE_CONTRACT, make: () => ({ port: statusLine, world: statusLineWorld }) }),
     bind({ contract: PERMISSIONS_CONTRACT, make: () => ({ port: hostPermissions, world: permissionsWorld }) }),
     bind({ contract: PLUGIN_CONTRACT, make: () => ({ port: hostPlugin, world: pluginWorld }) }),
+    bind({ contract: MODELS_CONTRACT, make: () => ({ port: hostModels, world: modelsWorld }) }),
+    bind({ contract: STEPS_CONTRACT, make: () => ({ port: hostSteps, world: stepsWorld }) }),
   ],
 });

@@ -4,10 +4,10 @@ import { sessionTitleOf } from "../../names/title.js";
 import { bindByEnv, bindByProcess, bindByTitle, bindHint, hintReason, processBoundNote, refreshedIn } from "../../hooks/bind.js";
 import { firstHint, JsonlHintLog } from "../../hooks/hint-log.js";
 import { injectFor } from "../../inbox/inject.js";
-import { claudeProcessOf } from "../../refresh/restart.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { hookLogOf } from "../hook-logs.js";
 import { transcriptsIfKept } from "../host.js";
+import { hostSessionAbove } from "../session-process.js";
 import { loadTree } from "../tree.js";
 import { inboxDepsOf } from "./inbox.js";
 /**
@@ -48,7 +48,7 @@ export async function bindTab(runtime, kit, own, claudeSession, title) {
  */
 export async function bindAfterClear(runtime, kit, roster, claudeSession) {
     try {
-        const pid = await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid);
+        const pid = await hostSessionAbove(runtime);
         if (pid === undefined) {
             return undefined;
         }

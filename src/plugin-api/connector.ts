@@ -5,7 +5,7 @@ import type { HttpClient } from '../core/http.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import { featuresOf, isConnectorKind, type ConnectorKind } from '../features/registry.ts';
-import type { CodeHost, Tracker } from '../issues/host.ts';
+import type { CodeHost, IssueTarget, Tracker } from '../issues/host.ts';
 import { adapterEntry, declarationProblems, type AdapterDeclaration } from './declaration.ts';
 import { isSupport } from './support.ts';
 
@@ -56,6 +56,33 @@ export interface ConnectorDeps {
 export interface ConnectorPorts {
   readonly tracker?: Tracker;
   readonly codeHost?: CodeHost;
+  /**
+   * The places the connector's config section names for its tracker, each written as the tracker's `repo` (Jira:
+   * `<site>/<project key>` in lowercase), so an issue command reads them without knowing the connector's keys. Left
+   * out by a connector whose places the team config names elsewhere (GitHub: `github.repos`).
+   */
+  readonly targets?: readonly string[];
+  /**
+   * How a task's ref names one of the tracker's issues, both ways. Left out by a connector whose refs core reads
+   * itself (GitHub: issues/ref.ts).
+   */
+  readonly refs?: RefCodec;
+}
+
+/**
+ * A connector's issue refs: its declaration's `refPrefix`, then an id only the connector reads (`jira:ENG-12`), so a
+ * ref stays the same text whatever place the config names it by.
+ */
+export interface RefCodec {
+  /** The ref of the tracker's issue `target`; undefined when the target is no place the connector's config names. */
+  readonly refOf: (target: IssueTarget) => string | undefined;
+  /** The issue `ref` names; undefined when it is another connector's ref, or names none of this one's places. */
+  readonly parseRef: (ref: string) => IssueTarget | undefined;
+  /**
+   * The page of the tracker's issue `target`, built from the connector's config, never an address an answer sent: the
+   * sync writes it as a closed issue's evidence. Undefined, as for refOf, when the target is no place the config names.
+   */
+  readonly pageOf: (target: IssueTarget) => string | undefined;
 }
 
 /** What the author of a connector writes: its declaration, how its config section is read, and how its ports are built. */

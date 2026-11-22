@@ -1,5 +1,6 @@
 import type {
   AlertsConfig,
+  ChangesConfig,
   FreezesConfig,
   DeliveryWaitConfig,
   QueueConfig,
@@ -18,7 +19,6 @@ import type {
   IdleConfig,
   ExecConfig,
   HiringConfig,
-  LaunchConfig,
   LockConfig,
   LeadBoundaryConfig,
   LoopsConfig,
@@ -139,6 +139,9 @@ export const DEFAULT_CONTEXT_FILES: ContextFilesConfig = {
 };
 
 export const DEFAULT_LOCK: LockConfig = { ttlMs: 300_000, pollMs: 50, waitMs: 20_000 };
+
+/** No change sources named: `teamrig changes` reads every one that applies to the project. */
+export const DEFAULT_CHANGES: ChangesConfig = { sources: [] };
 
 /** No exec PATH: a privileged command names its program by absolute path until the team lists its tool folders. */
 export const DEFAULT_EXEC: ExecConfig = { path: [] };
@@ -492,11 +495,3 @@ export const DEFAULT_HIRING: HiringConfig = {
   scaleOut: DEFAULT_SCALE_OUT,
 };
 
-/**
- * The lead's model and effort for each key its `launch` entry leaves unset: Opus (Claude Code's `opus`
- * alias, its newest Opus) at xhigh effort, since the lead plans, splits and judges the whole team's work.
- * Not `best`: in a lead A/B, Fable at xhigh judged no better than Opus and cost 2.4 times as much. A team
- * sets `launch.<lead id>.model` to `best` or a full model id to change it. The other sessions default to
- * Claude Code's own.
- */
-export const DEFAULT_LEAD_LAUNCH: Required<Pick<LaunchConfig, 'model' | 'effort'>> = { model: 'opus', effort: 'xhigh' };

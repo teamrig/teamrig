@@ -1,6 +1,7 @@
 /**
- * The host's sessions as the core starts, finds and names them. So far the port tells who the host says a run is;
- * its program, a launch, a resume, a session's processes and a wake join it as each moves out of the core.
+ * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
+ * host says a run is, what a child inherits of a session and which process runs one; a launch, a resume and a wake
+ * join it as each moves out of the core.
  */
 
 /**
@@ -26,6 +27,11 @@ export interface SessionIdentity {
    * by; undefined when the host tells none, as in the person's own shell.
    */
   readonly sessionId: string | undefined;
+  /**
+   * The effort level the host's environment forces on every session it starts, over the one a session picked, in the
+   * host's own word; undefined when nothing forces one, and the session's own effort holds.
+   */
+  readonly forcedEffort: string | undefined;
 }
 
 /**
@@ -46,9 +52,50 @@ export interface SessionVariables {
   readonly identity: readonly string[];
 }
 
+/**
+ * The environment variables a host sets for a session, by what a program teamrig starts may inherit of them. They
+ * are names and no reading: teamrig filters the environment it hands a new session or a queued step by them.
+ */
+export interface ChildEnvironment {
+  /**
+   * Every variable the host sets for a session's own tools. A session or a step started from inside one must not
+   * inherit them: it would look nested in its starter's session and could reach what the host keeps for that
+   * session alone.
+   */
+  readonly session: readonly string[];
+  /**
+   * Those of `session` a step parked on disk keeps, so a `teamrig` it runs still resolves its parker's tab. What is
+   * named here lands in a file, so none is a secret.
+   */
+  readonly parked: readonly string[];
+  /** The host's own login. A session of the host keeps these; no other program teamrig starts gets them. */
+  readonly login: readonly string[];
+}
+
+/** A running process as the system describes it, by what tells whose program it is. */
+export interface RunningProgram {
+  /** Its program's file name, such as `node` or a host's own binary. */
+  readonly name: string;
+  /** Its whole command line; empty when the system does not show it (a process of another user). */
+  readonly commandLine: string;
+}
+
 export interface SessionLauncher {
+  /**
+   * The host program's name as people know it, such as `Claude Code`: what a commit stamp names. The core sees no
+   * adapter's declaration, so the port carries the name itself.
+   */
+  readonly programName: string;
   /** The variables the host tells a run about its session by, the ones its declaration names. */
   readonly variables: SessionVariables;
+  /** The variables the host sets for a session, by what a new session or a queued step may inherit of them. */
+  readonly childEnv: ChildEnvironment;
   /** Who the host says this run is, in the environment the port was built for. */
   identity(): SessionIdentity;
+  /**
+   * Whether a running process is the host's own program running a session: its binary, or a runtime running its
+   * script. teamrig tells by it that a recorded session still runs, and finds the session a hook or a step runs
+   * under; a process id the system gave another program since must not pass.
+   */
+  isSessionProcess(process: RunningProgram): boolean;
 }

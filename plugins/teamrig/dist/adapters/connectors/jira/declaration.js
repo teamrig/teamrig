@@ -51,6 +51,7 @@ export const declaration = {
         'codehost.pull-news': NOT_A_CODE_HOST,
         'codehost.ci-excerpt': NOT_A_CODE_HOST,
         'codehost.pr-conflicts': NOT_A_CODE_HOST,
+        'codehost.pr-land': NOT_A_CODE_HOST,
         'codehost.review-posts': NOT_A_CODE_HOST,
         'codehost.linked-pulls': NOT_A_CODE_HOST,
     },

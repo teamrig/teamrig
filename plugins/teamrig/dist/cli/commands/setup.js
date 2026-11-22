@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { launchOf } from "../../config/launch.js";
+import { ownLaunchOf } from "../../config/launch.js";
 import { SHIPPED_CONFIG_FORMAT } from "../../config/migrate.js";
 import { KIT_NAME, resolveKitHome, teamConfigFile } from "../../core/home.js";
 import { describeRequirement } from "../../requirements/requirements.js";
@@ -31,7 +31,7 @@ export async function projectOf(runtime, flag) {
  * ({@link teamProjectOf}), else as {@link projectOf}.
  */
 export function sessionProjectOf(runtime, config, id, flag, from) {
-    return projectOf(runtime, flag ?? launchOf(config, id).project ?? teamProjectOf(config, from));
+    return projectOf(runtime, flag ?? ownLaunchOf(config, id).project ?? teamProjectOf(config, from));
 }
 /** {@link sessionProjectOf} for each session a pass over the team reads. */
 export function sessionFoldersOf(runtime, config, flag, from) {

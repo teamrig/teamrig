@@ -23,31 +23,16 @@ export const CREDENTIAL_VARIABLES = [
     'SLACK_BOT_TOKEN',
     'STRIPE_SECRET_KEY',
 ];
-/** Claude Code's own login. A session is Claude Code, so sessionEnv keeps these for it; no other program gets them. */
-export const CLAUDE_LOGIN_VARIABLES = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
-/**
- * Variables a running Claude Code session sets for its own tools. A terminal started from inside one
- * (Konsole and x-terminal-emulator inherit this process's environment) would pass them on, and the new
- * session would look nested inside the old one and could reach its messaging socket.
- */
-export const CLAUDE_SESSION_VARIABLES = [
-    'CLAUDECODE',
-    'CLAUDE_CODE_SESSION_ID',
-    'CLAUDE_CODE_CHILD_SESSION',
-    'CLAUDE_CODE_ENTRYPOINT',
-    'CLAUDE_CODE_EXECPATH',
-    'CLAUDE_CODE_MESSAGING_SOCKET',
-    'CLAUDE_CODE_MESSAGING_TOKEN',
-    'CLAUDE_CODE_SESSION_ATTENDED',
-    'CLAUDE_PID',
-    'CLAUDE_PROJECT_DIR',
-];
+/** The names in upper case: variable names compare without case, as Windows reads them. */
+function upperCased(names) {
+    return new Set(names.map((name) => name.toUpperCase()));
+}
 /**
  * `env` without the credential variables, but those `pass` names. Names compare without case, as Windows reads them,
  * so `gh_token` is left out as well and a `pass` entry in any case keeps its variable.
  */
 export function withoutCredentials(env, pass) {
-    const kept = new Set(pass.map((name) => name.toUpperCase()));
+    const kept = upperCased(pass);
     return Object.fromEntries(Object.entries(env).filter(([name]) => {
         const upper = name.toUpperCase();
         return kept.has(upper) || !CREDENTIAL_VARIABLES.includes(upper);
@@ -100,34 +85,33 @@ function isTeamrigVariable(name) {
     return name.toUpperCase().startsWith(TEAMRIG_VARIABLE_PREFIX);
 }
 /**
- * The parker's Claude Code session variables a parked step keeps, so a nested `teamrig` in it still resolves the
- * parker's tab: none is a secret. The rest of CLAUDE_SESSION_VARIABLES stays off disk; the messaging token is a
- * secret, and the step simply goes without it and the socket.
+ * What of `env` a parked step writes to disk: the `PARKED_VARIABLES`, teamrig's own and `parkedSession`, names
+ * compared without case. `parkedSession` is the parker's session variables its host lets a parked step keep (the host
+ * port's `childEnv.parked`, with every mark of an agent's run), so a nested `teamrig` in the step still resolves the
+ * parker's tab and is still told an agent runs it. What is kept lands in a file, so a credential variable is never
+ * kept, whatever a host names.
  */
-export const PARKED_SESSION_VARIABLES = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_PROJECT_DIR'];
-/** Variables a dispatched step never takes from the dispatcher: teamrig's own and its starter's Claude Code session's. */
-function isSessionVariable(name) {
-    return isTeamrigVariable(name) || CLAUDE_SESSION_VARIABLES.includes(name.toUpperCase());
-}
-/**
- * What of `env` a parked step writes to disk: the `PARKED_VARIABLES`, the `PARKED_SESSION_VARIABLES` and teamrig's
- * own, names compared without case.
- */
-export function parkedEnvOf(env) {
+export function parkedEnvOf(env, parkedSession) {
+    const session = upperCased(parkedSession);
     return Object.fromEntries(Object.entries(env).filter(([name]) => {
         const upper = name.toUpperCase();
-        return isTeamrigVariable(name) || PARKED_VARIABLES.includes(upper) || PARKED_SESSION_VARIABLES.includes(upper);
+        return isTeamrigVariable(name) || PARKED_VARIABLES.includes(upper) || (session.has(upper) && !CREDENTIAL_VARIABLES.includes(upper));
     }));
 }
 /**
  * The environment a parked step runs with: the dispatcher's, held in memory, with the step's parked variables over it.
- * The dispatcher's teamrig and Claude Code session variables are left out, so the step is never read as the session
- * that started the dispatcher and never holds its messaging socket or token; its credentials stay, and the step's
- * `delivery.passEnv` then keeps only those its team lets through, as for any queued step. Dispatcher and parker are
- * the same OS user on the same host.
+ * The dispatcher's teamrig variables and `hostSession`, the variables a host sets for a session's own tools (the host
+ * port's `childEnv.session`), are left out, so the step is never read as the session that started the dispatcher and
+ * never holds what the host keeps for that session alone, such as a messaging socket or its token; its credentials
+ * stay, and the step's `delivery.passEnv` then keeps only those its team lets through, as for any queued step.
+ * Dispatcher and parker are the same OS user on the same host.
  */
-export function dispatchedEnvOf(dispatcher, parked) {
-    const parkedNames = new Set(Object.keys(parked).map((name) => name.toUpperCase()));
-    const base = Object.entries(dispatcher).filter(([name]) => !isSessionVariable(name) && !parkedNames.has(name.toUpperCase()));
+export function dispatchedEnvOf(dispatcher, parked, hostSession) {
+    const session = upperCased(hostSession);
+    const parkedNames = upperCased(Object.keys(parked));
+    const base = Object.entries(dispatcher).filter(([name]) => {
+        const upper = name.toUpperCase();
+        return !isTeamrigVariable(name) && !session.has(upper) && !parkedNames.has(upper);
+    });
     return { ...Object.fromEntries(base), ...parked };
 }

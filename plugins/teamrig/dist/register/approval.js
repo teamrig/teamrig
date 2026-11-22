@@ -22,6 +22,36 @@ export function answerTo(task, reason) {
 export function approvalCleared(task, reason) {
     return answerTo(task, reason)?.verdict === 'approved';
 }
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+const COMMIT_SHA_RUN = /\b[0-9a-f]{7,40}\b/g;
+/** Whether `text` is a commit sha, full or abbreviated to at least 7 hex digits. */
+export function isCommitSha(text) {
+    return COMMIT_SHA.test(text);
+}
+/**
+ * Whether the task's answer note names a sha `head` starts with: an approval covers only the head it names, so an
+ * approval of an earlier head never clears a later one (T2788). Shared by the ship tool's merge and `teamrig pr`
+ * (T4817).
+ */
+export function answerNamesHead(task, head) {
+    const named = task.answer?.note?.match(COMMIT_SHA_RUN) ?? [];
+    return named.some((sha) => head.startsWith(sha));
+}
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/;
+const FULL_COMMIT_SHA_RUN = /\b[0-9a-f]{40}\b/g;
+/** Whether `text` is a full 40-hex commit sha. */
+export function isFullCommitSha(text) {
+    return FULL_COMMIT_SHA.test(text);
+}
+/**
+ * Whether the task's answer note names `head` in full: what `teamrig pr` holds an outside pull request's approval to
+ * (T4958 C1). Its author picks the commits, and a commit sharing a 7-hex prefix with the approved head is cheap to
+ * grind, so a prefix match could carry the approval over to code no one reviewed.
+ */
+export function answerNamesFullHead(task, head) {
+    const named = task.answer?.note?.match(FULL_COMMIT_SHA_RUN) ?? [];
+    return named.includes(head);
+}
 /**
  * The first task of `owner`'s, in register order, that waits on the approval of one of `approvers` (its leaders,
  * `LeadTree.chainOf`) and has it: what lets `owner` push to a protected branch under `pushGuard.pushToProtected: lead`

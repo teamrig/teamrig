@@ -13,6 +13,7 @@ import { EXIT, RefusedError } from "./runtime.js";
 import { hookLockDeadline } from "./hook-timeouts.js";
 const registerCommands = () => import("./commands/register.js");
 const tabSessionCommands = () => import("./commands/tab-session.js");
+const checkCommands = () => import("./commands/check.js");
 const statsCommands = () => import("./commands/stats.js");
 const reportCommands = () => import("./commands/report.js");
 const goalCommands = () => import("./commands/goal.js");
@@ -44,6 +45,7 @@ const teamCommands = () => import("./commands/team.js");
 const sessionsCommands = () => import("./commands/sessions.js");
 const closeCommands = () => import("./commands/close.js");
 const commitsCommands = () => import("./commands/commits.js");
+const changesCommands = () => import("./commands/changes.js");
 const secretsCommands = () => import("./commands/secrets.js");
 const doctorCommands = () => import("./commands/doctor.js");
 const pageCommands = () => import("./commands/page.js");
@@ -133,7 +135,7 @@ const COMMANDS = {
     },
     // --session names the caller on every task and inbox command, so a session can always pass it.
     show: { effect: 'read', flags: ['session'], switches: ['tree', 'history'], load: async () => (await registerCommands()).show },
-    check: { effect: 'read', flags: ['session', 'week'], switches: ['tree', 'all'], load: async () => (await registerCommands()).check },
+    check: { effect: 'read', flags: ['session', 'week'], switches: ['tree', 'all', 'new'], load: async () => (await checkCommands()).check },
     plan: { effect: 'read', flags: ['session', 'week'], switches: ['tree', 'by-slice'], load: async () => (await registerCommands()).plan },
     verify: { effect: 'read', flags: ['session'], load: async () => (await registerCommands()).verify },
     stats: { effect: 'read', flags: ['session', 'range'], switches: ['tree'], load: async () => (await statsCommands()).stats },
@@ -232,6 +234,8 @@ const COMMANDS = {
     'issue similar': { effect: 'read', flags: [], load: async () => (await issueCommands()).issueSimilar },
     'issue assign': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueAssign },
     'pr conflicts': { effect: 'write', flags: ['base'], load: async () => (await prCommands()).prConflicts },
+    'pr approve': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prApprove },
+    'pr merge': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prMerge },
     'issue links': { effect: 'write', flags: ['repo'], switches: ['yes'], load: async () => (await issueLinksCommands()).issueLinks },
     follow: { effect: 'write', flags: ['session'], switches: ['list'], load: async () => (await followCommands()).follow },
     unfollow: { effect: 'write', flags: ['session'], load: async () => (await followCommands()).unfollow },
@@ -275,6 +279,7 @@ const COMMANDS = {
     'config validate': { effect: 'read', flags: [], load: async () => (await configCommands()).validate },
     'config migrate': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await configCommands()).migrate },
     'commits check': { effect: 'read', flags: ['base', 'tip'], load: async () => (await commitsCommands()).check },
+    changes: { effect: 'read', flags: ['since', 'until', 'file', 'area'], load: async () => (await changesCommands()).changes },
     'secrets staged': { effect: 'read', flags: [], load: async () => (await secretsCommands()).staged },
     'secrets message': { effect: 'read', flags: [], load: async () => (await secretsCommands()).message },
     'secrets pushed': { effect: 'read', flags: [], load: async () => (await secretsCommands()).pushed },
@@ -596,6 +601,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       (roles.securityReviewer; with none set, any session but the task's owner) pins a hand step file
       (.ps1, .sh or .md) for a task still to finish at the sha256 of its bytes now (core rule 11), so a
       card may hand it to the owner; an edit needs a new audit; the task's owner gets an inbox line;
+      REFUSED for a file that calls gh, or a git command reaching a remote (push, fetch, pull, clone,
+      ls-remote, remote update, submodule update), on the human's own login, naming each call;
       --team <child>: the reviewer on a team above audits a task of that team below
   audit T<n> --verdict "<what the review found>" [--note ..] [--team <child>]   the security reviewer
       gives its verdict on the task's card (core rule 9), pinned with the question, options and
@@ -606,11 +613,12 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       of a task that needs it ("due 01-12 (from T9)"), and a row names another session's task needing it.
       --parked: only the quiet tasks the park rule leaves out of a list; --untriaged: only the tasks that
       wait for a leader to class them
-  show <id> [--tree] [--history]   every field, the last 3 history events and the inbox lines naming it;
-      --history: every event; --tree: what it needs and what needs it, each with owner, status and due, then
-      the next move (who acts first, on which task)
-  check [--week <date>] [--tree] [--all]   tasks and skills that break a team rule and context
-      text over budget, in a short form within 3,000 characters; --all: every flag in full
+  show <id> [<id> ...] [--tree] [--history]   every field, the last 3 history events and the inbox lines naming
+      it, for each id in order (an unknown one refuses the call); --history: every event; --tree: what it needs
+      and what needs it, each with owner, status and due, then the next move (who acts first, on which task)
+  check [--week <date>] [--tree] [--all] [--new]   tasks and skills that break a team rule and context
+      text over budget, in a short form within 3,000 characters; --all: every flag in full; --new:
+      only the flags the session acts on (as start shows them) new since its last start or check --new
   plan [--week <date>] [--tree] [--by-slice]    the week plan (default: the newest week that has
       started); --tree (the lead only): also every team under it, read-only, ids as <team>/T<n>;
       --by-slice: the week's tasks under each slice of the team's goals first, then the rest by band
@@ -753,7 +761,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   ui [--session <id|name>] [--team <team>]   starts the dedicated UI in this terminal, for the team here or the
       one named, on that session's view; it runs the entry script ui.path names, else the released UI
       this teamrig pins, fetched once into the kit home's ui folder, held to its sha256 at each start
-      and given only a few variables; refused while neither is there or ui.path names no file
+      and given only a few variables; refused while neither is there, ui.path names no file or the
+      release speaks an interface version this teamrig does not serve
   page test                    posts one page marked TEST through the team's page webhook, as an expired login's
       page goes; prints which team's alerts key paged, or why none went and fails, never the URL
   compact [--dry-run] [--from-history]   archives the task list's log and rewrites its snapshot, so reads
@@ -771,7 +780,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       sends the status push's labels, assignees, fields and types too (a close it plans is held for --push --yes,
       printed HELD), and assigns an outside person who claims an open issue by a /take comment,
       taking the assignee off after 7 days with no linked pull request,
-      its writes lowered so an hour of runs sends at most 250
+      its writes lowered so an hour of runs sends at most 250; first it imports each other tracker
+      with a connectors.<id> section (Jira: connectors.jira.projects) the same way, as that tracker's
+      source, read-only; --repo reads that GitHub repository alone
   issue watch   the team's one watch on github.repos, started hidden by the hooks: every
       github.probeSeconds (60 by default; 0 runs none) it asks GitHub whether each repository's issues,
       pull requests or Actions runs changed, a conditional read that costs no rate limit when nothing
@@ -842,6 +853,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       request's head and prints the files it conflicts on against origin's newest base (its default
       branch unless --base) and the rebase it needs; changes no local branch or file of the clone and
       writes nothing to GitHub; refuses a folder whose origin is another repository
+  pr approve <owner/name#n> --head <sha> [--check]   approves one pull request of the team's repositories
+      at its head, with the token saved for the owner; refused, writing nothing, unless one task holds it
+      (its ref), the caller owns that task, the caller's leader approved it with a note naming the full
+      40-hex head (a root team's lead needs no one), and the pull request is open, no draft, on its default
+      branch and at the full head --head names; --check prints what it would do and writes nothing
+  pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
+      refused while it conflicts, is queued already or its head's checks have not all passed: into its
+      merge queue where the repository has one, else merged by rebase, both pinned to the head read
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links
@@ -940,6 +959,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       the first teamrig that reads it, as a tab on an older one refuses every write after; --yes writes it
   commits check --base <ref> [--tip <ref>]   commits in base..tip (default HEAD) over the size rule
       with no reason line; any is REFUSED, for a merge script or CI
+  changes --since <version|date> [--until <version|date>] [--file <path>] [--area <area>]   what changed
+      in the team's project, newest release first: its change notes, its tasks and its commits
+      (changes.sources); a version it never released is REFUSED with the ones it did
   secrets staged | secrets message <file> | secrets pushed <remote>   for git's pre-commit, commit-msg and
       pre-push hooks: a secret the staged change, the message or the pushed commits and tags add is REFUSED,
       named by place and shape, never by value; default shapes and paths outside a team, plus the team's own

@@ -40,11 +40,13 @@ function shellTextOf(error, response) {
 }
 /**
  * The line for the model. `script` is the CLI this session's hooks run, the copy the bare command would run; its
- * path goes with forward slashes, which Bash and PowerShell both take.
+ * path goes with forward slashes, which Bash and PowerShell both take. It ends on the reload that brings the bare
+ * name back, as the host's person types it (`steps`); a host that names no steps gets the line without it.
  */
-export function missingCliLine(script, command) {
+export function missingCliLine(script, command, steps) {
     const path = script.replaceAll('\\', '/');
-    return (`${command}: the shell did not find the bare \`${command}\` command (Claude Code's shell snapshot failed to rebuild after a plugin reload). ` +
-        `For the rest of this session run the installed copy by its path: \`node "${path}" <command> ...\`, never another copy from the plugin cache (another version). ` +
-        `The user's /reload-plugins brings the bare name back.`);
+    const reload = steps === undefined ? '' : ` The user's ${steps.reloadPlugins} brings the bare name back.`;
+    return (`${command}: the shell did not find the bare \`${command}\` command (the host's shell snapshot failed to rebuild after a plugin reload). ` +
+        `For the rest of this session run the installed copy by its path: \`node "${path}" <command> ...\`, never another copy from the plugin cache (another version).` +
+        reload);
 }

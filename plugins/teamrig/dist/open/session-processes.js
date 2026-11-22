@@ -6,19 +6,27 @@ import { UTF8_OUTPUT } from "../core/powershell.js";
 import { sweepTree, windowsSweepHost } from "../delivery/tree-kill.js";
 import { nodeProgramRunner } from "../core/program-runner.js";
 import { exitText, outcomeOfError } from "./processes.js";
-const CLAUDE_PROGRAM = /^claude(\.exe)?$/i;
-const NODE_PROGRAM = /^node(\.exe)?$/i;
-/** Whether a process is Claude Code: its own binary, or Node.js running its script. */
-export function isClaudeProcess(info) {
-    return CLAUDE_PROGRAM.test(info.name) || (NODE_PROGRAM.test(info.name) && /claude/i.test(info.commandLine));
-}
-/** Whether `pid` still runs Claude Code: a pid the system gave another program since does not count. */
-export async function runsClaude(processes, pid) {
+/**
+ * Whether `pid` still runs a session's host program, which `isSessionProcess` tells: a pid the system gave another
+ * program since does not count.
+ */
+export async function runsSession(processes, pid, isSessionProcess) {
     if (pid === undefined || !processes.alive(pid)) {
         return false;
     }
     const info = await processes.describe(pid);
-    return info !== undefined && isClaudeProcess(info);
+    return info !== undefined && isSessionProcess(info);
+}
+/** How far up from a hook its session's host program may be: a hook run through a shell has the shell between. */
+const SESSION_HOPS = 3;
+/**
+ * The session's host program that runs `pid`, which `isSessionProcess` tells: `pid` itself or one of its first
+ * parents, from one listing of every process (each look starts a PowerShell on Windows, and a slow hook is killed at
+ * its host's timeout); undefined when none is.
+ */
+export async function sessionProcessOf(processes, pid, isSessionProcess) {
+    const lineage = await processes.lineage(pid);
+    return lineage?.slice(0, SESSION_HOPS).find((process) => isSessionProcess(process))?.pid;
 }
 /** PowerShell's start alone can take seconds on a busy machine. */
 export const LOOKUP_TIMEOUT_MS = 20_000;

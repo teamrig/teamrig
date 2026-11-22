@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { API_VERSION, apiVersionNotice, featuresOf, hostAdapterProblems, hostDeclarationProblems, isUnsupported } from '../../../plugin-api/index.ts';
 import { hostDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
+import { hostModels } from './models.ts';
+import { hostSteps } from './steps.ts';
 import adapter from './index.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
@@ -41,7 +43,7 @@ describe('the Claude Code adapter', () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(hostAdapterProblems(adapter), []);
     const ports = adapter.create(hostDeps());
-    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher']);
+    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher', 'models', 'steps']);
     assert.equal(isUnsupported(ports.hooks), false);
     assert.equal(isUnsupported(ports.toolCall), false);
     assert.equal(ports.transcripts, transcriptReader);
@@ -51,6 +53,8 @@ describe('the Claude Code adapter', () => {
     assert.equal(ports.permissions, hostPermissions);
     assert.equal(ports.plugin, hostPlugin);
     assert.equal(isUnsupported(ports.launcher), false);
+    assert.equal(ports.models, hostModels);
+    assert.equal(ports.steps, hostSteps);
   });
 
   it('tells who a run is from the environment it was built with', () => {

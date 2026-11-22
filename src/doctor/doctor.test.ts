@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CONTEXT_FILES, DEFAULT_LEAD_LAUNCH } from '../config/defaults.ts';
+import { DEFAULT_CONTEXT_FILES } from '../config/defaults.ts';
+import { leadLaunchFrom } from '../cli/host.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
 import { launchOf } from '../config/launch.ts';
 import { Roster } from '../config/roster.ts';
 import { describeNameClash, type NameClash, type TreeProblem } from '../config/tree.ts';
@@ -333,13 +335,20 @@ describe('doctorFindings of model and effort overrides', () => {
 describe('doctorFindings of launch entries', () => {
   const launchesOf = (launch: Record<string, Record<string, string>>): DoctorInput['launches'] => {
     const config = testConfig({ launch });
-    return config.sessions.map((id) => ({ id, launch: launchOf(config, id) }));
+    return config.sessions.map((id) => ({ id, launch: launchOf(config, id, leadLaunchFrom(shippedModels())) }));
   };
 
   it('flags a session whose launch names a model but no effort, with the key to set', () => {
     assert.deepEqual(lines(input({ launches: launchesOf({ alpha: { model: 'opus' }, bravo: { model: 'claude-sonnet-5-5[1m]' } }) })), [
       "WARN launch-effort app-alpha (session alpha) launches on model opus with no effort, so it runs at that model's default effort (medium on Opus, Sonnet and Haiku 5.5): set launch.alpha.effort in the team config",
       "WARN launch-effort app-bravo (session bravo) launches on model claude-sonnet-5-5[1m] with no effort, so it runs at that model's default effort (medium on Opus, Sonnet and Haiku 5.5): set launch.bravo.effort in the team config",
+    ]);
+  });
+
+  it("flags a session whose model the host does not run, ahead of a missing effort, with the key to fix", () => {
+    const launches = [{ id: 'alpha', launch: { model: 'gpt-5' }, modelProblem: 'not a model this host runs' }];
+    assert.deepEqual(lines(input({ launches })), [
+      'WARN launch-model app-alpha (session alpha) launches on model gpt-5, which this host does not run (not a model this host runs): `open` refuses it until launch.alpha.model is fixed in the team config',
     ]);
   });
 
@@ -365,7 +374,7 @@ describe('doctorFindings of launch entries', () => {
 
   it("is quiet for the lead's model with no effort, since the lead's default effort fills it in", () => {
     const launches = launchesOf({ lead: { model: 'sonnet' } });
-    assert.deepEqual(launches.find(({ id }) => id === 'lead')?.launch, { model: 'sonnet', effort: DEFAULT_LEAD_LAUNCH.effort });
+    assert.deepEqual(launches.find(({ id }) => id === 'lead')?.launch, { model: 'sonnet', effort: shippedModels().leadDefault.effort });
     assert.deepEqual(lines(input({ launches })), []);
   });
 });

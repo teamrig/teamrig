@@ -4,7 +4,7 @@ import { KIT_NAME } from "../../core/home.js";
 import { effortChangeLine, effortChangeText, effortWriteback, withLaunchEffort, WritebackMarksStore } from "../../effort/writeback.js";
 import { noPositionals } from "../args.js";
 import { postToHolder, sessionNameOn } from "../holder-team.js";
-import { transcriptsIfKept } from "../host.js";
+import { leadLaunchOf, transcriptsIfKept } from "../host.js";
 import { checkedNextConfig, configFileJson, configLockOf, requireConfig, teamZone } from "../kit.js";
 import { EXIT } from "../runtime.js";
 import { leadAboveOf } from "../tree.js";
@@ -22,7 +22,7 @@ async function writeLaunchEffort(runtime, scope, level) {
     const config = requireConfig(scope.kit, runtime, 'write');
     return configLockOf(runtime, scope.kit, config).run(async (writer) => {
         const file = await configFileJson(runtime, scope.kit.load.path);
-        const from = launchOf(checkedNextConfig(file), scope.id).effort;
+        const from = launchOf(checkedNextConfig(file), scope.id, leadLaunchOf(runtime)).effort;
         if (from === level) {
             return undefined;
         }
@@ -89,7 +89,7 @@ export async function effortWritebackOf(runtime, scope, event) {
         claude,
         transcript: event.transcript,
         running: event.effort,
-        config: launchOf(scope.config, scope.id).effort,
+        config: launchOf(scope.config, scope.id, leadLaunchOf(runtime)).effort,
     });
     if (change === undefined) {
         return { config: updated, lines: [] };

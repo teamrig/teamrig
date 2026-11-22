@@ -4,7 +4,7 @@ import type { Env } from '../core/home.ts';
 import { typedEffortsOf } from '../effort/typed-effort.ts';
 import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isClaudeSessionId, type ClaimOutcome, type ClearMode, type PersonHold } from '../mod/clear-hand.ts';
 import { endAndWait, tabProcessOf, workCutOffBy, type TabEnder } from '../open/end-tab.ts';
-import { isClaudeProcess, type FeedOutcome, type ProcessInfo, type SessionProcesses } from '../open/session-processes.ts';
+import type { FeedOutcome, ProcessInfo, SessionProcessCheck, SessionProcesses } from '../open/session-processes.ts';
 import type { TranscriptReader } from '../ports/host/index.ts';
 import type { RestoreRegistry } from '../restore/registry.ts';
 import type { ClearAsks } from './clear-asks.ts';
@@ -25,6 +25,11 @@ export interface RestartDeps extends TabEnder {
   readonly asks: ClearAsks;
   /** The registry of the restore after a reboot, which the ended session leaves as its SessionEnd hook would have it. */
   readonly restore: RestoreRegistry;
+  /**
+   * Whether a process is a session's host program, as the hosts tell it: the restart ends the recorded process only
+   * while it still is one, never a program that took its id since.
+   */
+  readonly isSessionProcess: SessionProcessCheck;
   /** Opens a new tab that starts the session fresh (`teamrig launch`). */
   openTab(): Promise<TabOpening>;
   /**
@@ -88,17 +93,6 @@ const CANCELLED: RestartResult = { kind: 'cancelled', why: 'the restart was canc
 
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */
 export const CLAIM_WAIT_MS = 10_000;
-
-/** How far up from a hook Claude Code may be: a hook run through a shell has the shell between. */
-const CLAUDE_HOPS = 3;
-
-/**
- * The Claude Code that runs `pid`: `pid` itself or one of its first parents, from one listing of every process (each
- * look starts a PowerShell on Windows, and a slow hook is killed at Claude Code's timeout); undefined when none is.
- */
-export async function claudeProcessOf(processes: SessionProcesses, pid: number): Promise<number | undefined> {
-  return (await processes.lineage(pid))?.slice(0, CLAUDE_HOPS).find(isClaudeProcess)?.pid;
-}
 
 /** The pending request this restart was started for; undefined once it was cancelled, taken or replaced. */
 async function pendingOf(deps: RestartDeps, plan: RestartPlan): Promise<RestartRequest | undefined> {
@@ -373,7 +367,7 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
       }
       continue;
     }
-    if (!isClaudeProcess(claude)) {
+    if (!deps.isSessionProcess(claude)) {
       await deps.store.clearRestart(plan.id);
       return { kind: 'failed', why: `process ${claude.pid} is ${claude.name}, not Claude Code` };
     }

@@ -1,4 +1,3 @@
-import { isClaudeProcess } from "../open/session-processes.js";
 /**
  * How often a watch looks: one signal 0 per starter, cheap enough to run through a whole step, and soon enough that a
  * step left behind frees the host lock and its memory within seconds.
@@ -37,16 +36,17 @@ export function launchingShellsOf(env, parentPid) {
 /**
  * The processes worth watching: the ones that started this one (`lineage` past its first entry), then each launching
  * shell's in turn (`shellLineages`, nearest shell first, each from the shell up) where the lines before stop short of
- * them, up to and with the nearest Claude Code, since what runs above it (a terminal, the desktop) ends a tab only
- * through it; with no Claude Code among them, as in a person's own terminal, every one.
+ * them, up to and with the nearest session's host program (`isSessionProcess` tells it), since what runs above it (a
+ * terminal, the desktop) ends a tab only through it; with no session among them, as in a person's own terminal, every
+ * one.
  */
-export function startersOf(lineage, shellLineages = []) {
+export function startersOf(lineage, isSessionProcess, shellLineages = []) {
     const starters = lineage.slice(1);
     for (const shellLineage of shellLineages) {
         starters.push(...shellLineage.filter((shell) => !starters.some((starter) => starter.pid === shell.pid)));
     }
-    const claude = starters.findIndex(isClaudeProcess);
-    return claude === -1 ? starters : starters.slice(0, claude + 1);
+    const session = starters.findIndex((starter) => isSessionProcess(starter));
+    return session === -1 ? starters : starters.slice(0, session + 1);
 }
 const GIT_NAME = /^git(?:\.exe)?$/iu;
 /** Whether a git command is among `starters`: the step is a git hook's, and that git command waits for its result. */
@@ -76,13 +76,14 @@ async function ownLineage(processes, pid) {
 /**
  * The watch over the system's processes: `lineage` for the process (`ownLineage`) and once for each launching shell, then `alive`
  * on each starter every `everyMs`. A starter whose id another process took between two checks still looks alive; that
- * only leaves the step to its time limit.
+ * only leaves the step to its time limit. `isSessionProcess` tells which starter is a session's host program: the
+ * watch knows no host's program itself.
  */
-export function starterWatch(processes, watched, every, everyMs = STARTER_CHECK_MS) {
+export function starterWatch(processes, watched, isSessionProcess, every, everyMs = STARTER_CHECK_MS) {
     return {
         async watch() {
             const [lineage, ...shellLineages] = await Promise.all([ownLineage(processes, watched.pid), ...watched.shells.map((pid) => processes.lineage(pid))]);
-            const starters = startersOf(lineage ?? [], shellLineages.map((shellLineage) => shellLineage ?? []));
+            const starters = startersOf(lineage ?? [], isSessionProcess, shellLineages.map((shellLineage) => shellLineage ?? []));
             const controller = new AbortController();
             let ended;
             let cancel = () => undefined;
@@ -95,8 +96,8 @@ export function starterWatch(processes, watched, every, everyMs = STARTER_CHECK_
                     }
                 });
             }
-            const claude = starters.find(isClaudeProcess);
-            const tabAlive = () => claude !== undefined && processes.alive(claude.pid);
+            const session = starters.find((starter) => isSessionProcess(starter));
+            const tabAlive = () => session !== undefined && processes.alive(session.pid);
             return { starters, stop: controller.signal, ended: () => ended, tabAlive, close: () => cancel() };
         },
     };

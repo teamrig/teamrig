@@ -16,7 +16,7 @@ function sameModel(model, leads) {
     return isDefaultModel(model) ? isDefaultModel(leads) : model === leads;
 }
 /** The request tied to the burst, or why the burst takes no such hire. */
-export function burstHireOf(request, burst, active, config) {
+export function burstHireOf(request, burst, active, config, leadDefault) {
     if (burst === undefined) {
         return { ok: false, problem: `no burst is in force: hire --burst hires for one (${KIT_NAME} burst)` };
     }
@@ -24,7 +24,7 @@ export function burstHireOf(request, burst, active, config) {
     if (taken >= burst.hires) {
         return { ok: false, problem: `the burst allows ${plural(burst.hires, 'hire')}, and ${taken} ${taken === 1 ? 'is' : 'are'} on the team` };
     }
-    const leads = launchOf(config, config.roles.lead);
+    const leads = launchOf(config, config.roles.lead, leadDefault);
     if (request.model !== undefined && !sameModel(request.model, leads.model)) {
         return { ok: false, problem: `--model ${request.model}: a burst hire runs on the lead's model (${leads.model ?? 'the default'}), never another` };
     }

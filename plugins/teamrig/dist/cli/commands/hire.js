@@ -12,6 +12,7 @@ import { noRoomText } from "../../sessions/headroom.js";
 import { homeCloseOf, SessionLog } from "../../sessions/log.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { readBursts } from "../burst-reading.js";
+import { launchHostOf, leadLaunchOf } from "../host.js";
 import { headroomOf } from "../headroom.js";
 import { callerOf } from "../inputs.js";
 import { checkedNextConfig, configFileJson, configLockOf, findTeam, openKit, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
@@ -67,7 +68,7 @@ function requestOf(args, runtime, id, by) {
 /** The request tied to the burst in force, for `hire --burst`; refused when the burst takes no such hire. */
 async function burstRequestOf(runtime, kit, config, request, active) {
     const { records, usedPct } = await readBursts(runtime, kit.paths, config.budget, request.now);
-    const checked = burstHireOf(request, activeBurst(records, request.now, usedPct), active, config);
+    const checked = burstHireOf(request, activeBurst(records, request.now, usedPct), active, config, leadLaunchOf(runtime));
     if (!checked.ok) {
         throw new RefusedError(checked.problem);
     }
@@ -175,7 +176,7 @@ export async function hire(args, runtime) {
         const { records, skipped } = await log.read();
         const active = activeHires(records);
         const request = args.switches.has('burst') ? await burstRequestOf(runtime, kit, config, asked, active) : asked;
-        const plan = planHire(await configFileJson(runtime, load.path), config, request);
+        const plan = planHire(await configFileJson(runtime, load.path), config, request, launchHostOf(runtime));
         if (!plan.ok) {
             throw new RefusedError(plan.problem);
         }

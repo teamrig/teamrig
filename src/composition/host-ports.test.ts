@@ -20,9 +20,11 @@ function building(ports: unknown): ModuleImporter {
 }
 
 describe('loadHostPorts', () => {
-  it('gives the shipped host adapter a filled transcript reader, usage meter, status line, permissions and plugin store', async () => {
+  it('gives the shipped host adapter a filled transcript reader, usage meter, status line, permissions, plugin store, models and steps', async () => {
     const ports = (await loadHostPorts(run))({ env: {}, platform: 'linux' });
-    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher']);
+    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher', 'models', 'steps']);
+    assert.equal(isUnsupported(ports.models), false);
+    assert.equal(isUnsupported(ports.steps), false);
     assert.equal(isUnsupported(ports.plugin), false);
     assert.equal(isUnsupported(ports.transcripts), false);
     assert.equal(isUnsupported(ports.usage), false);

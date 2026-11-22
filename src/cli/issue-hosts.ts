@@ -2,7 +2,7 @@ import { loadConnector, type Load } from '../composition/loader.ts';
 import type { KitConfig } from '../config/types.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import type { CodeHost, HostKind, Tracker } from '../issues/host.ts';
-import type { ConnectorAdapter, JsonRecord } from '../plugin-api/index.ts';
+import type { ConnectorAdapter, ConnectorPorts, JsonRecord, RefCodec } from '../plugin-api/index.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
 /** The two ports a command reaches a host through: where its issues live, and where its pull requests and files do. */
@@ -50,8 +50,8 @@ export class HostAdapterError extends Error {
  * as a refusal naming the key's path in the team config.
  *
  * The adapter is handed the run's program runner as it is, held to the two connector limits (plugin-api/connector.ts);
- * which program it runs, and with which arguments, is the adapter's own rule to keep. Both ports are asked of every adapter, as every command here was written for a
- * host that is both; a tracker with no code host needs its commands to ask for the tracker alone first.
+ * which program it runs, and with which arguments, is the adapter's own rule to keep. Both ports are asked of the
+ * adapter: a command that only reads or writes issues asks trackerOf instead, so a tracker with no code host serves it.
  */
 export async function hostsOf(
   kind: HostKind,
@@ -61,16 +61,79 @@ export async function hostsOf(
   sections: ConnectorSections,
   load: ConnectorLoader = loadConnector,
 ): Promise<Hosts> {
-  const loaded = await load(kind);
+  const { tracker, codeHost } = await portsOf(kind, runtime, scanner, stamp, sections, load);
+  if (tracker === undefined || codeHost === undefined) {
+    throw new HostAdapterError(kind, [...(tracker === undefined ? ['it builds no tracker'] : []), ...(codeHost === undefined ? ['it builds no code host'] : [])]);
+  }
+  return { tracker, codeHost };
+}
+
+/**
+ * The tracker alone of the connector `id`, built as hostsOf builds both ports: for a command that only reads or writes
+ * issues, so a connector that is a tracker and no code host (Jira) serves it. An adapter that builds no tracker fails
+ * the command, as for hostsOf.
+ */
+export async function trackerOf(
+  id: string,
+  runtime: HostRuntime,
+  scanner: SecretScanner,
+  stamp: boolean,
+  sections: ConnectorSections,
+  load: ConnectorLoader = loadConnector,
+): Promise<Tracker> {
+  const { tracker } = await portsOf(id, runtime, scanner, stamp, sections, load);
+  if (tracker === undefined) {
+    throw new HostAdapterError(id, ['it builds no tracker']);
+  }
+  return tracker;
+}
+
+/** What an import of a tracker other than GitHub reads it through: the tracker, the places its config names, and its refs. */
+export interface TrackerPorts {
+  readonly tracker: Tracker;
+  readonly targets: readonly string[];
+  readonly refs: RefCodec;
+}
+
+/**
+ * The tracker of the connector `id` with the places its section names and its issue refs, built as trackerOf builds
+ * the tracker: for the import of a tracker whose refs and places core does not know (Jira). An adapter that builds no
+ * tracker or gives no refs fails the command, as for hostsOf; one that names no place gives an empty list.
+ */
+export async function trackerPortsOf(
+  id: string,
+  runtime: HostRuntime,
+  scanner: SecretScanner,
+  stamp: boolean,
+  sections: ConnectorSections,
+  load: ConnectorLoader = loadConnector,
+): Promise<TrackerPorts> {
+  const { tracker, targets, refs } = await portsOf(id, runtime, scanner, stamp, sections, load);
+  if (tracker === undefined || refs === undefined) {
+    throw new HostAdapterError(id, [...(tracker === undefined ? ['it builds no tracker'] : []), ...(refs === undefined ? ['it gives no issue refs'] : [])]);
+  }
+  return { tracker, targets: targets ?? [], refs };
+}
+
+/** The ports the adapter of `id` builds from its section of the team config, the shared step of hostsOf, trackerOf and trackerPortsOf. */
+async function portsOf(
+  id: string,
+  runtime: HostRuntime,
+  scanner: SecretScanner,
+  stamp: boolean,
+  sections: ConnectorSections,
+  load: ConnectorLoader,
+): Promise<ConnectorPorts> {
+  const loaded = await load(id);
   if (loaded.kind === 'refused') {
-    throw new HostAdapterError(kind, loaded.notices);
+    throw new HostAdapterError(id, loaded.notices);
   }
   const problems: string[] = [];
-  const build = loaded.value.configure(sectionOf(sections, kind), (key, problem) => problems.push(`connectors.${kind}.${key} ${problem}`));
+  const build = loaded.value.configure(sectionOf(sections, id), (key, problem) => problems.push(`connectors.${id}.${key} ${problem}`));
   if (problems.length > 0) {
     throw new RefusedError(problems.join('; '));
   }
-  const { tracker, codeHost } = build({
+  return build({
     run: runtime.run,
     http: runtime.http,
     credentials: runtime.credentials,
@@ -78,10 +141,6 @@ export async function hostsOf(
     scanner,
     stamp,
   });
-  if (tracker === undefined || codeHost === undefined) {
-    throw new HostAdapterError(kind, [...(tracker === undefined ? ['it builds no tracker'] : []), ...(codeHost === undefined ? ['it builds no code host'] : [])]);
-  }
-  return { tracker, codeHost };
 }
 
 /** The repositories to read: every one of `github.repos`, or the one `--repo` names, which must be among them. */

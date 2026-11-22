@@ -33,6 +33,7 @@ import {
 } from '../../../plugin-api/index.ts';
 import { adfText, textAdf, type AdfDoc } from './adf.ts';
 import type { JiraAnswer, JiraClient } from './client.ts';
+import type { JiraConfig } from './config.ts';
 import { NOT_BUILT } from './declaration.ts';
 import { openableNames, openingType } from './issue-type.ts';
 import { stateReasonOf } from './resolution.ts';
@@ -262,19 +263,26 @@ export class JiraTracker implements Tracker {
   private readonly openingTypes = new Map<string, string>();
   /** The type the team's config names for a new issue (`connectors.jira.issueType`), or undefined for the tracker's own pick. */
   private readonly issueType: string | undefined;
+  /**
+   * The one site the team's config names (`connectors.jira.site`), or undefined while it names none. A project on any
+   * other site is refused before a request, so a task's ref can never carry the sign-in to a site the owner did not name.
+   */
+  private readonly site: string | undefined;
 
-  constructor(client: JiraClient, stamp: boolean, issueType?: string) {
+  constructor(client: JiraClient, stamp: boolean, config: Pick<JiraConfig, 'site' | 'issueType'> = { site: undefined, issueType: undefined }) {
     this.client = client;
     this.stamp = stamp;
-    this.issueType = issueType;
+    this.issueType = config.issueType;
+    this.site = config.site;
   }
 
   /** Reached with the site's saved sign-in only; the scope is the site, as one sign-in serves all its projects. */
   async reach(repo: string, use: HostUse): Promise<HostReach> {
-    const project = parseProject(repo);
-    if (project === undefined) {
-      return { kind: 'unreachable', reason: projectProblem(repo) };
+    const found = this.projectOf(repo);
+    if (found.kind === 'failed') {
+      return { kind: 'unreachable', reason: found.reason };
     }
+    const { project } = found;
     const signIn = await this.client.signIn(project.site);
     return signIn.kind === 'failed'
       ? { kind: 'unreachable', reason: signIn.reason }
@@ -287,10 +295,11 @@ export class JiraTracker implements Tracker {
    * here. When a page fails nothing of the project is given, so its tasks are not judged on half a read.
    */
   async list(repo: string, closedSince: string): Promise<HostList> {
-    const project = parseProject(repo);
-    if (project === undefined) {
-      return failed(projectProblem(repo));
+    const found = this.projectOf(repo);
+    if (found.kind === 'failed') {
+      return found;
     }
+    const { project } = found;
     const from = dayBefore(closedSince);
     if (from === undefined) {
       return failed(`${JSON.stringify(closedSince)} is not a day (YYYY-MM-DD)`);
@@ -335,10 +344,11 @@ export class JiraTracker implements Tracker {
    * title, or a label Jira cannot hold, is refused before anything is asked.
    */
   async open(draft: IssueDraft): Promise<HostOpen> {
-    const project = parseProject(draft.repo);
-    if (project === undefined) {
-      return failed(projectProblem(draft.repo));
+    const found = this.projectOf(draft.repo);
+    if (found.kind === 'failed') {
+      return found;
     }
+    const { project } = found;
     const [problem] = [...(draft.title.trim() === '' ? ['an issue with no title is not opened'] : []), ...draft.labels.flatMap((label) => labelProblem(label) ?? [])];
     if (problem !== undefined) {
       return failed(problem);
@@ -466,13 +476,15 @@ export class JiraTracker implements Tracker {
 
   /** A Jira label is not made ahead: it exists once an issue carries it. So any name Jira can hold is found, with no request. */
   labelExists(repo: string, label: string): Promise<HostLabel> {
-    const problem = parseProject(repo) === undefined ? projectProblem(repo) : labelProblem(label);
+    const found = this.projectOf(repo);
+    const problem = found.kind === 'failed' ? found.reason : labelProblem(label);
     return Promise.resolve(problem === undefined ? { kind: 'found' } : failed(problem));
   }
 
   /** Nothing to make (labelExists); a label's colour and description have no place in Jira. */
   createLabel(repo: string, label: LabelSpec): Promise<HostEnd> {
-    const problem = parseProject(repo) === undefined ? projectProblem(repo) : labelProblem(label.name);
+    const found = this.projectOf(repo);
+    const problem = found.kind === 'failed' ? found.reason : labelProblem(label.name);
     return Promise.resolve(problem === undefined ? { kind: 'done' } : failed(problem));
   }
 
@@ -510,19 +522,21 @@ export class JiraTracker implements Tracker {
 
   /** Whether the account `login` names may be assigned in the project. */
   async assigneeExists(repo: string, login: string): Promise<HostAssignee> {
-    const project = parseProject(repo);
-    if (project === undefined) {
-      return failed(projectProblem(repo));
+    const found = this.projectOf(repo);
+    if (found.kind === 'failed') {
+      return found;
     }
+    const { project } = found;
     return await this.assignable(project.site, `project=${project.key}`, login, this.noProject(project));
   }
 
   /** The account the site's sign-in belongs to, by its account id: Jira's users have no login, and the id is what an assign names. */
   async viewer(repo: string): Promise<HostViewer> {
-    const project = parseProject(repo);
-    if (project === undefined) {
-      return failed(projectProblem(repo));
+    const found = this.projectOf(repo);
+    if (found.kind === 'failed') {
+      return found;
     }
+    const { project } = found;
     const answer = await this.client.get(project.site, '/myself');
     if (answer.kind !== 'ok') {
       return answer.kind === 'missing' ? failed(`Jira on ${project.site} does not say whose sign-in it is`) : answer;
@@ -596,10 +610,11 @@ export class JiraTracker implements Tracker {
    * rate limit; an issue deleted while another stays the newest is not seen.
    */
   async watch(repo: string, marks: WatchMarks): Promise<HostWatch> {
-    const project = parseProject(repo);
-    if (project === undefined) {
-      return failed(projectProblem(repo));
+    const found = this.projectOf(repo);
+    if (found.kind === 'failed') {
+      return found;
     }
+    const { project } = found;
     const answer = await this.client.post(project.site, '/search/jql', { jql: `project = "${project.key}" ORDER BY updated DESC`, fields: ['updated'], maxResults: 1 });
     const body = this.searched(repo, answer);
     if (body.kind === 'failed') {
@@ -679,10 +694,25 @@ export class JiraTracker implements Tracker {
     return `Jira has no project ${project.key} on ${project.site}, or the sign-in may not see it`;
   }
 
-  /** The issue `target` names, or the failure of a `repo` that names no project. */
+  /**
+   * The project `repo` names, or why it is refused: it names no project, or one on a site other than the one the
+   * team's config names (security N1, T4806: the config's site and a ref's site must agree).
+   */
+  private projectOf(repo: string): { readonly kind: 'project'; readonly project: JiraProject } | Failed {
+    const project = parseProject(repo);
+    if (project === undefined) {
+      return failed(projectProblem(repo));
+    }
+    if (this.site !== undefined && project.site !== this.site) {
+      return failed(`${JSON.stringify(repo)} is on the site ${project.site}, but connectors.jira.site names ${this.site}: a project of another site is not reached`);
+    }
+    return { kind: 'project', project };
+  }
+
+  /** The issue `target` names, or the failure of a `repo` projectOf refuses. */
   private place(target: IssueTarget): ({ readonly kind: 'place' } & Place) | Failed {
-    const project = parseProject(target.repo);
-    return project === undefined ? failed(projectProblem(target.repo)) : { kind: 'place', project, key: issueKey(project, target.number) };
+    const found = this.projectOf(target.repo);
+    return found.kind === 'failed' ? found : { kind: 'place', project: found.project, key: issueKey(found.project, target.number) };
   }
 
   private noIssue(target: IssueTarget, place: Place): string {

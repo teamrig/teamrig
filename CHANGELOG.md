@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.503.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.502.0...teamrig-v0.503.0) (2026-11-22)
+
+
+### Features
+
+* **audit:** audit refuses a hand step file that runs gh or a remote git command on the human's login (T4896) ([8bd9ca5](https://github.com/teamrig/teamrig/commit/8bd9ca5c3c01d9decb2be38c491537c616d5c8ce))
+* **budget:** the status snapshot keeps the session's effort and the host's version (T4869) ([bf77066](https://github.com/teamrig/teamrig/commit/bf77066cce01f90e53d3936b569f0035435fbc4c)), closes [#2110](https://github.com/teamrig/teamrig/issues/2110)
+* **cli:** check --new prints only the flags new since the session's last start or check --new (T2536) ([8fec5db](https://github.com/teamrig/teamrig/commit/8fec5db1b73758bf4dce314bbcb52df9b8075d04))
+* **cli:** teamrig pr approve and pr merge land a lead-approved pull request at its head (T4817) ([46db904](https://github.com/teamrig/teamrig/commit/46db90444db6ad611ddfa40c27461cc0a649acf3))
+* **cli:** trackerOf builds a connector's tracker alone, so a tracker with no code host serves the issue commands (T4912) ([ab20e62](https://github.com/teamrig/teamrig/commit/ab20e62760dea0be2662d8df0fbe55fc44cb6d88))
+* **cli:** trackerPortsOf builds a tracker with its places and refs, for another tracker's import (T4912) ([bdfede0](https://github.com/teamrig/teamrig/commit/bdfede07b90cdb8d4e1c04154fc7690b8d9d0e02))
+* **config:** a launch model is any model name, checked against the host's models where it is used (T4750) ([4d36b9f](https://github.com/teamrig/teamrig/commit/4d36b9f526c027dc3039f27c24cb098b1ed268ca)), closes [#1988](https://github.com/teamrig/teamrig/issues/1988)
+* **conformance:** a models contract, bound to the Claude Code adapter (T4750) ([e21df07](https://github.com/teamrig/teamrig/commit/e21df07edc4d9f317629cf4cca7e78ff66d5f177)), closes [#1988](https://github.com/teamrig/teamrig/issues/1988)
+* **conformance:** a steps contract, bound to the Claude Code adapter (T4750) ([365c9f6](https://github.com/teamrig/teamrig/commit/365c9f6c76c00817e13f12b56bbf2b7e11532e4d)), closes [#1988](https://github.com/teamrig/teamrig/issues/1988)
+* **connectors:** codehost.pr-land names landing a lead-approved pull request, GitHub's alone (T4817) ([da2c11e](https://github.com/teamrig/teamrig/commit/da2c11e0e4f164e1f71e9a4f67d7cb44872327fd))
+* **core:** a program run can take its standard input from the request (T4756) ([c6be7b7](https://github.com/teamrig/teamrig/commit/c6be7b78650de8508e11d8167966766c0e8e8c51))
+* **github:** the host reads, approves and lands one pull request pinned to its head (T4817) ([aafa9db](https://github.com/teamrig/teamrig/commit/aafa9db07d9ec8864e6578d37df5ea09920dd07b))
+* **host:** a models port: the names a host takes, the lead's default and the steps that switch a session (T4750) ([63771a8](https://github.com/teamrig/teamrig/commit/63771a8f239e2067128003ca70beabb1c23eb690)), closes [#1988](https://github.com/teamrig/teamrig/issues/1988)
+* **host:** a steps port: the reload, exit, resume and update steps a host's person types (T4750) ([240279f](https://github.com/teamrig/teamrig/commit/240279f54ea6b29ac9b9af2fda48b3857b182af1)), closes [#1988](https://github.com/teamrig/teamrig/issues/1988)
+* **host:** the session launcher names the host program and tells an effort its environment forces (T4869) ([8f2a2ff](https://github.com/teamrig/teamrig/commit/8f2a2ff077886ba2a855beb72796e855823127c8)), closes [#2110](https://github.com/teamrig/teamrig/issues/2110)
+* **interface:** the served interface is 1.5, the minor that adds the plan's ownerCards ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([1d75168](https://github.com/teamrig/teamrig/commit/1d75168939f20e7f084d321cee17cd7ad7325f63))
+* **jira:** a connector reads and writes its own issue refs; Jira's are jira:ENG-12 on its config's site (T4912) ([9622e56](https://github.com/teamrig/teamrig/commit/9622e5607e653d1b4fdfa3f95d09722d582334d7))
+* **open:** a new or resumed session's environment drops the session variables its host names and keeps that host's login (T4749) ([b54b52b](https://github.com/teamrig/teamrig/commit/b54b52b5d4c6ac48fa74d89ba4b242c494d8e400))
+* **plugin-api:** a connector names its config's targets; Jira's are &lt;site&gt;/&lt;project key&gt; (T4912) ([71743db](https://github.com/teamrig/teamrig/commit/71743db2405871248b0b7931f6e28dcf7792fe5a))
+* **plugin-api:** a connector's ref codec builds its issue's page, Jira's on its config's site (T4912) ([4647d5b](https://github.com/teamrig/teamrig/commit/4647d5b17cccf9f11c8e280fb95319d53f31b1fe))
+* **ports:** the launcher port names what a child may inherit of a host's session variables (T4749) ([493a49a](https://github.com/teamrig/teamrig/commit/493a49a1365edfa5338c59893faa24efbb6fbbe4))
+* **ports:** the launcher port tells a session's own process (T4749) ([43b05b8](https://github.com/teamrig/teamrig/commit/43b05b8ef0cf8bbf72a6da414ed8dc44744890d1))
+* **read:** the plan document serves each session's cards on the owner, as teamrig meet asks them ([#2058](https://github.com/teamrig/teamrig/issues/2058)) ([b403ce3](https://github.com/teamrig/teamrig/commit/b403ce349a627a57fb89f8337e911d73b6fcee32))
+* **register:** each import writes as its own tracker and changes only its own tasks (T4912) ([31b3ae2](https://github.com/teamrig/teamrig/commit/31b3ae25461d17d4c36b9419be326c2378445973))
+* **register:** the import sources and their ref prefixes, held to each shipped tracker's declaration (T4912) ([75d7b64](https://github.com/teamrig/teamrig/commit/75d7b64696ce31bcc4c4d272e047659ea06ac44f))
+* **show:** several ids in one call, each in full and in order (T2536) ([564069b](https://github.com/teamrig/teamrig/commit/564069ba27c2151dc4eaa14c7cb58bcfd34b2c4a))
+* **sync:** an import plans per tracker: its source, refs, name in notes and page as a close's evidence (T4912) ([1d53917](https://github.com/teamrig/teamrig/commit/1d53917716ce33dddce3246fc721c8b8d43de3c1))
+* **sync:** issue sync imports the team's other trackers, Jira first, as their own source (T4912) ([30f1874](https://github.com/teamrig/teamrig/commit/30f1874c69d7174c680685cb2590622a06ec8193))
+* **terminals:** a pinned terminal program runs as a private copy of the bytes its sha256 was checked on (T4756) ([96db43a](https://github.com/teamrig/teamrig/commit/96db43afc7864dcf7c8d5f955eb7cdb94f12dd5a))
+* **terminals:** a terminal protocol client serves the terminal port over JSON-RPC, held to the terminal contract (T4756) ([5ab194f](https://github.com/teamrig/teamrig/commit/5ab194f0629fbf527ff32a9c7de08c5f0891423e))
+* **ui:** a released UI written against an interface this teamrig does not serve is refused before install (T4761) ([ac7745f](https://github.com/teamrig/teamrig/commit/ac7745fb8fbb8ba368358c1caf7160886ca49e4d))
+
+
+### Bug Fixes
+
+* **cli:** pr merge refuses unless every check on the head passed, read with its stand, since an admin token may bypass the branch's rules (T4958 C3) ([a22d63b](https://github.com/teamrig/teamrig/commit/a22d63b45fd0134041684fda44506a91efde425a))
+* **cli:** teamrig pr approve and pr merge take only the full head sha, in --head and in the approval note, compared exactly (T4958 C1) ([122adfa](https://github.com/teamrig/teamrig/commit/122adfae6c053307ce5996b28a00cdfe767891db)), closes [#2194](https://github.com/teamrig/teamrig/issues/2194)
+* **connectors:** pr approve's review body says it is automated and the team lead reviewed the head, naming no session (T4958 C2) ([cb070a1](https://github.com/teamrig/teamrig/commit/cb070a172ff38d31018f60fb11d500a1a9c7354d))
+* **jira:** a project on a site other than connectors.jira.site is refused before any request (T4912) ([998bd9a](https://github.com/teamrig/teamrig/commit/998bd9ade239026b6dadad1bae2bf998ca3def3c))
+* **register:** answerNamesFullHead types the shas it finds, so an answer with none still type-checks (T4958 C1) ([9b5956f](https://github.com/teamrig/teamrig/commit/9b5956fe944570829b48d75a0fce10c4f6f11c4b))
+* **ship:** the renamed-callers gate measures renames from the merge-base, not main (T4956) ([5d573c9](https://github.com/teamrig/teamrig/commit/5d573c993d547db89ca1992aba4b11b95891d275))
+* **sync:** a tracker that gives an issue no page closes its task with no evidence (T4912) ([f0f6fda](https://github.com/teamrig/teamrig/commit/f0f6fda644b261dd9592befe01d7c861fee72266))
+
 ## [0.502.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.501.0...teamrig-v0.502.0) (2026-11-21)
 
 

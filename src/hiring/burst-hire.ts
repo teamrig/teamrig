@@ -1,6 +1,6 @@
 import type { Burst } from '../budget/burst.ts';
 import { isDefaultModel, launchOf } from '../config/launch.ts';
-import { EFFORT_LEVELS, type KitConfig } from '../config/types.ts';
+import { EFFORT_LEVELS, type KitConfig, type LaunchConfig } from '../config/types.ts';
 import { KIT_NAME } from '../core/home.ts';
 import type { Checked } from '../setup/team-create.ts';
 import type { HireRecord } from './record.ts';
@@ -24,7 +24,7 @@ function sameModel(model: string, leads: string | undefined): boolean {
 }
 
 /** The request tied to the burst, or why the burst takes no such hire. */
-export function burstHireOf(request: HireRequest, burst: Burst | undefined, active: readonly HireRecord[], config: KitConfig): Checked<HireRequest> {
+export function burstHireOf(request: HireRequest, burst: Burst | undefined, active: readonly HireRecord[], config: KitConfig, leadDefault: LaunchConfig): Checked<HireRequest> {
   if (burst === undefined) {
     return { ok: false, problem: `no burst is in force: hire --burst hires for one (${KIT_NAME} burst)` };
   }
@@ -32,7 +32,7 @@ export function burstHireOf(request: HireRequest, burst: Burst | undefined, acti
   if (taken >= burst.hires) {
     return { ok: false, problem: `the burst allows ${plural(burst.hires, 'hire')}, and ${taken} ${taken === 1 ? 'is' : 'are'} on the team` };
   }
-  const leads = launchOf(config, config.roles.lead);
+  const leads = launchOf(config, config.roles.lead, leadDefault);
   if (request.model !== undefined && !sameModel(request.model, leads.model)) {
     return { ok: false, problem: `--model ${request.model}: a burst hire runs on the lead's model (${leads.model ?? 'the default'}), never another` };
   }

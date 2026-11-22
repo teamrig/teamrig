@@ -3,7 +3,7 @@ import type { KitReader } from '../../src/cli/kit.ts';
 import { RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, tabCallerOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { ENV, type Env } from '../../src/core/home.ts';
-import { approvedTaskOf } from '../../src/register/approval.ts';
+import { answerNamesHead, approvedTaskOf, isCommitSha } from '../../src/register/approval.ts';
 import { branchTaskOf } from '../../src/worktree/owner.ts';
 import { shipsInVersions, shipVersionFileOf, TEAMRIG_RELEASE_STAMPS, versionIn, type ReleaseStamp, type Version, type VersionFile } from './version-bump.ts';
 
@@ -21,9 +21,6 @@ export type MergeClearance =
  * Code tab, so it holds the name itself; the plugin's code asks its host adapter and names no host's variable.
  */
 const TAB_VARIABLE = 'CLAUDE_CODE_SESSION_ID';
-
-const SHA = /^[0-9a-f]{7,40}$/;
-const SHA_RUN = /\b[0-9a-f]{7,40}\b/g;
 
 /**
  * The task a branch is cut for, read as the plugin reads it (`branchTaskOf`), so a branch `teamrig worktree add --task`
@@ -58,15 +55,14 @@ export function mergeClearance(standing: MergeStanding, taskId: string, head: st
   if (approved === null) {
     return refused(`name the approved head with --approved <sha>: ${caller}'s merge needs the approval of ${approvers.join(' or ')}`);
   }
-  if (!SHA.test(approved) || !head.startsWith(approved)) {
+  if (!isCommitSha(approved) || !head.startsWith(approved)) {
     return refused(`--approved ${approved} is not the branch head ${head}`);
   }
   const answered = approvedTaskOf([task], caller, approvers);
   if (answered === undefined) {
     return refused(`${taskId} (${task.status}) holds no approval of ${approvers.join(' or ')}: set it waiting approval:${approvers[0]} and ask for it naming ${head}`);
   }
-  const named = task.answer?.note?.match(SHA_RUN) ?? [];
-  if (!named.some((sha) => head.startsWith(sha))) {
+  if (!answerNamesHead(task, head)) {
     return refused(`${answered.by}'s approval of ${taskId} names no sha of the head ${head}: ask ${answered.by} to approve naming it`);
   }
   return { kind: 'approved', by: answered.by };

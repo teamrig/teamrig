@@ -58,6 +58,8 @@ describe('defineHost', () => {
         permissions: unsupported('no permission rule is kept'),
         plugin: unsupported('no plugin is installed'),
         launcher: unsupported('no session is told'),
+        models: unsupported('no models are known'),
+        steps: unsupported('no steps are known'),
       }),
     });
     assert.equal(adapter.declaration, data);
@@ -71,6 +73,8 @@ describe('defineHost', () => {
       permissions: { kind: 'unsupported', notice: 'no permission rule is kept' },
       plugin: { kind: 'unsupported', notice: 'no plugin is installed' },
       launcher: { kind: 'unsupported', notice: 'no session is told' },
+      models: { kind: 'unsupported', notice: 'no models are known' },
+      steps: { kind: 'unsupported', notice: 'no steps are known' },
     });
     assert.equal(isHostAdapter(adapter), true);
   });

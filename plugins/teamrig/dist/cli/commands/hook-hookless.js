@@ -4,7 +4,7 @@ import { indexMarks } from "../../inbox/marks.js";
 import { checkedState, formatHooklessState, HOOKLESS_TAIL_BYTES, hooklessLine, hooklessNews, hooklessReader, hooklessTabs, isCheckDue, lastReplyAt, parseHooklessState, staleEntries, workedPastHook, } from "../../restore/hookless.js";
 import { RestoreRegistry, restoreSessionsDir } from "../../restore/registry.js";
 import { postToHolder, sessionNameOn } from "../holder-team.js";
-import { transcriptsOf } from "../host.js";
+import { stepsOf, transcriptsOf } from "../host.js";
 import { teamZone } from "../kit.js";
 import { inboxDepsOf } from "./inbox.js";
 import { fileLockOf } from "../file-locks.js";
@@ -59,6 +59,8 @@ export async function checkHooklessTabs(runtime, kit, config) {
     if (!isCheckDue(await readState(runtime, kit), now)) {
         return [];
     }
+    // Asked before the check is claimed: a host that names no steps refuses here, leaving no check marked done.
+    const steps = stepsOf(runtime);
     const lock = fileLockOf(runtime, kit.paths.hooklessLock, { ...config.lock, waitMs: 0 });
     const news = await lock.run(async () => {
         const state = await readState(runtime, kit);
@@ -74,7 +76,7 @@ export async function checkHooklessTabs(runtime, kit, config) {
     const refused = [];
     for (const tab of news) {
         const to = hooklessReader(tab, config.roles, team);
-        const text = hooklessLine(tab, sessionNameOn(to.team, team, tab.session), zone, now);
+        const text = hooklessLine(tab, sessionNameOn(to.team, team, tab.session), steps, zone, now);
         const problem = await postToHolder(runtime, { kit, config }, to, { from: KIT_NAME, text });
         if (problem !== undefined) {
             refused.push(`INBOX ${sessionNameOn(team, to.team, to.id)}: not posted: ${problem}`);

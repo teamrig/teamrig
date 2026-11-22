@@ -1,7 +1,6 @@
 import { relative } from 'node:path';
 import { formatConfig } from "../../config/load.js";
 import { splitRenameLog } from "../../names/rename.js";
-import { runsClaude } from "../../open/session-processes.js";
 import { readRegister } from "../../register/snapshot.js";
 import { SessionRecordStore } from "../../sessions/record.js";
 import { sessionFilesOf } from "../../setup/session-files.js";
@@ -9,13 +8,14 @@ import { childRegisterOf, parentEventsOf, splitProblems } from "../../setup/spli
 import { splitTasksOf, trimmedParentOf } from "../../setup/team-split.js";
 import { checkedNextConfig, configFileJson, configLockOf, renameDepsOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
+import { runsHostSession } from "../session-process.js";
 import { teamRegister } from "../team-register.js";
 /** The moved sessions whose Claude Code still runs, by the record their hook keeps. */
 export async function liveSessionsOf(runtime, paths, ids) {
     const records = await new SessionRecordStore(runtime.files, paths).readEach(ids);
     const live = [];
     for (const [id, record] of records) {
-        if (record !== undefined && (await runsClaude(runtime.sessionProcesses, record.claudePid))) {
+        if (record !== undefined && (await runsHostSession(runtime, record.claudePid))) {
             live.push({ id, pid: record.claudePid });
         }
     }

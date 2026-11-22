@@ -3,7 +3,7 @@ import { shortSha256 } from '../../register/hand-step.ts';
 import type { AuditSubject, Verdict } from '../../register/policy.ts';
 import type { WriteResult } from '../../register/register.ts';
 import { onePositional, UsageError, type ParsedArgs } from '../args.ts';
-import { handStepPin } from '../hand-step-file.ts';
+import { auditPin } from '../hand-step-file.ts';
 import { callerOf, taskIdOf } from '../inputs.ts';
 import { findTeam, openKit, sessionIdOf } from '../kit.ts';
 import { RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -68,7 +68,7 @@ async function subjectOf(args: ParsedArgs, runtime: CliRuntime): Promise<AuditSu
   if ((file === undefined) === (verdict === undefined)) {
     throw new UsageError('audit takes one of --file <the hand step file> or --verdict "<the security verdict on the task\'s card>"');
   }
-  return file === undefined ? { kind: 'verdict', text: verdict ?? '' } : { kind: 'file', pin: await handStepPin(runtime, 'file', file) };
+  return file === undefined ? { kind: 'verdict', text: verdict ?? '' } : { kind: 'file', pin: await auditPin(runtime, file) };
 }
 
 /**

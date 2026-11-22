@@ -1,13 +1,12 @@
 import { holdsDescription } from '../register/description-cut.ts';
 import type { Task } from '../register/fold.ts';
-import { ACTIVE_STATUSES, GITHUB_SOURCE, isIssueRef } from '../register/model.ts';
+import { ACTIVE_STATUSES, isImportSource, isTrackerRef, type ImportSource } from '../register/model.ts';
 import type { ImportChanges, ImportInput, StatusInput } from '../register/policy.ts';
-import { issuePage } from '../issues/host.ts';
 import type { HostIssue } from '../issues/issue.ts';
-import { issueTask, type ImportRules, type IssueTask } from './map.ts';
+import { issueTask, type ImportRules, type ImportTracker, type IssueTask } from './map.ts';
 import { issueTrust } from './trust.ts';
 
-/** How GitHub closed an issue, in the note the sync writes; any other reason is left out. */
+/** How a tracker closed an issue, in the note the sync writes; any other reason is left out. */
 const CLOSE_REASONS: ReadonlyMap<string, string> = new Map([
   ['COMPLETED', 'completed'],
   ['NOT_PLANNED', 'not planned'],
@@ -30,11 +29,11 @@ export interface SyncPlan {
   readonly leftOut: readonly number[];
 }
 
-/** The register's GitHub tasks by ref. Only the import adds them, one per ref (policy.ts). */
-export function importedTasks(tasks: Iterable<Task>): Map<string, Task> {
+/** The register's tasks the import of `source` added, by ref. Only that import adds them, one per ref (policy.ts). */
+export function importedTasks(tasks: Iterable<Task>, source: ImportSource): Map<string, Task> {
   const byRef = new Map<string, Task>();
   for (const task of tasks) {
-    if (task.source === GITHUB_SOURCE && task.ref !== null && !byRef.has(task.ref)) {
+    if (task.source === source && task.ref !== null && !byRef.has(task.ref)) {
       byRef.set(task.ref, task);
     }
   }
@@ -42,14 +41,19 @@ export function importedTasks(tasks: Iterable<Task>): Map<string, Task> {
 }
 
 /**
- * The task holding each issue or pull request ref: the task the import added for it, else the team's own task that
- * links to it (linkedRefs), the first of a ref winning, so news of an item reaches the session working it however its
- * task came to hold it.
+ * The task holding each issue or pull request ref: the task a tracker's import added for it, else the team's own task
+ * that links to it (linkedRefs), the first of a ref winning, so news of an item reaches the session working it however
+ * its task came to hold it.
  */
 export function refHolders(tasks: readonly Task[]): Map<string, Task> {
-  const held = importedTasks(tasks);
+  const held = new Map<string, Task>();
   for (const task of tasks) {
-    if (isIssueRef(task.ref) && !held.has(task.ref)) {
+    if (isImportSource(task.source) && task.ref !== null && !held.has(task.ref)) {
+      held.set(task.ref, task);
+    }
+  }
+  for (const task of tasks) {
+    if (isTrackerRef(task.ref) && !held.has(task.ref)) {
       held.set(task.ref, task);
     }
   }
@@ -57,14 +61,14 @@ export function refHolders(tasks: readonly Task[]): Map<string, Task> {
 }
 
 /**
- * The refs of the team's own tasks that point at an issue: each issue the team opened for one of its tasks (gh
- * migrate) is tracked by that task, so the import must not add a second task for it. Its text, owner and status
+ * The refs of the team's own tasks that point at an issue on a tracker: each issue the team opened for one of its
+ * tasks (issue migrate) is tracked by that task, so no import may add a second task for it. Its text, owner and status
  * stay the team's: the issue holds the public wording, the task the team's own.
  */
 export function linkedRefs(tasks: Iterable<Task>): Set<string> {
   const refs = new Set<string>();
   for (const task of tasks) {
-    if (task.source !== GITHUB_SOURCE && isIssueRef(task.ref)) {
+    if (!isImportSource(task.source) && isTrackerRef(task.ref)) {
       refs.add(task.ref);
     }
   }
@@ -72,17 +76,21 @@ export function linkedRefs(tasks: Iterable<Task>): Set<string> {
 }
 
 /**
- * The writes that bring the register in step with a repository's issues. An issue a team task links to
- * (`linked`, from linkedRefs) is that task's: nothing is written for it. An open issue with no task is
- * added when it is trusted or accepted (trust.ts), else left out by its number; a closed one with no task is
- * not, as there is nothing left to do. On a task the import added, only the title, the description, the
- * priority and whether it is open follow GitHub: any active status stands for an open issue, and its owner,
+ * The writes that bring the register in step with the issues of one place on `tracker` (a repository, a project).
+ * An issue a team task links to (`linked`, from linkedRefs) is that task's: nothing is written for it. An open issue
+ * with no task is added when it is trusted or accepted (trust.ts), else left out by its number; a closed one with no
+ * task is not, as there is nothing left to do. On a task the import added, only the title, the description, the
+ * priority and whether it is open follow the tracker: any active status stands for an open issue, and its owner,
  * notes and plans stay the team's. The title and description follow only while the issue is trusted or
- * accepted, so an outsider's edit after the accept stays on GitHub until someone accepts the issue again;
- * the task keeps the text of the last accept, and stays when its issue stops qualifying.
+ * accepted, so an outsider's edit after the accept stays on the tracker until someone accepts the issue again;
+ * the task keeps the text of the last accept, and stays when its issue stops qualifying. An issue at a place the
+ * tracker's config does not name has no ref, so it is neither written nor counted.
  */
-export function planSync(issues: readonly HostIssue[], imported: ReadonlyMap<string, Task>, rules: ImportRules, linked: ReadonlySet<string> = new Set()): SyncPlan {
-  const perIssue = issues.map((issue) => issueSteps(issue, imported, rules, linked));
+export function planSync(issues: readonly HostIssue[], imported: ReadonlyMap<string, Task>, rules: ImportRules, tracker: ImportTracker, linked: ReadonlySet<string> = new Set()): SyncPlan {
+  const perIssue = issues.flatMap((issue) => {
+    const wanted = issueTask(issue, rules, tracker);
+    return wanted === undefined ? [] : [issueSteps(issue, wanted, imported, rules, tracker, linked)];
+  });
   const count = (known: boolean, writes: boolean): number => perIssue.filter((one) => one.known === known && (one.steps.length > 0) === writes).length;
   return {
     steps: perIssue.flatMap((one) => one.steps),
@@ -100,8 +108,7 @@ interface IssueSteps {
   readonly leftOut?: number;
 }
 
-function issueSteps(issue: HostIssue, imported: ReadonlyMap<string, Task>, rules: ImportRules, linked: ReadonlySet<string>): IssueSteps {
-  const wanted = issueTask(issue, rules);
+function issueSteps(issue: HostIssue, wanted: IssueTask, imported: ReadonlyMap<string, Task>, rules: ImportRules, tracker: ImportTracker, linked: ReadonlySet<string>): IssueSteps {
   const task = imported.get(wanted.ref);
   const followsText = issueTrust(issue, rules.acceptLabel) !== 'untrusted';
   if (task === undefined && linked.has(wanted.ref)) {
@@ -121,9 +128,9 @@ function issueSteps(issue: HostIssue, imported: ReadonlyMap<string, Task>, rules
   const changes = fieldChanges(task, wanted, followsText);
   const names = Object.keys(changes);
   if (names.length > 0) {
-    steps.push({ kind: 'update', ref: wanted.ref, id: task.id, changes, note: `${namesText(names)} as on GitHub` });
+    steps.push({ kind: 'update', ref: wanted.ref, id: task.id, changes, note: `${namesText(names)} as on ${tracker.name}` });
   }
-  const status = statusChange(task, wanted, issue);
+  const status = statusChange(task, wanted, issue, tracker);
   if (status !== undefined) {
     steps.push({ kind: 'status', ref: wanted.ref, id: task.id, input: status });
   }
@@ -151,27 +158,32 @@ function fieldChanges(task: Task, wanted: IssueTask, followsText: boolean): Impo
 
 /**
  * The status the issue calls for, when the task is not in it: an active status counts as open. A task set done or
- * dropped while its issue is open goes back to open only once GitHub changed the issue after that, as reopening it
- * does, so the team's own close of an issue still open on GitHub stands.
+ * dropped while its issue is open goes back to open only once the tracker changed the issue after that, as reopening
+ * it does, so the team's own close of an issue still open on the tracker stands.
  */
-function statusChange(task: Task, wanted: IssueTask, issue: HostIssue): StatusInput | undefined {
+function statusChange(task: Task, wanted: IssueTask, issue: HostIssue, tracker: ImportTracker): StatusInput | undefined {
   switch (wanted.outcome) {
     case 'open':
-      return ACTIVE_STATUSES.includes(task.status) || !changedSince(issue, task.statusAt) ? undefined : { status: 'open', note: 'open on GitHub, changed there since this task closed' };
-    case 'done':
-      return task.status === 'done' ? undefined : { status: 'done', note: closedNote(issue.stateReason), evidence: issuePage(issue.repo, issue.number) };
+      return ACTIVE_STATUSES.includes(task.status) || !changedSince(issue, task.statusAt) ? undefined : { status: 'open', note: `open on ${tracker.name}, changed there since this task closed` };
+    case 'done': {
+      if (task.status === 'done') {
+        return undefined;
+      }
+      const page = tracker.pageOf(issue);
+      return { status: 'done', note: closedNote(issue.stateReason, tracker.name), ...(page === undefined ? {} : { evidence: page }) };
+    }
     case 'dropped':
-      return task.status === 'dropped' ? undefined : { status: 'dropped', note: closedNote(issue.stateReason) };
+      return task.status === 'dropped' ? undefined : { status: 'dropped', note: closedNote(issue.stateReason, tracker.name) };
   }
 }
 
-/** Whether GitHub changed the issue after `at`; an issue gh gave no time for counts as unchanged. */
+/** Whether the tracker changed the issue after `at`; an issue read with no time counts as unchanged. */
 function changedSince(issue: HostIssue, at: string): boolean {
   return issue.updatedAt !== undefined && Date.parse(issue.updatedAt) > Date.parse(at);
 }
 
-/** The note on a closed issue's task: how GitHub closed it, when it is a reason GitHub names. */
-export function closedNote(stateReason: string): string {
+/** The note on a closed issue's task: how its tracker, `trackerName`, closed it, when it is a reason CLOSE_REASONS names. */
+export function closedNote(stateReason: string, trackerName: string): string {
   const reason = CLOSE_REASONS.get(stateReason.toUpperCase());
-  return reason === undefined ? 'closed on GitHub' : `closed on GitHub as ${reason}`;
+  return reason === undefined ? `closed on ${trackerName}` : `closed on ${trackerName} as ${reason}`;
 }

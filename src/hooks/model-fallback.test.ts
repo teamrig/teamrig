@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
 import { FALLBACK_TAIL_BYTES, fallbackLine, lastFallbackOf, readLastFallback, type ModelFallback } from './model-fallback.ts';
 
 const reader = shippedTranscripts();
+const MODELS = shippedModels();
 const FABLE = 'claude-fable-5-1';
 const OPUS = 'claude-opus-4-8';
 const SWITCH: ModelFallback = { id: 'd1a87003-e004-4233-8310-9cf5c77cca16', from: FABLE, to: OPUS, category: 'cyber' };
@@ -96,12 +98,12 @@ describe('readLastFallback', () => {
 describe('fallbackLine', () => {
   it('names both models, the category and the command back to the team model or the old one', () => {
     assert.equal(
-      fallbackLine('app-lead', SWITCH, 'opus'),
-      'MODEL app-lead now runs model claude-opus-4-8, not claude-fable-5-1: Claude Code switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back',
+      fallbackLine(MODELS, 'app-lead', SWITCH, 'opus'),
+      'MODEL app-lead now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model opus to switch back',
     );
     assert.equal(
-      fallbackLine('app-alpha', { ...SWITCH, category: undefined }, undefined),
-      'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: Claude Code switched after its safeguards stopped a reply and keeps it for this session; type /model claude-fable-5-1 to switch back',
+      fallbackLine(MODELS, 'app-alpha', { ...SWITCH, category: undefined }, undefined),
+      'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply and keeps it for this session; type /model claude-fable-5-1 to switch back',
     );
   });
 });

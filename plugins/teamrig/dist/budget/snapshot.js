@@ -48,6 +48,8 @@ export function snapshotOfStatus(source, input, now) {
         cwd: reading.cwd,
         agentName: reading.agentName ?? null,
         model: reading.model ?? null,
+        effort: reading.effort ?? null,
+        hostVersion: reading.hostVersion ?? null,
         rateLimits,
         rateLimitsSince: rateLimits === null ? null : ts,
         rateLimitsAfter: null,
@@ -58,7 +60,7 @@ export function snapshotOfStatus(source, input, now) {
 }
 /**
  * The session's effort level as the host's status line reads it in its status input; undefined without one, as for
- * a model that takes none. The status line shows it; the snapshot does not keep it.
+ * a model that takes none. The status line shows it, and the snapshot keeps it for the commit stamp.
  */
 export function effortOfStatus(statusLine, input) {
     return statusLine.parse(input)?.effort;
@@ -75,6 +77,8 @@ export function formatSnapshot(snapshot) {
         cwd: snapshot.cwd,
         agent_name: snapshot.agentName,
         model: snapshot.model,
+        effort: snapshot.effort,
+        host_version: snapshot.hostVersion,
         rate_limits: limits === null ? null : { five_hour: storedWindow(limits.fiveHour), seven_day: storedWindow(limits.sevenDay) },
         rate_limits_since: snapshot.rateLimitsSince,
         rate_limits_after: snapshot.rateLimitsAfter,
@@ -102,6 +106,8 @@ export function parseSnapshot(text) {
         cwd: stringField(stored, 'cwd') ?? '',
         agentName: textOrNull(stored['agent_name']),
         model: textOrNull(stored['model']),
+        effort: textOrNull(stored['effort']),
+        hostVersion: textOrNull(stored['host_version']),
         rateLimits,
         rateLimitsSince: since,
         rateLimitsAfter: rateLimits === null ? null : timeUpTo(stored['rate_limits_after'], since ?? ts, false),

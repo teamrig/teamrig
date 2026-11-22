@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { launchHostFrom } from '../cli/host.ts';
+import type { LaunchHost } from '../config/launch.ts';
 import { parseConfig } from '../config/parse.ts';
 import type { JsonRecord } from '../core/guards.ts';
+import { shippedModels } from '../testing/shipped-models.ts';
 import { planHire, type HirePlan, type HireRequest } from './plan.ts';
 
 const NOW = Date.parse('2030-01-08T10:00:00Z');
@@ -10,20 +13,23 @@ const FILE: JsonRecord = { sessions: ['lead', 'alpha'], roles: { lead: 'lead' },
 
 const REQUEST: HireRequest = { id: 'helper', scope: 'port the importer', reason: 'release week', by: 'lead', now: NOW };
 
-function plan(file: JsonRecord, request: Partial<HireRequest> = {}): ReturnType<typeof planHire> {
+/** The shipped host's models, with its lead default held here so the cases read on their own. */
+const SHIPPED_HOST: LaunchHost = { ...launchHostFrom(shippedModels()), leadDefault: { model: 'opus', effort: 'xhigh' } };
+
+function plan(file: JsonRecord, request: Partial<HireRequest> = {}, host: LaunchHost = SHIPPED_HOST): ReturnType<typeof planHire> {
   const { config, issues } = parseConfig(file);
   assert.deepEqual(issues, [], 'the test file must be valid');
-  return planHire(file, config, { ...REQUEST, ...request });
+  return planHire(file, config, { ...REQUEST, ...request }, host);
 }
 
-function planned(file: JsonRecord, request: Partial<HireRequest> = {}): HirePlan {
-  const result = plan(file, request);
+function planned(file: JsonRecord, request: Partial<HireRequest> = {}, host: LaunchHost = SHIPPED_HOST): HirePlan {
+  const result = plan(file, request, host);
   assert.ok(result.ok, result.ok ? '' : result.problem);
   return result.value;
 }
 
-function problem(file: JsonRecord, request: Partial<HireRequest> = {}): string {
-  const result = plan(file, request);
+function problem(file: JsonRecord, request: Partial<HireRequest> = {}, host: LaunchHost = SHIPPED_HOST): string {
+  const result = plan(file, request, host);
   assert.equal(result.ok, false);
   return result.ok ? '' : result.problem;
 }
@@ -94,6 +100,14 @@ describe('planHire', () => {
     assert.match(problem(FILE, { id: 'Helper' }), /not a session id/);
     assert.match(problem(FILE, { id: 'alpha' }), /already on the team/);
     assert.match(problem(FILE, { model: 'gpt' }), /--model gpt/);
+  });
+
+  it('refuses a model name of a bad shape on any host, and one of the right shape only where the host does not run it', () => {
+    assert.match(problem(FILE, { model: 'opus 5' }, launchHostFrom(undefined)), /^--model opus 5: expected a model name/);
+    const refusal = shippedModels().problemOf('gpt-5');
+    assert.ok(refusal !== undefined, 'the shipped host runs no gpt-5');
+    assert.equal(problem(FILE, { model: 'gpt-5' }), `--model gpt-5: ${refusal}`);
+    assert.deepEqual(planned(FILE, { model: 'gpt-5' }, launchHostFrom(undefined)).config['launch'], { helper: { model: 'gpt-5' } });
   });
 
   it('hires past any count of sessions: no cap bounds hiring, the host room and the leader do', () => {

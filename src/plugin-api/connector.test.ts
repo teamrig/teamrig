@@ -36,6 +36,7 @@ describe('a connector declaration', () => {
       'codehost.pull-news is not unsupported, but its kinds do not list codehost',
       'codehost.ci-excerpt is not unsupported, but its kinds do not list codehost',
       'codehost.pr-conflicts is not unsupported, but its kinds do not list codehost',
+      'codehost.pr-land is not unsupported, but its kinds do not list codehost',
       'codehost.review-posts is not unsupported, but its kinds do not list codehost',
       'codehost.linked-pulls is not unsupported, but its kinds do not list codehost',
     ]);

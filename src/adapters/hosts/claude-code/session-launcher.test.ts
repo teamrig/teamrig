@@ -5,20 +5,26 @@ import { declaration } from './declaration.ts';
 import { sessionLauncher } from './session-launcher.ts';
 
 const PROJECT = join('/', 'work', 'app');
-const NONE = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined };
+const NONE = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
 
 describe("Claude Code's session launcher", () => {
-  it('tells the folder the session started in, how Claude Code was started, the kind of session and its id, each trimmed', () => {
-    const env = { CLAUDE_PROJECT_DIR: ` ${PROJECT} `, CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_KIND: ' bg ', CLAUDE_CODE_SESSION_ID: ' s-1 ' };
-    assert.deepEqual(sessionLauncher(env).identity(), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg', sessionId: 's-1' });
+  it('tells the folder the session started in, how Claude Code was started, the kind of session, its id and a forced effort, each trimmed', () => {
+    const env = { CLAUDE_PROJECT_DIR: ` ${PROJECT} `, CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_KIND: ' bg ', CLAUDE_CODE_SESSION_ID: ' s-1 ', CLAUDE_CODE_EFFORT_LEVEL: ' high ' };
+    assert.deepEqual(sessionLauncher(env).identity(), { projectDir: PROJECT, startedAs: 'cli', sessionKind: 'bg', sessionId: 's-1', forcedEffort: 'high' });
   });
 
   it('tells nothing of a run no session started, and reads a blank value as none', () => {
     assert.deepEqual(sessionLauncher({}).identity(), NONE);
-    assert.deepEqual(sessionLauncher({ CLAUDE_PROJECT_DIR: '', CLAUDE_CODE_ENTRYPOINT: ' ', CLAUDE_CODE_SESSION_KIND: '\t', CLAUDE_CODE_SESSION_ID: ' ' }).identity(), NONE);
+    const blank = { CLAUDE_PROJECT_DIR: '', CLAUDE_CODE_ENTRYPOINT: ' ', CLAUDE_CODE_SESSION_KIND: '\t', CLAUDE_CODE_SESSION_ID: ' ', CLAUDE_CODE_EFFORT_LEVEL: ' ' };
+    assert.deepEqual(sessionLauncher(blank).identity(), NONE);
   });
 
-  it('reads no variable but its own four', () => {
+  it("names the program by its declaration's name, whatever the environment holds", () => {
+    assert.equal(sessionLauncher({}).programName, declaration.name);
+    assert.equal(sessionLauncher({ CLAUDE_CODE_SESSION_ID: 's-1' }).programName, 'Claude Code');
+  });
+
+  it('reads no variable but its own five', () => {
     const env = { CLAUDE_PROJECT_DIR: PROJECT, PWD: join('/', 'tmp'), CLAUDECODE: '1', TEAMRIG_SESSION: 'dev' };
     assert.deepEqual(sessionLauncher(env).identity(), { ...NONE, projectDir: PROJECT });
   });

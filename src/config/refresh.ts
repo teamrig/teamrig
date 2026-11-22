@@ -1,4 +1,4 @@
-import { launchOf } from './launch.ts';
+import { ownLaunchOf } from './launch.ts';
 import { AUTO_RESTART_LEAD, type KitConfig, type RefreshConfig } from './types.ts';
 
 /** Whether the automatic restart is on for session `id`: `lead` turns it on for the team's lead only. */
@@ -16,7 +16,7 @@ const LARGE_WINDOW_SUFFIX = '[1m]';
  * instead: the window the plugin's mod reports, or a size no 200k window has (src/refresh/decide.ts `windowOf`).
  */
 export function largeWindowOf(config: KitConfig, id: string): boolean {
-  return launchOf(config, id).model?.endsWith(LARGE_WINDOW_SUFFIX) === true;
+  return ownLaunchOf(config, id).model?.endsWith(LARGE_WINDOW_SUFFIX) === true;
 }
 
 /**

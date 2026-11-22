@@ -1,7 +1,19 @@
 import { MAX_DESCRIPTION } from "../config/defaults.js";
 import { SecretScanner } from "../core/secrets.js";
+import { issuePage } from "../issues/host.js";
 import { refOf } from "../issues/ref.js";
 import { plainLine } from "../core/printable.js";
+import { GITHUB_SOURCE } from "../register/model.js";
+/**
+ * GitHub, as the import of `github.repos` reads it: each issue's ref is `gh:<owner>/<name>#<number>` (issues/ref.ts),
+ * its page issuePage's.
+ */
+export const GITHUB_TRACKER = {
+    source: GITHUB_SOURCE,
+    name: 'GitHub',
+    refOf: (target) => refOf(target),
+    pageOf: (target) => issuePage(target.repo, target.number),
+};
 /** The priority of an issue with no priority label of the team's: p2, or the team's least urgent level when it has no p2. */
 export const ISSUE_PRIORITY = 2;
 /** The description of an issue whose body looks like it holds a secret: the body stays on GitHub only. */
@@ -26,10 +38,15 @@ export function importRules(config) {
 export function issueRef(repo, number) {
     return refOf({ repo, number });
 }
-export function issueTask(issue, rules) {
+/** The task `issue` calls for on `tracker`; undefined for an issue at a place the tracker's config does not name, as it has no ref. */
+export function issueTask(issue, rules, tracker) {
+    const ref = tracker.refOf(issue);
+    if (ref === undefined) {
+        return undefined;
+    }
     return {
-        ref: issueRef(issue.repo, issue.number),
-        title: taskTitle(issue, rules.maxTitle),
+        ref,
+        title: taskTitle(issue, rules.maxTitle, tracker.name),
         description: taskDescription(issue.body, rules.secrets),
         priority: issuePriority(issue.labels, rules.priorities),
         owner: issueOwner(issue, rules),
@@ -38,11 +55,11 @@ export function issueTask(issue, rules) {
 }
 /**
  * The issue's title on one plain line, cut to `maxTitle`: outside text, so control and format characters
- * go. A title with nothing left names the issue instead.
+ * go. A title with nothing left names the issue on its tracker, `trackerName` (`GitHub issue acme/web#7`), instead.
  */
-export function taskTitle(issue, maxTitle) {
+export function taskTitle(issue, maxTitle, trackerName) {
     const title = plainLine(issue.title);
-    const text = title === '' ? `GitHub issue ${issue.repo}#${issue.number}` : title;
+    const text = title === '' ? `${trackerName} issue ${issue.repo}#${issue.number}` : title;
     // A cut between the two halves of a character leaves the first half alone: it goes too.
     return text.length <= maxTitle ? text : text.slice(0, maxTitle).replace(/[\uD800-\uDBFF]$/, '').trimEnd();
 }

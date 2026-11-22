@@ -27,6 +27,7 @@ import { nodeProcesses } from '../open/processes.ts';
 import { nodeSessionProcesses } from '../open/session-processes.ts';
 import { httpPackageRegistry } from '../package-guard/registry.ts';
 import { GIT_CLI, GIT_COMMIT_LOG } from '../push-guard/git.ts';
+import { GIT_CHANGES } from '../changes/git.ts';
 import { gitSecrets } from '../secret-guard/secrets-git.ts';
 import { GIT_POINTER } from '../setup/pointer-git.ts';
 import { requirementsCheck } from '../requirements/requirements.ts';
@@ -40,6 +41,7 @@ import { SHORTCUT_QUERY_TIMEOUT_MS, systemShortcutPlace } from '../restore/short
 import { SHUTDOWN_QUERY_TIMEOUT_MS, systemShutdownLog } from '../restore/shutdowns.ts';
 import { processStopWatch } from '../restore/stops.ts';
 import { CMD_SHIM_LINE_ENV } from './cmd-shim.ts';
+import { sessionProcessCheckOf } from './host.ts';
 import { runCli } from './run.ts';
 import type { ExitCode, Output } from './runtime.ts';
 
@@ -86,6 +88,11 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
   delete process.env[CMD_SHIM_LINE_ENV];
   const sessionProcesses = nodeSessionProcesses();
   const hostPrograms = nodeProgramRunner(HOST_PROGRAM_TIMEOUT_MS);
+  const host = await loadHostPorts(hostPrograms);
+  const shippedHosts = await loadShippedHosts(hostPrograms);
+  // The watch of this run's starters stops at the session that started it, which the hosts tell: built here, as the
+  // watch is a part of the runtime the hosts are handed to.
+  const isSessionProcess = sessionProcessCheckOf({ host, shippedHosts, env: process.env, platform: process.platform });
   return runCli(argv, {
     env: process.env,
     userHome: homedir(),
@@ -102,11 +109,11 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     secretsGit: gitSecrets(process.env),
     out: entry.out,
     platform: process.platform,
-    host: await loadHostPorts(hostPrograms),
-    shippedHosts: await loadShippedHosts(hostPrograms),
+    host,
+    shippedHosts,
     processes: nodeProcesses(),
     sessionProcesses,
-    starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, nodeEvery),
+    starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, isSessionProcess, nodeEvery),
     shell: nodeShellRunner(),
     steps: nodeStepRunner(process.platform),
     memory: nodeHostMemory(process.platform),
@@ -129,6 +136,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     },
     mergeGit: GIT_MERGE,
     pulls: GIT_PULLS,
+    changeGit: GIT_CHANGES,
     trees: GIT_TREES,
     hooks: nodeHookRunner(process.platform),
     packageRegistry: httpPackageRegistry(),

@@ -7,7 +7,7 @@ import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, hostRunning, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -508,6 +508,15 @@ describe('teamrig launch', () => {
     assert.deepEqual(processes.ran.map((run) => run.env), [{ ...SESSION_ENV, ANTHROPIC_API_KEY: value, GH_TOKEN: value }]);
   });
 
+  it("starts the session with the running host's login and no other host's, and with no session variable of any host", async () => {
+    const processes = new FakeProcesses();
+    const value = 'not-a-real-credential';
+    const host = hostNaming({ marks: ['AGENT_RUN'], identity: ['AGENT_SESSION'] }, {}, { session: ['AGENT_SOCKET'], parked: [], login: ['OPENAI_API_KEY'] });
+    const env = { PATH: '/usr/local/bin', ANTHROPIC_API_KEY: value, OPENAI_API_KEY: value, CLAUDE_PID: '7', CLAUDE_CODE_MESSAGING_TOKEN: value, AGENT_RUN: '1', AGENT_SESSION: 'abc', AGENT_SOCKET: '/run/agent' };
+    await new CliHarness(TEAM).run(LAUNCH, { probe: ON_PATH, processes, env, host });
+    assert.deepEqual(processes.ran.map((run) => run.env), [{ ...SESSION_ENV, OPENAI_API_KEY: value }]);
+  });
+
   it("starts Claude Code without the opener's plugin bin folders on PATH, so the session's own teamrig answers its Bash calls", async () => {
     const processes = new FakeProcesses();
     await launch(processes, [], { env: { PATH: '/home/me/.claude/plugins/cache/teamrig/teamrig/0.75.0/bin:/usr/local/bin' } });
@@ -579,6 +588,15 @@ describe('teamrig launch', () => {
     const result = await kit.run([...LAUNCH, '--effort', 'max', '--no-prompt'], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
     assert.deepEqual(result.stdout, [`Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on model sonnet at max effort`]);
     assert.deepEqual(processes.ran[0]?.args, ['--model', 'sonnet', '--effort', 'max', '--name', 'app-alpha']);
+  });
+
+  it('refuses a configured model the host does not run, before starting it, and names the key to fix', async () => {
+    const processes = new FakeProcesses();
+    const kit = new CliHarness({ ...TEAM, launch: { alpha: { model: 'gpt-5', effort: 'high' } } });
+    const result = await kit.run(LAUNCH, { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout.join('\n'), /^REFUSED launch\.alpha\.model gpt-5: .*; fix it in the team config, or `teamrig doctor` lists each/);
+    assert.deepEqual(processes.ran, []);
   });
 
   it('starts the lead on Opus at xhigh effort, and any session on its configured model and effort', async () => {
@@ -717,6 +735,23 @@ describe('teamrig launch', () => {
         const result = await kit.run(LAUNCH, { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' }, ...host });
         assert.deepEqual([result.code, processes.ran.length], [EXIT.ok, 1], name);
       }
+    });
+
+    it("is refused while it runs in the program of the host the run works in, which no other host takes for a session's", async () => {
+      const inDesk = (): Pick<RunOptions, 'sessionProcesses' | 'memory'> => ({
+        ...claudeRuns(6900),
+        sessionProcesses: new FakeSessionProcesses().add({ pid: 6900, parentPid: 1, name: 'agent-desk', commandLine: 'agent-desk' }),
+      });
+      const refused = new CliHarness(TEAM);
+      await recordStart(refused, 6900);
+      const none = new FakeProcesses();
+      const result = await refused.run(LAUNCH, { probe: ON_PATH, processes: none, env: { PATH: '/usr/local/bin' }, host: hostRunning('agent-desk'), ...inDesk() });
+      assert.deepEqual([result.code, result.stdout.at(-1), none.ran], [EXIT.refused, liveLine(6900), []]);
+      const started = new CliHarness(TEAM);
+      await recordStart(started, 6900);
+      const one = new FakeProcesses();
+      const elsewhere = await started.run(LAUNCH, { probe: ON_PATH, processes: one, env: { PATH: '/usr/local/bin' }, ...inDesk() });
+      assert.deepEqual([elsewhere.code, one.ran.length], [EXIT.ok, 1]);
     });
 
     it('is refused on a restart when another Claude Code took the session meanwhile', async () => {

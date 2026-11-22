@@ -80,6 +80,26 @@ describe('runCli: audit, the security reviewer pins a hand step file for a task 
     assert.deepEqual(filesOf(kit), before);
   });
 
+  it("refuses a hand step that calls gh or a remote git command on the human's login, naming each call, and writes nothing (T4896)", async () => {
+    const kit = await reviewed();
+    const steps: [string, string, string][] = [
+      ['merge.ps1', 'Write-Host "start"\ngh pr merge 12 --rebase\n', 'gh pr merge 12 --rebase'],
+      ['push.sh', 'git status\ngit push origin main\n', 'git push origin main'],
+      ['rules.md', '1. Open the settings.\n```\ngh api repos/o/n/rulesets\n```\n', 'gh api repos/o/n/rulesets'],
+    ];
+    for (const [name, text] of steps) {
+      await kit.files.write(join(APP, 'steps', name), text);
+    }
+    const before = filesOf(kit);
+    for (const [name, , call] of steps) {
+      const path = join(APP, 'steps', name);
+      const result = await kit.run(['audit', 'T1', '--file', path, '--session', 'bravo']);
+      assert.equal(result.code, EXIT.refused, name);
+      assert.match(result.stdout[0] ?? '', new RegExp(`^REFUSED ${escaped(path)} runs on the human's own login: ${escaped(call)}\\. A hand step never calls`));
+    }
+    assert.deepEqual(filesOf(kit), before);
+  });
+
   it('refuses a path with a line break, which a register line would read back as bad, writing nothing', async () => {
     const kit = await reviewed();
     const broken = join(APP, 'steps', 'grant\nread.ps1');

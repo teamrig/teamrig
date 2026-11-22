@@ -1,11 +1,12 @@
 import { exitText, isLogin, isRecord, LABEL_FILE, MAX_COMMENT, parseLabelFile, plainLine, targetText, withStampFooter, } from "../../../plugin-api/index.js";
-import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyArgs, issueCloseArgs, issueCommentArgs, issueCreateArgs, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueTypeSetArgs, jobLogArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
+import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyArgs, issueCloseArgs, issueCommentArgs, issueCreateArgs, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
 import { probeAnswerOf } from "./probe.js";
 import { createdNumber, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, runRead, startFailureText } from "./issues.js";
 import { readFields } from "./fields.js";
 import { failedLogExcerpt } from "./job-log.js";
 import { listLinks } from "./links.js";
 import { readPosts } from "./posts.js";
+import { pullStandIn } from "./pull-stand.js";
 import { listPulls, PULL_LIMIT } from "./pulls.js";
 import { PULL_PAGE_SIZE } from "./queries.js";
 import { NoAccessError } from "./tokens.js";
@@ -453,6 +454,33 @@ export class GitHubIssueHost {
     }
     unassign(target, login) {
         return this.write(target, issueUnassignArgs(target, login), `take ${login} off the assignees of`);
+    }
+    /**
+     * Reads where one pull request stands (pull-stand.ts), for `pr approve` and `pr merge` (T4817): read, missing when
+     * GitHub answers Not Found or null, else failed with gh's own line or when the answer has no pull request's shape.
+     */
+    async pullStand(target) {
+        const shown = targetText(target);
+        const read = await this.read(target.repo, pullStandArgs(target), `where ${shown} stands`);
+        if (read.kind !== 'found') {
+            return read;
+        }
+        const answer = pullStandIn(read.stdout);
+        return answer.kind === 'unreadable' ? { kind: 'failed', reason: `gh printed no pull request for ${shown}` } : answer;
+    }
+    /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */
+    approvePull(target, head) {
+        return this.write(target, pullApproveArgs(target, head), 'approve');
+    }
+    /**
+     * Lands the pull request as `pull` read it, pinned to its head: enqueued where the repository has a merge queue,
+     * else merged by rebase. GitHub refuses either when the head moved since the read, and keeps its own required checks.
+     */
+    async landPull(target, pull) {
+        const queue = pull.mergeQueue;
+        const args = queue ? pullEnqueueArgs(pull.id, pull.head) : pullMergeArgs(target, pull.head);
+        const end = await this.write(target, args, queue ? 'add to the merge queue' : 'merge');
+        return end.kind === 'failed' ? end : { kind: queue ? 'enqueued' : 'merged' };
     }
     /** One write; `missing`, when given, says what a Not Found means for it in place of the issue not being there. */
     async write(target, args, what, missing) {

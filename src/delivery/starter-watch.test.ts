@@ -32,6 +32,9 @@ const HOOK: ProcessInfo = { pid: 22, parentPid: 23, name: 'sh.exe', commandLine:
 const HOOK_STUB: ProcessInfo = { pid: 24, parentPid: 25, name: 'sh.exe', commandLine: 'sh teamrig queue' };
 const HOOK_CLI: ProcessInfo = { pid: 26, parentPid: HOOK_STUB.pid, name: 'node.exe', commandLine: 'node main.js queue' };
 
+/** What the hosts of a run tell the watch: the tab's session runs in the program `CLAUDE` names. */
+const isSession = (info: ProcessInfo): boolean => info.name === CLAUDE.name;
+
 /** An `Every` the test runs by hand: it keeps the check and each period asked, and whether its stop was called. */
 class ManualEvery {
   readonly periods: number[] = [];
@@ -105,22 +108,28 @@ async function endWatcher(ready: string, ended: string): Promise<void> {
 }
 
 describe('startersOf', () => {
-  it('keeps the starters up to and with the nearest Claude Code, else every one', () => {
-    assert.deepEqual(startersOf([SELF, SHELL, CLAUDE, TERMINAL]), [SHELL, CLAUDE]);
-    assert.deepEqual(startersOf([SELF, SHELL, TERMINAL]), [SHELL, TERMINAL]);
-    assert.deepEqual(startersOf([SELF]), []);
-    assert.deepEqual(startersOf([]), []);
+  it("keeps the starters up to and with the nearest session's host program, else every one", () => {
+    assert.deepEqual(startersOf([SELF, SHELL, CLAUDE, TERMINAL], isSession), [SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([SELF, SHELL, TERMINAL], isSession), [SHELL, TERMINAL]);
+    assert.deepEqual(startersOf([SELF], isSession), []);
+    assert.deepEqual(startersOf([], isSession), []);
+  });
+
+  it('knows no program itself: the session among the starters is the one its host tells, and none where no host tells of any', () => {
+    const DESK: ProcessInfo = { pid: 17, parentPid: CLAUDE.pid, name: 'agent-desk', commandLine: 'agent-desk' };
+    assert.deepEqual(startersOf([SELF, SHELL, DESK, CLAUDE, TERMINAL], (info) => info.name === 'agent-desk'), [SHELL, DESK]);
+    assert.deepEqual(startersOf([SELF, SHELL, CLAUDE, TERMINAL], () => false), [SHELL, CLAUDE, TERMINAL]);
   });
 
   it("goes on with the launching shell's line where the own line stops short of it, and adds no starter twice", () => {
-    assert.deepEqual(startersOf([LAUNCHED, STUB], [[SHELL, CLAUDE, TERMINAL]]), [STUB, SHELL, CLAUDE]);
-    assert.deepEqual(startersOf([SELF, SHELL, CLAUDE, TERMINAL], [[SHELL, CLAUDE, TERMINAL]]), [SHELL, CLAUDE]);
-    assert.deepEqual(startersOf([], [[SHELL, CLAUDE]]), [SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([LAUNCHED, STUB], isSession, [[SHELL, CLAUDE, TERMINAL]]), [STUB, SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([SELF, SHELL, CLAUDE, TERMINAL], isSession, [[SHELL, CLAUDE, TERMINAL]]), [SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([], isSession, [[SHELL, CLAUDE]]), [SHELL, CLAUDE]);
   });
 
   it("goes on with each launching shell's line in turn, nearest first, where the one before stops short", () => {
-    assert.deepEqual(startersOf([HOOK_CLI, HOOK_STUB], [[HOOK], [HOOK_RUNNER, GIT, SHELL, CLAUDE, TERMINAL]]), [HOOK_STUB, HOOK, HOOK_RUNNER, GIT, SHELL, CLAUDE]);
-    assert.deepEqual(startersOf([HOOK_CLI, HOOK_STUB], [[HOOK], [HOOK_RUNNER, GIT, SHELL], [SHELL, CLAUDE]]), [HOOK_STUB, HOOK, HOOK_RUNNER, GIT, SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([HOOK_CLI, HOOK_STUB], isSession, [[HOOK], [HOOK_RUNNER, GIT, SHELL, CLAUDE, TERMINAL]]), [HOOK_STUB, HOOK, HOOK_RUNNER, GIT, SHELL, CLAUDE]);
+    assert.deepEqual(startersOf([HOOK_CLI, HOOK_STUB], isSession, [[HOOK], [HOOK_RUNNER, GIT, SHELL], [SHELL, CLAUDE]]), [HOOK_STUB, HOOK, HOOK_RUNNER, GIT, SHELL, CLAUDE]);
   });
 });
 
@@ -143,7 +152,7 @@ describe('starterWatch', () => {
   it('checks each starter every 5 seconds, and once one ended, stops the checks and aborts', async () => {
     const processes = tab();
     const manual = new ManualEvery();
-    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, manual.every).watch();
+    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, isSession, manual.every).watch();
     assert.deepEqual([watching.starters, manual.periods], [[SHELL, CLAUDE], [STARTER_CHECK_MS]]);
     manual.tick();
     assert.deepEqual([watching.stop.aborted, watching.ended(), endedText(watching)], [false, undefined, 'a process that started it']);
@@ -155,7 +164,7 @@ describe('starterWatch', () => {
   it('finds Claude Code ended though the shell under it runs on, as a launcher stub does on Windows', async () => {
     const processes = tab();
     const manual = new ManualEvery();
-    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, manual.every, 200).watch();
+    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, isSession, manual.every, 200).watch();
     processes.exit(CLAUDE.pid);
     manual.tick();
     assert.deepEqual([manual.periods, watching.ended(), watching.stop.aborted], [[200], CLAUDE, true]);
@@ -163,10 +172,10 @@ describe('starterWatch', () => {
 
   it("under Git Bash, finds the shell ended through the launcher's record, where its own line ends at the launcher stub", async () => {
     const processes = tab().add(STUB).add(LAUNCHED);
-    const unnamed = await starterWatch(processes, { pid: LAUNCHED.pid, shells: [] }, new ManualEvery().every).watch();
+    const unnamed = await starterWatch(processes, { pid: LAUNCHED.pid, shells: [] }, isSession, new ManualEvery().every).watch();
     assert.deepEqual(unnamed.starters, [STUB], 'without the record the stub alone is watched, and it runs on');
     const manual = new ManualEvery();
-    const watching = await starterWatch(processes, { pid: LAUNCHED.pid, shells: [SHELL.pid] }, manual.every).watch();
+    const watching = await starterWatch(processes, { pid: LAUNCHED.pid, shells: [SHELL.pid] }, isSession, manual.every).watch();
     assert.deepEqual(watching.starters, [STUB, SHELL, CLAUDE]);
     processes.exit(SHELL.pid);
     manual.tick();
@@ -175,11 +184,11 @@ describe('starterWatch', () => {
 
   it("finds the Bash tool's shell ended under a hook that a second Git Bash shell runs, through every shell the launcher named (T764)", async () => {
     const processes = tab().add(GIT).add(HOOK_RUNNER).add(HOOK).add(HOOK_STUB).add(HOOK_CLI);
-    const nearest = await starterWatch(processes, { pid: HOOK_CLI.pid, shells: [HOOK.pid] }, new ManualEvery().every).watch();
+    const nearest = await starterWatch(processes, { pid: HOOK_CLI.pid, shells: [HOOK.pid] }, isSession, new ManualEvery().every).watch();
     assert.deepEqual(nearest.starters, [HOOK_STUB, HOOK], 'with the nearest shell alone, nothing watched ends with the Bash tool');
     processes.lineages.length = 0;
     const manual = new ManualEvery();
-    const watching = await starterWatch(processes, { pid: HOOK_CLI.pid, shells: [HOOK.pid, HOOK_RUNNER.pid] }, manual.every).watch();
+    const watching = await starterWatch(processes, { pid: HOOK_CLI.pid, shells: [HOOK.pid, HOOK_RUNNER.pid] }, isSession, manual.every).watch();
     assert.deepEqual([watching.starters, processes.lineages], [[HOOK_STUB, HOOK, HOOK_RUNNER, GIT, SHELL, CLAUDE], [HOOK_CLI.pid, HOOK.pid, HOOK_RUNNER.pid]]);
     processes.exit(SHELL.pid);
     manual.tick();
@@ -189,7 +198,7 @@ describe('starterWatch', () => {
   it('checks nothing and never aborts when the system will not list the starters, or lists none', async () => {
     for (const [processes, pid, shells] of [[tab().hideLineage(), SELF.pid, [SHELL.pid]], [tab(), 99, []]] as const) {
       const manual = new ManualEvery();
-      const watching = await starterWatch(processes, { pid, shells }, manual.every).watch();
+      const watching = await starterWatch(processes, { pid, shells }, isSession, manual.every).watch();
       watching.close();
       assert.deepEqual([watching.starters, manual.periods, watching.stop.aborted, watching.ended()], [[], [], false, undefined]);
     }
@@ -199,7 +208,7 @@ describe('starterWatch', () => {
     for (const how of ['failed', 'short'] as const) {
       const processes = tab().failLineages(1, how);
       const manual = new ManualEvery();
-      const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, manual.every).watch();
+      const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, isSession, manual.every).watch();
       assert.deepEqual([watching.starters, processes.lineages, manual.periods], [[SHELL, CLAUDE], [SELF.pid, SELF.pid], [STARTER_CHECK_MS]], how);
       processes.exit(SHELL.pid);
       manual.tick();
@@ -209,29 +218,41 @@ describe('starterWatch', () => {
 
   it('lists its starters at most twice, and then watches none, when every listing goes wrong (#908)', async () => {
     const processes = tab().failLineages(2, 'failed');
-    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, new ManualEvery().every).watch();
+    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, isSession, new ManualEvery().every).watch();
     assert.deepEqual([watching.starters, processes.lineages], [[], [SELF.pid, SELF.pid]]);
   });
 
   it('stops checking once closed', async () => {
     const manual = new ManualEvery();
-    const watching = await starterWatch(tab(), { pid: SELF.pid, shells: [] }, manual.every).watch();
+    const watching = await starterWatch(tab(), { pid: SELF.pid, shells: [] }, isSession, manual.every).watch();
     watching.close();
     assert.equal(manual.cancelled, true);
   });
 
   it("tells whether the tab's Claude Code still runs, looked up at each call: the reaper ended the shell alone (T2304)", async () => {
     const processes = tab();
-    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, new ManualEvery().every).watch();
+    const watching = await starterWatch(processes, { pid: SELF.pid, shells: [] }, isSession, new ManualEvery().every).watch();
     processes.exit(SHELL.pid);
     assert.equal(watching.tabAlive(), true);
     processes.exit(CLAUDE.pid);
     assert.equal(watching.tabAlive(), false);
   });
 
+  it("watches up to the session its host tells, and tells that one's tab alive: a program no host calls its own is one more starter", async () => {
+    const DESK: ProcessInfo = { pid: 17, parentPid: TERMINAL.pid, name: 'agent-desk', commandLine: 'agent-desk' };
+    const desk = (): FakeSessionProcesses => new FakeSessionProcesses().add(TERMINAL).add(DESK).add({ ...SHELL, parentPid: DESK.pid }).add(SELF);
+    const told = desk();
+    const watching = await starterWatch(told, { pid: SELF.pid, shells: [] }, (info) => info.name === 'agent-desk', new ManualEvery().every).watch();
+    assert.deepEqual([watching.starters.map((starter) => starter.pid), watching.tabAlive()], [[SHELL.pid, DESK.pid], true]);
+    told.exit(DESK.pid);
+    assert.equal(watching.tabAlive(), false);
+    const untold = await starterWatch(desk(), { pid: SELF.pid, shells: [] }, isSession, new ManualEvery().every).watch();
+    assert.deepEqual([untold.starters.map((starter) => starter.pid), untold.tabAlive()], [[SHELL.pid, DESK.pid, TERMINAL.pid], false]);
+  });
+
   it("never finds a tab alive with no Claude Code among the starters, as in a person's own terminal (T2304)", async () => {
     const own = new FakeSessionProcesses().add(TERMINAL).add({ ...SHELL, parentPid: TERMINAL.pid }).add(SELF);
-    const watching = await starterWatch(own, { pid: SELF.pid, shells: [] }, new ManualEvery().every).watch();
+    const watching = await starterWatch(own, { pid: SELF.pid, shells: [] }, isSession, new ManualEvery().every).watch();
     assert.deepEqual([watching.starters.map((starter) => starter.pid), watching.tabAlive()], [[SHELL.pid, TERMINAL.pid], false]);
   });
 });
@@ -274,7 +295,7 @@ describe('starterWatch on this machine', () => {
         `import { nodeEvery, starterWatch } from ${JSON.stringify(new URL('./starter-watch.ts', import.meta.url).href)};`,
         `import { nodeSessionProcesses } from ${JSON.stringify(new URL('../open/session-processes.ts', import.meta.url).href)};`,
         `const quit = setTimeout(() => process.exit(3), ${REAL_QUIT_MS});`,
-        'const watching = await starterWatch(nodeSessionProcesses(), { pid: process.pid, shells: [] }, nodeEvery, 200).watch();',
+        'const watching = await starterWatch(nodeSessionProcesses(), { pid: process.pid, shells: [] }, () => false, nodeEvery, 200).watch();',
         "watching.stop.addEventListener('abort', () => {",
         `  writeFileSync(${JSON.stringify(ended)}, String(watching.ended()?.pid));`,
         '  clearTimeout(quit);',
@@ -345,7 +366,7 @@ describe('starterWatch on this machine', () => {
         `import { nodeSessionProcesses } from ${JSON.stringify(new URL('../open/session-processes.ts', import.meta.url).href)};`,
         `const quit = setTimeout(() => process.exit(3), ${REAL_QUIT_MS});`,
         'const shells = launchingShellsOf(process.env, process.ppid);',
-        'const watching = await starterWatch(nodeSessionProcesses(), { pid: process.pid, shells }, nodeEvery, 200).watch();',
+        'const watching = await starterWatch(nodeSessionProcesses(), { pid: process.pid, shells }, () => false, nodeEvery, 200).watch();',
         "watching.stop.addEventListener('abort', () => {",
         `  writeFileSync(${JSON.stringify(ended)}, String(watching.ended()?.pid));`,
         '  clearTimeout(quit);',

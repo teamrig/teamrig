@@ -1,6 +1,6 @@
 import { LeadTree } from '../config/lead-tree.ts';
 import type { KitConfig } from '../config/types.ts';
-import { formatAddress } from '../core/address.ts';
+import { formatAddress, type SessionAddress } from '../core/address.ts';
 import type { Task } from '../register/fold.ts';
 import { JsonlEventLog } from '../register/store.ts';
 import { openKit, rosterOf, sessionIdOf, type KitReader } from './kit.ts';
@@ -63,6 +63,17 @@ export async function tabCallerOf(reader: KitReader, team: string, claudeSession
 }
 
 async function approversOf(reader: KitReader, team: string, config: KitConfig, caller: string): Promise<string[]> {
+  const above = caller === config.roles.lead && config.team?.parent !== undefined ? await leadAboveOf(reader, team, config) : undefined;
+  return approversIn(team, config, caller, above);
+}
+
+/**
+ * Whose approval clears `caller`'s landing on team `team` (MergeStanding.approvers): its leaders, nearest first; for a
+ * child team's lead, `above`, the parent team's lead (T1140); none for a root team's lead. Shared by the ship tool's
+ * merge and `teamrig pr` (T4817). Refused for a child team's lead when `above` is undefined, as the parent team then
+ * has no config to name who approves it.
+ */
+export function approversIn(team: string, config: KitConfig, caller: string, above: SessionAddress | undefined): string[] {
   if (caller !== config.roles.lead) {
     return new LeadTree(config).chainOf(caller);
   }
@@ -70,7 +81,6 @@ async function approversOf(reader: KitReader, team: string, config: KitConfig, c
   if (parent === undefined) {
     return [];
   }
-  const above = await leadAboveOf(reader, team, config);
   if (above === undefined) {
     throw new RefusedError(`team ${parent}, the parent team, has no config to name its lead, who approves the merges of ${team}'s lead`);
   }

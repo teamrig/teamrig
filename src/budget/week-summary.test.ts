@@ -23,6 +23,8 @@ function reading(sessionId: string, usedPct: number, since: string, after: strin
     cwd: '/work/app',
     agentName: null,
     model: 'Opus 5.5',
+    effort: null,
+    hostVersion: null,
     rateLimits: { fiveHour: null, sevenDay: { usedPct, resetsAt: RESETS_AT } },
     rateLimitsSince: since,
     rateLimitsAfter: after,

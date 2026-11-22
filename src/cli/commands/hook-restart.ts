@@ -2,7 +2,7 @@ import { isEffortLevel, type EffortLevel, type KitConfig } from '../../config/ty
 import { ENV, type TeamPaths } from '../../core/home.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
 import { noticeOf, type NoticeDecision, type StopContext } from '../../refresh/decide.ts';
-import { claudeProcessOf, restartMayAct } from '../../refresh/restart.ts';
+import { restartMayAct } from '../../refresh/restart.ts';
 import type { ParkedRestart, RestartRequest, RestartTab } from '../../refresh/state.ts';
 import type { RefreshStore } from '../../refresh/store.ts';
 import { parkRulesOf } from '../../register/park.ts';
@@ -10,6 +10,7 @@ import { startableTasks } from '../../wake/day-start.ts';
 import { identityOf } from '../host.ts';
 import { teamZone } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
+import { hostSessionAbove } from '../session-process.ts';
 import { teamRegister } from '../team-register.ts';
 
 /** What the automatic restart needs from the turn end's hook event and environment. */
@@ -39,7 +40,7 @@ export interface RestartScope {
   readonly id: string;
   readonly context: StopContext;
   readonly target: RestartTarget;
-  /** The Claude Code process the hook runs under (`claudeProcessOf`); undefined when it was not found. */
+  /** The session's host process the hook runs under (`hostSessionAbove`); undefined when it was not found. */
   readonly claude: number | undefined;
 }
 
@@ -128,7 +129,7 @@ export interface RearmScope {
 async function armFromTab(runtime: CliRuntime, store: RefreshStore, scope: RearmScope, tab: RestartTab): Promise<boolean> {
   const { team, id, cwd } = scope;
   // Looked up on this rare path only: each look at a process starts a PowerShell on Windows.
-  const claude = await claudeProcessOf(runtime.sessionProcesses, runtime.sessionProcesses.parentPid);
+  const claude = await hostSessionAbove(runtime);
   const project = identityOf(runtime).projectDir ?? tab.cwd ?? cwd;
   if (claude !== undefined && project !== undefined) {
     const at = new Date(runtime.clock.now()).toISOString();

@@ -42,6 +42,7 @@ const CHILD_TAKES = {
     contextFiles: 'copy',
     lock: 'copy',
     exec: 'copy',
+    changes: 'copy',
     pushGuard: 'copy',
     packageGuard: 'copy',
     commitGuard: 'copy',

@@ -92,7 +92,18 @@ const STATES: Readonly<Record<string, PullState>> = { OPEN: 'open', MERGED: 'mer
 const MERGEABLE: Readonly<Record<string, PullMergeable>> = { MERGEABLE: 'mergeable', CONFLICTING: 'conflicting', UNKNOWN: 'unknown' };
 const REVIEWS: Readonly<Record<string, PullReview>> = { APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', REVIEW_REQUIRED: 'review-required' };
 /** GitHub's rollup of a commit's checks; a cancelled check run rolls up as FAILURE. */
-const CHECKS: Readonly<Record<string, PullChecks>> = { SUCCESS: 'passing', FAILURE: 'failing', ERROR: 'failing', PENDING: 'pending', EXPECTED: 'pending' };
+const CHECKS: ReadonlyMap<string, PullChecks> = new Map<string, PullChecks>([
+  ['SUCCESS', 'passing'],
+  ['FAILURE', 'failing'],
+  ['ERROR', 'failing'],
+  ['PENDING', 'pending'],
+  ['EXPECTED', 'pending'],
+]);
+
+/** A commit's check rollup `state` in teamrig's words; undefined for no state or one GitHub does not send. */
+export function rollupChecks(state: unknown): PullChecks | undefined {
+  return typeof state === 'string' ? CHECKS.get(state) : undefined;
+}
 
 /** One pull request as the shipped query gives it; null when a field the monitor needs is missing or not what GitHub sends. */
 export function pullOf(item: unknown, repo: string): HostPull | null {
@@ -130,7 +141,7 @@ export function pullOf(item: unknown, repo: string): HostPull | null {
     head,
     fork: item['isCrossRepository'] === true,
     mergeable: MERGEABLE[stringField(item, 'mergeable') ?? ''] ?? 'unknown',
-    checks: CHECKS[rollupStateOf(item) ?? ''] ?? 'none',
+    checks: rollupChecks(rollupStateOf(item)) ?? 'none',
     review: REVIEWS[stringField(item, 'reviewDecision') ?? ''] ?? 'none',
     failedJobs: failedJobsOf(rollupOf(item)),
     closes: closedIssuesOf(recordField(item, 'closingIssuesReferences'), repo),

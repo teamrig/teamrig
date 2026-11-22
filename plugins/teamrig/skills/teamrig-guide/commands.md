@@ -587,6 +587,8 @@ Flags:
 
 - `--session <id|name>`: the caller, the security reviewer.
 - `--file <path>`: the hand step file, read from the caller's folder; one of `--file` or `--verdict` is required.
+  A file that calls the code host's CLI, or a git command reaching a remote, on the human's own login is refused,
+  naming each call.
 - `--verdict "<what the review found>"`: the security verdict on the task's card, and whether the owner may
   approve it.
 - `--note "<text>"`: what you checked.
@@ -679,6 +681,10 @@ description on one line, cut to 80 characters. Last come the team's inbox lines 
 the task, read or not, in the order posted, each once with the sessions that got it. A correction sent by line (`T1:
 the password needs 12 characters`) stays with the task, even after the handover of the session that read it is
 rewritten.
+
+Name several ids to read them in one call (`teamrig show T4 T9`): each prints in full, in the order given, an id named
+twice once. An unknown id refuses the whole call before anything prints (`REFUSED no task T8`), so what prints is
+never a part read as the whole.
 
 Flags:
 
@@ -788,6 +794,10 @@ transcript).
 By default it prints a short form
 within 3,000 characters: each kind with its count (and its detail when every flag of it shares one), at most 5
 of its tasks as short rows, then `+N more`; the same for skill flags. `--all` prints every flag in full.
+`--new` prints only the flags new since your last `start` or `check --new`: the flags your `start` shows (all of them
+for the lead, else those of your own tasks and skills and your group's), less those that call showed, under a line
+naming when that was (`NEW since Sat 11-14 13:22 IST`). A flag that cleared and came back counts as new again. Run
+it between starts in place of a full `check`; `check` and `check --all` stay the full view and record nothing.
 
 Flags:
 
@@ -795,6 +805,8 @@ Flags:
 - `--week <date>`: check against that week's plan instead of the current one.
 - `--tree`: the lead only: also every team under it.
 - `--all`: every flag in full, one line each, instead of the short form.
+- `--new`: only the flags your `start` shows that your last `start` or `check --new` did not, then records them as
+  shown.
 
 Example:
 
@@ -1338,6 +1350,14 @@ anything. Exit 1 when a
 repository could not be read (its tasks stay as they are, and the `FAILED` line says why), 2 when the
 register refused a step (a `SKIPPED` line each), else 0.
 
+Other trackers: the same run first imports each other tracker the team wrote a `connectors.<id>` section for; the
+connector's page names its keys and the saved token it reads. Its tasks get that tracker's id as their source and a
+`<id>:<key>` ref, and its own `PREVIEW` or `WROTE` line; only open and closed state, title, description and priority
+follow it, as for repositories. A tracker that cannot yet say who is inside has every issue left out (a `LEFT OUT`
+line names them by key) until its trust rule ships. A section the connector refuses gets a `REFUSED` line, one it
+cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
+tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
+
 On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by default), the team's
 `teamrig issue watch` runs `teamrig issue sync --auto` within a probe of a change on GitHub. A new issue so reaches its
 owner while sessions work; a run by hand still works at any time.
@@ -1787,6 +1807,62 @@ CONFLICTS acme/web#7 (head d00d5ee) against origin/main (b4e2a91): 2 files
   src/a.ts
   docs/b.md
 To land it: rebase its branch onto origin/main and resolve these files.
+```
+
+### teamrig pr approve
+
+Approves one PR of the team's repositories at its head on the code host, with the token saved for the repository's
+owner, so the session holding an outside PR's task reviews it there with no person's hand. It writes only once every
+gate passes, reading them all first: exactly one task holds the PR (its ref), the caller owns that task (only a
+change's owner lands it), the caller's leader approved it with a note naming the full 40-hex head (an approval covers
+only the head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's
+default branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
+own approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
+when the code host failed, 2 when refused, else 0.
+
+Flags:
+
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--check`: prints what it would do once every gate passes, and writes nothing.
+- `--session <id|name>`: the caller, who must own the task.
+
+Example:
+
+```sh
+teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
+```
+
+Output:
+
+```text
+APPROVED acme/web#12 at d00d5ee
+```
+
+### teamrig pr merge
+
+Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
+its base, is in the merge queue already or any check on its head has not passed (pending, failing or none). Where
+the repository has a merge queue it enters it (`ENQUEUED`), else it is merged by rebase (`MERGED`); both are pinned
+to the head read, so the code host refuses the landing if the head moved since. teamrig reads the checks itself, as a
+token that may bypass the branch's rules skips the code host's own. Exit 1 when the code host failed, 2 when refused,
+else 0.
+
+Flags:
+
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--check`: prints what it would do once every gate passes, and writes nothing.
+- `--session <id|name>`: the caller, who must own the task.
+
+Example:
+
+```sh
+teamrig pr merge acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef
+```
+
+Output:
+
+```text
+ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
 ```
 
 ### teamrig issue links
@@ -2470,7 +2546,7 @@ answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.4`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.5`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2486,9 +2562,9 @@ Every document carries:
 `priority`, `status`, `due`, `note`, `proof`, `evidence`, `source`, `ref`, `waits`, `after`, its times and the
 rest), and `cuts`.
 
-`plan` (since interface 1.1) adds `at`, `validUntil`, `week`, `tasks` and `finished`: where each task stands in the
-team's plan, as `teamrig list` orders it, so a program ranks nothing itself. It holds ids, numbers, statuses and
-tags, and no words of a task: join `tasks[].id` to the `tasks` document for those.
+`plan` (since interface 1.1) adds `at`, `validUntil`, `week`, `tasks`, `finished` and `ownerCards`: where each task
+stands in the team's plan, as `teamrig list` orders it, so a program ranks nothing itself. It holds ids, numbers,
+statuses and tags, and no words of a task: join `tasks[].id` to the `tasks` document for those.
 
 - `at`: when the plan was judged, a UTC instant.
 - `validUntil`: the first moment after `at` an answer here may change with no file moving: a due passing or coming
@@ -2499,6 +2575,12 @@ tags, and no words of a task: join `tasks[].id` to the `tasks` document for thos
   still in the team's order.
 - `finished`: the finished tasks the register still holds, by number, each `{ "id", "workClass" }`, under `--owner`
   that session's only. A plan places none of them; the class is the one a list shows beside a finished task.
+- `ownerCards` (since interface 1.5): each session with a card on the owner, as `teamrig meet` asks them, `{
+  "session", "due", "later" }`, the sessions in the plan order of their first card; `--owner` keeps that session's.
+  `due` is the ids the lead asks the owner now, in plan order. `later` is the cards the owner put off, the soonest
+  back first, each `{ "id", "until", "at" }`: `until` as stored, `at` the same moment as a UTC instant, `null` for
+  a stored text that reads as no time. A card on the owner whose gate `register.requireDecisionCard` wants is left
+  out while it has none.
 
 Each of `tasks` holds:
 
@@ -2750,7 +2832,7 @@ teamrig read tasks --json --owner api
 Output:
 
 ```text
-{"interface":"1.4","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"cuts":[]}
+{"interface":"1.5","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"cuts":[]}
 ```
 
 ### teamrig sessions
@@ -2963,7 +3045,7 @@ Flags:
 - `--scope "<its job>"`: its job; required.
 - `--reason "<why>"`: why it is needed; required.
 - `--name <name>`: its display and Claude Code session name.
-- `--model <model>`: the model it starts on; the lead's own by default.
+- `--model <model>`: the model it starts on; the lead's own by default. A name the host does not run is refused.
 - `--effort <level>`: the effort it starts at; the lead's own by default.
 - `--review <YYYY-MM-DD>`: its review day, or the new one of a hired session kept.
 - `--approved-by "<who>"`: who approved it; needed under `hiring.policy` `owner`.
@@ -4544,7 +4626,7 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `system`), `rename-log`, `inbox-orphan`, `inbox-unread`, `rules-long`, `lead-start`, `context-size`,
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
-session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-effort`,
+session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
 `allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`.
 
 `context-size` weighs, in characters (about 4 per token), the user's CLAUDE.md with the project folder's and each
@@ -4566,9 +4648,11 @@ Claude Code settings (`settings.json` in Claude Code's folder) or the project's 
 `.claude/settings.local.json`), with its value and the file: `CLAUDE_CODE_EFFORT_LEVEL` beats every `--effort` (the
 config's `launch` efforts among them), `/effort` and per-call Agent effort; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1
 beats every per-call Agent model. `settings-json` is one of those files that is not a JSON object, so its block went
-unchecked. `launch-effort` is a session whose `launch` entry names a model but no effort: it starts at that model's
-default effort (medium on Opus, Sonnet and Haiku 5.5), so set `launch.<id>.effort`. The lead's unset effort takes the
-lead's default, so the lead is not flagged.
+unchecked. `launch-model` is a session whose `launch` model this host does not run: the config takes any model
+name, so a team config loads on every host, and the host's own check runs where the name is used, so `open` refuses
+to start that session and `hire --model` refuses the name. `launch-effort` is a session whose `launch` entry names a
+model but no effort: it starts at that model's default effort (medium on Opus, Sonnet and Haiku 5.5), so set
+`launch.<id>.effort`. The lead's unset effort takes the lead's default, so the lead is not flagged.
 
 ```text
 WARN launch-effort shop-web (session web) launches on model opus with no effort, so it runs at that model's default effort (medium on Opus, Sonnet and Haiku 5.5): set launch.web.effort in the team config
@@ -5208,6 +5292,51 @@ OK 3 commit(s) in origin/main..HEAD, none over 400 non-test lines or 15 files wi
 
 A commit over the rule without the reason line is `REFUSED` (exit 2).
 
+### teamrig changes
+
+Lists what changed in the team's project since a release or a day, newest release first, the changes not released
+yet on top. In each release, actions (a step to take) and behaviour changes come first, then the rest by area. It
+reads each change source that applies to the project, or those `[changes.sources]` names, in this order:
+
+- `notes`: the project's change notes not released yet, `changes/<slug>.md`, each with `---` front matter
+  (`area`, `kind`: action, behaviour, feature, fix or other, `audience`: lead or all, for an action its
+  `action` line, and `files` and `refs` as comma lists), then its text. A note it cannot read is a `WARN` line.
+- `register`: the team's tasks the range's commits name (`T12` in a subject), one entry per task, its title as
+  the text.
+- `git`: the commit subjects; a Conventional Commits type sets the kind and its scope the area, any other
+  `area:` prefix is the area. Release, build, test and tooling commits are left out.
+
+One change two sources name (the same task or commit) is shown once, from the earlier source. A release is a
+version tag (`v1.2.3`, or a component's `teamrig-v1.2.3` as release-please tags it) or a commit naming its version
+(`plugin: version 0.447.0, ...`, `chore(release): 1.2.3`, `chore(main): release teamrig 1.2.3`).
+
+Flags:
+
+- `--since <version|date>`: required: a release (`0.447.0`), or a day or time on the team's clock
+  (`2026-11-16`, `2026-11-16 09:00`).
+- `--until <version|date>`: the last release or time to show; default now.
+- `--file <path>`: only the changes that touched this file or folder.
+- `--area <area>`: only the changes in this area.
+
+Example:
+
+```sh
+teamrig changes --since 0.447.0 --area open
+```
+
+Output:
+
+```text
+CHANGES since 0.447.0: 2 change(s) from register, git
+0.453.0 (2026-11-16)
+  fix open: teamrig open works on Windows with no Windows Terminal (T3272 #1360 3a0dfcc99)
+0.449.0 (2026-11-15)
+  feature open: open names the terminal it opens (5d1c2a7e0)
+```
+
+A source that cannot be read is a `FAILED <source>: <why>` line beside the others' entries. A version the project
+never released is `REFUSED` (exit 2), naming its newest releases.
+
 ### teamrig secrets staged
 
 For a git pre-commit hook: finds the secrets the staged change adds, a line in a secret shape (the shapes the secret
@@ -5313,8 +5442,8 @@ start a part of the name: it tells whose branch it is), `{issue}` (the number of
 [delivery.branches.slugMax], default 40) and `{session}` (the task's owner). The branch type is `--type` when
 given, else the one [delivery.branches.classes] maps the task's work class to, else the one
 [delivery.branches.itemTypes] maps its item type to (default: a task `feat`, a bug `fix`);
-[delivery.branches.typePatterns] gives a branch type its own pattern. Branches named before keep their names. To
-ship a branch again under a new name, add `-b` to it (`feat/t12-parse-input-b`), never a force-push.
+[delivery.branches.typePatterns] gives a branch type its own pattern. Branches named before keep their names. A
+rebase or conflict fix goes back to the same branch with `--force-with-lease`, never under a new name.
 
 It refuses (exit 2) before any change for: a name that is no branch name; a folder already there; an `origin/HEAD`
 that names no default branch (`git remote set-head origin --auto` sets it); a branch that already exists; `--repo`
@@ -5607,9 +5736,11 @@ dispatcher takes each parked step and runs it as `teamrig queue --detached-run <
 process, so thirty waiting steps cost one node process, not thirty. A step runs with the dispatcher's environment
 under its own parked variables: every other variable, credentials too, is the dispatcher's, held in memory, and
 whoever started the dispatcher (a session's `--detach`, or a start or idle pass) is the same OS user on the same host;
-`delivery.passEnv` still decides which credentials the step's command gets. The dispatcher's teamrig and Claude Code
-session variables never reach a step: it keeps its own parker's session id and project folder, and goes without a
-messaging socket or token. The dispatcher ends once nothing is
+`delivery.passEnv` still decides which credentials the step's command gets. The dispatcher's teamrig variables and
+the session variables of its host (Claude Code's, and any other host's teamrig ships) never reach a step: it keeps
+its own parker's session id, project folder and the mark that an agent runs it, which are parked with it, and goes
+without a messaging socket or token. No credential variable is parked, whatever a host names. The dispatcher ends
+once nothing is
 parked or running, and its
 own lines go to `<delivery dir>/detached/dispatcher.log`. Steps left parked with no dispatcher running, as after a
 reboot, get a new one from the next `teamrig start` of any session of the team or the next idle pass. The hidden run
@@ -7258,7 +7389,7 @@ session in that folder, is read by `teamrig budget`. Only `ts` and `session_id` 
 required, and `rate_limits.seven_day` carries the week; the other fields may be `null`.
 
 ```json
-{"ts":"2026-10-15T12:00:50.598Z","session_id":"0b6f9c2e-5d1a-4c3e-9f7a-2e8d4b1c6a90","cwd":"/work/app","agent_name":null,"model":"Opus 5.5","rate_limits":{"five_hour":{"used_percentage":6,"resets_at":1792081200},"seven_day":{"used_percentage":57,"resets_at":1792544400}},"rate_limits_since":"2026-10-15T11:58:02.114Z","rate_limits_after":"2026-10-15T11:41:17.930Z","cost_usd":857.79,"context_used_pct":15,"context_input_tokens":153654}
+{"ts":"2026-10-15T12:00:50.598Z","session_id":"0b6f9c2e-5d1a-4c3e-9f7a-2e8d4b1c6a90","cwd":"/work/app","agent_name":null,"model":"Opus 5.5","effort":"high","host_version":"2.1.0","rate_limits":{"five_hour":{"used_percentage":6,"resets_at":1792081200},"seven_day":{"used_percentage":57,"resets_at":1792544400}},"rate_limits_since":"2026-10-15T11:58:02.114Z","rate_limits_after":"2026-10-15T11:41:17.930Z","cost_usd":857.79,"context_used_pct":15,"context_input_tokens":153654}
 ```
 
 `resets_at` is in seconds since 1970, as Claude Code sends it. Claude Code redraws the status line with the
