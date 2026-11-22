@@ -9,7 +9,8 @@ import type { ConfigFormat } from '../config/migrate.ts';
 import type { FileBytes } from '../core/file-bytes.ts';
 import type { Files } from '../core/files.ts';
 import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
-import type { Env } from '../core/home.ts';
+import { resolveKitHome, type Env } from '../core/home.ts';
+import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
@@ -41,6 +42,7 @@ import type { ExecPorts } from '../exec/ports.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
 import type { PointerGit } from '../setup/pointer-ignore.ts';
 import { FakeClock } from './fake-clock.ts';
+import { FakeUserPath, quietRestore } from './fake-restore.ts';
 import { FakeSessionProcesses } from './fake-session-processes.ts';
 import { MemoryFiles } from './memory-files.ts';
 import { programOverGh } from './program-over-gh.ts';
@@ -175,7 +177,11 @@ export interface RunOptions {
   readonly shippedHosts?: readonly HostSource[];
   /** The worktrees `worktree remove` sees; default none. */
   readonly worktrees?: WorktreePorts;
-  /** The shutdown log and countdown `restore` sees; default no shutdown on record and a countdown that goes at once. */
+  /**
+   * The shutdown log and countdown `restore` sees; default no shutdown on record, a countdown that goes at once, and a
+   * user PATH that already holds the kit home's bin folder, as on a machine a session start set up (T5095), so a
+   * doctor run is clean unless a spec empties it.
+   */
   readonly restore?: RestorePorts;
   /** The runner `teamrig queue` runs its step in; default one whose steps exit 0 at once. */
   readonly steps?: StepRunner;
@@ -249,9 +255,11 @@ export class CliHarness {
 
   /** The runtime a run gets, for a spec of a class that takes one; by default what it prints goes nowhere. */
   runtime(options: RunOptions = {}, out: Output = { stdout: () => undefined, stderr: () => undefined }): CliRuntime {
+    const env: Env = { TEAMRIG_HOME: KIT, ...options.env };
+    const userHome = options.userHome ?? USER_HOME;
     return {
-      env: { TEAMRIG_HOME: KIT, ...options.env },
-      userHome: options.userHome ?? USER_HOME,
+      env,
+      userHome,
       cwd: options.cwd ?? APP,
       pid: CLI_PID,
       files: options.files ?? this.files,
@@ -279,7 +287,7 @@ export class CliHarness {
       ...(options.host === undefined ? {} : { host: options.host }),
       ...(options.shippedHosts === undefined ? {} : { shippedHosts: options.shippedHosts }),
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
-      ...(options.restore === undefined ? {} : { restore: options.restore }),
+      restore: options.restore ?? cliOnPathRestore(env, userHome),
       ...(options.steps === undefined ? {} : { steps: options.steps }),
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),
@@ -297,6 +305,11 @@ export class CliHarness {
       ...(options.cmdShimLine === undefined ? {} : { cmdShimLine: options.cmdShimLine }),
     };
   }
+}
+
+/** Quiet restore ports on a machine whose user PATH already holds the kit home's bin folder (T5095). */
+function cliOnPathRestore(env: Env, userHome: string): RestorePorts {
+  return { ...quietRestore(), userPath: new FakeUserPath([cliLauncherFolder(resolveKitHome(env, userHome))]) };
 }
 
 /** A PreToolUse payload for a Bash call in the project folder. */

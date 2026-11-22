@@ -63,7 +63,9 @@ export const UNREAD_INBOX_DAYS = 7;
  * - `shell-history`: a PowerShell history file that keeps every line typed in the console, a credential in a URL too,
  *   while no PowerShell profile sets a history handler or turns saving off;
  * - `page-webhook`: the page webhook the team's alerts (or a team's above) name gives no https URL, so an expired
- *   Claude login pages nobody until the day it is needed (T2349: host alerts dead 19 h unseen).
+ *   Claude login pages nobody until the day it is needed (T2349: host alerts dead 19 h unseen);
+ * - `cli-path`: the kit home's bin folder is not on the user's PATH, so `teamrig` runs in no terminal of the user's
+ *   own (T5095: the owner's `teamrig ui` was not found in PowerShell).
  */
 export type FindingKind =
   | 'requirement'
@@ -90,7 +92,8 @@ export type FindingKind =
   | 'deny-missing'
   | 'project-missing'
   | 'shell-history'
-  | 'page-webhook';
+  | 'page-webhook'
+  | 'cli-path';
 
 /** A project folder the team config names, and what is at its path on this machine. */
 export interface ConfiguredProject {
@@ -137,6 +140,17 @@ export interface PageProblem {
   readonly team: string;
   readonly key: string;
   readonly problem: string;
+}
+
+/** Whether teamrig runs from the user's own terminals: its bin folder, the PATH it goes on, and the team's switch. */
+export interface CliPathState {
+  /** The kit home's bin folder, which holds the teamrig launchers. */
+  readonly folder: string;
+  /** Where the user's PATH is kept (`UserPath.where`). */
+  readonly where: string;
+  readonly onPath: boolean;
+  /** The team's `cliOnPath.enabled`: whether its session starts add the folder. */
+  readonly enabled: boolean;
 }
 
 /** A session and the model and effort it starts on. */
@@ -201,6 +215,7 @@ export interface DoctorInput {
   readonly shellHistory: ShellHistory;
   /** Why the page webhook the team's alerts name gives no URL (`pageCheckOf`); undefined when it resolves or none is named. */
   readonly page: PageProblem | undefined;
+  readonly cliPath: CliPathState;
   /** The team's own budget switch and quiet hours: `quietHours` is no account key, so a child team is checked on its own. */
   readonly budget: Pick<BudgetConfig, 'enabled' | 'quietHours'>;
   readonly now: Date;
@@ -594,6 +609,21 @@ function pageFindings({ page, command }: DoctorInput): Finding[] {
 }
 
 /**
+ * The kit home's bin folder missing from the user's PATH: the CLI then runs only where a hook or a session names its
+ * full path, never as `teamrig` in a terminal the user opens. On, a session start adds it; off, only the user can.
+ */
+function cliPathFindings({ cliPath, command }: DoctorInput): Finding[] {
+  if (cliPath.onPath) {
+    return [];
+  }
+  const missing = `${cliPath.folder} is not on the user's PATH (${cliPath.where}), so \`${command}\` is not found in a terminal you open`;
+  const fix = cliPath.enabled
+    ? `the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal`
+    : `cliOnPath.enabled is false, so no session start adds it: set it to true and start a session, or add the folder to the PATH yourself, then open a new terminal`;
+  return [{ kind: 'cli-path', detail: `${missing}: ${fix}` }];
+}
+
+/**
  * Quiet hours whose action is `ask`: in them a helper launch raises a permission prompt (`helperGate`), which nobody
  * at the host answers at night, so the tab waits until someone does (T1983: 222 minutes on 11-04). `block` refuses
  * the launch with its reason and the tab goes on. The budget off lets every launch go, and quiet hours of no length
@@ -621,7 +651,7 @@ function quietHoursFindings({ budget, now, zone }: DoctorInput): Finding[] {
  * inboxes nobody reads, rules too long to show, a lead's start past the cap or with a rules file cut to a pointer, text every call re-reads over its budget (files, and the lists the newest
  * session holds), a broken tree of teams or a session name two teams use, a variable that overrides every model or effort
  * choice, a launch with a model but no effort, local allow rules that approve a whole tool or program or hold a credential,
- * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, and a page webhook that gives no URL.
+ * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, and a teamrig bin folder off the user's PATH.
  * It reads only; every fix is the user's.
  */
 export function doctorFindings(input: DoctorInput): Finding[] {
@@ -643,6 +673,7 @@ export function doctorFindings(input: DoctorInput): Finding[] {
     ...projectFindings(input),
     ...shellHistoryFindings(input),
     ...pageFindings(input),
+    ...cliPathFindings(input),
   ];
 }
 

@@ -4804,7 +4804,7 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
 session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
-`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`.
+`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`.
 
 `context-size` weighs, in characters (about 4 per token), the user's CLAUDE.md with the project folder's and each
 parent's (`CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`), the project's memory index (`MEMORY.md`) and the
@@ -4896,6 +4896,16 @@ run [teamrig page test](#teamrig-page-test) to see a page arrive.
 
 ```text
 WARN page-webhook team shop's alerts.pageWebhookFile gives no page URL (the webhook URL alerts.pageWebhookFile gives is not an https URL), so an expired Claude login pages nobody: fix alerts.pageWebhookFile or what it names, then run teamrig page test
+```
+
+`cli-path` is the bin folder of the teamrig home missing from the user's PATH where it is kept (on Windows the `Path`
+value of `HKCU\Environment`, elsewhere the shell's startup files), not doctor's own PATH: `teamrig` then runs in no
+terminal you open ([Install and update](requirements.md#install-and-update)). With [cliOnPath.enabled] on, the next
+session start of the team adds it; off, no session start of the team does, so turn it on or add the folder yourself.
+Either way, a terminal opened before that keeps its old PATH.
+
+```text
+WARN cli-path C:\Users\you\.teamrig\bin is not on the user's PATH (HKCU\Environment Path), so `teamrig` is not found in a terminal you open: the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal
 ```
 
 ### teamrig ui
