@@ -120,9 +120,9 @@ describe('rulesets for releases', () => {
     assert.deepEqual(markers['bypass_actors'], []);
   });
 
-  it('the release branch, which every install reads, only the publish job can create, push, rewrite or delete', () => {
+  it('the release and preview branches, which installs read, only the publish job can create, push, rewrite or delete', () => {
     assert.equal(branch['target'], 'branch');
-    assert.deepEqual(recordField(branch, 'conditions'), { ref_name: { include: ['refs/heads/release'], exclude: [] } });
+    assert.deepEqual(recordField(branch, 'conditions'), { ref_name: { include: ['refs/heads/release', 'refs/heads/preview'], exclude: [] } });
     assert.deepEqual([...rulesOf(branch).keys()].sort(), ['creation', 'deletion', 'non_fast_forward', 'update']);
   });
 
