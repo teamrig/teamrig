@@ -42,7 +42,8 @@ import { describeCredential } from './token-check.ts';
  * from origin, only while it holds nothing but a release (release-pull.ts), on that task's approval; the merge never
  * opens that pull request. The release tool rewrites its head when main gains a commit its changelog shows; a main
  * that gained only hidden ones leaves the head behind, so the merge catches that head up itself and merges it on the
- * same approval (release-catch-up.ts, T5055), and refuses any other move.
+ * same approval (release-catch-up.ts, T5055). A head the release tool wrote again merges on the approval of the head
+ * `--approved` names when both hold only a release (T5117), both heads printed.
  *
  * A rebase merge replays the branch onto main as it is at merge time, and GitHub merges a stale branch
  * whenever it does not conflict: what lands is then a tree no check ran on, and a commit that repeats one
@@ -668,8 +669,12 @@ interface ReleaseGate {
 /**
  * The gate of `ship.ts merge --release` (T4645): the caller's clearance of the release pull request's head on the
  * approval of the release task `task`, since the branch the release tool names names no task. A head runMerge caught
- * up from the cleared one (release-catch-up.ts: the same diff rebased onto main, T5055) passes on that clearance; any
- * other head, one the release tool wrote meanwhile among them, is asked again, so it needs its own approval.
+ * up from the cleared one (release-catch-up.ts: the same diff rebased onto main, T5055) passes on that clearance.
+ *
+ * Any other head, one the release tool wrote again on a newer main among them, clears on the approval of the head
+ * `--approved` names when both hold only a release (T5117, owner order 11-22): mergeRun refused the live head
+ * otherwise before this gate, and `approvedRelease` holds the approved one to the same check. The release tool writes
+ * a release from commit subjects main already merged, so a new version and notes on a newer main need no new round.
  */
 function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGate {
   let cleared: { sha: string; by: string } | null = null;
@@ -681,10 +686,13 @@ function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGat
         cleared = { sha, by: cleared.by };
         return null;
       }
-      const clearance = await deps.clearTaskMerge(task, sha, args.approved);
+      const approved = args.approved === null || sha.startsWith(args.approved) ? null : approvedRelease(deps, args.approved);
+      if (approved !== null && approved.kind === 'refused') return approved.reason;
+      const clearance = await deps.clearTaskMerge(task, approved === null ? sha : approved.sha, args.approved);
       if (clearance.kind === 'refused') return clearance.reason;
       const by = clearedBy(clearance);
-      deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${by} on ${task}`);
+      const carries = approved === null ? '' : `carries the approved ${approved.sha.slice(0, 9)}, both heads only a release, `;
+      deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${carries}${by} on ${task}`);
       cleared = { sha, by };
       return null;
     },
@@ -693,6 +701,44 @@ function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGat
       carried = sha;
     },
   };
+}
+
+/** The release head `--approved` names, read in full, or why an approval of it cannot carry to another head. */
+type ApprovedRelease = { readonly kind: 'release'; readonly sha: string } | { readonly kind: 'refused'; readonly reason: string };
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The release head `approved` names, when it holds only a release (release-pull.ts, as the live head was held to): the
+ * commit as this repo has it, else fetched from origin by its full sha, since the release tool's push of a newer head
+ * leaves the approved one on no branch. Refused when it cannot be read or holds more than a release.
+ */
+function approvedRelease(deps: MergeDeps, approved: string): ApprovedRelease {
+  const commitOf = (): string | null => {
+    try {
+      return deps.git('rev-parse', '--verify', '--quiet', `${approved}^{commit}`);
+    } catch {
+      return null;
+    }
+  };
+  let sha = commitOf();
+  if (sha === null && FULL_SHA.test(approved)) {
+    try {
+      deps.git('fetch', '--quiet', 'origin', approved);
+    } catch {
+      // Not on origin either: refused below, as an unknown sha.
+    }
+    sha = commitOf();
+  }
+  if (sha === null) {
+    return { kind: 'refused', reason: `--approved ${approved} is not the release head, nor a commit here or on origin to carry its approval from: give the approved head's full sha` };
+  }
+  const profile = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
+  // mergeRun's releaseHead refused a repo with no release pull request before any gate ran.
+  if (profile.release === null) throw new Error('the release gate ran for a repo that lists no release pull request');
+  const refusal = deps.releaseRefusal(profile, profile.release, sha);
+  if (refusal !== null) return { kind: 'refused', reason: `the approved ${sha.slice(0, 9)} holds more than a release, so its approval carries to no other head: ${refusal}` };
+  return { kind: 'release', sha };
 }
 
 /** Catches up the release head `gate` cleared onto main's tip `move` names (release-catch-up.ts, T5055). */
