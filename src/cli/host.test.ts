@@ -531,7 +531,7 @@ describe('sessionCommandLinesOf', () => {
   });
 
   it('reads no fork or job where no host tells of its sessions', () => {
-    const lines = sessionCommandLinesOf({ host: bare, shippedHosts: [shippedHost(bare)], env: {}, platform: 'linux' });
+    const lines = sessionCommandLinesOf({ host: bare, shippedHosts: { bare: shippedHost(bare) }, env: {}, platform: 'linux' });
     assert.deepEqual([SHIPPED_FORK, OWN_FORK].map((line) => lines.isForkOf(line, 'c0')), [false, false]);
     assert.equal(lines.backgroundJobSession(SHIPPED_JOB), undefined);
   });

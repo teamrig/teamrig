@@ -38,9 +38,13 @@ function wholeWrite(pathKey: string, contentKey: string): Reader {
       kind: 'edit',
       name,
       input,
-      path: decodePath(stringField(input, pathKey)),
-      texts: text === undefined ? [] : [text],
-      change: text === undefined ? undefined : { kind: 'whole', text },
+      files: [
+        {
+          path: decodePath(stringField(input, pathKey)),
+          texts: text === undefined ? [] : [text],
+          change: text === undefined ? undefined : { kind: 'whole', text },
+        },
+      ],
     };
   };
 }
@@ -63,9 +67,13 @@ function singleEdit(pathKey: string, fromKey: string, toKey: string, defaultAll:
       kind: 'edit',
       name,
       input,
-      path: decodePath(stringField(input, pathKey)),
-      texts: to === undefined ? [] : [to],
-      change: replacement === undefined ? undefined : { kind: 'replacements', replacements: [replacement] },
+      files: [
+        {
+          path: decodePath(stringField(input, pathKey)),
+          texts: to === undefined ? [] : [to],
+          change: replacement === undefined ? undefined : { kind: 'replacements', replacements: [replacement] },
+        },
+      ],
     };
   };
 }
@@ -83,9 +91,13 @@ function multiEdit(name: string, input: JsonRecord): ToolCall {
     kind: 'edit',
     name,
     input,
-    path: decodePath(stringField(input, 'TargetFile')),
-    texts,
-    change,
+    files: [
+      {
+        path: decodePath(stringField(input, 'TargetFile')),
+        texts,
+        change,
+      },
+    ],
   };
 }
 

@@ -36,9 +36,7 @@ describe("Antigravity's tool calls", () => {
       kind: 'edit',
       name: 'write_to_file',
       input: { TargetFile: '"/a/b.ts"', CodeContent: 'hello' },
-      path: '/a/b.ts',
-      texts: ['hello'],
-      change: { kind: 'whole', text: 'hello' },
+      files: [{ path: '/a/b.ts', texts: ['hello'], change: { kind: 'whole', text: 'hello' } }],
     });
     assert.deepEqual(
       linux.normalize('replace_file_content', {
@@ -51,9 +49,7 @@ describe("Antigravity's tool calls", () => {
         kind: 'edit',
         name: 'replace_file_content',
         input: { TargetFile: '/a/b.ts', TargetContent: 'old', ReplacementContent: 'new', AllowMultiple: true },
-        path: '/a/b.ts',
-        texts: ['new'],
-        change: { kind: 'replacements', replacements: [{ from: 'old', to: 'new', all: true }] },
+        files: [{ path: '/a/b.ts', texts: ['new'], change: { kind: 'replacements', replacements: [{ from: 'old', to: 'new', all: true }] } }],
       },
     );
     assert.deepEqual(
@@ -74,15 +70,19 @@ describe("Antigravity's tool calls", () => {
             { TargetContent: 'c', ReplacementContent: 'd', AllowMultiple: true },
           ],
         },
-        path: '/a/b.ts',
-        texts: ['b', 'd'],
-        change: {
-          kind: 'replacements',
-          replacements: [
-            { from: 'a', to: 'b', all: false },
-            { from: 'c', to: 'd', all: true },
-          ],
-        },
+        files: [
+          {
+            path: '/a/b.ts',
+            texts: ['b', 'd'],
+            change: {
+              kind: 'replacements',
+              replacements: [
+                { from: 'a', to: 'b', all: false },
+                { from: 'c', to: 'd', all: true },
+              ],
+            },
+          },
+        ],
       },
     );
   });
@@ -93,25 +93,19 @@ describe("Antigravity's tool calls", () => {
       kind: 'edit',
       name: 'write_file',
       input: { Path: '/a/b.ts' },
-      path: '/a/b.ts',
-      texts: [],
-      change: undefined,
+      files: [{ path: '/a/b.ts', texts: [], change: undefined }],
     });
     assert.deepEqual(linux.normalize('edit_file', { Path: '/a/b.ts' }), {
       kind: 'edit',
       name: 'edit_file',
       input: { Path: '/a/b.ts' },
-      path: '/a/b.ts',
-      texts: [],
-      change: undefined,
+      files: [{ path: '/a/b.ts', texts: [], change: undefined }],
     });
     assert.deepEqual(linux.normalize('multi_replace_file_content', { TargetFile: '"{bad' }), {
       kind: 'edit',
       name: 'multi_replace_file_content',
       input: { TargetFile: '"{bad' },
-      path: '"{bad',
-      texts: [],
-      change: undefined,
+      files: [{ path: '"{bad', texts: [], change: undefined }],
     });
   });
 
