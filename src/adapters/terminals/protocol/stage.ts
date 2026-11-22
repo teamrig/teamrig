@@ -1,15 +1,9 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { errorCode } from '../../../plugin-api/index.ts';
 import { sha256Of } from './spawn.ts';
 
 const PRIVATE = 0o700;
-
-function errorCode(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null || !('code' in error)) {
-    return undefined;
-  }
-  return typeof error.code === 'string' ? error.code : undefined;
-}
 
 async function bytesAt(path: string): Promise<Uint8Array | undefined> {
   try {
