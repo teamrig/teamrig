@@ -1870,6 +1870,32 @@ Output:
 ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
 ```
 
+### teamrig ci rerun
+
+Starts every job of one CI run of one of the team's repositories again, with the token saved for its owner, for a
+run a glitch on the code host's side failed (a job reported passed while still running, the run marked failed). Use it
+in place of the code host's own re-run command, which teamrig refuses as a write. It re-runs the whole run, never its
+failed jobs alone, and changes no code, setting or secret, so it needs no task or approval: it is refused only for a
+caller off the team or a repository the team config does not list. The token needs Actions Read and write; a refusal says which
+permission is missing. Exit 1 when the code host failed (a run still going, one too old), 2 when refused, else 0.
+
+Flags:
+
+- `--run <id>`: the run's id, the number after `/runs/` in its address.
+- `--session <id|name>`: the caller, who must be on the team.
+
+Example:
+
+```sh
+teamrig ci rerun acme/web --run 45027704561
+```
+
+Output:
+
+```text
+RERUN acme/web run 45027704561: every job started again
+```
+
 ### teamrig issue links
 
 Puts the task tree on the issues of `github.repos`. A task planned after another or waiting on it (a `task:` wait),

@@ -532,6 +532,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
       refused while it conflicts, is queued already or its head's checks have not all passed: into its
       merge queue where the repository has one, else merged by rebase, both pinned to the head read
+  ci rerun <owner/name> --run <id>   starts every job of one CI run of one of the team's repositories
+      again, with the token saved for its owner (which needs Actions Read and write), for a run a glitch
+      on the host's side failed; the id is the number after /runs/ in the run's address; changes no
+      code, setting or secret, so it needs no task or approval
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links
