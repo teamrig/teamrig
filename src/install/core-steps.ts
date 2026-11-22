@@ -21,6 +21,12 @@ export interface CoreStepDeps extends PathSearchDeps {
   readonly requirements: RequirementsCheck;
   /** This CLI's entry script, `<plugin>/dist/cli/main.js` in an install. */
   readonly script: string;
+  /**
+   * The kit home's bin folder, `<kit home>/bin`: a session start writes the kit's own `teamrig` launcher there and puts
+   * the folder on the user's PATH, so `teamrig` runs from any terminal (T5095). The launcher finds the installed
+   * plugin's CLI on each run, so it is never another install.
+   */
+  readonly kitBin: string;
   readonly team: TeamLook;
 }
 
@@ -99,27 +105,32 @@ function sameFolder(a: string, b: string, platform: NodeJS.Platform): boolean {
 }
 
 /**
- * The `teamrig` a shell runs is this install's: its shim on PATH sits in the bin folder of the plugin this CLI runs
- * from. Another install's shim there is an older or newer teamrig answering every command typed, as after an update
- * in a session that started before it.
+ * The fix for a `teamrig` missing from PATH or another install's: a new session, whose start puts the installed
+ * plugin's bin folder on its own PATH and the kit's launcher folder on the user's. No folder to add by hand: the
+ * plugin's bin folder is named by version, so the next update replaces it.
+ */
+const NEW_SESSION_FIX = `start a new session of a host with the ${KIT_NAME} plugin enabled`;
+
+/**
+ * The `teamrig` a shell runs is this install's: its shim on PATH is the kit's own launcher in `kitBin`, which runs the
+ * installed plugin's CLI, or sits in the bin folder of the plugin this CLI runs from. A shim anywhere else is an older
+ * or newer teamrig answering every command typed, as after an update in a session that started before it.
  */
 export const CLI_STEP: InstallStep<CoreStepDeps> = {
   id: 'cli',
   addedIn: INSTALL_CHECK_BASELINE,
   title: `the ${KIT_NAME} command on PATH`,
   async probe(deps) {
-    const plugin = pluginFolderOf(deps.script, 2, deps.platform);
-    const bin = pathsOf(deps.platform).join(plugin, 'bin');
     const shim = await findProgram(KIT_NAME, deps, WINDOWS_COMMAND_EXTENSIONS);
     if (shim === undefined) {
-      return { kind: 'missing', detail: `no ${KIT_NAME} on PATH`, fix: `start a new session of a host with the ${KIT_NAME} plugin enabled, or add ${bin} to PATH` };
+      return { kind: 'missing', detail: `no ${KIT_NAME} on PATH`, fix: NEW_SESSION_FIX };
     }
-    if (!sameFolder(pluginFolderOf(shim, 1, deps.platform), plugin, deps.platform)) {
-      return {
-        kind: 'missing',
-        detail: `the ${KIT_NAME} on PATH (${shim}) is another install than this one (${deps.script})`,
-        fix: `start a new session so PATH names the installed plugin's bin folder, or put ${bin} first on PATH`,
-      };
+    const folder = pathsOf(deps.platform).dirname(shim);
+    if (sameFolder(folder, deps.kitBin, deps.platform)) {
+      return { kind: 'ok', detail: `${shim}, the kit launcher` };
+    }
+    if (!sameFolder(pluginFolderOf(shim, 1, deps.platform), pluginFolderOf(deps.script, 2, deps.platform), deps.platform)) {
+      return { kind: 'missing', detail: `the ${KIT_NAME} on PATH (${shim}) is another install than this one (${deps.script})`, fix: NEW_SESSION_FIX };
     }
     return { kind: 'ok', detail: shim };
   },

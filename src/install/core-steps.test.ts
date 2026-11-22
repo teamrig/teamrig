@@ -21,6 +21,7 @@ function deps(overrides: Partial<CoreStepDeps> = {}): CoreStepDeps {
     probe: new FakePathProbe({ files: ['C:\\plugin\\bin\\teamrig.cmd'] }),
     requirements: requirements([]),
     script: 'C:\\plugin\\dist\\cli\\main.js',
+    kitBin: 'C:\\home\\.teamrig\\bin',
     team: FOUND_TEAM,
     ...overrides,
   };
@@ -84,16 +85,36 @@ describe('CLI_STEP', () => {
     assert.deepEqual(await CLI_STEP.probe(deps({ script: 'C:\\Plugin\\dist\\cli\\main.js' })), { kind: 'ok', detail: 'C:\\plugin\\bin\\teamrig.cmd' });
   });
 
-  it('is missing, naming the bin folder to add, when no teamrig is on PATH', async () => {
-    const state = await CLI_STEP.probe(deps({ probe: new FakePathProbe() }));
-    assert.equal(state.kind, 'missing');
-    assert.match(state.kind === 'missing' ? state.fix : '', /add C:\\plugin\\bin to PATH/);
+  it('is missing, with a new session and no folder to add as the fix, when no teamrig is on PATH', async () => {
+    assert.deepEqual(await CLI_STEP.probe(deps({ probe: new FakePathProbe() })), {
+      kind: 'missing',
+      detail: 'no teamrig on PATH',
+      fix: 'start a new session of a host with the teamrig plugin enabled',
+    });
   });
 
-  it('is missing when the teamrig on PATH is another install’s', async () => {
+  it('is missing when the teamrig on PATH is another install’s, with a new session as the fix', async () => {
     const state = await CLI_STEP.probe(deps({ env: { PATH: 'C:\\old\\bin' }, probe: new FakePathProbe({ files: ['C:\\old\\bin\\teamrig.cmd'] }) }));
     assert.equal(state.kind, 'missing');
     assert.match(state.kind === 'missing' ? state.detail : '', /C:\\old\\bin\\teamrig\.cmd\) is another install/);
+    assert.equal(state.kind === 'missing' ? state.fix : '', 'start a new session of a host with the teamrig plugin enabled');
+  });
+
+  it('finds the kit launcher in the kit home’s bin folder ok, the folder in any case on Windows', async () => {
+    const launcher = 'C:\\Home\\.teamrig\\bin\\teamrig.cmd';
+    assert.deepEqual(await CLI_STEP.probe(deps({ env: { PATH: 'C:\\Home\\.teamrig\\bin' }, probe: new FakePathProbe({ files: [launcher] }) })), {
+      kind: 'ok',
+      detail: `${launcher}, the kit launcher`,
+    });
+  });
+
+  it('finds the kit launcher ok on a POSIX host, ahead of a plugin bin folder later on PATH', async () => {
+    const posix = { platform: 'linux' as const, script: '/opt/plugin/dist/cli/main.js', kitBin: '/srv/kit/.teamrig/bin' };
+    const probe = new FakePathProbe({ files: ['/srv/kit/.teamrig/bin/teamrig', '/opt/plugin/bin/teamrig'] });
+    assert.deepEqual(await CLI_STEP.probe(deps({ ...posix, env: { PATH: '/srv/kit/.teamrig/bin:/opt/plugin/bin' }, probe })), {
+      kind: 'ok',
+      detail: '/srv/kit/.teamrig/bin/teamrig, the kit launcher',
+    });
   });
 
   it('reads POSIX paths with their case on a POSIX host', async () => {

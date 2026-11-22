@@ -39,7 +39,7 @@ describe('teamrig doctor: the install check (T5075)', () => {
     const kit = new CliHarness(TEAM);
     const lines = installOf(await kit.run(['doctor'], { env: { PATH: '/usr/bin' } }));
     assert.equal(lines[0], 'INSTALL 4 step(s): 3 ok, 1 missing, 0 unknown');
-    assert.equal(lines[3], '  MISSING cli (the teamrig command on PATH): no teamrig on PATH; fix: start a new session of a host with the teamrig plugin enabled, or add /opt/teamrig/bin to PATH');
+    assert.equal(lines[3], '  MISSING cli (the teamrig command on PATH): no teamrig on PATH; fix: start a new session of a host with the teamrig plugin enabled');
   });
 
   it('shows a probe that hangs past its limit as unknown, without holding back the other steps', async () => {

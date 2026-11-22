@@ -4834,8 +4834,9 @@ INSTALL 4 step(s): 4 ok, 0 missing, 0 unknown
 
 After the findings comes the `INSTALL` section: each install step every host shares, in install order, probed live as
 `OK`, `MISSING` (with `fix:` and what to do) or `UNKNOWN` (the probe failed or ran past 2 seconds; the other steps
-still run). `cli` is missing when no `teamrig` is on PATH, or when the one on PATH belongs to another install than the
-one running, as after an update in a session that started before it: start a new session. With no team found, doctor
+still run). `cli` is ok for the kit's own launcher in `<kit home>/bin` or the running plugin's shim; it is missing when
+no `teamrig` is on PATH, or when the one on PATH belongs to another install than the one running, as after an update
+in a session that started before it: start a new session. With no team found, doctor
 prints the section, its `team` step naming the create line, and then refuses as any team command does.
 
 With findings, the header is `DOCTOR N finding(s)`, then one `WARN <kind> <detail and fix>` line each. Kinds: `requirement` (git,
