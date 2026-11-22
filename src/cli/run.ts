@@ -68,6 +68,7 @@ const closeCommands = () => import('./commands/close.ts');
 const commitsCommands = () => import('./commands/commits.ts');
 const changesCommands = () => import('./commands/changes.ts');
 const secretsCommands = () => import('./commands/secrets.ts');
+const stampCommands = () => import('./commands/stamp.ts');
 const doctorCommands = () => import('./commands/doctor.ts');
 const pageCommands = () => import('./commands/page.ts');
 const filesCommands = () => import('./commands/files.ts');
@@ -316,6 +317,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'secrets staged': { effect: 'read', flags: [], load: async () => (await secretsCommands()).staged },
   'secrets message': { effect: 'read', flags: [], load: async () => (await secretsCommands()).message },
   'secrets pushed': { effect: 'read', flags: [], load: async () => (await secretsCommands()).pushed },
+  'stamp commit': { effect: 'write', flags: [], load: async () => (await stampCommands()).commit },
   'worktree add': { effect: 'write', flags: ['repo', 'task', 'type'], load: async () => (await worktreeCommands()).add },
   'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
@@ -1038,6 +1040,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       pre-push hooks: a secret the staged change, the message or the pushed commits and tags add is REFUSED,
       named by place and shape, never by value; default shapes and paths outside a team, plus the team's own
       inside one
+  stamp commit <file>   for git's commit-msg hook: adds Made-with: teamrig <version> and, in a session,
+      Made-by naming its program, model and effort to the commit message; commits.stamp false leaves it as written
   worktree add <branch> | --task <T id> [--type <branch type>] [--repo <name>]   makes a session's new worktree the same way every time: fetches
       the default branch origin/HEAD names, adds the worktree on the new branch from it, in a folder
       named after the branch (each / as -) in delivery.repos.<name>.worktreeFolder (default

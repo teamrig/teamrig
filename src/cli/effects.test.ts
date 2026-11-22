@@ -98,6 +98,7 @@ const EXPECTED = {
   freeze: 'write',
   unfreeze: 'write',
   'stable-periods': 'read',
+  'stamp commit': 'write',
   job: 'write',
   'job end': 'write',
   'deploy-status': 'read',

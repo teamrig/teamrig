@@ -5656,6 +5656,32 @@ printf '%s\n' "$updates" | teamrig secrets pushed "$1" || exit 1
 printf '%s\n' "$updates" | git lfs pre-push "$@"
 ```
 
+### teamrig stamp commit
+
+For a git commit-msg hook: adds teamrig's stamp to the commit message file, in git's trailer block. `Made-with: teamrig
+<version>` marks every commit made with teamrig; in a session it adds `Made-by: <program> <version>; model <model>;
+effort <effort>`, read from the host and the session's last status line snapshot, `unknown` for a part the host does
+not tell, and an effort the host forces on every session over the one the session picked. A rerun or an amend keeps one
+of each, with the last run's values; a commit made outside a session drops an old `Made-by`. The team's
+`[commits.stamp]` set to false leaves the message as written.
+
+Flags: none.
+
+Example (the hook line; `|| true`, so a failed stamp never blocks the commit):
+
+```sh
+teamrig stamp commit "$1" || true
+```
+
+Output:
+
+```text
+STAMPED Made-with: teamrig <version>, Made-by: Claude Code 3.1.0; model Opus 5.5; effort high
+```
+
+With `[commits.stamp]` false it prints `SKIPPED commits.stamp is false: the message is left as written`; a message
+file that is not there is `FAILED` (exit 1).
+
 ### teamrig worktree add
 
 Makes a session's new worktree the same way every time, so each session starts from the same ready checkout. It

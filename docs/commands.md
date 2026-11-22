@@ -651,6 +651,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       pre-push hooks: a secret the staged change, the message or the pushed commits and tags add is REFUSED,
       named by place and shape, never by value; default shapes and paths outside a team, plus the team's own
       inside one
+  stamp commit <file>   for git's commit-msg hook: adds Made-with: teamrig <version> and, in a session,
+      Made-by naming its program, model and effort to the commit message; commits.stamp false leaves it as written
   worktree add <branch> | --task <T id> [--type <branch type>] [--repo <name>]   makes a session's new worktree the same way every time: fetches
       the default branch origin/HEAD names, adds the worktree on the new branch from it, in a folder
       named after the branch (each / as -) in delivery.repos.<name>.worktreeFolder (default
