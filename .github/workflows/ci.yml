@@ -156,11 +156,14 @@ jobs:
         if: ${{ needs.changes.outputs.kind == 'code' }}
 
   test:
-    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    name: test (${{ matrix.os }}, node ${{ matrix.node }}${{ matrix.part != 'all' && format(', {0}', matrix.part) || '' }})
     # A code change is tested on all three OSes, since paths, renames and hook launch differ by OS (macOS minutes
     # bill at 10x, Windows at 2x). Node 22 only, to ease the shared free GitHub runners. A docs or design change
     # changes no code, so it runs on ubuntu alone, only the steps its kind names; the runners come from change kind
     # above (TEST_SYSTEMS in tools/ci/change-kind.ts).
+    # Windows is the required check's critical path, so its leg is split in three runners (T5030): the suite in two
+    # shards (part 1/2 and 2/2) and every other step (part checks). ubuntu and macOS keep one leg (part all), whose
+    # name leaves the part out, as the names in tools/ship/repos.json read it.
     needs: changes
     if: ${{ !github.event.repository.private }}
     strategy:
@@ -168,6 +171,15 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.systems) }}
         node: [22]
+        part: [all, '1/2', '2/2', checks]
+        exclude:
+          - { os: ubuntu-latest, part: '1/2' }
+          - { os: ubuntu-latest, part: '2/2' }
+          - { os: ubuntu-latest, part: checks }
+          - { os: windows-latest, part: all }
+          - { os: macos-latest, part: '1/2' }
+          - { os: macos-latest, part: '2/2' }
+          - { os: macos-latest, part: checks }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -180,45 +192,52 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
         if: ${{ needs.changes.outputs.kind != 'design' }}
+      # A shard leg (a part with a /) runs only the install, the build and its half of the suite; every other step
+      # below runs on the all and checks legs.
       - run: npm run typecheck
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
       # Before the tests: specs load the built plugin (its hooks, launcher and integrity list).
       - run: npm run build
         if: ${{ needs.changes.outputs.kind != 'design' }}
       # On ubuntu the coverage gate runs the whole suite on the same Node and fails on any failing test, so this leg
       # leaves it there rather than run it twice (T5027).
       - run: npm test
-        if: ${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' && matrix.part == 'all' }}
+      # npm test's own line with the shard flag before the file patterns: node ignores a --test-shard after them, so
+      # npm test -- --test-shard would run the whole suite on each shard (tools/ci/ci-workflow.test.ts holds it equal).
+      - run: node --test --test-shard=${{ matrix.part }} --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tools/ci/slowest-reporter.ts --test-reporter-destination=stdout "tools/**/*.test.ts" "src/**/*.test.ts"
+        if: ${{ needs.changes.outputs.kind == 'code' && contains(matrix.part, '/') }}
       # A docs change runs only the specs that hold the docs to the code: tools/docs/, and SECURITY.md's.
       - run: node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts
         if: ${{ needs.changes.outputs.kind == 'docs' }}
       # Runs the launcher and every hook from the dist, as an installed plugin runs them.
       - run: node tools/ci/dist-smoke-cli.ts
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
       # A new developer's first run: a clone with no login, a bare teamrig on the PATH, a new team on a new project, every hook.
       - run: node tools/ci/fresh-install-cli.ts
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
       # The docs' pictures are drawn in code, the commands screen from the CLI's real output; they must match on every OS.
       - run: node tools/docs/images-cli.ts --check
-        if: ${{ needs.changes.outputs.kind != 'design' }}
+        if: ${{ needs.changes.outputs.kind != 'design' && !contains(matrix.part, '/') }}
       # The configuration reference is drawn from the config schema; it must match the committed page.
       - run: node tools/docs/configuration-cli.ts --check
-        if: ${{ needs.changes.outputs.kind != 'design' }}
+        if: ${{ needs.changes.outputs.kind != 'design' && !contains(matrix.part, '/') }}
       # The parity page is drawn from what each adapter declares and the feature registry; it must match the committed
       # page, on a docs change too, which could edit the page by hand.
       - run: node tools/docs/parity-cli.ts --check
-        if: ${{ needs.changes.outputs.kind != 'design' }}
+        if: ${{ needs.changes.outputs.kind != 'design' && !contains(matrix.part, '/') }}
       # The layer boundaries of src (what the core and an adapter import, who imports an adapter, where a tool is named): each count held to tools/ci/boundaries.json, failing a rise.
       # A docs or design change touches no file under src, so only a code change runs it.
       - run: node tools/ci/boundaries-cli.ts
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
       # The host and tool words in each skill (plugins/teamrig/skills, .claude/skills): a count may fall, never rise
       # over tools/ci/provider-words.json. Skills are code to the change kind, so only a code change runs it.
       - run: node tools/ci/provider-words-cli.ts
-        if: ${{ needs.changes.outputs.kind == 'code' }}
+        if: ${{ needs.changes.outputs.kind == 'code' && !contains(matrix.part, '/') }}
       # Every link, anchor and Mermaid block in the Markdown must resolve on every OS; a design change's too, as
       # docs/design/ is Markdown a reader follows.
       - run: node tools/docs/doc-check-cli.ts
+        if: ${{ !contains(matrix.part, '/') }}
 
   summary:
     name: every check passed

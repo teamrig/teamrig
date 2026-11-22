@@ -11,7 +11,9 @@
       "commit subject gate",
       "coverage gate",
       "test (ubuntu-latest, node 22)",
-      "test (windows-latest, node 22)",
+      "test (windows-latest, node 22, 1/2)",
+      "test (windows-latest, node 22, 2/2)",
+      "test (windows-latest, node 22, checks)",
       "test (macos-latest, node 22)",
       "every check passed"
     ],
@@ -20,8 +22,8 @@
       "runner": "tools/ci/local.ts"
     },
     "regenerated": ["plugins/teamrig/dist/", "plugins/teamrig/.claude-plugin/plugin.json", "src/core/version.ts", ".release-please-manifest.json"],
-    "flaky": ["test (ubuntu-latest, node 22)", "test (windows-latest, node 22)", "test (macos-latest, node 22)"],
-    "conditional": ["test (windows-latest, node 22)", "test (macos-latest, node 22)"],
+    "flaky": ["test (ubuntu-latest, node 22)", "test (windows-latest, node 22, 1/2)", "test (windows-latest, node 22, 2/2)", "test (windows-latest, node 22, checks)", "test (macos-latest, node 22)"],
+    "conditional": ["test (windows-latest, node 22, 1/2)", "test (windows-latest, node 22, 2/2)", "test (windows-latest, node 22, checks)", "test (macos-latest, node 22)"],
     "mergeChecks": "changed",
     "pullSections": ["Reach", "Risks"],
     "release": { "head": "release-please--branches--main--components--teamrig", "changelog": "CHANGELOG.md" }

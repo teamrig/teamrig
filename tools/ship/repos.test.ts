@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { TEST_SYSTEMS, testSystems } from '../ci/change-kind.ts';
+import { testSystems } from '../ci/change-kind.ts';
 import { parseProfiles, profileFor, readProfiles, repoSlugs, slugOf } from './repos.ts';
 import { DIST } from './ship-commits.ts';
 import { TEAMRIG_RELEASE_MANIFEST, TEAMRIG_VERSION_FILES } from './version-bump.ts';
@@ -182,12 +182,16 @@ test('the shipped repos.json still lists every job a teamrig pull request runs, 
   assert.ok(jobs.includes('commit size rule'), jobs.join(', '));
   for (const job of jobs) assert.ok(teamrig.checks.includes(job), `ci.yml job "${job}" is missing from repos.json, so a CI merge would not wait for it`);
   const tests = teamrig.checks.filter(check => check.startsWith('test ('));
-  assert.deepEqual(tests, ['ubuntu-latest', 'windows-latest', 'macos-latest'].map(os => `test (${os}, node 22)`));
-  const nodes = (/^ {8}node: \[([^\]]+)\]$/m.exec(workflow)?.[1] ?? '').split(',').map(item => item.trim());
-  const leg = (os: string): string[] => nodes.map(node => `test (${os}, node ${node})`);
+  // tools/ci/ci-workflow.test.ts derives these names from ci.yml's matrix, its parts and excludes (T5030).
+  assert.deepEqual(tests, [
+    'test (ubuntu-latest, node 22)',
+    'test (windows-latest, node 22, 1/2)',
+    'test (windows-latest, node 22, 2/2)',
+    'test (windows-latest, node 22, checks)',
+    'test (macos-latest, node 22)',
+  ]);
   assert.match(workflow, /^ {8}os: \$\{\{ fromJSON\(needs\.changes\.outputs\.systems\) \}\}$/m, 'the matrix runs the systems change-kind-cli.ts names');
-  assert.deepEqual(tests, TEST_SYSTEMS.flatMap(leg), 'repos.json must wait for exactly the test runs ci.yml\'s matrix makes for a code change');
-  const leftOut = TEST_SYSTEMS.filter(os => !testSystems('docs').includes(os)).flatMap(leg);
+  const leftOut = tests.filter(name => !testSystems('docs').some(os => name.startsWith(`test (${os},`)));
   assert.deepEqual(teamrig.conditional, leftOut, 'a docs run leaves these legs out, so a merge must not wait for them once the summary passed');
   assert.equal(teamrig.checks.length, jobs.length + tests.length);
 });
@@ -219,7 +223,13 @@ test('reads the flaky checks, and refuses one not among the checks, the summary,
 
 test('the shipped repos.json re-runs only teamrig\'s test legs once as flaky (T2532, T2988)', () => {
   const profiles = readProfiles();
-  assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig').flaky, ['test (ubuntu-latest, node 22)', 'test (windows-latest, node 22)', 'test (macos-latest, node 22)']);
+  assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig').flaky, [
+    'test (ubuntu-latest, node 22)',
+    'test (windows-latest, node 22, 1/2)',
+    'test (windows-latest, node 22, 2/2)',
+    'test (windows-latest, node 22, checks)',
+    'test (macos-latest, node 22)',
+  ]);
   assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig-pane').flaky, []);
 });
 
@@ -236,7 +246,12 @@ test('reads the conditional checks, and refuses them without a summary, or one n
 
 test('the shipped repos.json leaves teamrig\'s windows and macOS test legs conditional, which a docs-only run does not make (T4617)', () => {
   const profiles = readProfiles();
-  assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig').conditional, ['test (windows-latest, node 22)', 'test (macos-latest, node 22)']);
+  assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig').conditional, [
+    'test (windows-latest, node 22, 1/2)',
+    'test (windows-latest, node 22, 2/2)',
+    'test (windows-latest, node 22, checks)',
+    'test (macos-latest, node 22)',
+  ]);
   assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig-pane').conditional, []);
 });
 

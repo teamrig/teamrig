@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { TEST_SYSTEMS } from './change-kind.ts';
+import { profileFor, readProfiles } from '../ship/repos.ts';
 
 const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 
@@ -53,7 +54,36 @@ const PUBLIC_ONLY = '    if: ${{ !github.event.repository.private }}\n';
 const CODE = "${{ needs.changes.outputs.kind == 'code' }}";
 const NOT_DESIGN = "${{ needs.changes.outputs.kind != 'design' }}";
 const DOCS = "${{ needs.changes.outputs.kind == 'docs' }}";
-const CODE_OFF_UBUNTU = "${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' }}";
+const WHOLE_SUITE = "${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' && matrix.part == 'all' }}";
+const SHARD = "${{ needs.changes.outputs.kind == 'code' && contains(matrix.part, '/') }}";
+const NOT_SHARD = "!contains(matrix.part, '/')";
+const CODE_CHECK = `\${{ needs.changes.outputs.kind == 'code' && ${NOT_SHARD} }}`;
+const NOT_DESIGN_CHECK = `\${{ needs.changes.outputs.kind != 'design' && ${NOT_SHARD} }}`;
+
+/** The `test` script of package.json, the line `npm test` runs. */
+function npmTestLine(): string {
+  const manifest: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const scripts = typeof manifest === 'object' && manifest !== null && 'scripts' in manifest ? manifest.scripts : undefined;
+  const test = typeof scripts === 'object' && scripts !== null && 'test' in scripts ? scripts.test : undefined;
+  assert.ok(typeof test === 'string', 'package.json has a test script');
+  return test;
+}
+
+/** The test job's name: the part shows on a split OS's legs alone, so a one-leg OS keeps the name it had. */
+const LEG_NAME = "test (${{ matrix.os }}, node ${{ matrix.node }}${{ matrix.part != 'all' && format(', {0}', matrix.part) || '' }})";
+
+/** What GitHub names a test leg by LEG_NAME, on Node 22. */
+function legName(os: string, part: string): string {
+  return `test (${os}, node 22${part === 'all' ? '' : `, ${part}`})`;
+}
+
+/** The parts each OS of the test matrix runs as its own leg: the `part` list less the `exclude` entries for it. */
+function legsOf(test: string, systems: readonly string[]): ReadonlyMap<string, readonly string[]> {
+  const unquote = (value: string): string => value.trim().replace(/^'(.*)'$/, '$1');
+  const parts = /^ {8}part: \[(.+)\]$/m.exec(test)?.[1]?.split(',').map(unquote) ?? [];
+  const excluded = [...test.matchAll(/^ {10}- \{ os: ([\w-]+), part: ([^}]+) \}$/gm)].map((entry) => `${entry[1]} ${unquote(entry[2] ?? '')}`);
+  return new Map(systems.map((os) => [os, parts.filter((part) => !excluded.includes(`${os} ${part}`))]));
+}
 
 describe('ci.yml', () => {
   const jobs = jobsOf(workflow);
@@ -181,18 +211,19 @@ describe('ci.yml', () => {
       { does: 'actions/checkout', when: undefined },
       { does: 'actions/setup-node', when: undefined },
       { does: 'npm ci --ignore-scripts', when: NOT_DESIGN },
-      { does: 'npm run typecheck', when: CODE },
+      { does: 'npm run typecheck', when: CODE_CHECK },
       { does: 'npm run build', when: NOT_DESIGN },
-      { does: 'npm test', when: CODE_OFF_UBUNTU },
+      { does: 'npm test', when: WHOLE_SUITE },
+      { does: npmTestLine().replace(/^node --test /, 'node --test --test-shard=${{ matrix.part }} '), when: SHARD },
       { does: 'node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts', when: DOCS },
-      { does: 'node tools/ci/dist-smoke-cli.ts', when: CODE },
-      { does: 'node tools/ci/fresh-install-cli.ts', when: CODE },
-      { does: 'node tools/docs/images-cli.ts --check', when: NOT_DESIGN },
-      { does: 'node tools/docs/configuration-cli.ts --check', when: NOT_DESIGN },
-      { does: 'node tools/docs/parity-cli.ts --check', when: NOT_DESIGN },
-      { does: 'node tools/ci/boundaries-cli.ts', when: CODE },
-      { does: 'node tools/ci/provider-words-cli.ts', when: CODE },
-      { does: 'node tools/docs/doc-check-cli.ts', when: undefined },
+      { does: 'node tools/ci/dist-smoke-cli.ts', when: CODE_CHECK },
+      { does: 'node tools/ci/fresh-install-cli.ts', when: CODE_CHECK },
+      { does: 'node tools/docs/images-cli.ts --check', when: NOT_DESIGN_CHECK },
+      { does: 'node tools/docs/configuration-cli.ts --check', when: NOT_DESIGN_CHECK },
+      { does: 'node tools/docs/parity-cli.ts --check', when: NOT_DESIGN_CHECK },
+      { does: 'node tools/ci/boundaries-cli.ts', when: CODE_CHECK },
+      { does: 'node tools/ci/provider-words-cli.ts', when: CODE_CHECK },
+      { does: 'node tools/docs/doc-check-cli.ts', when: `\${{ ${NOT_SHARD} }}` },
     ]);
   });
 
@@ -203,7 +234,39 @@ describe('ci.yml', () => {
     assert.equal(nodeOf(test), '${{ matrix.node }}');
     assert.match(test, /^ {8}node: \[22\]$/m, 'the test legs run the Node the coverage gate runs');
     assert.match(test, /^ {8}os: \$\{\{ fromJSON\(needs\.changes\.outputs\.systems\) \}\}$/m);
-    assert.equal(stepsOf(test).find((step) => step.does === 'npm test')?.when, CODE_OFF_UBUNTU);
+    assert.equal(stepsOf(test).find((step) => step.does === 'npm test')?.when, WHOLE_SUITE);
+  });
+
+  it('splits the Windows leg into two suite shards and a checks leg, one leg on every other OS (T5030)', () => {
+    const test = jobs.get('test') ?? '';
+    assert.ok(test.includes(`    name: ${LEG_NAME}\n`), 'each leg has its own name, so every-check-cli.ts reads each one');
+    const legs = legsOf(test, TEST_SYSTEMS);
+    for (const os of TEST_SYSTEMS) {
+      assert.deepEqual(legs.get(os), os === 'windows-latest' ? ['1/2', '2/2', 'checks'] : ['all'], `the legs of ${os}`);
+    }
+  });
+
+  it("lists each test leg's name in the ship profile, as a check to wait on, re-run once and leave out by plan (T5030)", () => {
+    const profile = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const names = [...legsOf(jobs.get('test') ?? '', TEST_SYSTEMS)].flatMap(([os, parts]) => parts.map((part) => legName(os, part)));
+    assert.deepEqual(profile.checks.filter((name) => name.startsWith('test (')), names);
+    assert.deepEqual(profile.flaky, names, 'a test leg that fails under load is re-run once');
+    assert.deepEqual(profile.conditional, names.filter((name) => !name.startsWith('test (ubuntu-latest')), 'a docs change runs on ubuntu alone');
+  });
+
+  it('runs each part of the suite once on a split OS: shards 1 to N of N, and npm test on no leg of it (T5030)', () => {
+    const test = jobs.get('test') ?? '';
+    const shards = (legsOf(test, ['windows-latest']).get('windows-latest') ?? []).filter((part) => part.includes('/'));
+    assert.ok(shards.length >= 2, shards.join(', '));
+    assert.deepEqual(shards, shards.map((_, index) => `${index + 1}/${shards.length}`), 'every shard of the suite runs, each once');
+    assert.ok(!(legsOf(test, ['windows-latest']).get('windows-latest') ?? []).includes('all'), 'a whole-suite leg would run it twice');
+  });
+
+  it("puts the shard flag before npm test's file patterns, as node ignores one after them (T5030)", () => {
+    const shard = stepsOf(jobs.get('test') ?? '').find((step) => step.when === SHARD)?.does ?? '';
+    const flag = shard.indexOf('--test-shard=');
+    assert.ok(flag > 0 && flag < shard.indexOf('"tools/**/*.test.ts"'), shard);
+    assert.equal(shard.replace(' --test-shard=${{ matrix.part }}', ''), npmTestLine(), 'the shards run the suite npm test runs');
   });
 
   it('caches npm downloads in each job that installs, keyed on the lockfile by setup-node (T5027)', () => {

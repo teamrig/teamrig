@@ -196,7 +196,9 @@ that edits `tools/ci` cannot name itself docs; a base from before the tool is `c
 review) and, on ubuntu alone, the build, the docs' specs, the pictures, the config reference, the parity page and the doc links; a
 `design` change runs the commit checks and the doc links; a `code` change runs everything on every OS (the test
 matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
-gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Each job still runs and skips only its steps,
+gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Windows, the
+slowest leg, runs as three: the suite in two shards (`test (windows-latest, node 22, 1/2)` and `2/2`) and every other
+step (`checks`). Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
