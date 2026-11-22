@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { launchModelProblem, launchOf, ownLaunchOf, type LaunchHost } from '../../config/launch.ts';
 import { Roster } from '../../config/roster.ts';
 import type { ContextFilesConfig, KitConfig } from '../../config/types.ts';
@@ -119,8 +118,7 @@ function teamLookOf(look: KitLook): TeamLook {
 
 /** The install steps every host shares (install/core-steps.ts), each probed under `PROBE_TIMEOUT_MS`, as lines. */
 async function installCheckLines(runtime: CliRuntime, team: TeamLook): Promise<string[]> {
-  // The folder T5095's session start writes the kit launcher to; once it lands, its cliLauncherFolder names it.
-  const kitBin = join(resolveKitHome(runtime.env, runtime.userHome), 'bin');
+  const kitBin = cliLauncherFolder(resolveKitHome(runtime.env, runtime.userHome));
   const deps: CoreStepDeps = { env: runtime.env, platform: runtime.platform, probe: runtime.probe, requirements: runtime.requirements, script: runtime.self.script, kitBin, team };
   return installLines(await checkInstall(CORE_STEPS, deps, { timeoutMs: PROBE_TIMEOUT_MS, sleep: runtime.idleSleep }));
 }

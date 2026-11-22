@@ -112,6 +112,24 @@ function sameFolder(a: string, b: string, platform: NodeJS.Platform): boolean {
 const NEW_SESSION_FIX = `start a new session of a host with the ${KIT_NAME} plugin enabled`;
 
 /**
+ * Whether a session start puts the kit launcher's folder on the user's PATH: the team's `cliOnPath.enabled`, or the
+ * key's default (on) where no config loaded, as a session start reads it then.
+ */
+function launcherGoesOnPath(team: TeamLook): boolean {
+  return team.kind === 'found' && team.load.status === 'loaded' ? team.load.config.cliOnPath.enabled : true;
+}
+
+/**
+ * The CLI step's fix: a new session, and with `cliOnPath.enabled` off, doctor's `cli-path` finding for a terminal of
+ * the user's own, since no session start then puts the launcher on the user's PATH (T5095).
+ */
+function cliFix(team: TeamLook): string {
+  return launcherGoesOnPath(team)
+    ? NEW_SESSION_FIX
+    : `${NEW_SESSION_FIX}; cliOnPath.enabled is false, so for a terminal of your own follow ${KIT_NAME} doctor's cli-path finding`;
+}
+
+/**
  * The `teamrig` a shell runs is this install's: its shim on PATH is the kit's own launcher in `kitBin`, which runs the
  * installed plugin's CLI, or sits in the bin folder of the plugin this CLI runs from. A shim anywhere else is an older
  * or newer teamrig answering every command typed, as after an update in a session that started before it.
@@ -123,14 +141,14 @@ export const CLI_STEP: InstallStep<CoreStepDeps> = {
   async probe(deps) {
     const shim = await findProgram(KIT_NAME, deps, WINDOWS_COMMAND_EXTENSIONS);
     if (shim === undefined) {
-      return { kind: 'missing', detail: `no ${KIT_NAME} on PATH`, fix: NEW_SESSION_FIX };
+      return { kind: 'missing', detail: `no ${KIT_NAME} on PATH`, fix: cliFix(deps.team) };
     }
     const folder = pathsOf(deps.platform).dirname(shim);
     if (sameFolder(folder, deps.kitBin, deps.platform)) {
       return { kind: 'ok', detail: `${shim}, the kit launcher` };
     }
     if (!sameFolder(pluginFolderOf(shim, 1, deps.platform), pluginFolderOf(deps.script, 2, deps.platform), deps.platform)) {
-      return { kind: 'missing', detail: `the ${KIT_NAME} on PATH (${shim}) is another install than this one (${deps.script})`, fix: NEW_SESSION_FIX };
+      return { kind: 'missing', detail: `the ${KIT_NAME} on PATH (${shim}) is another install than this one (${deps.script})`, fix: cliFix(deps.team) };
     }
     return { kind: 'ok', detail: shim };
   },

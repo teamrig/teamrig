@@ -100,6 +100,21 @@ describe('CLI_STEP', () => {
     assert.equal(state.kind === 'missing' ? state.fix : '', 'start a new session of a host with the teamrig plugin enabled');
   });
 
+  it('names doctor’s cli-path finding beside the new session when cliOnPath.enabled is false', async () => {
+    const config = testConfig();
+    const off: TeamLook = { kind: 'found', team: 'alpha', load: { status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: { ...config, cliOnPath: { enabled: false } }, issues: [] } };
+    const fix = 'start a new session of a host with the teamrig plugin enabled; cliOnPath.enabled is false, so for a terminal of your own follow teamrig doctor\'s cli-path finding';
+    const none = await CLI_STEP.probe(deps({ team: off, probe: new FakePathProbe() }));
+    assert.equal(none.kind === 'missing' ? none.fix : '', fix);
+    const other = await CLI_STEP.probe(deps({ team: off, env: { PATH: 'C:\\old\\bin' }, probe: new FakePathProbe({ files: ['C:\\old\\bin\\teamrig.cmd'] }) }));
+    assert.equal(other.kind === 'missing' ? other.fix : '', fix);
+  });
+
+  it('keeps the new session alone as the fix where no config loaded, as cliOnPath is on by default', async () => {
+    const state = await CLI_STEP.probe(deps({ team: { kind: 'none', why: 'no team here' }, probe: new FakePathProbe() }));
+    assert.equal(state.kind === 'missing' ? state.fix : '', 'start a new session of a host with the teamrig plugin enabled');
+  });
+
   it('finds the kit launcher in the kit home’s bin folder ok, the folder in any case on Windows', async () => {
     const launcher = 'C:\\Home\\.teamrig\\bin\\teamrig.cmd';
     assert.deepEqual(await CLI_STEP.probe(deps({ env: { PATH: 'C:\\Home\\.teamrig\\bin' }, probe: new FakePathProbe({ files: [launcher] }) })), {
