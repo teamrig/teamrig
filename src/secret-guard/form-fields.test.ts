@@ -1,11 +1,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FormFields } from './form-fields.ts';
+import { ToolOutputRedactor } from './redactor.ts';
 
 const join = (...parts: string[]): string => parts.join('');
 const PASSWORD = join('s3', 'cret', 'Value9');
 const fields = new FormFields();
 const values = (text: string): string[] => fields.hitsIn(text).map(({ value }) => value);
+/** The stdout a redaction by these fields alone leaves, and the kinds it reports. */
+const redacted = (stdout: string): { stdout: unknown; classes: readonly string[] } => {
+  const redaction = new ToolOutputRedactor([fields]).redact({ stdout });
+  return { stdout: redaction.response['stdout'], classes: redaction.classes };
+};
 
 describe('FormFields', () => {
   it("finds a password field's value in a pipe-joined input record", () => {
@@ -18,8 +24,7 @@ describe('FormFields', () => {
   it("finds a password field's value in a JSON object per input, by its type or a password-like name or id", () => {
     assert.deepEqual(values(join('[{"type":"text","name":"user","value":"carl"},{"type":"password","name":"p","value":"', PASSWORD, '"}]')), [PASSWORD]);
     assert.deepEqual(values(join('{"value": "', PASSWORD, '", "id": "user[password]"}')), [PASSWORD]);
-    assert.deepEqual(values(join('{"type":"text","name":"otp","value":"', PASSWORD, '"}')), [PASSWORD]);
-    assert.deepEqual(values(join('{"type":"password","value":"a\\"', PASSWORD, '"}')), [join('a"', PASSWORD)]);
+    assert.deepEqual(values(join('{"type":"text","name":"login_pwd","value":"', PASSWORD, '"}')), [PASSWORD]);
   });
 
   it('finds the value attribute of password input markup', () => {
@@ -40,6 +45,19 @@ describe('FormFields', () => {
     assert.deepEqual(values(join('{"out":"{\\"type\\":\\"password\\",\\"value\\":\\"', PASSWORD, '\\"}"}')), [PASSWORD]);
     assert.deepEqual(values(join('a { opens here\n{"type":"password","value":"', PASSWORD, '"}')), [PASSWORD]);
     assert.deepEqual(values(join("{'type':'password'} {\"type\":\"password\",\"value\":\"", PASSWORD, '"}')), [PASSWORD]);
+  });
+
+  it('cuts a value holding a JSON escape as the result prints it', () => {
+    for (const raw of [join('a\\"', PASSWORD), join('a\\\\', PASSWORD), join('\\u0041', PASSWORD)]) {
+      const result = redacted(join('{"type":"password","value":"', raw, '"}'));
+      assert.deepEqual(result, { stdout: '{"type":"password","value":"[redacted value of a password field]"}', classes: ['value of a password field'] }, raw);
+    }
+    const held = redacted(join('{"out":"{\\"type\\":\\"password\\",\\"value\\":\\"a\\\\\\"', PASSWORD, '\\"}"}'));
+    assert.ok(!String(held.stdout).includes(PASSWORD), String(held.stdout));
+  });
+
+  it('takes a password-named input tag of any type', () => {
+    assert.deepEqual(values(join('<input type=text name="user[password]" value="', PASSWORD, '">')), [PASSWORD]);
   });
 
   it('takes the attribute named value or type, never a data- attribute first', () => {
@@ -63,6 +81,9 @@ describe('FormFields', () => {
       join('| password | ', PASSWORD, ' |'),
       join('the password field holds ', PASSWORD),
       '{"type":"password","name":"p"}',
+      join('{"id":"secret-guard","value":"', PASSWORD, '"}'),
+      join('{"name":"pass","value":"', PASSWORD, '"}'),
+      join('{"type":"text","name":"otp","value":"', PASSWORD, '"}'),
     ];
     for (const text of plain) {
       assert.deepEqual(values(text), [], text);
