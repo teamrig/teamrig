@@ -42,4 +42,4 @@ without the App: read that summary first, and fix the cause before approving.
 - The approval clears only the task's owner, from its own tab, at the approved sha; a merge from another session is
   refused as for any branch.
 
-Last verified: 2026-11-21
+Last verified: 2026-11-22
