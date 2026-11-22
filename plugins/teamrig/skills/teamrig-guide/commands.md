@@ -5678,7 +5678,7 @@ teamrig stamp commit "$1" || true
 Output:
 
 ```text
-STAMPED Made-with: teamrig <version>, Made-by: Claude Code 3.1.0; model Opus 5.5; effort high
+STAMPED Made-with: teamrig <version>, Made-by: <program> 3.1.0; model Opus 5.5; effort high
 ```
 
 With `[commits.stamp]` false it prints `SKIPPED commits.stamp is false: the message is left as written`; a message
