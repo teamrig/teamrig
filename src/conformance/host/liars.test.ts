@@ -1,12 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { nothingLauncher, yesLauncher } from './launcher.ts';
 import { nothingModels, yesModels } from './models.ts';
 import { nothingSteps, yesSteps } from './steps.ts';
 
 /**
  * A contract's cases stop at a liar's first wrong answer, so they never ask it the rest. These hold each liar of the
- * models and steps contracts to every answer its comment promises, so a liar that drifts into an honest answer is
- * seen here rather than in a contract that no longer catches anything.
+ * launcher, models and steps contracts to every answer its comment promises, so a liar that drifts into an honest
+ * answer is seen here rather than in a contract that no longer catches anything.
  */
 describe('the models liars', () => {
   it('nothingModels takes no name, tells no model apart and names no step or note', () => {
@@ -46,5 +47,25 @@ describe('the steps liars', () => {
     const { port, world } = yesSteps();
     const steps = [port.reloadPlugins, port.exit, port.pluginCommand(world.plugin), port.resume(world.session), port.updatePlugin(world.plugin, world.marketplace), port.updateHost];
     assert.deepEqual(new Set(steps), new Set(['do it']));
+  });
+});
+
+describe('the launcher liars', () => {
+  it('nothingLauncher names nothing, passes no argument, tells no part of a run and owns no process', () => {
+    const { port, world } = nothingLauncher();
+    const launcher = port(world.env({ sessionId: 'session-one', forcedEffort: 'high' }));
+    assert.deepEqual([launcher.programName, launcher.program], ['', '']);
+    assert.deepEqual(launcher.launchArgs({ name: 'n', model: 'm', effort: 'e', resume: 'r', settingsFile: 's', prompt: 'p' }), []);
+    assert.deepEqual(Object.values(launcher.identity()), [undefined, undefined, undefined, undefined, undefined]);
+    assert.deepEqual([launcher.variables.marks, launcher.variables.identity, launcher.childEnv.session], [[], [], []]);
+    assert.equal(launcher.isSessionProcess(world.sessionProcess), false);
+  });
+
+  it('yesLauncher tells one fixed run whatever it is told, starts every session alike and owns every process', () => {
+    const { port, world } = yesLauncher();
+    assert.deepEqual(port(world.env({ sessionId: 'session-one' })).identity(), port({}).identity());
+    const launcher = port({});
+    assert.deepEqual(launcher.launchArgs({ name: undefined, model: 'one', effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined }), launcher.launchArgs({ name: undefined, model: 'two', effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined }));
+    assert.equal(launcher.isSessionProcess({ name: 'anything', commandLine: '' }), true);
   });
 });

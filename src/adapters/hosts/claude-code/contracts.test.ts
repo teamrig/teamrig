@@ -1,5 +1,6 @@
 import {
   bind,
+  LAUNCHER_CONTRACT,
   MODELS_CONTRACT,
   PERMISSIONS_CONTRACT,
   PLUGIN_CONTRACT,
@@ -7,6 +8,7 @@ import {
   STEPS_CONTRACT,
   TRANSCRIPT_CONTRACT,
   USAGE_CONTRACT,
+  type LauncherWorld,
   type ModelsWorld,
   type PermissionsWorld,
   type PluginWorld,
@@ -15,12 +17,14 @@ import {
   type TranscriptWorld,
   type UsageWorld,
   type WorldInstall,
+  type WorldIdentity,
 } from '../../../conformance/index.ts';
 import { isStringArray, recordField, stringField, type JsonRecord, type RateWindow } from '../../../plugin-api/index.ts';
 import { describeContracts } from '../../../testing/contracts.ts';
 import { promptLine, resultsLine } from '../../../testing/transcript-lines.ts';
 import { declaration } from './declaration.ts';
 import { hostModels } from './models.ts';
+import { sessionLauncher } from './session-launcher.ts';
 import { hostSteps } from './steps.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
@@ -104,6 +108,27 @@ const modelsWorld: ModelsWorld = { model: 'claude-opus-5-5', otherModel: 'claude
 /** A Claude Code session id, and teamrig's own plugin and marketplace. */
 const stepsWorld: StepsWorld = { session: '0f3c2a1b-9d4e-4c7a-8b21-5e6f7a8b9c0d', plugin: 'teamrig', marketplace: 'teamrig' };
 
+/** The variable Claude Code tells each part of a run's session by. */
+const IDENTITY_VARIABLES = [
+  ['projectDir', 'CLAUDE_PROJECT_DIR'],
+  ['startedAs', 'CLAUDE_CODE_ENTRYPOINT'],
+  ['sessionKind', 'CLAUDE_CODE_SESSION_KIND'],
+  ['sessionId', 'CLAUDE_CODE_SESSION_ID'],
+  ['forcedEffort', 'CLAUDE_CODE_EFFORT_LEVEL'],
+] as const satisfies readonly (readonly [keyof WorldIdentity, string])[];
+
+/** Claude Code's environment for a run: each told part under its variable, and its native binary running a session. */
+const launcherWorld: LauncherWorld = {
+  env: (identity) =>
+    Object.fromEntries(
+      IDENTITY_VARIABLES.flatMap(([part, name]) => {
+        const value = identity[part];
+        return value === undefined ? [] : [[name, value]];
+      }),
+    ),
+  sessionProcess: { name: 'claude.exe', commandLine: 'claude --resume 0f3c2a1b-9d4e-4c7a-8b21-5e6f7a8b9c0d' },
+};
+
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';
 
 /** An install's scope and project in `installed_plugins.json`: `user` for every project, `managed` for one teamrig does not know. */
@@ -154,5 +179,6 @@ describeContracts({
     bind({ contract: PLUGIN_CONTRACT, make: () => ({ port: hostPlugin, world: pluginWorld }) }),
     bind({ contract: MODELS_CONTRACT, make: () => ({ port: hostModels, world: modelsWorld }) }),
     bind({ contract: STEPS_CONTRACT, make: () => ({ port: hostSteps, world: stepsWorld }) }),
+    bind({ contract: LAUNCHER_CONTRACT, make: () => ({ port: sessionLauncher, world: launcherWorld }) }),
   ],
 });

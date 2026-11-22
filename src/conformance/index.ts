@@ -3,6 +3,7 @@
  * inside teamrig and an outside program reached through the protocol. It imports the plugin API, `node:assert` and
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
+import { LAUNCHER_CONTRACT } from './host/launcher.ts';
 import { PERMISSIONS_CONTRACT } from './host/permissions.ts';
 import { MODELS_CONTRACT } from './host/models.ts';
 import { STEPS_CONTRACT } from './host/steps.ts';
@@ -25,6 +26,7 @@ export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions, type Permissi
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin, type PluginCase, type PluginSubject, type PluginWorld, type WorldInstall, type WorldMarketplace } from './host/plugin.ts';
 export { MODELS_CONTRACT, nothingModels, yesModels, type ModelsCase, type ModelsSubject, type ModelsWorld } from './host/models.ts';
 export { STEPS_CONTRACT, nothingSteps, yesSteps, type StepsCase, type StepsSubject, type StepsWorld } from './host/steps.ts';
+export { LAUNCHER_CONTRACT, nothingLauncher, yesLauncher, type LauncherCase, type LauncherOf, type LauncherSubject, type LauncherWorld, type WorldIdentity } from './host/launcher.ts';
 
 /**
  * Every contract of the kit. A port's contract lives in its own file, under `host/`, `connector/` or `terminal/`,
@@ -40,4 +42,5 @@ export const CONTRACTS: readonly KitEntry[] = [
   entryOf(PLUGIN_CONTRACT),
   entryOf(MODELS_CONTRACT),
   entryOf(STEPS_CONTRACT),
+  entryOf(LAUNCHER_CONTRACT),
 ];
