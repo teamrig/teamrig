@@ -19,7 +19,7 @@ they all stay silent, but `hook restore-track` and `hook tool-end` still record 
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
-| `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, a `git commit` with its hooks) run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
+| `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, `pr approve` or `pr merge` at the head your leader approved, a teamrig command that only reads, a `git commit` with its hooks), alone or piped into one read-only filter, run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
 | `PreToolUse` on `AskUserQuestion` and `Bash` | `hook picker-guard` | With `pickerGuard.enabled` (on unless a team sets it false), refuses the question picker to every session and helper, to the lead in and outside the owner's daily meeting, to a sub-team's lead, and to a session in its own meeting with the owner, with the reason to decide it if it is the session's own, else record it on its task and go on, and a session's Bash `cd` compound Claude Code would hold on a permission prompt, quoting its form to rerun, or saying to drop the `cd` when it has none ([the picker guard](#before-a-question-the-picker-guard)) |
 | `PermissionRequest` | `hook prompt-refuse` | With `prompts.hookAsks: refuse` (the default), answers each permission prompt Claude Code is about to raise but the question picker's and plan mode's exit, per case: a line that runs a sanctioned route or provably only reads runs, a line with a rerun form is refused quoting it, anything else is refused with the reason to record the step for the owner and go on ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)) |
 | `PreToolUse` on `SendMessage` | `hook cold-send` | Holds once a message that would wake an idle session cold; with `open.idle.mode` on, turns a message to a session teamrig closed into its urgent line; during the daily meeting, holds every message to the lead but a CRITICAL one, and during a booked or on-the-spot meeting every message to the session met |
@@ -461,7 +461,11 @@ allow, in a mode that asks, or a check of its own that always asks): `hook promp
 
 - **A line that runs one of the session's own jobs runs** (since 0.268.0): one plain Bash command, read as the CLI
   reads it, that is a sanctioned route: `teamrig merge`, `teamrig deploy --repo <name>`, `teamrig exec request`,
-  `teamrig worktree remove` (no `--base`), a register or inbox command (`start`, `add`, `set`, `list`, `inbox`...), a
+  `teamrig worktree remove` (no `--base`), `teamrig pr approve|merge <owner/name#n> --head <full 40-hex head>
+  [--session <you>] [--check]` from a tab bound to you, for a session that has a leader (a root team's lead keeps the
+  check: no one approves its landings), a teamrig command that only reads (`list`, `show`, `budget`, `doctor`...; not
+  `secrets message`, nor `sessions` or `setup scan` with `--project`, which open a path you name), a register or inbox
+  command (`start`, `add`, `set`, `inbox`...), a
   `git commit` with its hooks running (only `-a -s -q -m -F` and paths), or a `git push [-u] [-q] <remote> <branch>`
   of a task branch you own (`t<id>-...`) to a remote the repository names, never a protected branch, and only while
   git pushes it to the remote branch of its own name. A rebased branch goes back to that same branch, so its review
@@ -471,8 +475,13 @@ allow, in a mode that asks, or a check of its own that always asks): `hook promp
   `upstream` or `tracking` (which sends it to its upstream, `origin/main` for a branch cut from it), keeps the
   prompt. One plain
   command: no `;`, `&`, `|`, `<`, `>` but a lone `2>&1`, no substitution, variable, `$'`, `$"` or `#`, inside quotes
-  too, so a commit message holding one of them gets the cases below. On Windows the line must be that same route
-  both as written and with its backslash runs halved, as Claude Code's Bash tool hands it to bash (since 0.370.0).
+  too (but the `#` of a bare `<owner>/<name>#<n>` word, which no shell reads as a comment), so a commit message holding one of them gets the cases below. The one `|` taken pipes the route into one
+  filter that reads only the pipe: `head`/`tail` with `-n <n>`, `-<n>` or `-c <n>` (never `-f`), `grep` with one bare
+  or single-quoted pattern and `-i -v -n -c -E -F -w -x -o -m -A -B -C`, or `wc -l -w -c -m`; no file operand, no
+  second pipe, no redirection on the right. A piped line exits with the filter's status, so a `pr merge` that failed
+  can exit 0: read its `MERGED`, `APPROVED` or `FAILED` line, not the exit code. On Windows the line must be that same
+  route, with the same filter, both as written and with its backslash runs halved, as Claude Code's Bash tool hands it
+  to bash (since 0.370.0). PowerShell lines are not read as routes yet.
 - **A line that provably only reads runs**, by the [read-only allow](#before-a-shell-command-the-read-only-allow)'s
   check and its trusted prefixes, even with `readonlyShell.enabled` off; one that would print a secret does not. This
   allow also answers a prompt a settings `ask` rule raised, which a `PreToolUse` allow never overrides: keep a line
