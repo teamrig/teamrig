@@ -171,6 +171,7 @@ const EXPECTED = {
   'worktree add': 'write',
   'worktree remove': 'write',
   test: 'write',
+  'redact-exec': 'internal',
   gh: 'write',
   'conformance client': 'write',
   'conformance terminal': 'write',

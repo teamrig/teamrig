@@ -102,6 +102,7 @@ const automodeCommands = () => import('./commands/automode.ts');
 const permissionsCommands = () => import('./commands/permissions.ts');
 const setupScanCommand = () => import('./commands/setup-scan.ts');
 const testCommand = () => import('./commands/test.ts');
+const redactExecCommand = () => import('./commands/redact-exec.ts');
 const ghCommand = () => import('./commands/gh.ts');
 const conformanceCommand = () => import('./commands/conformance.ts');
 const conformanceClientCommand = () => import('./commands/conformance-client.ts');
@@ -347,6 +348,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'worktree add': { effect: 'write', flags: ['repo', 'task', 'type'], load: async () => (await worktreeCommands()).add },
   'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
+  'redact-exec': { effect: 'internal', flags: [], rest: true, load: async () => (await redactExecCommand()).redactExec },
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
   'conformance terminal': { effect: 'write', flags: ['program', 'sha256', 'args'], load: async () => (await conformanceCommand()).conformanceTerminal },
   'conformance client': { effect: 'write', flags: ['script', 'home', 'steps'], load: async () => (await conformanceClientCommand()).conformanceClient },
@@ -1326,6 +1328,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       node spec file as --small, anything more as a heavy step; exit 0 when the command passed, 1
       otherwise. One quoted word runs as a shell line ("npm run build && npm test"); several run as one
       command, each word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
+  redact-exec -- <command ...> runs a shell command and redacts secret shapes and secret variables from
+      its output before printing it; exit 0 when the command passed, 1 otherwise
   gh -- <gh args ...>          runs one gh call with the key saved for the owner of the repository it
       reaches (-R, a gh api repos/, orgs/ or users/ path, a gh repo command's repository, else GH_REPO,
       else the folder's git remotes), never the machine's gh login; REFUSED when it reaches more than
