@@ -25,7 +25,6 @@ describe('provider-words-cli', () => {
   const skills = (): void => {
     repo.write(`${PLUGIN}/SKILL.md`, 'Open a pull request.\n');
     repo.write(`${PLUGIN}/more/notes.md`, 'On GitHub.\n');
-    repo.write(`${PLUGIN}/steps.md`, 'gh pr create, GitHub, Jira\n');
     repo.write(`${PLUGIN}/script.ts`, 'gh\n');
     repo.write(`${OWN}/SKILL.md`, 'Run /clear, then a high five.\n');
     repo.write('plugins/teamrig/skills/README.md', 'GitHub\n');

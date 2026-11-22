@@ -10,8 +10,6 @@ import { BASELINE_FILE, type SkillFile, declaredTerms, hitLine, providerHits, sk
 /** The folders whose every subfolder is one skill: the plugin's and this repo's own. */
 const SKILL_ROOTS = ['plugins/teamrig/skills', '.claude/skills'] as const;
 const BASELINE = 'tools/ci/provider-words.json';
-/** A skill's step texts name one product by design, so the check leaves them out. */
-const STEP_TEXTS = 'steps.md';
 const USAGE = 'usage: provider-words-cli.ts [--list] [--write] [--base <commit>] [--root <repo>]';
 
 /** The `/` path from the repo root. */
@@ -28,7 +26,7 @@ function skillFiles(root: string): readonly SkillFile[] {
       .sort();
     return skills.flatMap((skill) =>
       readdirSync(join(root, skill), { recursive: true, withFileTypes: true })
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && entry.name !== STEP_TEXTS)
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
         .map((entry) => repoPath(root, join(entry.parentPath, entry.name)))
         .sort()
         .map((path) => ({ skill, path, text: readFileSync(join(root, path), 'utf8') })),
