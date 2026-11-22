@@ -30,6 +30,24 @@ export function approvalCleared(task: Pick<Task, 'answer'>, reason: WaitReason):
   return answerTo(task, reason)?.verdict === 'approved';
 }
 
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+const COMMIT_SHA_RUN = /\b[0-9a-f]{7,40}\b/g;
+
+/** Whether `text` is a commit sha, full or abbreviated to at least 7 hex digits. */
+export function isCommitSha(text: string): boolean {
+  return COMMIT_SHA.test(text);
+}
+
+/**
+ * Whether the task's answer note names a sha `head` starts with: an approval covers only the head it names, so an
+ * approval of an earlier head never clears a later one (T2788). Shared by the ship tool's merge and `teamrig pr`
+ * (T4817).
+ */
+export function answerNamesHead(task: Pick<Task, 'answer'>, head: string): boolean {
+  const named = task.answer?.note?.match(COMMIT_SHA_RUN) ?? [];
+  return named.some((sha) => head.startsWith(sha));
+}
+
 /** A task of the owner's that one of its approvers approved, with who did. */
 export interface ApprovedTask {
   readonly task: Task;

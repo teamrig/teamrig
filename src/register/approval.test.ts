@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LeadTree } from '../config/lead-tree.ts';
 import { testConfig } from '../testing/config.ts';
 import { testTask } from '../testing/task.ts';
-import { answerTo, approvalCleared, approvedTaskOf, waitAnswerersOf } from './approval.ts';
+import { answerNamesHead, answerTo, approvalCleared, approvedTaskOf, isCommitSha, waitAnswerersOf } from './approval.ts';
 import type { ApprovalAnswer } from './fold.ts';
 import type { WaitReason } from './waits.ts';
 
@@ -18,6 +18,33 @@ describe('answerTo (T996)', () => {
     assert.equal(answerTo(testTask({ answer: APPROVED }), { kind: 'approval', who: 'owner' }), undefined, "the lead's answer is not the owner's");
     assert.equal(answerTo(testTask({ answer: APPROVED }), { kind: 'decision', who: 'lead' }), undefined, 'a decision is not an approval');
     assert.equal(answerTo(testTask(), LEAD), undefined, 'unanswered');
+  });
+});
+
+describe('isCommitSha (T4817)', () => {
+  it('takes a full or abbreviated lowercase sha of 7 to 40 hex digits, and nothing else', () => {
+    assert.equal(isCommitSha('abc1234'), true);
+    assert.equal(isCommitSha('a'.repeat(40)), true);
+    assert.equal(isCommitSha('abc123'), false, 'too short');
+    assert.equal(isCommitSha('a'.repeat(41)), false, 'too long');
+    assert.equal(isCommitSha('ABC1234'), false, 'uppercase');
+    assert.equal(isCommitSha('abc1234 '), false, 'trailing text');
+  });
+});
+
+describe('answerNamesHead (T2788, T4817)', () => {
+  const HEAD = 'abc1234def5678';
+
+  it('holds when the note names a sha the head starts with, anywhere in it', () => {
+    assert.equal(answerNamesHead(testTask({ answer: { ...APPROVED, note: 'OK abc1234: check PASS' } }), HEAD), true);
+    assert.equal(answerNamesHead(testTask({ answer: { ...APPROVED, note: `head ${HEAD}` } }), HEAD), true);
+  });
+
+  it("fails for another head's sha, a sha the head only contains, no sha, or no answer", () => {
+    assert.equal(answerNamesHead(testTask({ answer: { ...APPROVED, note: 'OK 9999999' } }), HEAD), false, 'an earlier head');
+    assert.equal(answerNamesHead(testTask({ answer: { ...APPROVED, note: 'OK 1234def' } }), HEAD), false, 'not a prefix');
+    assert.equal(answerNamesHead(testTask({ answer: APPROVED }), HEAD), false, 'names no sha');
+    assert.equal(answerNamesHead(testTask(), HEAD), false, 'unanswered');
   });
 });
 
