@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { formatConfig } from '../config/load.ts';
 import { TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
+import { findingLines } from '../testing/cli-harness.ts';
 import { teamConfigOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 
 describe('teamrig doctor in a tree of teams', () => {
@@ -14,7 +15,7 @@ describe('teamrig doctor in a tree of teams', () => {
     await kit.files.write(teamConfigOf('deep'), config('deep', 'ui', { x: 'app-alpha' }));
     await kit.files.write(teamConfigOf('blog'), config('blog', 'gone'));
     const result = await kit.run(['doctor']);
-    assert.deepEqual(result.stdout, [
+    assert.deepEqual(findingLines(result.stdout), [
       'DOCTOR 2 finding(s), team app',
       'WARN tree-depth team deep is at level 4 of its tree, and a tree has at most 3 levels: hang it under a team nearer the root',
       'WARN name-two-teams app-alpha is the session name of app/alpha, deep/x: Claude Code session names are machine-wide, so messages by that name can reach the wrong team; give one a new name with `teamrig rename`',

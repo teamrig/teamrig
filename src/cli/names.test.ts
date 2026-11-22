@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
-import { CliHarness, RENAMES_PATH, renameRecordsOf, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
+import { CliHarness, findingLines, RENAMES_PATH, renameRecordsOf, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { EXIT } from './runtime.ts';
 
 const NAMED: JsonRecord = { ...TEAM, names: { lead: 'captain' } };
@@ -104,7 +104,8 @@ describe('runCli: doctor', () => {
     const kit = new CliHarness(NAMED);
     await kit.holdSecretDeny();
     await kit.run(['rename', 'alpha', 'scout', '--session', 'alpha']);
-    assert.deepEqual(await kit.run(['doctor']), { code: EXIT.ok, stdout: ['DOCTOR clean, team app'], stderr: [] });
+    const healthy = await kit.run(['doctor']);
+    assert.deepEqual({ ...healthy, stdout: findingLines(healthy.stdout) }, { code: EXIT.ok, stdout: ['DOCTOR clean, team app'], stderr: [] });
   });
 
   it('warns of a damaged rename log, an inbox keyed by a name and rules too long to show, and still exits 0', async () => {
@@ -117,7 +118,7 @@ describe('runCli: doctor', () => {
     const result = await kit.run(['doctor']);
     assert.equal(result.code, EXIT.ok);
     assert.deepEqual(
-      result.stdout.map((line) => line.split(' ').slice(0, 2).join(' ')),
+      findingLines(result.stdout).map((line) => line.split(' ').slice(0, 2).join(' ')),
       ['DOCTOR 3', 'WARN rename-log', 'WARN inbox-orphan', 'WARN rules-long'],
     );
     assert.equal(result.stdout[0], 'DOCTOR 3 finding(s), team app');

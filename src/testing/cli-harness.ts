@@ -119,6 +119,12 @@ export interface CliResult {
   readonly stderr: readonly string[];
 }
 
+/** What `doctor` printed before its install check (the `INSTALL ` header on), for specs of its findings alone. */
+export function findingLines(stdout: readonly string[]): readonly string[] {
+  const install = stdout.findIndex((line) => line.startsWith('INSTALL '));
+  return install === -1 ? stdout : stdout.slice(0, install);
+}
+
 export interface RunOptions {
   readonly env?: Env;
   readonly stdin?: string;

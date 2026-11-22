@@ -17,10 +17,12 @@ import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { launchHostOf, modelsIfKnown, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
-import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
+import { CORE_STEPS, type CoreStepDeps, type TeamLook } from '../../install/core-steps.ts';
+import { checkInstall, installLines, PROBE_TIMEOUT_MS } from '../../install/steps.ts';
+import { findTeam, openKit, projectFolder, requireConfig, teamZone, type Kit } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
-import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readTeamRules } from '../team-rules.ts';
 import { loadTree } from '../tree.ts';
 import { inboxDepsOf } from './inbox.ts';
@@ -93,7 +95,9 @@ function pageProblemOf(check: PageCheck): PageProblem | undefined {
  * holds (src/doctor/deny-lines.ts); and the user's PowerShell history file when no PowerShell profile keeps
  * credentials out of it (src/doctor/shell-history.ts; the history is probed, never read); and a page webhook the team's
  * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed); and the kit home's
- * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). It reads only and exits 0
+ * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). After the findings, an
+ * INSTALL section: each install step every host shares, probed live, with the fix for one missing
+ * (src/install/core-steps.ts); with no team found it prints that section, then refuses as a team command does. It reads only and exits 0
  * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
  */
 /** Each session's launch as it starts on this host, with why the host would not run its model. */
@@ -112,9 +116,40 @@ async function cliPathOf(runtime: CliRuntime, config: KitConfig): Promise<CliPat
   return { folder, where: userPath.where, onPath: await userPath.holds(folder), enabled: config.cliOnPath.enabled };
 }
 
+/** What doctor found for a team: its kit, or the refusal a team command gives where there is none. */
+type KitLook = { readonly kind: 'found'; readonly team: string; readonly kit: Kit } | { readonly kind: 'none'; readonly refusal: RefusedError };
+
+async function lookForKit(runtime: CliRuntime): Promise<KitLook> {
+  try {
+    const { team } = await findTeam(runtime);
+    return { kind: 'found', team, kit: await openKit(runtime, team) };
+  } catch (error) {
+    if (error instanceof RefusedError) {
+      return { kind: 'none', refusal: error };
+    }
+    throw error;
+  }
+}
+
+function teamLookOf(look: KitLook): TeamLook {
+  return look.kind === 'none' ? { kind: 'none', why: look.refusal.message } : { kind: 'found', team: look.team, load: look.kit.load };
+}
+
+/** The install steps every host shares (install/core-steps.ts), each probed under `PROBE_TIMEOUT_MS`, as lines. */
+async function installCheckLines(runtime: CliRuntime, team: TeamLook): Promise<string[]> {
+  const deps: CoreStepDeps = { env: runtime.env, platform: runtime.platform, probe: runtime.probe, requirements: runtime.requirements, script: runtime.self.script, team };
+  return installLines(await checkInstall(CORE_STEPS, deps, { timeoutMs: PROBE_TIMEOUT_MS, sleep: runtime.idleSleep }));
+}
+
 export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
-  const kit = await openTeamKit(runtime);
+  const look = await lookForKit(runtime);
+  const install = await installCheckLines(runtime, teamLookOf(look));
+  if (look.kind === 'none') {
+    install.forEach((line) => runtime.out.stdout(line));
+    throw look.refusal;
+  }
+  const { kit } = look;
   const config = requireConfig(kit, runtime, 'read');
   const { paths } = kit;
   const renameLog = await new JsonlRenameLog(runtime.files, paths.renames).read();
@@ -151,5 +186,6 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   });
   runtime.out.stdout(findings.length === 0 ? `DOCTOR clean, team ${paths.team}` : `DOCTOR ${findings.length} finding(s), team ${paths.team}`);
   findings.forEach((finding) => runtime.out.stdout(formatFinding(finding)));
+  install.forEach((line) => runtime.out.stdout(line));
   return EXIT.ok;
 }
