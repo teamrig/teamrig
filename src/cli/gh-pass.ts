@@ -5,7 +5,9 @@ import type { Env } from '../core/home.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import { ghRouteOf } from '../hooks/gh-routes.ts';
 import type { GithubRepos } from '../hooks/gh-write-refusals.ts';
-import { apiEndpointOf, apiRepoOf, endpointPath, ghCallOf, ghCommandSlotOf, ghGroupKind, remoteReposOf, repoFlagsOf, repoFlagValue } from '../hooks/gh-writes.ts';
+import {
+  apiEndpointOf, apiRepoOf, endpointPath, ghCallOf, ghCommandSlotOf, ghGroupKind, mayResolveElsewhere, remoteReposOf, repoFlagsOf, repoValueOf,
+} from '../hooks/gh-writes.ts';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
 import type { Output } from './runtime.ts';
 
@@ -13,16 +15,21 @@ import type { Output } from './runtime.ts';
  * `teamrig gh -- <gh args>` (T4897 S1, S4): runs gh with the key saved for the one repository it reaches, else for
  * that repository's owner, never the machine's own gh login, which may be another project's key. The target comes from
  * the call's words (`-R`, a `gh api` path, a `gh repo` command's repository), else `GH_REPO`, else the folder's git
- * remotes; a run that reaches several repositories of one owner, or an owner's `orgs/` or `users/` path, takes the
- * owner's key; a run that reaches more than one owner, or none teamrig can tell, is refused, as is a group that changes gh itself (auth, config,
- * alias, extension) or runs code that is not gh's (an alias or an extension would hold the key). A write on one of the
- * team's repositories (`github.repos`) stays with teamrig's own commands, which check who may write.
+ * remotes; a run that reaches several repositories of one owner, none with a key of its own, or an owner's `orgs/` or
+ * `users/` path, takes the owner's key; a run that reaches more than one owner, a host other than github.com, or none
+ * teamrig can tell, is refused, as is a group that changes gh itself (auth, config, alias, extension) or runs code that
+ * is not gh's (an alias or an extension would hold the key). A write on one of the team's repositories
+ * (`github.repos`) stays with teamrig's own commands, which check who may write.
  */
 
-/** The saved keys: one repository's own, else its owner's, and an owner's for a call that reaches more than one repository. */
+/**
+ * The saved keys: one repository's own, else its owner's; an owner's for a call that reaches the owner itself; and an
+ * owner's for several of its repositories only when none has a key of its own.
+ */
 export interface GhKeys {
   accessFor(repo: string): Promise<RepoAccess | NoAccessError>;
   accessForOwner(owner: string): Promise<RepoAccess | NoAccessError>;
+  accessForRepos(owner: string, repos: readonly string[]): Promise<RepoAccess | NoAccessError>;
 }
 
 /** What a run reads besides gh's words. */
@@ -60,6 +67,14 @@ const OWNER_PATHS: ReadonlySet<string> = new Set(['orgs', 'users']);
 
 /** The hosts a full `gh api` URL may reach: a key saved for github.com goes nowhere else. */
 const GITHUB_HOSTS: ReadonlySet<string> = new Set(['github.com', 'api.github.com']);
+
+/** The hosts a `-R`, `gh repo` or `GH_REPO` value may name: gh sends `GH_TOKEN` to any GitHub host it names, such as a `*.ghe.com` tenant. */
+const REPO_HOSTS: ReadonlySet<string> = new Set(['github.com', 'www.github.com']);
+
+/** Why a repository value's host is refused, or undefined for github.com or a value with no host. */
+function hostRefusal(host: string | undefined, where: string): string | undefined {
+  return host === undefined || REPO_HOSTS.has(host) ? undefined : `${where} names the host ${host}, and the saved keys are for github.com`;
+}
 
 /** The `gh repo` commands that take the repository as a word of their own (`gh repo view acme/web`). */
 const REPO_POSITIONAL: ReadonlySet<string> = new Set(['view', 'clone', 'edit', 'delete', 'fork', 'archive', 'unarchive', 'sync']);
@@ -103,6 +118,9 @@ function apiNamed(rest: readonly ShellWord[]): Named {
     return refused(`its URL reaches ${host === '' ? 'no host' : host}, and the saved keys are for github.com`);
   }
   const path = endpointPath(endpoint.text);
+  if (mayResolveElsewhere(path)) {
+    return refused('its path has a `.`, `..` or `%` segment, which may reach another repository than the one whose key teamrig would pick');
+  }
   const repo = apiRepoOf(path);
   if (repo === 'folder') {
     return FOLDER;
@@ -111,6 +129,9 @@ function apiNamed(rest: readonly ShellWord[]): Named {
     return targetsOf([repo]);
   }
   const [first, owner] = path.split('/');
+  if (first === 'repos') {
+    return refused('its `repos/` path names no repository teamrig can read; write it as `repos/<owner>/<name>/...`');
+  }
   return first !== undefined && OWNER_PATHS.has(first) && owner !== undefined && OWNER_NAME.test(owner)
     ? { kind: 'targets', targets: [{ owner: owner.toLowerCase(), repo: undefined }] }
     : FOLDER;
@@ -123,7 +144,8 @@ function groupNamed(group: string, rest: readonly ShellWord[]): Named {
     return refused('its `-R` value names no repository');
   }
   if (flags.given) {
-    return targetsOf(flags.repos);
+    const offHost = flags.hosts.map((host) => hostRefusal(host, 'its `-R` value')).find((why) => why !== undefined);
+    return offHost === undefined ? targetsOf(flags.repos) : refused(offHost);
   }
   if (group !== 'repo') {
     return FOLDER;
@@ -132,11 +154,15 @@ function groupNamed(group: string, rest: readonly ShellWord[]): Named {
   if (slot.kind !== 'command' || slot.command === undefined || !REPO_POSITIONAL.has(slot.command.text)) {
     return FOLDER;
   }
-  const repo = slot.rest.flatMap((word) => {
-    const named = word.text.startsWith('-') ? undefined : repoFlagValue(word.text);
+  const value = slot.rest.flatMap((word) => {
+    const named = word.text.startsWith('-') ? undefined : repoValueOf(word.text);
     return named === undefined ? [] : [named];
   })[0];
-  return repo === undefined ? FOLDER : targetsOf([repo]);
+  if (value === undefined) {
+    return FOLDER;
+  }
+  const offHost = hostRefusal(value.host, `its repository \`${value.repo}\``);
+  return offHost === undefined ? targetsOf([value.repo]) : refused(offHost);
 }
 
 /** What a call's words name, or that the folder picks; a group teamrig will not run with a key is refused. */
@@ -158,7 +184,10 @@ export function namedTargetsOf(words: readonly ShellWord[]): Named {
   return group.text === 'api' ? apiNamed(words.slice(1)) : groupNamed(group.text, words.slice(1));
 }
 
-/** The repositories gh picks one from when the words name none: `GH_REPO`, else the folder's remotes; undefined when teamrig cannot tell. */
+/**
+ * The repositories gh picks one from when the words name none: `GH_REPO`, else the folder's remotes; undefined when
+ * teamrig cannot tell, or `GH_REPO` names a host other than github.com.
+ */
 type FolderRepos = () => Promise<readonly string[] | undefined>;
 
 function folderReposOf(ports: GhPassPorts): FolderRepos {
@@ -167,8 +196,8 @@ function folderReposOf(ports: GhPassPorts): FolderRepos {
     read ??= (async () => {
       const ghRepo = ports.env['GH_REPO'];
       if (ghRepo !== undefined && ghRepo !== '') {
-        const repo = repoFlagValue(ghRepo);
-        return repo === undefined ? undefined : [repo];
+        const value = repoValueOf(ghRepo);
+        return value === undefined || hostRefusal(value.host, 'GH_REPO') !== undefined ? undefined : [value.repo];
       }
       const listing = await ports.run({ program: 'git', args: ['-C', ports.cwd, 'remote', '-v'] }).catch(() => undefined);
       return listing === undefined || listing.end.kind !== 'exited' || listing.end.code !== 0 ? [] : remoteReposOf(listing.stdout);
@@ -177,11 +206,15 @@ function folderReposOf(ports: GhPassPorts): FolderRepos {
   };
 }
 
-/**
- * The one target whose key the run uses, or why there is none: the repository when every target is that one
- * repository, else the owner when every target is of that owner.
- */
-async function targetFor(named: Named, folder: FolderRepos): Promise<({ readonly kind: 'target' } & Target) | { readonly kind: 'refused'; readonly why: string }> {
+/** The owner whose key the run uses, and the repositories of it the run reaches (none for a call on the owner itself). */
+interface Picked {
+  readonly kind: 'target';
+  readonly owner: string;
+  readonly repos: readonly string[];
+}
+
+/** The owner whose key the run uses and the repositories it reaches, or why there is none: every target must be of one owner. */
+async function targetFor(named: Named, folder: FolderRepos): Promise<Picked | { readonly kind: 'refused'; readonly why: string }> {
   if (named.kind === 'refused') {
     return named;
   }
@@ -189,7 +222,7 @@ async function targetFor(named: Named, folder: FolderRepos): Promise<({ readonly
   if (named.kind === 'folder') {
     const repos = await folder();
     if (repos === undefined) {
-      return refused('it reaches the repository of the folder (or `GH_REPO`), which teamrig cannot read: a remote reaches GitHub in a form it cannot read (an SSH alias, a port), or `GH_REPO` names none; name the repository with `-R <owner>/<name>`');
+      return refused('it reaches the repository of the folder (or `GH_REPO`), which teamrig cannot read: a remote reaches GitHub in a form it cannot read (an SSH alias, a port, a `*.ghe.com` host), or `GH_REPO` names none on github.com; name the repository with `-R <owner>/<name>`');
     }
     if (repos.length === 0) {
       return refused('it names no repository and the folder has no GitHub remote, so no owner to pick a key for; name the repository with `-R <owner>/<name>`');
@@ -204,9 +237,17 @@ async function targetFor(named: Named, folder: FolderRepos): Promise<({ readonly
   if (unique.length > 1) {
     return refused(`it reaches ${unique.join(', ')}: one run uses one owner's key; name one repository with \`-R <owner>/<name>\``);
   }
-  const repos = new Set(targets.map((target) => target.repo));
-  const [repo] = repos;
-  return { kind: 'target', owner, repo: repos.size === 1 ? repo : undefined };
+  const repos = [...new Set(targets.flatMap((target) => (target.repo === undefined ? [] : [target.repo])))];
+  return { kind: 'target', owner, repos };
+}
+
+/** The key for the picked target: the one repository's own (else its owner's), the owner's, or the owner's for several repositories none of which has its own. */
+function accessOf(picked: Picked, keys: GhKeys): Promise<RepoAccess | NoAccessError> {
+  const [repo] = picked.repos;
+  if (repo === undefined) {
+    return keys.accessForOwner(picked.owner);
+  }
+  return picked.repos.length === 1 ? keys.accessFor(repo) : keys.accessForRepos(picked.owner, picked.repos);
 }
 
 /** Why a write is left to teamrig's own commands: it may land on one of the team's repositories. */
@@ -251,7 +292,7 @@ export async function ghPass(args: readonly string[], ports: GhPassPorts): Promi
   if (write !== undefined) {
     return refused(write);
   }
-  const access = picked.repo === undefined ? await ports.keys.accessForOwner(picked.owner) : await ports.keys.accessFor(picked.repo);
+  const access = await accessOf(picked, ports.keys);
   if (access instanceof NoAccessError) {
     return refused(access.message);
   }

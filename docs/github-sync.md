@@ -103,7 +103,12 @@ reads the repository's own token first and its owner's token only when none is s
 read stops that repository with a `FAILED` line: the owner's token, which may reach more, never stands in for it.
 The `ACCESS` line names which one a command used (`ACCESS acme/web: read with the token saved as
 teamrig-gh-acme.web`). Only a person saving or removing a token changes which one reaches a repository: no config
-maps repositories to tokens.
+maps repositories to tokens. A `teamrig gh` run that reaches several repositories of one owner (two `-R` values, or a
+folder with two remotes of that owner) is refused when any of them has a token of its own: name one with `-R`.
+
+A repository token changes which token teamrig picks; it does not cap what the owner's token can reach. For the
+repository to really have fewer rights, leave it out of the owner token's repository selection on GitHub too, since
+a call that reaches the owner as a whole (such as a GraphQL query) runs on the owner's token.
 
 ### Create a token
 

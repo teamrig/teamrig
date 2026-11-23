@@ -164,14 +164,65 @@ describe('ghPass: the key of the owner a gh call reaches (T4897)', () => {
     one.credentials.saves('teamrig-gh-globex.api', 'api-key');
     await ghPass(['pr', 'view', '5', '-R', 'Globex/API'], one.ports);
     await ghPass(['api', 'repos/globex/api/pulls'], one.ports);
-    assert.deepEqual(one.programs.ghRuns().map((run) => run.env?.['GH_TOKEN']), ['api-key', 'api-key']);
+    await ghPass(['api', 'repos/globex/api.git/issues'], one.ports);
+    assert.deepEqual(one.programs.ghRuns().map((run) => run.env?.['GH_TOKEN']), ['api-key', 'api-key', 'api-key']);
 
     const more = setup();
     more.credentials.saves('teamrig-gh-globex.api', 'api-key');
-    await ghPass(['pr', 'list', '-R', 'globex/api', '-R', 'globex/site'], more.ports);
+    await ghPass(['pr', 'list', '-R', 'globex/site', '-R', 'globex/docs'], more.ports);
     await ghPass(['api', 'orgs/globex/teams'], more.ports);
     assert.deepEqual(more.programs.ghRuns().map((run) => run.env?.['GH_TOKEN']), [ownerToken('globex'), ownerToken('globex')]);
     assert.ok(!more.credentials.reads.includes('teamrig-gh-globex.api'));
+  });
+
+  it('refuses a call reaching several repositories of one owner when one has its own key, never reading the owner’s', async () => {
+    const flags = setup();
+    flags.credentials.saves('teamrig-gh-globex.api', 'api-key');
+    assert.match(refusalOf(await ghPass(['pr', 'list', '-R', 'globex/site', '-R', 'globex/api'], flags.ports)), /globex\/api has a key of its own/u);
+    assert.ok(!flags.credentials.reads.includes('teamrig-gh-globex'));
+    assert.equal(flags.programs.ghRuns().length, 0);
+
+    const folder = setup();
+    folder.credentials.saves('teamrig-gh-acme.web', 'web-key');
+    folder.programs.remotes = 'origin\thttps://github.com/acme/web.git (fetch)\nfork\thttps://github.com/acme/web-fork.git (fetch)\n';
+    assert.match(refusalOf(await ghPass(['issue', 'list'], folder.ports)), /acme\/web has a key of its own/u);
+    assert.equal(folder.programs.ghRuns().length, 0);
+
+    const locked = setup();
+    locked.credentials.failsOn('teamrig-gh-globex.api', 'the keyring is locked');
+    assert.match(refusalOf(await ghPass(['pr', 'list', '-R', 'globex/site', '-R', 'globex/api'], locked.ports)), /could not read teamrig-gh-globex\.api/u);
+    assert.ok(!locked.credentials.reads.includes('teamrig-gh-globex'));
+    assert.equal(locked.programs.ghRuns().length, 0);
+  });
+
+  it('refuses a gh api path with a `.`, `..` or `%` segment, or a repos/ path naming no repository, before any key is read', async () => {
+    for (const path of ['repos/globex/x/../api', 'repos/globex/%61pi', 'repos/globex/./api/pulls', 'repos/glo$bex/api']) {
+      const { programs, credentials, ports } = setup();
+      refusalOf(await ghPass(['api', path], ports));
+      assert.deepEqual(credentials.reads, [], path);
+      assert.equal(programs.ghRuns().length, 0, path);
+    }
+  });
+
+  it('refuses a -R, gh repo or GH_REPO value on a host other than github.com, and a folder with a *.ghe.com remote', async () => {
+    for (const [args, env] of [
+      [['pr', 'list', '-R', 'x.ghe.com/acme/web'], {}],
+      [['pr', 'list', '-R', 'https://x.ghe.com/acme/web'], {}],
+      [['repo', 'view', 'x.ghe.com/acme/web'], {}],
+      [['issue', 'list'], { GH_REPO: 'x.ghe.com/acme/web' }],
+    ] as const) {
+      const { programs, credentials, ports } = setup({ env });
+      refusalOf(await ghPass(args, ports));
+      assert.deepEqual(credentials.reads, [], args.join(' '));
+      assert.equal(programs.ghRuns().length, 0, args.join(' '));
+    }
+    const github = setup();
+    assert.deepEqual(await ghPass(['pr', 'list', '-R', 'github.com/globex/api'], github.ports), { kind: 'ran', ok: true });
+
+    const tenant = setup();
+    tenant.programs.remotes = 'origin\thttps://github.com/acme/web.git (fetch)\nwork\thttps://x.ghe.com/acme/web.git (fetch)\n';
+    assert.match(refusalOf(await ghPass(['issue', 'list'], tenant.ports)), /\*\.ghe\.com/u);
+    assert.deepEqual(tenant.credentials.reads, []);
   });
 
   it('refuses a call whose repository key is saved but cannot be read, never running on the owner’s key', async () => {

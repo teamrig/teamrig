@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
-import { NoAccessError, repoOwner, RepoTokens, TokenMissingError, TokenReadError } from './tokens.ts';
+import { NoAccessError, OwnKeyError, repoOwner, RepoTokens, TokenMissingError, TokenReadError } from './tokens.ts';
 
 const ENV = { HOME: '/u' };
 
@@ -59,6 +59,24 @@ describe('RepoTokens', () => {
     assert.ok(!(access instanceof NoAccessError));
     assert.equal(access.scope, 'acme');
     assert.deepEqual(store.reads, ['teamrig-gh-acme']);
+  });
+
+  it("gives several repositories of one owner the owner's key only when none has a key of its own", async () => {
+    const none = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token');
+    const owner = await new RepoTokens(none, ENV).accessForRepos('Acme', ['acme/web', 'acme/api']);
+    assert.ok(!(owner instanceof NoAccessError));
+    assert.equal(owner.scope, 'acme');
+    assert.deepEqual(none.reads, ['teamrig-gh-acme.web', 'teamrig-gh-acme.api', 'teamrig-gh-acme']);
+
+    const own = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token').saves('teamrig-gh-acme.api', 'api-token');
+    const refused = await new RepoTokens(own, ENV).accessForRepos('acme', ['acme/web', 'acme/api']);
+    assert.ok(refused instanceof OwnKeyError);
+    assert.match(refused.message, /it reaches acme\/web, acme\/api, and acme\/api has a key of its own/u);
+    assert.ok(!own.reads.includes('teamrig-gh-acme'));
+
+    const locked = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token').failsOn('teamrig-gh-acme.web', 'the keyring is locked');
+    assert.ok(await new RepoTokens(locked, ENV).accessForRepos('acme', ['acme/web', 'acme/api']) instanceof TokenReadError);
+    assert.deepEqual(locked.reads, ['teamrig-gh-acme.web']);
   });
 
   it('gives no access, never the gh login, when no key is saved for the owner', async () => {

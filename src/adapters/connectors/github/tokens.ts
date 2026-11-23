@@ -43,6 +43,15 @@ export class TokenMissingError extends NoAccessError {
   }
 }
 
+/** A call reaches several repositories of one owner, and one of them has a key of its own, which the owner's key would stand in for. */
+export class OwnKeyError extends NoAccessError {
+  override readonly name = 'OwnKeyError';
+
+  constructor(repos: readonly string[], repo: string) {
+    super(`it reaches ${repos.join(', ')}, and ${repo} has a key of its own, so the owner's key may not stand in for it; name one repository with \`-R <owner>/<name>\``);
+  }
+}
+
 /** The owner of `owner/name`, in lowercase. */
 export function repoOwner(repo: string): string {
   return repo.slice(0, repo.indexOf('/')).toLowerCase();
@@ -78,6 +87,28 @@ export class RepoTokens {
   accessForOwner(name: string): Promise<RepoAccess | NoAccessError> {
     const owner = name.toLowerCase();
     return this.access(owner, [ownerCandidate(owner)]);
+  }
+
+  /**
+   * The access to several repositories of `owner` at once through the owner's key, used only when none of them has a
+   * key of its own: a repository key that is saved, or that the store could not read, refuses the call, since the
+   * wider key would stand in for it.
+   */
+  async accessForRepos(name: string, repos: readonly string[]): Promise<RepoAccess | NoAccessError> {
+    const owner = name.toLowerCase();
+    const narrow = repos.flatMap((repo): KeyCandidate[] => {
+      const credential = repoOwner(repo) === owner ? repoTokenName(repo) : undefined;
+      return credential === undefined ? [] : [{ scope: repo.toLowerCase(), credential }];
+    });
+    const own = narrow.length === 0 ? { kind: 'missing' as const } : await pickKey(this.store, narrow);
+    switch (own.kind) {
+      case 'found':
+        return new OwnKeyError(repos, own.scope);
+      case 'failed':
+        return new TokenReadError(own.credential, this.store.label, own.reason, this.store.saveCommand(own.credential));
+      case 'missing':
+        return this.accessForOwner(owner);
+    }
   }
 
   private async access(owner: string, candidates: readonly KeyCandidate[]): Promise<RepoAccess | NoAccessError> {
