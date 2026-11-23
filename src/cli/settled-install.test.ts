@@ -7,6 +7,7 @@ import { bareHost } from '../testing/bare-host.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FakePluginStore } from '../testing/fake-plugin-store.ts';
 import { SHIPPED_HOST } from '../testing/host.ts';
+import type { HostSource } from '../composition/host-ports.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { installStateOf, REOPEN_SETTLE_MS, settleWaitText, type InstallState } from './settled-install.ts';
 
@@ -74,6 +75,13 @@ describe('installStateOf', () => {
     const store = await storeOf('{"plugins": ');
     store.pluginStore.date(LIST, store.clock.now());
     assert.deepEqual(await installStateOf({ ...store, userHome: HOME, host: () => bareHost(), platform: 'linux' }, PROJECT), { kind: 'settled' });
+  });
+
+  it('settles on a host that keeps a plugin store but names none of its folders: there is no list to read', async () => {
+    const store = await storeOf('{"plugins": ');
+    store.pluginStore.date(LIST, store.clock.now());
+    const host: HostSource = (given) => ({ ...SHIPPED_HOST(given), paths: bareHost().paths });
+    assert.deepEqual(await installStateOf({ ...store, userHome: HOME, host, platform: 'linux' }, PROJECT), { kind: 'settled' });
   });
 
   it('holds while any part of the store an install writes changed under 30 s ago, saying how long ago', async () => {
