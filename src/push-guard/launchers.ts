@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { decodePrompt } from '../open/prompt.ts';
 import { splitEnvString } from './program-split.ts';
 import { assignedWords, isExpressionHead, parseShell, type ShellDialect, type ShellWord } from './tokenizer.ts';
 
@@ -192,7 +193,7 @@ const CMD_START_VALUED: ReadonlySet<string> = new Set(['/node', '/affinity', '/m
  * name of `queue` (T1308), stays: teamrig refuses it now, but the week's transcripts the budget reads for misses still
  * hold it, and an older teamrig on the path would still run what it wraps, so the guards keep reading that command.
  */
-const TEAMRIG_RUNNERS: ReadonlySet<string> = new Set(['queue', 'heavy', 'test']);
+const TEAMRIG_RUNNERS: ReadonlySet<string> = new Set(['queue', 'heavy', 'test', 'redact-exec']);
 /** The shell Node's `spawn` starts with `shell: true`, which runs a teamrig runner's command given as one word. */
 export const SPAWN_SHELL: ShellDialect = process.platform === 'win32' ? 'cmd' : 'bash';
 
@@ -660,8 +661,27 @@ class LaunchReader {
     if (runner && (end === -1 ? args : args.slice(0, end)).some((arg) => arg.dynamic)) {
       return { kind: 'opaque', reason: 'where the command teamrig runs starts is only known when it runs', gated: true, command: { program: head, args } };
     }
-    if (!runner || end === -1) {
+    if (!runner) {
       return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
+    }
+    const shell = subcommand.text === 'redact-exec' ? redactExecShell(args) : SPAWN_SHELL;
+    if (end === -1) {
+      if (subcommand.text !== 'redact-exec') {
+        return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
+      }
+      const encoded = flagValue(args, '--encoded-command');
+      if (encoded === undefined) {
+        return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
+      }
+      if (encoded.dynamic) {
+        return { kind: 'opaque', reason: 'the encoded command redact-exec runs is only known when it runs', gated: true, command: { program: head, args } };
+      }
+      const decoded = decodePrompt(encoded.text);
+      if (decoded === undefined) {
+        return { kind: 'opaque', reason: 'the encoded command redact-exec runs cannot be decoded', gated: true, command: { program: head, args } };
+      }
+      this.runner = true;
+      return this.script({ text: decoded, dynamic: false }, shell, false);
     }
     const words = args.slice(end + 1);
     const [only] = words;
@@ -670,11 +690,30 @@ class LaunchReader {
     }
     this.runner = true;
     if (words.length === 1) {
-      return this.script(only, SPAWN_SHELL, false);
+      return this.script(only, shell, false);
     }
     this.called = true;
     return { kind: 'next', words };
   }
+}
+
+function flagValue(args: readonly ShellWord[], flag: string): ShellWord | undefined {
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === undefined || arg.dynamic) continue;
+    if (arg.text === flag) return args[i + 1];
+    if (arg.text.startsWith(`${flag}=`)) return { text: arg.text.slice(flag.length + 1), dynamic: false };
+  }
+  return undefined;
+}
+
+function redactExecShell(args: readonly ShellWord[]): ShellDialect {
+  const value = flagValue(args, '--shell');
+  if (value === undefined || value.dynamic) return SPAWN_SHELL;
+  if (value.text === 'powershell') return 'powershell';
+  if (value.text === 'cmd') return 'cmd';
+  if (value.text === 'bash' || value.text === 'sh') return 'bash';
+  return SPAWN_SHELL;
 }
 
 /** cmd's `if [/i] [not] exist X command`, `if a==b command`, `if a EQU b command`: the words of the command it runs. */
