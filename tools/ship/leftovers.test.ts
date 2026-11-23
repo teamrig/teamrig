@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
 import type { Gh } from './github.ts';
 import {
@@ -224,8 +224,12 @@ describe('against a real origin', () => {
    * task's version raise, so t5-new, t5-old rebased onto it, raises the version from another number and
    * builds another dist. t5-new lands on main; t6-work holds a change main lacks; t7-merge merges t6-work; t9-done is an ancestor of main.
    */
-  beforeEach(() => {
-    repo = new TempRepo('leftovers').init();
+  // Built once with git and copied per test (T5032): about 30 git runs each test would otherwise repeat. The bare
+  // origin sits in `outside`, so each copy has its own and re-points its remote there.
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('leftovers-template').init();
     origin = join(repo.outside, 'origin.git');
     repo.git('init', '-q', '--bare', origin);
     repo.git('remote', 'add', 'origin', origin);
@@ -252,8 +256,18 @@ describe('against a real origin', () => {
     repo.git('checkout', '-q', 'main');
     repo.git('push', '-q', 'origin', 'main', 't5-old', 't5-new', 't6-work', 't7-merge', 't9-done');
     repo.git('remote', 'set-head', 'origin', 'main');
+    template = repo;
   });
+
+  beforeEach(() => {
+    repo = new TempRepo('leftovers').copyFrom(template);
+    origin = join(repo.outside, 'origin.git');
+    repo.git('remote', 'set-url', 'origin', origin);
+  });
+
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   const shaOf = (branch: string): string => repo.git('rev-parse', branch).trim();
   const originBranches = (): string[] => repo.git('--git-dir', origin, 'for-each-ref', '--format=%(refname:lstrip=2)', 'refs/heads/').trim().split('\n').sort();
