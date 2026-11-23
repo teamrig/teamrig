@@ -9,8 +9,12 @@ const CLI = fileURLToPath(new URL('./publish-cli.ts', import.meta.url));
 describe('release publish CLI', () => {
   let repo: TempRepo;
 
+  /** Main's catalog, which installs from `release`. */
+  const CATALOG = `${JSON.stringify({ name: 'teamrig', plugins: [{ name: 'teamrig', source: { source: 'git-subdir', url: 'https://example.com/t.git', path: 'plugins/teamrig', ref: 'release' } }] }, null, 2)}\n`;
+
   beforeEach(() => {
     repo = new TempRepo('release-cli').init();
+    repo.write('.claude-plugin/marketplace.json', CATALOG);
   });
 
   afterEach(() => repo.remove());
@@ -50,6 +54,7 @@ describe('release publish CLI', () => {
     const commit = repo.git('ls-remote', origin, 'refs/heads/preview').split('\t')[0] ?? '';
     assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${stable} ${source}`);
     assert.equal(repo.git('ls-remote', origin, 'refs/heads/release').split('\t')[0], stable);
+    assert.equal(repo.git('show', `${commit}:.claude-plugin/marketplace.json`), CATALOG.replace('"ref": "release"', '"ref": "preview"'));
   });
 
   it('exits 2 without a version or a source', () => {
