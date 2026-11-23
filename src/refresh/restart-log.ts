@@ -51,22 +51,29 @@ export class RestartLog {
   }
 }
 
-/** A restart-log row as `check` reads it: when it ended, its result's kind and its `why` when it has one. */
+/**
+ * A restart-log row as `check` reads it: when it ended, its result's kind, its `why` when it has one, and why the
+ * session's process lookup failed when that stopped the restart.
+ */
 export interface RestartRow {
   readonly session: string;
   readonly endedAt: string;
   readonly kind: string;
   readonly why: string | null;
+  readonly lookupFailure: string | null;
 }
 
 function rowOf(line: string): RestartRow | undefined {
   const record = parseObject(line.trim());
-  const result = record === undefined ? undefined : recordField(record, 'result');
-  const session = record === undefined ? undefined : stringField(record, 'session');
-  const endedAt = record === undefined ? undefined : stringField(record, 'endedAt');
+  if (record === undefined) {
+    return undefined;
+  }
+  const result = recordField(record, 'result');
+  const session = stringField(record, 'session');
+  const endedAt = stringField(record, 'endedAt');
   const kind = result === undefined ? undefined : stringField(result, 'kind');
   if (result === undefined || session === undefined || endedAt === undefined || kind === undefined) {
     return undefined;
   }
-  return { session, endedAt, kind, why: stringField(result, 'why') ?? null };
+  return { session, endedAt, kind, why: stringField(result, 'why') ?? null, lookupFailure: stringField(record, 'lookupFailure') ?? null };
 }
