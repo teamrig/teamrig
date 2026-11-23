@@ -25,13 +25,21 @@ interface GhRead {
 /** A word gh's line takes as one argument with no quotes in every dialect. */
 const PLAIN_WORD = /^[\w@%+=:,./#-]+$/u;
 
+/**
+ * A word quoted for the program cmd starts, which splits its line as a C runtime does: a run of backslashes is
+ * doubled where a quote follows it, the closing quote included, and each quote gets one more, so it stays plain.
+ */
+function runtimeQuoted(text: string): string {
+  return `"${text.replace(/(\\*)"/gu, '$1$1\\"').replace(/\\+$/u, '$&$&')}"`;
+}
+
 /** A word written back into a `teamrig gh` line for the dialect it was run in; a word only known when it runs stays as written. */
 function wordFor(word: ShellWord, dialect: ShellDialect): string {
   if (word.dynamic || PLAIN_WORD.test(word.text)) {
     return word.text;
   }
   if (dialect === 'cmd') {
-    return `"${word.text.replace(/"/gu, '\\"')}"`;
+    return runtimeQuoted(word.text);
   }
   return `'${word.text.replace(/'/gu, dialect === 'powershell' ? "''" : `'\\''`)}'`;
 }

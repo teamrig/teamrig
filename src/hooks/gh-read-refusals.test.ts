@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runsOf } from '../package-guard/programs.ts';
+import { splitLine } from '../push-guard/native-line.ts';
+import type { ShellDialect } from '../push-guard/tokenizer.ts';
 import { ghReadRefusals } from './gh-read-refusals.ts';
 import type { GhWriteEnv } from './gh-write-refusals.ts';
 
@@ -14,12 +16,12 @@ const TEAM: GhWriteEnv = {
 /** The same team, run from a contributor's fork. */
 const FORK: GhWriteEnv = { ...TEAM, remotesOf: () => ['someone/fork'] };
 
-function refusals(line: string, env: GhWriteEnv = TEAM, dialect: 'bash' | 'powershell' = 'bash'): string[] {
+function refusals(line: string, env: GhWriteEnv = TEAM, dialect: ShellDialect = 'bash'): string[] {
   return ghReadRefusals(runsOf(line, { cwd: 'C:/w', home: 'C:/u', dialect }), env);
 }
 
 /** The one refusal a line gets. */
-function refusal(line: string, env: GhWriteEnv = TEAM, dialect: 'bash' | 'powershell' = 'bash'): string {
+function refusal(line: string, env: GhWriteEnv = TEAM, dialect: ShellDialect = 'bash'): string {
   const found = refusals(line, env, dialect);
   assert.equal(found.length, 1, `${line}: ${found.join(' | ')}`);
   return found[0] ?? '';
@@ -66,6 +68,24 @@ describe('ghReadRefusals: a read on a team owner (T4896)', () => {
     assert.ok(refusal("gh issue list -R acme/web --search 'is:open label:bug'").endsWith("`teamrig gh -- issue list -R acme/web --search 'is:open label:bug'`."));
     assert.ok(refusal('gh issue list -R acme/web --search "it\'s"').endsWith("`teamrig gh -- issue list -R acme/web --search 'it'\\''s'`."));
     assert.ok(refusal('gh issue list -R acme/web --search "it\'s"', TEAM, 'powershell').endsWith("`teamrig gh -- issue list -R acme/web --search 'it''s'`."));
+  });
+
+  it('writes a cmd word back so the program it starts reads the same word, a backslash before the closing quote included', () => {
+    // cmd keeps each backslash and drops the quotes, so these lines give the words `C:\my dir\`, `a\\ b` and `x\ y`;
+    // the route must hand the program, which splits its line as a C runtime does, those same words.
+    for (const [quoted, word] of [
+      ['"C:\\my dir\\"', 'C:\\my dir\\'],
+      ['"a\\\\ b"', 'a\\\\ b'],
+      ['x\\" y"', 'x\\ y'],
+    ] as const) {
+      const route = /`teamrig gh -- (.*)`\.$/u.exec(refusal(`gh issue list -R acme/web --search ${quoted}`, TEAM, 'cmd'))?.[1];
+      assert.ok(route !== undefined, quoted);
+      for (const runtime of ['ucrt', 'msvcrt'] as const) {
+        const units: readonly string[] = [...route];
+        const words: readonly string[] = splitLine(units, runtime).map((word) => word.filter((unit): unit is string => typeof unit === 'string').join(''));
+        assert.equal(words.at(-1), word, `${runtime} reads ${route}`);
+      }
+    }
   });
 
   it('reads a program only known when it runs as gh only when its words name a team owner', () => {
