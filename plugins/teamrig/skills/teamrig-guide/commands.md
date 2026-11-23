@@ -1379,8 +1379,10 @@ register refused a step (a `SKIPPED` line each), else 0.
 Other trackers: the same run first imports each other tracker the team wrote a `connectors.<id>` section for; the
 connector's page names its keys and the saved token it reads. Its tasks get that tracker's id as their source and a
 `<id>:<key>` ref, and its own `PREVIEW` or `WROTE` line; only open and closed state, title, description and priority
-follow it, as for repositories. A tracker that cannot yet say who is inside has every issue left out (a `LEFT OUT`
-line names them by key) until its trust rule ships. A section the connector refuses gets a `REFUSED` line, one it
+follow it, as for repositories. An issue becomes a task only when the tracker's trust rule (`connectors.<id>.trust`)
+lets its reporter in: a `TRUST` line per reason counts the issues let in or kept out, and a `REPORTER` line names each
+reporter let in, marked `NEW` until a `--yes` takes it. A tracker that cannot yet say who is inside has every issue
+left out (a `LEFT OUT` line names them by key). A section the connector refuses gets a `REFUSED` line, one it
 cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
 tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
 

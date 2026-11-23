@@ -167,9 +167,43 @@ that no one accepted yet (at most 20, then how many more); their text is never p
 acme/web` reads one repository only.
 
 The same run first imports any other tracker your team config has a `connectors` section for: today Jira's projects
-(`connectors.jira`), each with its own `ACCESS`, `REPO` and `PREVIEW` lines and tasks of source `jira`. Until Jira's
-trust rule ships, every Jira issue is left out, so it adds no task yet. A Jira section that is wrong or cannot be read
-gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub alone.
+(`connectors.jira`), each with its own `ACCESS`, `REPO` and `PREVIEW` lines and tasks of source `jira`. A Jira section
+that is wrong or cannot be read gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub
+alone.
+
+A Jira issue becomes a task only when its trust rule lets it in, the way a GitHub issue needs an author inside the
+repository. By default a reporter is inside when their account is a site account (Jira's `atlassian` kind, not a
+`customer` or an `app`), and only on a project anonymous users cannot browse: on one anyone may browse, a `NOTE` line
+says so and no default applies, so only a rule the team wrote lets anyone in. `connectors.jira.trust` sets the rule:
+
+```json
+"trust": {
+  "inside": [{ "accountType": ["atlassian"] }],
+  "never": [{ "accounts": ["5b10ac8d82e05b22cc7d4ef5"] }],
+  "edits": "inside",
+  "projects": { "ENG": { "inside": [{ "accounts": ["5b10a2844c20165700ede21g"] }] } }
+}
+```
+
+- `inside` lists the matchers that let a reporter in: `accountType` names account kinds, `accounts` names account ids
+  (a display name is never a matcher; anyone can copy one).
+- `never` keeps a reporter out whatever `inside` says; a project's `never` adds to the site's.
+- `edits` (`inside` by default) drops an issue's trust when someone not inside edited its title or body; `any` keeps
+  it.
+- `projects.<KEY>` gives one project its own `inside`, `never` or `edits`.
+
+An anonymous or hidden reporter is always kept out, and so is an issue whose edit history could not be read whole: a
+fact the import cannot read never lets an issue in. A wrong `trust` key is refused and reads as nothing inside, never
+as the wider default. The preview says what the rule did with one `TRUST` line per reason and a `REPORTER` line for
+each reporter it let in, marking `NEW` those no `--yes` took yet:
+
+```text
+TRUST acme/eng: 2 let in, the reporter matches inside (accountType atlassian): jira:ENG-1 jira:ENG-2
+TRUST acme/eng: 1 kept out, the reporter matches never (accounts): jira:ENG-3
+REPORTER acme/eng: 5b10a2844c20165700ede21g (Dana Reporter) let in 2 issue(s), NEW since the last --yes
+```
+
+`teamrig issue sync --yes` takes the reporters it lists, so the next preview marks only reporters who are new since.
 
 Another tracker's import reads only the team's issues by default: those assigned to the signed-in account or to a
 person `connectors.jira.people` names, and those carrying a label of `sync.scope.labels` (`teamrig`) or the accept
