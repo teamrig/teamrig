@@ -58,15 +58,17 @@ describe('runCli: hook update-check', () => {
     const repo = join(KIT, 'updates', 'kit.git');
     const hooks = new FakeHooks()
       .answer(['git', 'remote', 'get-url', 'origin'], { lines: ['https://example.test/owner/kit.git'] })
-      .answer(['git', 'ls-remote', 'origin', 'HEAD'], { lines: ['abc123\tHEAD'] })
+      .answer(['git', 'ls-remote', 'origin', 'HEAD', 'refs/heads/*'], { lines: ['abc123\tHEAD'] })
       .answer(['git', 'show', 'FETCH_HEAD:.claude-plugin/marketplace.json'], { lines: [MARKETPLACE] })
       .answer(['git', 'show', 'FETCH_HEAD:plugins/teamrig/.claude-plugin/plugin.json'], { lines: ['{"version": "0.340.0"}'] });
     assert.deepEqual(answerOf(await run(kit, 'update-check', hooks)), {
       kind: 'notices',
       notices: [{ plugin: 'teamrig', marketplace: 'kit', installed: '0.332.0', newest: '0.340.0' }],
     });
-    assert.equal(hooks.ran[0]?.cwd, CLONE);
-    assert.ok(hooks.ran.slice(1).every((request) => request.cwd === repo));
+    // Only the clone's remote and its branch are read in Claude Code's clone; every other call runs in teamrig's own.
+    const inClone = hooks.ran.filter((request) => request.cwd === CLONE).map((request) => request.argv.join(' '));
+    assert.deepEqual(inClone, ['git remote get-url origin', 'git symbolic-ref -q --short HEAD']);
+    assert.ok(hooks.ran.every((request) => request.cwd === CLONE || request.cwd === repo));
     assert.ok(hooks.ran.every((request) => request.env['GIT_TERMINAL_PROMPT'] === '0'));
   });
 

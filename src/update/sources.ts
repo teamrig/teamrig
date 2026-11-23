@@ -53,16 +53,26 @@ export function trackedInstallsOf(installs: readonly PluginInstall[]): readonly 
 }
 
 /**
- * The folder of `plugin` in a marketplace, relative to its root and with no `./` or trailing slash (`plugins/teamrig`;
- * `` for the root itself); undefined when the marketplace does not list it there, or names another kind of source.
+ * Where a marketplace installs a plugin from: its folder, relative to the repository's root with no `./` or trailing
+ * slash (`plugins/teamrig`; `` for the root itself), and for a `git-subdir` source the repository and branch it names.
+ */
+export interface PluginSource {
+  readonly folder: string;
+  /** The branch a `git-subdir` source installs (`release`, `preview`); undefined for the marketplace's own commit. */
+  readonly ref: string | undefined;
+  /** The repository a `git-subdir` source names, as written; undefined for the marketplace's own repository. */
+  readonly url: string | undefined;
+}
+
+/**
+ * Where `plugin` is installed from in a marketplace; undefined when the marketplace does not list it, or names another
+ * kind of source.
  *
  * A `git-subdir` source (`{"source": "git-subdir", "url": ..., "path": "plugins/teamrig", "ref": "release"}`) installs
- * the folder `path` of another branch. Its folder is read here in the marketplace's own commit all the same: each
- * tracked plugin's release branch is a commit of its main with the build on top (tools/release/publish.ts), so main's
- * plugin.json names the released version. A release pull request raises main's copy minutes before its branch is
- * published; an update asked in those minutes finds the version it has, and the next check shows the band again.
+ * the folder `path` of the branch `ref`. With release channels (T5133) main runs ahead of every channel's branch, so
+ * src/update/check.ts reads the version published on that branch, never in the marketplace's own commit.
  */
-export function pluginFolderOf(marketplaceText: string, plugin: string): string | undefined {
+export function pluginSourceOf(marketplaceText: string, plugin: string): PluginSource | undefined {
   const marketplace = parsed(marketplaceText);
   const plugins = isRecord(marketplace) ? marketplace['plugins'] : undefined;
   if (!Array.isArray(plugins)) {
@@ -70,15 +80,52 @@ export function pluginFolderOf(marketplaceText: string, plugin: string): string 
   }
   for (const entry of plugins) {
     if (isRecord(entry) && entry['name'] === plugin) {
-      const source = entry['source'];
-      if (typeof source === 'string') {
-        return source.startsWith('./') ? folderIn(source.slice(2)) : undefined;
-      }
-      const path = isRecord(source) && source['source'] === 'git-subdir' ? source['path'] : undefined;
-      return typeof path === 'string' && path !== '' ? folderIn(path.replace(/^\.\//, '')) : undefined;
+      return sourceOf(entry['source']);
     }
   }
   return undefined;
+}
+
+function sourceOf(source: unknown): PluginSource | undefined {
+  if (typeof source === 'string') {
+    const folder = source.startsWith('./') ? folderIn(source.slice(2)) : undefined;
+    return folder === undefined ? undefined : { folder, ref: undefined, url: undefined };
+  }
+  if (!isRecord(source) || source['source'] !== 'git-subdir') {
+    return undefined;
+  }
+  const { path, ref, url } = source;
+  const folder = typeof path === 'string' && path !== '' ? folderIn(path.replace(/^\.\//, '')) : undefined;
+  if (folder === undefined) {
+    return undefined;
+  }
+  return {
+    folder,
+    ref: typeof ref === 'string' && isBranchName(ref) ? ref : undefined,
+    url: typeof url === 'string' && url.trim() !== '' ? url : undefined,
+  };
+}
+
+/** A name git may be asked for as `refs/heads/<name>`: letters, digits, `.`, `_`, `/` and `-`, no leading `-` or `..`. */
+export function isBranchName(name: string): boolean {
+  return /^[A-Za-z0-9._/-]+$/.test(name) && !name.startsWith('-') && !name.includes('..') && !name.endsWith('/');
+}
+
+/**
+ * Whether two repository addresses name the same repository: `https://github.com/owner/kit.git`, `owner/kit` and
+ * `git@github.com:owner/kit` all read as `owner/kit`, in any letter case. A `git-subdir` branch is fetched through
+ * the marketplace's own bare repository, so only a branch of that repository is read.
+ */
+export function sameRepository(a: string, b: string): boolean {
+  const key = (address: string): string =>
+    address
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]+@)?[^/]+\//, '')
+      .replace(/^[^@/:]+@[^:/]+:/, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/, '');
+  return key(a) !== '' && key(a) === key(b);
 }
 
 /** A relative folder without its trailing slash; undefined for one that starts at the root, climbs out or uses `\`. */

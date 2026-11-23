@@ -1605,14 +1605,15 @@ Claude Code does not check teamrig's marketplace for updates by itself, so a per
 teamrig-pane until they happened to update it. In each interactive tab, a minute after the mod loads and then every
 10 minutes, the mod runs [`teamrig hook update-check`](commands.md#teamrig-hook-update-check). The CLI asks the network
 at most every 6 hours across the machine, and the first tab to look claims that check, so tabs that look together ask
-once: for a cloned marketplace, `git ls-remote` of its `origin` names the newest commit, and only a commit not seen
-before is fetched, one commit deep and without file contents, into a bare repository teamrig keeps under
-`~/.teamrig/updates/` (never Claude Code's own clone), which `git gc` keeps from growing; a directory marketplace is
-read in place. The version is the `.claude-plugin/plugin.json` one in the folder the marketplace's entry names: a
-relative `./` source, or the `path` of a `git-subdir` source, read in the marketplace's own commit, since a release
-branch is its main's commit with the build on top. The answer is kept in `~/.teamrig/updates/check.json`, and every
-other look reads that file only. A marketplace that cannot be asked (offline, no access) keeps what was known, and
-nothing shows.
+once: for a cloned marketplace, `git ls-remote` of its `origin` names the newest commit of the branch the clone is on
+and of each branch, and only a commit not seen before is fetched, one commit deep and without file contents, into a
+bare repository teamrig keeps under `~/.teamrig/updates/` (never Claude Code's own clone), which `git gc` keeps from
+growing; a directory marketplace is read in place. The version is the `.claude-plugin/plugin.json` one in the folder
+the marketplace's entry names: a relative `./` source in the marketplace's own commit, or the `path` of a `git-subdir`
+source on the branch its `ref` names (`release` for stable, `preview`), since main runs ahead of every release
+channel. A `git-subdir` source in another repository than the marketplace's is not read. The answer is kept in
+`~/.teamrig/updates/check.json`, and every other look reads that file only. A marketplace that cannot be asked
+(offline, no access) keeps what was known, and nothing shows.
 
 While a newer version than the installed one is published, the band above the prompt reads, in green,
 `teamrig: teamrig 0.334.0 is out (you run 0.333.0)`, with two buttons, plain and without digits, so a key typed at

@@ -25,6 +25,17 @@ const KNOWN = JSON.stringify({
 const MARKETPLACE = JSON.stringify({ name: 'kit', plugins: [{ name: 'teamrig', source: './plugins/teamrig' }] });
 const pluginJson = (version: string): string => JSON.stringify({ name: 'teamrig', version });
 
+/** A branch of the remote other than its default one. */
+interface Branch {
+  readonly sha: string;
+  readonly version: string;
+  readonly marketplace: string;
+}
+
+/** A marketplace whose teamrig entry installs `plugins/teamrig` from branch `ref` of `url`. */
+const subdirMarketplace = (ref: string, url = 'https://github.com/owner/kit.git'): string =>
+  JSON.stringify({ name: 'kit', plugins: [{ name: 'teamrig', source: { source: 'git-subdir', url, path: 'plugins/teamrig', ref } }] });
+
 /** A git that answers each call from what the remote holds now, and records every call it was asked. */
 class FakeGit implements UpdateGit {
   readonly calls: string[] = [];
@@ -32,9 +43,14 @@ class FakeGit implements UpdateGit {
   version = '0.333.0';
   marketplace = MARKETPLACE;
   online = true;
+  /** The branch Claude Code's clone of the marketplace is on; undefined for a detached HEAD. */
+  cloneBranch: string | undefined;
+  /** The remote's other branches: each one's commit, plugin version and marketplace file. */
+  readonly branches = new Map<string, Branch>();
   /** Runs inside `ls-remote`, while the check is asking the network. */
   duringAsk: (() => Promise<void>) | undefined;
   private readonly files: MemoryFiles;
+  private fetchedRef = 'HEAD';
 
   constructor(files: MemoryFiles) {
     this.files = files;
@@ -47,6 +63,9 @@ class FakeGit implements UpdateGit {
     if (command === 'remote') {
       return where === CLONE ? 'https://example.test/owner/kit.git\n' : undefined;
     }
+    if (command === 'symbolic-ref') {
+      return where === CLONE && this.cloneBranch !== undefined ? `${this.cloneBranch}\n` : undefined;
+    }
     if (command === 'init') {
       await this.files.write(`${where}/HEAD`, 'ref: refs/heads/main\n');
       return '';
@@ -56,17 +75,20 @@ class FakeGit implements UpdateGit {
     }
     if (command === 'ls-remote') {
       await this.duringAsk?.();
-      return this.online ? `${this.sha}\tHEAD\n` : undefined;
+      const heads = [...this.branches].map(([name, branch]) => `${branch.sha}\trefs/heads/${name}\n`);
+      return this.online ? [`${this.sha}\tHEAD\n`, ...heads].join('') : undefined;
     }
     if (command === 'fetch') {
+      this.fetchedRef = args.at(-1) ?? '';
       return this.online ? '' : undefined;
     }
     if (command === 'show') {
+      const branch = this.branches.get(this.fetchedRef.replace(/^refs\/heads\//, ''));
       const path = args[1]?.replace(/^FETCH_HEAD:/, '');
       if (path === '.claude-plugin/marketplace.json') {
-        return this.marketplace;
+        return branch === undefined ? this.marketplace : branch.marketplace;
       }
-      return path === 'plugins/teamrig/.claude-plugin/plugin.json' ? pluginJson(this.version) : undefined;
+      return path === 'plugins/teamrig/.claude-plugin/plugin.json' ? pluginJson(branch?.version ?? this.version) : undefined;
     }
     return undefined;
   }
@@ -97,7 +119,8 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
       `${REPO}: config remote.origin.url https://example.test/owner/kit.git`,
       `${REPO}: config remote.origin.promisor true`,
       `${REPO}: config remote.origin.partialclonefilter blob:none`,
-      `${REPO}: ls-remote origin HEAD`,
+      `${CLONE}: symbolic-ref -q --short HEAD`,
+      `${REPO}: ls-remote origin HEAD refs/heads/*`,
       `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin HEAD`,
       `${REPO}: show FETCH_HEAD:.claude-plugin/marketplace.json`,
       `${REPO}: show FETCH_HEAD:plugins/teamrig/.claude-plugin/plugin.json`,
@@ -105,16 +128,76 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     ]);
     assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)), {
       checkedAt: START,
-      published: { kit: { sha: 'aaa111', versions: { teamrig: '0.333.0' } } },
+      published: { kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' } } },
       dismissed: {},
     });
   });
 
-  it('tells of the newer version a git-subdir entry installs, read from its path in the marketplace (T4355)', async () => {
-    const { git, check } = setup();
-    git.marketplace = JSON.stringify({ name: 'kit', plugins: [{ name: 'teamrig', source: { source: 'git-subdir', url: 'owner/kit', path: 'plugins/teamrig', ref: 'release' } }] });
+  it("reads a git-subdir entry's version on the branch it installs, not main's ahead of it (T5133)", async () => {
+    const { git, files, check } = setup();
+    git.marketplace = subdirMarketplace('release');
+    git.version = '0.340.0';
+    git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
     assert.deepEqual(await check().notices(), [NOTICE]);
-    assert.ok(git.calls.includes(`${REPO}: show FETCH_HEAD:plugins/teamrig/.claude-plugin/plugin.json`));
+    assert.deepEqual(git.of('fetch'), [
+      `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin HEAD`,
+      `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/release`,
+    ]);
+    assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)).published, { kit: { sha: 'aaa111', refs: { release: 'rel111' }, versions: { teamrig: '0.333.0' } } });
+  });
+
+  it('tells nothing while only main is ahead of the installed release', async () => {
+    const { git, check } = setup();
+    git.marketplace = subdirMarketplace('release');
+    git.version = '0.340.0';
+    git.branches.set('release', { sha: 'rel111', version: '0.332.0', marketplace: subdirMarketplace('release') });
+    assert.deepEqual(await check().notices(), []);
+  });
+
+  it('fetches again when only the installed branch moved, and nothing when no branch did', async () => {
+    const { git, clock, check } = setup();
+    git.marketplace = subdirMarketplace('release');
+    git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
+    await check().notices();
+    clock.advance(CHECK_EVERY_MS);
+    await check().notices();
+    assert.equal(git.of('fetch').length, 2, 'nothing moved: no fetch');
+    git.branches.set('release', { sha: 'rel222', version: '0.334.0', marketplace: subdirMarketplace('release') });
+    clock.advance(CHECK_EVERY_MS);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.334.0' }]);
+    assert.equal(git.of('fetch').length, 4);
+  });
+
+  it("reads the marketplace on the branch its clone is on, and the plugin there once (a preview channel's)", async () => {
+    const { git, check } = setup();
+    git.cloneBranch = 'preview';
+    git.marketplace = subdirMarketplace('release');
+    git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
+    git.branches.set('preview', { sha: 'pre111', version: '0.335.0', marketplace: subdirMarketplace('preview') });
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.335.0' }]);
+    assert.ok(git.calls.includes(`${REPO}: ls-remote origin refs/heads/preview refs/heads/*`));
+    assert.deepEqual(git.of('fetch'), [`${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/preview`]);
+  });
+
+  it("tells nothing for a branch the remote lacks, or another repository's branch", async () => {
+    const lacking = setup();
+    lacking.git.marketplace = subdirMarketplace('release');
+    assert.deepEqual(await lacking.check().notices(), []);
+    const other = setup();
+    other.git.marketplace = subdirMarketplace('release', 'https://github.com/other/kit.git');
+    other.git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
+    assert.deepEqual(await other.check().notices(), []);
+    assert.equal(other.git.of('fetch').length, 1);
+  });
+
+  it('reads again a kept answer from before plugins were read on their branches', async () => {
+    const { git, files, check } = setup({ 'teamrig@kit': '0.332.0' }, {
+      [`${UPDATES}/check.json`]: JSON.stringify({ checkedAt: START - CHECK_EVERY_MS, published: { kit: { sha: 'aaa111', versions: { teamrig: '0.340.0' } } }, dismissed: {} }),
+    });
+    git.marketplace = subdirMarketplace('release');
+    git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
+    assert.deepEqual(await check().notices(), [NOTICE]);
+    assert.equal(parseCheckState(files.get(`${UPDATES}/check.json`)).published['kit']?.refs['release'], 'rel111');
   });
 
   it('tells nothing when the published version is the installed one', async () => {
@@ -276,12 +359,16 @@ describe('parseCheckState', () => {
   it('drops fields and entries of another shape', () => {
     const text = JSON.stringify({
       checkedAt: 'soon',
-      published: { kit: { sha: 'a', versions: { teamrig: '1.0.0', bad: 3 } }, broken: { versions: {} } },
+      published: {
+        kit: { sha: 'a', refs: { release: 'r', bad: 1 }, versions: { teamrig: '1.0.0', bad: 3 } },
+        broken: { versions: {} },
+        unbranched: { sha: 'b', versions: { teamrig: '1.0.0' } },
+      },
       dismissed: { teamrig: '1.0.0', other: false },
     });
     assert.deepEqual(parseCheckState(text), {
       checkedAt: undefined,
-      published: { kit: { sha: 'a', versions: { teamrig: '1.0.0' } } },
+      published: { kit: { sha: 'a', refs: { release: 'r' }, versions: { teamrig: '1.0.0' } } },
       dismissed: { teamrig: '1.0.0' },
     });
   });
@@ -295,7 +382,7 @@ describe('isNewer and noticesOf', () => {
   });
 
   it('leaves out an install whose marketplace published nothing for it', () => {
-    const state = { checkedAt: START, published: { kit: { sha: 'a', versions: {} } }, dismissed: {} };
+    const state = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: {} } }, dismissed: {} };
     assert.deepEqual(noticesOf([{ plugin: 'teamrig', marketplace: 'kit', version: '0.1.0' }], state), []);
   });
 });
