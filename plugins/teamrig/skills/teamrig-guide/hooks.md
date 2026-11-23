@@ -1616,8 +1616,9 @@ channel. A `git-subdir` source in another repository than the marketplace's is n
 (offline, no access) keeps what was known, and nothing shows.
 
 While a newer version than the installed one is published, the band above the prompt reads, in green,
-`teamrig: teamrig 0.334.0 is out (you run 0.333.0)`, with two buttons, plain and without digits, so a key typed at
-the prompt never presses one:
+`teamrig: teamrig 0.334.0 (stable) is out (you run 0.333.0)`, naming the release channel the version was read on
+(`stable` for the `release` branch, `preview`; none off a channel's branch), with two buttons, plain and without
+digits, so a key typed at the prompt never presses one:
 
 - **Update** runs [`teamrig hook update-apply`](commands.md#teamrig-hook-update-apply): Claude Code's own
   `claude plugin marketplace update` and `claude plugin update`, so the install lands as `/plugin` would land it, then

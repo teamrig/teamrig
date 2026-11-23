@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PluginInstall } from '../ports/host/index.ts';
 import { shippedPlugin } from '../testing/shipped-plugin.ts';
-import { pluginFilePath, pluginSourceOf, pluginVersionOf, sameRepository, trackedInstallsOf } from './sources.ts';
+import { channelOf, pluginFilePath, pluginSourceOf, pluginVersionOf, sameRepository, trackedInstallsOf } from './sources.ts';
 
 const PLUGIN = shippedPlugin();
 
@@ -102,5 +102,14 @@ describe('pluginFilePath and pluginVersionOf', () => {
     assert.equal(pluginVersionOf('{"version": "0.333.0-beta"}'), undefined);
     assert.equal(pluginVersionOf('{"version": 3}'), undefined);
     assert.equal(pluginVersionOf('nope'), undefined);
+  });
+});
+
+describe('channelOf', () => {
+  it('reads release as the stable channel and preview as the preview one, any other branch as none (T5133)', () => {
+    assert.equal(channelOf('release'), 'stable');
+    assert.equal(channelOf('preview'), 'preview');
+    assert.equal(channelOf('main'), undefined);
+    assert.equal(channelOf(undefined), undefined);
   });
 });

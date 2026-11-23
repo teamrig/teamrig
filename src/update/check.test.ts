@@ -128,7 +128,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     ]);
     assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)), {
       checkedAt: START,
-      published: { kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' } } },
+      published: { kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' }, channels: {} } },
       dismissed: {},
     });
   });
@@ -138,12 +138,14 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     git.marketplace = subdirMarketplace('release');
     git.version = '0.340.0';
     git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
-    assert.deepEqual(await check().notices(), [NOTICE]);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, channel: 'stable' }]);
     assert.deepEqual(git.of('fetch'), [
       `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin HEAD`,
       `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/release`,
     ]);
-    assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)).published, { kit: { sha: 'aaa111', refs: { release: 'rel111' }, versions: { teamrig: '0.333.0' } } });
+    assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)).published, {
+      kit: { sha: 'aaa111', refs: { release: 'rel111' }, versions: { teamrig: '0.333.0' }, channels: { teamrig: 'stable' } },
+    });
   });
 
   it('tells nothing while only main is ahead of the installed release', async () => {
@@ -164,7 +166,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     assert.equal(git.of('fetch').length, 2, 'nothing moved: no fetch');
     git.branches.set('release', { sha: 'rel222', version: '0.334.0', marketplace: subdirMarketplace('release') });
     clock.advance(CHECK_EVERY_MS);
-    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.334.0' }]);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.334.0', channel: 'stable' }]);
     assert.equal(git.of('fetch').length, 4);
   });
 
@@ -174,7 +176,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     git.marketplace = subdirMarketplace('release');
     git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
     git.branches.set('preview', { sha: 'pre111', version: '0.335.0', marketplace: subdirMarketplace('preview') });
-    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.335.0' }]);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.335.0', channel: 'preview' }]);
     assert.ok(git.calls.includes(`${REPO}: ls-remote origin refs/heads/preview refs/heads/*`));
     assert.deepEqual(git.of('fetch'), [`${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/preview`]);
   });
@@ -196,7 +198,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     });
     git.marketplace = subdirMarketplace('release');
     git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
-    assert.deepEqual(await check().notices(), [NOTICE]);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, channel: 'stable' }]);
     assert.equal(parseCheckState(files.get(`${UPDATES}/check.json`)).published['kit']?.refs['release'], 'rel111');
   });
 
@@ -360,7 +362,8 @@ describe('parseCheckState', () => {
     const text = JSON.stringify({
       checkedAt: 'soon',
       published: {
-        kit: { sha: 'a', refs: { release: 'r', bad: 1 }, versions: { teamrig: '1.0.0', bad: 3 } },
+        kit: { sha: 'a', refs: { release: 'r', bad: 1 }, versions: { teamrig: '1.0.0', bad: 3 }, channels: { teamrig: 'stable', bad: 4 } },
+        unlabelled: { sha: 'c', refs: {}, versions: { teamrig: '1.0.0' } },
         broken: { versions: {} },
         unbranched: { sha: 'b', versions: { teamrig: '1.0.0' } },
       },
@@ -368,7 +371,10 @@ describe('parseCheckState', () => {
     });
     assert.deepEqual(parseCheckState(text), {
       checkedAt: undefined,
-      published: { kit: { sha: 'a', refs: { release: 'r' }, versions: { teamrig: '1.0.0' } } },
+      published: {
+        kit: { sha: 'a', refs: { release: 'r' }, versions: { teamrig: '1.0.0' }, channels: { teamrig: 'stable' } },
+        unlabelled: { sha: 'c', refs: {}, versions: { teamrig: '1.0.0' }, channels: {} },
+      },
       dismissed: { teamrig: '1.0.0' },
     });
   });
@@ -382,7 +388,15 @@ describe('isNewer and noticesOf', () => {
   });
 
   it('leaves out an install whose marketplace published nothing for it', () => {
-    const state = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: {} } }, dismissed: {} };
+    const state = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: {}, channels: {} } }, dismissed: {} };
     assert.deepEqual(noticesOf([{ plugin: 'teamrig', marketplace: 'kit', version: '0.1.0' }], state), []);
+  });
+
+  it('names the channel a version was read on, and none when it was read off a channel (T5133)', () => {
+    const install = { plugin: 'teamrig', marketplace: 'kit', version: '0.1.0' };
+    const on = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: { teamrig: '0.2.0' }, channels: { teamrig: 'preview' } } }, dismissed: {} };
+    assert.deepEqual(noticesOf([install], on), [{ plugin: 'teamrig', marketplace: 'kit', installed: '0.1.0', newest: '0.2.0', channel: 'preview' }]);
+    const off = { ...on, published: { kit: { ...on.published.kit, channels: {} } } };
+    assert.deepEqual(noticesOf([install], off), [{ plugin: 'teamrig', marketplace: 'kit', installed: '0.1.0', newest: '0.2.0' }]);
   });
 });

@@ -19,7 +19,7 @@ import type { Files } from '../core/files.ts';
 import { isRecord } from '../core/guards.ts';
 import { compareVersions, parseVersion } from '../core/release-version.ts';
 import type { HostPlugin, MarketplaceSource } from '../ports/host/index.ts';
-import { isBranchName, MARKETPLACE_FILE, pluginFilePath, pluginSourceOf, pluginVersionOf, sameRepository, trackedInstallsOf, type PluginSource, type TrackedInstall } from './sources.ts';
+import { channelOf, isBranchName, MARKETPLACE_FILE, pluginFilePath, pluginSourceOf, pluginVersionOf, sameRepository, trackedInstallsOf, type PluginSource, type TrackedInstall } from './sources.ts';
 
 /** How often the network is asked at most, across every tab of the machine. */
 export const CHECK_EVERY_MS = 6 * 60 * 60_000;
@@ -30,16 +30,19 @@ export interface UpdateNotice {
   readonly marketplace: string;
   readonly installed: string;
   readonly newest: string;
+  /** The release channel the newest version was read on (`stable`, `preview`); absent off a channel's branch. */
+  readonly channel?: string;
 }
 
 /**
  * What one marketplace published at its newest commit: the commit (empty for a directory), the commit of each branch a
- * plugin was read on, and each tracked plugin's version.
+ * plugin was read on, each tracked plugin's version, and the release channel each one was read on, if any.
  */
 export interface Published {
   readonly sha: string;
   readonly refs: Readonly<Record<string, string>>;
   readonly versions: Readonly<Record<string, string>>;
+  readonly channels: Readonly<Record<string, string>>;
 }
 
 /** The kept state: the last network check, what each marketplace published then, and the versions the person dismissed. */
@@ -89,7 +92,7 @@ function publishedRecord(value: unknown): Readonly<Record<string, Published>> {
   for (const [name, entry] of Object.entries(value)) {
     // An entry with no `refs` was kept before plugins were read on their branches (T5133): read it again.
     if (isRecord(entry) && typeof entry['sha'] === 'string' && isRecord(entry['refs'])) {
-      entries.push([name, { sha: entry['sha'], refs: textRecord(entry['refs']), versions: textRecord(entry['versions']) }]);
+      entries.push([name, { sha: entry['sha'], refs: textRecord(entry['refs']), versions: textRecord(entry['versions']), channels: textRecord(entry['channels']) }]);
     }
   }
   return Object.fromEntries(entries);
@@ -124,7 +127,8 @@ export function isNewer(a: string, b: string): boolean {
 /** The installs a newer version is published for, leaving out those the person dismissed that version or a newer one of. */
 export function noticesOf(installs: readonly TrackedInstall[], state: CheckState): readonly UpdateNotice[] {
   return installs.flatMap((install) => {
-    const newest = state.published[install.marketplace]?.versions[install.plugin];
+    const published = state.published[install.marketplace];
+    const newest = published?.versions[install.plugin];
     if (newest === undefined || !isNewer(newest, install.version)) {
       return [];
     }
@@ -132,7 +136,9 @@ export function noticesOf(installs: readonly TrackedInstall[], state: CheckState
     if (dismissed !== undefined && !isNewer(newest, dismissed)) {
       return [];
     }
-    return [{ plugin: install.plugin, marketplace: install.marketplace, installed: install.version, newest }];
+    const notice: UpdateNotice = { plugin: install.plugin, marketplace: install.marketplace, installed: install.version, newest };
+    const channel = published?.channels[install.plugin];
+    return [channel === undefined ? notice : { ...notice, channel }];
   });
 }
 
@@ -276,7 +282,16 @@ export class UpdateCheck {
       refs[ref] = head;
       Object.assign(versions, await this.versionsAt(readRef, [...sources].filter(([, each]) => each.ref === ref)));
     }
-    return { sha, refs, versions };
+    // A plugin read on its own branch carries that branch's channel; one read with the marketplace, the clone's branch's.
+    const marketBranch = marketRef.startsWith('refs/heads/') ? marketRef.slice('refs/heads/'.length) : undefined;
+    const channels: Record<string, string> = {};
+    for (const [plugin, each] of sources) {
+      const channel = channelOf(onBranch(each.ref) ? each.ref : marketBranch);
+      if (channel !== undefined && versions[plugin] !== undefined) {
+        channels[plugin] = channel;
+      }
+    }
+    return { sha, refs, versions, channels };
   }
 
   /** Each plugin's version read from its folder through `read`, leaving out one whose plugin.json names none. */
@@ -320,7 +335,7 @@ export class UpdateCheck {
       const found = pluginSourceOf(marketplace, plugin);
       return found === undefined ? [] : [[plugin, found] as const];
     });
-    return { sha: '', refs: {}, versions: await this.versionsAt(read, sources) };
+    return { sha: '', refs: {}, versions: await this.versionsAt(read, sources), channels: {} };
   }
 }
 

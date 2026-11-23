@@ -111,6 +111,14 @@ export function isBranchName(name: string): boolean {
   return /^[A-Za-z0-9._/-]+$/.test(name) && !name.startsWith('-') && !name.includes('..') && !name.endsWith('/');
 }
 
+/** The release channel a branch carries (T5133): `release` is the stable channel, `preview` the preview one; any other none. */
+export function channelOf(branch: string | undefined): string | undefined {
+  if (branch === 'release') {
+    return 'stable';
+  }
+  return branch === 'preview' ? 'preview' : undefined;
+}
+
 /**
  * Whether two repository addresses name the same repository: `https://github.com/owner/kit.git`, `owner/kit` and
  * `git@github.com:owner/kit` all read as `owner/kit`, in any letter case. A `git-subdir` branch is fetched through

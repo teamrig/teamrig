@@ -104,6 +104,10 @@ describe('updateLine', () => {
   it('names the plugin, the newest version and the one the tab runs', () => {
     assert.equal(updateLine(TEAMRIG), 'teamrig 0.333.0 is out (you run 0.332.0)');
   });
+
+  it('names the release channel the version came on, when the CLI told it (T5133)', () => {
+    assert.equal(updateLine({ ...TEAMRIG, channel: 'stable' }), 'teamrig 0.333.0 (stable) is out (you run 0.332.0)');
+  });
 });
 
 describe('updateBandOf', () => {
@@ -143,6 +147,7 @@ describe('parseUpdateAnswer', () => {
   it('reads each answer the CLI gives', () => {
     const answers: readonly UpdateAnswer[] = [
       { kind: 'notices', notices: [TEAMRIG] },
+      { kind: 'notices', notices: [{ ...TEAMRIG, channel: 'preview' }] },
       { kind: 'dismissed' },
       { kind: 'applied', plugin: 'teamrig', version: '0.333.0' },
       { kind: 'failed', why: 'Claude Code is not on PATH' },
@@ -155,6 +160,7 @@ describe('parseUpdateAnswer', () => {
   it('takes nothing else', () => {
     assert.equal(parseUpdateAnswer('not json'), undefined);
     assert.equal(parseUpdateAnswer('{"kind":"notices","notices":[{"plugin":"teamrig"}]}'), undefined);
+    assert.equal(parseUpdateAnswer(JSON.stringify({ kind: 'notices', notices: [{ ...TEAMRIG, channel: 7 }] })), undefined);
     assert.equal(parseUpdateAnswer('{"kind":"applied","plugin":"teamrig"}'), undefined);
     assert.equal(parseUpdateAnswer('{"kind":"failed"}'), undefined);
     assert.equal(parseUpdateAnswer('[]'), undefined);
