@@ -16,6 +16,7 @@ import type { Clock, Sleep } from '../core/lock.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { CredentialStore } from '../core/credentials.ts';
+import type { KeyPorts } from '../core/terminal.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import type { PullGit } from '../sync/pull-conflicts.ts';
 import type { MergeGit } from '../merge/git.ts';
@@ -110,6 +111,8 @@ export interface CliRuntime {
   readonly run: ProgramRunner;
   /** The system's saved secrets, where `teamrig issue sync` finds each owner's read-only GitHub token; only ever read. */
   readonly credentials: CredentialStore;
+  /** The writes to those secrets and the person's terminal, for `teamrig key` alone. */
+  readonly keys: KeyPorts;
   /** The API of an outside tool a connector adapter reaches with no command line (plugin-api/connector.ts): https only. */
   readonly http: HttpClient;
   /** Whether a folder or a program is there. */

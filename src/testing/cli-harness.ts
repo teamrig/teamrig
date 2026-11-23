@@ -26,6 +26,7 @@ import type { ChangeGit } from '../changes/source.ts';
 import type { RepoState } from '../push-guard/push.ts';
 import type { SecretsGit } from '../secret-guard/secrets-git.ts';
 import type { CredentialStore } from '../core/credentials.ts';
+import type { KeyPorts } from '../core/terminal.ts';
 import type { HttpClient } from '../core/http.ts';
 import type { GhRunner } from '../adapters/connectors/github/gh.ts';
 import type { ShellRunner } from '../test-run/shell.ts';
@@ -165,6 +166,8 @@ export interface RunOptions {
   readonly gh?: GhRunner;
   /** The saved secrets `issue sync` reads tokens from; default a store with none. */
   readonly credentials?: CredentialStore;
+  /** What `teamrig key` writes with; default no person at the terminal and writes to a store apart from `credentials`. */
+  readonly keys?: KeyPorts;
   /** The outside API a connector adapter reaches; default one where no request is answered. */
   readonly http?: HttpClient;
   /** The folders and programs the CLI sees; default none. */
@@ -284,6 +287,7 @@ export class CliHarness {
       ...(options.shell === undefined ? {} : { shell: options.shell }),
       ...(options.gh === undefined ? {} : { run: programOverGh(options.gh) }),
       ...(options.credentials === undefined ? {} : { credentials: options.credentials }),
+      ...(options.keys === undefined ? {} : { keys: options.keys }),
       ...(options.http === undefined ? {} : { http: options.http }),
       ...(options.probe === undefined ? {} : { probe: options.probe }),
       ...(options.pluginStore === undefined ? {} : { pluginStore: options.pluginStore }),
