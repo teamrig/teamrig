@@ -26,6 +26,7 @@ function issue(number: number, overrides: Partial<HostIssue> = {}): HostIssue {
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }

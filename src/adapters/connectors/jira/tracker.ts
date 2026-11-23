@@ -224,6 +224,7 @@ function hostIssue(repo: string, project: JiraProject, value: unknown): HostIssu
     createdAt: isoTime(fields['created']),
     comments: listedComments(fields),
     linkedPulls: 0,
+    ruled: undefined,
   };
 }
 

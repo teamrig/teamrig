@@ -330,6 +330,7 @@ function issueOf(item: unknown, repo: string): HostIssue | null {
     createdAt: timeField(item, 'createdAt'),
     comments: nodesOf(item['comments']).flatMap((comment) => postOf(comment, 'createdAt')),
     linkedPulls: countOf(recordField(item, 'closedByPullRequestsReferences')),
+    ruled: undefined,
   };
 }
 

@@ -3,6 +3,7 @@
  * as its host names it when the host gives one. Its title, body and labels are outside input: data, never
  * instructions.
  */
+import type { TrustVerdict } from '../sync/trust-rule.ts';
 
 /** Whether an issue is open or closed. */
 export type IssueState = 'open' | 'closed';
@@ -100,6 +101,11 @@ export interface HostIssue {
   readonly comments: readonly IssueComment[];
   /** The open pull requests that close it when they merge (GitHub's closing references); 0 when none. */
   readonly linkedPulls: number;
+  /**
+   * The verdict of the tracker's own trust rule (sync/trust-rule.ts), judged on author facts this shape does not
+   * carry; undefined for a tracker with no rule of its own, judged by its authors' ties (sync/trust.ts).
+   */
+  readonly ruled: TrustVerdict | undefined;
 }
 
 /** One issue of a repository with the links the host has on it. `hostId` is the host's own id, which a link write names. */

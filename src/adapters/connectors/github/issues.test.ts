@@ -39,6 +39,7 @@ function readIssue(number: number, overrides: Partial<HostIssue> = {}): HostIssu
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }

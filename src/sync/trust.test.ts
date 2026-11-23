@@ -27,6 +27,7 @@ function issue(overrides: Partial<HostIssue> = {}): HostIssue {
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }
@@ -45,6 +46,13 @@ describe('issueTrust', () => {
     for (const association of ['OWNER', 'MEMBER', 'COLLABORATOR', 'member']) {
       assert.equal(issueTrust(issue({ authorAssociation: association }), 'teamrig'), 'trusted', association);
     }
+  });
+
+  it("takes the tracker's own verdict over the author's tie and the accept label", () => {
+    const labelled = { labels: ['teamrig'], labelEvents: [{ label: 'teamrig', actor: 'maintainer', actorKind: 'User', at: ACCEPTED_AT }] };
+    const refused = { trusted: false, why: 'the reporter matches never (accounts acc-1)', failed: undefined } as const;
+    assert.equal(issueTrust(issue({ ...labelled, authorAssociation: 'MEMBER', ruled: refused }), 'teamrig'), 'untrusted');
+    assert.equal(issueTrust(issue({ authorAssociation: 'NONE', ruled: { trusted: true, why: 'the reporter matches inside (accountType atlassian)' } }), 'teamrig'), 'trusted');
   });
 
   it('leaves out every other author until someone accepts the issue', () => {

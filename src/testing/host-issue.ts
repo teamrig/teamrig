@@ -23,6 +23,7 @@ export function testHostIssue(number: number, overrides: Partial<HostIssue> = {}
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }

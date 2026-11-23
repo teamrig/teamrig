@@ -49,9 +49,13 @@ export function isInsider(association: string): boolean {
  * How far the sync takes `issue`'s text. Only someone with triage rights can label an issue, so a label needs no
  * rights lookup; the two other ways a label lands are refused by its actor: an issue template applies it with the
  * author as actor, a workflow or app with a `Bot` one. An edit of the title or body at or after the accept undoes it
- * (the person who accepted read the older text), until someone adds the label again.
+ * (the person who accepted read the older text), until someone adds the label again. An issue its tracker already
+ * judged by its own rule (`ruled`) takes that verdict alone: the rule has no accept path yet, so none is read here.
  */
 export function issueTrust(issue: HostIssue, acceptLabel: string): IssueTrust {
+  if (issue.ruled !== undefined) {
+    return issue.ruled.trusted ? 'trusted' : 'untrusted';
+  }
   if (isInsideAuthor(issue.authorAssociation)) {
     return 'trusted';
   }
