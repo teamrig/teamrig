@@ -36,6 +36,32 @@ export function insideKey(project: JiraProject): string {
   return `connectors.jira.trust.projects.${project.key}.inside`;
 }
 
+/** How the public-project guard read a project: proved closed to a reader with no sign-in, or open, with what it was given. */
+export type Exposure = { readonly kind: 'closed' } | { readonly kind: 'open'; readonly given: string };
+
+/**
+ * The only answers that prove an unsigned read was turned away. Anything else (200, a redirect, a 429 or 5xx, no
+ * answer at all) is no proof, so the project counts as one anyone may browse and the default inside is held back.
+ */
+const CLOSED_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+
+/**
+ * Whether anyone may browse `project`: one read of it with no credentials. A project open to the public may take issues
+ * from people the team never let in, so there the default inside waits for the team to name who is inside.
+ */
+export async function exposureOf(client: JiraClient, project: JiraProject): Promise<Exposure> {
+  const result = await client.unsigned(project.site, `/project/${project.key}`);
+  if (result.kind === 'failed') {
+    return { kind: 'open', given: 'got no answer' };
+  }
+  return CLOSED_STATUSES.has(result.status) ? { kind: 'closed' } : { kind: 'open', given: `was answered ${result.status}` };
+}
+
+/** The one line a list prints for a project the guard found open, naming the key that lets the team's people in. */
+export function openProjectLine(project: JiraProject, exposure: Exposure & { readonly kind: 'open' }): string {
+  return `anyone may browse ${project.key}: its read without a sign-in ${exposure.given}, so the default inside is not applied; set ${insideKey(project)}`;
+}
+
 /** A Jira user as the rule reads it, or undefined for none; an account id Jira hides reads as empty, which is never inside. */
 export function trustAuthor(user: JsonRecord | undefined): TrustAuthor | undefined {
   return user === undefined ? undefined : { accountId: stringField(user, 'accountId') ?? '', accountType: stringField(user, 'accountType') };

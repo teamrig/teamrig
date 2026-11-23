@@ -50,7 +50,7 @@ import { stateReasonOf } from './resolution.ts';
 import { jqlString, scopeClause } from './scope.ts';
 import { browseUrl, credentialName, issueKey, issueNumber, parseProject, projectProblem, type JiraProject } from './site.ts';
 import { closingStep, isDoneStatus } from './transitions.ts';
-import { insideKey, JIRA_TRUST_DEFAULTS, judgeIssue, reporterOf } from './trust.ts';
+import { exposureOf, insideKey, JIRA_TRUST_DEFAULTS, judgeIssue, openProjectLine, reporterOf, type Exposure } from './trust.ts';
 
 /**
  * Jira Cloud as a tracker (the plugin API's Tracker port): a list is pages of one search, a look for a change one
@@ -320,6 +320,8 @@ export class JiraTracker implements Tracker {
   private readonly viewers = new Map<string, string>();
   /** Whose issues become tasks as written (`connectors.jira.trust`); left out, the Jira defaults alone (trust.ts). */
   private readonly trust: SiteTrust;
+  /** The public-project guard's read of each project by `site/key`, one a run (trust.ts). */
+  private readonly exposures = new Map<string, Promise<Exposure>>();
 
   constructor(client: JiraClient, stamp: boolean, config: Partial<Pick<JiraConfig, 'site' | 'issueType' | 'people' | 'trust'>> = {}) {
     this.client = client;
@@ -331,11 +333,31 @@ export class JiraTracker implements Tracker {
   }
 
   /**
-   * The rule `project`'s issues are judged by. A project counts as one anyone may browse until a read proves it closed
-   * to anonymous users; none is read yet, so the default inside is held back and only an inside the team wrote applies.
+   * The rule `project`'s issues are judged by, and the line to print with it. A project counts as one anyone may
+   * browse until the guard's unsigned read proves it closed (trust.ts); only then does the default inside apply. An
+   * inside the team wrote applies either way, so no guard read is made for it.
    */
-  private ruleOf(project: JiraProject): ResolvedTrust {
-    return resolveTrust(this.trust, project.key, JIRA_TRUST_DEFAULTS, true, insideKey(project));
+  private async ruleOf(project: JiraProject): Promise<{ readonly rule: ResolvedTrust; readonly notes: readonly string[] }> {
+    const held = resolveTrust(this.trust, project.key, JIRA_TRUST_DEFAULTS, true, insideKey(project));
+    if (held.heldDefault === undefined) {
+      return { rule: held, notes: [] };
+    }
+    const exposure = await this.exposureOf(project);
+    return exposure.kind === 'closed'
+      ? { rule: resolveTrust(this.trust, project.key, JIRA_TRUST_DEFAULTS, false, insideKey(project)), notes: [] }
+      : { rule: held, notes: [openProjectLine(project, exposure)] };
+  }
+
+  /** The guard's read of `project`, made once a run however often the project is listed. */
+  private exposureOf(project: JiraProject): Promise<Exposure> {
+    const place = `${project.site}/${project.key}`;
+    const known = this.exposures.get(place);
+    if (known !== undefined) {
+      return known;
+    }
+    const read = exposureOf(this.client, project);
+    this.exposures.set(place, read);
+    return read;
   }
 
   /** Reached with the site's saved sign-in only; the scope is the site, as one sign-in serves all its projects. */
@@ -401,12 +423,13 @@ export class JiraTracker implements Tracker {
     }
     const jql = `project = "${project.key}" AND (statusCategory != Done OR statusCategoryChangedDate >= "${from}")`;
     const closedFrom = `${closedSince}T00:00:00.000Z`;
-    const rule = this.ruleOf(project);
+    const { rule, notes } = await this.ruleOf(project);
     if (request === undefined || request.scope.all) {
       const searched = await this.searchPages(repo, project, rule, jql, closedFrom);
-      return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: searched.notes };
+      return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: [...notes, ...searched.notes] };
     }
-    return await this.scopedList(repo, project, rule, jql, closedFrom, request);
+    const scoped = await this.scopedList(repo, project, rule, jql, closedFrom, request);
+    return scoped.kind === 'listed' ? { ...scoped, notes: [...notes, ...scoped.notes] } : scoped;
   }
 
   /** `issue`, read of `value`, with the trust rule's verdict on it. */

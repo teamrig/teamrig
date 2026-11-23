@@ -1,4 +1,4 @@
-import { isRecord, isStringArray, recordField, type CredentialStore, type HttpClient, type HttpRequest, type JsonRecord, type SecretScanner } from '../../../plugin-api/index.ts';
+import { isRecord, isStringArray, recordField, type CredentialStore, type HttpClient, type HttpRequest, type HttpResult, type JsonRecord, type SecretScanner } from '../../../plugin-api/index.ts';
 import { baseUrl, credentialName } from './site.ts';
 
 /**
@@ -109,6 +109,15 @@ export class JiraClient {
 
   put(site: string, path: string, body: JsonRecord): Promise<JiraAnswer> {
     return this.call(site, (headers) => ({ method: 'PUT', url: `${baseUrl(site)}${path}`, headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+  }
+
+  /**
+   * `path` read with no sign-in at all, as anyone on the internet could: the public-project guard asks what such a
+   * reader is given. The answer comes back as it is, its status unread here and never sent twice, so a 429 or a
+   * redirect is left for the guard to judge rather than retried or turned into a failure.
+   */
+  unsigned(site: string, path: string): Promise<HttpResult> {
+    return this.http.send({ method: 'GET', url: `${baseUrl(site)}${path}`, headers: { accept: 'application/json' } });
   }
 
   /** How the credential of `site` is saved, for a reason that asks for it. */
