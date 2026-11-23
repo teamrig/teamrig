@@ -3,6 +3,15 @@ import type { SessionStart } from '../../../plugin-api/index.ts';
 /** Codex CLI's program as npm installs it on PATH (`@openai/codex`'s `bin`), the native binary named the same. */
 export const PROGRAM = 'codex';
 
+/**
+ * Turns off Codex's interactive shells on every start. With them on (the default in Codex 0.170.0), `exec_command`
+ * opens a shell with `tty: true` and `write_stdin` then sends it lines no PreToolUse hook sees, so teamrig's shell guards
+ * would judge only the bare shell. Off, `exec_command` refuses a tty and `write_stdin` into a shell without one fails
+ * (T5270 F2). A `-c` override beats the person's config.toml, where `setup hooks --host codex` writes the same key for
+ * sessions started outside teamrig.
+ */
+export const NO_TTY_SHELLS: readonly string[] = ['-c', 'features.unified_exec_tty=false'];
+
 /** The flag with its value, or nothing when the value is left to Codex CLI. */
 function flag(name: string, value: string | undefined): readonly string[] {
   return value === undefined ? [] : [name, value];
@@ -39,6 +48,7 @@ function resumeArgs(resume: string | undefined): readonly string[] {
 export function launchArgs(start: SessionStart): readonly string[] {
   return [
     ...resumeArgs(start.resume),
+    ...NO_TTY_SHELLS,
     ...flag('--model', start.model),
     ...(start.effort === undefined ? [] : ['-c', `model_reasoning_effort=${start.effort}`]),
     ...(start.prompt === undefined ? [] : ['--', start.prompt]),
