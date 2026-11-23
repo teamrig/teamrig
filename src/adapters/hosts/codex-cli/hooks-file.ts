@@ -11,8 +11,12 @@
  * full is refused whole with a reason: a key, an event or a handler field it has no rule for, or a word neither shell
  * can carry unchanged. What is left out on purpose is listed in `skipped`, never dropped silently. Matchers are kept
  * as they are: which Codex tool a matcher's name stands for is the host port's rule, not this file's.
+ *
+ * teamrig's file is Claude Code's, whose lines say `--host claude-code`; a Codex line names `--host codex-cli` in its
+ * place, so the hook loads Codex's ports (its tool calls, its reply shape) and runs in a team that lists only Codex.
  */
 
+import { declaration } from './declaration.ts';
 import { isSharedHookEvent, type SharedHookEvent } from './events.ts';
 
 /** One command hook as Codex reads it. */
@@ -69,6 +73,9 @@ const NO_CONTEXT_LIMIT = { additionalContextLimit: 0 } as const;
 
 const PLUGIN_ROOT = '${CLAUDE_PLUGIN_ROOT}';
 const DEFAULT_TIMEOUT_SECONDS = 15;
+const HOST_FLAG = '--host';
+/** This adapter's id in teamrig's host table, which each hook line names so the run loads Codex's ports. */
+export const CODEX_CLI_HOST = declaration.id;
 
 const FILE_KEYS: readonly string[] = ['description', 'modules', 'hooks'];
 const GROUP_KEYS: readonly string[] = ['matcher', 'hooks'];
@@ -222,8 +229,25 @@ function checkWord(word: string, what: string): void {
   }
 }
 
+/** The source's words without the `--host <id>` pair it names. */
+function withoutHost(words: readonly string[], what: string): readonly string[] {
+  const kept: string[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index] ?? '';
+    if (word !== HOST_FLAG) {
+      kept.push(word);
+      continue;
+    }
+    if (words[index + 1] === undefined) {
+      throw new UnknownSource(`${what} ends with ${HOST_FLAG} and names no host`);
+    }
+    index += 1;
+  }
+  return kept;
+}
+
 function commandLines(sourceWords: readonly string[], pluginRoot: string, what: string): Pick<CodexHookHandler, 'command' | 'commandWindows'> {
-  const words = sourceWords.map((word) => word.replaceAll(PLUGIN_ROOT, pluginRoot));
+  const words = [...withoutHost(sourceWords, what).map((word) => word.replaceAll(PLUGIN_ROOT, pluginRoot)), HOST_FLAG, CODEX_CLI_HOST];
   for (const word of words) {
     checkWord(word, what);
   }
