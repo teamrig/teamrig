@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { PathKind, PathProbe } from '../core/path-probe.ts';
 import type { HiddenRequest, Processes, RunOutcome, RunRequest, StartOutcome, StartRequest } from '../open/processes.ts';
-import { KEEP_FOCUS_PROGRAM_VAR } from '../open/keep-focus.ts';
+import { KEEP_FOCUS_PROGRAM_VAR } from '../adapters/terminals/windows-terminal/scripts.ts';
 
 /**
  * A host without Windows PowerShell, for `onRun('powershell.exe', NO_POWERSHELL)`: the script that keeps the focus cannot

@@ -268,7 +268,7 @@ describe('teamrig open', () => {
     const result = await openAlpha(processes, { platform: 'win32' });
     assert.deepEqual(result, {
       code: EXIT.printed,
-      stdout: ['MANUAL no terminal opened (windows-terminal is not installed); open a new terminal and run this in PowerShell:', shellCommand('win32', APP, launchArgv())],
+      stdout: ['MANUAL no terminal opened (windows-terminal: Windows Terminal is not installed); open a new terminal and run this in PowerShell:', shellCommand('win32', APP, launchArgv())],
       stderr: [],
     });
     const linux = await openAlpha(new FakeProcesses(), {}, ['--terminal', 'print']);

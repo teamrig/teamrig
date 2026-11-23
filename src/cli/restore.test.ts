@@ -146,7 +146,7 @@ describe('teamrig restore check', () => {
     assert.equal(await logOf(kit), [
       '2030-01-08T10:00:00.000Z check: started',
       '2030-01-08T10:00:00.000Z check: 2 to restore, 1 kept, 0 closed, 0 hung',
-      '2030-01-08T10:00:00.000Z check: opened the restore tab; windows-terminal exited 0',
+      '2030-01-08T10:00:00.000Z check: opened the restore tab; windows-terminal opened it',
       '',
     ].join('\n'));
   });
@@ -155,7 +155,7 @@ describe('teamrig restore check', () => {
     const kit = await restoreKit();
     const result = await kit.run(['restore', 'check'], machine(kit, new FakeProcesses()));
     assert.equal(result.code, EXIT.printed);
-    assert.deepEqual(result.stdout, ['MANUAL no terminal opened (windows-terminal is not installed); open a new terminal and run this in PowerShell:', shellCommand('win32', USER_HOME, RUN)]);
+    assert.deepEqual(result.stdout, ['MANUAL no terminal opened (windows-terminal: Windows Terminal is not installed); open a new terminal and run this in PowerShell:', shellCommand('win32', USER_HOME, RUN)]);
   });
 
   it('logs that it started before a bad flag stops it (T1705)', async () => {
@@ -204,7 +204,7 @@ describe('teamrig restore run', () => {
     assert.ok(result.stdout.includes('Opened app-alpha (idle)'));
     assert.ok(result.stdout.includes('Opened notes (continue: mid-turn)'));
     assert.equal((await new RestoreRegistry(kit.files, restoreSessionsDir(KIT)).read(ALPHA))?.restoreAttempts, 1);
-    assert.match(await logOf(kit), new RegExp(`run: opened ${ALPHA} \\(idle\\) at effort high \\(last run\\); windows-terminal exited 0\n`));
+    assert.match(await logOf(kit), new RegExp(`run: opened ${ALPHA} \\(idle\\) at effort high \\(last run\\); windows-terminal opened it\n`));
     assert.doesNotMatch(await logOf(kit), /tab opened/, 'a run by hand is not in its tab');
   });
 
@@ -217,7 +217,7 @@ describe('teamrig restore run', () => {
       processes.started.map((request) => request.args),
       [windowsTab('[app] alpha', APP, medium), windowsTab('notes', APP, NOTES_RESUME)],
     );
-    assert.match(await logOf(kit), new RegExp(`run: opened ${ALPHA} \\(idle\\) at effort medium \\(config\\); windows-terminal exited 0\n`));
+    assert.match(await logOf(kit), new RegExp(`run: opened ${ALPHA} \\(idle\\) at effort medium \\(config\\); windows-terminal opened it\n`));
   });
 
   it("reopens a team's session in the team's own Windows Terminal window when open.teamWindow is on, and one outside any team as before (T1427)", async () => {
@@ -241,7 +241,7 @@ describe('teamrig restore run', () => {
     const failed = await restoreKit();
     const result = await failed.run(['restore', 'run', '--tab'], machine(failed, new FakeProcesses()));
     assert.equal(result.code, EXIT.failed);
-    assert.ok(result.stdout.includes(`FAILED to reopen app-alpha: no terminal opened (windows-terminal is not installed); run: ${shellCommand('win32', APP, ALPHA_LAUNCH)}`));
+    assert.ok(result.stdout.includes(`FAILED to reopen app-alpha: no terminal opened (windows-terminal: Windows Terminal is not installed); run: ${shellCommand('win32', APP, ALPHA_LAUNCH)}`));
     assert.equal(result.stdout.at(-1), `This tab closes in ${TAB_CLOSE_DELAY_MS / 1_000} s.`);
     assert.deepEqual(failed.clock.sleeps, [TAB_CLOSE_DELAY_MS]);
     assert.equal((await new RestoreRegistry(failed.files, restoreSessionsDir(KIT)).read(ALPHA))?.restoreAttempts, 0);

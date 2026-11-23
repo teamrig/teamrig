@@ -1,7 +1,6 @@
 import type { TerminalChoice } from '../config/types.ts';
 import type { Env } from '../core/home.ts';
 import type { StartRequest } from './processes.ts';
-import { shellCommand } from './quote.ts';
 
 /** A terminal `teamrig open` can start a tab in. */
 export type Terminal = Exclude<TerminalChoice, 'auto' | 'print'>;
@@ -19,7 +18,7 @@ export interface TabRequest {
   readonly argv: readonly string[];
   /** The named window the tab opens in, made when none of that name is open (`teamWindowOf`); undefined: the most recent one. Windows Terminal alone names windows; the others open as before. */
   readonly window: string | undefined;
-  /** tmux and macOS Terminal keep the focus by their own flags, Windows Terminal through open/keep-focus.ts; the Linux terminals have no call for it. */
+  /** How each terminal keeps the focus is its adapter's own; the Linux terminals have no call for it. */
   readonly focus: TabFocus;
 }
 
@@ -83,55 +82,6 @@ export function splitCommand(terminal: SplitTerminal, tab: TabRequest): TabComma
       }
       return command('wt.exe', ['-w', '0', 'split-pane', '--vertical', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
     }
-  }
-}
-
-/**
- * The launcher call that opens the tab, each argument passed as it is, with no shell in between. Only
- * macOS Terminal takes shell text (`do script`), so there every argument is quoted, and the text goes
- * to AppleScript as a run argument, never inside the script.
- */
-export function tabCommand(terminal: Terminal, tab: TabRequest): TabCommand {
-  const { title, folder, argv, window, focus } = tab;
-  switch (terminal) {
-    case 'tmux':
-      // tmux 3.0 and later run a command given as several arguments without a shell; -d leaves the current window selected.
-      return command('tmux', ['new-window', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, '-n', title, ...argv], folder, 'exit');
-    case 'windows-terminal': {
-      const unsafe = windowsTerminalUnsafe(tab);
-      if (unsafe !== undefined) {
-        return windowsTerminalRefusal(unsafe);
-      }
-      // `-w 0` is the most recent window; a name is the window of that name, made when none is open.
-      return command('wt.exe', ['-w', window ?? '0', 'new-tab', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
-    }
-    case 'macos-terminal':
-      // Without `activate`, Terminal opens the window behind the app the owner is in.
-      return command(
-        'osascript',
-        [
-          '-e',
-          'on run argv',
-          '-e',
-          'tell application "Terminal"',
-          ...(focus === 'take' ? ['-e', 'activate'] : []),
-          '-e',
-          'do script (item 1 of argv)',
-          '-e',
-          'end tell',
-          '-e',
-          'end run',
-          shellCommand('darwin', folder, argv),
-        ],
-        folder,
-        'exit',
-      );
-    case 'gnome-terminal':
-      return command('gnome-terminal', ['--tab', `--working-directory=${folder}`, '--', ...argv], folder, 'exit');
-    case 'konsole':
-      return command('konsole', ['--new-tab', '--workdir', folder, '-e', ...argv], folder, 'spawn');
-    case 'x-terminal-emulator':
-      return command('x-terminal-emulator', ['-T', title, '-e', ...argv], folder, 'spawn');
   }
 }
 

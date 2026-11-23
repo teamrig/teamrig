@@ -191,7 +191,7 @@ describe('teamrig ui', () => {
     it('falls back to this terminal, saying why, when no window can open', async () => {
       const processes = new FakeProcesses();
       const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
-      assert.deepEqual([result.code, result.stdout], [0, ['NOTE no terminal window opened (tmux is not installed); the UI shows in this terminal']]);
+      assert.deepEqual([result.code, result.stdout], [0, ['NOTE no terminal window opened (tmux: tmux is not installed); the UI shows in this terminal']]);
       assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
     });
 
@@ -231,7 +231,7 @@ describe('teamrig ui', () => {
         const result = await new CliHarness(IN_TMUX).run(['ui'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), interactive: false });
         assert.deepEqual(result.stdout, [
           'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
-          'NOTE no terminal window opened (tmux is not installed); the UI shows in this terminal',
+          'NOTE no terminal window opened (tmux: tmux is not installed); the UI shows in this terminal',
         ]);
         assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
       });
@@ -248,7 +248,7 @@ describe('teamrig ui', () => {
         const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
         const config = { ...WITH_UI, open: { terminal: 'gnome-terminal' } };
         const result = await new CliHarness(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), env: { WT_SESSION: 'guid' }, interactive: false });
-        assert.deepEqual(result.stdout, ['NOTE no terminal window opened (gnome-terminal is not installed); the UI shows beside the session', 'OPENED the UI in a split of this windows-terminal window']);
+        assert.deepEqual(result.stdout, ['NOTE no terminal window opened (gnome-terminal: gnome-terminal is not installed); the UI shows beside the session', 'OPENED the UI in a split of this windows-terminal window']);
         assert.deepEqual(processes.ran, []);
       });
     });
