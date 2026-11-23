@@ -54,7 +54,7 @@ describe('release publish CLI', () => {
     const commit = repo.git('ls-remote', origin, 'refs/heads/preview').split('\t')[0] ?? '';
     assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${stable} ${source}`);
     assert.equal(repo.git('ls-remote', origin, 'refs/heads/release').split('\t')[0], stable);
-    assert.equal(repo.git('show', `${commit}:.claude-plugin/marketplace.json`), CATALOG.replace('"ref": "release"', '"ref": "preview"'));
+    assert.equal(repo.git('show', `${commit}:.claude-plugin/marketplace.json`), `${JSON.stringify({ name: 'teamrig', plugins: [{ name: 'teamrig', source: './plugins/teamrig' }] }, null, 2)}\n`);
   });
 
   it('exits 2 without a version or a source', () => {

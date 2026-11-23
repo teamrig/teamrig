@@ -5,23 +5,24 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { GitError, type Git } from '../lib/git.ts';
 import { AUTHOR, TempRepo } from '../lib/temp-repo.ts';
-import { marketplaceOnBranch, publicationProblem, publishRelease, type Files, type Publication } from './publish.ts';
+import { marketplaceFromCheckout, publicationProblem, publishRelease, type Files, type Publication } from './publish.ts';
 
 const CATALOG = 'catalog/marketplace.json';
 
-/** A catalog of one plugin installed from a ref, and one installed from the default branch. */
-const catalog = (ref: string): string =>
-  `${JSON.stringify(
-    {
-      name: 'x',
-      plugins: [
-        { name: 'x', source: { source: 'git-subdir', url: 'https://example.com/x.git', path: 'plugins/x', ref }, description: 'x' },
-        { name: 'y', source: './plugins/y' },
-      ],
-    },
-    null,
-    2,
-  )}\n`;
+/** A catalog text of these plugin entries, written as main writes it. */
+const catalogOf = (plugins: readonly unknown[]): string => `${JSON.stringify({ name: 'x', plugins }, null, 2)}\n`;
+
+/** Main's catalog: one plugin installed from a folder of this repo at ref `release`, one already relative. */
+const MAIN_CATALOG = catalogOf([
+  { name: 'x', source: { source: 'git-subdir', url: 'https://example.com/x.git', path: 'plugins/x', ref: 'release' }, description: 'x' },
+  { name: 'y', source: './plugins/y' },
+]);
+
+/** The catalog a release commit holds: both plugins from the marketplace's own checkout, naming no branch. */
+const RELEASE_CATALOG = catalogOf([
+  { name: 'x', source: './plugins/x', description: 'x' },
+  { name: 'y', source: './plugins/y' },
+]);
 
 const DIST = 'plugins/x/dist';
 
@@ -128,17 +129,27 @@ describe('publishRelease', () => {
     assert.equal(remote('refs/heads/release'), '');
   });
 
-  it("commits the catalog installing from the branch it publishes to, leaving the source commit's catalog as it was", async () => {
-    repo.write(CATALOG, catalog('release'));
+  it("commits the catalog installing from the marketplace's own checkout, leaving the source commit's catalog as it was", async () => {
+    repo.write(CATALOG, MAIN_CATALOG);
     const source = release('one');
     const commit = await publishRelease(git, disk, { ...preview(source, '1.0.0'), marketplace: CATALOG }, () => {});
-    assert.equal(repo.git('show', `${commit}:${CATALOG}`), catalog('preview'));
-    assert.equal(repo.git('show', `${source}:${CATALOG}`), catalog('release'));
+    assert.equal(repo.git('show', `${commit}:${CATALOG}`), RELEASE_CATALOG);
+    assert.equal(repo.git('show', `${source}:${CATALOG}`), MAIN_CATALOG);
     assert.equal(repo.git('show', `${commit}:${DIST}/index.js`), 'built one');
   });
 
+  it('installs a preview release fast-forwarded onto release from release, as its catalog names no branch', async () => {
+    repo.write(CATALOG, MAIN_CATALOG);
+    const commit = await publishRelease(git, disk, { ...preview(release('one'), '1.0.0'), marketplace: CATALOG }, () => {});
+    repo.git('push', '-q', origin, `${commit}:refs/heads/release`);
+    repo.git('fetch', '-q', origin, 'refs/heads/release');
+    const promoted = repo.git('show', `FETCH_HEAD:${CATALOG}`);
+    assert.equal(promoted, RELEASE_CATALOG);
+    assert.doesNotMatch(promoted, /"ref"|preview/);
+  });
+
   it('changes nothing when run again for a release whose catalog it rewrote', async () => {
-    repo.write(CATALOG, catalog('release'));
+    repo.write(CATALOG, MAIN_CATALOG);
     const source = release('one');
     const publication = { ...preview(source, '1.0.0'), marketplace: CATALOG };
     const commit = await publishRelease(git, disk, publication, () => {});
@@ -192,17 +203,29 @@ describe('publishRelease', () => {
   });
 });
 
-describe('marketplaceOnBranch', () => {
-  it('sets each ref the catalog names to the branch, keeping an entry with no ref and the key order', () => {
-    assert.equal(marketplaceOnBranch(catalog('release'), 'preview'), catalog('preview'));
+describe('marketplaceFromCheckout', () => {
+  it('makes each git-subdir entry a relative source of its folder, keeping a relative entry and the key order', () => {
+    assert.equal(marketplaceFromCheckout(MAIN_CATALOG), RELEASE_CATALOG);
   });
 
-  it('gives the same text back for a catalog already on the branch', () => {
-    assert.equal(marketplaceOnBranch(catalog('preview'), 'preview'), catalog('preview'));
+  it('gives the same text back for a catalog already relative', () => {
+    assert.equal(marketplaceFromCheckout(RELEASE_CATALOG), RELEASE_CATALOG);
+  });
+
+  it('keeps one ./ on a path that already starts with it', () => {
+    const text = catalogOf([{ name: 'x', source: { source: 'git-subdir', url: 'https://example.com/x.git', path: './plugins/x' } }]);
+    assert.equal(marketplaceFromCheckout(text), catalogOf([{ name: 'x', source: './plugins/x' }]));
+  });
+
+  it('refuses an entry whose path is no folder of this repository', () => {
+    for (const path of ['', '/srv/work/x', '../other/x', 'plugins/../../x']) {
+      const text = catalogOf([{ name: 'x', source: { source: 'git-subdir', url: 'https://example.com/x.git', path } }]);
+      assert.throws(() => marketplaceFromCheckout(text), /the catalog entry x names no folder of this repository as its path/, path);
+    }
   });
 
   it('refuses a catalog with no plugins list', () => {
-    assert.throws(() => marketplaceOnBranch('{"name":"x"}', 'preview'), /the marketplace catalog has no "plugins" list/);
+    assert.throws(() => marketplaceFromCheckout('{"name":"x"}'), /the marketplace catalog has no "plugins" list/);
   });
 });
 
