@@ -1892,7 +1892,7 @@
       "type": "object",
       "properties": {
         "mode": {
-          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
+          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
           "type": "string",
           "enum": ["terminal", "window", "both"],
           "default": "terminal"

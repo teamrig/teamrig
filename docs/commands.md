@@ -433,8 +433,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       and a page webhook that gives no https URL
   ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
       team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
-      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
-      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+      this terminal, in a window of its own opened as open.terminal says, or in both; run with no
+      terminal of its own (a session's shell), the terminal half shows in a split of the session's
+      tmux or Windows Terminal window, else in a window; one that cannot open falls back and says
+      so; it runs the entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
       file or the release speaks an interface version this teamrig does not serve
