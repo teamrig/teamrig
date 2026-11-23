@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.506.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.505.0...teamrig-v0.506.0) (2026-11-23)
+
+
+### Features
+
+* **antigravity:** adapt to new HostPorts members and EditCall.files ([5028cee](https://github.com/teamrig/teamrig/commit/5028ceeedb164d24b2e483fea8e475fbc092ae66))
+* **antigravity:** agy's status line puts teamrig's launcher beside its own line (T4752) ([647354e](https://github.com/teamrig/teamrig/commit/647354e3005e364f78e282e99dd95c14de364a88))
+* **antigravity:** check an Antigravity hook input against its event's shape (T4752) ([ff41648](https://github.com/teamrig/teamrig/commit/ff41648b78deaba43e2ec377cb1d2a0f0c345162))
+* **antigravity:** rewrite teamrig's hooks file as one Antigravity loads (T4752) ([e00f26f](https://github.com/teamrig/teamrig/commit/e00f26fed9d3cac3aae89d85c57413030dedf921))
+* **antigravity:** the adapter serves agy's status-line port (T4752) ([148b02a](https://github.com/teamrig/teamrig/commit/148b02ac9f9895d25577652f307da6c2df3b69d0))
+* **antigravity:** the hook bridge takes the event its command line names and checks the input against it (T4752) ([6148566](https://github.com/teamrig/teamrig/commit/6148566a3b03ab56ec2f4a5ed1567cb6453859de))
+* **cli:** a run works in the host its command line names, the team's first host else (T4752) ([1419535](https://github.com/teamrig/teamrig/commit/14195350c1184b46d7b8fbaa8c78ae5c9b09ad2a))
+* **cli:** a runtime port for the person's terminal and the store's writes, for teamrig key (T4897) ([91dfb34](https://github.com/teamrig/teamrig/commit/91dfb34930a8c97d85179acc638888286a13596a))
+* **cli:** teamrig key check asks GitHub whose a saved key is, its kind, rights and expiry, and key add checks the key it saved (T4897) ([6420717](https://github.com/teamrig/teamrig/commit/6420717fd976fcaefe882e3737bcb72542cf4a20))
+* **cli:** teamrig key list, add and remove for GitHub keys (T4897) ([1f79f44](https://github.com/teamrig/teamrig/commit/1f79f4494a34d96b5849ac8c294857fdd6584c0a))
+* **cli:** the runtime tells whether the run has a terminal a person types in (T5105) ([219e10b](https://github.com/teamrig/teamrig/commit/219e10b10e82794b8c29eb0b430af2de19fe986d))
+* **config:** a team names the hosts its sessions run on (T4752) ([cc5d77e](https://github.com/teamrig/teamrig/commit/cc5d77ef9c1d09ad0ce8d74210df2fdd7d28c13f))
+* **config:** the hosts key takes antigravity-cli, the adapter teamrig now ships (T4752) ([6acd188](https://github.com/teamrig/teamrig/commit/6acd18843247d2ae176d3865334e2151d607458b))
+* **credentials:** the store's save and remove commands on each OS, for teamrig key (T4897) ([9bd3da6](https://github.com/teamrig/teamrig/commit/9bd3da6ca4b66166a58d6c9fc699ec79b9bc1e5f))
+* **hooks:** a hook takes the event its host named with --host-event (T4752) ([ee0e889](https://github.com/teamrig/teamrig/commit/ee0e88912a53f06d43f52230dd3db3b6263ad67b))
+* **hooks:** each hook line names its host, agy's lines name antigravity-cli (T4752) ([afad5f9](https://github.com/teamrig/teamrig/commit/afad5f9b93637611adf2d2154cf4f23ba9ff79d8))
+* **hosts:** add Antigravity hook bridge ([607c463](https://github.com/teamrig/teamrig/commit/607c4638a375633a11752001d8611762e55c2cc0))
+* **hosts:** add Antigravity paths and specs ([babc4b4](https://github.com/teamrig/teamrig/commit/babc4b41d7fa870d7b54147c0b90953471d885c3))
+* **hosts:** add Antigravity tool call normalizer ([7733926](https://github.com/teamrig/teamrig/commit/773392636f312c9ed90cdf76b5c4fdc9738b2ef6))
+* **hosts:** add unsupported launcher port to Antigravity adapter ([b3f883c](https://github.com/teamrig/teamrig/commit/b3f883c84ddce94a1a1e231ae649a52d4a97c665))
+* **hosts:** register Antigravity host adapter and declaration ([1115275](https://github.com/teamrig/teamrig/commit/1115275eb59052760b727867ea6367a71f2de0f6))
+* **open:** a split of the run's own tmux or Windows Terminal window (T5105) ([86b5202](https://github.com/teamrig/teamrig/commit/86b52023328a1e87181fc7a6e0f11c06af5bdc64))
+* **ui:** teamrig ui with no terminal of its own shows the UI in a split beside the session (T5105) ([cea4b86](https://github.com/teamrig/teamrig/commit/cea4b8618dd4858cfc7f10f0efe0db7620b8720f))
+
+
+### Bug Fixes
+
+* **antigravity:** align schema hosts, codex hooks spec, and adapter coverage ([732de45](https://github.com/teamrig/teamrig/commit/732de459ad3114bf5dce89c542f0418241c72f41))
+* **antigravity:** hook matchers name agy's tools, so PreToolUse fires on run_command (T5033) ([cffbf41](https://github.com/teamrig/teamrig/commit/cffbf412e07196c2827e88a47ab962633e87e847)), closes [#2244](https://github.com/teamrig/teamrig/issues/2244)
+* **antigravity:** set session mark to ANTIGRAVITY_CONVERSATION_ID with agy 1.5.8 fixture ([ca6b9a2](https://github.com/teamrig/teamrig/commit/ca6b9a2b05a95e0cf1b0f414e87758ac26440816))
+* **antigravity:** the status line reads agy's model object, not a text (T5033) ([29bc79f](https://github.com/teamrig/teamrig/commit/29bc79f5f32959cca1afcd5bc72f4a4eaa96ccd9)), closes [#2244](https://github.com/teamrig/teamrig/issues/2244)
+* **ci:** the dist smoke finds a hook's sample by its name, past the --host flags its line carries (T4752) ([ee159e4](https://github.com/teamrig/teamrig/commit/ee159e4c4e0df919d917469241193815995e6fbe))
+* **cli:** teamrig key add and remove are internal: /teamrig has no terminal to run them in (T4897) ([dd4f173](https://github.com/teamrig/teamrig/commit/dd4f173eb93b9a8d3e00cc065878ff9630330c89))
+* **cli:** the key terminal's program is marked shown on purpose: the store's prompt must reach the person (T4897) ([d354160](https://github.com/teamrig/teamrig/commit/d354160ab55d968358e6683a6ee2b5d003b783fc))
+* **config:** config get reads a key under a map entry the file holds ([#1467](https://github.com/teamrig/teamrig/issues/1467)) ([dc456e7](https://github.com/teamrig/teamrig/commit/dc456e758393eab8dd14a98d5acae6b21a99b593))
+* **guards:** the guard entry takes the --host its hook line names, beside --host-event, each once with a checked value (T4752) ([20d8cf8](https://github.com/teamrig/teamrig/commit/20d8cf88c16c255f20b86bf7cdd018f92be842e6))
+* **key:** key add and key remove start the store's tool from its absolute path, never a bare name (T4897) ([6c827aa](https://github.com/teamrig/teamrig/commit/6c827aa84de1468151ee1ad8b91ba2e2e20b6349)), closes [#2178](https://github.com/teamrig/teamrig/issues/2178)
+* **permissions:** key list and key check stay off the read route: they read the credential store (T4897) ([b20c679](https://github.com/teamrig/teamrig/commit/b20c67956356be3da36cc3ee1b6cbba563636846))
+* **register:** a goal added after a torn last line of the goals file starts its own line (T5142) ([3b3475c](https://github.com/teamrig/teamrig/commit/3b3475c5762584930a5a68d2e0f6ee68efd3d73d))
+* **register:** an append after a torn last line starts its own line, so no task is lost and no id reused (T5142) ([0fb11a1](https://github.com/teamrig/teamrig/commit/0fb11a1470af886910dc9c44bb2b318342fe3bed)), closes [#2290](https://github.com/teamrig/teamrig/issues/2290)
+* **release:** a published build's marketplace catalog installs from the branch it is on (T5224) ([77b5af0](https://github.com/teamrig/teamrig/commit/77b5af09c199515ff871dd08e6e71c1441c59864)), closes [#2378](https://github.com/teamrig/teamrig/issues/2378)
+* **ship:** ship.ts merge goes on catching up a head main keeps moving past, bounded by time, not a count (T5134) ([6fe05d1](https://github.com/teamrig/teamrig/commit/6fe05d1bbea2cfe7cb79644986b29fc47cfe7184))
+
 ## [0.505.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.504.0...teamrig-v0.505.0) (2026-11-23)
 
 
