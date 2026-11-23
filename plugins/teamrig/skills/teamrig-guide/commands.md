@@ -5577,7 +5577,11 @@ installed plugin, so it is refused from a source checkout (`setup hooks runs fro
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
 `SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
-file already holds the same handlers, one `UNCHANGED` line. It never writes `config.toml` and never trusts a handler
+file already holds the same handlers, one `UNCHANGED` line. A second line does the same for the one setting the hooks
+need in Codex's `config.toml` beside it, `[features] unified_exec_tty = false`: Codex runs no hook on a line typed
+into an interactive shell, so teamrig turns those shells off (its own launcher passes the same setting). Every other
+line of `config.toml` stays, the old file is kept as `codex-config.bak` in `backups`, and a `features = { ... }`
+inline table is refused with nothing written: set `unified_exec_tty = false` in it by hand. It never trusts a handler
 for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
 every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
 refused where an agent runs it; the preview stays open.
@@ -5597,6 +5601,7 @@ Output:
 
 ```text
 PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
+PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [features] unified_exec_tty = false
   SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
   NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
   NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
