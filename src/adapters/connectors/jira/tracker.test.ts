@@ -110,6 +110,7 @@ function hostIssue(number: number, over: Partial<HostIssue> = {}): HostIssue {
     lastEditedAt: undefined,
     authorAssociation: '',
     author: '',
+    authorName: '',
     authorKind: '',
     labelEvents: [],
     renamedAt: undefined,
@@ -171,7 +172,7 @@ describe('listing a Jira project', () => {
       status: { statusCategory: { key: 'indeterminate' } },
       labels: ['bug', 'p1'],
       assignee: { accountId: 'a-assignee', accountType: 'atlassian' },
-      reporter: { accountId: 'a-reporter', accountType: 'atlassian' },
+      reporter: { accountId: 'a-reporter', accountType: 'atlassian', displayName: 'Dana Reporter' },
       updated: '2026-11-20T15:48:00.000+0200',
       created: '2026-11-18T09:00:00.000+0200',
       comment: {
@@ -196,6 +197,7 @@ describe('listing a Jira project', () => {
           assignees: ['a-assignee'],
           updatedAt: '2026-11-20T13:48:00.000Z',
           author: 'a-reporter',
+          authorName: 'Dana Reporter',
           authorKind: 'User',
           createdAt: '2026-11-18T07:00:00.000Z',
           comments: [

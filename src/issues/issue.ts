@@ -89,6 +89,8 @@ export interface HostIssue {
   readonly authorAssociation: string;
   /** The author's login, empty when the host no longer has that account. */
   readonly author: string;
+  /** The author's name as the host shows it to people, raw (printed only through plainLine); empty when it gives none. */
+  readonly authorName: string;
   /** What kind of account the author is, as the host names it (`User`, `Bot`, `Organization`); empty when it gives none. */
   readonly authorKind: string;
   /** The labels put on it, oldest first, among the last timeline events the host reads. */

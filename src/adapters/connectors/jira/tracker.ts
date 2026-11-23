@@ -222,6 +222,7 @@ function hostIssue(repo: string, project: JiraProject, value: unknown): HostIssu
     lastEditedAt: undefined,
     authorAssociation: '',
     author: accountId(reporter),
+    authorName: (reporter === undefined ? undefined : stringField(reporter, 'displayName')) ?? '',
     authorKind: accountKind(reporter),
     labelEvents: [],
     renamedAt: undefined,

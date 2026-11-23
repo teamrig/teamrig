@@ -17,6 +17,7 @@ export function testHostIssue(number: number, overrides: Partial<HostIssue> = {}
     lastEditedAt: undefined,
     authorAssociation: 'OWNER',
     author: 'maintainer',
+    authorName: '',
     authorKind: 'User',
     labelEvents: [],
     renamedAt: undefined,

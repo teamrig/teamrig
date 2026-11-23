@@ -20,6 +20,7 @@ function issue(number: number, overrides: Partial<HostIssue> = {}): HostIssue {
     lastEditedAt: undefined,
     authorAssociation: '',
     author: 'someone',
+    authorName: '',
     authorKind: 'atlassian',
     labelEvents: [],
     renamedAt: undefined,

@@ -21,6 +21,7 @@ function issue(overrides: Partial<HostIssue> = {}): HostIssue {
     lastEditedAt: undefined,
     authorAssociation: 'NONE',
     author: 'stranger',
+    authorName: '',
     authorKind: 'User',
     labelEvents: [],
     renamedAt: undefined,

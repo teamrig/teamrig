@@ -33,6 +33,7 @@ function readIssue(number: number, overrides: Partial<HostIssue> = {}): HostIssu
     lastEditedAt: undefined,
     authorAssociation: 'OWNER',
     author: 'maintainer',
+    authorName: '',
     authorKind: 'User',
     labelEvents: [],
     renamedAt: undefined,

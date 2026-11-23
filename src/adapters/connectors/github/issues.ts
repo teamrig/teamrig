@@ -324,6 +324,8 @@ function issueOf(item: unknown, repo: string): HostIssue | null {
     lastEditedAt: timeField(item, 'lastEditedAt'),
     authorAssociation: stringField(item, 'authorAssociation') ?? '',
     author: loginOf(recordField(item, 'author')),
+    // The issue query reads no display name; nothing GitHub's import prints needs one.
+    authorName: '',
     authorKind: kindOf(recordField(item, 'author')),
     labelEvents: events.flatMap(labelEventOf),
     renamedAt: latestRename(events),
