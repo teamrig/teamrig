@@ -27,7 +27,7 @@ export type FirstRead =
   | { readonly kind: 'failed'; readonly index: number; readonly reason: string }
   | { readonly kind: 'missing' };
 
-/** The operating system's store of saved secrets, read by name. teamrig never writes to it. */
+/** The operating system's store of saved secrets, read by name. Only `teamrig key` writes to it, through CredentialKeeper. */
 export interface CredentialStore {
   /** The store as a message names it, e.g. "the Windows Credential Manager". */
   readonly label: string;
@@ -54,12 +54,28 @@ export async function readFirstOneByOne(read: (name: string) => Promise<Credenti
   return { kind: 'missing' };
 }
 
+/** What removing one credential did. */
+export type CredentialRemove = { readonly kind: 'removed' } | { readonly kind: 'failed'; readonly reason: string };
+
+/**
+ * The store's two writes, made only by a person's own `teamrig key` command. Saving runs the store's own tool in the
+ * person's terminal, which asks for the secret and shows nothing typed, so the secret never passes teamrig.
+ */
+export interface CredentialKeeper {
+  readonly label: string;
+  /** The store's own save command for `name`, run with the person's terminal as its stdin and stdout. */
+  saveRequest(name: string): ProgramRequest;
+  remove(name: string): Promise<CredentialRemove>;
+}
+
 /** One operating system's store: the tool that reads it, and how that tool says "no such credential". */
 interface StoreTool {
   readonly label: string;
   /** The program, for a message when it cannot start. */
   readonly program: string;
-  saveCommand(name: string): string;
+  /** The tool that saves a secret, asking for it with nothing shown. */
+  saveRequest(name: string): ProgramRequest;
+  removeRequest(name: string): ProgramRequest;
   request(name: string): ProgramRequest;
   missing(result: ProgramResult): boolean;
   secretOf(stdout: string): string;
@@ -133,7 +149,8 @@ namespace TeamrigCredentials {
 const WINDOWS: StoreTool = {
   label: 'the Windows Credential Manager',
   program: 'powershell.exe',
-  saveCommand: (name) => `cmdkey /generic:${name} /user:teamrig /pass`,
+  saveRequest: (name) => ({ program: 'cmdkey', args: [`/generic:${name}`, '/user:teamrig', '/pass'] }),
+  removeRequest: (name) => ({ program: 'cmdkey', args: [`/delete:${name}`] }),
   request: (name) => powerShellRequest(windowsReadScript(name)),
   missing: (result) => result.end.kind === 'exited' && result.end.code === WINDOWS_MISSING_EXIT,
   secretOf: (stdout) => Buffer.from(stdout.trim(), 'base64').toString('utf8'),
@@ -145,7 +162,9 @@ const MACOS_MISSING_EXIT = 44;
 const MACOS: StoreTool = {
   label: 'the macOS keychain',
   program: 'security',
-  saveCommand: (name) => `security add-generic-password -U -s ${name} -a teamrig -w`,
+  saveRequest: (name) => ({ program: 'security', args: ['add-generic-password', '-U', '-s', name, '-a', 'teamrig', '-w'] }),
+  // By service name alone, as the read finds it, so a key saved under another account name goes too.
+  removeRequest: (name) => ({ program: 'security', args: ['delete-generic-password', '-s', name] }),
   request: (name) => ({ program: 'security', args: ['find-generic-password', '-s', name, '-w'] }),
   missing: (result) => result.end.kind === 'exited' && result.end.code === MACOS_MISSING_EXIT,
   secretOf: (stdout) => stdout.trimEnd(),
@@ -155,7 +174,8 @@ const MACOS: StoreTool = {
 const LINUX: StoreTool = {
   label: 'the Secret Service keyring',
   program: 'secret-tool',
-  saveCommand: (name) => `secret-tool store --label=${name} service ${name}`,
+  saveRequest: (name) => ({ program: 'secret-tool', args: ['store', `--label=${name}`, 'service', name] }),
+  removeRequest: (name) => ({ program: 'secret-tool', args: ['clear', 'service', name] }),
   request: (name) => ({ program: 'secret-tool', args: ['lookup', 'service', name] }),
   missing: (result) => result.end.kind === 'exited' && result.end.code === 1 && result.stdout === '' && result.stderr.trim() === '',
   secretOf: (stdout) => stdout.trimEnd(),
@@ -178,10 +198,44 @@ export function systemCredentials(platform: NodeJS.Platform, run: ProgramRunner)
   const read = (name: string): Promise<CredentialRead> => readWith(tool, run, name);
   return {
     label: tool.label,
-    saveCommand: (name) => tool.saveCommand(name),
+    saveCommand: (name) => saveCommandOf(tool, name),
     read,
     readFirst: (names) => (tool === WINDOWS ? windowsReadFirst(run, names) : readFirstOneByOne(read, names)),
   };
+}
+
+/** The writes to the store of the operating system teamrig runs on, through its own command-line tool. */
+export function systemCredentialKeeper(platform: NodeJS.Platform, run: ProgramRunner): CredentialKeeper {
+  const tool = toolFor(platform);
+  return {
+    label: tool.label,
+    saveRequest: (name) => tool.saveRequest(name),
+    remove: (name) => removeWith(tool, run, name),
+  };
+}
+
+/** The save command as a person types it; every part is a credential name or a fixed word, so none needs quoting. */
+function saveCommandOf(tool: StoreTool, name: string): string {
+  const request = tool.saveRequest(name);
+  return [request.program, ...request.args].join(' ');
+}
+
+async function removeWith(tool: StoreTool, run: ProgramRunner, name: string): Promise<CredentialRemove> {
+  if (!CREDENTIAL_NAME.test(name)) {
+    return { kind: 'failed', reason: `${JSON.stringify(name)} is not a credential name: letters, digits, '.', '_' or '-'` };
+  }
+  const request = tool.removeRequest(name);
+  let result: ProgramResult;
+  try {
+    result = await run(request);
+  } catch (error) {
+    return { kind: 'failed', reason: `${request.program} could not start: ${errorMessage(error)}` };
+  }
+  if (result.end.kind === 'exited' && result.end.code === 0) {
+    return { kind: 'removed' };
+  }
+  // cmdkey prints its errors on stdout.
+  return { kind: 'failed', reason: `${request.program} ${endText(result.end)}: ${firstLine(result.stderr === '' ? result.stdout : result.stderr)}` };
 }
 
 /**
@@ -220,7 +274,7 @@ async function windowsRun(run: ProgramRunner, names: readonly string[]): Promise
   const secret = WINDOWS.secretOf(answer[2]);
   return TOKEN_TEXT.test(secret)
     ? { kind: 'found', index, secret }
-    : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${WINDOWS.saveCommand(name)}` };
+    : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${saveCommandOf(WINDOWS, name)}` };
 }
 
 async function readWith(tool: StoreTool, run: ProgramRunner, name: string): Promise<CredentialRead> {
@@ -242,7 +296,7 @@ async function readWith(tool: StoreTool, run: ProgramRunner, name: string): Prom
   }
   const secret = tool.secretOf(result.stdout);
   if (!TOKEN_TEXT.test(secret)) {
-    return { kind: 'failed', reason: `credential ${name} does not hold a token: save it again with ${tool.saveCommand(name)}` };
+    return { kind: 'failed', reason: `credential ${name} does not hold a token: save it again with ${saveCommandOf(tool, name)}` };
   }
   return { kind: 'found', secret };
 }

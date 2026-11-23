@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { systemCredentials, windowsReadFirstScript, windowsReadScript } from './credentials.ts';
+import { systemCredentialKeeper, systemCredentials, windowsReadFirstScript, windowsReadScript } from './credentials.ts';
 import type { ProgramRequest, ProgramResult, ProgramRunner } from './program-runner.ts';
 
 const NAME = 'teamrig-gh-acme';
@@ -174,5 +174,49 @@ describe('credential names', () => {
       reason: `"acme'; rm" is not a credential name: letters, digits, '.', '_' or '-'`,
     });
     assert.deepEqual(runner.ran, []);
+  });
+});
+
+describe('systemCredentialKeeper', () => {
+  it('saves with the store tool that asks for the secret itself, the same command the read failures name', () => {
+    const cases: readonly (readonly [NodeJS.Platform, ProgramRequest])[] = [
+      ['win32', { program: 'cmdkey', args: [`/generic:${NAME}`, '/user:teamrig', '/pass'] }],
+      ['darwin', { program: 'security', args: ['add-generic-password', '-U', '-s', NAME, '-a', 'teamrig', '-w'] }],
+      ['linux', { program: 'secret-tool', args: ['store', `--label=${NAME}`, 'service', NAME] }],
+    ];
+    for (const [platform, request] of cases) {
+      const { run } = answering(exited(0));
+      assert.deepEqual(systemCredentialKeeper(platform, run).saveRequest(NAME), request);
+      assert.equal(systemCredentials(platform, run).saveCommand(NAME), [request.program, ...request.args].join(' '));
+    }
+  });
+
+  it('removes with each store tool, finding the item as the read does', async () => {
+    const cases: readonly (readonly [NodeJS.Platform, ProgramRequest])[] = [
+      ['win32', { program: 'cmdkey', args: [`/delete:${NAME}`] }],
+      ['darwin', { program: 'security', args: ['delete-generic-password', '-s', NAME] }],
+      ['linux', { program: 'secret-tool', args: ['clear', 'service', NAME] }],
+    ];
+    for (const [platform, request] of cases) {
+      const { run, ran } = answering(exited(0));
+      assert.deepEqual(await systemCredentialKeeper(platform, run).remove(NAME), { kind: 'removed' });
+      assert.deepEqual(ran, [request]);
+    }
+  });
+
+  it('gives a failed remove by its first error line, stdout when the tool prints there, and a tool that cannot start', async () => {
+    const windows = answering(exited(1, '\nCMDKEY: Element not found.\n'));
+    assert.deepEqual(await systemCredentialKeeper('win32', windows.run).remove(NAME), { kind: 'failed', reason: 'cmdkey exited 1: CMDKEY: Element not found.' });
+    const linux = answering(exited(1, '', 'Cannot autolaunch D-Bus\n'));
+    assert.deepEqual(await systemCredentialKeeper('linux', linux.run).remove(NAME), { kind: 'failed', reason: 'secret-tool exited 1: Cannot autolaunch D-Bus' });
+    const missing = await systemCredentialKeeper('linux', notStarting('ENOENT')).remove(NAME);
+    assert.equal(missing.kind, 'failed');
+  });
+
+  it('refuses to remove a name that would need quoting, without running anything', async () => {
+    const { run, ran } = answering(exited(0));
+    const removed = await systemCredentialKeeper('win32', run).remove('acme & del');
+    assert.equal(removed.kind, 'failed');
+    assert.deepEqual(ran, []);
   });
 });
