@@ -329,8 +329,9 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
   'git-credential': { effect: 'internal', flags: [], load: async () => (await gitCredentialCommand()).gitCredential },
   'key list': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyList },
-  'key add': { effect: 'write', flags: [], load: async () => (await keyCommands()).keyAdd },
-  'key remove': { effect: 'write', flags: [], load: async () => (await keyCommands()).keyRemove },
+  // add and remove run only in the person's own terminal (C7), never from /teamrig, which has none.
+  'key add': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyAdd },
+  'key remove': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyRemove },
   queue: { effect: 'write', flags: QUEUE_FLAGS, switches: QUEUE_SWITCHES, rest: true, load: async () => (await queueCommand()).queue },
   withdraw: { effect: 'write', flags: ['session', 'what'], switches: ['all'], load: async () => (await withdrawCommand()).withdraw },
   'step-away': { effect: 'write', flags: [], load: async () => (await stepAsideCommands()).stepAway },
