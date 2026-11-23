@@ -15,9 +15,10 @@ Two small files, one minute.
 `teamrig team create <team> --sessions <id,id>` does steps 2 and 3 for you, and `teamrig open <session>` opens a tab
 for a session (step 4).
 
-Permissions: in auto mode every `teamrig` command runs with no settings entry. In default mode, Claude Code asks
-before each one unless you add `"Bash(teamrig:*)"` to `permissions.allow` in `~/.claude/settings.json` or the
-project's `.claude/settings.json` ([what was tested](../plugins/teamrig/skills/teamrig-guide/hooks.md#permissions)).
+Permissions: `teamrig automode install` adds allow rules to `permissions.allow` in `~/.claude/settings.json` for the
+commands that touch only the team's files (`teamrig list`, `teamrig set` and the like), so they run with no prompt in
+any mode. Never add a wider rule such as `"Bash(teamrig:*)"`: it would also approve the commands that post, merge or
+change the budget ([what was tested](../plugins/teamrig/skills/teamrig-guide/hooks.md#permissions)).
 
 ## Configuration
 

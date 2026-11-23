@@ -5246,8 +5246,18 @@ hooks). A plugin cannot ship these (its settings take only `agent` and `subagent
 own Claude Code settings (`settings.json` in `$CLAUDE_CONFIG_DIR`, else in `~/.claude`). The lines replace the
 team's tagged lines where they were, else go at the end; your own lines and other teams' tagged lines stay as they
 are. With no list yet, the new one starts with `"$defaults"`, so Claude Code's built-in entries stay on; a list you
-already have is left without it if it has none. Run it again after a config change or a teamrig upgrade: it
-rewrites only lines that differ. Without `--yes` it shows the change and writes nothing; with `--yes` it first keeps
+already have is left without it if it has none.
+
+It also adds teamrig's own allow rules to `permissions.allow`, one `Bash(teamrig <command> *)` and one
+`PowerShell(teamrig <command> *)` per command that reads or writes only the team's files whatever its arguments, and
+whose words start no other command (`teamrig list`, `teamrig set`, `teamrig inbox add` and the like; never `add`,
+`budget` or `rules`, whose rule would also approve `add --issue`, `budget lift` or `rules forget`). Those commands then
+run with no prompt and no classifier call. A rule of yours with the same reach counts as there and stays yours. It
+records the rules it wrote in `synced-allow-rules.json` in the kit's home, and takes out only those, once teamrig no
+longer syncs them; it never touches a rule you wrote, `deny` or `ask`. A record that does not parse is refused before
+anything is written. `automode uninstall` leaves these rules, as every team on the machine shares them.
+
+Run it again after a config change or a teamrig upgrade: it rewrites only lines that differ. Without `--yes` it shows the change and writes nothing; with `--yes` it first keeps
 the old settings file in the kit's `backups` folder. It changes your settings, not a team's, so it takes no
 `--session`. Claude Code's auto mode refuses a session that edits its own settings, and teamrig
 refuses `--yes` where Claude Code runs it, a `!` line too, so type `/teamrig automode install --yes` in a tab, or run

@@ -1995,22 +1995,22 @@ Node.js.
 
 ## Permissions
 
-teamrig never edits Claude Code's permission or auto-mode settings, and it adds no allow rules. Only the opt-in
-read-only allow lets a call skip the prompt, and only a shell line it proves only reads.
+teamrig changes Claude Code's permission settings only when you run `teamrig automode install` (the team's auto-mode
+lines and teamrig's own allow rules below) or `teamrig permissions trim`. Past those rules, only the opt-in read-only
+allow lets a call skip the prompt, and only a shell line it proves only reads.
 
 - **Auto mode**: no settings entry is needed. In a hand test on Claude Code 2.1.300 with no user settings at all,
   the auto-mode classifier allowed every teamrig command it was given (43 calls: creating a team, adding and
   setting tasks, inbox lines, reads and lists, from Bash and from PowerShell, whether the user named the command or
   the session chose it from the team rules): none was denied or asked.
-- **Default mode**: Claude Code asks before each `teamrig` command until you allow it. One rule covers them all;
-  put it in your user settings (`~/.claude/settings.json`) or the project's `.claude/settings.json`:
-  ```json
-  { "permissions": { "allow": ["Bash(teamrig:*)"] } }
-  ```
-  In a hand test on Claude Code 2.1.301 with no user settings, that rule, given in a settings file
-  (`claude --settings`) and as `--allowedTools`, let every teamrig command run with no question (`--version`,
-  `team create`, and a chain of two, `teamrig who && teamrig list`), while `git --version` was still asked.
-  `Bash(teamrig *)` worked the same. The rule is for the Bash tool, where Claude Code puts `teamrig`.
+- **Default mode**: Claude Code asks before each `teamrig` command until it is allowed. `teamrig automode install`
+  adds `Bash(teamrig <command> *)` and `PowerShell(teamrig <command> *)` to your user settings for each command that
+  reads or writes only the team's files whatever its arguments, and whose words start no other command (`list`,
+  `set`, `inbox add` and the like); every other command still asks. Never add one wide rule such as
+  `Bash(teamrig:*)`: a prefix rule approves its command with any arguments before the classifier, so it would also
+  approve `add --issue`, `budget lift` or `merge` with no question. In a hand test on Claude Code 2.1.301, a prefix
+  rule given in a settings file and as `--allowedTools` let its commands run with no question while `git --version`
+  was still asked.
 - **The push guard** refuses on its own, whatever the mode: a push to a protected branch is refused with its route
   unless `pushGuard.pushToProtected` clears it.
 - **The commit guard** refuses a git command run without the repository's hooks on its own, whatever the mode,
@@ -2025,9 +2025,8 @@ read-only allow lets a call skip the prompt, and only a shell line it proves onl
 - **The db-write guard** refuses a line that writes to a database by hand on its own, whatever the mode, unless
   `dbWriteGuard.writes` is `allow`.
 - **The exec guard** refuses a privileged command's review run as another session or the owner, any
-  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories, on its own, whatever the mode, so `Bash(teamrig:*)` stays safe for
-  `exec` too. A team that wants each review asked as well allows the rest by name (`Bash(teamrig exec request:*)`,
-  `dry-run`, `status`, `run`) instead of the one rule.
+  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories, on its own, whatever the mode
+  or allow rules.
 - **The read-only allow** (`readonlyShell.enabled`) lets a shell line that only reads run with no prompt in default
   mode too; it never asks or refuses, so in a mode that already allows the line it changes nothing.
 - **The picker guard** (`pickerGuard.enabled`, on by default) refuses the question picker to every session and helper,

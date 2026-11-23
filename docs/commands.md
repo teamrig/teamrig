@@ -607,9 +607,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   statusline uninstall [--yes] takes it back out: the status line before it returns
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
-      worktree) into Claude Code's autoMode.environment, the facts auto mode trusts; run it again after a
-      config change or an upgrade; without --yes it shows the change and writes nothing
-  automode uninstall [--yes]   takes the team's lines back out, leaving every other line
+      worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
+      own allow rules for the commands that touch only the team's files, taking out only rules it wrote
+      that are no longer synced; run it again after a config change or an upgrade; without --yes it shows
+      the change and writes nothing
+  automode uninstall [--yes]   takes the team's lines back out, leaving every other line and teamrig's
+      allow rules
   permissions trim [--all] [--yes]   removes the local allow rules off the config's permissions.keepAllow
       that approve a whole tool or program or hold a credential (--all: every rule) from the team's
       Claude Code settings, its worktrees' too; it counts them by class, never printing a rule; without
