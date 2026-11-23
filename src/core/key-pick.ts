@@ -23,17 +23,13 @@ export type KeyPick =
  * Reads the candidates in order and gives the first key saved. A read that fails stops the pick there: a wider key
  * never stands in for a narrower one the store holds but could not read, which may be the one with fewer rights.
  */
-export async function pickKey(store: Pick<CredentialStore, 'read'>, candidates: readonly KeyCandidate[]): Promise<KeyPick> {
-  for (const candidate of candidates) {
-    const read = await store.read(candidate.credential);
-    switch (read.kind) {
-      case 'found':
-        return { kind: 'found', secret: read.secret, scope: candidate.scope, credential: candidate.credential };
-      case 'failed':
-        return { kind: 'failed', scope: candidate.scope, credential: candidate.credential, reason: read.reason };
-      case 'missing':
-        break;
-    }
+export async function pickKey(store: Pick<CredentialStore, 'readFirst'>, candidates: readonly KeyCandidate[]): Promise<KeyPick> {
+  const read = await store.readFirst(candidates.map((candidate) => candidate.credential));
+  const candidate = read.kind === 'missing' ? undefined : candidates[read.index];
+  if (read.kind === 'missing' || candidate === undefined) {
+    return { kind: 'missing', tried: candidates };
   }
-  return { kind: 'missing', tried: candidates };
+  return read.kind === 'found'
+    ? { kind: 'found', secret: read.secret, scope: candidate.scope, credential: candidate.credential }
+    : { kind: 'failed', scope: candidate.scope, credential: candidate.credential, reason: read.reason };
 }

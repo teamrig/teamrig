@@ -1,4 +1,4 @@
-import type { CredentialRead, CredentialStore } from '../core/credentials.ts';
+import { readFirstOneByOne, type CredentialRead, type CredentialStore, type FirstRead } from '../core/credentials.ts';
 import { tokenName } from '../issues/token-names.ts';
 
 /** The repository owners the specs' GitHub teams list: `acme/web`, `globex/api`. */
@@ -43,5 +43,10 @@ export class FakeCredentials implements CredentialStore {
   async read(name: string): Promise<CredentialRead> {
     this.reads.push(name);
     return this.held.get(name) ?? { kind: 'missing' };
+  }
+
+  /** Reads one by one, so `reads` shows each name read, and none past the first saved or unreadable one. */
+  readFirst(names: readonly string[]): Promise<FirstRead> {
+    return readFirstOneByOne((name) => this.read(name), names);
   }
 }
