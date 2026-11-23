@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { testSystems } from '../ci/change-kind.ts';
+import { type Job, evaluate, plannedOut, verdictOf } from './github.ts';
 import { parseProfiles, profileFor, readProfiles, repoSlugs, slugOf } from './repos.ts';
 import { DIST } from './ship-commits.ts';
 import { TEAMRIG_RELEASE_MANIFEST, TEAMRIG_VERSION_FILES } from './version-bump.ts';
@@ -252,7 +253,21 @@ test('the shipped repos.json leaves teamrig\'s windows and macOS test legs condi
     'test (windows-latest, node 22, checks)',
     'test (macos-latest, node 22)',
   ]);
-  assert.deepEqual(profileFor(profiles, 'GeneralA6/teamrig-pane').conditional, []);
+});
+
+test('the shipped repos.json takes a teamrig-pane run on Node 22 or on Node 24 as green once its summary passed (T5286)', () => {
+  // The pane's move to Node 24 (T4033) renames its test jobs; until its main runs Node 24 only, a pane pull request
+  // runs one set or the other, and ship.ts must wait on neither set's absence.
+  const pane = profileFor(readProfiles(), 'GeneralA6/teamrig-pane');
+  const job = (name: string): Job => ({ name, status: 'completed', conclusion: 'success', runId: 1, runAttempt: 1, started: true });
+  const gates = pane.checks.filter(name => !name.startsWith('test ('));
+  for (const node of ['22', '24']) {
+    const jobs = [...gates, ...['ubuntu', 'windows', 'macos'].map(os => `test (${os}-latest, node ${node})`)].map(job);
+    const outcomes = plannedOut(evaluate(pane.checks, jobs, [], pane.summary), pane.summary, pane.conditional);
+    assert.equal(verdictOf(outcomes), 'passed', `node ${node}: ${outcomes.map(o => `${o.name} ${o.state}`).join('; ')}`);
+  }
+  const unfinished = [...gates.filter(name => name !== pane.summary), 'test (ubuntu-latest, node 24)'].map(job);
+  assert.notEqual(verdictOf(plannedOut(evaluate(pane.checks, unfinished, [], pane.summary), pane.summary, pane.conditional)), 'passed', 'no summary yet');
 });
 
 test('finds a repo under each of its aliases, any case, as the same profile, and lists it once by its own name (T3275)', () => {

@@ -41,6 +41,9 @@
       "test (ubuntu-latest, node 22)",
       "test (windows-latest, node 22)",
       "test (macos-latest, node 22)",
+      "test (ubuntu-latest, node 24)",
+      "test (windows-latest, node 24)",
+      "test (macos-latest, node 24)",
       "every check passed"
     ],
     "summary": "every check passed",
@@ -48,6 +51,7 @@
       "runner": "tools/ci/local.ts"
     },
     "regenerated": ["plugins/teamrig-pane/.claude-plugin/plugin.json", ".release-please-manifest.json"],
+    "conditional": ["test (ubuntu-latest, node 22)", "test (windows-latest, node 22)", "test (macos-latest, node 22)", "test (ubuntu-latest, node 24)", "test (windows-latest, node 24)", "test (macos-latest, node 24)"],
     "release": { "head": "release-please--branches--main--components--teamrig-pane", "changelog": "CHANGELOG.md" }
   }
 }
