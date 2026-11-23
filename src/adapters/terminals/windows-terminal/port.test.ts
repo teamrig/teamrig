@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import type { PaneOpen } from '../../../plugin-api/index.ts';
 import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { FakeProcesses } from '../../../testing/fake-processes.ts';
-import { BEHIND_WHY, launcherOf, windowsTerminalPort } from './port.ts';
+import { launcherOf, windowsTerminalPort } from './port.ts';
 import { FOCUS_EXIT, FOCUS_SCRIPT, FOCUS_TITLE_VAR, KEEP_FOCUS_ARGS_VAR, KEEP_FOCUS_EXIT, KEEP_FOCUS_PROGRAM_VAR, KEEP_FOCUS_SCRIPT } from './scripts.ts';
 
 const TITLE = '[shop] api';
@@ -113,7 +113,7 @@ describe('the Windows Terminal port', () => {
   it("answers gone when no tab has the title, and failed with why when the tab stayed behind another app's window or the script failed", async () => {
     const cases = [
       [{ kind: 'exited', code: FOCUS_EXIT.noTab }, { kind: 'gone' }],
-      [{ kind: 'exited', code: FOCUS_EXIT.behind }, { kind: 'failed', why: BEHIND_WHY }],
+      [{ kind: 'exited', code: FOCUS_EXIT.behind }, { kind: 'selected' }],
       [{ kind: 'exited', code: 1 }, { kind: 'failed', why: 'Windows Terminal could not be searched (exit 1)' }],
       [{ kind: 'missing' }, { kind: 'failed', why: 'Windows PowerShell is not installed' }],
       [{ kind: 'failed', error: 'EACCES' }, { kind: 'failed', why: 'EACCES' }],

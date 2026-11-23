@@ -237,7 +237,7 @@ terminal a **host**: a program teamrig runs, speaking a small protocol, in the m
 | Request | What the host does |
 | --- | --- |
 | `open` | Opens a pane for a session, with the command, folder, title and an opaque identity bag teamrig gives, and answers with the host's own pane id |
-| `focus` | Brings a session's pane forward |
+| `focus` | Brings a session's pane forward; answers `selected` when the pane is selected but the system keeps another app's window in front |
 | `close` | Closes it |
 | `restart` | Restarts it, resuming the conversation when asked |
 | `rename` | Changes its title |

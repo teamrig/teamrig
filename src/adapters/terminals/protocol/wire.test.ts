@@ -67,6 +67,7 @@ describe('the terminal protocol wire', () => {
   it('reads each answer kind its request may give, and unserved or a quoted failure for any', () => {
     assert.deepEqual(openAnswerOf({ kind: 'opened', pane: 'p1', more: 1 }), { kind: 'opened', pane: 'p1' });
     assert.deepEqual(paneAnswerOf('close', { kind: 'gone' }), { kind: 'gone' });
+    assert.deepEqual(paneAnswerOf('focus', { kind: 'selected' }), { kind: 'selected' });
     assert.deepEqual(deliverAnswerOf({ kind: 'held', why: 'draft' }), { kind: 'held', why: 'draft' });
     assert.deepEqual(deliverAnswerOf({ kind: 'refused', why: 'wrong\ttoken' }), { kind: 'refused', why: 'wrong token' });
     assert.deepEqual(idleAnswerOf({ kind: 'state', state: 'asking' }), { kind: 'state', state: 'asking' });
@@ -79,6 +80,7 @@ describe('the terminal protocol wire', () => {
   const mismatched: readonly (readonly [string, () => { readonly kind: string }])[] = [
     ['an open with an empty pane id', () => openAnswerOf({ kind: 'opened', pane: '' })],
     ['a pane request answered delivered', () => paneAnswerOf('focus', { kind: 'delivered' })],
+    ['a close answered selected, which only a focus answers', () => paneAnswerOf('close', { kind: 'selected' })],
     ['a wake held by idle, which never holds one', () => deliverAnswerOf({ kind: 'held', why: 'idle' })],
     ['a wake held by a state the protocol lacks', () => deliverAnswerOf({ kind: 'held', why: 'sleepy' })],
     ['an idle answer of a state the protocol lacks', () => idleAnswerOf({ kind: 'state', state: 'sleepy' })],

@@ -21,9 +21,6 @@ const UNSERVED: Unserved = { kind: 'unserved' };
  */
 const UNSAFE = /[;"%\p{Cc}]/u;
 
-/** Why the focus answers failed when the tab was found and selected, but the window did not come to the front. */
-export const BEHIND_WHY = "selected in its window; Windows kept another app's window in front";
-
 /** The launcher that opens the pane's tab: `-w 0` is the most recent window; a name is the window of that name, made when none is open. */
 export function launcherOf(request: PaneOpen): StartRequest {
   const { title, folder, argv, window } = request;
@@ -48,15 +45,18 @@ function keptStartOf(launcher: StartRequest, code: number): StartOutcome {
   }
 }
 
-/** What the focus script's exit code answers: done, gone when no tab has the title, else failed with why. */
+/**
+ * What the focus script's exit code answers: done, selected when Windows' foreground lock kept another app's window in
+ * front of the selected tab, gone when no tab has the title, else failed with why.
+ */
 function focusAnswerOf(code: number): PaneAnswer {
   switch (code) {
     case 0:
       return { kind: 'done' };
+    case FOCUS_EXIT.behind:
+      return { kind: 'selected' };
     case FOCUS_EXIT.noTab:
       return { kind: 'gone' };
-    case FOCUS_EXIT.behind:
-      return { kind: 'failed', why: BEHIND_WHY };
     default:
       return { kind: 'failed', why: `Windows Terminal could not be searched (exit ${code})` };
   }
