@@ -1,5 +1,6 @@
 import type { TranscriptSource } from '../budget/discover.ts';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
+import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
@@ -117,6 +118,8 @@ export interface CliRuntime {
   readonly starters: StarterWatch;
   /** Runs the command-line tool of a connector adapter, such as `gh`, each run held to the two connector limits of time and output (plugin-api/connector.ts). */
   readonly run: ProgramRunner;
+  /** How `teamrig conformance terminal` stages and runs the pinned terminal program it checks: the protocol's limits. */
+  readonly terminalPrograms: TerminalPrograms;
   /** The system's saved secrets, where `teamrig issue sync` finds each owner's read-only GitHub token; only ever read. */
   readonly credentials: CredentialStore;
   /** The writes to those secrets and the person's terminal, for `teamrig key` alone. */

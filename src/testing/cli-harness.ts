@@ -43,6 +43,7 @@ import type { TreeState } from '../delivery/push-pass.ts';
 import type { PackageRegistry } from '../package-guard/registry.ts';
 import { CONTEXT_MAX_CHARS, TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
 import type { ExecPorts } from '../exec/ports.ts';
+import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
 import type { PointerGit } from '../setup/pointer-ignore.ts';
 import { FakeClock } from './fake-clock.ts';
@@ -224,6 +225,8 @@ export interface RunOptions {
   readonly packageRegistry?: PackageRegistry;
   /** The process `teamrig exec` runs a command in and the checkout it binds to; default a spawner whose command exits 0 and a clean checkout of the fixture request's repository. */
   readonly exec?: ExecPorts;
+  /** How `teamrig conformance terminal` stages and runs the pinned program; default the reference terminal over the protocol. */
+  readonly terminalPrograms?: TerminalPrograms;
   /** The chat webhook posts go to; default one that keeps them and answers each as posted. */
   readonly webhook?: ChatWebhook;
   /** Where the CLI runs from and the node options it was started with; default the quiet world's, with none. */
@@ -323,6 +326,7 @@ export class CliHarness {
       ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
       ...(options.packageRegistry === undefined ? {} : { packageRegistry: options.packageRegistry }),
       ...(options.exec === undefined ? {} : { exec: options.exec }),
+      ...(options.terminalPrograms === undefined ? {} : { terminalPrograms: options.terminalPrograms }),
       ...(options.webhook === undefined ? {} : { webhook: options.webhook }),
       ...(options.self === undefined ? {} : { self: options.self }),
       out,

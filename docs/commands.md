@@ -893,6 +893,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  conformance terminal --program <absolute path> --sha256 <hex> [--args <a,b>]   runs the terminal
+      contract's cases on an outside terminal program over the terminal protocol, a staged copy of the
+      file whose bytes hash to --sha256, each case on a new fake terminal of the program's own (kit
+      mode), then checks it serves no kit request outside kit mode; prints PASS or FAIL per case, SKIP
+      for a case this operating system lacks, LEAK per kit request served; exit 0 when all passed
   git-credential get | store | erase
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on

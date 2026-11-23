@@ -103,6 +103,7 @@ const permissionsCommands = () => import('./commands/permissions.ts');
 const setupScanCommand = () => import('./commands/setup-scan.ts');
 const testCommand = () => import('./commands/test.ts');
 const ghCommand = () => import('./commands/gh.ts');
+const conformanceCommand = () => import('./commands/conformance.ts');
 const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const keyCommands = () => import('./commands/key.ts');
 const kitCommands = () => import('./commands/kit.ts');
@@ -343,6 +344,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
+  'conformance terminal': { effect: 'write', flags: ['program', 'sha256', 'args'], load: async () => (await conformanceCommand()).conformanceTerminal },
   'git-credential': { effect: 'internal', flags: [], load: async () => (await gitCredentialCommand()).gitCredential },
   'key list': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyList },
   // add and remove run only in the person's own terminal (C7), never from /teamrig, which has none.
@@ -1310,6 +1312,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  conformance terminal --program <absolute path> --sha256 <hex> [--args <a,b>]   runs the terminal
+      contract's cases on an outside terminal program over the terminal protocol, a staged copy of the
+      file whose bytes hash to --sha256, each case on a new fake terminal of the program's own (kit
+      mode), then checks it serves no kit request outside kit mode; prints PASS or FAIL per case, SKIP
+      for a case this operating system lacks, LEAK per kit request served; exit 0 when all passed
   git-credential get | store | erase
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on

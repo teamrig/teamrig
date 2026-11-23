@@ -7421,6 +7421,41 @@ Output:
 {"state":"OPEN","title":"Ship the release"}
 ```
 
+### teamrig conformance terminal
+
+Checks a terminal host built outside teamrig, a program that speaks the terminal protocol, against every case of the
+terminal contract the built-in terminals are held to. teamrig copies the file at `--program` to a private folder,
+refuses it unless its bytes hash to `--sha256`, and runs the copy once per protocol request with `--args`
+(comma-separated). Each case runs in a world of the program's own fake terminal, named by `TEAMRIG_KIT` (kit mode);
+last the program runs without it and must serve no kit request, since a host in production that serves one lets
+anyone set what its panes are.
+
+Prints `PASS <case>` or `FAIL <case>: <why>` per case, `SKIP <case>` for a case this operating system lacks, `LEAK
+<request>` per kit request served outside kit mode, and a summary line; exit 0 only when every case passed and none
+leaked, else 1. A missing flag, a relative `--program` or a `--sha256` that is not 64 lowercase hex characters is a
+usage error.
+
+Flags:
+
+- `--program <absolute path>`: the terminal host's program file.
+- `--sha256 <hex>`: the sha256 its bytes must hash to; any other file is refused.
+- `--args <a,b>`: the words the program runs with, comma-separated; default none.
+
+Example:
+
+```sh
+teamrig conformance terminal --program /opt/myterm/teamrig-host --sha256 <64 hex> --args serve
+```
+
+Output:
+
+```text
+PASS terminal.open-shows-the-pane
+PASS terminal.open-ids-differ
+...
+15 of 15 cases passed, 0 kit request(s) served outside kit mode
+```
+
 ### teamrig git-credential
 
 git's credential helper for https to the code host the saved keys are for: git runs it, not a session. `get` reads
