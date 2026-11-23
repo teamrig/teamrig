@@ -34,7 +34,7 @@ function resumeArgs(resume: string | undefined): readonly string[] {
  * `-` stays the prompt and is never read as a flag.
  *
  * Codex has no flag for a session's shown name or for a settings file loaded over the person's own, so `name` and
- * `settingsFile` pass nothing: the declaration keeps `sessions.open` unsupported until a live run proves a start.
+ * `settingsFile` pass nothing, nor `pluginDirs`, which a start refuses for Codex before it runs (no `pluginManifest`): the declaration keeps `sessions.open` unsupported until a live run proves a start.
  */
 export function launchArgs(start: SessionStart): readonly string[] {
   return [

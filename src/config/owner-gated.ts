@@ -31,4 +31,5 @@ export const OWNER_GATED_KEYS: readonly (readonly string[])[] = [
   ['commitGuard'],
   // ui.mode, only where the UI shows, is the lead's (T5105).
   ['ui', 'path'],
+  ['pluginDirs'],
 ];

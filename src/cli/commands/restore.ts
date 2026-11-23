@@ -326,8 +326,8 @@ export async function restoreResume(args: ParsedArgs, runtime: CliRuntime): Prom
   const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
   const { command, prefix } = await hostProgramOf(runtime, env);
   runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
-  // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
-  const start = { name: undefined, model: undefined, effort, resume: claudeSession, settingsFile: undefined, prompt };
+  // A session outside any team has no name, model, settings file or plugin folder of teamrig's: the host keeps its own.
+  const start = { name: undefined, model: undefined, effort, resume: claudeSession, settingsFile: undefined, pluginDirs: [], prompt };
   const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
   return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }

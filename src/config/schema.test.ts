@@ -164,6 +164,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   decisionBatchTimes: 'decisions.batchTimesUtc',
   dedicatedOwners: 'decisions.dedicatedOwners',
   ownMeetingTeams: 'decisions.ownMeetingTeams',
+  pluginDirs: 'pluginDirs',
   decisionBatchAt: 'decisions.batchAt',
   chainNudgeAt: 'loops.chainNudgeAt',
   leadOwnPaths: 'leadBoundary.ownPaths',

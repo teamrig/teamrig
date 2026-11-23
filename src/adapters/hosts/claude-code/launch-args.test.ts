@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ClaudeLaunchRefusedError, launchArgs, PROGRAM } from './launch-args.ts';
 import { sessionLauncher } from './session-launcher.ts';
 
-const BARE = { name: undefined, model: undefined, effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined };
+const BARE = { name: undefined, model: undefined, effort: undefined, resume: undefined, settingsFile: undefined, pluginDirs: [], prompt: undefined };
 const SESSION = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
 describe("Claude Code's launch arguments", () => {
@@ -11,8 +11,19 @@ describe("Claude Code's launch arguments", () => {
     assert.deepEqual(launchArgs(BARE), []);
   });
 
+  it('loads each plugin folder with --plugin-dir, first and in order', () => {
+    assert.deepEqual(launchArgs({ ...BARE, pluginDirs: ['/opt/app/teamrig', '/opt/app/pane'], prompt: 'Go on' }), [
+      '--plugin-dir',
+      '/opt/app/teamrig',
+      '--plugin-dir',
+      '/opt/app/pane',
+      '--',
+      'Go on',
+    ]);
+  });
+
   it('spells each part that is set as its flag, in one order, with the first prompt last', () => {
-    const start = { name: 'app-alpha', model: 'sonnet', effort: 'max', resume: SESSION, settingsFile: '/state/launch/alpha.settings.json', prompt: 'Go on' };
+    const start = { name: 'app-alpha', model: 'sonnet', effort: 'max', resume: SESSION, settingsFile: '/state/launch/alpha.settings.json', pluginDirs: [], prompt: 'Go on' };
     assert.deepEqual(launchArgs(start), [
       '--model',
       'sonnet',

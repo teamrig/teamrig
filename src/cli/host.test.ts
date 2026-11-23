@@ -351,7 +351,7 @@ describe('identityOf', () => {
       const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
       const childEnv = { session: [], parked: [], login: [] };
       const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
-      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined } };
+      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', pluginManifest: undefined, launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       ...UNTOLD,
@@ -363,7 +363,7 @@ describe('identityOf', () => {
 });
 
 describe('launcherOf and launcherIfTold', () => {
-  const START = { name: 'app-alpha', model: undefined, effort: 'high', resume: undefined, settingsFile: undefined, prompt: 'Go on' };
+  const START = { name: 'app-alpha', model: undefined, effort: 'high', resume: undefined, settingsFile: undefined, pluginDirs: [], prompt: 'Go on' };
 
   it("give the running host's own launcher: its program and the arguments it starts a session by", () => {
     const world = quietWorld();

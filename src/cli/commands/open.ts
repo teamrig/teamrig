@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { describeLaunch, launchModelProblem, launchOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
+import type { SessionLauncher } from '../../ports/host/index.ts';
 import { splitAddress } from '../../core/address.ts';
 import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
@@ -448,6 +449,26 @@ async function closeSince(runtime: CliRuntime, log: SessionLog, id: string, resu
 }
 
 /**
+ * The plugin folders the team config's `pluginDirs` names, each checked to hold the host's plugin file: the host
+ * would start without the hooks the team expects, and say nothing. Refused for a host that loads no plugin folder.
+ */
+async function pluginDirsOf(runtime: CliRuntime, config: KitConfig, launcher: SessionLauncher): Promise<readonly string[]> {
+  if (config.pluginDirs.length === 0) {
+    return [];
+  }
+  const manifest = launcher.pluginManifest;
+  if (manifest === undefined) {
+    throw new RefusedError(`pluginDirs names ${config.pluginDirs.join(', ')}, but ${launcher.programName} loads no plugin folder`);
+  }
+  for (const dir of config.pluginDirs) {
+    if ((await runtime.probe.kind(`${dir}/${manifest}`)) !== 'file') {
+      throw new RefusedError(`pluginDirs names ${dir}, which holds no ${manifest}`);
+    }
+  }
+  return config.pluginDirs;
+}
+
+/**
  * How to start the running host's program in `env`: the program its session launcher names, found on that PATH.
  * Refused when it is not there, and with the host's own reason on a host that tells nothing of its sessions.
  */
@@ -515,6 +536,7 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   }
   const { command, prefix } = await hostProgramOf(runtime, claudeEnv);
   const launcher = launcherOf(runtime);
+  const pluginDirs = await pluginDirsOf(runtime, config, launcher);
   const name = roster.nameOf(id) ?? id;
   const host = launchHostOf(runtime);
   const { leadDefault } = host;
@@ -535,7 +557,7 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   for (;;) {
     await refuseLiveRun(runtime, kit, roster, id, name);
     // The host spells its own flags: this start only says what the session is to be.
-    const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
+    const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, pluginDirs, prompt: first });
     const args = [...prefix, ...launcher.launchArgs(start)];
     const startedAt = runtime.clock.now();
     const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });

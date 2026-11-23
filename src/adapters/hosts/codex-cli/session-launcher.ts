@@ -21,6 +21,8 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
   return {
     programName: declaration.name,
     program: PROGRAM,
+    // Codex loads no plugin folder: a team naming one is refused before Codex starts.
+    pluginManifest: undefined,
     launchArgs,
     variables: declaration.sessionVariables,
     childEnv: CHILD_ENVIRONMENT,

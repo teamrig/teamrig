@@ -30,6 +30,7 @@ export const CONFIG_LIMITS = {
   criticalOwners: { maxItems: 32 },
   dedicatedOwners: { maxItems: 32 },
   ownMeetingTeams: { maxItems: 32 },
+  pluginDirs: { maxItems: 8 },
   maxVerifying: { min: 0, max: 100 },
   maxReparks: { min: 0, max: 20 },
   maxSelfMadePerDay: { min: 0, max: 200 },

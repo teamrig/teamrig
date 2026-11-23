@@ -1,7 +1,7 @@
 import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
-import { launchArgs, PROGRAM } from './launch-args.ts';
+import { launchArgs, PLUGIN_MANIFEST, PROGRAM } from './launch-args.ts';
 import { backgroundJobSession, isForkOf } from './session-command-lines.ts';
 import { sessionPlaceOf } from './session-place.ts';
 import { isSessionProcess } from './session-process.ts';
@@ -23,6 +23,7 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
   return {
     programName: declaration.name,
     program: PROGRAM,
+    pluginManifest: PLUGIN_MANIFEST,
     launchArgs,
     variables: SESSION_VARIABLES,
     childEnv: CHILD_ENVIRONMENT,
