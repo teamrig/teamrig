@@ -25,6 +25,7 @@ describe('the plugin API surface', () => {
       'MAX_COMMENT',
       'MENTION_PAGES_MAX',
       'MENTION_PAGE_SIZE',
+      'NO_TRUST_RULE',
       'OSES',
       'PANE_STATES',
       'ProgramOutputCapError',

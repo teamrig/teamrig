@@ -2,7 +2,9 @@ import {
   isClaim,
   isRecord,
   isStringArray,
+  NO_TRUST_RULE,
   recordField,
+  resolveTrust,
   SEARCH_PAGE,
   stampCredit,
   stringField,
@@ -33,7 +35,9 @@ import {
   type JsonRecord,
   type LabelSpec,
   type ReadComment,
+  type ResolvedTrust,
   type ScopeRequest,
+  type SiteTrust,
   type Tracker,
   type WatchMarks,
 } from '../../../plugin-api/index.ts';
@@ -46,6 +50,7 @@ import { stateReasonOf } from './resolution.ts';
 import { jqlString, scopeClause } from './scope.ts';
 import { browseUrl, credentialName, issueKey, issueNumber, parseProject, projectProblem, type JiraProject } from './site.ts';
 import { closingStep, isDoneStatus } from './transitions.ts';
+import { insideKey, JIRA_TRUST_DEFAULTS, judgeIssue, reporterOf } from './trust.ts';
 
 /**
  * Jira Cloud as a tracker (the plugin API's Tracker port): a list is pages of one search, a look for a change one
@@ -184,9 +189,8 @@ function listedComments(fields: JsonRecord): IssueComment[] {
 }
 
 /**
- * One issue of a search as the import reads it, or undefined when it does not read as an issue of `project`.
- * No label event and no tie of the reporter to the project is given, so core takes none of these issues on trust:
- * an accept label counts only by the event of who put it on.
+ * One issue of a search as the import reads it, or undefined when it does not read as an issue of `project`. Its
+ * trust is not read here: the list sets `ruled`, the trust rule's verdict (trust.ts), which core takes alone.
  */
 function hostIssue(repo: string, project: JiraProject, value: unknown): HostIssue | undefined {
   if (!isRecord(value)) {
@@ -314,13 +318,24 @@ export class JiraTracker implements Tracker {
   private readonly people: readonly string[];
   /** The signed-in account's id by site, read once (`/myself`): a scoped list counts it among the team's people. */
   private readonly viewers = new Map<string, string>();
+  /** Whose issues become tasks as written (`connectors.jira.trust`); left out, the Jira defaults alone (trust.ts). */
+  private readonly trust: SiteTrust;
 
-  constructor(client: JiraClient, stamp: boolean, config: Partial<Pick<JiraConfig, 'site' | 'issueType' | 'people'>> = {}) {
+  constructor(client: JiraClient, stamp: boolean, config: Partial<Pick<JiraConfig, 'site' | 'issueType' | 'people' | 'trust'>> = {}) {
     this.client = client;
     this.stamp = stamp;
     this.issueType = config.issueType;
     this.site = config.site;
     this.people = config.people ?? [];
+    this.trust = config.trust ?? NO_TRUST_RULE;
+  }
+
+  /**
+   * The rule `project`'s issues are judged by. A project counts as one anyone may browse until a read proves it closed
+   * to anonymous users; none is read yet, so the default inside is held back and only an inside the team wrote applies.
+   */
+  private ruleOf(project: JiraProject): ResolvedTrust {
+    return resolveTrust(this.trust, project.key, JIRA_TRUST_DEFAULTS, true, insideKey(project));
   }
 
   /** Reached with the site's saved sign-in only; the scope is the site, as one sign-in serves all its projects. */
@@ -386,15 +401,21 @@ export class JiraTracker implements Tracker {
     }
     const jql = `project = "${project.key}" AND (statusCategory != Done OR statusCategoryChangedDate >= "${from}")`;
     const closedFrom = `${closedSince}T00:00:00.000Z`;
+    const rule = this.ruleOf(project);
     if (request === undefined || request.scope.all) {
-      const searched = await this.searchPages(repo, project, jql, closedFrom);
+      const searched = await this.searchPages(repo, project, rule, jql, closedFrom);
       return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: searched.notes };
     }
-    return await this.scopedList(repo, project, jql, closedFrom, request);
+    return await this.scopedList(repo, project, rule, jql, closedFrom, request);
+  }
+
+  /** `issue`, read of `value`, with the trust rule's verdict on it. */
+  private async judged(project: JiraProject, rule: ResolvedTrust, issue: HostIssue, value: unknown): Promise<HostIssue> {
+    return { ...issue, ruled: await judgeIssue(this.client, rule, project, issueKey(project, issue.number), reporterOf(value)) };
   }
 
   /** The scoped half of `list`: one search of the scope's issues, the held ones it left out read by key. */
-  private async scopedList(repo: string, project: JiraProject, jql: string, closedFrom: string, request: ScopeRequest): Promise<HostList> {
+  private async scopedList(repo: string, project: JiraProject, rule: ResolvedTrust, jql: string, closedFrom: string, request: ScopeRequest): Promise<HostList> {
     const viewer = await this.viewerOn(project.site);
     if (viewer.kind === 'failed') {
       return viewer;
@@ -404,12 +425,12 @@ export class JiraTracker implements Tracker {
     if (clause.kind === 'failed') {
       return clause;
     }
-    const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } as const : await this.searchPages(repo, project, `${jql} AND (${clause.jql})`, closedFrom);
+    const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } as const : await this.searchPages(repo, project, rule, `${jql} AND (${clause.jql})`, closedFrom);
     if (searched.kind === 'failed') {
       return searched;
     }
     const listed = new Set(searched.issues.map((issue) => issue.number));
-    const held = await this.heldIssues(repo, project, [...new Set(request.held)].filter((number) => !listed.has(number)));
+    const held = await this.heldIssues(repo, project, rule, [...new Set(request.held)].filter((number) => !listed.has(number)));
     if (held.kind === 'failed') {
       return held;
     }
@@ -417,7 +438,7 @@ export class JiraTracker implements Tracker {
   }
 
   /** The pages of one search of `jql`: the issues read, the closed ones cut to `closedFrom`, and what the list says of its read. */
-  private async searchPages(repo: string, project: JiraProject, jql: string, closedFrom: string): Promise<Searched | Failed> {
+  private async searchPages(repo: string, project: JiraProject, rule: ResolvedTrust, jql: string, closedFrom: string): Promise<Searched | Failed> {
     const issues: HostIssue[] = [];
     let unreadable = 0;
     let token: string | undefined;
@@ -432,7 +453,7 @@ export class JiraTracker implements Tracker {
         if (issue === undefined) {
           unreadable += 1;
         } else if (issue.closedAt === undefined || issue.closedAt >= closedFrom) {
-          issues.push(issue);
+          issues.push(await this.judged(project, rule, issue, item));
         }
       }
       token = body.next;
@@ -455,7 +476,7 @@ export class JiraTracker implements Tracker {
    * or close day: a held task's close must arrive. Not by a `key in` search, which Jira refuses whole when one key is
    * gone; a key Jira does not give (deleted, moved, out of the sign-in's sight) is named in a note instead.
    */
-  private async heldIssues(repo: string, project: JiraProject, numbers: readonly number[]): Promise<Searched | Failed> {
+  private async heldIssues(repo: string, project: JiraProject, rule: ResolvedTrust, numbers: readonly number[]): Promise<Searched | Failed> {
     const issues: HostIssue[] = [];
     let unreadable = 0;
     for (let start = 0; start < numbers.length; start += BULK_KEYS) {
@@ -473,7 +494,7 @@ export class JiraTracker implements Tracker {
         if (issue === undefined) {
           unreadable += 1;
         } else {
-          issues.push(issue);
+          issues.push(await this.judged(project, rule, issue, item));
         }
       }
     }

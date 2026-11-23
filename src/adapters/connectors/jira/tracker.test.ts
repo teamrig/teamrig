@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEARCH_PAGE, stampCredit, type HostIssue, type JsonRecord } from '../../../plugin-api/index.ts';
+import { SEARCH_PAGE, stampCredit, type HostIssue, type JsonRecord, type SiteTrust } from '../../../plugin-api/index.ts';
 import { connectorDeps } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
@@ -26,13 +26,13 @@ interface Kit {
 
 /**
  * A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config
- * names, `site` the site it names, `people` the account ids it counts as the team's.
+ * names, `site` the site it names, `people` the account ids it counts as the team's, `trust` its trust rule.
  */
-function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string, people: readonly string[] = []): Kit {
+function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string, people: readonly string[] = [], trust?: SiteTrust): Kit {
   const http = new FakeHttp();
   const credentials = saved ? new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token') : new FakeCredentials();
   const client = new JiraClient(http, credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
-  return { tracker: new JiraTracker(client, stamp, { site, issueType, people }), http };
+  return { tracker: new JiraTracker(client, stamp, { site, issueType, people, ...(trust === undefined ? {} : { trust }) }), http };
 }
 
 function parsedJson(text: string): unknown {
@@ -57,6 +57,9 @@ function jiraIssue(key: string, fields: JsonRecord = {}): JsonRecord {
   return { id: '10001', key, fields: { summary: 'A title', status: { statusCategory: { key: 'new' } }, ...fields } };
 }
 
+/** The trust rule's verdict on an issue with no reporter. */
+const ANONYMOUS = { trusted: false, why: 'the reporter is anonymous or hidden', failed: undefined } as const;
+
 /** The issue `jiraIssue` reads as, then `over`. */
 function hostIssue(number: number, over: Partial<HostIssue> = {}): HostIssue {
   return {
@@ -80,7 +83,7 @@ function hostIssue(number: number, over: Partial<HostIssue> = {}): HostIssue {
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
-    ruled: undefined,
+    ruled: ANONYMOUS,
     ...over,
   };
 }
@@ -168,6 +171,11 @@ describe('listing a Jira project', () => {
             { at: '2026-11-19T10:00:00.000Z', login: 'a-app', authorAssociation: '', authorKind: 'Bot' },
             { at: '2026-11-19T11:00:00.000Z', login: '', authorAssociation: '', authorKind: '' },
           ],
+          ruled: {
+            trusted: false,
+            why: 'anyone may browse the project, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside',
+            failed: undefined,
+          },
         }),
       ],
       notes: [],
@@ -445,6 +453,50 @@ describe('searching a Jira project (T4860)', () => {
     assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed('Jira answered 500'));
     assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed(NOT_A_LIST));
     assert.deepEqual(await kit().tracker.search.searchIssues('acme', ALL), failed(NOT_A_PROJECT));
+  });
+});
+
+describe("judging a listed Jira issue's trust (T5012)", () => {
+  const COLLEAGUE = { accountId: 'colleague', accountType: 'atlassian' };
+  const CUSTOMER = { accountId: 'customer-1', accountType: 'customer' };
+  const CHANGELOG = `${API}/issue/ENG-1/changelog?startAt=0&maxResults=100`;
+  const WRITTEN: SiteTrust = { inside: [{ kind: 'accountType', types: ['atlassian'] }], never: [{ kind: 'accounts', ids: ['banned'] }], edits: undefined, projects: new Map() };
+
+  it('holds the default inside back on a project not proved closed, naming the key to set, with no history read', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1', { reporter: COLLEAGUE })]));
+    const listed = await tracker.list(REPO, '2026-11-10');
+    assert.deepEqual(listed.kind === 'listed' ? listed.issues.map((issue) => issue.ruled) : listed, [
+      { trusted: false, why: 'anyone may browse the project, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside', failed: undefined },
+    ]);
+    assert.deepEqual(sent(http).map(([method, path]) => `${method} ${String(path)}`), ['POST /search/jql']);
+  });
+
+  it("applies a written inside and never, reading the history of the inside reporters' issues only", async () => {
+    const { tracker, http } = kit(false, true, undefined, undefined, [], WRITTEN);
+    http
+      .answers('POST', SEARCH, 200, page([jiraIssue('ENG-1', { reporter: COLLEAGUE }), jiraIssue('ENG-2', { reporter: CUSTOMER }), jiraIssue('ENG-3', { reporter: { accountId: 'banned', accountType: 'atlassian' } })]))
+      .answers('GET', CHANGELOG, 200, JSON.stringify({ values: [{ author: COLLEAGUE, items: [{ field: 'summary', fieldId: 'summary' }] }], isLast: true }));
+    const listed = await tracker.list(REPO, '2026-11-10');
+    assert.deepEqual(listed.kind === 'listed' ? listed.issues.map((issue) => [issue.number, issue.author, issue.ruled]) : listed, [
+      [1, 'colleague', { trusted: true, why: 'the reporter matches inside (accountType atlassian)' }],
+      [2, 'customer-1', { trusted: false, why: 'the reporter (customer account) matches no inside', failed: undefined }],
+      [3, 'banned', { trusted: false, why: 'the reporter matches never (accounts banned)', failed: undefined }],
+    ]);
+    assert.deepEqual(sent(http).map(([method, path]) => `${method} ${String(path)}`), ['POST /search/jql', 'GET /issue/ENG-1/changelog?startAt=0&maxResults=100']);
+  });
+
+  it('judges a held issue read by key the same way', async () => {
+    const { tracker, http } = kit(false, true, undefined, undefined, [], WRITTEN);
+    http
+      .answers('GET', `${API}/myself`, 200, '{"accountId":"me"}')
+      .answers('POST', SEARCH, 200, page([]))
+      .answers('POST', `${API}/issue/bulkfetch`, 200, JSON.stringify({ issues: [jiraIssue('ENG-1', { reporter: COLLEAGUE })] }))
+      .answers('GET', CHANGELOG, 500);
+    const listed = await tracker.list(REPO, '2026-11-10', { scope: { all: false, assigned: 'team', labels: [] }, people: [], held: [1] });
+    const ruled = listed.kind === 'listed' ? listed.issues[0]?.ruled : undefined;
+    assert.equal(ruled?.trusted, false);
+    assert.match(ruled !== undefined && !ruled.trusted ? (ruled.failed ?? '') : '', /^the read of ENG-1's edit history failed: Jira answered 500/);
   });
 });
 
