@@ -172,6 +172,7 @@ const EXPECTED = {
   'worktree remove': 'write',
   test: 'write',
   gh: 'write',
+  'conformance client': 'write',
   'conformance terminal': 'write',
   'git-credential': 'internal',
   'key list': 'read',

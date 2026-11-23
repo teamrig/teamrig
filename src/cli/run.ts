@@ -104,6 +104,7 @@ const setupScanCommand = () => import('./commands/setup-scan.ts');
 const testCommand = () => import('./commands/test.ts');
 const ghCommand = () => import('./commands/gh.ts');
 const conformanceCommand = () => import('./commands/conformance.ts');
+const conformanceClientCommand = () => import('./commands/conformance-client.ts');
 const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const keyCommands = () => import('./commands/key.ts');
 const kitCommands = () => import('./commands/kit.ts');
@@ -348,6 +349,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
   'conformance terminal': { effect: 'write', flags: ['program', 'sha256', 'args'], load: async () => (await conformanceCommand()).conformanceTerminal },
+  'conformance client': { effect: 'write', flags: ['script', 'home', 'steps'], load: async () => (await conformanceClientCommand()).conformanceClient },
   'git-credential': { effect: 'internal', flags: [], load: async () => (await gitCredentialCommand()).gitCredential },
   'key list': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyList },
   // add and remove run only in the person's own terminal (C7), never from /teamrig, which has none.
@@ -1336,6 +1338,15 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       file whose bytes hash to --sha256, each case on a new fake terminal of the program's own (kit
       mode), then checks it serves no kit request outside kit mode; prints PASS or FAIL per case, SKIP
       for a case this operating system lacks, LEAK per kit request served; exit 0 when all passed
+  conformance client --script <file.json> --home <absolute path> [--steps <n>]   builds a scripted
+      team for a UI client's tests: writes the script's team config into a private kit home at --home
+      and runs its steps there (add, set, update and inbox add only, on the script's fixed clock, one
+      minute apart, with no network, chat, program, shell or wake), so the client runs the real read
+      --json and events --json with $TEAMRIG_HOME set to it; --steps stops after step n, and a later run
+      with a larger n applies the rest; prints one JSON line (home, team, applied), each step's lines
+      on stderr; REFUSED for a folder the kit did not make, another script's home, a smaller --steps,
+      or a step running any other command or a flag that reaches past the home (--issue, --team,
+      --wake); exit 1 when a step fails
   git-credential get | store | erase
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
