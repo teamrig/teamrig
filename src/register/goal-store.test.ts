@@ -57,6 +57,19 @@ describe('GoalStore', () => {
     assert.equal(goal?.addedBy, 'lead');
   });
 
+  it('keeps an added goal on a line of its own after a last line torn without its newline (#2290)', async () => {
+    const torn = '{"v":1,"type":"goal-a';
+    const files = new MemoryFiles({ [PATH]: torn });
+    const goals = store(files);
+
+    assert.equal((await goals.add(A1, LEAD, CAP)).kind, 'written');
+
+    assert.ok((files.get(PATH) ?? '').startsWith(`${torn}\n`), 'the torn bytes stay');
+    const read = await goals.read();
+    assert.equal(read.goals.get('A1')?.title, A1.title);
+    assert.equal(read.unreadable, 1);
+  });
+
   it('refuses a second add of a tag and writes nothing', async () => {
     const files = new MemoryFiles();
     const goals = store(files);

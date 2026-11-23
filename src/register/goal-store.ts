@@ -1,5 +1,5 @@
 import type { Files } from '../core/files.ts';
-import { assertWritable, parseJsonl, toJsonlLine } from '../core/jsonl.ts';
+import { appendJsonlLines, assertWritable, parseJsonl, toJsonlLine } from '../core/jsonl.ts';
 import type { Mutex } from '../core/lock.ts';
 import { goalSliceRefusal, type GoalSliceInput, type SliceWriter } from './goal-slices.ts';
 import {
@@ -38,11 +38,11 @@ export type GoalWrite = { readonly kind: 'written'; readonly record: GoalRecord 
  * of a newer teamrig is refused for writes (NewerDataError), never mixed with this version's.
  */
 export class GoalStore {
-  private readonly files: Pick<Files, 'read' | 'append'>;
+  private readonly files: Pick<Files, 'read' | 'readTail' | 'append'>;
   private readonly path: string;
   private readonly mutex: Mutex;
 
-  constructor(files: Pick<Files, 'read' | 'append'>, path: string, mutex: Mutex) {
+  constructor(files: Pick<Files, 'read' | 'readTail' | 'append'>, path: string, mutex: Mutex) {
     this.files = files;
     this.path = path;
     this.mutex = mutex;
@@ -113,7 +113,7 @@ export class GoalStore {
   }
 
   private async append(record: GoalRecord): Promise<GoalWrite> {
-    await this.files.append(this.path, toJsonlLine(goalRecordJson(record)));
+    await appendJsonlLines(this.files, this.path, toJsonlLine(goalRecordJson(record)));
     return { kind: 'written', record };
   }
 }
