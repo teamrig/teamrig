@@ -5619,6 +5619,87 @@ OK 3 commit(s) in origin/main..HEAD, none over 400 non-test lines or 15 files wi
 
 A commit over the rule without the reason line is `REFUSED` (exit 2).
 
+### teamrig channel
+
+Shows the release channel this machine's teamrig install follows. On the stable channel, the install follows its
+marketplace's default branch, which takes a release once it has been out for a while; on the preview channel, it
+follows the marketplace's `preview` branch, which takes every release as it is cut. It reads the host's own plugin
+list and marketplace records, and changes nothing.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig channel
+```
+
+Output:
+
+```text
+teamrig 0.505.0 follows the stable channel (marketplace teamrig)
+```
+
+A marketplace that follows a branch teamrig does not name shows that branch. No teamrig install from a marketplace,
+a marketplace read from a local folder (which follows no branch) and a host that keeps no plugin store are
+`REFUSED` (exit 2).
+
+### teamrig channel stable
+
+Moves this machine's teamrig install to the stable channel: it changes the marketplace's own entry in your user
+settings, so the host follows the default branch, then re-adds the marketplace and updates teamrig through the host's
+own plugin commands. Without `--yes` it shows the change and the commands and writes nothing; with `--yes` it first
+keeps the old settings file in the kit's `backups` folder. A new session runs the version it installed. It changes
+your settings, not a team's, so it takes no `--session`.
+
+Flags:
+
+- `--yes`: write the change and run the commands; without it, only show them.
+
+Example:
+
+```sh
+teamrig channel stable
+```
+
+Output:
+
+```text
+PREVIEW nothing written (add --yes to write): the preview channel -> the stable channel
+  CHANGE /home/me/.claude/settings.json: the marketplace teamrig's own entry follows its default branch
+  RUN claude plugin marketplace add GeneralA6/teamrig
+  RUN claude plugin update teamrig@teamrig
+```
+
+`UNCHANGED teamrig already follows the stable channel` when nothing would change. A host command that fails is a
+`FAILED <command>: <what it said>` line (exit 1) naming the kept settings file. Settings that are not a JSON object
+and a host program not on the PATH are `REFUSED` (exit 2), with nothing written.
+
+### teamrig channel preview
+
+Moves this machine's teamrig install to the preview channel, the marketplace's `preview` branch, which takes every
+release as it is cut: the same steps as [channel stable](#teamrig-channel-stable), with the marketplace's entry
+following `preview`. Use it to try each release first; `teamrig channel stable` moves back.
+
+Flags:
+
+- `--yes`: write the change and run the commands; without it, only show them.
+
+Example:
+
+```sh
+teamrig channel preview --yes
+```
+
+Output:
+
+```text
+DONE teamrig follows the preview channel; a new session runs it; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
+  CHANGE /home/me/.claude/settings.json: the marketplace teamrig's own entry follows preview
+  RUN claude plugin marketplace add GeneralA6/teamrig#preview
+  RUN claude plugin update teamrig@teamrig
+```
+
 ### teamrig changes
 
 Lists what changed in the team's project since a release or a day, newest release first, the changes not released

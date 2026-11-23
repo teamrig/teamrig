@@ -45,6 +45,8 @@ settings lack, for you to paste: teamrig never writes your permissions.
   in a tab. It shows the session's tasks beside the conversation and makes no model calls, so it costs no tokens.
 - **A command by hand:** type it after `/teamrig`, such as `/teamrig budget`. It runs on your machine and shows what
   it printed, also with no model call.
+- **Every release first:** `teamrig channel preview --yes` moves your install to the preview channel, which takes
+  each release as it is cut; `teamrig channel stable --yes` moves it back.
 - **Updates:** see [Updating the plugin](docs/how-it-works.md#updating-the-plugin). Open tabs reload it by themselves
   once idle.
 

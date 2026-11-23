@@ -607,6 +607,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   statusline install [--yes]   makes teamrig statusline Claude Code's status line, in front of the one
       already there; without --yes it shows the change and writes nothing
   statusline uninstall [--yes] takes it back out: the status line before it returns
+  channel                      the release channel this machine's teamrig install follows: stable or preview
+  channel stable [--yes]       moves the install to the stable releases, its marketplace's default branch
+  channel preview [--yes]      moves it to every release as it is cut, its marketplace's preview branch; both
+      change the marketplace's entry in your user settings and reinstall teamrig through the host's own
+      plugin commands; without --yes they show the change and write nothing
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
       worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's

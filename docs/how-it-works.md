@@ -84,6 +84,11 @@ claude plugin marketplace update teamrig
 claude plugin update teamrig@teamrig
 ```
 
+To take each release as it is cut instead, move the install to the preview channel with `teamrig channel preview
+--yes`, and back with `teamrig channel stable --yes`; `teamrig channel` names the one it follows. It changes the
+marketplace's entry in your Claude Code user settings (keeping the old file first) and runs the two plugin commands
+for you.
+
 Each open tab then takes the new version by itself: teamrig's mod (`hooks/register.ts`) reads Claude Code's
 `installed_plugins.json` every 15 s, and once an install changed (any plugin's that applies to the tab), the file
 has read the same for 10 s and nothing in the plugin store changed for 10 s (an install still copied into the
