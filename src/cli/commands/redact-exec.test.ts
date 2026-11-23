@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { encodePrompt } from '../../open/prompt.ts';
 import { readEvents } from '../../register/snapshot.ts';
 import { APP, CLAUDE_SESSION, CliHarness, EVENTS_PATH, TEAM, TEAM_HOME, contextOf, decisionOf } from '../../testing/cli-harness.ts';
-import { redactExec } from './redact-exec.ts';
 
 const FAKE_TOKEN = ['ghp', '_1234567890abcdefghijklmnopqrstuvwxyz'].join('');
 const INCIDENTS = join(TEAM_HOME, 'state', 'secret-incidents.jsonl');
@@ -22,21 +21,26 @@ function bashHookStdin(command: string): string {
 }
 
 describe('teamrig redact-exec', () => {
-  it('loads config before running the command and passes clean output through unchanged', async () => {
+  it('loads config before running the command even if the command rewrites it, and passes clean output through', async () => {
     const harness = new CliHarness();
-    let sawConfigBeforeRun = false;
-    const res = await harness.run(['redact-exec', '--', 'echo', 'hello'], {
+    const res = await harness.run(['redact-exec', '--', 'env'], {
       shell: {
         run: async () => {
-          sawConfigBeforeRun = harness.files.get(join(TEAM_HOME, 'config.json')) !== undefined;
-          return { end: { kind: 'exited', code: 0 }, output: 'hello world\n' };
+          await harness.files.write(join(TEAM_HOME, 'config.json'), JSON.stringify({ ...TEAM, secretGuard: { redact: false } }));
+          return { end: { kind: 'exited', code: 0 }, output: `token=${FAKE_TOKEN}\n` };
         },
       },
     });
-    assert.equal(sawConfigBeforeRun, true);
     assert.equal(res.code, 0);
-    assert.deepEqual(res.stdout, ['hello world']);
-    assert.deepEqual(res.stderr, []);
+    assert.equal(res.stdout[0]?.includes(FAKE_TOKEN), false);
+    assert.match(res.stdout[0] ?? '', /\[redacted /);
+
+    const clean = await new CliHarness().run(['redact-exec', '--', 'echo', 'hello'], {
+      shell: { run: async () => ({ end: { kind: 'exited', code: 0 }, output: 'hello world\n' }) },
+    });
+    assert.equal(clean.code, 0);
+    assert.deepEqual(clean.stdout, ['hello world']);
+    assert.deepEqual(clean.stderr, []);
   });
 
   it('files a rotation task on leak, names it on stderr, and never stores the secret value', async () => {
@@ -163,9 +167,23 @@ describe('teamrig redact-exec', () => {
       stdin: bashHookStdin('teamrig redact-exec -- teamrig exec approve R1'),
     });
     assert.equal(decisionOf(execRes), 'deny');
-  });
 
-  it('exports redactExec directly', () => {
-    assert.equal(typeof redactExec, 'function');
+    const dynShell = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec --shell "$S" -- echo ok'),
+    });
+    assert.equal(decisionOf(dynShell), 'deny');
+
+    const dynShellEq = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec "--shell=$S" -- echo ok'),
+    });
+    assert.equal(decisionOf(dynShellEq), 'deny');
+
+    const afterDash = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec -- echo --shell "$S"'),
+    });
+    assert.equal(decisionOf(afterDash), undefined);
   });
 });

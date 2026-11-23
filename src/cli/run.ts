@@ -9,12 +9,12 @@ import { QUEUE_FLAGS, QUEUE_SWITCHES } from './commands/queue-args.ts';
 import { CommandHelp } from './help.ts';
 import { parseArgs, UsageError, type CommandEffect, type CommandEffects, type CommandFlags, type CommandRest, type CommandSwitches, type ParsedArgs } from './args.ts';
 import { RENAMED } from './renamed.ts';
-import { EXIT, RefusedError, type CliRuntime, type ExitCode } from './runtime.ts';
+import { EXIT, RefusedError, type CliRuntime, type ProcessExit } from './runtime.ts';
 import { hookLockDeadline } from './hook-timeouts.ts';
 import { chooseHost } from './host-choice.ts';
 import type { CommandTable } from '../slash/plan.ts';
 
-type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode>;
+type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ProcessExit>;
 
 interface CommandSpec {
   readonly flags: readonly string[];
@@ -1424,7 +1424,7 @@ function refuseSettingsWrite(command: string, switches: ReadonlySet<string>, run
   }
 }
 
-export async function runCli(given: readonly string[], runtime: CliRuntime): Promise<ExitCode> {
+export async function runCli(given: readonly string[], runtime: CliRuntime): Promise<ProcessExit> {
   const argv = shimArgs(given, runtime.cmdShimLine);
   if (argv === undefined) {
     runtime.out.stderr(cutLineMessage(runtime.self.script));

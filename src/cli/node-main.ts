@@ -50,7 +50,7 @@ import { USER_PATH_TIMEOUT_MS, systemUserPath } from '../restore/user-path.ts';
 import { CMD_SHIM_LINE_ENV } from './cmd-shim.ts';
 import { sessionProcessCheckOf } from './host.ts';
 import { runCli } from './run.ts';
-import type { ExitCode, Output } from './runtime.ts';
+import type { Output, ProcessExit } from './runtime.ts';
 
 /** How an entry script runs the CLI. */
 export interface NodeEntry {
@@ -95,7 +95,7 @@ export function ignoreClosedPipe(stream: Writable): AbortSignal {
  * apart from the entry scripts, so the guard runner can load it inside a try (T1818): one CLI module that fails to load
  * fails this import, not the entry.
  */
-export async function runWithNode(argv: readonly string[], entry: NodeEntry): Promise<ExitCode> {
+export async function runWithNode(argv: readonly string[], entry: NodeEntry): Promise<ProcessExit> {
   // The shim's command line is this run's alone: the steps, hooks and commands it starts take `process.env`, and a
   // teamrig among them that reads it would refuse its own arguments.
   const cmdShimLine = process.env[CMD_SHIM_LINE_ENV];

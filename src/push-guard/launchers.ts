@@ -189,9 +189,10 @@ const START_PROCESS_FLAGS: ReadonlySet<string> = new Set(['loaduserprofile', 'no
 /** `start` options in cmd that take the next word as their value. */
 const CMD_START_VALUED: ReadonlySet<string> = new Set(['/node', '/affinity', '/machine']);
 /**
- * teamrig's subcommands that run the command line after their `--`: `teamrig queue ... -- git push`. `heavy`, the old
- * name of `queue` (T1308), stays: teamrig refuses it now, but the week's transcripts the budget reads for misses still
- * hold it, and an older teamrig on the path would still run what it wraps, so the guards keep reading that command.
+ * teamrig's subcommands that run a wrapped command (`queue`, `heavy`, `test`, `redact-exec`): `teamrig queue ... -- git push`.
+ * `heavy`, the old name of `queue` (T1308), stays: teamrig refuses it now, but the week's transcripts the budget reads
+ * for misses still hold it, and an older teamrig on the path would still run what it wraps, so the guards keep reading
+ * that command.
  */
 const TEAMRIG_RUNNERS: ReadonlySet<string> = new Set(['queue', 'heavy', 'test', 'redact-exec']);
 /** The shell Node's `spawn` starts with `shell: true`, which runs a teamrig runner's command given as one word. */
@@ -665,6 +666,9 @@ class LaunchReader {
       return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
     }
     const shell = subcommand.text === 'redact-exec' ? redactExecShell(args) : SPAWN_SHELL;
+    if (shell === undefined) {
+      return { kind: 'opaque', reason: 'the shell redact-exec runs is only known when it runs', gated: true, command: { program: head, args } };
+    }
     if (end === -1) {
       if (subcommand.text !== 'redact-exec') {
         return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
@@ -700,16 +704,21 @@ class LaunchReader {
 function flagValue(args: readonly ShellWord[], flag: string): ShellWord | undefined {
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
-    if (arg === undefined || arg.dynamic) continue;
+    if (arg === undefined) continue;
+    if (!arg.dynamic && arg.text === '--') break;
+    if (arg.text.startsWith(`${flag}=`)) {
+      return { text: arg.text.slice(flag.length + 1), dynamic: arg.dynamic };
+    }
+    if (arg.dynamic) continue;
     if (arg.text === flag) return args[i + 1];
-    if (arg.text.startsWith(`${flag}=`)) return { text: arg.text.slice(flag.length + 1), dynamic: false };
   }
   return undefined;
 }
 
-function redactExecShell(args: readonly ShellWord[]): ShellDialect {
+function redactExecShell(args: readonly ShellWord[]): ShellDialect | undefined {
   const value = flagValue(args, '--shell');
-  if (value === undefined || value.dynamic) return SPAWN_SHELL;
+  if (value === undefined) return SPAWN_SHELL;
+  if (value.dynamic) return undefined;
   if (value.text === 'powershell') return 'powershell';
   if (value.text === 'cmd') return 'cmd';
   if (value.text === 'bash' || value.text === 'sh') return 'bash';

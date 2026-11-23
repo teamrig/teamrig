@@ -10,7 +10,7 @@ import { commandLine, unrunnableReason } from '../../test-run/shell.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
 import { secretFilesOf } from '../host.ts';
 import { sessionRef, shellWordsOf } from '../inputs.ts';
-import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { type CliRuntime, type ProcessExit } from '../runtime.ts';
 import { guardLoadOf } from './hook-guard-load.ts';
 import { fileRotations } from './secret-rotation.ts';
 
@@ -28,7 +28,7 @@ function writeOutput(runtime: Pick<CliRuntime, 'out'>, text: string): void {
   runtime.out.stdout(text.replace(/\r?\n$/, ''));
 }
 
-function exitCodeOf(end: ShellEnd): ExitCode {
+function exitCodeOf(end: ShellEnd): ProcessExit {
   if (end.kind === 'exited') {
     return end.code;
   }
@@ -104,7 +104,7 @@ function rotationEventOf(runtime: CliRuntime): HookEvent {
  * loads the team's secret-guard config first, runs the command, redacts secrets from its merged stdout/stderr, files
  * rotation tasks on a leak, and returns the command's own exit code (or `128 + signal`).
  */
-export async function redactExec(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+export async function redactExec(args: ParsedArgs, runtime: CliRuntime): Promise<ProcessExit> {
   noPositionals(args);
   const command = commandOf(args, runtime.platform);
   const shell = shellFlagOf(args);
