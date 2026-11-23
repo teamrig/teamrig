@@ -203,43 +203,65 @@ interface TeamrigRepo {
   readonly raise: (version: string, message: string) => string;
 }
 
-function teamrigRepo(t: { after: (fn: () => void) => void }): TeamrigRepo {
-  const root = mkdtempSync(join(tmpdir(), 'catch-up-regen-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const repo = baseRepo(root);
-  cpSync(templateRoot(), root, { recursive: true });
-  // The copy's remote and hooks folder still name the template's; each test's own copy talks only to its own origin.
-  repo.git('remote', 'set-url', 'origin', join(root, 'origin.git'));
-  repo.git('config', 'core.hooksPath', join(root, 'no-hooks'));
-  return repo;
-}
-
 /**
- * The base repo every real-git catch-up test starts from, built once for the file and copied per test (T5032): its
- * fifteen git runs took most of each test's time on a loaded Windows host.
+ * Real-git catch-up tests start from repos built once for the file and copied per test (T5032, T5274): the git runs
+ * that make them took most of each test's time on a loaded Windows host, and copying their files costs far less.
+ * These are the template folders made so far, removed once the file ends.
  */
-let template: string | undefined;
-
-function templateRoot(): string {
-  if (template === undefined) {
-    const root = mkdtempSync(join(tmpdir(), 'catch-up-template-'));
-    template = root;
-    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', join(root, 'origin.git')]);
-    mkdirSync(join(root, 'work'));
-    const { git, commitFiles, build } = baseRepo(root);
-    git('init', '-q', '-b', 'main');
-    for (const [key, value] of [['user.name', 't'], ['user.email', 't@example.com'], ['commit.gpgsign', 'false'], ['core.hooksPath', join(root, 'no-hooks')], ['core.autocrlf', 'false']] as const) git('config', key, value);
-    git('remote', 'add', 'origin', join(root, 'origin.git'));
-    commitFiles({ 'src/a.ts': 'export const a = 1;\n', [KIT]: "export const KIT_VERSION = '0.1.0';\n", [PLUGIN]: '{\n  "name": "teamrig",\n  "version": "0.1.0"\n}\n', 'README.md': '# r\n', [RELEASE]: release('0.0.5') }, 'base');
-    build();
-    commitFiles({}, 'build: the first dist');
-  }
-  return template;
-}
+const templates: string[] = [];
 
 after(() => {
-  if (template !== undefined) rmSync(template, { recursive: true, force: true });
+  for (const root of templates) rmSync(root, { recursive: true, force: true });
 });
+
+/** Makes its value the first time it is asked for and hands that same one back after. */
+function once<T>(make: () => T): () => T {
+  let made: { readonly value: T } | undefined;
+  return () => (made ??= { value: make() }).value;
+}
+
+/** A copy of the repo and origin under `from` in a new folder, with its remote and hooks folder re-pointed there. */
+function copyOf(from: string, prefix: string): { readonly root: string; readonly repo: TeamrigRepo } {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  cpSync(from, root, { recursive: true });
+  const repo = baseRepo(root);
+  // The copy's remote and hooks folder still name the template's; each copy talks only to its own origin.
+  repo.git('remote', 'set-url', 'origin', join(root, 'origin.git'));
+  repo.git('config', 'core.hooksPath', join(root, 'no-hooks'));
+  return { root, repo };
+}
+
+/** The base repo every real-git test starts from: one commit at 0.1.0 and its dist, pushed to no origin yet. */
+const baseTemplate = once((): string => {
+  const root = mkdtempSync(join(tmpdir(), 'catch-up-template-'));
+  templates.push(root);
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', join(root, 'origin.git')]);
+  mkdirSync(join(root, 'work'));
+  const { git, commitFiles, build } = baseRepo(root);
+  git('init', '-q', '-b', 'main');
+  for (const [key, value] of [['user.name', 't'], ['user.email', 't@example.com'], ['commit.gpgsign', 'false'], ['core.hooksPath', join(root, 'no-hooks')], ['core.autocrlf', 'false']] as const) git('config', key, value);
+  git('remote', 'add', 'origin', join(root, 'origin.git'));
+  commitFiles({ 'src/a.ts': 'export const a = 1;\n', [KIT]: "export const KIT_VERSION = '0.1.0';\n", [PLUGIN]: '{\n  "name": "teamrig",\n  "version": "0.1.0"\n}\n', 'README.md': '# r\n', [RELEASE]: release('0.0.5') }, 'base');
+  build();
+  commitFiles({}, 'build: the first dist');
+  return root;
+});
+
+/** A template built on the base: a copy of it with `setUp` run once, and what `setUp` returned. */
+function templateOnBase<S>(prefix: string, setUp: (repo: TeamrigRepo) => S): () => S & { readonly root: string } {
+  return once(() => {
+    const { root, repo } = copyOf(baseTemplate(), prefix);
+    templates.push(root);
+    return { ...setUp(repo), root };
+  });
+}
+
+/** A test's own copy of the template at `from` (the base unless given), removed when the test ends. */
+function teamrigRepo(t: { after: (fn: () => void) => void }, from: string = baseTemplate()): TeamrigRepo {
+  const { root, repo } = copyOf(from, 'catch-up-regen-');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return repo;
+}
 
 /** The steps on the repo at `<root>/work`, whatever is in it yet. */
 function baseRepo(root: string): TeamrigRepo {
@@ -266,10 +288,17 @@ function baseRepo(root: string): TeamrigRepo {
   return { dir, git, build, commitFiles, raise };
 }
 
-/** main moved to 0.2.0 with its own work (a new src/b.ts) and dist; the change, from the base, sits on HEAD (t9-change) at 0.1.1. */
-function movedPast(t: { after: (fn: () => void) => void }, work: Readonly<Record<string, string>> = { 'src/a.ts': 'export const a = 2;\n' }, mainWork: Readonly<Record<string, string>> = { 'src/b.ts': 'export const b = 1;\n' }) {
-  const repo = teamrigRepo(t);
-  const { git, commitFiles, raise } = repo;
+/** What the change and main each commit before main moves past the change. */
+interface MovedPastWork {
+  readonly work: Readonly<Record<string, string>>;
+  readonly mainWork?: Readonly<Record<string, string>>;
+}
+
+const MOVED_PAST_WORK: MovedPastWork = { work: { 'src/a.ts': 'export const a = 2;\n' } };
+const MAIN_WORK: Readonly<Record<string, string>> = { 'src/b.ts': 'export const b = 1;\n' };
+
+/** Moves main to 0.2.0 with `mainWork` and its dist, pushed; then commits `work` from the base on HEAD at 0.1.1, pushed. */
+function moveMainPast({ git, commitFiles, raise }: TeamrigRepo, { work, mainWork = MAIN_WORK }: MovedPastWork): { readonly base: string; readonly tip: string; readonly sha: string } {
   const base = git('rev-parse', 'HEAD');
   commitFiles(mainWork, 'main: its own work');
   const tip = raise('0.2.0', 'plugin: version 0.2.0, b arrives');
@@ -278,10 +307,31 @@ function movedPast(t: { after: (fn: () => void) => void }, work: Readonly<Record
   commitFiles(work, 'a: a changes (T9)');
   const sha = raise('0.1.1', 'plugin: version 0.1.1, a changes (T9)\n\nThe raise for a.');
   git('push', '-q', 'origin', HEAD);
-  const request: CatchUpRequest = { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
+  return { base, tip, sha };
+}
+
+/** The repo main moved past with the default work, shared by most tests that read it. */
+const movedPastTemplate = templateOnBase('catch-up-moved-template-', (repo) => moveMainPast(repo, MOVED_PAST_WORK));
+
+/**
+ * main moved to 0.2.0 with its own work (a new src/b.ts unless `change` says) and dist; the change, from the base,
+ * sits on HEAD (t9-change) at 0.1.1. With no `change`, the test copies the template that already holds it.
+ */
+function movedPast(t: { after: (fn: () => void) => void }, change?: MovedPastWork) {
+  if (change === undefined) {
+    const made = movedPastTemplate();
+    return catchUpOf(teamrigRepo(t, made.root), made);
+  }
+  const repo = teamrigRepo(t);
+  return catchUpOf(repo, moveMainPast(repo, change));
+}
+
+/** The request and deps that catch up the head in `repo` onto the tip in `shas`. */
+function catchUpOf<S extends { readonly tip: string }>(repo: TeamrigRepo, shas: S) {
+  const request: CatchUpRequest = { head: HEAD, tip: shas.tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
   const log: string[] = [];
-  const deps: CatchUpDeps = { git, log: (line) => log.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
-  return { ...repo, base, tip, sha, request, deps, log };
+  const deps: CatchUpDeps = { git: repo.git, log: (line) => log.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
+  return { ...repo, ...shas, request, deps, log };
 }
 
 test('a teamrig head main moved past drops its version and dist commits, replays its work, raises again on main\'s version and rebuilds the dist (T2988)', (t) => {
@@ -364,23 +414,24 @@ function assertRestored(git: (...args: string[]) => string, sha: string): void {
 
 const reasonOf = (caught: ReturnType<typeof catchUp>): string => (caught.kind === 'refused' ? caught.reason : '');
 
-/** main moved to 0.2.0; the change, from the base at 0.1.0, carries a tools edit and then what `change` commits (T4298). */
-function manifestChange(t: { after: (fn: () => void) => void }, change: (repo: ReturnType<typeof teamrigRepo>) => void) {
-  const repo = teamrigRepo(t);
-  const { git, commitFiles, raise } = repo;
+/** main moved to 0.2.0, and the change's tools edit from the base checked out on HEAD, unpushed: what each manifestChange starts from. */
+const manifestTemplate = templateOnBase('catch-up-manifest-template-', ({ git, commitFiles, raise }) => {
   const base = git('rev-parse', 'HEAD');
-  commitFiles({ 'src/b.ts': 'export const b = 1;\n' }, 'main: its own work');
+  commitFiles(MAIN_WORK, 'main: its own work');
   const tip = raise('0.2.0', 'plugin: version 0.2.0');
   git('push', '-q', 'origin', 'main');
   git('switch', '-q', '--create', HEAD, base);
   commitFiles({ 'tools/x.ts': 'export const x = 1;\n' }, 'tools: x');
+  return { base, tip };
+});
+
+/** main moved to 0.2.0; the change, from the base at 0.1.0, carries a tools edit and then what `change` commits (T4298). */
+function manifestChange(t: { after: (fn: () => void) => void }, change: (repo: TeamrigRepo) => void) {
+  const { root, base, tip } = manifestTemplate();
+  const repo = teamrigRepo(t, root);
   change(repo);
-  git('push', '-q', 'origin', HEAD);
-  const sha = git('rev-parse', 'HEAD');
-  const request: CatchUpRequest = { head: HEAD, tip, main: 'main', regenerated: listedPaths(TEAMRIG_REGENERATION) };
-  const log: string[] = [];
-  const deps: CatchUpDeps = { git, log: (line) => log.push(line), readText: (path) => readFileSync(join(repo.dir, path), 'utf8'), writeText: (path, text) => writeFileSync(join(repo.dir, path), text), build: repo.build };
-  return { ...repo, base, tip, sha, request, deps, log };
+  repo.git('push', '-q', 'origin', HEAD);
+  return catchUpOf(repo, { base, tip, sha: repo.git('rev-parse', 'HEAD') });
 }
 
 const SET_MANIFEST = (version: string): string => `fix(release): the release manifest starts from main's version, ${version} (T9)`;
@@ -424,19 +475,19 @@ test('a release manifest set in the raise commit, or to another version than the
 
 
 test('a work commit that conflicts with main is aborted and refused, the repo dir back on the head (T2988)', (t) => {
-  const { git, request, deps, sha } = movedPast(t, { 'src/a.ts': 'export const a = 2;\n' }, { 'src/a.ts': 'export const a = 3;\n' });
+  const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n' }, mainWork: { 'src/a.ts': 'export const a = 3;\n' } });
   assert.match(reasonOf(catchUp(deps, request)), /, and replaying its commit [0-9a-f]{9} onto that tip conflicts: rebase it by hand, ship it again with its plan \(ship\.ts <dir> <plan\.json> --merge\)/);
   assertRestored(git, sha);
 });
 
 test('a commit that mixes work with the version files is refused before any rebase (T2988)', (t) => {
-  const { git, request, deps, sha } = movedPast(t, { 'src/a.ts': 'export const a = 2;\n', [KIT]: "export const KIT_VERSION = '0.1.1';\n" });
+  const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n', [KIT]: "export const KIT_VERSION = '0.1.1';\n" } });
   assert.match(reasonOf(catchUp(deps, request)), /, and its commit [0-9a-f]{9} changes the version files or the dist together with its work, so they cannot be made again apart: ship it again with its plan/);
   assertRestored(git, sha);
 });
 
 test('work that writes down the version it raised to is refused when main\'s raise sets another (T2988)', (t) => {
-  const { git, request, deps, sha } = movedPast(t, { 'src/a.ts': 'export const a = 2;\n', 'docs/news.md': 'New in 0.1.1: a is 2.\n' });
+  const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n', 'docs/news.md': 'New in 0.1.1: a is 2.\n' } });
   assert.match(reasonOf(catchUp(deps, request)), /, and its work names the version 0\.1\.1 it raised to \(docs\/news\.md\), which becomes 0\.2\.1 on that tip: ship it again with its plan/);
   assertRestored(git, sha);
 });
