@@ -27,7 +27,7 @@ const LONG_AGO = '2029-11-01T09:00:00.000Z';
 
 /** A task as `queuedWork` reads it: unsized, of no class or type, its status set long ago unless `fields` say otherwise. */
 function workTask(fields: Pick<WorkTask, 'id' | 'owner' | 'status' | 'priority'> & Partial<WorkTask>): WorkTask {
-  return { statusAt: LONG_AGO, sizeBase: null, workClass: null, type: null, waits: [], ...fields };
+  return { statusAt: LONG_AGO, sizeBase: null, workClass: null, type: null, waits: [], answer: null, ...fields };
 }
 
 /** Each session's weights by priority id, as `workWeights` maps them. */
@@ -107,6 +107,27 @@ describe('queuedWork', () => {
 
   it('lists an open blocker beside p0 as work that goes on past the daily stop (T4329)', () => {
     const work = queuedWork([workTask({ id: 'T1', owner: 'alpha', status: 'open', priority: BLOCKER_PRIORITY_ID }), workTask({ id: 'T2', owner: 'alpha', status: 'open', priority: 0 })], priorities, NOW);
+    assert.deepEqual([...work.urgent], [['alpha', ['T1', 'T2']]]);
+  });
+
+  it('lists a waiting p0 whose every wait is over (an answered approval, a finished task) as work past the daily stop, never one still waiting or on a time (T4388)', () => {
+    const approved = { verdict: 'approved' as const, by: 'lead', at: LONG_AGO, note: 'OK abc1234' };
+    const work = queuedWork(
+      [
+        workTask({ id: 'T1', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'approval', who: 'lead' }], answer: approved }),
+        workTask({ id: 'T2', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'task', id: 'T9' }] }),
+        workTask({ id: 'T3', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'approval', who: 'lead' }] }),
+        workTask({ id: 'T4', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'task', id: 'T8' }] }),
+        workTask({ id: 'T5', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'time', at: '2029-01-01 09:00' }] }),
+        workTask({ id: 'T6', owner: 'alpha', status: 'waiting', priority: 1, waits: [{ kind: 'approval', who: 'lead' }], answer: approved }),
+        workTask({ id: 'T7', owner: 'alpha', status: 'waiting', priority: 0, waits: [{ kind: 'approval', who: 'po' }], answer: approved }),
+        workTask({ id: 'T8', owner: 'bravo', status: 'in-progress', priority: 2 }),
+      ],
+      priorities,
+      NOW,
+    );
+    // T1: approved; T2: its task no read holds, so finished. T3 unanswered, T4 on a live task, T5 on a time, T6 not
+    // p0, T7 answered by another than the one it waits for: none of them.
     assert.deepEqual([...work.urgent], [['alpha', ['T1', 'T2']]]);
   });
 
@@ -299,7 +320,7 @@ describe('cachedWork', () => {
     const { files } = await team();
     assert.deepEqual([...(await cachedWork(files, PATH, CACHE, priorities, NOW)).weights], BOTH);
     assert.deepEqual(cacheIn(files), {
-      [VERSION_FIELD]: 7,
+      [VERSION_FIELD]: 8,
       key: { tail: await files.stamp(tail), snapshot: null, priorities: [1, 2, 3, 4, 5] },
       work: { alpha: { 1: 5 }, bravo: { 3: 3 } },
       urgent: {},
@@ -377,7 +398,8 @@ describe('cachedWork', () => {
   type Damage = (cache: JsonRecord, key: JsonRecord) => string;
   const DAMAGES: readonly (readonly [string, Damage])[] = [
     ['damaged', (cache) => JSON.stringify(cache).slice(0, -2)],
-    ['in another format', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 8, work: {} })],
+    ['in another format', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 9, work: {} })],
+    ['in the seventh format, its p0 ids without the waiting ones whose waits are over', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 7, work: {} })],
     ['in the sixth format, with no answers awaited', (cache) => JSON.stringify({ [VERSION_FIELD]: 6, key: cache['key'], work: {}, urgent: {}, sizeBases: {}, likeTasks: [] })],
     ['without its answers awaited', (cache) => JSON.stringify({ ...cache, work: {}, awaited: 'none' })],
     ['with answers awaited that are not text', (cache) => JSON.stringify({ ...cache, work: {}, awaited: { alpha: [5] } })],

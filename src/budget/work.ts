@@ -3,6 +3,7 @@ import type { PriorityConfig } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
 import { isRecord, recordField } from '../core/guards.ts';
 import { parseObject, recordVersion, VERSION_FIELD } from '../core/jsonl.ts';
+import { answerTo } from '../register/approval.ts';
 import { isItemType, parseSizeBase, type SizeBase } from '../register/events.ts';
 import type { Task } from '../register/fold.ts';
 import { layoutPaths } from '../register/layout.ts';
@@ -85,7 +86,28 @@ export interface QueuedWork {
 export const NO_WORK: QueuedWork = { weights: new Map(), urgent: new Map(), awaited: new Map(), sizeBases: new Map(), likeTasks: [] };
 
 /** What `queuedWork` reads of a task. */
-export type WorkTask = Pick<Task, 'id' | 'owner' | 'status' | 'statusAt' | 'priority' | 'sizeBase' | 'workClass' | 'type' | 'waits'>;
+export type WorkTask = Pick<Task, 'id' | 'owner' | 'status' | 'statusAt' | 'priority' | 'sizeBase' | 'workClass' | 'type' | 'waits' | 'answer'>;
+
+/**
+ * True when a waiting task's owner can take it up again (T4388): every reason it waits for is an approval its giver
+ * answered (either way, as `waitsLetGoOn` reads it: an approval sends the owner to merge, a decline back to work) or a
+ * task that finished, one no read holds counting as finished. A p0 the lead approved is the owner's next step, so the
+ * daily stop must not hold it. A time wait never counts here: the work cache is keyed by register writes alone, so a
+ * time passing would not reach a cached reading; such a task is held until its owner sets it going again.
+ */
+function waitIsOver(task: WorkTask, statuses: ReadonlyMap<string, TaskStatus>): boolean {
+  return (
+    task.status === 'waiting' &&
+    task.waits.length > 0 &&
+    task.waits.every((reason) => {
+      if (reason.kind === 'task') {
+        const status = statuses.get(reason.id);
+        return status === undefined || status === 'done' || status === 'dropped';
+      }
+      return answerTo(task, reason) !== undefined;
+    })
+  );
+}
 
 function appended(map: Map<string, string[]>, session: string, id: string): void {
   const ids = map.get(session) ?? [];
@@ -122,15 +144,17 @@ export function awaitedAnswers(all: readonly WorkTask[]): Map<string, string[]> 
 }
 
 /**
- * The sessions' queued work at `now`: `workWeights`, each session's open and in-progress p0 and blocker tasks, the answers others
- * wait on it for, every task's size base, and the like tasks.
+ * The sessions' queued work at `now`: `workWeights`, each session's p0 and blocker tasks it can work on (open, in
+ * progress, or waiting with every wait over, `waitIsOver`), the answers others wait on it for, every task's size
+ * base, and the like tasks.
  */
 export function queuedWork(tasks: Iterable<WorkTask>, priorities: readonly PriorityConfig[], now: number): QueuedWork {
   const all = [...tasks];
   const queued = all.filter((task) => QUEUED.has(task.status));
+  const statuses = new Map(all.map((task) => [task.id, task.status]));
   const urgent = new Map<string, string[]>();
-  for (const task of queued) {
-    if (isRightNow(task.priority)) {
+  for (const task of all) {
+    if (isRightNow(task.priority) && (QUEUED.has(task.status) || waitIsOver(task, statuses))) {
       appended(urgent, task.owner, task.id);
     }
   }
@@ -164,10 +188,10 @@ export const WORK_CACHE_FILE = 'work.cache.json';
 /**
  * The work cache's format (2: with each session's p0 ids; 3: each session's weights by priority id; 4: its top task's
  * weight only, T1588, so a format-3 cache of every task's weights is read again; 5: with each task's size base, T2141;
- * 6: with the like tasks, T2194; 7: with the answers awaited, T2656); a cache in any other reads as missing and is
- * written again.
+ * 6: with the like tasks, T2194; 7: with the answers awaited, T2656; 8: its p0 ids with the waiting ones whose waits
+ * are over, T4388); a cache in any other reads as missing and is written again.
  */
-const WORK_CACHE_FORMAT = 7;
+const WORK_CACHE_FORMAT = 8;
 
 /** What a reading of the work was read from: the stamps of the register files the working set folds, and the priority ids that weighed it. */
 interface WorkKey {

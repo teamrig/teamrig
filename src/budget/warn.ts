@@ -57,7 +57,7 @@ export interface BudgetFacts extends LiftNames {
   readonly isLead: boolean;
   /** The budget never holds the session (src/budget/unheld.ts `unheldOf`): the security reviewer or the GitHub answerer. */
   readonly unheld: boolean;
-  /** Its open and in-progress p0 task ids: urgent work that goes on past the daily stop, helpers too. */
+  /** Its p0 and blocker task ids it can work on (`queuedWork`): urgent work that goes on past the daily stop, helpers too. */
   readonly urgent: readonly string[];
   /**
    * The answers other sessions wait on it for (`QueuedWork.awaited`): a wait on it blocks another session, so they go on
