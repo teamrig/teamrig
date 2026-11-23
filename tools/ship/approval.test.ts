@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { EXIT, RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { CLAUDE_SESSION, CliHarness, TEAM_HOME } from '../../src/testing/cli-harness.ts';
@@ -252,15 +252,26 @@ describe('changePatch: the fingerprint of what a branch changes over main', () =
   const patch = (rev = 'HEAD'): string => changePatch(git, rev, 'main', WRITES);
   const lines = (from: number, to: number): string => Array.from({ length: to - from + 1 }, (_, i) => `line ${from + i}\n`).join('');
 
-  beforeEach(() => {
-    repo = new TempRepo('approval').init();
+  // main's base commit and t1-change's one commit on it, built once with git and copied per test (T5032): each test
+  // then starts at t1-change with no git run of its own setup.
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('approval-template').init();
     repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
     commitFiles('base', { 'src/a.ts': lines(1, 20), 'src/b.ts': 'b\n', 'dist/a.js': 'a\n', [MANIFEST]: manifest('0.1.0'), [VERSION_TS]: versionTs('0.1.0'), [MIGRATE_TS]: migration(1, '0.1.0'), [GUIDE]: GUIDE_BASE, [SCHEMA]: '{}\n' });
     repo.git('checkout', '-q', '-b', 't1-change');
     commitFiles('core: a', { 'src/a.ts': lines(1, 20).replace('line 15\n', 'line fifteen\n'), 'src/new.ts': 'new\n' });
+    template = repo;
+  });
+
+  beforeEach(() => {
+    repo = new TempRepo('approval').copyFrom(template);
   });
 
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   it('is a sha256, the same on the same change', () => {
     assert.match(patch(), /^[0-9a-f]{64}$/);
