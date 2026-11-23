@@ -27,7 +27,7 @@ const VERSION_COMMAND = 'version';
 
 const SECTION = /^### teamrig (.+?)\s*$/;
 const HEADING = /^#{1,3}\s/;
-const FLAG_BULLET = /^- `--([a-z][a-z-]*)/;
+const FLAG_BULLET = /^- `--([a-z][a-z0-9-]*)/;
 const FENCE = /^\s*(`{3,})\s*([\w-]*)/;
 const INLINE_COMMAND = /`(teamrig [^`]+)`/g;
 const QUOTED = /"[^"]*"/g;
