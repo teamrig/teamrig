@@ -52,7 +52,6 @@ describe('the plugin API surface', () => {
       'folderGlob',
       'hostAdapterProblems',
       'hostDeclarationProblems',
-      'importsProject',
       'instantField',
       'isApiVersion',
       'isClaim',

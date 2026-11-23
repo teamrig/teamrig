@@ -272,8 +272,8 @@ export {
 // The scope a tracker's list may be asked with: which of a place's issues the import takes (sync/scope.ts).
 export type { AssignedScope, ImportScope, ScopeRequest } from '../sync/scope.ts';
 // A tracker's trust rule: whose issues become tasks as written, judged the same for every connector (sync/trust-rule.ts).
-export { importsProject, judgeTrust, resolveTrust } from '../sync/trust-rule.ts';
-export type { ProjectTrust, ResolvedTrust, SiteTrust, TrustAuthor, TrustDefaults, TrustEditors, TrustEdits, TrustFacts, TrustLevel, TrustMatcher, TrustVerdict } from '../sync/trust-rule.ts';
+export { judgeTrust, resolveTrust } from '../sync/trust-rule.ts';
+export type { ResolvedTrust, SiteTrust, TrustAuthor, TrustDefaults, TrustEditors, TrustEdits, TrustFacts, TrustLevel, TrustMatcher, TrustVerdict } from '../sync/trust-rule.ts';
 export { NO_TRUST_RULE, parseTrustRule, type TrustSyntax } from '../sync/trust-config.ts';
 export type { HostIssue, IssueComment, IssueState, IssueThread, LabelEvent, LinkedIssue, ReadComment } from '../issues/issue.ts';
 // A repository's label file, and the labels teamrig keeps: the only labels a tracker may make.

@@ -23,14 +23,9 @@ export interface TrustLevel {
   readonly edits: TrustEdits | undefined;
 }
 
-/** A project's own rule: `import: false` reads nothing from it. */
-export interface ProjectTrust extends TrustLevel {
-  readonly import: boolean;
-}
-
 /** A connector's whole rule: the site's, and each project's override by its key. */
 export interface SiteTrust extends TrustLevel {
-  readonly projects: ReadonlyMap<string, ProjectTrust>;
+  readonly projects: ReadonlyMap<string, TrustLevel>;
 }
 
 /** The rule one project's issues are judged by, its levels already merged. */
@@ -65,11 +60,6 @@ export function resolveTrust(site: SiteTrust, project: string, defaults: TrustDe
     return { inside: written, never, edits, heldDefault: undefined };
   }
   return publicProject ? { inside: [], never, edits, heldDefault: insideKey } : { inside: defaults.inside, never, edits, heldDefault: undefined };
-}
-
-/** Whether `project` is read at all. */
-export function importsProject(site: SiteTrust, project: string): boolean {
-  return site.projects.get(project)?.import ?? true;
 }
 
 /** An author as the tracker gives it; `accountType` undefined when the tracker did not say. */

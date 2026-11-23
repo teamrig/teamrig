@@ -25,7 +25,7 @@ describe('parseTrustRule', () => {
       inside: [{ accountType: ['atlassian'] }, { accounts: ['5b10ac8d82e05b22cc7d4ef5'] }],
       never: [{ accounts: ['mail-1'] }],
       edits: 'any',
-      projects: { SUP: { inside: [{ accounts: ['agent-1'] }], never: [{ accounts: ['bot-1'] }], edits: 'inside' }, OPS: { import: false } },
+      projects: { SUP: { inside: [{ accounts: ['agent-1'] }], never: [{ accounts: ['bot-1'] }], edits: 'inside' }, OPS: { edits: 'any' } },
     });
     assert.deepEqual(problems, []);
     assert.deepEqual(rule.inside, [
@@ -34,15 +34,15 @@ describe('parseTrustRule', () => {
     ]);
     assert.deepEqual(rule.never, [{ kind: 'accounts', ids: ['mail-1'] }]);
     assert.equal(rule.edits, 'any');
-    assert.deepEqual(rule.projects.get('SUP'), { inside: [{ kind: 'accounts', ids: ['agent-1'] }], never: [{ kind: 'accounts', ids: ['bot-1'] }], edits: 'inside', import: true });
-    assert.deepEqual(rule.projects.get('OPS'), { inside: undefined, never: [], edits: undefined, import: false });
+    assert.deepEqual(rule.projects.get('SUP'), { inside: [{ kind: 'accounts', ids: ['agent-1'] }], never: [{ kind: 'accounts', ids: ['bot-1'] }], edits: 'inside' });
+    assert.deepEqual(rule.projects.get('OPS'), { inside: undefined, never: [], edits: 'any' });
   });
 
   it('refuses accept until the rule reads it, and any key it does not know', () => {
     const { problems } = read({ accept: { label: 'teamrig' }, insde: [] , projects: { ENG: { accept: null } } });
     assert.deepEqual(problems, [
       'trust.accept: is not read yet: an outsider issue imports only by inside, so drop the key',
-      'trust.insde: is no key of a trust rule (inside, never, edits, projects, import)',
+      'trust.insde: is no key of a trust rule (inside, never, edits, projects)',
       'trust.projects.ENG.accept: is not read yet: an outsider issue imports only by inside, so drop the key',
     ]);
   });
@@ -87,9 +87,12 @@ describe('parseTrustRule', () => {
     assert.deepEqual(notObject.rule.inside, []);
   });
 
-  it('reads a project import that is no boolean as no import, the narrower one, and says so', () => {
-    const { rule, problems } = read({ projects: { OPS: { import: 'no' } } });
-    assert.deepEqual(problems, ['trust.projects.OPS.import: must be true or false, not "no"']);
-    assert.equal(rule.projects.get('OPS')?.import, false);
+  it('refuses a project import until the rule reads it, never a silent no-op, and names a project key it does not know', () => {
+    const { rule, problems } = read({ projects: { OPS: { import: false, projects: {} } } });
+    assert.deepEqual(problems, [
+      "trust.projects.OPS.import: is not read yet: to read nothing of a project, leave it out of the connector's projects",
+      'trust.projects.OPS.projects: is no key of a trust rule (inside, never, edits)',
+    ]);
+    assert.deepEqual(rule.projects.get('OPS'), { inside: undefined, never: [], edits: undefined });
   });
 });

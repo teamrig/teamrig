@@ -1,6 +1,6 @@
 import type { ConfigReport } from '../plugin-api/connector.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
-import type { ProjectTrust, SiteTrust, TrustEdits, TrustLevel, TrustMatcher } from './trust-rule.ts';
+import type { SiteTrust, TrustEdits, TrustLevel, TrustMatcher } from './trust-rule.ts';
 
 /**
  * Reads a connector's `trust` key (trust-rule.ts) as the team's JSON holds it. Total: a wrong key is reported and
@@ -23,7 +23,12 @@ const LATER_KINDS: ReadonlySet<string> = new Set(['groups', 'projectRoles', 'ema
 
 const LEVEL_KEYS: ReadonlySet<string> = new Set(['inside', 'never', 'edits']);
 const SITE_KEYS: ReadonlySet<string> = new Set([...LEVEL_KEYS, 'projects']);
-const PROJECT_KEYS: ReadonlySet<string> = new Set([...LEVEL_KEYS, 'import']);
+
+/** Keys a later slice reads, refused with what to do meanwhile rather than read as a silent no-op. */
+const LATER_KEYS: ReadonlyMap<string, string> = new Map([
+  ['accept', 'is not read yet: an outsider issue imports only by inside, so drop the key'],
+  ['import', 'is not read yet: to read nothing of a project, leave it out of the connector\'s projects'],
+]);
 
 /** The rule of a section with no `trust` key: every key takes the connector's default. */
 export const NO_TRUST_RULE: SiteTrust = { inside: undefined, never: [], edits: undefined, projects: new Map() };
@@ -104,10 +109,11 @@ function editsOf(value: unknown, key: string, report: ConfigReport): TrustEdits 
 
 function unknownKeys(value: JsonRecord, known: ReadonlySet<string>, key: string, report: ConfigReport): void {
   for (const name of Object.keys(value)) {
-    if (name === 'accept') {
-      report(`${key}.accept`, 'is not read yet: an outsider issue imports only by inside, so drop the key');
+    const later = LATER_KEYS.get(name);
+    if (later !== undefined) {
+      report(`${key}.${name}`, later);
     } else if (!known.has(name)) {
-      report(`${key}.${name}`, 'is no key of a trust rule (inside, never, edits, projects, import)');
+      report(`${key}.${name}`, `is no key of a trust rule (${[...known].join(', ')})`);
     }
   }
 }
@@ -120,26 +126,22 @@ function levelOf(value: JsonRecord, key: string, syntax: TrustSyntax, report: Co
   };
 }
 
-function projectOf(value: unknown, key: string, syntax: TrustSyntax, report: ConfigReport): ProjectTrust | undefined {
+function projectOf(value: unknown, key: string, syntax: TrustSyntax, report: ConfigReport): TrustLevel | undefined {
   if (!isRecord(value)) {
     report(key, `must be an object of a project's own rule, not ${shown(value)}`);
     return undefined;
   }
-  unknownKeys(value, PROJECT_KEYS, key, report);
-  const take = value['import'];
-  if (take !== undefined && typeof take !== 'boolean') {
-    report(`${key}.import`, `must be true or false, not ${shown(take)}`);
-  }
-  return { ...levelOf(value, key, syntax, report), import: take === undefined || take === true };
+  unknownKeys(value, LEVEL_KEYS, key, report);
+  return levelOf(value, key, syntax, report);
 }
 
-function projectsOf(value: unknown, key: string, syntax: TrustSyntax, report: ConfigReport): ReadonlyMap<string, ProjectTrust> {
-  const projects = new Map<string, ProjectTrust>();
+function projectsOf(value: unknown, key: string, syntax: TrustSyntax, report: ConfigReport): ReadonlyMap<string, TrustLevel> {
+  const projects = new Map<string, TrustLevel>();
   if (value === undefined) {
     return projects;
   }
   if (!isRecord(value)) {
-    report(key, 'must be an object of project keys to their own rule ({"ENG": {"import": false}})');
+    report(key, 'must be an object of project keys to their own rule ({"ENG": {"edits": "any"}})');
     return projects;
   }
   for (const [name, rule] of Object.entries(value)) {

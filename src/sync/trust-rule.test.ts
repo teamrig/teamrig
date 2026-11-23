@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { importsProject, judgeTrust, matches, resolveTrust, type ResolvedTrust, type SiteTrust, type TrustAuthor, type TrustDefaults, type TrustFacts } from './trust-rule.ts';
+import { judgeTrust, matches, resolveTrust, type ResolvedTrust, type SiteTrust, type TrustAuthor, type TrustDefaults, type TrustFacts } from './trust-rule.ts';
 
 const SITE_ACCOUNTS = { kind: 'accountType', types: ['atlassian'] } as const;
 const DEFAULTS: TrustDefaults = { inside: [SITE_ACCOUNTS], edits: 'inside' };
@@ -39,7 +39,7 @@ describe('resolveTrust', () => {
   });
 
   it('lets a project replace inside and edits but adds its never to the site never', () => {
-    const own = { inside: [MAIL], never: [{ kind: 'accounts', ids: ['bot-9'] }], edits: 'any', import: true } as const;
+    const own = { inside: [MAIL], never: [{ kind: 'accounts', ids: ['bot-9'] }], edits: 'any' } as const;
     const resolved = resolveTrust(site({ never: [MAIL], edits: 'inside', projects: new Map([['ENG', own]]) }), 'ENG', DEFAULTS, false, KEY);
     assert.deepEqual(resolved.inside, [MAIL]);
     assert.equal(resolved.edits, 'any');
@@ -47,19 +47,11 @@ describe('resolveTrust', () => {
   });
 
   it('leaves another project on the site rule', () => {
-    const own = { inside: [MAIL], never: [], edits: undefined, import: true } as const;
+    const own = { inside: [MAIL], never: [], edits: undefined } as const;
     assert.deepEqual(resolveTrust(site({ projects: new Map([['OPS', own]]) }), 'ENG', DEFAULTS, false, KEY).inside, [SITE_ACCOUNTS]);
   });
 });
 
-describe('importsProject', () => {
-  it('reads a project unless its rule says import false', () => {
-    const off = { inside: undefined, never: [], edits: undefined, import: false } as const;
-    const trust = site({ projects: new Map([['OPS', off]]) });
-    assert.equal(importsProject(trust, 'OPS'), false);
-    assert.equal(importsProject(trust, 'ENG'), true);
-  });
-});
 
 describe('matches', () => {
   it('never matches an account type the tracker did not give', () => {

@@ -542,7 +542,7 @@ describe("judging a listed Jira issue's trust (T5012)", () => {
   });
 
   it('makes no guard read when the team wrote an inside, for the site or the project', async () => {
-    const own: SiteTrust = { inside: undefined, never: [], edits: undefined, projects: new Map([['ENG', { import: true, inside: [{ kind: 'accounts', ids: ['colleague'] }], never: [], edits: 'any' }]]) };
+    const own: SiteTrust = { inside: undefined, never: [], edits: undefined, projects: new Map([['ENG', { inside: [{ kind: 'accounts', ids: ['colleague'] }], never: [], edits: 'any' }]]) };
     for (const trust of [WRITTEN, own]) {
       const { tracker, http } = kit({ trust });
       http.answers('POST', SEARCH, 200, page([])).answers('GET', CHANGELOG, 200, JSON.stringify({ values: [], isLast: true }));
