@@ -247,9 +247,7 @@ const isRepoName: Check<string> = (repo) =>
   /^[a-z0-9][a-z0-9-]{0,38}\/[a-z0-9._-]{1,100}$/i.test(repo) ? undefined : 'expected a GitHub repository as owner/name';
 
 /** A GitHub login: letters, digits or -, starting with a letter or digit, at most 39 characters. */
-const GITHUB_LOGIN = /^[a-z0-9][a-z0-9-]{0,38}$/i;
-
-const isGithubLogin: Check<string> = (login) => (GITHUB_LOGIN.test(login) ? undefined : 'expected a GitHub login: letters, digits or -, at most 39 characters');
+const isGithubLogin: Check<string> = (login) => (/^[a-z0-9][a-z0-9-]{0,38}$/i.test(login) ? undefined : 'expected a GitHub login: letters, digits or -, at most 39 characters');
 
 const BRANCH_NAME: Check<string> = (name) => (/^[^\s~^:?*[\\]+$/.test(name) ? undefined : 'not a valid branch name');
 
