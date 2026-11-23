@@ -332,6 +332,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   // add and remove run only in the person's own terminal (C7), never from /teamrig, which has none.
   'key add': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyAdd },
   'key remove': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyRemove },
+  'key check': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyCheck },
   queue: { effect: 'write', flags: QUEUE_FLAGS, switches: QUEUE_SWITCHES, rest: true, load: async () => (await queueCommand()).queue },
   withdraw: { effect: 'write', flags: ['session', 'what'], switches: ['all'], load: async () => (await withdrawCommand()).withdraw },
   'step-away': { effect: 'write', flags: [], load: async () => (await stepAsideCommands()).stepAway },
@@ -1249,7 +1250,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       repository's own, by credential name, and whether the store holds it; never a key
   key add <owner|owner/name>   (from a person's own terminal only, else REFUSED) saves the key for an
       owner or one repository: the store's own save command asks for it with nothing shown, so the key
-      never passes teamrig; says when it replaces a saved one, then reads it back
+      never passes teamrig; says when it replaces a saved one, then reads it back and checks it as key check does
+  key check [<owner|owner/name>]   asks GitHub, at its API host over https only, whose each saved key is,
+      its kind, rights and expiry, never printing the key; warns on a classic or never-expiring key and
+      one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow

@@ -1,6 +1,7 @@
 import type { CredentialRead } from '../../core/credentials.ts';
 import type { ShellEnd } from '../../core/shell-end.ts';
 import { githubReposOf, type GithubRepos } from '../../hooks/gh-write-refusals.ts';
+import { checkGithubKey, keyCheckText } from '../../issues/github-key-check.ts';
 import { keyScopeOf, repoTokenName, tokenName, type KeyScope } from '../../issues/token-names.ts';
 import { onePositional, UsageError, type ParsedArgs } from '../args.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -9,7 +10,7 @@ import { guardLoadOf } from './hook-guard-load.ts';
 /** Where a person revokes a GitHub key, which removing it from the store does not do. */
 const GITHUB_TOKENS_PAGE = 'https://github.com/settings/personal-access-tokens';
 
-type KeyRuntime = Pick<CliRuntime, 'credentials' | 'keys' | 'out'>;
+type KeyRuntime = Pick<CliRuntime, 'credentials' | 'keys' | 'out' | 'http' | 'clock'>;
 
 /**
  * `teamrig key list`: each key the team's `github.repos` may use, its owner's and each repository's own, by scope and
@@ -19,16 +20,12 @@ export async function keyList(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
   if (args.positionals.length > 0) {
     throw new UsageError(`teamrig key list takes no scope, it lists the team's: unexpected "${args.positionals.join(' ')}"`);
   }
-  const guard = await guardLoadOf(runtime.cwd, runtime);
-  const github: GithubRepos = guard === undefined ? { kind: 'none' } : githubReposOf(guard.load);
-  if (github.kind === 'unknown') {
-    throw new RefusedError(`teamrig key list: ${github.why}`);
-  }
-  if (github.kind === 'none') {
+  const scopes = await teamScopes(runtime, 'list');
+  if (scopes.length === 0) {
     runtime.out.stdout(`no repository in github.repos; a key is saved as ${tokenName('<owner>')} for an owner, ${tokenName('<owner>')}.<name> for one repository: teamrig key add <owner|owner/name>`);
     return EXIT.ok;
   }
-  for (const scope of scopesOf([...github.repos])) {
+  for (const scope of scopes) {
     runtime.out.stdout(`${scope.scope}  ${scope.credential}  ${stateText(await runtime.credentials.read(scope.credential), scope)}`);
   }
   return EXIT.ok;
@@ -87,7 +84,7 @@ async function confirmSaved(runtime: KeyRuntime, scope: KeyScope): Promise<ExitC
   switch (after.kind) {
     case 'found':
       runtime.out.stdout(`saved: ${scope.scope} now uses ${scope.credential}`);
-      return EXIT.ok;
+      return reportCheck(runtime, scope, after.secret);
     case 'missing':
       runtime.out.stderr(`teamrig key add: the store's save command ended, but ${scope.credential} is not there`);
       return EXIT.failed;
@@ -95,6 +92,70 @@ async function confirmSaved(runtime: KeyRuntime, scope: KeyScope): Promise<ExitC
       runtime.out.stderr(`teamrig key add: ${scope.credential} was saved but does not read back: ${after.reason}`);
       return EXIT.failed;
   }
+}
+
+/**
+ * `teamrig key check [<owner|owner/name>]`: asks GitHub whose each saved key is, its kind, rights and expiry, sending
+ * the key only to GitHub's API host over https (C7); with no scope, every saved key the team's `github.repos` may use.
+ * Warns on a classic or never-expiring key and one near its expiry (N1). Fails when a key is refused or unreachable.
+ */
+export async function keyCheck(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  const scopes = args.positionals.length === 0 ? await teamScopes(runtime, 'check') : [scopeArg(args)];
+  if (scopes.length === 0) {
+    runtime.out.stdout('no repository in github.repos to check a key for: teamrig key check <owner|owner/name>');
+    return EXIT.ok;
+  }
+  let code: ExitCode = EXIT.ok;
+  for (const scope of scopes) {
+    const read = await runtime.credentials.read(scope.credential);
+    if (read.kind === 'missing') {
+      if (args.positionals.length > 0) {
+        runtime.out.stderr(`teamrig key check: no key is saved for ${scope.scope} as ${scope.credential}`);
+        code = EXIT.failed;
+      }
+      continue;
+    }
+    if (read.kind === 'failed') {
+      runtime.out.stderr(`teamrig key check: ${scope.credential} is unreadable: ${read.reason}`);
+      code = EXIT.failed;
+      continue;
+    }
+    if ((await reportCheck(runtime, scope, read.secret)) !== EXIT.ok) {
+      code = EXIT.failed;
+    }
+  }
+  return code;
+}
+
+/** Prints what GitHub says of the key saved for `scope`: owner, kind, rights, expiry and warnings, never the key. */
+async function reportCheck(runtime: KeyRuntime, scope: KeyScope, secret: string): Promise<ExitCode> {
+  const check = await checkGithubKey(runtime.http, secret);
+  switch (check.kind) {
+    case 'valid': {
+      const text = keyCheckText(check, runtime.clock.now());
+      runtime.out.stdout(`${scope.scope}  ${scope.credential}  ${text.summary}`);
+      for (const warning of text.warnings) {
+        runtime.out.stdout(`  warning: ${warning}`);
+      }
+      return EXIT.ok;
+    }
+    case 'rejected':
+      runtime.out.stderr(`teamrig key check: GitHub refuses the key for ${scope.scope} (${check.status}): it is revoked, expired or mistyped; save a new one with teamrig key add ${scope.scope}`);
+      return EXIT.failed;
+    case 'failed':
+      runtime.out.stderr(`teamrig key check: could not check the key for ${scope.scope}: ${check.reason}`);
+      return EXIT.failed;
+  }
+}
+
+/** The team's scopes from its `github.repos`, refused when that list cannot be read. */
+async function teamScopes(runtime: CliRuntime, verb: 'list' | 'check'): Promise<readonly KeyScope[]> {
+  const guard = await guardLoadOf(runtime.cwd, runtime);
+  const github: GithubRepos = guard === undefined ? { kind: 'none' } : githubReposOf(guard.load);
+  if (github.kind === 'unknown') {
+    throw new RefusedError(`teamrig key ${verb}: ${github.why}`);
+  }
+  return github.kind === 'none' ? [] : scopesOf([...github.repos]);
 }
 
 /**

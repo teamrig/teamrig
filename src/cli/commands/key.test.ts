@@ -1,15 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { JsonRecord } from '../../core/guards.ts';
+import { GITHUB_KEY_CHECK_URL } from '../../issues/github-key-check.ts';
 import { repoTokenName, tokenName } from '../../issues/token-names.ts';
 import { CliHarness, TEAM } from '../../testing/cli-harness.ts';
 import { FakeCredentials } from '../../testing/fake-credentials.ts';
+import { FakeHttp } from '../../testing/fake-http.ts';
 import { FakeTerminal } from '../../testing/fake-terminal.ts';
 import { EXIT } from '../runtime.ts';
 import { scopesOf } from './key.ts';
 
 const REPOS_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'globex/api', 'acme/api'] } };
 const WEB = repoTokenName('acme/web') ?? '';
+
+/** GitHub answering the key check as it does for a fine-grained key of `login` that expires on 2030-03-01. */
+function github(login: string = 'octo'): FakeHttp {
+  return new FakeHttp().answers('GET', GITHUB_KEY_CHECK_URL, 200, JSON.stringify({ login }), { 'github-authentication-token-expiration': '2030-03-01 00:00:00 UTC' });
+}
 
 /** A person at a terminal typing `key` into the store's save command, which saves it under the name it was given. */
 function typing(store: FakeCredentials, key: string): FakeTerminal {
@@ -54,22 +61,33 @@ describe('scopesOf', () => {
 });
 
 describe('teamrig key add', () => {
-  it("runs the store's own save command in the person's terminal, then reads the key back", async () => {
+  it("runs the store's own save command in the person's terminal, then reads the key back and checks it", async () => {
     const store = new FakeCredentials();
     const terminal = typing(store, 'typed-key');
-    const run = await new CliHarness(REPOS_TEAM).run(['key', 'add', 'Acme/Web'], { credentials: store, keys: { keeper: store, terminal } });
+    const http = github();
+    const run = await new CliHarness(REPOS_TEAM).run(['key', 'add', 'Acme/Web'], { credentials: store, keys: { keeper: store, terminal }, http });
     assert.equal(run.code, EXIT.ok);
     assert.deepEqual(terminal.ran, [store.saveRequest(WEB)]);
     assert.match(run.stdout.join('\n'), /saving a key for acme\/web/u);
     assert.match(run.stdout.join('\n'), /saved: acme\/web now uses/u);
+    assert.match(run.stdout.join('\n'), /octo, unknown, rights set per repository, expires 2030-03-01/u);
+    assert.equal(http.requests[0]?.headers?.['authorization'], 'Bearer typed-key');
     assert.doesNotMatch([...run.stdout, ...run.stderr].join('\n'), /typed-key/u);
   });
 
   it('says it replaces a key saved under the name before', async () => {
     const store = new FakeCredentials().saves(tokenName('acme'), 'old-key');
-    const run = await new CliHarness(TEAM).run(['key', 'add', 'acme'], { credentials: store, keys: { keeper: store, terminal: typing(store, 'new-key') } });
+    const run = await new CliHarness(TEAM).run(['key', 'add', 'acme'], { credentials: store, keys: { keeper: store, terminal: typing(store, 'new-key') }, http: github() });
     assert.equal(run.code, EXIT.ok);
     assert.match(run.stdout.join('\n'), /replacing the key for acme/u);
+  });
+
+  it('fails, the key kept, when GitHub refuses the key just saved', async () => {
+    const store = new FakeCredentials();
+    const http = new FakeHttp().answers('GET', GITHUB_KEY_CHECK_URL, 401);
+    const run = await new CliHarness(TEAM).run(['key', 'add', 'acme'], { credentials: store, keys: { keeper: store, terminal: typing(store, 'bad-key') }, http });
+    assert.equal(run.code, EXIT.failed);
+    assert.match(run.stderr.join('\n'), /GitHub refuses the key for acme \(401\)/u);
   });
 
   it('refuses a run with no person at a terminal, running nothing', async () => {
@@ -98,6 +116,45 @@ describe('teamrig key add', () => {
     const empty = await new CliHarness(TEAM).run(['key', 'add', 'acme'], { credentials: store, keys: { keeper: store, terminal: new FakeTerminal(true) } });
     assert.equal(empty.code, EXIT.failed);
     assert.match(empty.stderr.join('\n'), /is not there/u);
+  });
+});
+
+describe('teamrig key check', () => {
+  it("checks each saved key the team's repositories may use, skipping a missing one, never printing a key", async () => {
+    const store = new FakeCredentials().saves(tokenName('acme'), 'ghp_acme').saves(WEB, 'github_pat_web');
+    const http = new FakeHttp().answers('GET', GITHUB_KEY_CHECK_URL, 200, '{"login":"octo"}', { 'x-oauth-scopes': 'repo' });
+    const run = await new CliHarness(REPOS_TEAM).run(['key', 'check'], { credentials: store, http });
+    assert.equal(run.code, EXIT.ok);
+    assert.deepEqual(
+      http.requests.map((request) => request.headers?.['authorization']),
+      ['Bearer ghp_acme', 'Bearer github_pat_web'],
+    );
+    assert.equal(run.stdout[0], `acme  ${tokenName('acme')}  octo, classic, scopes repo, no expiry`);
+    assert.match(run.stdout.join('\n'), /warning: a classic key reaches every repository/u);
+    assert.match(run.stdout.join('\n'), new RegExp(`acme/web  ${WEB.replace('.', '\\.')}  octo, fine-grained`, 'u'));
+    assert.doesNotMatch([...run.stdout, ...run.stderr].join('\n'), /ghp_acme|github_pat_web/u);
+  });
+
+  it('checks the one scope named, and fails when nothing is saved for it', async () => {
+    const store = new FakeCredentials().saves(tokenName('acme'), 'github_pat_acme');
+    const ok = await new CliHarness(TEAM).run(['key', 'check', 'acme'], { credentials: store, http: github() });
+    assert.equal(ok.code, EXIT.ok);
+    const none = await new CliHarness(TEAM).run(['key', 'check', 'globex'], { credentials: store, http: github() });
+    assert.equal(none.code, EXIT.failed);
+    assert.match(none.stderr.join('\n'), /no key is saved for globex/u);
+  });
+
+  it('fails on a key GitHub refuses, an unreadable one or no answer', async () => {
+    const store = new FakeCredentials().saves(tokenName('acme'), 'k').failsOn(tokenName('globex'), 'keyring locked');
+    const refused = await new CliHarness(TEAM).run(['key', 'check', 'acme'], { credentials: store, http: new FakeHttp().answers('GET', GITHUB_KEY_CHECK_URL, 401) });
+    assert.equal(refused.code, EXIT.failed);
+    assert.match(refused.stderr.join('\n'), /revoked, expired or mistyped/u);
+    const locked = await new CliHarness(TEAM).run(['key', 'check', 'globex'], { credentials: store, http: github() });
+    assert.equal(locked.code, EXIT.failed);
+    assert.match(locked.stderr.join('\n'), /unreadable: keyring locked/u);
+    const offline = await new CliHarness(TEAM).run(['key', 'check', 'acme'], { credentials: store, http: new FakeHttp().failsOn('GET', GITHUB_KEY_CHECK_URL, 'GitHub could not be reached') });
+    assert.equal(offline.code, EXIT.failed);
+    assert.match(offline.stderr.join('\n'), /could not check the key for acme: GitHub could not be reached/u);
   });
 });
 

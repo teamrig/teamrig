@@ -851,7 +851,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       repository's own, by credential name, and whether the store holds it; never a key
   key add <owner|owner/name>   (from a person's own terminal only, else REFUSED) saves the key for an
       owner or one repository: the store's own save command asks for it with nothing shown, so the key
-      never passes teamrig; says when it replaces a saved one, then reads it back
+      never passes teamrig; says when it replaces a saved one, then reads it back and checks it as key check does
+  key check [<owner|owner/name>]   asks GitHub, at its API host over https only, whose each saved key is,
+      its kind, rights and expiry, never printing the key; warns on a classic or never-expiring key and
+      one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow

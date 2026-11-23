@@ -7038,8 +7038,9 @@ Saves the GitHub key for an owner (`acme`) or for one repository (`acme/api`), w
 for that repository. It runs only from a person's own terminal, never from a session, a pipe or a script (REFUSED,
 exit 2): the credential store's own save command runs in your terminal and asks for the key with nothing shown, so
 the key never passes teamrig, an argument, the environment or a file. It says when it replaces a key saved before,
-then reads the key back from the store to confirm it. Use a fine-grained key limited to the repositories and rights
-the team needs. The store is your user's keychain, not a sandbox: any program running as you can read it.
+then reads the key back from the store and checks it as [teamrig key check](#teamrig-key-check) does; it fails, the
+key kept, when GitHub refuses it. Use a fine-grained key limited to the repositories and rights the team needs. The
+store is your user's keychain, not a sandbox: any program running as you can read it.
 
 Flags: none.
 
@@ -7049,11 +7050,37 @@ Example, on Windows, with no key saved for the repository before:
 teamrig key add acme/api
 ```
 
-Output (the store's own prompt comes between the two lines):
+Output (the store's own prompt comes between the first two lines):
 
 ```text
 saving a key for acme/api as teamrig-gh-acme.api in the Windows Credential Manager; paste it at the prompt, nothing typed shows
 saved: acme/api now uses teamrig-gh-acme.api
+acme/api  teamrig-gh-acme.api  octo, fine-grained, rights set per repository, expires 2030-03-01
+```
+
+### teamrig key check
+
+Asks GitHub whose each saved key is, sending the key only to GitHub's API host (`https://api.github.com`) and never
+printing it: the account it belongs to, its kind (fine-grained, classic, app or OAuth), a classic key's scopes and
+its expiry day. With no scope it checks every saved key the team's `github.repos` may use, skipping one not saved;
+with `<owner|owner/name>` only that one. It warns on a classic or app key, which reaches every repository its user
+can, on a key that never expires, and on one that expires within 7 days or has expired. Exit 1 when a key is not
+saved (a named scope), unreadable, refused by GitHub (revoked, expired or mistyped) or GitHub cannot be reached.
+
+Flags: none.
+
+Example, with a classic key saved for the owner `acme`:
+
+```sh
+teamrig key check acme
+```
+
+Output:
+
+```text
+acme  teamrig-gh-acme  octo, classic, scopes repo, workflow, no expiry
+  warning: a classic key reaches every repository its user can; a fine-grained key limited to the team's repositories is safer
+  warning: the key never expires; one with an expiry limits what a leaked key can do
 ```
 
 ### teamrig key remove

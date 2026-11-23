@@ -168,6 +168,7 @@ const EXPECTED = {
   'key list': 'read',
   'key add': 'internal',
   'key remove': 'internal',
+  'key check': 'read',
   'hook push-guard': 'internal',
   'hook package-guard': 'internal',
   'hook secret-guard': 'internal',
