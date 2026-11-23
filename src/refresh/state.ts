@@ -17,7 +17,9 @@ export const REFRESH_RESTART_NEXT_FORMAT = 2;
  * raised the threshold on a large context window. One threshold holds for every window since (T4083), so this code
  * writes no `largeWindow` and ignores one a file still has; the format stays 3, so a tab on an older release still
  * reads what this one writes. A format 1 or 2 file reads as it did, without a baseline; a file in a newer format reads
- * as absent and is never overwritten (`RefreshStore.setState`).
+ * as absent and is never overwritten (`RefreshStore.setState`). The `RefreshWindow` fields ride beside the phase in
+ * format 3 too: optional, so a release from before them reads the phase as it did and drops them on its next write,
+ * which only makes the window count as unreported.
  */
 export const REFRESH_STATE_FORMAT = 3;
 /** The format before `largeWindow`, still read. */
@@ -110,6 +112,20 @@ export type RefreshState =
     }
   | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null };
 
+/**
+ * What the state file keeps of the session's context window beside its phase (#1543): the tab's, not the phase's,
+ * so each state write keeps them (`RefreshStore.setState`), and a file may hold them before it holds any phase.
+ */
+export interface RefreshWindow {
+  /**
+   * The context window the plugin's mod last reported for the session's tab: the turn end is never told it, so it caps
+   * the session's own refresh limit by this one. Absent when none was reported.
+   */
+  readonly window?: number;
+  /** The window the session was last told its own limit was capped on, so it is told once per window; absent before. */
+  readonly windowWarned?: number;
+}
+
 /** The lead's ask that a session refresh at its next finished task, whatever its context. */
 export interface RefreshRequest {
   /** The lead's session id. */
@@ -170,7 +186,7 @@ function restartRecordOf(text: string): JsonRecord | undefined {
   return format === REFRESH_FORMAT || format === REFRESH_RESTART_NEXT_FORMAT ? record : undefined;
 }
 
-/** A state file's record: format 1 or 2; undefined for a damaged file or another format. */
+/** A state file's record: format 1, 2 or 3; undefined for a damaged file or another format. */
 function stateRecordOf(text: string): JsonRecord | undefined {
   const record = parseObject(text.trim());
   const version = record === undefined ? undefined : recordVersion(record);
@@ -302,8 +318,21 @@ function phaseOf(record: JsonRecord, task: string | null, at: string, base: { re
   }
 }
 
-export function formatRefreshState(state: RefreshState): string {
-  return toJsonlLine({ [VERSION_FIELD]: REFRESH_STATE_FORMAT, ...state });
+/** A positive whole number of tokens as a field to spread: none when absent or damaged, which counts as unreported. */
+function windowField(record: JsonRecord, key: keyof RefreshWindow): RefreshWindow {
+  const value = record[key];
+  return isNonNegativeInteger(value) && value > 0 ? { [key]: value } : {};
+}
+
+/** The window fields of a state file's content; none for a file without them, a damaged one or another format. */
+export function parseRefreshWindow(text: string): RefreshWindow {
+  const record = stateRecordOf(text);
+  return record === undefined ? {} : { ...windowField(record, 'window'), ...windowField(record, 'windowWarned') };
+}
+
+/** The state file's line: the phase, when there is one, then the window fields given. */
+export function formatRefreshState(state: RefreshState | undefined, window: RefreshWindow = {}): string {
+  return toJsonlLine({ [VERSION_FIELD]: REFRESH_STATE_FORMAT, ...state, ...window });
 }
 
 /** A request file's content; undefined when it is damaged or from another format. */

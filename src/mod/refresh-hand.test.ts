@@ -90,7 +90,15 @@ describe('RefreshHand.afterTool', () => {
     assert.equal(host.asks(), 2);
   });
 
-  it('sends the CLI the context alone: one threshold holds for every window', async () => {
+  it('sends the CLI the window reported with the context, which a session\'s own limit is capped by (#1543)', async () => {
+    const host = new FakeHost();
+    const hand = new RefreshHand(host);
+    host.answer({ kind: 'wait', nextAt: 500_000 });
+    assert.deepEqual(await hand.afterTool(40_000, 1_000_000), { kind: 'waiting', nextAt: 500_000 });
+    assert.deepEqual(host.calls[0]?.stdin, { session_id: TAB, cwd: '/work/app/src', tokens: 40_000, window: 1_000_000 });
+  });
+
+  it('sends the context alone when no window is reported', async () => {
     const host = new FakeHost();
     const hand = new RefreshHand(host);
     host.answer({ kind: 'wait', nextAt: 120_000 });

@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import { launchOf } from '../../config/launch.ts';
-import { autoRestartOf, sessionRefreshOf } from '../../config/refresh.ts';
+import { autoRestartOf } from '../../config/refresh.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
 import { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
@@ -34,7 +34,6 @@ import {
   decideStop,
   reaskGrowth,
   thousands,
-  type RefreshSettings,
   type StopContext,
   type StopDecision,
   type StopFacts,
@@ -43,6 +42,7 @@ import type { HookEvent, HookReply, HostModels } from '../../ports/host/index.ts
 import { ownerTurnsLine, ownerTurnsText, type OwnerTurn } from '../../refresh/owner-turns.ts';
 import { carryLines, carryStartOf, readCarry, type CarriedCron, type Carry, type CarryPlaces, type CarryStart } from '../../refresh/carry.ts';
 import { RefreshStore } from '../../refresh/store.ts';
+import { sessionSettingsOf, windowWarningOf } from '../../refresh/window.ts';
 import { readContextTokens } from '../../refresh/usage.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hookLogOf } from '../hook-logs.ts';
@@ -208,9 +208,10 @@ async function titleOutcome(runtime: CliRuntime, kit: Kit, config: KitConfig, ho
 /**
  * A prompt typed while the automatic restart waits for the session to be idle, or is held back until a wake brings it
  * work (T1383), cancels it, so the session keeps its context; one line tells the model, with the context growth
- * (`growth` tokens) that asks again. None when no restart waits, or one is already ending the session.
+ * that asks again, a share of the session's limit on its window. None when no restart waits, or one is already ending
+ * the session.
  */
-async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, refresh: Pick<RefreshSettings, 'contextTokens'>): Promise<string | undefined> {
+async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, config: KitConfig, id: string): Promise<string | undefined> {
   const store = new RefreshStore(runtime.files, kit.paths);
   const parked = (await store.parked(id)) !== undefined;
   const pending = (await store.restart(id))?.phase === 'pending';
@@ -223,7 +224,7 @@ async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, r
   if (!parked && !pending) {
     return undefined;
   }
-  const growth = reaskGrowth(refresh);
+  const growth = reaskGrowth(sessionSettingsOf(config, id, (await store.window(id)).window));
   return `${KIT_NAME}: the user typed, so the automatic restart is cancelled and you keep this context; a new handover is asked at your next task end, or once your context grew ${thousands(growth)} more`;
 }
 
@@ -284,7 +285,7 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
     await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
     await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
   }
-  const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
+  const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, config, session).catch(() => undefined);
   const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);
   // Like the inbox lines below, reading the digest moves its cursor, so it is read late; only a leader gets one.
   const digest = session === undefined ? undefined : await leaderDigestText(runtime, kit.paths, config, session).catch(() => undefined);
@@ -720,7 +721,8 @@ async function refreshDecisionOf(runtime: CliRuntime, scope: SessionScope, event
     await store.clearParked(id);
   }
   const target = restartTargetOf(runtime, event);
-  const settings = sessionRefreshOf(config, id);
+  // The turn end is never told the window: the one the mod last reported caps the session's own limit (#1543).
+  const settings = sessionSettingsOf(config, id, (await store.window(id)).window);
   const context: StopContext = {
     stopHookActive: event.stopActive,
     settings,
@@ -760,6 +762,24 @@ async function refreshDecisionOf(runtime: CliRuntime, scope: SessionScope, event
       break;
   }
   return decision;
+}
+
+/**
+ * The line that tells the user, once per context window, that the session's own refresh limit is past what its
+ * window takes and is capped (`windowWarningOf`, #1543); recorded before it is shown, so it is never shown twice.
+ */
+async function windowWarningLinesOf(runtime: CliRuntime, scope: SessionScope): Promise<readonly string[]> {
+  const { kit, config, id } = scope;
+  if (!config.refresh.enabled) {
+    return [];
+  }
+  const store = new RefreshStore(runtime.files, kit.paths);
+  const warning = windowWarningOf(config, id, await store.window(id), KIT_NAME);
+  if (warning === undefined) {
+    return [];
+  }
+  await store.setWindow(id, { windowWarned: warning.warned });
+  return [warning.line];
 }
 
 /** The model notices for the user at this turn's end (`stopModelNotices`); none when the event names no session. */
@@ -829,6 +849,7 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
     return blockReply(handStep);
   }
   const decision = await refreshDecisionOf(runtime, scope, event).catch((): StopDecision => ({ kind: 'none' }));
+  const window = await windowWarningLinesOf(runtime, scope).catch((): readonly string[] => []);
   // Before the model notices, which then read the level just written: no "runs at another effort" for a typed /effort.
   const effort = await effortWritebackOf(runtime, scope, event).catch((): EffortWritebackOutcome => ({ config: scope.config, lines: [] }));
   const notices = await modelNoticesOf(runtime, { ...scope, config: effort.config }, event).catch((): readonly string[] => []);
@@ -837,7 +858,7 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
   await ensureWatch(runtime, scope.kit, scope.config).catch(() => undefined);
   const hookless = await checkHooklessTabs(runtime, scope.kit, scope.config).catch((): readonly string[] => []);
   const lead = await leadStopLines(runtime, scope, event.transcript).catch((): readonly string[] => []);
-  const lines = [...effort.lines, ...notices, ...budget, ...verify, ...lead, ...hookless];
+  const lines = [...window, ...effort.lines, ...notices, ...budget, ...verify, ...lead, ...hookless];
   const ask = await askBlockOf(runtime, scope, event.stopActive, decision).catch((): string | undefined => undefined);
   if (ask === undefined && decision.kind !== 'block') {
     // Only a turn that ends: a block sends the session on working, which its next tool's end records.

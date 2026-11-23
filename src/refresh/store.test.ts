@@ -33,6 +33,34 @@ describe('RefreshStore', () => {
     assert.match(files.get(path) ?? '', /^\{"v":3,/);
   });
 
+  it('keeps the context window the mod reported across state writes, and the state across window writes (#1543)', async () => {
+    const files = new MemoryFiles();
+    const store = new RefreshStore(files, PATHS);
+    const boundary = { phase: 'boundary', task: 'T3', at: AT, finished: 1, ask: null } as const;
+    assert.deepEqual(await store.window('alpha'), {}, 'none before any write');
+    await store.setWindow('alpha', { window: 1_000_000 });
+    assert.equal(await store.state('alpha'), undefined, 'a window alone is no state');
+    assert.deepEqual(await store.window('alpha'), { window: 1_000_000 });
+    await store.setState('alpha', boundary);
+    assert.deepEqual([await store.state('alpha'), await store.window('alpha')], [boundary, { window: 1_000_000 }]);
+    await store.setWindow('alpha', { windowWarned: 200_000 });
+    assert.deepEqual([await store.state('alpha'), await store.window('alpha')], [boundary, { window: 1_000_000, windowWarned: 200_000 }]);
+    await store.setWindow('alpha', { window: 200_000 });
+    assert.deepEqual(await store.window('alpha'), { window: 200_000, windowWarned: 200_000 });
+    assert.deepEqual(await store.window('bravo'), {});
+    assert.equal(files.paths().length, 1);
+  });
+
+  it('refuses to write a window over a state file a newer teamrig wrote', async () => {
+    const files = new MemoryFiles();
+    const store = new RefreshStore(files, PATHS);
+    const path = join(PATHS.refresh, 'alpha.json');
+    await files.write(path, '{"v":4,"phase":"boundary","task":"T3","at":"x","finished":1,"ask":null,"later":true}\n');
+    await assert.rejects(store.setWindow('alpha', { window: 1_000_000 }), NewerDataError);
+    assert.match(files.get(path) ?? '', /"later":true/);
+    assert.deepEqual(await store.window('alpha'), {});
+  });
+
   it("keeps the lead's request in a file of its own, so neither write overwrites the other", async () => {
     const files = new MemoryFiles();
     const store = new RefreshStore(files, PATHS);

@@ -125,13 +125,43 @@ describe('runCli: hook refresh-mid', () => {
     assert.equal(((await tab.mid(146_000)) as { kind: string }).kind, 'ask');
   });
 
-  it('reads no window an older mod sends: a 1M one asks at 120k as a 200k one does', async () => {
+  it('asks at the team threshold whatever window the mod reports: a 1M one asks at 120k as a 200k one does', async () => {
     for (const window of [1_000_000, 200_000]) {
       const tab = new Tab();
       await tab.transcript('{}\n');
       assert.equal((answerOf(await tab.run('refresh-mid', { tokens: 130_000, window })) as { kind: string }).kind, 'ask', String(window));
       assert.doesNotMatch((await tab.state()) ?? '', /largeWindow/);
     }
+  });
+
+  it("caps a session's own limit at 80% of the window the mod reports, or of 200k before one is (#1543)", async () => {
+    const team = { ...TEAM, refresh: { tabTitle: false, sessionContextTokens: { alpha: 500_000 } } };
+    const large = new Tab(team);
+    await large.transcript('{}\n');
+    assert.deepEqual(answerOf(await large.run('refresh-mid', { tokens: 300_000, window: 1_000_000 })), { kind: 'wait', nextAt: 500_000 });
+    assert.deepEqual(await large.mid(400_000), { kind: 'wait', nextAt: 500_000 }, 'on the window kept when the mod sends none');
+    assert.equal(((await large.mid(500_000)) as { kind: string }).kind, 'ask');
+    const small = new Tab(team);
+    await small.transcript('{}\n');
+    assert.deepEqual(answerOf(await small.run('refresh-mid', { tokens: 100_000, window: 200_000 })), { kind: 'wait', nextAt: 160_000 });
+    const unreported = new Tab(team);
+    await unreported.transcript('{}\n');
+    assert.deepEqual(await unreported.mid(100_000), { kind: 'wait', nextAt: 160_000 });
+  });
+
+  it('records the window the mod reports, before any phase too, and keeps it when a mod sends none (#1543)', async () => {
+    const tab = new Tab();
+    await tab.transcript('{}\n');
+    const store = new RefreshStore(tab.kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
+    assert.deepEqual(answerOf(await tab.run('refresh-mid', { tokens: 40_000, window: 1_000_000 })), { kind: 'wait', nextAt: 120_000 });
+    assert.deepEqual([await store.state('alpha'), await store.window('alpha')], [undefined, { window: 1_000_000 }]);
+    assert.deepEqual(await tab.mid(50_000), { kind: 'wait', nextAt: 120_000 });
+    assert.deepEqual(await store.window('alpha'), { window: 1_000_000 }, 'a mod that sends none leaves it');
+    assert.equal((answerOf(await tab.run('refresh-mid', { tokens: 130_000, window: 200_000 })) as { kind: string }).kind, 'ask');
+    assert.deepEqual(await store.window('alpha'), { window: 200_000 }, 'a new window replaces it');
+    assert.equal((await store.state('alpha'))?.phase, 'asked', 'beside the ask');
+    assert.deepEqual(answerOf(await tab.run('refresh-mid', { tokens: 131_000, window: 'large' })), { kind: 'wait', nextAt: 154_000 });
+    assert.deepEqual(await store.window('alpha'), { window: 200_000 }, 'a window it cannot read is none');
   });
 
   it('asks within the turn once the context reaches the threshold, and the turn end asks once more until the handover is written', async () => {

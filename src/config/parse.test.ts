@@ -1877,6 +1877,7 @@ describe('parseConfig', () => {
       compactCeilingTokens: 0,
       handoverMaxBytes: 0,
       endCommand: ['node', 'end.cjs', 'end'],
+      sessionContextTokens: { alpha: 500_000 },
       handoverDir: 'notes',
     };
     const set = parseConfig({ ...ROSTER, refresh: chosen });
@@ -1992,6 +1993,20 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(issues), ['hiring.idleHours']);
     assert.equal(issues[0]?.message, `is no longer read: ${IDLE_RETIRE_DROPPED}; delete it`);
     assert.deepEqual(config.hiring, DEFAULT_HIRING);
+  });
+
+  it('reads a refresh limit per session, leaving out one for no session or out of bounds (#1543)', () => {
+    assert.deepEqual(DEFAULT_REFRESH.sessionContextTokens, {});
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      refresh: { sessionContextTokens: { alpha: 500_000, bravo: 9_999, carol: 300_000, alpha2: 'large' } },
+    });
+    assert.deepEqual(paths(issues), ['refresh.sessionContextTokens.bravo', 'refresh.sessionContextTokens.carol', 'refresh.sessionContextTokens.alpha2']);
+    assert.equal(issues[1]?.message, 'is not one of the sessions');
+    assert.deepEqual(config.refresh, { ...DEFAULT_REFRESH, sessionContextTokens: { alpha: 500_000 } });
+    const notMap = parseConfig({ ...ROSTER, refresh: { sessionContextTokens: [500_000] } });
+    assert.deepEqual(paths(notMap.issues), ['refresh.sessionContextTokens']);
+    assert.deepEqual(notMap.config.refresh.sessionContextTokens, {});
   });
 
   it('flags refresh.largeWindowContextTokens a current-format file still holds, as one threshold holds for every window (T4083)', () => {

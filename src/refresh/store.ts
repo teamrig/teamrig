@@ -11,11 +11,13 @@ import {
   parseParkedRestart,
   parseRefreshRequest,
   parseRefreshState,
+  parseRefreshWindow,
   parseRestartRequest,
   REFRESH_STATE_FORMAT,
   type ParkedRestart,
   type RefreshRequest,
   type RefreshState,
+  type RefreshWindow,
   type RestartRequest,
 } from './state.ts';
 
@@ -67,11 +69,30 @@ export class RefreshStore {
     return text === undefined ? undefined : parseRefreshState(text);
   }
 
-  /** Throws NewerDataError when a newer teamrig wrote the file: an older one never overwrites what it cannot read. */
+  /**
+   * Writes the session's state, keeping the window fields the file holds: a phase change says nothing of the window.
+   * Throws NewerDataError when a newer teamrig wrote the file: an older one never overwrites what it cannot read.
+   */
   async setState(id: string, state: RefreshState): Promise<void> {
     const path = this.statePath(id);
-    writableObject(path, await this.files.read(path), REFRESH_STATE_FORMAT);
-    await this.files.write(path, formatRefreshState(state));
+    const text = await this.files.read(path);
+    writableObject(path, text, REFRESH_STATE_FORMAT);
+    await this.files.write(path, formatRefreshState(state, text === undefined ? {} : parseRefreshWindow(text)));
+  }
+
+  /** What the session's state file keeps of its context window; none when it has no file or the file holds none. */
+  async window(id: string): Promise<RefreshWindow> {
+    const text = await this.files.read(this.statePath(id));
+    return text === undefined ? {} : parseRefreshWindow(text);
+  }
+
+  /** Writes the window fields given over the file's, keeping its state; throws NewerDataError as `setState` does. */
+  async setWindow(id: string, window: RefreshWindow): Promise<void> {
+    const path = this.statePath(id);
+    const text = await this.files.read(path);
+    writableObject(path, text, REFRESH_STATE_FORMAT);
+    const state = text === undefined ? undefined : parseRefreshState(text);
+    await this.files.write(path, formatRefreshState(state, { ...(text === undefined ? {} : parseRefreshWindow(text)), ...window }));
   }
 
   async request(id: string): Promise<RefreshRequest | undefined> {

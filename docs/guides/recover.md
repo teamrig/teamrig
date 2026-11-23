@@ -115,7 +115,10 @@ sequenceDiagram
   and while a booked one started with `teamrig meeting start M<n>` is on, neither are the session met and those
   joining, up to `refresh.compactCeilingTokens`; the end of the turn that runs `teamrig meeting end` asks at once.
 - Two rules in the team config ask for it. `refresh.contextTokens` (120,000 by default, on every context window, a 1M one too) refreshes at that size,
-  well before Claude Code compacts a 200k window at about 167k. `refresh.everyTasks` (3 by default) refreshes at
+  well before Claude Code compacts a 200k window at about 167k. `refresh.sessionContextTokens` gives a session its
+  own size in its place, a higher one for the lead or a session on a 1M window, say: it is capped at 80% of the
+  context window the plugin's mod last reported for that session (200k while none is), and you are told once per
+  window when it is. `refresh.everyTasks` (3 by default) refreshes at
   every third finished task once the context is at `refresh.everyTasksMinTokens` (80,000) or more, so a session
   that grows slowly still gets a fresh start; a `/clear`, a new process or a compaction starts the count over.
 - The lead can ask for a refresh at any size: `teamrig refresh web` applies at web's next turn end.

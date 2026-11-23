@@ -365,6 +365,7 @@ export const DEFAULT_SYNC: SyncConfig = { scope: DEFAULT_SCOPE, ...DEFAULT_CAPS 
 export const DEFAULT_REFRESH: RefreshConfig = {
   enabled: true,
   contextTokens: 120_000,
+  sessionContextTokens: {},
   everyTasks: 3,
   everyTasksMinTokens: 80_000,
   tabTitle: true,

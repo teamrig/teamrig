@@ -676,7 +676,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     meetingNotices: parseMeetingNotices(read, read.section(raw, 'meetingNotices', '')),
     readonlyShell: parseReadonlyShell(read, read.section(raw, 'readonlyShell', '')),
     permissions: parsePermissions(read, read.section(raw, 'permissions', '')),
-    refresh: parseRefresh(read, read.section(raw, 'refresh', '')),
+    refresh: parseRefresh(read, read.section(raw, 'refresh', ''), sessions),
     hiring: parseHiring(read, read.section(raw, 'hiring', '')),
     burst: parseBurst(read, read.section(raw, 'burst', '')),
     rush: parseRush(read, read.section(raw, 'rush', '')),
@@ -2299,7 +2299,24 @@ function autoRestartIn(read: ConfigReader, raw: JsonRecord, path: string, fallba
   return fallback;
 }
 
-function parseRefresh(read: ConfigReader, raw: JsonRecord): RefreshConfig {
+/** `refresh.sessionContextTokens`: a limit for each session named; one for no session or out of bounds is left out. */
+function sessionContextTokensIn(read: ConfigReader, raw: JsonRecord, path: string, sessions: readonly string[]): Record<string, number> {
+  const limits: Record<string, number> = {};
+  for (const [id, value] of Object.entries(read.section(raw, 'sessionContextTokens', path))) {
+    const itemPath = `${path}.sessionContextTokens.${id}`;
+    if (!sessions.includes(id)) {
+      read.report(itemPath, 'is not one of the sessions');
+      continue;
+    }
+    const tokens = read.integerItem(value, itemPath, REFRESH_TOKENS);
+    if (tokens !== undefined) {
+      limits[id] = tokens;
+    }
+  }
+  return limits;
+}
+
+function parseRefresh(read: ConfigReader, raw: JsonRecord, sessions: readonly string[]): RefreshConfig {
   const path = 'refresh';
   const defaults = DEFAULT_REFRESH;
   const handoverDir = read.optionalString(raw, 'handoverDir', path);
@@ -2307,6 +2324,7 @@ function parseRefresh(read: ConfigReader, raw: JsonRecord): RefreshConfig {
   return {
     enabled: read.boolean(raw, 'enabled', path, defaults.enabled),
     contextTokens: read.integer(raw, 'contextTokens', path, defaults.contextTokens, REFRESH_TOKENS),
+    sessionContextTokens: sessionContextTokensIn(read, raw, path, sessions),
     everyTasks: read.integer(raw, 'everyTasks', path, defaults.everyTasks, REFRESH_TASKS),
     everyTasksMinTokens: read.integer(raw, 'everyTasksMinTokens', path, defaults.everyTasksMinTokens, REFRESH_TOKENS),
     tabTitle: read.boolean(raw, 'tabTitle', path, defaults.tabTitle),

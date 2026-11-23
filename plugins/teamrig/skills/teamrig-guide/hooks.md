@@ -1272,7 +1272,8 @@ is the point.
 ## End of a turn: context refresh
 
 At the end of every turn, the Stop hook measures your context from the transcript. At or over
-`refresh.contextTokens` (120,000 by default), at a task end after every `refresh.everyTasks` finished tasks (3) with the context at
+`refresh.contextTokens` (120,000 by default) or the session's own size in `refresh.sessionContextTokens`, at a task end
+after every `refresh.everyTasks` finished tasks (3) with the context at
 `refresh.everyTasksMinTokens` (80,000) or more, or when the lead asked with `teamrig refresh <id>`, it keeps you going with one instruction: write your handover to
 `<home>/teams/<team>/handover/<id>.md`, replacing the whole file, with what the register lacks, not task statuses (the fresh start
 [lists them live](#session-start)), in a `## State` and a `## Next steps` section, then end your turn and start
@@ -1327,6 +1328,13 @@ size asks within a turn: the lead's request and the task count wait for a turn's
 does not hold the ask, which names it, as at a turn's end; an open owner meeting holds it, for each session in it (the lead in its daily meeting, the session met and those joining in a booked one). A turn that ends with no handover marked ready after a mid-turn ask is asked once
 more by the Stop hook. A handover marked ready is never asked over before the turn's end announces it, even when the
 result of the `refresh --ready` call itself is past the size, so the restart still follows the turn.
+
+The mod sends the context window reported with the context, and the CLI keeps it in the session's refresh
+state, since the Stop hook is never told it. A session's own size in `refresh.sessionContextTokens` is capped at 80%
+of that window, within a turn and at its end, so it asks before the window compacts: 160k on a 200k window, 800k on
+a 1M one. A window not reported yet counts as 200k. The first turn end that caps it on a window tells the user, once
+for that window: `teamrig: refresh.sessionContextTokens.lead (900k) is past 80% of its 1000k context window, so lead
+refreshes at 800k`. The team's `refresh.contextTokens` holds as set, on every window.
 
 Before Claude Code compacts the main conversation on its own (its automatic compaction, or the summary it computes
 ahead), the mod runs `teamrig hook compact-check` with Claude Code's estimate of the context. While your handover

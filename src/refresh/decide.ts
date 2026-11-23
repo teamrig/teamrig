@@ -115,7 +115,8 @@ export interface CompactFacts {
 /**
  * The smallest context window of a current Claude model, which `decideCompact` takes for a window it is not told: a
  * ceiling at or past it holds nothing, so on a larger window the hold lets go sooner than it could, never past the
- * room the window has.
+ * room the window has. A session's own refresh limit is checked against it too while no window is reported
+ * (src/refresh/window.ts), which errs the same safe way.
  */
 export const SMALLEST_MODEL_WINDOW = 200_000;
 

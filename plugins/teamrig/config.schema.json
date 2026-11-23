@@ -2205,6 +2205,18 @@
           "maximum": 10000000,
           "default": 120000
         },
+        "sessionContextTokens": {
+          "x-teamrig-served": "value",
+          "description": "A session's own refresh limit, in tokens, by its id, in place of contextTokens: a higher one for the lead, say, or for a session on a 1M window. It is checked against the context window the plugin's mod last reported for the session, one not reported counting as 200,000 tokens: a limit past 80% of that window refreshes at 80% instead, under where the window compacts, and the user is told so once per window.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/sessionName" },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 10000000
+          },
+          "default": {}
+        },
         "everyTasks": {
           "description": "Also refresh once this many tasks were finished since the context was last fresh (a /clear, a new process or a compaction); 0 turns it off.",
           "type": "integer",

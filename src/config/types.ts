@@ -1422,6 +1422,12 @@ export interface RefreshConfig {
    */
   readonly contextTokens: number;
   /**
+   * A session's own refresh limit by its id, in place of `contextTokens` (#1543): a higher one for the lead, say, or for
+   * a session on a 1M window. It is capped at 80% of the context window the plugin's mod last reported for the session,
+   * one not reported counting as 200k, so it stays under where that window compacts (src/refresh/window.ts).
+   */
+  readonly sessionContextTokens: Readonly<Record<string, number>>;
+  /**
    * Also refresh once this many tasks were finished since the context was last fresh (a /clear, a new
    * process or a compaction), when the context is at least `everyTasksMinTokens`; 0 turns it off.
    */

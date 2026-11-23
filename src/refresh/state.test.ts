@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { fieldPaths } from '../testing/field-paths.ts';
-import { formatRefreshRequest, formatRefreshState, parseRefreshRequest, parseRefreshState, type RefreshState } from './state.ts';
+import { formatRefreshRequest, formatRefreshState, parseRefreshRequest, parseRefreshState, parseRefreshWindow, type RefreshState } from './state.ts';
 
 const AT = '2030-01-08T10:00:00.000Z';
 
@@ -164,5 +164,36 @@ describe("an older release's largeWindow field", () => {
     const read = parseRefreshState(live);
     assert.deepEqual(read, { phase: 'idle', task: 'T3', at: AT, tokens: 140_000, finished: 1, baseline: 122_000 });
     assert.equal(read === undefined ? undefined : formatRefreshState(read).includes('largeWindow'), false);
+  });
+});
+
+describe('the context window fields (#1543)', () => {
+  it('round-trip the window last reported and the one last warned on beside every phase, in format 3 still', () => {
+    for (const phase of EVERY_PHASE) {
+      const text = formatRefreshState(phase, { window: 1_000_000, windowWarned: 200_000 });
+      assert.equal(JSON.parse(text).v, 3, phase.phase);
+      assert.deepEqual(parseRefreshState(text), phase, phase.phase);
+      assert.deepEqual(parseRefreshWindow(text), { window: 1_000_000, windowWarned: 200_000 }, phase.phase);
+    }
+  });
+
+  it('keep a window with no phase yet, which reads as no state, as it does for a release from before them', () => {
+    const text = formatRefreshState(undefined, { window: 1_000_000 });
+    assert.equal(parseRefreshState(text), undefined);
+    assert.deepEqual(parseRefreshWindow(text), { window: 1_000_000 });
+  });
+
+  it('read as no window reported from a file without them, a damaged value, another format or no file', () => {
+    assert.deepEqual(parseRefreshWindow(formatRefreshState(EVERY_PHASE[0])), {});
+    assert.deepEqual(parseRefreshWindow('{"v":3,"phase":"refreshed","task":null,"at":"x","window":"1M","windowWarned":0}'), {});
+    assert.deepEqual(parseRefreshWindow('{"v":3,"window":-200000,"windowWarned":1.5}'), {});
+    assert.deepEqual(parseRefreshWindow('{"v":4,"window":1000000}'), {});
+    assert.deepEqual(parseRefreshWindow('not json'), {});
+  });
+
+  it('are written after the phase, and only when given', () => {
+    const state: RefreshState = { phase: 'refreshed', task: null, at: AT };
+    assert.deepEqual(Object.keys(JSON.parse(formatRefreshState(state, { window: 200_000 }))), ['v', 'phase', 'task', 'at', 'window']);
+    assert.deepEqual(Object.keys(JSON.parse(formatRefreshState(state))), ['v', 'phase', 'task', 'at']);
   });
 });

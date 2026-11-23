@@ -544,6 +544,39 @@ describe('runCli: context refresh', () => {
     assert.match(JSON.stringify(stopJson(await stop('bravo', 130_000))), /"reason":"teamrig: your context is 130k \(refresh at 120k\)/);
   });
 
+  it("caps a session's own limit at the turn end by the window the mod reported, and tells the tab once per window (#1543)", async () => {
+    const kit = new CliHarness({ ...TEAM, refresh: { tabTitle: false, sessionContextTokens: { alpha: 900_000 } } });
+    const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
+    const stop = async (tokens: number): Promise<CliResult> => {
+      await kit.files.write(TRANSCRIPT, transcript(tokens));
+      return kit.run(['hook', 'stop'], { ...AS_ALPHA, stdin: stopPayload() });
+    };
+    const capped = 'teamrig: refresh.sessionContextTokens.alpha (900k) is past 80% of the 200k context window counted while none is reported, so alpha refreshes at 160k';
+    assert.deepEqual(stopJson(await stop(100_000)), { systemMessage: capped }, 'no window reported: 200k counts');
+    assert.deepEqual(await store.window('alpha'), { windowWarned: 200_000 });
+    assert.deepEqual(await stop(110_000), SILENT, 'told once on this window');
+    assert.match(JSON.stringify(stopJson(await stop(160_000))), /"reason":"teamrig: your context is 160k \(refresh at 160k\)/);
+    await store.setState('alpha', { phase: 'refreshed', task: null, at: '2030-01-08T09:59:00.000Z' });
+    await store.setWindow('alpha', { window: 1_000_000 });
+    const large = stopJson(await stop(300_000));
+    assert.deepEqual(large, {
+      systemMessage: 'teamrig: refresh.sessionContextTokens.alpha (900k) is past 80% of its 1000k context window, so alpha refreshes at 800k',
+    });
+    assert.deepEqual(await stop(799_999), SILENT, 'never at 200k counted: the window kept is 1M');
+    assert.match(JSON.stringify(stopJson(await stop(800_000))), /"reason":"teamrig: your context is 800k \(refresh at 800k\)/);
+  });
+
+  it("asks a session with its own limit under its window's cap at that limit, telling nothing (#1543)", async () => {
+    const kit = new CliHarness({ ...TEAM, refresh: { tabTitle: false, sessionContextTokens: { alpha: 150_000 } } });
+    const stop = async (session: string, tokens: number): Promise<CliResult> => {
+      await kit.files.write(TRANSCRIPT, transcript(tokens));
+      return kit.run(['hook', 'stop'], { env: { TEAMRIG_SESSION: session }, stdin: stopPayload() });
+    };
+    assert.deepEqual(await stop('alpha', 140_000), SILENT);
+    assert.match(JSON.stringify(stopJson(await stop('alpha', 150_000))), /"reason":"teamrig: your context is 150k \(refresh at 150k\)/);
+    assert.match(JSON.stringify(stopJson(await stop('bravo', 130_000))), /"reason":"teamrig: your context is 130k \(refresh at 120k\)/);
+  });
+
   it('asks for the handover at any turn end over the threshold, mid-task, and again only once the context grew', async () => {
     const kit = new CliHarness({ ...TEAM, refresh: { tabTitle: false } });
     const stop = async (tokens: number): Promise<CliResult> => {

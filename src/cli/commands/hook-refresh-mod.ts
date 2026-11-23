@@ -1,5 +1,4 @@
 import { findTranscript } from '../../budget/discover.ts';
-import { sessionRefreshOf } from '../../config/refresh.ts';
 import { isNonNegativeInteger, type JsonRecord } from '../../core/guards.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { inBookedMeeting, MeetingSchedule } from '../../meeting/schedule.ts';
@@ -7,6 +6,7 @@ import { inMeeting, MeetingStore } from '../../meeting/state.ts';
 import { decideCompact, decideMidTurn, handoverHashOf, type AskContext, type CompactDecision, type DueFacts } from '../../refresh/decide.ts';
 import { readRunningWork } from '../../refresh/running.ts';
 import { RefreshStore } from '../../refresh/store.ts';
+import { sessionSettingsOf } from '../../refresh/window.ts';
 import { readContextEstimate } from '../../refresh/usage.ts';
 import { contextSourceIfTold, identityOf, transcriptsFolderIfKnown, transcriptsIfKept } from '../host.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -79,10 +79,11 @@ async function transcriptOf(runtime: CliRuntime, origin: HookOrigin): Promise<st
   return findTranscript(runtime.transcripts, transcriptsFolderIfKnown(runtime), project, origin.session);
 }
 
-function askContextOf(runtime: CliRuntime, scope: SessionScope, store: RefreshStore): AskContext {
+/** What the ask names, the session's own limit capped by `window`, the context window last reported for it. */
+function askContextOf(runtime: CliRuntime, scope: SessionScope, store: RefreshStore, window: number | undefined): AskContext {
   const { config, roster, id } = scope;
   return {
-    settings: sessionRefreshOf(config, id),
+    settings: sessionSettingsOf(config, id, window),
     now: new Date(runtime.clock.now()).toISOString(),
     session: { id, team: scope.kit.paths.team, name: roster.nameOf(id) ?? id },
     handoverPath: store.handoverPath(id),
@@ -96,8 +97,9 @@ function askContextOf(runtime: CliRuntime, scope: SessionScope, store: RefreshSt
  * threshold (`decideMidTurn`), so a long turn refreshes before Claude Code compacts it. The ask is recorded
  * before it is answered, so the turn's end asks again only when the handover is not written by then. The
  * running work, which takes the transcript's last 8 MiB, is read only once the context is past the size.
- * stdin: `{session_id, cwd, tokens}`, `tokens` the context the last reply read. One threshold holds for every window
- * (T4083), so a `window` an older mod still sends is not read.
+ * stdin: `{session_id, cwd, tokens, window?}`, `tokens` the context the last reply read, `window` the context window
+ * reported with it. The window is kept in the session's state file, since the turn end is never told it: a session's
+ * own refresh limit is checked against it there too (#1543). A mod that sends none leaves the one kept.
  */
 export async function refreshMid(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -112,8 +114,14 @@ export async function refreshMid(args: ParsedArgs, runtime: CliRuntime): Promise
     return answer(runtime, OFF);
   }
   const store = new RefreshStore(runtime.files, scope.kit.paths);
+  const sent = countOf(fields, 'window');
+  const kept = (await store.window(scope.id)).window;
+  const window = sent !== undefined && sent > 0 ? sent : kept;
+  if (window !== undefined && window !== kept) {
+    await store.setWindow(scope.id, { window });
+  }
   const state = await store.state(scope.id);
-  const context = askContextOf(runtime, scope, store);
+  const context = askContextOf(runtime, scope, store, window);
   const meeting = await inMeetingNow(runtime, scope);
   const first = decideMidTurn(state, context, { tokens, meeting, due: undefined });
   const decision =

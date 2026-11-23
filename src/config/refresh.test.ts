@@ -36,3 +36,18 @@ describe('sessionRefreshOf', () => {
     assert.equal(sessionRefreshOf(config, 'web').contextTokens, 120_000);
   });
 });
+
+describe('sessionRefreshOf with refresh.sessionContextTokens (#1543)', () => {
+  it("gives a session named there its own limit in place of contextTokens, and every other the team's", () => {
+    const { config } = parseConfig({ ...ROSTER, refresh: { contextTokens: 130_000, sessionContextTokens: { lead: 500_000 } } });
+    assert.deepEqual(sessionRefreshOf(config, 'lead'), { ...config.refresh, contextTokens: 500_000 });
+    assert.deepEqual(sessionRefreshOf(config, 'web'), config.refresh);
+    assert.equal(sessionRefreshOf(config, 'api').contextTokens, 130_000);
+  });
+
+  it('gives a session its own limit under the team threshold too', () => {
+    const { config } = parseConfig({ ...ROSTER, refresh: { sessionContextTokens: { web: 80_000 } } });
+    assert.equal(sessionRefreshOf(config, 'web').contextTokens, 80_000);
+    assert.equal(sessionRefreshOf(config, 'lead').contextTokens, 120_000);
+  });
+});

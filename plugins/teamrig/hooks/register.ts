@@ -701,7 +701,8 @@ export const register: Register = (on) => {
     if (tokens === undefined) {
       return result;
     }
-    const look = await hand.afterTool(tokens);
+    // With the window, which the CLI keeps for the turn end: a hook is never told it (#1543).
+    const look = await hand.afterTool(tokens, usage?.context.window);
     if (refreshWorthLogging(look)) {
       $.ui.log(`teamrig refresh within the turn: ${JSON.stringify(look)}`, { to: 'debug' });
     }
