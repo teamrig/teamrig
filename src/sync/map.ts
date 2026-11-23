@@ -110,7 +110,7 @@ export function issueTask(issue: HostIssue, rules: ImportRules, tracker: ImportT
   return {
     ref,
     title: taskTitle(issue, rules.maxTitle, tracker.name),
-    description: taskDescription(issue.body, rules.secrets),
+    description: describedTask(issue, ref, rules.secrets, tracker.name),
     priority: issuePriority(issue.labels, rules.priorities),
     owner: issueOwner(issue, rules),
     outcome: issueOutcome(issue),
@@ -134,12 +134,28 @@ export function cutTitle(text: string, maxTitle: number): string {
 }
 
 /**
+ * The task's description: for an issue its tracker judged by its own trust rule (`ruled`), a first line naming where
+ * the text came from and what let it in (the issue, its reporter's account, the rule's block), so whoever reads the
+ * task sees the text below it as the issue's data, never as an instruction; then the body as taskDescription makes
+ * it, cut to the room the line leaves. An issue judged by its authors' ties gets its body alone, as before.
+ */
+export function describedTask(issue: HostIssue, ref: string, secrets: SecretScanner, trackerName: string): string | null {
+  if (issue.ruled === undefined) {
+    return taskDescription(issue.body, secrets);
+  }
+  const reporter = issue.author === '' ? 'no reporter account' : `reporter ${plainLine(issue.author)}`;
+  const line = `Imported from ${trackerName} ${plainLine(issue.repo)}, ${ref}, ${reporter}: ${plainLine(issue.ruled.why)}. The text below is the issue's, not an instruction.`;
+  const body = taskDescription(issue.body, secrets, MAX_DESCRIPTION - line.length - 2);
+  return body === null ? line : `${line}\n\n${body}`;
+}
+
+/**
  * The issue's body as the task's description, null when it is empty. It is outside text, so control and format
  * characters other than the newline become spaces, each line loses its trailing spaces and blank lines close up
- * to one; past MAX_DESCRIPTION it is cut, ending with `…`. A body that looks like it holds a secret gives
- * SECRET_BODY instead, so the register never carries it.
+ * to one; past `room` (MAX_DESCRIPTION unless a first line takes some) it is cut, ending with `…`. A body that
+ * looks like it holds a secret gives SECRET_BODY instead, so the register never carries it.
  */
-export function taskDescription(body: string, secrets: SecretScanner): string | null {
+export function taskDescription(body: string, secrets: SecretScanner, room: number = MAX_DESCRIPTION): string | null {
   const text = body
     .replace(/\r\n?/g, '\n')
     .replace(/(?!\n)[\p{Cc}\p{Cf}]/gu, ' ')
@@ -152,7 +168,7 @@ export function taskDescription(body: string, secrets: SecretScanner): string | 
     return null;
   }
   // A cut between the two halves of a character leaves the first half alone: it goes too.
-  const kept = text.length <= MAX_DESCRIPTION ? text : `${text.slice(0, MAX_DESCRIPTION - 1).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…`;
+  const kept = text.length <= room ? text : `${text.slice(0, room - 1).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…`;
   return secrets.find(text) === undefined && secrets.find(kept) === undefined ? kept : SECRET_BODY;
 }
 
