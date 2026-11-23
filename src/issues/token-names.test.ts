@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { repoTokenName, SHIP_TOKEN, TOKEN_PREFIX, tokenName } from './token-names.ts';
+import { keyScopeOf, repoTokenName, SHIP_TOKEN, TOKEN_PREFIX, tokenName } from './token-names.ts';
 
 describe('repoTokenName', () => {
   it("names one repository's credential teamrig-gh-<owner>.<name> in lowercase", () => {
@@ -29,5 +29,18 @@ describe('tokenName', () => {
 
   it("keeps the ship tool's credential apart from every owner's", () => {
     assert.equal(SHIP_TOKEN.startsWith(TOKEN_PREFIX), false);
+  });
+});
+
+describe('keyScopeOf', () => {
+  it('reads an owner or one repository of it, in lowercase, with the credential its key is saved as', () => {
+    assert.deepEqual(keyScopeOf('Acme'), { scope: 'acme', credential: tokenName('acme') });
+    assert.deepEqual(keyScopeOf('Acme/Web.site'), { scope: 'acme/web.site', credential: repoTokenName('acme/web.site') });
+  });
+
+  it('refuses what is no GitHub owner or repository', () => {
+    for (const text of ['', '-acme', 'acme-', 'ac--me', 'a'.repeat(40), 'acme/', 'acme/..', 'acme/.', 'acme/web/x', 'acme/we b', 'ac.me', '/web']) {
+      assert.equal(keyScopeOf(text), undefined, text);
+    }
   });
 });
