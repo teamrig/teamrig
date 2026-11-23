@@ -32,6 +32,7 @@ export function nodeTerminal(stdin: MaybeTerminal, stdout: MaybeTerminal): Termi
     run: (request) =>
       new Promise((resolve, reject) => {
         const env = request.env === undefined ? {} : { env: request.env };
+        // Shown on purpose: the store's prompt must reach the person; it runs only from their own terminal.
         const child = spawn(request.program, [...request.args], { ...env, stdio: 'inherit' });
         child.once('error', reject);
         child.once('close', (code, signal) => resolve(endOf(code, signal)));
