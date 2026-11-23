@@ -14,6 +14,13 @@ function provedWin(heading: string, date: string): Support {
   };
 }
 
+const WIN_PERM_PROOF = {
+  os: 'windows',
+  toolVersion: '1.5.14',
+  date: '2026-11-23',
+  evidence: 'agy 1.5.14 --settings permissions.deny read_file() live run',
+} as const;
+
 const UNPROVED: Support = {
   kind: 'partial',
   missing: 'no live run yet',
@@ -58,7 +65,7 @@ export const declaration: HostDeclaration = {
     'hooks.output-redact': NOT_YET('PreToolUse overwrite redact-exec wrapper'),
     'hooks.prompt-secret': PROMPT_SECRET,
     'hooks.tool-failure': UNPROVED,
-    'permissions.deny-lines': NOT_YET('permissions port'),
+    'permissions.deny-lines': { kind: 'supported', proofs: [WIN_PERM_PROOF] },
     'permissions.auto-mode-routes': NO_HOST_SUPPORT('Claude Code auto-mode routes'),
     'sessions.open': NO_HOST_SUPPORT('terminal tab launching'),
     'sessions.resume': NO_HOST_SUPPORT('terminal tab resume'),

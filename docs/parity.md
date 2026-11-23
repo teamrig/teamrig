@@ -60,7 +60,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: permissions port is not built yet |
+| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, unproved | unsupported: not built for Codex CLI yet | supported, proved on [windows](agy 1.5.14 --settings permissions.deny read_file() live run); unproved on linux, macos |
 | `permissions.auto-mode-routes` | the push and deploy routes granted to auto mode | supported, proved on [windows](proofs/claude-code.md#permissionsauto-mode-routes); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no Claude Code auto-mode routes |
 
 ### sessions

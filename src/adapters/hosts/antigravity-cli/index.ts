@@ -2,6 +2,7 @@ import { defineHost, unsupported } from '../../../plugin-api/index.ts';
 import { declaration } from './declaration.ts';
 import { hookBridge } from './hook-bridge.ts';
 import { hostPaths } from './paths.ts';
+import { antigravityPermissions } from './permissions.ts';
 import { statusLine } from './status-line.ts';
 import { toolCallShape } from './tool-call.ts';
 import { antigravityUserHooks } from './user-hooks.ts';
@@ -22,7 +23,7 @@ export default defineHost({
       statusLine,
       paths: hostPaths(deps.platform),
       secrets: { secretFiles: () => [] },
-      permissions: unsupported('Antigravity CLI permissions port is not built yet'),
+      permissions: antigravityPermissions,
       plugin: unsupported('Antigravity CLI plugin store port is not built yet'),
       launcher: unsupported('Antigravity CLI session launcher port is not built yet'),
       models: unsupported('Antigravity CLI models port is not built yet'),
