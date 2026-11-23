@@ -200,7 +200,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   syncScopeLabels: 'sync.scope.labels',
   syncMaxOpen: 'sync.maxOpen',
   syncMaxNewPerSync: 'sync.maxNewPerSync',
-  githubDesignAssignees: 'github.designAssignees',
+  designAssignees: 'github.designAssignees',
   budgetTargetPct: 'budget.targetPct',
   budgetReservePct: 'budget.reservePct',
   weeklyLimitW: 'budget.weeklyLimitW',
