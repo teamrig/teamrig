@@ -1469,7 +1469,9 @@ Flags:
   first went in progress to `Start date`, its due day to `Target date`, its score, rounded, to `Score`, and the
   issue type (a task `Task`, a bug `Bug`, a goal `Feature`, a design issue `Design`), each a `FIELD` or `TYPE`
   line and only where it differs, in the same writes per run. A field or type the repository lacks is skipped with
-  a `NOTE`; a repository with none prints nothing; nothing is ever cleared, and the labels stay.
+  a `NOTE`; a repository with none prints nothing; nothing is ever cleared, and the labels stay. An issue's fields
+  and type come only from the task speaking for it, as for the labels: two active team tasks on it write neither,
+  with a `NOTE`.
 
 Example:
 
