@@ -19,7 +19,7 @@ const INTRO = [
   '',
   'A cell reads:',
   '',
-  '- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.',
+  '- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.',
   '- **partial**: part of it runs. The cell says what is missing, then where the rest is proved.',
   '- **unsupported**: it does not run on this tool. The cell says why.',
   '',
@@ -31,12 +31,19 @@ const SIDES: { readonly [Side in FeatureSide]: { readonly title: string; readonl
   terminal: { title: 'Terminals', what: 'The programs whose panes the sessions run in.' },
 };
 
-/** Where a row that runs is proved, and where it is not yet. */
-function proofWords(support: Support): string {
+/**
+ * Where a row that runs is proved, each system a link to the record of its first proof there, and where it is not yet.
+ * A link keeps the record one click from the claim, and the doc check fails a record page or heading that is gone.
+ */
+function proofWords(support: Exclude<Support, { readonly kind: 'unsupported' }>): string {
   const proved = provedOn(support);
   if (proved.length === 0) return 'unproved';
   const unproved = OSES.filter((os) => !proved.includes(os));
-  const on = `proved on ${proved.join(', ')}`;
+  const linked = proved.map((os) => {
+    const proof = support.proofs.find((each) => each.os === os);
+    return proof === undefined ? os : `[${os}](${proof.evidence})`;
+  });
+  const on = `proved on ${linked.join(', ')}`;
   return unproved.length === 0 ? on : `${on}; unproved on ${unproved.join(', ')}`;
 }
 

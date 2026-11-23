@@ -6,7 +6,7 @@ What each tool teamrig runs on supports, feature by feature, as its adapter decl
 
 A cell reads:
 
-- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.
+- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.
 - **partial**: part of it runs. The cell says what is missing, then where the rest is proved.
 - **unsupported**: it does not run on this tool. The cell says why.
 

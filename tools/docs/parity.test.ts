@@ -15,7 +15,7 @@ import {
 import { connectorDeclarationData, hostDeclarationData, manifestOf, SUPPORTED, terminalDeclarationData, UNSUPPORTED } from '../../src/testing/manifests.ts';
 import { renderParity } from './parity.ts';
 
-const proofOn = (os: ProofRef['os']): ProofRef => ({ os, toolVersion: '2.1.0', date: '2026-11-19', evidence: 'the proof record' });
+const proofOn = (os: ProofRef['os'], evidence = `proofs/some-cli.md#${os}`): ProofRef => ({ os, toolVersion: '2.1.0', date: '2026-11-19', evidence });
 
 function host(over: Readonly<Record<string, unknown>> = {}): Load<HostDeclaration> {
   const value = hostDeclarationData(over);
@@ -43,7 +43,7 @@ const headings = (text: string, level: string): string[] => text.split('\n').fil
 describe('renderParity', () => {
   it('says of a row that runs where it is proved, and of the others what is missing or why', () => {
     const manifest = manifestOf('host', SUPPORTED, {
-      'rules.memory': { kind: 'supported', proofs: [proofOn('linux'), proofOn('windows'), proofOn('linux')] },
+      'rules.memory': { kind: 'supported', proofs: [proofOn('linux'), proofOn('windows', 'https://example.com/run'), proofOn('linux', 'proofs/later.md#linux')] },
       'context.size': { kind: 'supported', proofs: [proofOn('macos'), proofOn('windows'), proofOn('linux')] },
       'sessions.wake': { kind: 'partial', missing: 'a wake while a turn runs', notice: 'an idle session only', proofs: [] },
       'sessions.carry': { kind: 'partial', missing: 'crons', notice: 'no crons', proofs: [proofOn('macos')] },
@@ -51,10 +51,16 @@ describe('renderParity', () => {
     });
     const text = page({ hosts: [host({ manifest })] });
     assert.equal(rowOf(text, 'rules.session-start'), '| `rules.session-start` | team rules, identity and live tasks at a session start | supported, unproved |');
-    assert.equal(rowOf(text, 'rules.memory'), '| `rules.memory` | memory files kept between sessions | supported, proved on windows, linux; unproved on macos |');
-    assert.equal(rowOf(text, 'context.size'), '| `context.size` | the context size and its refresh thresholds | supported, proved on windows, linux, macos |');
+    assert.equal(
+      rowOf(text, 'rules.memory'),
+      '| `rules.memory` | memory files kept between sessions | supported, proved on [windows](https://example.com/run), [linux](proofs/some-cli.md#linux); unproved on macos |',
+    );
+    assert.equal(
+      rowOf(text, 'context.size'),
+      '| `context.size` | the context size and its refresh thresholds | supported, proved on [windows](proofs/some-cli.md#windows), [linux](proofs/some-cli.md#linux), [macos](proofs/some-cli.md#macos) |',
+    );
     assert.equal(rowOf(text, 'sessions.wake'), '| `sessions.wake` | waking an idle session | partial (missing: a wake while a turn runs), unproved |');
-    assert.match(rowOf(text, 'sessions.carry') ?? '', / \| partial \(missing: crons\), proved on macos; unproved on windows, linux \|$/);
+    assert.match(rowOf(text, 'sessions.carry') ?? '', / \| partial \(missing: crons\), proved on \[macos\]\(proofs\/some-cli\.md#macos\); unproved on windows, linux \|$/);
     assert.equal(rowOf(text, 'tabs.title-status'), '| `tabs.title-status` | tab titles and status circles | unsupported: the tool has no such thing |');
   });
 

@@ -19,7 +19,7 @@ export interface ProofRef {
   readonly toolVersion: string;
   /** The day it ran, `YYYY-MM-DD`. */
   readonly date: string;
-  /** Where its record is kept. */
+  /** A link to its record, which docs/parity.md links the proof to: a URL, or a page path from docs/ with its heading. */
   readonly evidence: string;
 }
 
