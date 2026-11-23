@@ -30,7 +30,7 @@ describe('teamrig ui', () => {
     const result = await new CliHarness(WITH_UI).run(['ui'], { processes, probe, env: { PATH: '/bin' } });
     assert.deepEqual(result, { code: 0, stdout: [], stderr: [] });
     assert.deepEqual(processes.ran, [
-      { command: NODE, args: [ENTRY, '--team', 'app'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/bin', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE } },
+      { command: NODE, args: [ENTRY, '--team', 'app'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/bin', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE } },
     ]);
   });
 
@@ -126,7 +126,7 @@ describe('teamrig ui', () => {
       assert.equal(http.requests.length, 1);
       assert.deepEqual(
         processes.ran.map((ran) => [ran.command, normalisePath(ran.args[0] ?? ''), ran.args.slice(1), ran.env]),
-        [0, 1].map(() => [NODE, RELEASED_ENTRY, ['--team', 'app'], { TEAMRIG_HOME: KIT, PATH: '/bin', LANG: 'C.UTF-8', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE }]),
+        [0, 1].map(() => [NODE, RELEASED_ENTRY, ['--team', 'app'], { TEAMRIG_HOME: KIT, PATH: '/bin', LANG: 'C.UTF-8', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE }]),
       );
     });
 
@@ -136,7 +136,7 @@ describe('teamrig ui', () => {
       assert.equal(await uiCommand(PIN)(argsOf(), new CliHarness(WITH_UI).runtime({ processes, probe, http, env: CALLER_ENV })), 0);
       assert.deepEqual(http.requests, []);
       assert.deepEqual(processes.ran[0]?.args[0], ENTRY);
-      assert.deepEqual(processes.ran[0]?.env, { TEAMRIG_HOME: KIT, ...CALLER_ENV, TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE });
+      assert.deepEqual(processes.ran[0]?.env, { TEAMRIG_HOME: KIT, ...CALLER_ENV, TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE });
     });
 
     it('is refused, starting nothing, when the fetched archive misses the pin or cannot be fetched', async () => {

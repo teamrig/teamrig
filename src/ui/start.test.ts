@@ -59,6 +59,13 @@ describe('uiRequest', () => {
 
   it('keeps the caller’s environment and adds the CLI the UI calls back, over a value already there', () => {
     const request = uiRequest({ ...START, env: { PATH: '/bin', [UI_ENV.cli]: '/old/main.js' } });
-    assert.deepEqual(request.env, { PATH: '/bin', TEAMRIG_CLI: '/kit/dist/cli/main.js', TEAMRIG_NODE: '/bin/node' });
+    assert.deepEqual(request.env, { PATH: '/bin', TEAMRIG_CLI: '/kit/dist/cli/main.js', TEAMRIG_NODE: '/bin/node', TEAMRIG_TEAM: 'app' });
+  });
+
+  it('names its team to the CLI it calls back, over the caller’s, so a folder of another team never decides it (T5249)', () => {
+    const fromFolderOfParent = uiRequest({ ...START, team: 'child', env: { PATH: '/bin' } });
+    assert.equal(fromFolderOfParent.env['TEAMRIG_TEAM'], 'child');
+    const overCaller = uiRequest({ ...START, team: 'child', env: { PATH: '/bin', TEAMRIG_TEAM: 'parent' } });
+    assert.equal(overCaller.env['TEAMRIG_TEAM'], 'child');
   });
 });
