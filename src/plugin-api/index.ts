@@ -186,6 +186,8 @@ export type { Env } from '../core/home.ts';
 // git's credential helper protocol: what a connector answers git's `get` with, and where its helper is wired.
 export { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../core/git-credential.ts';
 export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/http.ts';
+// Which saved key reaches a target: the narrowest scope's credential first, a failed read never falling to a wider one.
+export { pickKey, type KeyCandidate, type KeyPick } from '../core/key-pick.ts';
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from '../core/printable.ts';
 // The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
