@@ -804,10 +804,11 @@ const PULL_NODE_ID = /^PR_[A-Za-z0-9_-]{1,100}$/;
  * The read of where one pull request stands before `pr approve` or `pr merge` writes (T4817): its node id, state,
  * draft, head, base, whether GitHub finds it conflicting and whether it is queued, and the repository's default branch
  * and whether that branch lands through a merge queue (Repository.mergeQueue, which names the default branch's queue;
- * PullRequest.isMergeQueueEnabled is not served everywhere).
+ * PullRequest.isMergeQueueEnabled is not served everywhere). The head's check suites and runs ride along for a head
+ * whose rollup GitHub answers null though its runs exist (T5164, pull-stand.ts).
  */
 export const PULL_STAND_QUERY =
-  'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}}}';
+  'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state} checkSuites(first:20){totalCount nodes{checkRuns(first:50){totalCount nodes{status conclusion}}}}}}}}}}';
 
 /** The enqueue of one pull request pinned to its head, word for word as the ship tool's queue landing sends it (tools/ship/merge-queue.ts). */
 export const ENQUEUE_MUTATION =

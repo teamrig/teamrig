@@ -131,6 +131,13 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     assert.deepEqual(writes(gh), []);
   });
 
+  it('queues a release head whose rollup GitHub answers null, from its check runs that passed beside a suite awaiting approval (T5164)', async () => {
+    const gh = standing({ mergeQueue: true, checks: null, suites: [[], ['COMPLETED:SUCCESS', 'COMPLETED:SUCCESS']] });
+    const result = await (await landingKit()).run(['pr', 'merge', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.match(result.stdout.at(-1) ?? '', /^ENQUEUED acme\/web#12 at aaaaaaa/u);
+  });
+
   it('lands a root lead’s own task with no one’s approval', async () => {
     const gh = standing();
     const result = await (await landingKit(null, 'lead')).run(['pr', 'merge', 'acme/web#12', '--head', HEAD], { env: { TEAMRIG_SESSION: 'lead' }, gh });
@@ -169,6 +176,7 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     { name: "a merge's head checks failed", kit: () => landingKit(), spec: { checks: 'FAILURE' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head's checks are failing: a merge needs them all passed/u },
     { name: "a merge's head checks are pending", kit: () => landingKit(), spec: { checks: 'PENDING' }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head's checks are pending: a merge needs them all passed/u },
     { name: "a merge's head has no checks", kit: () => landingKit(), spec: { checks: null }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head has no checks: a merge needs them run and passed/u },
+    { name: "a merge's head has a null rollup and a failed check run", kit: () => landingKit(), spec: { checks: null, suites: [['COMPLETED:SUCCESS', 'COMPLETED:FAILURE']] }, args: ['pr', 'merge', 'acme/web#12', '--head', HEAD], reason: /its head's checks are failing: a merge needs them all passed/u },
     { name: '--head is no sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', 'main'], reason: /--head main is no full commit sha/u },
     { name: '--head is a short sha', kit: () => landingKit(), args: ['pr', 'merge', 'acme/web#12', '--head', STAND_HEAD.slice(0, 12)], reason: /--head a{12} is no full commit sha: give the head the approval names, all 40 hex digits/u },
   ];

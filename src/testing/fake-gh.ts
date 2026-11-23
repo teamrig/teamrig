@@ -241,6 +241,21 @@ export interface PullStandSpec {
   readonly mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   /** The head's statusCheckRollup state, null for a head with no checks; SUCCESS when left out. */
   readonly checks?: 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED' | null;
+  /** The head's check suites, each its runs as `status` or `status:conclusion` (`COMPLETED:SUCCESS`); none when left out. */
+  readonly suites?: readonly (readonly string[])[];
+}
+
+/** A check suite of the stand's head as GitHub sends it, its runs from PullStandSpec.suites' words. */
+function standSuite(runs: readonly string[]): JsonRecord {
+  return {
+    checkRuns: {
+      totalCount: runs.length,
+      nodes: runs.map((run) => {
+        const [status, conclusion] = run.split(':');
+        return { status, conclusion: conclusion ?? null };
+      }),
+    },
+  };
 }
 
 /** One file of a commit as a test sets it; each part left out takes ghCommit's default. */
@@ -293,7 +308,16 @@ export function ghPullStand(spec: PullStandSpec = {}): JsonRecord {
       baseRefName: spec.base ?? 'main',
       mergeable: spec.mergeable ?? 'MERGEABLE',
       mergeQueueEntry: spec.queued === true ? { state: 'QUEUED' } : null,
-      commits: { nodes: [{ commit: { statusCheckRollup: spec.checks === null ? null : { state: spec.checks ?? 'SUCCESS' } } }] },
+      commits: {
+        nodes: [
+          {
+            commit: {
+              statusCheckRollup: spec.checks === null ? null : { state: spec.checks ?? 'SUCCESS' },
+              checkSuites: { totalCount: spec.suites?.length ?? 0, nodes: (spec.suites ?? []).map(standSuite) },
+            },
+          },
+        ],
+      },
     },
   };
 }
