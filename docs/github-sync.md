@@ -73,10 +73,10 @@ only `p1`, `p2` or `p3` (a blocker or a p0 as `p1`), as it creates no label but 
 ## 2. Give teamrig read access
 
 teamrig reads and writes issues through the GitHub CLI, [`gh`](https://cli.github.com), with **a token saved for
-each owner** (the `acme` in `acme/web`), handed to `gh` for that run only. It never uses the `gh` login
-(`gh auth login`) in its place, which may reach more than the token was given: an owner with no saved token, or
-one the credential store cannot read (a locked keyring, for one), stops with a `FAILED` line naming the store and
-the fix, and nothing runs for it. `teamrig issue sync` reads the other owners on.
+each owner** (the `acme` in `acme/web`), or for one repository, handed to `gh` for that run only. It never uses the
+`gh` login (`gh auth login`) in its place, which may reach more than the token was given: an owner with no saved
+token, or one the credential store cannot read (a locked keyring, for one), stops with a `FAILED` line naming the
+store and the fix, and nothing runs for it. `teamrig issue sync` reads the other owners on.
 
 ### What each command needs
 
@@ -95,6 +95,16 @@ A fine-grained GitHub token belongs to one *resource owner*: your personal accou
 reach the repositories of another owner. So a team that reads `you/tool` and `your-org/app` creates two tokens, one
 for each owner. teamrig finds each by its name, `teamrig-gh-<owner>`, so no config names them.
 
+### A token for one repository
+
+To give one repository fewer rights than the rest of its owner's, or a token of its own, save a token under
+`teamrig-gh-<owner>.<name>`, both in lowercase: `teamrig-gh-acme.web` for `acme/web`. For each repository teamrig
+reads the repository's own token first and its owner's token only when none is saved. A repository token it cannot
+read stops that repository with a `FAILED` line: the owner's token, which may reach more, never stands in for it.
+The `ACCESS` line names which one a command used (`ACCESS acme/web: read with the token saved as
+teamrig-gh-acme.web`). Only a person saving or removing a token changes which one reaches a repository: no config
+maps repositories to tokens.
+
 ### Create a token
 
 Do this once per owner:
@@ -112,7 +122,8 @@ it.
 
 ### Save it
 
-Save the token in your system's credential store under `teamrig-gh-<owner>`, the owner in lowercase. Each command asks
+Save the token in your system's credential store under `teamrig-gh-<owner>`, the owner in lowercase (or
+`teamrig-gh-<owner>.<name>` for [one repository](#a-token-for-one-repository)). Each command asks
 for the token and shows nothing as you paste it. Run it in a terminal window of your own:
 
 | System | Save | Remove |
