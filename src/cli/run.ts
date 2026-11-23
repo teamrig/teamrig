@@ -1039,7 +1039,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
       earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
-      the hooks need in the host's config file (Codex: interactive shells off) is set the same way; it never
+      the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the

@@ -24,7 +24,7 @@ export type UserHooksAnswer = { readonly ok: true; readonly value: UserHooksPlan
 export type ConfigLinesAnswer = { readonly ok: true; readonly text: string | undefined } | { readonly ok: false; readonly problem: string };
 
 /**
- * A setting teamrig's hooks need in the host's own config file to guard every call, such as Codex CLI's interactive
+ * A setting teamrig's hooks need in the host's own config file to guard every call, such as a host's interactive
  * shells off: set by `setup hooks` with the hooks, every other line of the file kept as it was.
  */
 export interface HostConfigLines {

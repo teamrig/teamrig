@@ -14,7 +14,7 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
  * handlers are replaced, so the same command after an update rewrites them. Without --yes it only counts what would be
  * inserted, unchanged, changed and removed; with it, the old file is kept in the kit's backups folder first. It never
  * writes the host's trust in a handler: the person gives that in the host, after every write. A setting the hooks need
- * in the host's own config file (the adapter's `configLines`, such as Codex CLI's interactive shells off) is set the
+ * in the host's own config file (the adapter's `configLines`, such as a host's interactive shells off) is set the
  * same way, every other line kept, the old file backed up; any file it cannot edit refuses the run before a write.
  */
 
