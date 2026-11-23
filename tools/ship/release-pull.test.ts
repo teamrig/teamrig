@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { teamrigShipWritesOf } from './approval.ts';
 import { releaseRefusal } from './release-pull.ts';
@@ -31,14 +31,24 @@ describe('releaseRefusal: the release pull request merges only when it holds onl
   const release = (version: string): string => commitFiles(`chore(main): release ${version}`, { ...versions(version), [CHANGELOG]: notesWith(version) });
   const refusal = (sha: string): string | null => releaseRefusal(git, 'main', sha, RELEASE, TEAMRIG_SHIP_VERSION_FILES);
 
-  beforeEach(() => {
-    repo = new TempRepo('release-pull').init();
+  // main's base and the release branch on it, made once with git and copied per test (T5032).
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('release-pull-template').init();
     repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
     commitFiles('base', { ...versions('0.1.0'), [CHANGELOG]: NOTES_BASE, 'src/a.ts': 'a\n' });
     repo.git('checkout', '-q', '-b', RELEASE.head);
+    template = repo;
+  });
+
+  beforeEach(() => {
+    repo = new TempRepo('release-pull').copyFrom(template);
   });
 
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   it('clears a head that raises every version file to one version and adds the notes', () => {
     assert.equal(refusal(release('0.2.0')), null);
@@ -167,14 +177,24 @@ describe("releaseRefusal on teamrig-pane's release, read by the shipped repos.js
     return releaseRefusal((args) => repo.git(...args), 'main', sha, profile.release, teamrigShipWritesOf(profile.regenerated).versionFiles);
   };
 
-  beforeEach(() => {
-    repo = new TempRepo('release-pull-pane').init();
+  // Made once and copied per test, as above (T5032).
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('release-pull-pane-template').init();
     repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
     commitFiles({ ...paneVersions('0.76.0'), [CHANGELOG]: NOTES_BASE, 'src/a.ts': 'a\n' });
     repo.git('checkout', '-q', '-b', profile.release?.head ?? 'release');
+    template = repo;
+  });
+
+  beforeEach(() => {
+    repo = new TempRepo('release-pull-pane').copyFrom(template);
   });
 
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   it('clears a head that raises the plugin manifest and the release manifest to one version and adds the notes', () => {
     assert.equal(refusal(commitFiles({ ...paneVersions('0.77.0'), [CHANGELOG]: notesWith('0.77.0') })), null);
