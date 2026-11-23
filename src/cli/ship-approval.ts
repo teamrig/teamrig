@@ -47,13 +47,13 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
  * so a typed name moves no merge to another session's task. Refused when the config does not load or the tab is not
  * bound to that session alone.
  */
-export async function tabCallerOf(reader: KitReader, team: string, claudeSession: string, callerText: string): Promise<string> {
+export async function tabCallerOf(reader: KitReader, team: string, hostSession: string, callerText: string): Promise<string> {
   const kit = await openKit(reader, team);
   if (kit.load.status !== 'loaded') {
     throw new RefusedError(`team ${team}'s config at ${kit.load.path} is ${kit.load.status}: the merge cannot tell which session its tab is`);
   }
   const roster = await rosterOf(reader, kit, kit.load.config);
-  const bound = await tabSessionOf(reader.files, kit.paths.inboxMarks, roster, claudeSession, callerText);
+  const bound = await tabSessionOf(reader.files, kit.paths.inboxMarks, roster, hostSession, callerText);
   if (bound === undefined) {
     throw new RefusedError(
       `this Claude Code tab is not bound to ${callerText} alone: a merge runs from the merging session's own tab, whose every inbox mark names that session (a tab that read another session's inbox merges nothing)`,

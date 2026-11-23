@@ -5,7 +5,7 @@ import type { TranscriptReader, UsageMeter } from '../ports/host/index.ts';
 import { sessionsTitled } from '../hooks/bind.ts';
 import { attribute } from './attribute.ts';
 import { readLines, type TranscriptBytes } from './cursor.ts';
-import type { ClaudeSessionFiles, TranscriptSet } from './discover.ts';
+import type { HostSessionFiles, TranscriptSet } from './discover.ts';
 import { formatRollup, rollupFileName, type DayRollup } from './rollup-file.ts';
 import { rollupLineOf, RollupFold, type RollupSource } from './rollup.ts';
 
@@ -28,7 +28,7 @@ export interface TreeAttributionInput {
   readonly own: string;
   /** Every team of the tree, the own one too, in the one order every team's run reads them in. */
   readonly tree: readonly TreeMember[];
-  readonly sessions: readonly ClaudeSessionFiles[];
+  readonly sessions: readonly HostSessionFiles[];
   /** The title the user gave a Claude Code session, from its transcript; undefined when it has none. */
   titleOf(transcript: string): Promise<string | undefined>;
 }
@@ -44,9 +44,9 @@ interface MarkClaim {
  * log of the team that wrote them, so a session moved to another team leaves its old days marked in the team it left;
  * such a mark goes to the one tree team holding the id now, and claims nothing when none or several do.
  */
-function markClaimOf(tree: readonly TreeMember[], claudeSession: string): MarkClaim | undefined {
+function markClaimOf(tree: readonly TreeMember[], hostSession: string): MarkClaim | undefined {
   const marks = tree.flatMap(({ team, roster, areaBySession }) => {
-    const id = areaBySession.get(claudeSession);
+    const id = areaBySession.get(hostSession);
     return id === undefined ? [] : [{ team, roster, id }];
   });
   const held = marks.find(({ roster, id }) => roster.ids.includes(id));
@@ -76,15 +76,15 @@ export async function attributeInTree(input: TreeAttributionInput): Promise<Read
   if (member === undefined) {
     return new Map();
   }
-  const claims = new Map(input.sessions.map(({ claudeSession }) => [claudeSession, markClaimOf(input.tree, claudeSession)]));
+  const claims = new Map(input.sessions.map(({ hostSession }) => [hostSession, markClaimOf(input.tree, hostSession)]));
   const areaBySession = new Map<string, string>();
-  for (const [claudeSession, claim] of claims) {
+  for (const [hostSession, claim] of claims) {
     if (claim?.team === input.own) {
-      areaBySession.set(claudeSession, claim.id);
+      areaBySession.set(hostSession, claim.id);
     }
   }
   const attribution = await attribute({
-    sessions: input.sessions.filter(({ claudeSession }) => [undefined, input.own].includes(claims.get(claudeSession)?.team)),
+    sessions: input.sessions.filter(({ hostSession }) => [undefined, input.own].includes(claims.get(hostSession)?.team)),
     team: member.team,
     roster: member.roster,
     areaBySession,

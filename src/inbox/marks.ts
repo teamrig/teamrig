@@ -24,7 +24,7 @@ export interface InboxMark {
   readonly area: string;
   readonly line: number;
   readonly at: string;
-  readonly claudeSession: string | null;
+  readonly hostSession: string | null;
   readonly lastLineHash: string | null;
 }
 
@@ -41,7 +41,7 @@ export function parseMark(line: JsonlRecord): MarkParse {
   const area = stringField(record, 'area');
   const count = record['line'];
   const at = stringField(record, 'at');
-  const claudeSession = hostSessionValue(record, 'claudeSession') ?? null;
+  const hostSession = hostSessionValue(record, 'claudeSession') ?? null;
   const lastLineHash = record['lastLineHash'] ?? null;
   const valid =
     area !== undefined &&
@@ -49,9 +49,9 @@ export function parseMark(line: JsonlRecord): MarkParse {
     isNonNegativeInteger(count) &&
     at !== undefined &&
     !Number.isNaN(Date.parse(at)) &&
-    (claudeSession === null || (typeof claudeSession === 'string' && CLAUDE_SESSION_ID.test(claudeSession))) &&
+    (hostSession === null || (typeof hostSession === 'string' && CLAUDE_SESSION_ID.test(hostSession))) &&
     (lastLineHash === null || typeof lastLineHash === 'string');
-  return valid ? { kind: 'mark', mark: { v: line.version, area, line: count, at, claudeSession, lastLineHash } } : { kind: 'unreadable' };
+  return valid ? { kind: 'mark', mark: { v: line.version, area, line: count, at, hostSession, lastLineHash } } : { kind: 'unreadable' };
 }
 
 export interface MarkLogRead {
@@ -88,10 +88,10 @@ export interface MarkIndex {
  * The Claude Code session that last read `area`'s inbox and is still bound to it (its own newest mark names
  * `area`); undefined when none is on record.
  */
-export function lastClaudeSessionOf(marks: readonly InboxMark[], area: string): string | undefined {
+export function lastHostSessionOf(marks: readonly InboxMark[], area: string): string | undefined {
   const bound = indexMarks(marks).areaBySession;
-  const mark = [...marks].reverse().find((found) => found.area === area && found.claudeSession !== null && bound.get(found.claudeSession) === area);
-  return mark?.claudeSession ?? undefined;
+  const mark = [...marks].reverse().find((found) => found.area === area && found.hostSession !== null && bound.get(found.hostSession) === area);
+  return mark?.hostSession ?? undefined;
 }
 
 /**
@@ -100,11 +100,11 @@ export function lastClaudeSessionOf(marks: readonly InboxMark[], area: string): 
  * newest mark, so a tool call's read binds the tab only once. Undefined when
  * the read binds nothing new: no Claude Code session, a tab bound to no area or to `area`, or to one that left.
  */
-export function boundElsewhereOf(marks: readonly InboxMark[], claudeSession: string | null, area: string, onRoster: (id: string) => boolean): string | undefined {
-  if (claudeSession === null) {
+export function boundElsewhereOf(marks: readonly InboxMark[], hostSession: string | null, area: string, onRoster: (id: string) => boolean): string | undefined {
+  if (hostSession === null) {
     return undefined;
   }
-  const bound = indexMarks(marks).areaBySession.get(claudeSession);
+  const bound = indexMarks(marks).areaBySession.get(hostSession);
   return bound !== undefined && bound !== area && onRoster(bound) ? bound : undefined;
 }
 
@@ -114,8 +114,8 @@ export function indexMarks(marks: readonly InboxMark[]): MarkIndex {
   const areaBySession = new Map<string, string>();
   for (const mark of marks) {
     byArea.set(mark.area, mark);
-    if (mark.claudeSession !== null) {
-      areaBySession.set(mark.claudeSession, mark.area);
+    if (mark.hostSession !== null) {
+      areaBySession.set(mark.hostSession, mark.area);
     }
   }
   return { byArea, areaBySession };
@@ -132,7 +132,7 @@ export function tabsOf(marks: readonly InboxMark[], area: string, limit: number)
     if (tabs.length >= limit) {
       break;
     }
-    const tab = mark.claudeSession;
+    const tab = mark.hostSession;
     if (tab !== null && areaBySession.get(tab) === area && !tabs.includes(tab)) {
       tabs.push(tab);
     }
@@ -145,8 +145,8 @@ export function tabsOf(marks: readonly InboxMark[], area: string, limit: number)
  * holds it, so a tab that has read or bound as two areas holds no role, and neither does one with no mark. Every mark
  * counts, not the newest: a tab of `alpha` that once ran `inbox read --session bravo` must not run bravo's role.
  */
-export function soleAreaOf(marks: readonly InboxMark[], claudeSession: string): string | undefined {
-  const areas = new Set(marks.filter((mark) => mark.claudeSession === claudeSession).map((mark) => mark.area));
+export function soleAreaOf(marks: readonly InboxMark[], hostSession: string): string | undefined {
+  const areas = new Set(marks.filter((mark) => mark.hostSession === hostSession).map((mark) => mark.area));
   const [area] = areas;
   return areas.size === 1 ? area : undefined;
 }

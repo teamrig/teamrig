@@ -74,8 +74,8 @@ describe('approversIn: whose approval clears a landing, from a loaded config (T4
 });
 
 /** Records that tab `claudeSession` read `area`'s inbox. */
-async function mark(kit: CliHarness, area: string, claudeSession: string = CLAUDE_SESSION): Promise<void> {
-  const record = { v: 1, area, line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession, lastLineHash: null };
+async function mark(kit: CliHarness, area: string, hostSession: string = CLAUDE_SESSION): Promise<void> {
+  const record = { v: 1, area, line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: hostSession, lastLineHash: null };
   await kit.files.append(join(TEAM_HOME, 'state', 'inbox-marks.jsonl'), `${JSON.stringify(record)}\n`);
 }
 

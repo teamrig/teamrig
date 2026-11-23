@@ -110,7 +110,7 @@ describe('mergeClearance: the merge needs its approver to have approved the head
 });
 
 describe('clearMerge', () => {
-  const caller = { session: 'alpha', team: 'app', claudeSession: CLAUDE_SESSION } as const;
+  const caller = { session: 'alpha', team: 'app', hostSession: CLAUDE_SESSION } as const;
   /** Reads with the tab bound to whichever session the caller names, unless `tabCallerOf` says otherwise. */
   const readsOf = (standingOf: StandingOf, tabCallerOf: TabCallerOf = async (_team, _tab, session) => session): MergeReads => ({ tabCallerOf, standingOf });
   const fixed = (value: MergeStanding): MergeReads => readsOf(async () => value);
@@ -144,8 +144,8 @@ describe('clearMerge', () => {
     );
     assert.match(reasonOf(await clearMerge({ ...caller, session: undefined }, value, 't1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
     assert.match(reasonOf(await clearMerge({ ...caller, team: '' }, value, 't1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
-    assert.match(reasonOf(await clearMerge({ ...caller, claudeSession: undefined }, value, 't1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID must name the merging Claude Code tab/);
-    assert.match(reasonOf(await clearMerge({ ...caller, claudeSession: '' }, value, 't1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
+    assert.match(reasonOf(await clearMerge({ ...caller, hostSession: undefined }, value, 't1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID must name the merging Claude Code tab/);
+    assert.match(reasonOf(await clearMerge({ ...caller, hostSession: '' }, value, 't1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
   });
 
   it('clearMergeFrom reads the caller, team and tab from the env, and the marks and register through the reader', async () => {
@@ -187,7 +187,7 @@ describe('clearMerge', () => {
     });
     assert.deepEqual(await clearTaskMerge(caller, reads, 'T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
     assert.deepEqual(asked, ['T1']);
-    assert.match(reasonOf(await clearTaskMerge({ ...caller, claudeSession: '' }, reads, 'T1', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
+    assert.match(reasonOf(await clearTaskMerge({ ...caller, hostSession: '' }, reads, 'T1', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
     assert.match(reasonOf(await clearTaskMerge(caller, fixed(await standing(await waitingKit())), 'T1', HEAD, HEAD)), /T1 \(waiting\) holds no approval of lead/);
   });
 

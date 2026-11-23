@@ -33,11 +33,11 @@ const KILLED: EndFacts = { cause: 'killed', apiError: undefined };
 
 const turn = (effort: string): string => JSON.stringify({ type: 'assistant', effort, message: { model: 'claude-opus-5-5' } });
 
-function entry(claudeSession: string, createdAt: number, overrides: Partial<RestoreEntry> = {}): RestoreEntry {
+function entry(hostSession: string, createdAt: number, overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession,
+    hostSession,
     projectDir: '/work/app',
-    transcriptPath: `/t/${claudeSession}.jsonl`,
+    transcriptPath: `/t/${hostSession}.jsonl`,
     entrypoint: 'cli',
     sessionKind: undefined,
     pid: undefined,
@@ -163,13 +163,13 @@ async function world(
       projectsDir: PROJECTS,
       platform: 'linux',
       roomWaitMs: ROOM_WAIT_MS,
-      stillRunning: async (recorded) => recorded.claudeSession === LIVE || recorded.claudeSession === HUNG,
+      stillRunning: async (recorded) => recorded.hostSession === LIVE || recorded.hostSession === HUNG,
       transcriptOf: async ({ transcriptPath }) => (transcriptPath !== undefined && (await probe.kind(transcriptPath)) === 'file' ? transcriptPath : undefined),
       readTail: (path, maxBytes) => files.readTail(path, maxBytes),
       // MemoryFiles dates every file at the epoch: each transcript reads as long unwritten.
       modifiedAt: (path) => files.modifiedAt(path),
       end: async (recorded) => {
-        ended.push(recorded.claudeSession);
+        ended.push(recorded.hostSession);
         return ending.outcome;
       },
       reopen: async (tab) => {
@@ -240,7 +240,7 @@ describe('checkRestore', () => {
     await archive.put({ entry: entry(MOVED, 7), archivedAt: clock.now() - ARCHIVE_KEEP_MS + DAY_MS, reason: 'background session' });
     await checkRestore(deps);
     assert.deepEqual(
-      (await archive.list()).map(({ entry: kept }) => kept.claudeSession),
+      (await archive.list()).map(({ entry: kept }) => kept.hostSession),
       [MOVED],
     );
     assert.deepEqual(logged, ['archive: deleted 1 archived 7 days ago or earlier', 'check: 1 to restore, 0 kept, 0 closed, 0 hung']);
@@ -256,7 +256,7 @@ describe('checkRestore', () => {
   it('drops a background job and a tab continued in it, which the tracker recorded as tabs with no end', async () => {
     const { deps, registry, logged, clock } = await world('go', undefined, [LEAD_ENTRY, entry(JOB, 6), entry(MOVED, 7)]);
     assert.deepEqual(await checkRestore(deps), { since: clock.now(), count: 1 });
-    assert.deepEqual((await registry.list()).map(({ claudeSession }) => claudeSession), [LEAD]);
+    assert.deepEqual((await registry.list()).map(({ hostSession }) => hostSession), [LEAD]);
     assert.deepEqual(logged, [`archived ${JOB} (background session)`, `archived ${MOVED} (continued in 60000000)`, 'check: 1 to restore, 0 kept, 0 closed, 0 hung']);
   });
 });
@@ -269,7 +269,7 @@ describe('runRestore', () => {
     assert.deepEqual(countdown.counted, [60]);
     assert.deepEqual(reopened, [
       {
-        claudeSession: LEAD,
+        hostSession: LEAD,
         title: 'app-lead',
         folder: '/work/app',
         team: { team: 'app', session: 'lead', name: 'app-lead', isLead: true, terminal: 'auto', teamWindow: false, launched: true, effort: undefined },
@@ -277,14 +277,14 @@ describe('runRestore', () => {
         prompt: continuePrompt(KILLED, NOTHING_LOST, 'app-alpha continue (mid-turn)'),
       },
       {
-        claudeSession: ALPHA,
+        hostSession: ALPHA,
         title: 'app-alpha',
         folder: '/work/app',
         team: { team: 'app', session: 'alpha', name: 'app-alpha', isLead: false, terminal: 'auto', teamWindow: false, launched: true, effort: undefined },
         effort: 'max',
         prompt: continuePrompt(KILLED, NOTHING_LOST, undefined),
       },
-      { claudeSession: LONE, title: 'notes', folder: '/work', team: undefined, effort: undefined, prompt: undefined },
+      { hostSession: LONE, title: 'notes', folder: '/work', team: undefined, effort: undefined, prompt: undefined },
     ]);
     assert.deepEqual(clock.sleeps, [TAB_STAGGER_MS, TAB_STAGGER_MS]);
     assert.deepEqual(await registry.read(LEAD), { ...LEAD_ENTRY, restoreAttempts: 1, restoredAt: start });
@@ -298,7 +298,7 @@ describe('runRestore', () => {
     const { deps, reopened, logged } = await world();
     await runRestore({ ...deps, teams: [APP_CONFIGURED] }, LOGON);
     assert.deepEqual(
-      reopened.map(({ claudeSession, effort }) => [claudeSession, effort]),
+      reopened.map(({ hostSession, effort }) => [hostSession, effort]),
       [
         [LEAD, 'high'],
         [ALPHA, 'medium'],
@@ -355,7 +355,7 @@ describe('runRestore', () => {
   it('takes the attempt back when a tab does not open or opening it throws', async () => {
     const outcomes: ReopenOutcome[] = [{ kind: 'failed', why: 'no terminal' }];
     const { deps, registry, clock, printed } = await world('go', async (tab) => {
-      if (tab.claudeSession === ALPHA) {
+      if (tab.hostSession === ALPHA) {
         throw new Error('spawn EACCES');
       }
       return outcomes.shift() ?? OPENED;
@@ -371,10 +371,10 @@ describe('runRestore', () => {
 
   it('waits for room on the host before it reopens a tab the gate keeps shut, then opens it (T2283)', async () => {
     const outcomes: ReopenOutcome[] = [NO_ROOM, NO_ROOM];
-    const { deps, reopened, clock, printed, logged } = await world('go', async (tab) => (tab.claudeSession === ALPHA ? (outcomes.shift() ?? OPENED) : OPENED));
+    const { deps, reopened, clock, printed, logged } = await world('go', async (tab) => (tab.hostSession === ALPHA ? (outcomes.shift() ?? OPENED) : OPENED));
     assert.deepEqual(await runRestore(deps, LOGON), { opened: 3, failed: 0 });
     assert.deepEqual(
-      reopened.map(({ claudeSession }) => claudeSession),
+      reopened.map(({ hostSession }) => hostSession),
       [LEAD, ALPHA, ALPHA, ALPHA, LONE],
     );
     assert.deepEqual(clock.sleeps, [TAB_STAGGER_MS, ROOM_POLL_MS, ROOM_POLL_MS, TAB_STAGGER_MS]);
@@ -384,20 +384,20 @@ describe('runRestore', () => {
   });
 
   it('holds back a tab the host has no room for all of the wait, its attempt taken back, and goes on with the next (T2283)', async () => {
-    const { deps, reopened, registry, clock, printed, logged } = await world('go', async (tab) => (tab.claudeSession === ALPHA ? NO_ROOM : OPENED));
+    const { deps, reopened, registry, clock, printed, logged } = await world('go', async (tab) => (tab.hostSession === ALPHA ? NO_ROOM : OPENED));
     assert.deepEqual(await runRestore(deps, LOGON), { opened: 2, failed: 1 });
     const looks = ROOM_WAIT_MS / ROOM_POLL_MS;
-    assert.equal(reopened.filter(({ claudeSession }) => claudeSession === ALPHA).length, 1 + looks);
+    assert.equal(reopened.filter(({ hostSession }) => hostSession === ALPHA).length, 1 + looks);
     assert.deepEqual(clock.sleeps, [TAB_STAGGER_MS, ...Array<number>(looks).fill(ROOM_POLL_MS)]);
     assert.deepEqual(await registry.read(ALPHA), ALPHA_ENTRY);
     assert.ok(printed.includes(`HELD app-alpha: ${NO_ROOM.why}. Run "teamrig restore run" to reopen it once the host has room.`), printed.join('\n'));
     assert.ok(logged.includes(`run: held ${ALPHA} (no room on the host)`), logged.join('\n'));
-    assert.equal(reopened.at(-1)?.claudeSession, LONE);
+    assert.equal(reopened.at(-1)?.hostSession, LONE);
   });
 
   it('skips a session reopened or forgotten since the plan', async () => {
     const { deps, reopened, printed } = await world('go', async (tab, self) => {
-      if (tab.claudeSession === LEAD) {
+      if (tab.hostSession === LEAD) {
         await self.registry.write({ ...ALPHA_ENTRY, updatedAt: self.clock.now() });
         await self.registry.remove(LONE);
       }
@@ -405,7 +405,7 @@ describe('runRestore', () => {
     });
     assert.deepEqual(await runRestore(deps, LOGON), { opened: 1, failed: 0 });
     assert.deepEqual(
-      reopened.map(({ claudeSession }) => claudeSession),
+      reopened.map(({ hostSession }) => hostSession),
       [LEAD],
     );
     assert.ok(printed.includes('Skipped app-alpha (active since logon)'));
@@ -417,12 +417,12 @@ describe('runRestore', () => {
     const went = await world('go', undefined, entries, CLOSED_TRANSCRIPT);
     assert.deepEqual(await runRestore(went.deps, LOGON), { opened: 3, failed: 0 });
     assert.deepEqual(went.countdown.offered, [1]);
-    assert.ok(!went.reopened.some(({ claudeSession }) => claudeSession === CLOSED));
+    assert.ok(!went.reopened.some(({ hostSession }) => hostSession === CLOSED));
     assert.ok(went.printed.includes('Closed outside a shutdown in the last 48 h (1), reopened only with [a]:'), went.printed.join('\n'));
     assert.deepEqual(await went.registry.read(CLOSED), CLOSED_ENTRY);
     const all = await world('all', undefined, entries, CLOSED_TRANSCRIPT);
     assert.deepEqual(await runRestore(all.deps, LOGON), { opened: 4, failed: 0 });
-    assert.equal(all.reopened.at(-1)?.claudeSession, CLOSED);
+    assert.equal(all.reopened.at(-1)?.hostSession, CLOSED);
     assert.ok(all.logged.includes('run: started, 4 to reopen, the 1 closed too'), all.logged.join('\n'));
     assert.ok(all.logged.includes('run: done, 4 opened, 0 skipped, 0 failed of 4'), all.logged.join('\n'));
   });
@@ -432,7 +432,7 @@ describe('runRestore', () => {
     assert.deepEqual(await runRestore(deps, LOGON), { opened: 1, failed: 0 });
     assert.deepEqual(countdown.offered, [0]);
     assert.deepEqual(
-      reopened.map(({ claudeSession }) => claudeSession),
+      reopened.map(({ hostSession }) => hostSession),
       [CLOSED],
     );
     assert.equal(printed[0], 'Claude Code sessions closed outside a shutdown in the last 48 h (1):');
@@ -449,7 +449,7 @@ describe('runRestore', () => {
     assert.deepEqual(countdown.offeredHung, [1]);
     assert.ok(printed.includes(HUNG_HEADING), printed.join('\n'));
     assert.deepEqual(ended, []);
-    assert.ok(!reopened.some(({ claudeSession }) => claudeSession === HUNG));
+    assert.ok(!reopened.some(({ hostSession }) => hostSession === HUNG));
     assert.deepEqual(await registry.read(HUNG), HUNG_ENTRY);
   });
 
@@ -457,7 +457,7 @@ describe('runRestore', () => {
     const { deps, reopened, ended, logged } = await world('kill', undefined, [...ENTRIES, HUNG_ENTRY], HUNG_TRANSCRIPT);
     assert.deepEqual(await runRestore(deps, LOGON), { opened: 4, failed: 0 });
     assert.deepEqual(ended, [HUNG]);
-    assert.equal(reopened.at(-1)?.claudeSession, HUNG);
+    assert.equal(reopened.at(-1)?.hostSession, HUNG);
     assert.notEqual(reopened.at(-1)?.prompt, undefined);
     assert.ok(logged.includes('run: started, 4 to reopen, the 1 hung too'), logged.join('\n'));
     assert.ok(logged.includes(`run: ended hung ${HUNG} (ended)`), logged.join('\n'));
@@ -508,7 +508,7 @@ describe('runRestore', () => {
 
   it('counts the skipped and failed sessions in its last line, and says when all reopen idle', async () => {
     const { deps, logged } = await world('idle', async (tab, self) => {
-      if (tab.claudeSession === LEAD) {
+      if (tab.hostSession === LEAD) {
         await self.registry.remove(LONE);
         return { kind: 'failed', why: 'no terminal' };
       }
@@ -521,7 +521,7 @@ describe('runRestore', () => {
 
   it('logs how far it got when its tab is closed while it reopens', async () => {
     const { deps, logged, stops } = await world('go', async (tab) => {
-      if (tab.claudeSession === ALPHA) {
+      if (tab.hostSession === ALPHA) {
         await stops.stop('SIGHUP');
       }
       return OPENED;

@@ -201,26 +201,26 @@ function agentLineOf(agent: ListedAgent): string {
 /** A Claude Code session id as it may appear in a file name: letters, digits and dashes only. */
 const CLAUDE_SESSION_ID = /^[A-Za-z0-9-]{1,64}$/;
 
-export function isClaudeSessionId(value: string): boolean {
+export function isHostSessionId(value: string): boolean {
   return CLAUDE_SESSION_ID.test(value);
 }
 
 /** The ask for one Claude Code session in the ask folder; undefined for an id unsafe in a file name. */
-export function askFileOf(dir: string, claudeSession: string): string | undefined {
-  return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.ask` : undefined;
+export function askFileOf(dir: string, hostSession: string): string | undefined {
+  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.ask` : undefined;
 }
 
 /** How the ask was answered, `taken`, `held` or `withdrawn`, created once: the first writer wins and the other learns it lost. */
-export function outcomeFileOf(dir: string, claudeSession: string): string | undefined {
-  return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.outcome` : undefined;
+export function outcomeFileOf(dir: string, hostSession: string): string | undefined {
+  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.outcome` : undefined;
 }
 
 /**
  * Why the tab held the ask, written before its `held` outcome: the outcome stays the one word a restart
  * started under an older teamrig reads.
  */
-export function holdWhyFileOf(dir: string, claudeSession: string): string | undefined {
-  return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.held` : undefined;
+export function holdWhyFileOf(dir: string, hostSession: string): string | undefined {
+  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.held` : undefined;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -490,8 +490,8 @@ export class ClearHand {
     if (dir === undefined) {
       return { kind: 'no folder' };
     }
-    const claudeSession = await this.host.sessionId();
-    const ask = askFileOf(dir, claudeSession);
+    const hostSession = await this.host.sessionId();
+    const ask = askFileOf(dir, hostSession);
     if (ask === undefined || !(await this.host.exists(ask))) {
       return { kind: 'no ask' };
     }
@@ -503,7 +503,7 @@ export class ClearHand {
     if (this.busy) {
       return { kind: 'busy' };
     }
-    const stdin = JSON.stringify({ session_id: claudeSession });
+    const stdin = JSON.stringify({ session_id: hostSession });
     const handAsk = parseHandAsk(text);
     const held = await this.heldBy(handAsk);
     if (held !== undefined) {

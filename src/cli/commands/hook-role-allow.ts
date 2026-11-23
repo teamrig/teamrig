@@ -19,9 +19,9 @@ import { kitContextOf } from './hook-route-context.ts';
  * the same session the call names with its `--session`, which every role call carries, so a flag never lends a tab
  * another session's role; undefined otherwise.
  */
-async function holderOf(runtime: CliRuntime, kit: Kit, config: KitConfig, claudeSession: string, caller: string): Promise<string | undefined> {
+async function holderOf(runtime: CliRuntime, kit: Kit, config: KitConfig, hostSession: string, caller: string): Promise<string | undefined> {
   const roster = await rosterOf(runtime, kit, config);
-  return tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, claudeSession, caller);
+  return tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, hostSession, caller);
 }
 
 /**
@@ -39,14 +39,14 @@ export async function roleAllowReplyOf(runtime: CliRuntime, kit: Kit, event: Hoo
     return undefined;
   }
   const { config } = load;
-  const claudeSession = event.session;
+  const hostSession = event.session;
   const shell = event.call;
-  if (claudeSession === undefined || shell?.kind !== 'shell' || shell.command === undefined) {
+  if (hostSession === undefined || shell?.kind !== 'shell' || shell.command === undefined) {
     return undefined;
   }
   const context = { ...kitContextOf(runtime, event, cli), repos: config.github.repos, isShipTool: shipToolTest(kit, config) };
   const call = await shellRoleCallOf(shell, context);
-  const holder = call === undefined ? undefined : await holderOf(runtime, kit, config, claudeSession, call.session);
+  const holder = call === undefined ? undefined : await holderOf(runtime, kit, config, hostSession, call.session);
   const role = call === undefined || holder === undefined ? undefined : roleHolding(config.serviceRoles, call.command, holder);
   if (call === undefined || holder === undefined || role === undefined) {
     return undefined;
@@ -68,7 +68,7 @@ export async function roleAllowReplyOf(runtime: CliRuntime, kit: Kit, event: Hoo
     return roleCapReply(role, cap, weight);
   }
   const acted = { command: call.command, target };
-  const facts = { at: new Date(now), session: holder, claudeSession, role, call: acted };
+  const facts = { at: new Date(now), session: holder, hostSession, role, call: acted };
   await log.append(toJsonlLine(roleAllowRecord(count === undefined ? facts : { ...facts, count })));
   return roleAllowReply(role, acted);
 }

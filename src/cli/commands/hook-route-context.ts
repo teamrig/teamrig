@@ -38,12 +38,12 @@ export function kitContextOf(runtime: CliRuntime, event: HookEvent, cli: Command
  */
 function landingApproversOf(runtime: CliRuntime, kit: Kit, config: KitConfig, event: HookEvent): LandingContext['approversOf'] {
   return async (named) => {
-    const claudeSession = event.session;
-    if (claudeSession === undefined) {
+    const hostSession = event.session;
+    if (hostSession === undefined) {
       return [];
     }
     const roster = await rosterOf(runtime, kit, config);
-    const bound = await tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, claudeSession, named ?? runtime.env['TEAMRIG_SESSION']);
+    const bound = await tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, hostSession, named ?? runtime.env['TEAMRIG_SESSION']);
     return bound === undefined ? [] : approversOf(runtime, kit.paths.team, config, bound).catch(() => []);
   };
 }

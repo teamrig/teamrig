@@ -32,7 +32,7 @@ const NO_HOOKS = 'so it gets no inbox, guards or tab status';
 async function writeTab(kit: CliHarness, session: string, hookAgo: number, overrides: Partial<RestoreEntry> = {}): Promise<void> {
   const at = kit.clock.now() - hookAgo;
   const entry: RestoreEntry = {
-    claudeSession: TAB,
+    hostSession: TAB,
     projectDir: APP,
     transcriptPath: TAB_TRANSCRIPT,
     entrypoint: 'cli',
@@ -55,7 +55,7 @@ async function writeTab(kit: CliHarness, session: string, hookAgo: number, overr
 /** The tab's read of session `area`'s inbox, `ago` before the harness's clock, as the team's inbox marks keep it. */
 async function markRead(kit: CliHarness, area: string, ago: number): Promise<void> {
   const marks = new JsonlMarkLog(new PlainLogFile(kit.files, join(TEAM_HOME, 'state', 'inbox-marks.jsonl')));
-  await marks.append({ v: MARK_VERSION, area, line: 0, at: isoAgo(kit, ago), claudeSession: TAB, lastLineHash: null });
+  await marks.append({ v: MARK_VERSION, area, line: 0, at: isoAgo(kit, ago), hostSession: TAB, lastLineHash: null });
 }
 
 function isoAgo(kit: CliHarness, ago: number): string {

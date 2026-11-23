@@ -98,26 +98,26 @@ export class ClearAsks {
   }
 
   /** Posts a new ask, first removing an outcome (and hold reason) a run that stopped before its close left, so the ask starts unclaimed. */
-  async post(claudeSession: string, ask: PostedClearAsk): Promise<void> {
-    await this.files.remove(this.outcomePath(claudeSession));
-    await this.files.remove(this.holdWhyPath(claudeSession));
-    await this.files.write(this.askPath(claudeSession), `${JSON.stringify(ask)}\n`);
+  async post(hostSession: string, ask: PostedClearAsk): Promise<void> {
+    await this.files.remove(this.outcomePath(hostSession));
+    await this.files.remove(this.holdWhyPath(hostSession));
+    await this.files.write(this.askPath(hostSession), `${JSON.stringify(ask)}\n`);
   }
 
   /** The session's ask; undefined when there is none or it is damaged. */
-  async ask(claudeSession: string): Promise<ClearAsk | undefined> {
-    const text = await this.files.read(this.askPath(claudeSession));
+  async ask(hostSession: string): Promise<ClearAsk | undefined> {
+    const text = await this.files.read(this.askPath(hostSession));
     return text === undefined ? undefined : parseClearAsk(text);
   }
 
   /** True when this claim won the ask; false when it was answered first (the restart withdrew it). */
-  async claim(claudeSession: string): Promise<boolean> {
-    return this.files.createExclusive(this.outcomePath(claudeSession), CLAIM_TAKEN);
+  async claim(hostSession: string): Promise<boolean> {
+    return this.files.createExclusive(this.outcomePath(hostSession), CLAIM_TAKEN);
   }
 
   /** True when this claim won an ask in `end` mode, so the restart ends the session and the tab runs no /clear; false when it was answered first. */
-  async claimEnd(claudeSession: string): Promise<boolean> {
-    return this.files.createExclusive(this.outcomePath(claudeSession), CLAIM_END);
+  async claimEnd(hostSession: string): Promise<boolean> {
+    return this.files.createExclusive(this.outcomePath(hostSession), CLAIM_END);
   }
 
   /**
@@ -125,53 +125,53 @@ export class ClearAsks {
    * answered first. `why`, the mod's reason, is written before the outcome, so it is there when the restart
    * sees `held`.
    */
-  async hold(claudeSession: string, why: string | undefined): Promise<boolean> {
+  async hold(hostSession: string, why: string | undefined): Promise<boolean> {
     const line = why === undefined ? '' : holdWhyLine(why);
     if (line !== '') {
-      await this.files.write(this.holdWhyPath(claudeSession), `${line}\n`);
+      await this.files.write(this.holdWhyPath(hostSession), `${line}\n`);
     }
-    return this.files.createExclusive(this.outcomePath(claudeSession), CLAIM_HELD);
+    return this.files.createExclusive(this.outcomePath(hostSession), CLAIM_HELD);
   }
 
   /** Why the tab held the ask; undefined when it gave no reason (a mod older than the reason) or did not hold it. */
-  async heldWhy(claudeSession: string): Promise<string | undefined> {
-    const line = holdWhyLine((await this.files.read(this.holdWhyPath(claudeSession))) ?? '');
+  async heldWhy(hostSession: string): Promise<string | undefined> {
+    const line = holdWhyLine((await this.files.read(this.holdWhyPath(hostSession))) ?? '');
     return line === '' ? undefined : line;
   }
 
   /** True when the ask was taken back unanswered; false when a tab claimed or held it first. */
-  async withdraw(claudeSession: string): Promise<boolean> {
-    return this.files.createExclusive(this.outcomePath(claudeSession), CLAIM_WITHDRAWN);
+  async withdraw(hostSession: string): Promise<boolean> {
+    return this.files.createExclusive(this.outcomePath(hostSession), CLAIM_WITHDRAWN);
   }
 
   /** How the ask was answered; undefined while it is not (or the outcome is damaged). */
-  async outcome(claudeSession: string): Promise<ClaimOutcome | undefined> {
-    const text = await this.files.read(this.outcomePath(claudeSession));
+  async outcome(hostSession: string): Promise<ClaimOutcome | undefined> {
+    const text = await this.files.read(this.outcomePath(hostSession));
     return text === undefined ? undefined : outcomeOf(text);
   }
 
   /** Removes the ask, then its outcome and hold reason, so a tab looking meanwhile finds no ask before the outcome goes. */
-  async close(claudeSession: string): Promise<void> {
-    await this.files.remove(this.askPath(claudeSession));
-    await this.files.remove(this.outcomePath(claudeSession));
-    await this.files.remove(this.holdWhyPath(claudeSession));
+  async close(hostSession: string): Promise<void> {
+    await this.files.remove(this.askPath(hostSession));
+    await this.files.remove(this.outcomePath(hostSession));
+    await this.files.remove(this.holdWhyPath(hostSession));
   }
 
-  private askPath(claudeSession: string): string {
-    return this.checked(askFileOf(this.dir, claudeSession), claudeSession);
+  private askPath(hostSession: string): string {
+    return this.checked(askFileOf(this.dir, hostSession), hostSession);
   }
 
-  private outcomePath(claudeSession: string): string {
-    return this.checked(outcomeFileOf(this.dir, claudeSession), claudeSession);
+  private outcomePath(hostSession: string): string {
+    return this.checked(outcomeFileOf(this.dir, hostSession), hostSession);
   }
 
-  private holdWhyPath(claudeSession: string): string {
-    return this.checked(holdWhyFileOf(this.dir, claudeSession), claudeSession);
+  private holdWhyPath(hostSession: string): string {
+    return this.checked(holdWhyFileOf(this.dir, hostSession), hostSession);
   }
 
-  private checked(path: string | undefined, claudeSession: string): string {
+  private checked(path: string | undefined, hostSession: string): string {
     if (path === undefined) {
-      throw new Error(`"${claudeSession}" is not a Claude Code session id`);
+      throw new Error(`"${hostSession}" is not a Claude Code session id`);
     }
     return path;
   }

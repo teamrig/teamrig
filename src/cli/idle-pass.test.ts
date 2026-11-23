@@ -10,7 +10,7 @@ import { byReopenOrder, passLineOf, passTotalOf, type PassStep, type ReopenWish 
 const ROSTER = new Roster({ sessions: ['lead', 'alpha', 'bravo'], names: { alpha: 'api' }, roles: { lead: 'lead' } }, 'app');
 const APP = resolve('/', 'work', 'app');
 const CLOSABLE = {
-  record: { claudePid: 8100, claudeSession: 'c1', at: '2030-01-08T08:00:00.000Z' },
+  record: { claudePid: 8100, hostSession: 'c1', at: '2030-01-08T08:00:00.000Z' },
   claude: { pid: 8100, parentPid: 8000, name: 'claude.exe', commandLine: 'claude --resume c1' },
   heldMb: 1300,
   committedMb: undefined,

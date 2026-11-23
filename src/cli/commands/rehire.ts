@@ -3,7 +3,7 @@ import type { HiringConfig } from '../../config/types.ts';
 import { errorMessage } from '../../core/guards.ts';
 import type { TeamPaths } from '../../core/home.ts';
 import { PlainLogFile } from '../../core/log-file.ts';
-import { lastClaudeSessionOf } from '../../inbox/marks.ts';
+import { lastHostSessionOf } from '../../inbox/marks.ts';
 import { JsonlMarkLog } from '../../inbox/store.ts';
 import { resumeVerdict, type ResumeVerdict } from '../../hiring/rehire.ts';
 import type { RetireRecord } from '../../hiring/record.ts';
@@ -19,17 +19,17 @@ import type { CliRuntime } from '../runtime.ts';
 export async function resumeVerdictOf(runtime: CliRuntime, paths: TeamPaths, hiring: HiringConfig, id: string, project: string): Promise<ResumeVerdict> {
   try {
     const { marks } = await new JsonlMarkLog(new PlainLogFile(runtime.files, paths.inboxMarks)).read();
-    return await claudeSessionVerdict(runtime, hiring, lastClaudeSessionOf(marks, id), project);
+    return await hostSessionVerdict(runtime, hiring, lastHostSessionOf(marks, id), project);
   } catch (error) {
     return unmeasured(error);
   }
 }
 
 /** Whether Claude Code session `claudeSession` (undefined: none on record) in `project` is small and recent enough to resume. */
-export async function claudeSessionVerdict(runtime: CliRuntime, hiring: HiringConfig, claudeSession: string | undefined, project: string): Promise<ResumeVerdict> {
+export async function hostSessionVerdict(runtime: CliRuntime, hiring: HiringConfig, hostSession: string | undefined, project: string): Promise<ResumeVerdict> {
   try {
-    const last = claudeSession === undefined ? undefined : await lastSessionOf(runtime, claudeSession, project);
-    return resumeVerdict({ claudeSession, changedAt: last?.changedAt, tokens: last?.tokens }, hiring, runtime.clock.now());
+    const last = hostSession === undefined ? undefined : await lastSessionOf(runtime, hostSession, project);
+    return resumeVerdict({ hostSession, changedAt: last?.changedAt, tokens: last?.tokens }, hiring, runtime.clock.now());
   } catch (error) {
     return unmeasured(error);
   }
@@ -49,8 +49,8 @@ export interface LastSession {
 }
 
 /** Measures Claude Code session `claudeSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
-export function lastSessionOf(runtime: CliRuntime, claudeSession: string, project: string): Promise<LastSession> {
-  return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, claudeSession));
+export function lastSessionOf(runtime: CliRuntime, hostSession: string, project: string): Promise<LastSession> {
+  return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, hostSession));
 }
 
 /** Measures the Claude Code transcript at `transcript`, in whatever folder it sits. It throws when a read fails. */

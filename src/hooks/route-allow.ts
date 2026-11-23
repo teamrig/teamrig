@@ -38,7 +38,7 @@ export function routeAllowReply(route: SanctionedRoute): HookReply {
 export interface RouteAllowFacts {
   readonly at: Date;
   readonly session: string | undefined;
-  readonly claudeSession: string | null;
+  readonly hostSession: string | null;
   readonly route: RouteId;
 }
 
@@ -51,7 +51,7 @@ export function routeAllowRecord(facts: RouteAllowFacts): JsonRecord {
     v: 1,
     at: facts.at.toISOString(),
     session: facts.session ?? null,
-    claudeSession: facts.claudeSession,
+    claudeSession: facts.hostSession,
     tool: 'Bash',
     event: 'PreToolUse',
     answer: 'route',

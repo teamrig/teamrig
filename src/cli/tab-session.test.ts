@@ -12,8 +12,8 @@ const ROSTER = new Roster({ sessions: ['lead', 'alpha', 'bravo'], names: { alpha
 /** Marks files with one mark per `[area, tab]`. */
 async function marked(...marks: readonly (readonly [string, string])[]): Promise<MemoryFiles> {
   const files = new MemoryFiles();
-  for (const [area, claudeSession] of marks) {
-    await files.append(MARKS, `${JSON.stringify({ v: 1, area, line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession, lastLineHash: null })}\n`);
+  for (const [area, hostSession] of marks) {
+    await files.append(MARKS, `${JSON.stringify({ v: 1, area, line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: hostSession, lastLineHash: null })}\n`);
   }
   return files;
 }

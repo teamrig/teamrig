@@ -7,7 +7,7 @@ import type { SessionRecord } from './record.ts';
 const MB = 2 ** 20;
 const TEN = Date.parse('2030-01-08T10:00:00.000Z');
 
-const record = (claudePid: number, at: string): SessionRecord => ({ claudePid, claudeSession: `claude-${claudePid}`, at });
+const record = (claudePid: number, at: string): SessionRecord => ({ claudePid, hostSession: `claude-${claudePid}`, at });
 
 /**
  * Claude Code 6900 (started 09:00) runs a shell and an MCP server, each with what it committed; 7100 started at

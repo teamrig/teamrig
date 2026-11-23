@@ -10,7 +10,7 @@ const PROJECTS = '/home/me/.claude/projects';
 
 function entry(transcriptPath: string | undefined): RestoreEntry {
   return {
-    claudeSession: SESSION,
+    hostSession: SESSION,
     projectDir: '/work/app',
     transcriptPath,
     entrypoint: 'cli',

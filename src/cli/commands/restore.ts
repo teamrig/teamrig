@@ -26,7 +26,7 @@ import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from '../host.ts';
 import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
-import { claudeExit, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
+import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
 
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
@@ -138,7 +138,7 @@ async function openRestoredTab(runtime: CliRuntime, tab: ReopenTab, terminal: Te
       terminal: terminal ?? team.terminal,
       teamWindow: team.teamWindow,
       focus: 'keep',
-      resume: tab.claudeSession,
+      resume: tab.hostSession,
       ...(tab.effort === undefined ? {} : { effort: tab.effort }),
     });
     return reopenOutcomeOf(runtime, outcome, tab.folder, argv);
@@ -148,7 +148,7 @@ async function openRestoredTab(runtime: CliRuntime, tab: ReopenTab, terminal: Te
     runtime.self.script,
     'restore',
     'resume',
-    tab.claudeSession,
+    tab.hostSession,
     '--project',
     tab.folder,
     ...homeArgs(runtime),
@@ -315,7 +315,7 @@ async function runInTab(runtime: CliRuntime, deps: RestoreDeps, since: number): 
  * session variables, so it comes back as it ran before.
  */
 export async function restoreResume(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
-  const claudeSession = claudeSessionArg('claude-session', onePositional(args, 'claude-session'));
+  const hostSession = hostSessionArg('claude-session', onePositional(args, 'claude-session'));
   const project = requiredFlag(args.flags, 'project');
   if ((await runtime.probe.kind(project)) !== 'folder') {
     throw new RefusedError(`the project folder ${project} does not exist`);
@@ -325,9 +325,9 @@ export async function restoreResume(args: ParsedArgs, runtime: CliRuntime): Prom
   const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
   const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
   const { command, prefix } = await hostProgramOf(runtime, env);
-  runtime.out.stdout(`Resuming Claude Code session ${claudeSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
+  runtime.out.stdout(`Resuming Claude Code session ${hostSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
   // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
-  const start = { name: undefined, model: undefined, effort, resume: claudeSession, settingsFile: undefined, prompt };
+  const start = { name: undefined, model: undefined, effort, resume: hostSession, settingsFile: undefined, prompt };
   const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
   return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }

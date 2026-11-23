@@ -217,7 +217,7 @@ describe('runCli: meeting move, end and drop', () => {
 
 /** Alpha's tab runs: its record names Claude Code CLAUDE_PID, which the host lists as started a minute before it. */
 async function alphaRuns(kit: CliHarness): Promise<Pick<RunOptions, 'sessionProcesses' | 'memory'>> {
-  await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: CLAUDE_PID, claudeSession: 'c0', at: '2030-01-08T09:00:00.000Z' });
+  await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: CLAUDE_PID, hostSession: 'c0', at: '2030-01-08T09:00:00.000Z' });
   return {
     sessionProcesses: new FakeSessionProcesses().add({ pid: CLAUDE_PID, parentPid: 1, name: 'claude.exe', commandLine: 'claude' }),
     memory: new FakeHostMemory().lists([{ pid: CLAUDE_PID, parent: 1, bytes: 400 * MB, startedMs: Date.parse('2030-01-08T08:59:00Z') }]),

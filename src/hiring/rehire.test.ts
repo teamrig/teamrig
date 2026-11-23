@@ -9,18 +9,18 @@ const CLAUDE = '0123abcd-0000-4000-8000-00000000000a';
 const LAST = `its last Claude Code session ${CLAUDE}`;
 
 function facts(overrides: Partial<ResumeFacts> = {}): ResumeFacts {
-  return { claudeSession: CLAUDE, changedAt: NOW - 2 * DAY_MS, tokens: 120_000, ...overrides };
+  return { hostSession: CLAUDE, changedAt: NOW - 2 * DAY_MS, tokens: 120_000, ...overrides };
 }
 
 describe('resumeVerdict', () => {
   it('resumes a recent, small session, with its numbers', () => {
-    assert.deepEqual(resumeVerdict(facts(), DEFAULT_HIRING, NOW), { kind: 'resume', claudeSession: CLAUDE, detail: `${LAST} holds 120000 tokens of context, idle 2.0 day(s)` });
+    assert.deepEqual(resumeVerdict(facts(), DEFAULT_HIRING, NOW), { kind: 'resume', hostSession: CLAUDE, detail: `${LAST} holds 120000 tokens of context, idle 2.0 day(s)` });
     assert.equal(resumeVerdict(facts({ tokens: 250_000, changedAt: NOW - 7 * DAY_MS }), DEFAULT_HIRING, NOW).kind, 'resume', 'the limits themselves still resume');
     assert.match(resumeVerdict(facts({ changedAt: NOW + 1000 }), DEFAULT_HIRING, NOW).detail, /idle 0\.0 day/);
   });
 
   it('starts fresh with no session on record, its transcript gone or its context unread', () => {
-    assert.deepEqual(resumeVerdict(facts({ claudeSession: undefined }), DEFAULT_HIRING, NOW), { kind: 'fresh', detail: 'no Claude Code session of it is on record' });
+    assert.deepEqual(resumeVerdict(facts({ hostSession: undefined }), DEFAULT_HIRING, NOW), { kind: 'fresh', detail: 'no Claude Code session of it is on record' });
     assert.deepEqual(resumeVerdict(facts({ changedAt: undefined }), DEFAULT_HIRING, NOW), { kind: 'fresh', detail: `${LAST} has no transcript in this project folder` });
     assert.deepEqual(resumeVerdict(facts({ tokens: undefined }), DEFAULT_HIRING, NOW), { kind: 'fresh', detail: `the context of ${LAST} could not be read` });
   });

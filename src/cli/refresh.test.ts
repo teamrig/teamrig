@@ -310,7 +310,7 @@ describe('runCli: context refresh', () => {
     });
     const request = await store.restart('alpha');
     assert.ok(request);
-    assert.deepEqual(request, { phase: 'pending', at: request.at, pid: 6900, claudeSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null });
+    assert.deepEqual(request, { phase: 'pending', at: request.at, pid: 6900, hostSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null });
     assert.match((await kit.files.read(STATE('alpha'))) ?? '', /"claudePid":6900/);
     // Each look starts a PowerShell on Windows: a slow hook is killed at Claude Code's timeout.
     assert.deepEqual([underClaude.described, underClaude.lineages], [[], [7000]], 'the Claude Code process looked up once');
@@ -383,7 +383,7 @@ describe('runCli: context refresh', () => {
     });
     const parked = await store.parked('alpha');
     assert.ok(parked);
-    assert.deepEqual(parked, { at: parked.at, claudeSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null });
+    assert.deepEqual(parked, { at: parked.at, hostSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null });
     assert.deepEqual([await store.restart('alpha'), processes.hidden.filter((run) => run.args[1] === 'restart')], [undefined, []], 'no fresh start to sit idle');
     assert.match((await kit.files.read(STATE('alpha'))) ?? '', /"noticed":true.*"claudePid":6900/);
   });
@@ -435,7 +435,7 @@ describe('runCli: context refresh', () => {
   it('leaves a restart that is already ending the session alone', async () => {
     const kit = new CliHarness();
     const store = await handoverWritten(kit);
-    const request: RestartRequest = { phase: 'ending', at: '2030-01-08T10:00:00.000Z', pid: 6900, claudeSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null };
+    const request: RestartRequest = { phase: 'ending', at: '2030-01-08T10:00:00.000Z', pid: 6900, hostSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null };
     await store.setRestart('alpha', request);
     const result = await kit.run(['hook', 'inbox-reminder'], { ...AS_ALPHA, stdin: JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, prompt: 'hi' }) });
     assert.ok(!result.stdout.some((line) => line.includes('restart')));

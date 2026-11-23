@@ -47,7 +47,7 @@ describe('route allow', () => {
 
   it('logs the route, the sessions and the time, never the command', () => {
     const at = new Date('2030-01-08T10:00:00.000Z');
-    assert.deepEqual(routeAllowRecord({ at, session: 'alpha', claudeSession: 'c1', route: 'git-commit' }), {
+    assert.deepEqual(routeAllowRecord({ at, session: 'alpha', hostSession: 'c1', route: 'git-commit' }), {
       v: 1,
       at: '2030-01-08T10:00:00.000Z',
       session: 'alpha',
@@ -58,13 +58,13 @@ describe('route allow', () => {
       route: 'git-commit',
       command: null,
     });
-    assert.equal(routeAllowRecord({ at, session: undefined, claudeSession: null, route: 'merge' })['session'], null);
+    assert.equal(routeAllowRecord({ at, session: undefined, hostSession: null, route: 'merge' })['session'], null);
   });
 
   it('writes the line as it does today, naming the tab claudeSession: no code reads the id back, so the rename moves it in one release (T4762)', () => {
     const at = new Date('2030-01-08T10:00:00.000Z');
     assert.equal(
-      toJsonlLine(routeAllowRecord({ at, session: 'alpha', claudeSession: 'c1', route: 'git-commit' })),
+      toJsonlLine(routeAllowRecord({ at, session: 'alpha', hostSession: 'c1', route: 'git-commit' })),
       '{"v":1,"at":"2030-01-08T10:00:00.000Z","session":"alpha","claudeSession":"c1","tool":"Bash","event":"PreToolUse","answer":"route","route":"git-commit","command":null}\n',
     );
   });

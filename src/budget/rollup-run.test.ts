@@ -5,7 +5,7 @@ import { MemoryFiles } from '../testing/memory-files.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { shippedUsage } from '../testing/shipped-usage.ts';
-import type { ClaudeSessionFiles } from './discover.ts';
+import type { HostSessionFiles } from './discover.ts';
 import { formatRollup, type DayRollup } from './rollup-file.ts';
 import { applyPlans, attributeInTree, foldTeam, outcomeCounts, planDays, type DayPlan, type TreeMember } from './rollup-run.ts';
 
@@ -18,8 +18,8 @@ function member(team: string, sessions: readonly string[], marks: Readonly<Recor
   return { team, roster: new Roster({ sessions, names: {}, roles: { lead: sessions[0] ?? 'lead' } }, team), areaBySession: new Map(Object.entries(marks)) };
 }
 
-function session(claudeSession: string, main: readonly string[] = [`/${claudeSession}.jsonl`], subagents: readonly string[] = []): ClaudeSessionFiles {
-  return { claudeSession, main, subagents };
+function session(hostSession: string, main: readonly string[] = [`/${hostSession}.jsonl`], subagents: readonly string[] = []): HostSessionFiles {
+  return { hostSession, main, subagents };
 }
 
 function titles(byPath: Readonly<Record<string, string>>): (path: string) => Promise<string | undefined> {

@@ -11,7 +11,7 @@ import { WakeAsks } from '../wake/asks.ts';
 
 const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', claudeSession: ALPHA_TAB, idleMinutes: 75, freedMb: 1300 };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', hostSession: ALPHA_TAB, idleMinutes: 75, freedMb: 1300 };
 
 function send(to: string, message = 'Review the fix on T1.'): string {
   return JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, tool_name: 'SendMessage', tool_input: { to, message } });
@@ -39,7 +39,7 @@ describe('a send to a session teamrig closed', () => {
   it("posts the message as the receiver's urgent line and denies the send with why, while the idle pass reopens sessions", async () => {
     const kit = await closedAlpha('on');
     // A record from before the close is the tab the close ended.
-    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: 42, claudeSession: ALPHA_TAB, at: '2030-01-08T07:00:00.000Z' });
+    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: 42, hostSession: ALPHA_TAB, at: '2030-01-08T07:00:00.000Z' });
     const held = await coldSend(kit, send('app-alpha'));
     assert.equal(held.code, 0, held.stderr.join('\n'));
     assert.equal(decisionOf(held), 'deny');
@@ -63,7 +63,7 @@ describe('a send to a session teamrig closed', () => {
     assert.deepEqual((await coldSend(open, send('alpha'))).stdout, [], 'never closed');
 
     const byHand = await closedAlpha('on');
-    await new SessionRecordStore(byHand.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: 43, claudeSession: ALPHA_TAB, at: '2030-01-08T09:00:00.000Z' });
+    await new SessionRecordStore(byHand.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudePid: 43, hostSession: ALPHA_TAB, at: '2030-01-08T09:00:00.000Z' });
     assert.deepEqual((await coldSend(byHand, send('alpha'))).stdout, [], 'started by hand since its close');
 
     const own = await closedAlpha('on', {}, 'alpha');

@@ -10,9 +10,9 @@ import type { CliRuntime } from './runtime.ts';
  * `$TEAMRIG_SESSION`) looks up to. Undefined otherwise, so neither a typed name nor the environment moves a tab to
  * another session, and a tab that ever read another session's inbox acts as nobody.
  */
-export async function tabSessionOf(files: CliRuntime['files'], marksPath: string, roster: Roster, claudeSession: string, named: string | undefined): Promise<string | undefined> {
+export async function tabSessionOf(files: CliRuntime['files'], marksPath: string, roster: Roster, hostSession: string, named: string | undefined): Promise<string | undefined> {
   const { marks } = await new JsonlMarkLog(new PlainLogFile(files, marksPath)).read();
-  const bound = soleAreaOf(marks, claudeSession);
+  const bound = soleAreaOf(marks, hostSession);
   const found = named === undefined ? undefined : roster.lookup(named);
   return bound !== undefined && roster.ids.includes(bound) && found?.ok === true && found.id === bound ? bound : undefined;
 }

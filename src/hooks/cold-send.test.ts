@@ -23,7 +23,7 @@ const NOW = new Date('2030-01-08T10:00:00Z');
 const HOUR = 3_600_000;
 
 function factsAt(now: Date, overrides: Partial<ColdSendFacts> = {}): ColdSendFacts {
-  return { claudeSession: TAB, to: 'alpha', name: 'app-alpha', idleMs: 2 * HOUR, coldAfterMinutes: 60, now, command: 'teamrig', wakeNow: true, ...overrides };
+  return { hostSession: TAB, to: 'alpha', name: 'app-alpha', idleMs: 2 * HOUR, coldAfterMinutes: 60, now, command: 'teamrig', wakeNow: true, ...overrides };
 }
 
 describe('sentMessageOf', () => {
@@ -78,7 +78,7 @@ describe('decideColdSend', () => {
     const log = new JsonlColdSendLog(new MemoryFiles(), LOG);
     await decideColdSend(log, factsAt(NOW));
     assert.equal((await decideColdSend(log, factsAt(new Date(NOW.getTime() + RESEND_WINDOW_MS + 1)))).kind, 'hold');
-    assert.equal((await decideColdSend(log, factsAt(NOW, { claudeSession: OTHER_TAB }))).kind, 'hold');
+    assert.equal((await decideColdSend(log, factsAt(NOW, { hostSession: OTHER_TAB }))).kind, 'hold');
     assert.equal((await decideColdSend(log, factsAt(NOW, { to: 'bravo', name: 'app-bravo' }))).kind, 'hold');
   });
 

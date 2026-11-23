@@ -101,21 +101,21 @@ export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
     return { verdict: 'discard', reason: 'stale' };
   }
   // Before `active since logon`: a tab that hung after this logon began is still hung (10-31, T1744).
-  if (facts.running.has(entry.claudeSession) && facts.stalled.has(entry.claudeSession)) {
+  if (facts.running.has(entry.hostSession) && facts.stalled.has(entry.hostSession)) {
     return { verdict: 'hung', reason: `hung: mid-turn, its transcript unwritten for ${HUNG_AFTER_MS / 3_600_000} h` };
   }
   if (entry.updatedAt >= facts.since) {
     return { verdict: 'keep', reason: 'active since logon' };
   }
-  if (facts.running.has(entry.claudeSession)) {
+  if (facts.running.has(entry.hostSession)) {
     return { verdict: 'keep', reason: 'still running' };
   }
   // `claude --resume` needs the transcript; a session that never got a first prompt has none.
-  if (!facts.transcripts.has(entry.claudeSession)) {
+  if (!facts.transcripts.has(entry.hostSession)) {
     return { verdict: 'discard', reason: 'no transcript' };
   }
   // A job's hooks may not see its session kind, and a tab sent to a job never records an end: its transcript tells.
-  const kind = facts.kinds.get(entry.claudeSession);
+  const kind = facts.kinds.get(entry.hostSession);
   if (kind?.background === true) {
     return { verdict: 'discard', reason: 'background session' };
   }

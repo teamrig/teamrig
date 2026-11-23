@@ -15,7 +15,7 @@ import { teamRegister } from '../team-register.ts';
 
 /** What the automatic restart needs from the turn end's hook event and environment. */
 export interface RestartTarget {
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly transcript: string;
   readonly cwd: string | null;
   /** Where a new tab opens: the folder the host says the session started in, else the session's working folder. */
@@ -31,7 +31,7 @@ export function restartTargetOf(runtime: CliRuntime, event: Pick<HookEvent, 'ses
   if (session === undefined || transcript === undefined || project === undefined) {
     return undefined;
   }
-  return { claudeSession: session, transcript, cwd: cwd ?? null, project, effort: isEffortLevel(effort) ? effort : null };
+  return { hostSession: session, transcript, cwd: cwd ?? null, project, effort: isEffortLevel(effort) ? effort : null };
 }
 
 /** The session a restart is armed for. */
@@ -57,7 +57,7 @@ async function startRunner(runtime: CliRuntime, team: string, id: string, at: st
 
 /** What a restart keeps of the Stop hook's tab, the process it runs under aside. */
 function restartTabOf(runtime: CliRuntime, id: string, target: RestartTarget): RestartTab {
-  return { claudeSession: target.claudeSession, transcript: target.transcript, cwd: target.cwd, supervised: runtime.env[ENV.launched] === id, effort: target.effort };
+  return { hostSession: target.hostSession, transcript: target.transcript, cwd: target.cwd, supervised: runtime.env[ENV.launched] === id, effort: target.effort };
 }
 
 /**
@@ -150,7 +150,7 @@ async function armFromTab(runtime: CliRuntime, store: RefreshStore, scope: Rearm
 export async function parkedHere(store: RefreshStore, scope: RearmScope): Promise<ParkedRestart | undefined> {
   const { id, tab, refresh } = scope;
   const parked = await store.parked(id);
-  if (parked === undefined || parked.claudeSession !== tab || !refresh.enabled || !refresh.autoRestart) {
+  if (parked === undefined || parked.hostSession !== tab || !refresh.enabled || !refresh.autoRestart) {
     return undefined;
   }
   if ((await store.state(id))?.phase !== 'ready') {
@@ -180,7 +180,7 @@ export async function armParkedRestart(runtime: CliRuntime, store: RefreshStore,
  */
 export async function rearmDeadRestart(runtime: CliRuntime, store: RefreshStore, scope: RearmScope, request: RestartRequest | undefined): Promise<boolean> {
   const { id, tab, refresh } = scope;
-  if (request === undefined || restartMayAct(request, runtime.clock.now()) || request.claudeSession !== tab || !refresh.enabled || !refresh.autoRestart) {
+  if (request === undefined || restartMayAct(request, runtime.clock.now()) || request.hostSession !== tab || !refresh.enabled || !refresh.autoRestart) {
     return false;
   }
   if ((await store.state(id))?.phase !== 'ready') {

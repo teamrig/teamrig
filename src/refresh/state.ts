@@ -1,6 +1,6 @@
 import { isEffortLevel, type EffortLevel } from '../config/types.ts';
 import { isNonNegativeInteger, isRecord, stringField, type JsonRecord } from '../core/guards.ts';
-import { hostSessionOf } from '../core/host-session.ts';
+import { hostSessionOf, legacyHostSessionRecord } from '../core/host-session.ts';
 import { parseObject, recordVersion, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
 
 /** The format of the refresh files this code reads and writes; a file in another format reads as absent. */
@@ -130,7 +130,7 @@ export interface RestartRequest {
   /** The Claude Code process to end when no mod clears the tab: the one the Stop hook runs under. */
   readonly pid: number;
   /** Its Claude Code session id: the tab's mod finds its ask by it, and the SessionEnd input of `refresh.endCommand` names it. */
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly transcript: string | null;
   readonly cwd: string | null;
   /** `teamrig launch` runs the process and starts it again; otherwise the restart opens a new tab. */
@@ -144,7 +144,7 @@ export interface RestartRequest {
 }
 
 /** What a restart keeps of the tab it is for, from the Stop hook that asked for it. */
-export type RestartTab = Pick<RestartRequest, 'claudeSession' | 'transcript' | 'cwd' | 'supervised' | 'effort'>;
+export type RestartTab = Pick<RestartRequest, 'hostSession' | 'transcript' | 'cwd' | 'supervised' | 'effort'>;
 
 /**
  * The automatic restart the Stop hook held back once the handover was written (T1383): the session had no work it
@@ -348,7 +348,7 @@ export function parseRestartRequest(text: string): RestartRequest | undefined {
 }
 
 export function formatRestartRequest(request: RestartRequest): string {
-  return toJsonlLine({ [VERSION_FIELD]: REFRESH_FORMAT, ...request });
+  return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: REFRESH_FORMAT, ...request }, 'claudeSession'));
 }
 
 /** A parked restart file's content; undefined when it is damaged or from a format this code does not read. */
@@ -363,20 +363,20 @@ export function parseParkedRestart(text: string): ParkedRestart | undefined {
 }
 
 export function formatParkedRestart(parked: ParkedRestart): string {
-  return toJsonlLine({ [VERSION_FIELD]: REFRESH_FORMAT, ...parked });
+  return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: REFRESH_FORMAT, ...parked }, 'claudeSession'));
 }
 
 /** The tab fields of a restart file; undefined when one is missing or of the wrong type. */
 function restartTabOf(record: JsonRecord): RestartTab | undefined {
-  const claudeSession = hostSessionOf(record, 'claudeSession');
+  const hostSession = hostSessionOf(record, 'claudeSession');
   const transcript = nullableString(record, 'transcript');
   const cwd = nullableString(record, 'cwd');
   const supervised = record['supervised'];
   const effort = effortOf(record['effort']);
-  if (claudeSession === undefined || transcript === undefined || cwd === undefined || typeof supervised !== 'boolean' || effort === undefined) {
+  if (hostSession === undefined || transcript === undefined || cwd === undefined || typeof supervised !== 'boolean' || effort === undefined) {
     return undefined;
   }
-  return { claudeSession, transcript, cwd, supervised, effort };
+  return { hostSession, transcript, cwd, supervised, effort };
 }
 
 /** A recorded effort level, null when absent (a file from before it) or null, undefined when damaged. */

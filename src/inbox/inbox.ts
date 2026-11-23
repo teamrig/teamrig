@@ -114,13 +114,13 @@ export interface ReadResult {
  */
 export async function readInbox(
   deps: InboxDeps,
-  input: { readonly area: string; readonly claudeSession: string | null; readonly now: Date },
+  input: { readonly area: string; readonly hostSession: string | null; readonly now: Date },
 ): Promise<ReadResult> {
   const lines = (await deps.inboxes.lines(input.area)) ?? [];
   const { byArea } = indexMarks((await deps.marks.read()).marks);
   const read = byArea.get(input.area) ?? null;
   const unread = unreadOf(input.area, lines, read, lineHash);
-  const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.claudeSession);
+  const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.hostSession);
   const unshown = unshownOf(input.area, lines, read, shown, lineHash);
   const before = unread.lines.slice(0, unread.lines.length - unshown.length);
   const printed = [...before.filter((line) => cutWhenShown(line)), ...unshown];
@@ -130,7 +130,7 @@ export async function readInbox(
     area: input.area,
     line: lines.length,
     at: input.now.toISOString(),
-    claudeSession: input.claudeSession,
+    hostSession: input.hostSession,
     lastLineHash: last === undefined ? null : lineHash(last),
   };
   await deps.marks.append(mark);
@@ -144,7 +144,7 @@ export function formatRead(result: ReadResult): string {
   const before = shownBefore === 0 ? '' : `, and ${shownBefore} the prompt hook showed this session, now marked read too`;
   const redo = unread.resume === 'rewritten' ? ' (the file was rewritten, so all of it is shown)' : '';
   const next =
-    mark.claudeSession === null
+    mark.hostSession === null
       ? 'outside Claude Code, so no prompt will remind you of new ones'
       : 'new ones are shown at your next prompt';
   return `READ ${mark.area}: ${what}${before}${redo}; ${next}`;

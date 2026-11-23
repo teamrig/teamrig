@@ -25,7 +25,7 @@ const LOG = join(TEAM_HOME, 'state', 'session-log.jsonl');
 const TRANSCRIPT = projectTranscriptPath(join(USER_HOME, '.claude', 'projects'), APP, CLAUDE_SESSION);
 const CHARGE: CommitCharge = { usedMb: 40_000, limitMb: 100_700 };
 /** Alpha, closed by the lead in Claude Code session CLAUDE_SESSION, small and recent enough that `open` resumes it. */
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
 /** The woken session's Claude Code, as its start recorded it and the host lists it while it runs. */
 const CLAUDE_PID = 8100;
 const RUNNING = [{ pid: CLAUDE_PID, parent: 8000, bytes: 1100 * MB }];
@@ -53,7 +53,7 @@ async function hostOf(kit: CliHarness, rows: readonly { pid: number; parent: num
 
 /** Session `id`'s start record in the team home `home`, naming the Claude Code process `RUNNING` lists. */
 async function running(kit: CliHarness, id = 'alpha', home = TEAM_HOME): Promise<void> {
-  await new SessionRecordStore(kit.files, { sessions: join(home, 'state', 'sessions') }).write(id, { claudePid: CLAUDE_PID, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
+  await new SessionRecordStore(kit.files, { sessions: join(home, 'state', 'sessions') }).write(id, { claudePid: CLAUDE_PID, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
 }
 
 /** The wake asks waiting for `id`'s tab in the team home `home`. */

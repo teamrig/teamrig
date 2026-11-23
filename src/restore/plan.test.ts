@@ -38,7 +38,7 @@ const NOTHING: LostWork = { background: 0, crons: 0, wake: false };
 
 function entry(overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession: SESSION,
+    hostSession: SESSION,
     projectDir: '/work/app',
     transcriptPath: '/claude/projects/app/s.jsonl',
     entrypoint: 'cli',
@@ -195,17 +195,17 @@ describe('selectRestorePlan', () => {
   it('sorts each verdict oldest session first', () => {
     const other = '99999999-2222-4333-8444-555555555555';
     const shut = 'bbbbbbbb-2222-4333-8444-555555555555';
-    const older = entry({ claudeSession: other, createdAt: SHUTDOWN - 7_200_000 });
-    const closed = entry({ claudeSession: shut, endedAt: SHUTDOWN - 3_600_000, endReason: 'other' });
-    const plan = selectRestorePlan([entry(), older, closed, entry({ claudeSession: 'aaaaaaaa-2222-4333-8444-555555555555' })], facts({
+    const older = entry({ hostSession: other, createdAt: SHUTDOWN - 7_200_000 });
+    const closed = entry({ hostSession: shut, endedAt: SHUTDOWN - 3_600_000, endReason: 'other' });
+    const plan = selectRestorePlan([entry(), older, closed, entry({ hostSession: 'aaaaaaaa-2222-4333-8444-555555555555' })], facts({
       transcripts: new Map([
         [SESSION, 't1'],
         [other, 't2'],
         [shut, 't3'],
       ]),
     }));
-    assert.deepEqual(plan.restore.map((judged) => judged.entry.claudeSession), [other, SESSION]);
-    assert.deepEqual(plan.closed.map((judged) => judged.entry.claudeSession), [shut]);
+    assert.deepEqual(plan.restore.map((judged) => judged.entry.hostSession), [other, SESSION]);
+    assert.deepEqual(plan.closed.map((judged) => judged.entry.hostSession), [shut]);
     assert.deepEqual(plan.discard.map((judged) => judged.reason), ['no transcript']);
     assert.deepEqual(plan.keep, []);
     assert.deepEqual(plan.hung, []);

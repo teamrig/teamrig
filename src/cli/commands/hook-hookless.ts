@@ -58,7 +58,7 @@ async function findHooklessTabs(runtime: CliRuntime, kit: Kit, config: KitConfig
     const changed = path === undefined ? undefined : await runtime.transcripts.changedAt(path);
     const found = path === undefined || changed === undefined || !workedPastHook(entry.updatedAt, changed, now) ? undefined : await replyAtEnd(runtime, path);
     if (found !== undefined) {
-      replies.set(entry.claudeSession, found);
+      replies.set(entry.hostSession, found);
     }
   }
   return hooklessTabs(stale, replies, now);

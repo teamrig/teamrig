@@ -8,7 +8,7 @@ export interface RequirementsNoteInput {
   readonly problems: readonly RequirementProblem[];
   readonly log: HintLog;
   /** The Claude Code session, from the hook payload; null when the payload has none. */
-  readonly claudeSession: string | null;
+  readonly hostSession: string | null;
   readonly now: Date;
   /** The CLI name the lines name. */
   readonly command: string;
@@ -23,7 +23,7 @@ export async function requirementsNoteOnce(input: RequirementsNoteInput): Promis
   if (input.problems.length === 0) {
     return undefined;
   }
-  if (input.claudeSession !== null && !(await firstHint(input.log, input.claudeSession, REQUIREMENTS_HINT, input.now))) {
+  if (input.hostSession !== null && !(await firstHint(input.log, input.hostSession, REQUIREMENTS_HINT, input.now))) {
     return undefined;
   }
   return input.problems.map((problem) => describeRequirement(problem, input.command)).join('\n');

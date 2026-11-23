@@ -93,7 +93,7 @@ async function deadRestart(config: JsonRecord, request: Partial<RestartRequest> 
   const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
   await check(kit);
   const left = new Date(kit.clock.now() - 2 * GIVE_UP_MS).toISOString();
-  await store.setRestart('alpha', { phase: 'pending', at: left, pid: 4100, claudeSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null, ...request });
+  await store.setRestart('alpha', { phase: 'pending', at: left, pid: 4100, hostSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null, ...request });
   await store.setState('alpha', ready ? READY : { phase: 'refreshed', task: 'T1', at: left });
   await hand(kit, 'Fix the login', 'p1');
   return { kit, store };
@@ -115,7 +115,7 @@ async function parkedRestart(config: JsonRecord, tab = ALPHA_TAB, ready = true):
   const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
   await check(kit);
   const at = new Date(kit.clock.now()).toISOString();
-  await store.setParked('alpha', { at, claudeSession: tab, transcript: null, cwd: null, supervised: true, effort: null });
+  await store.setParked('alpha', { at, hostSession: tab, transcript: null, cwd: null, supervised: true, effort: null });
   await store.setState('alpha', ready ? READY : { phase: 'refreshed', task: 'T1', at });
   return { kit, store };
 }
@@ -296,7 +296,7 @@ describe('hook wake-check', () => {
   it('never wakes a session while its automatic restart may act, whose prompt would cancel it, and wakes it for the work after (T980)', async () => {
     const kit = await teamWithAlphaTab({ ...TEAM, wake: { batchSeconds: 0 } });
     const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
-    const request: RestartRequest = { phase: 'pending', at: new Date(kit.clock.now()).toISOString(), pid: 4100, claudeSession: ALPHA_TAB, transcript: null, cwd: null, supervised: false, effort: null };
+    const request: RestartRequest = { phase: 'pending', at: new Date(kit.clock.now()).toISOString(), pid: 4100, hostSession: ALPHA_TAB, transcript: null, cwd: null, supervised: false, effort: null };
     await check(kit);
     await store.setRestart('alpha', request);
     await hand(kit, 'Fix the login', 'p1');
@@ -312,7 +312,7 @@ describe('hook wake-check', () => {
     const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
     await check(kit);
     const left = new Date(kit.clock.now() - 2 * GIVE_UP_MS).toISOString();
-    await store.setRestart('alpha', { phase: 'pending', at: left, pid: 4100, claudeSession: ALPHA_TAB, transcript: null, cwd: null, supervised: false, effort: null });
+    await store.setRestart('alpha', { phase: 'pending', at: left, pid: 4100, hostSession: ALPHA_TAB, transcript: null, cwd: null, supervised: false, effort: null });
     await store.setState('alpha', READY);
     await hand(kit, 'Fix the login', 'p1');
     assert.equal((await check(kit)).stdout[0]?.includes('"kind":"wake","ids":["T1"]'), true);
@@ -421,7 +421,7 @@ describe('hook wake-check', () => {
     const underClaude = UNDER_CLAUDE();
     assert.deepEqual(answerOf(await checkUnder(kit, processes, underClaude)), { kind: 'wait', watch: watchOf(), recheckAt: kit.clock.now() + RESTART_RECHECK_MS });
     const at = new Date(kit.clock.now()).toISOString();
-    assert.deepEqual(await store.restart('alpha'), { phase: 'pending', at, pid: 6900, claudeSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null });
+    assert.deepEqual(await store.restart('alpha'), { phase: 'pending', at, pid: 6900, hostSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null });
     assert.deepEqual(underClaude.lineages, [7000], 'the Claude Code process looked up once');
     const runners = (): string[][] => processes.hidden.filter((run) => run.args[1] === 'restart').map((run) => [run.command, run.cwd, ...run.args]);
     // The request names no folder, so the new tab opens in the one the tab's check runs in.
@@ -434,7 +434,7 @@ describe('hook wake-check', () => {
 
   it('leaves a restart whose runner died alone for another tab or a session no longer waiting for its fresh start, and wakes it', async () => {
     const cases: readonly { readonly name: string; readonly request: Partial<RestartRequest>; readonly ready: boolean }[] = [
-      { name: 'asked for another tab', request: { claudeSession: OTHER_TAB }, ready: true },
+      { name: 'asked for another tab', request: { hostSession: OTHER_TAB }, ready: true },
       { name: 'the session refreshed since', request: {}, ready: false },
     ];
     for (const { name, request, ready } of cases) {
@@ -463,12 +463,12 @@ describe('hook wake-check', () => {
     const { kit, store } = await parkedRestart(PARKED_TEAM);
     const processes = new FakeProcesses();
     assert.deepEqual(answerOf(await checkUnder(kit, processes)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'no work: it waits');
-    assert.deepEqual([processes.hidden, (await store.parked('alpha'))?.claudeSession], [[], ALPHA_TAB]);
+    assert.deepEqual([processes.hidden, (await store.parked('alpha'))?.hostSession], [[], ALPHA_TAB]);
     await hand(kit, 'Fix the login', 'p1');
     const underClaude = UNDER_CLAUDE();
     assert.deepEqual(answerOf(await checkUnder(kit, processes, underClaude)), { kind: 'wait', watch: watchOf(), recheckAt: kit.clock.now() + RESTART_RECHECK_MS });
     const at = new Date(kit.clock.now()).toISOString();
-    assert.deepEqual(await store.restart('alpha'), { phase: 'pending', at, pid: 6900, claudeSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null });
+    assert.deepEqual(await store.restart('alpha'), { phase: 'pending', at, pid: 6900, hostSession: ALPHA_TAB, transcript: null, cwd: null, supervised: true, effort: null });
     assert.deepEqual([await store.parked('alpha'), underClaude.lineages, await logLines(kit)], [undefined, [7000], []], 'armed once, no wake logged');
     const runners = processes.hidden.filter((run) => run.args[1] === 'restart').map((run) => [run.command, run.cwd, ...run.args]);
     assert.deepEqual(runners, [['/usr/bin/node', APP, '/opt/teamrig/dist/cli/main.js', 'restart', 'alpha', '--team', 'app', '--at', at, '--project', APP]]);
@@ -839,7 +839,7 @@ describe('hook wake-check runs the idle pass', () => {
   /** A dry-run team whose bravo the lead closed at 09:00 UTC; neither lead nor alpha runs. */
   async function idleTeam(config: JsonRecord = DRY_RUN): Promise<CliHarness> {
     const kit = await teamWithAlphaTab(config);
-    await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'close', session: 'bravo', by: 'lead', at: '2030-01-08T09:00:00.000Z', claudeSession: 'claude-bravo', idleMinutes: 75, freedMb: 1300 });
+    await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'close', session: 'bravo', by: 'lead', at: '2030-01-08T09:00:00.000Z', hostSession: 'claude-bravo', idleMinutes: 75, freedMb: 1300 });
     return kit;
   }
 
@@ -922,7 +922,7 @@ describe('hook wake-check runs the idle pass', () => {
 
   it("in mode on starts no reopen for a session a wake's reopen is pending on (#1584)", async () => {
     const kit = await teamWithAlphaTab(ON);
-    await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'close', session: 'bravo', by: 'idle-pass', at: '2030-01-08T09:00:00.000Z', claudeSession: 'claude-bravo', idleMinutes: 75, freedMb: 1300, folder: APP });
+    await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'close', session: 'bravo', by: 'idle-pass', at: '2030-01-08T09:00:00.000Z', hostSession: 'claude-bravo', idleMinutes: 75, freedMb: 1300, folder: APP });
     const processes = new FakeProcesses();
     const woke = await kit.run(['inbox', 'add', '--session', 'lead', '--to', 'bravo', '--text', 'Re-confirm now.', '--wake', 'now'], {
       processes,
@@ -1028,7 +1028,7 @@ describe('hook wake-check runs the idle pass', () => {
       kit.clock.advance(MINUTE);
       await passCheck(kit);
       assert.deepEqual(await hooklessLines(), [hookless], `${mode}: told once a reopen`);
-      await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 8200, claudeSession: 'claude-bravo', at: new Date(kit.clock.now()).toISOString() });
+      await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 8200, hostSession: 'claude-bravo', at: new Date(kit.clock.now()).toISOString() });
       kit.clock.advance(MINUTE);
       await passCheck(kit);
       assert.deepEqual(await hooklessLines(), [hookless], `${mode}: a hook started`);
@@ -1083,7 +1083,7 @@ describe('hook wake-check runs the idle pass', () => {
       const kit = await idleTeam({ ...ON, team: { id: 'app' } });
       const node = parent === null ? { id: team } : { id: team, parent };
       await kit.files.write(teamConfigOf(team), formatConfig({ configVersion: 1, team: node, sessions: ['lead', 'front'], roles: { lead: 'lead' } }));
-      const close = { kind: 'close', session: 'front', by: 'lead', at: '2030-01-08T09:00:00.000Z', claudeSession: 'claude-front', idleMinutes: 75, freedMb: 1300 } as const;
+      const close = { kind: 'close', session: 'front', by: 'lead', at: '2030-01-08T09:00:00.000Z', hostSession: 'claude-front', idleMinutes: 75, freedMb: 1300 } as const;
       await new SessionLog(kit.files, webState(team, 'session-log.jsonl')).append(folder === null ? close : { ...close, folder });
       const handed = await kit.run(['add', '--owner', 'front', '--title', 'Ship the form', '--description', 'what and why', '--priority', 'p1', '--session', 'lead'], { env: { TEAMRIG_TEAM: team } });
       assert.equal(handed.code, 0, handed.stderr.join('\n'));
@@ -1291,7 +1291,7 @@ function alphaEntryOf(kit: CliHarness): Promise<RestoreEntry | undefined> {
 /** Writes ALPHA_TAB's restore entry: its last turn ended at `failedAt` on `code`, with `retries` retries sent since. */
 async function failedTab(kit: CliHarness, failedAt: number, code: string, retries = 0): Promise<void> {
   const entry: RestoreEntry = {
-    claudeSession: ALPHA_TAB,
+    hostSession: ALPHA_TAB,
     projectDir: APP,
     transcriptPath: join(USER_HOME, '.claude', 'projects', 'app', `${ALPHA_TAB}.jsonl`),
     entrypoint: 'cli',

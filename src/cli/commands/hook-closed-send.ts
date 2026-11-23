@@ -22,7 +22,7 @@ import { inboxDepsOf } from './inbox.ts';
  * subscription). With wakes on, the denial also names `inbox add --wake now`, which posts the same ask, so the sender
  * posts such a line itself next time.
  */
-export async function closedSendHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, claudeSession: string): Promise<HookReply | undefined> {
+export async function closedSendHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, hostSession: string): Promise<HookReply | undefined> {
   const text = message.text.trim();
   if (config.open.idle.mode !== 'on' || text === '') {
     return undefined;
@@ -32,7 +32,7 @@ export async function closedSendHold(runtime: CliRuntime, kit: Kit, config: KitC
     return undefined;
   }
   const { marks } = await inboxDepsOf(runtime, kit.paths).marks.read();
-  if (tabsOf(marks, receiver.id, RECEIVER_TABS).includes(claudeSession)) {
+  if (tabsOf(marks, receiver.id, RECEIVER_TABS).includes(hostSession)) {
     return undefined;
   }
   const closed = closedOf((await new SessionLog(runtime.files, kit.paths.sessionLog).read()).records, receiver.id);
@@ -43,10 +43,10 @@ export async function closedSendHold(runtime: CliRuntime, kit: Kit, config: KitC
   if (started !== undefined && Date.parse(started.at) > Date.parse(closed.at)) {
     return undefined;
   }
-  const from = indexMarks(marks).areaBySession.get(claudeSession) ?? KIT_NAME;
+  const from = indexMarks(marks).areaBySession.get(hostSession) ?? KIT_NAME;
   const at = teamZone(config, runtime).clock(new Date(closed.at));
   // A home close (T1364) is of a session hired with no room, which never ran.
-  const state = closed.claudeSession === undefined ? `home (${closed.by} hired it at ${at} with no room on the host)` : `closed (${closed.by} closed it at ${at})`;
+  const state = closed.hostSession === undefined ? `home (${closed.by} hired it at ${at} with no room on the host)` : `closed (${closed.by} closed it at ${at})`;
   const why = `${roster.nameOf(receiver.id) ?? receiver.id} is ${state}, so this message cannot reach it`;
   const unposted = await postUrgentLine(runtime, kit, config, { to: receiver.id, from, text });
   const line = `${KIT_NAME} inbox add --to ${receiver.id} --text "..."${config.wake.enabled ? ' --wake now' : ''}`;

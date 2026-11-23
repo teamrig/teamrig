@@ -41,7 +41,7 @@ export async function close(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const { closable } = verdict;
   const what = `${name} (session ${id}): ${closableText(closable)}`;
   if (!args.switches.has('yes')) {
-    runtime.out.stdout(`CLOSE ${what}; ${KIT_NAME} open ${name} resumes Claude Code session ${closable.record.claudeSession}. Run again with --yes to close it`);
+    runtime.out.stdout(`CLOSE ${what}; ${KIT_NAME} open ${name} resumes Claude Code session ${closable.record.hostSession}. Run again with --yes to close it`);
     return EXIT.ok;
   }
   const problem = await closeSession(runtime, kit.paths, { id, by, closable });

@@ -24,7 +24,7 @@ export const INTENTIONAL_END_REASONS: ReadonlySet<string> = new Set(['clear', 'r
 export const OTHER_END = 'other';
 
 export interface RestoreEntry {
-  readonly claudeSession: string;
+  readonly hostSession: string;
   /** The folder it started in, kept from its first event: a later `cd` does not move it. */
   readonly projectDir: string;
   readonly transcriptPath: string | undefined;
@@ -92,7 +92,7 @@ export type TrackEvent =
 
 /** What an event tells about its session; undefined where it does not say. */
 export interface TrackFacts {
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly at: number;
   readonly projectDir: string | undefined;
   readonly transcriptPath: string | undefined;
@@ -132,7 +132,7 @@ export function applyEvent(existing: RestoreEntry | undefined, event: TrackEvent
     return { kind: 'none' };
   }
   const base: RestoreEntry = {
-    claudeSession: facts.claudeSession,
+    hostSession: facts.hostSession,
     projectDir,
     transcriptPath: facts.transcriptPath ?? existing?.transcriptPath,
     entrypoint: facts.entrypoint ?? existing?.entrypoint,
@@ -178,7 +178,7 @@ type EntryFields = Readonly<Record<string, string | number | Readonly<Record<str
 export function entryRecord(entry: RestoreEntry): EntryFields {
   const { apiError } = entry;
   return {
-    claudeSession: entry.claudeSession,
+    claudeSession: entry.hostSession,
     projectDir: entry.projectDir,
     transcriptPath: entry.transcriptPath,
     entrypoint: entry.entrypoint,
@@ -254,7 +254,7 @@ export function parseEntry(text: string): RestoreEntry | undefined {
  * later teamrig's entry, naming the session `hostSession` (T4762), is told by that field alone.
  */
 export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
-  const claudeSession = hostSessionOf(record, 'claudeSession');
+  const hostSession = hostSessionOf(record, 'claudeSession');
   const projectDir = stringField(record, 'projectDir');
   const state = activityOf(stringField(record, 'state'));
   const createdAt = instantField(record, 'createdAt');
@@ -267,8 +267,8 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
   const pid = rawPid === undefined ? undefined : isNonNegativeInteger(rawPid) ? rawPid : null;
   const restoreAttempts = record['restoreAttempts'];
   if (
-    claudeSession === undefined ||
-    !CLAUDE_SESSION_ID.test(claudeSession) ||
+    hostSession === undefined ||
+    !CLAUDE_SESSION_ID.test(hostSession) ||
     projectDir === undefined ||
     state === undefined ||
     createdAt === undefined ||
@@ -285,7 +285,7 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
     return undefined;
   }
   const entry: RestoreEntry = {
-    claudeSession,
+    hostSession,
     projectDir,
     transcriptPath: stringField(record, 'transcriptPath'),
     entrypoint: stringField(record, 'entrypoint'),

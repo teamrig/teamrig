@@ -73,14 +73,14 @@ export function mergeClearance(standing: MergeStanding, taskId: string, head: st
 export interface MergeCaller {
   readonly session: string | undefined;
   readonly team: string | undefined;
-  readonly claudeSession: string | undefined;
+  readonly hostSession: string | undefined;
 }
 
 /** Reads a merge's standing from the register (`mergeStandingOf`); rejects with `RefusedError` when it cannot. */
 export type StandingOf = (team: string, caller: string, taskId: string) => Promise<MergeStanding>;
 
 /** The session the merging tab is bound to, which must be the one the caller names (`tabCallerOf`); rejects with `RefusedError` otherwise. */
-export type TabCallerOf = (team: string, claudeSession: string, caller: string) => Promise<string>;
+export type TabCallerOf = (team: string, hostSession: string, caller: string) => Promise<string>;
 
 /** What a merge's clearance reads: the tab's session, then that session's standing. */
 export interface MergeReads {
@@ -111,12 +111,12 @@ export async function clearTaskMerge(caller: MergeCaller, reads: MergeReads, tas
   if (caller.session === undefined || caller.session === '' || caller.team === undefined || caller.team === '') {
     return refused('TEAMRIG_SESSION and TEAMRIG_TEAM must name the merging session and its team');
   }
-  if (caller.claudeSession === undefined || caller.claudeSession === '') {
+  if (caller.hostSession === undefined || caller.hostSession === '') {
     return refused(`${TAB_VARIABLE} must name the merging Claude Code tab: a merge runs from the merging session's own tab`);
   }
   let standing: MergeStanding;
   try {
-    const session = await reads.tabCallerOf(caller.team, caller.claudeSession, caller.session);
+    const session = await reads.tabCallerOf(caller.team, caller.hostSession, caller.session);
     standing = await reads.standingOf(caller.team, session, taskId);
   } catch (error) {
     if (error instanceof RefusedError) {
@@ -152,9 +152,9 @@ export function clearTaskMergeFrom(env: Env, reader: KitReader): ClearTaskMerge 
 
 function mergeContextOf(env: Env, reader: KitReader): { readonly caller: MergeCaller; readonly reads: MergeReads } {
   return {
-    caller: { session: env[ENV.session]?.trim(), team: env[ENV.team]?.trim(), claudeSession: env[TAB_VARIABLE]?.trim() },
+    caller: { session: env[ENV.session]?.trim(), team: env[ENV.team]?.trim(), hostSession: env[TAB_VARIABLE]?.trim() },
     reads: {
-      tabCallerOf: (team, claudeSession, session) => tabCallerOf(reader, team, claudeSession, session),
+      tabCallerOf: (team, hostSession, session) => tabCallerOf(reader, team, hostSession, session),
       standingOf: (team, session, taskId) => mergeStandingOf(reader, team, session, taskId),
     },
   };

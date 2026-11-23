@@ -743,12 +743,12 @@ async function statusLineSetup(runtime: CliRuntime, cwd: string): Promise<Status
 }
 
 /** The open meeting's mark for the tab of `claudeSession`; a failed read is told on stderr, never breaking the status bar. */
-async function meetingMarkOf(runtime: CliRuntime, team: LoadedTeam | undefined, claudeSession: string): Promise<StatusLineMeeting | undefined> {
+async function meetingMarkOf(runtime: CliRuntime, team: LoadedTeam | undefined, hostSession: string): Promise<StatusLineMeeting | undefined> {
   if (team === undefined) {
     return undefined;
   }
   try {
-    return await statusLineMeetingFor(runtime, team, claudeSession);
+    return await statusLineMeetingFor(runtime, team, hostSession);
   } catch (error) {
     runtime.out.stderr(`teamrig statusline: the meeting was not read: ${errorMessage(error)}`);
     return undefined;

@@ -308,9 +308,9 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
 export async function coldSend(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
   const { event } = await readHookInput(runtime);
-  const claudeSession = event?.session;
+  const hostSession = event?.session;
   const message = event === undefined ? undefined : sentMessageOf(event);
-  if (claudeSession === undefined || message === undefined) {
+  if (hostSession === undefined || message === undefined) {
     return EXIT.ok;
   }
   const found = await sessionTeam(event?.cwd, runtime);
@@ -324,9 +324,9 @@ export async function coldSend(args: ParsedArgs, runtime: CliRuntime): Promise<E
   const { config } = kit.load;
   const roster = await rosterOf(runtime, kit, config);
   const hold =
-    (await meetingHold(runtime, kit, config, roster, message, claudeSession)) ??
-    (await closedSendHold(runtime, kit, config, roster, message, claudeSession)) ??
-    (await coldSendHold(runtime, kit, config, roster, message, claudeSession));
+    (await meetingHold(runtime, kit, config, roster, message, hostSession)) ??
+    (await closedSendHold(runtime, kit, config, roster, message, hostSession)) ??
+    (await coldSendHold(runtime, kit, config, roster, message, hostSession));
   writeReply(runtime, 'tool-start', hold);
   return EXIT.ok;
 }
@@ -927,7 +927,7 @@ export async function sessionStart(args: ParsedArgs, runtime: CliRuntime): Promi
   const requirementsNote = await requirementsNoteOnce({
     problems: await runtime.requirements.problems(),
     log: new JsonlHintLog(hookLogOf(runtime, kit.paths, 'bind-hints')),
-    claudeSession: event?.session ?? null,
+    hostSession: event?.session ?? null,
     now: new Date(runtime.clock.now()),
     command: KIT_NAME,
   });

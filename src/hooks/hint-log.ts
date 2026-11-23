@@ -11,8 +11,8 @@ export const HINT_VERSION = 1;
  * session start's note of missing requirements.
  */
 export interface HintLog {
-  shown(claudeSession: string, reason: string): Promise<boolean>;
-  record(claudeSession: string, reason: string, at: Date): Promise<void>;
+  shown(hostSession: string, reason: string): Promise<boolean>;
+  record(hostSession: string, reason: string, at: Date): Promise<void>;
 }
 
 /**
@@ -28,13 +28,13 @@ export class JsonlHintLog implements HintLog {
   }
 
   /** A line of any version naming the session and reason counts: a newer teamrig gave that hint too. */
-  async shown(claudeSession: string, reason: string): Promise<boolean> {
+  async shown(hostSession: string, reason: string): Promise<boolean> {
     const { records } = parseJsonl((await this.log.read()) ?? '');
-    return records.some((line) => hostSessionOf(line.record, 'claudeSession') === claudeSession && stringField(line.record, 'reason') === reason);
+    return records.some((line) => hostSessionOf(line.record, 'claudeSession') === hostSession && stringField(line.record, 'reason') === reason);
   }
 
-  async record(claudeSession: string, reason: string, at: Date): Promise<void> {
-    await this.log.append(toJsonlLine({ v: HINT_VERSION, claudeSession, reason, at: at.toISOString() }));
+  async record(hostSession: string, reason: string, at: Date): Promise<void> {
+    await this.log.append(toJsonlLine({ v: HINT_VERSION, claudeSession: hostSession, reason, at: at.toISOString() }));
   }
 }
 
@@ -42,12 +42,12 @@ export class JsonlHintLog implements HintLog {
  * Whether the hint prints now: the first time for this Claude Code session and reason, recorded
  * before it prints. A log that cannot be read or written never silences the hint: it prints again.
  */
-export async function firstHint(log: HintLog, claudeSession: string, reason: string, now: Date): Promise<boolean> {
+export async function firstHint(log: HintLog, hostSession: string, reason: string, now: Date): Promise<boolean> {
   try {
-    if (await log.shown(claudeSession, reason)) {
+    if (await log.shown(hostSession, reason)) {
       return false;
     }
-    await log.record(claudeSession, reason, now);
+    await log.record(hostSession, reason, now);
   } catch {
     // The hint is one short line: shown again beats never shown.
   }

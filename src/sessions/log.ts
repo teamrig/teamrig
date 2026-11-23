@@ -1,5 +1,5 @@
 import { isNonNegativeInteger, stringField, type JsonRecord } from '../core/guards.ts';
-import { hostSessionOf } from '../core/host-session.ts';
+import { hostSessionOf, legacyHostSessionRecord } from '../core/host-session.ts';
 import { assertWritable, parseJsonl, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
 
 /**
@@ -38,7 +38,7 @@ export interface CloseRecord {
    * The Claude Code session it ran, which its reopen resumes; absent in a home close (T1364): a session hired with no
    * room on the host, which starts home, never having run, and opens as a new hire does.
    */
-  readonly claudeSession?: string;
+  readonly hostSession?: string;
   /** How long its transcript had been quiet, in whole minutes; 0 in a home close. */
   readonly idleMinutes: number;
   /** What its Claude Code's process tree held, freed by the close; 0 in a home close. */
@@ -89,14 +89,14 @@ export function parseSessionLogRecord(record: JsonRecord): SessionLogRecord | un
     return { kind: 'reopen', session, at, ...(resumed === undefined ? {} : { resumed }) };
   }
   const by = stringField(record, 'by');
-  const claudeSession = hostSessionOf(record, 'claudeSession');
+  const hostSession = hostSessionOf(record, 'claudeSession');
   const idleMinutes = integerField(record, 'idleMinutes');
   const freedMb = integerField(record, 'freedMb');
   if (record['kind'] !== 'close' || by === undefined || idleMinutes === undefined || freedMb === undefined) {
     return undefined;
   }
   const folder = stringField(record, 'folder');
-  return { kind: 'close', session, by, at, ...(claudeSession === undefined ? {} : { claudeSession }), idleMinutes, freedMb, ...(folder === undefined ? {} : { folder }) };
+  return { kind: 'close', session, by, at, ...(hostSession === undefined ? {} : { hostSession }), idleMinutes, freedMb, ...(folder === undefined ? {} : { folder }) };
 }
 
 /** The close that keeps a session hired with no room home until it has work and the host has room (T1364). */
@@ -105,7 +105,7 @@ export function homeCloseOf(session: string, by: string, at: string): CloseRecor
 }
 
 function recordOf(record: SessionLogRecord): JsonRecord {
-  return { [VERSION_FIELD]: SESSION_LOG_FORMAT, ...record };
+  return legacyHostSessionRecord({ [VERSION_FIELD]: SESSION_LOG_FORMAT, ...record }, 'claudeSession');
 }
 
 /** The close a session is in: its newest record when that is a close; undefined once it was reopened, or never closed. */

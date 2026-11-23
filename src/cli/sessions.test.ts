@@ -29,8 +29,8 @@ const BUDGETED: JsonRecord = { ...TEAM, budget: { enabled: true }, wake: { prior
 async function recordedTeam(config: JsonRecord = TEAM): Promise<CliHarness> {
   const kit = new CliHarness(config);
   const store = new SessionRecordStore(kit.files, { sessions: SESSIONS });
-  await store.write('lead', { claudePid: 6900, claudeSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
-  await store.write('alpha', { claudePid: 7100, claudeSession: 'claude-alpha', at: '2030-01-08T09:30:00.000Z' });
+  await store.write('lead', { claudePid: 6900, hostSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
+  await store.write('alpha', { claudePid: 7100, hostSession: 'claude-alpha', at: '2030-01-08T09:30:00.000Z' });
   return kit;
 }
 
@@ -101,7 +101,7 @@ const REPLY = `${JSON.stringify({ type: 'assistant', isSidechain: false, message
 async function runningTeam(config: JsonRecord = TEAM, project = APP): Promise<{ readonly kit: CliHarness; readonly processes: FakeSessionProcesses; readonly options: RunOptions }> {
   const kit = await recordedTeam(config);
   const transcript = projectTranscriptPath(join(USER_HOME, '.claude', 'projects'), project, CLAUDE_SESSION);
-  await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: ALPHA_CLAUDE.pid, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
+  await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: ALPHA_CLAUDE.pid, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
   await kit.files.write(transcript, REPLY);
   const processes = new FakeSessionProcesses().add(ALPHA_TAB).add(ALPHA_CLAUDE);
   const rows = [
@@ -125,7 +125,7 @@ const CHILD_LEAD: JsonRecord = { ...TEAM, team: { id: 'app', parent: 'org' }, ro
 /** {@link runningTeam}, but the session named lead last ran in a Claude Code that ended: alpha alone runs. */
 async function leaderTeam(config: JsonRecord): Promise<{ readonly kit: CliHarness; readonly processes: FakeSessionProcesses; readonly options: RunOptions }> {
   const team = await runningTeam(config);
-  await new SessionRecordStore(team.kit.files, { sessions: SESSIONS }).write('lead', { claudePid: 7200, claudeSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
+  await new SessionRecordStore(team.kit.files, { sessions: SESSIONS }).write('lead', { claudePid: 7200, hostSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
   return team;
 }
 
@@ -134,7 +134,7 @@ async function closedTeam(config: JsonRecord = TEAM): Promise<CliHarness> {
   const kit = new CliHarness(config);
   const log = new SessionLog(kit.files, LOG);
   for (const session of ['alpha', 'bravo']) {
-    await log.append({ kind: 'close', session, by: 'lead', at: '2030-01-08T09:00:00.000Z', claudeSession: `claude-${session}`, idleMinutes: 75, freedMb: 1300 });
+    await log.append({ kind: 'close', session, by: 'lead', at: '2030-01-08T09:00:00.000Z', hostSession: `claude-${session}`, idleMinutes: 75, freedMb: 1300 });
   }
   return kit;
 }

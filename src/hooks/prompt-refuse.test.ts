@@ -144,12 +144,12 @@ describe('promptAnswerRecord', () => {
   const join = (...parts: string[]): string => parts.join('');
 
   it('keeps who answered, the tool, the answer and the command', () => {
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: 'c1', answer: { kind: 'rerun', form: 'git -C /w status' }, call: bashCall('cd /w && git status') }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: 'c1', answer: { kind: 'rerun', form: 'git -C /w status' }, call: bashCall('cd /w && git status') }, SCANNER);
     assert.deepEqual(record, { v: 1, at: '2030-01-08T10:00:00.000Z', session: 'alpha', claudeSession: 'c1', tool: 'Bash', answer: 'rerun', command: 'cd /w && git status' });
   });
 
   it('writes the line as it does today, naming the tab claudeSession: no code reads the id back, so the rename moves it in one release (T4762)', () => {
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: 'c1', answer: { kind: 'route', route: 'merge' }, call: bashCall('teamrig merge') }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: 'c1', answer: { kind: 'route', route: 'merge' }, call: bashCall('teamrig merge') }, SCANNER);
     assert.equal(
       toJsonlLine(record),
       '{"v":1,"at":"2030-01-08T10:00:00.000Z","session":"alpha","claudeSession":"c1","tool":"Bash","answer":"route","route":"merge","command":null}\n',
@@ -158,17 +158,17 @@ describe('promptAnswerRecord', () => {
 
   it("keeps a route's id and never its command, whose commit message is free text", () => {
     const message = join('ship ', 'ghp', '_', 'a1'.repeat(18), ' private words');
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: 'c1', answer: { kind: 'route', route: 'git-commit' }, call: bashCall(`git commit -s -m "${message}"`) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: 'c1', answer: { kind: 'route', route: 'git-commit' }, call: bashCall(`git commit -s -m "${message}"`) }, SCANNER);
     assert.deepEqual(record, { v: 1, at: '2030-01-08T10:00:00.000Z', session: 'alpha', claudeSession: 'c1', tool: 'Bash', answer: 'route', route: 'git-commit', command: null });
     assert.doesNotMatch(JSON.stringify(record), /private words|ghp_/);
   });
 
   it(`keeps only the first ${LOGGED_COMMAND_CHARS} characters of the command and none of the rest of the input`, () => {
     const long = `echo ${'x'.repeat(LOGGED_COMMAND_CHARS * 2)}`;
-    const record = promptAnswerRecord({ at: AT, session: undefined, claudeSession: null, answer: { kind: 'refused' }, call: bashCall(long) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: undefined, hostSession: null, answer: { kind: 'refused' }, call: bashCall(long) }, SCANNER);
     assert.equal(record['command'], long.slice(0, LOGGED_COMMAND_CHARS));
     assert.equal(record['session'], null);
-    const write = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: null, answer: { kind: 'refused' }, call: callOf('Write', { file_path: '/w/a', content: 'secret text' }) }, SCANNER);
+    const write = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: null, answer: { kind: 'refused' }, call: callOf('Write', { file_path: '/w/a', content: 'secret text' }) }, SCANNER);
     assert.equal(write['tool'], 'Write');
     assert.equal(write['command'], null);
     assert.doesNotMatch(JSON.stringify(write), /secret text/);
@@ -176,7 +176,7 @@ describe('promptAnswerRecord', () => {
 
   it('keeps the command a tool of no shell kind carries, masked and cut like a shell line', () => {
     const command = join('run --pass', 'word ', 'Qx7mRt', '9wLp4Zn');
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: null, answer: { kind: 'refused' }, call: callOf('mcp__box__run', { command, note: 'kept out' }) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: null, answer: { kind: 'refused' }, call: callOf('mcp__box__run', { command, note: 'kept out' }) }, SCANNER);
     assert.equal(record['tool'], 'mcp__box__run');
     assert.equal(record['command'], 'run --password [redacted]');
     assert.doesNotMatch(JSON.stringify(record), /kept out/);
@@ -184,20 +184,20 @@ describe('promptAnswerRecord', () => {
 
   it("redacts an Authorization header's credential and a URL's user part", () => {
     const command = join('curl -H "Authorization: Bearer ', 'abcdefgh', '12345678" https://', 'token5678', '@api.example.com/x');
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: null, answer: { kind: 'refused' }, call: bashCall(command) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: null, answer: { kind: 'refused' }, call: bashCall(command) }, SCANNER);
     assert.equal(record['command'], 'curl -H "[redacted credentials in an Authorization header] https://[redacted]@api.example.com/x');
   });
 
   it("masks the forms the scanner misses: a secret flag's value, a secret env name's, a login's password (T1986)", () => {
     const value = join('Qx7mRt', '9wLp4Zn');
     const command = join('API_TO', 'KEN=', value, ' tool --pass', 'word ', value, ' && curl -u app:', value, ' https://api.local');
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: null, answer: { kind: 'refused' }, call: bashCall(command) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: null, answer: { kind: 'refused' }, call: bashCall(command) }, SCANNER);
     assert.equal(record['command'], 'API_TOKEN=[redacted] tool --password [redacted] && curl -u app:[redacted] https://api.local');
   });
 
   it('redacts before the cut, so a secret the cut would split leaves none of its start', () => {
     const lead = `echo ${'x'.repeat(LOGGED_COMMAND_CHARS - 15)} `;
-    const record = promptAnswerRecord({ at: AT, session: 'alpha', claudeSession: null, answer: { kind: 'refused' }, call: bashCall(join(lead, 'ghp', '_', 'a1'.repeat(18))) }, SCANNER);
+    const record = promptAnswerRecord({ at: AT, session: 'alpha', hostSession: null, answer: { kind: 'refused' }, call: bashCall(join(lead, 'ghp', '_', 'a1'.repeat(18))) }, SCANNER);
     assert.equal(lead.length, LOGGED_COMMAND_CHARS - 9);
     assert.equal(record['command'], join(lead, '[redacted GitHub token]').slice(0, LOGGED_COMMAND_CHARS));
     assert.doesNotMatch(String(record['command']), /ghp_/);

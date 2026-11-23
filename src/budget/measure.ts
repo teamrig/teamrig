@@ -121,7 +121,7 @@ async function outsideOnDay(deps: MeasureDeps, input: MeasureInput, each: readon
     if (!changed.some((at) => at !== undefined && at >= dayStart)) {
       continue;
     }
-    const used = (await meterSession(deps, new MemoryUsageStore(), files.claudeSession, files, input)).state.byDay[day];
+    const used = (await meterSession(deps, new MemoryUsageStore(), files.hostSession, files, input)).state.byDay[day];
     if (used === undefined || used.calls === 0) {
       continue;
     }

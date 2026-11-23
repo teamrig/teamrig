@@ -34,11 +34,11 @@ const REUSED_PID = 9200;
 const turn = (effort: string): string => JSON.stringify({ type: 'assistant', effort, message: { model: 'claude-opus-5-5' } });
 const transcriptOf = (id: string): string => join(TRANSCRIPTS, `${id}.jsonl`);
 
-function entry(claudeSession: string, createdAt: number, overrides: Partial<RestoreEntry> = {}): RestoreEntry {
+function entry(hostSession: string, createdAt: number, overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession,
+    hostSession,
     projectDir: APP,
-    transcriptPath: transcriptOf(claudeSession),
+    transcriptPath: transcriptOf(hostSession),
     entrypoint: 'cli',
     sessionKind: undefined,
     pid: undefined,

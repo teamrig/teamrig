@@ -19,7 +19,7 @@ import { teamSessionOf } from './hook-input.ts';
  * starting CRITICAL (src/meeting/quiet.ts); so does one to any session the owner meets in its own tab, in a booked or
  * on-the-spot meeting (T2985). Unlike the cold hold, a resend does not pass it.
  */
-export async function meetingHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, claudeSession: string): Promise<HookReply | undefined> {
+export async function meetingHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, hostSession: string): Promise<HookReply | undefined> {
   const receiver = roster.lookup(message.to);
   if (!receiver.ok) {
     return undefined;
@@ -28,7 +28,7 @@ export async function meetingHold(runtime: CliRuntime, kit: Kit, config: KitConf
   if (lead !== undefined && receiver.id === lead) {
     const phase = phaseOf(await new MeetingStore(runtime.files, kit.paths.meeting).read(), runtime.clock.now());
     if (phase.kind === 'open') {
-      return dailyHold(runtime, kit, config, roster, message, claudeSession, lead, phase.meeting);
+      return dailyHold(runtime, kit, config, roster, message, hostSession, lead, phase.meeting);
     }
   }
   const meeting = meetingInTabOf((await new MeetingSchedule(runtime.files, kit.paths.meetings).read()).meetings, receiver.id, runtime.clock.now());
@@ -39,7 +39,7 @@ export async function meetingHold(runtime: CliRuntime, kit: Kit, config: KitConf
     meeting,
     to: receiver.id,
     toName: roster.nameOf(receiver.id) ?? receiver.id,
-    from: await teamSessionOf(runtime, kit, roster, claudeSession),
+    from: await teamSessionOf(runtime, kit, roster, hostSession),
     text: message.text,
     command: KIT_NAME,
     zone: teamZone(config, runtime),
@@ -48,12 +48,12 @@ export async function meetingHold(runtime: CliRuntime, kit: Kit, config: KitConf
 }
 
 /** The open daily meeting's hold of a message to the lead, which records a CRITICAL one as its break-through (T2524). */
-async function dailyHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, claudeSession: string, lead: string, meeting: Meeting): Promise<HookReply | undefined> {
+async function dailyHold(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, message: SentMessage, hostSession: string, lead: string, meeting: Meeting): Promise<HookReply | undefined> {
   const facts: QuietFacts = {
     meeting,
     to: lead,
     lead,
-    from: await teamSessionOf(runtime, kit, roster, claudeSession),
+    from: await teamSessionOf(runtime, kit, roster, hostSession),
     leadName: roster.nameOf(lead) ?? lead,
     text: message.text,
     command: KIT_NAME,

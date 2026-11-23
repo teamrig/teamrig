@@ -68,7 +68,7 @@ function envId(runtime: CliRuntime, name: string): string | undefined {
  */
 async function trackEntry(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
   const registry = new RestoreRegistry(runtime.files, restoreSessionsDir(kitHome));
-  const change = applyEvent(await registry.read(facts.claudeSession), event, facts);
+  const change = applyEvent(await registry.read(facts.hostSession), event, facts);
   switch (change.kind) {
     case 'write': {
       await registry.write(change.entry);
@@ -79,7 +79,7 @@ async function trackEntry(event: TrackEvent, facts: TrackFacts, runtime: CliRunt
       return;
     }
     case 'remove':
-      await registry.remove(facts.claudeSession);
+      await registry.remove(facts.hostSession);
       return;
     case 'none':
       return;
@@ -101,12 +101,12 @@ async function codedEvent(event: TrackEvent, facts: TrackFacts, runtime: CliRunt
 
 /** The login event a turn end reports: a good one answered, a failed one failed on the login; undefined for any other. */
 function loginEventOf(event: TrackEvent, facts: TrackFacts): LoginEvent | undefined {
-  const { claudeSession, at } = facts;
+  const { hostSession, at } = facts;
   switch (event.kind) {
     case 'ready':
-      return { kind: 'answered', claudeSession, at };
+      return { kind: 'answered', hostSession, at };
     case 'error':
-      return event.code === AUTH_FAILED ? { kind: 'auth-failed', claudeSession, at } : undefined;
+      return event.code === AUTH_FAILED ? { kind: 'auth-failed', hostSession, at } : undefined;
     default:
       return undefined;
   }
@@ -114,7 +114,7 @@ function loginEventOf(event: TrackEvent, facts: TrackFacts): LoginEvent | undefi
 
 /** How the restore log names a tab: its team and session when `teamrig launch` started it, and its Claude session. */
 function tabLabelOf(facts: TrackFacts): string {
-  return facts.team === undefined || facts.session === undefined ? facts.claudeSession : `${facts.team}/${facts.session} (${facts.claudeSession})`;
+  return facts.team === undefined || facts.session === undefined ? facts.hostSession : `${facts.team}/${facts.session} (${facts.hostSession})`;
 }
 
 /**
@@ -160,9 +160,9 @@ async function trackLogin(event: TrackEvent, facts: TrackFacts, runtime: CliRunt
 /** The reply an event shows the login works by: a good turn end, or a tool end of the tab's own turn; undefined for any other. */
 function dayProbeReplyOf(event: TrackEvent, facts: TrackFacts): DayProbeReply | undefined {
   if (event.kind === 'ready') {
-    return { kind: 'answered', tab: facts.claudeSession, at: facts.at };
+    return { kind: 'answered', tab: facts.hostSession, at: facts.at };
   }
-  return event.kind === 'tool' && event.mainThread ? { kind: 'tool', tab: facts.claudeSession, at: facts.at } : undefined;
+  return event.kind === 'tool' && event.mainThread ? { kind: 'tool', tab: facts.hostSession, at: facts.at } : undefined;
 }
 
 /** Releases the day-start probe (src/restore/day-probe.ts) at a reply that shows the login works, and logs it. */
@@ -242,14 +242,14 @@ async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: Cli
  * teamrig on the user's PATH (`trackLaunchers`), else undefined.
  */
 export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promise<string | undefined> {
-  const claudeSession = hook.session;
+  const hostSession = hook.session;
   const reported = trackEventOf(hook);
-  if (claudeSession === undefined || reported === undefined) {
+  if (hostSession === undefined || reported === undefined) {
     return undefined;
   }
   const told = identityOf(runtime);
   const facts: TrackFacts = {
-    claudeSession,
+    hostSession,
     at: runtime.clock.now(),
     // The folder the session started in, which stays put through a `cd` or a worktree: the one to resume from.
     projectDir: told.projectDir ?? present(hook.cwd),

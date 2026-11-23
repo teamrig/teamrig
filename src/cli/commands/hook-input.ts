@@ -84,13 +84,13 @@ export function envSession(runtime: CliRuntime): string | undefined {
  * The team session a hook runs for: `$TEAMRIG_SESSION` when it is set (an id or any name the
  * session has had), else the area this Claude Code session last read its inbox as.
  */
-export async function teamSessionOf(runtime: CliRuntime, kit: Kit, roster: Roster, claudeSession: string | null): Promise<string | undefined> {
+export async function teamSessionOf(runtime: CliRuntime, kit: Kit, roster: Roster, hostSession: string | null): Promise<string | undefined> {
   const session = envSession(runtime);
   if (session !== undefined) {
     const found = roster.lookup(session);
     return found.ok ? found.id : undefined;
   }
-  return markedSessionOf(runtime, kit, roster, claudeSession);
+  return markedSessionOf(runtime, kit, roster, hostSession);
 }
 
 /**
@@ -98,12 +98,12 @@ export async function teamSessionOf(runtime: CliRuntime, kit: Kit, roster: Roste
  * on the roster. It is how a tab started without `$TEAMRIG_SESSION`, such as the one that set the team
  * up, stays its session.
  */
-export async function markedSessionOf(runtime: CliRuntime, kit: Kit, roster: Roster, claudeSession: string | null): Promise<string | undefined> {
-  if (claudeSession === null) {
+export async function markedSessionOf(runtime: CliRuntime, kit: Kit, roster: Roster, hostSession: string | null): Promise<string | undefined> {
+  if (hostSession === null) {
     return undefined;
   }
   const { marks } = await inboxDepsOf(runtime, kit.paths).marks.read();
-  const area = indexMarks(marks).areaBySession.get(claudeSession);
+  const area = indexMarks(marks).areaBySession.get(hostSession);
   return area !== undefined && roster.ids.includes(area) ? area : undefined;
 }
 

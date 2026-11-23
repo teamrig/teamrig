@@ -29,7 +29,7 @@ export async function recordSessionStart(
   kit: Pick<Kit, 'paths'>,
   ids: readonly string[],
   id: string,
-  claudeSession: string,
+  hostSession: string,
   transcript: string | undefined,
 ): Promise<StartRecordNotes> {
   try {
@@ -39,7 +39,7 @@ export async function recordSessionStart(
       // Its own tree, a fork of its conversation or the background job it handed it to is no second one.
       return { failure: undefined, duplicate: (await isLiveRunOwn(runtime, live, claudePid)) ? undefined : duplicateText(id, claudePid, live) };
     }
-    const started = { claudePid, claudeSession, at: new Date(runtime.clock.now()).toISOString() };
+    const started = { claudePid, hostSession, at: new Date(runtime.clock.now()).toISOString() };
     const record = transcript === undefined ? started : { ...started, transcript };
     await new SessionRecordStore(runtime.files, kit.paths).write(id, record);
     return RECORDED;

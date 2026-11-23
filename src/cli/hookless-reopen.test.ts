@@ -12,12 +12,12 @@ const ROSTER = new Roster({ sessions: ['lead', 'alpha', 'bravo'], names: { alpha
 const CLOSED_AT = '2030-01-08T09:00:00.000Z';
 const REOPENED_AT = '2030-01-08T10:00:00.000Z';
 const REOPEN = Date.parse(REOPENED_AT);
-const CLOSE_ALPHA: SessionLogRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: CLOSED_AT, claudeSession: 'c-alpha', idleMinutes: 75, freedMb: 1300 };
+const CLOSE_ALPHA: SessionLogRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: CLOSED_AT, hostSession: 'c-alpha', idleMinutes: 75, freedMb: 1300 };
 const REOPEN_ALPHA: SessionLogRecord = { kind: 'reopen', session: 'alpha', at: REOPENED_AT, resumed: 'c-alpha' };
 const LOG: readonly SessionLogRecord[] = [CLOSE_ALPHA, REOPEN_ALPHA];
 
 function started(at: string): SessionRecord {
-  return { claudePid: 8100, claudeSession: 'c-alpha', at };
+  return { claudePid: 8100, hostSession: 'c-alpha', at };
 }
 
 function startsOf(alpha: SessionRecord | undefined): Map<string, SessionRecord | undefined> {

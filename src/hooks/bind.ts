@@ -60,7 +60,7 @@ export type BindOutcome =
 
 export interface BindInput {
   readonly own: TeamRoster;
-  readonly claudeSession: string;
+  readonly hostSession: string;
   /** Whether `$TEAMRIG_SESSION` is set: it always wins over a title. */
   readonly envSession: boolean;
   readonly title: string | undefined;
@@ -78,13 +78,13 @@ export interface BindDeps {
  * fingerprint and when it was read) under the new Claude Code session, so nothing counts as read that
  * was unread. An area never read gets the position before its first line, dated now.
  */
-export function bindMarkOf(newest: InboxMark | undefined, area: string, claudeSession: string, now: Date): InboxMark {
+export function bindMarkOf(newest: InboxMark | undefined, area: string, hostSession: string, now: Date): InboxMark {
   return {
     v: MARK_VERSION,
     area,
     line: newest?.line ?? 0,
     at: newest?.at ?? now.toISOString(),
-    claudeSession,
+    hostSession,
     lastLineHash: newest?.lastLineHash ?? null,
   };
 }
@@ -94,9 +94,9 @@ export async function bindByTitle(deps: BindDeps, input: BindInput): Promise<Bin
   if (input.envSession) {
     return { kind: 'kept' };
   }
-  const { own, claudeSession } = input;
+  const { own, hostSession } = input;
   const { byArea, areaBySession } = indexMarks((await deps.marks.read()).marks);
-  const marked = areaBySession.get(claudeSession);
+  const marked = areaBySession.get(hostSession);
   if (marked !== undefined && own.roster.ids.includes(marked)) {
     return { kind: 'kept' };
   }
@@ -114,7 +114,7 @@ export async function bindByTitle(deps: BindDeps, input: BindInput): Promise<Bin
   if (candidates.length !== 1 || only === undefined) {
     return { kind: 'ambiguous', title, candidates };
   }
-  const mark = bindMarkOf(byArea.get(only.id), only.id, claudeSession, input.now);
+  const mark = bindMarkOf(byArea.get(only.id), only.id, hostSession, input.now);
   await deps.marks.append(mark);
   return { kind: 'bound', id: only.id, mark };
 }
@@ -165,17 +165,17 @@ export interface ProcessBindDeps {
  * session. Bound only when exactly one session refreshed there; the mark repeats the area's read position.
  * A tab a mark already names keeps it (bind once, T3081): the Claude Code session comes from the hook's stdin.
  */
-export async function bindByProcess(deps: ProcessBindDeps, claudeSession: string, now: Date): Promise<{ readonly id: string; readonly mark: InboxMark } | undefined> {
+export async function bindByProcess(deps: ProcessBindDeps, hostSession: string, now: Date): Promise<{ readonly id: string; readonly mark: InboxMark } | undefined> {
   const sessions = await deps.refreshedHere();
   const [only] = sessions;
   if (sessions.length !== 1 || only === undefined) {
     return undefined;
   }
   const { byArea, areaBySession } = indexMarks((await deps.marks.read()).marks);
-  if (areaBySession.has(claudeSession)) {
+  if (areaBySession.has(hostSession)) {
     return undefined;
   }
-  const mark = bindMarkOf(byArea.get(only), only, claudeSession, now);
+  const mark = bindMarkOf(byArea.get(only), only, hostSession, now);
   await deps.marks.append(mark);
   return { id: only, mark };
 }
@@ -190,12 +190,12 @@ export function processBoundNote(id: string): string {
  * a new one, and the readers that follow a tab by its marks (the pane, the budget, restore) cannot see the environment,
  * so without this they lose the tab until its first `inbox read`. A tab a mark already names keeps that mark.
  */
-export async function bindByEnv(marks: MarkLog, id: string, claudeSession: string, now: Date): Promise<InboxMark | undefined> {
+export async function bindByEnv(marks: MarkLog, id: string, hostSession: string, now: Date): Promise<InboxMark | undefined> {
   const { byArea, areaBySession } = indexMarks((await marks.read()).marks);
-  if (areaBySession.has(claudeSession)) {
+  if (areaBySession.has(hostSession)) {
     return undefined;
   }
-  const mark = bindMarkOf(byArea.get(id), id, claudeSession, now);
+  const mark = bindMarkOf(byArea.get(id), id, hostSession, now);
   await marks.append(mark);
   return mark;
 }

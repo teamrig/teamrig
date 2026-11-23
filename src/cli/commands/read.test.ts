@@ -460,7 +460,7 @@ describe('teamrig read sessions', () => {
 
   it('answers self with the session the conversation runs in, the newest start when two sessions hold it', async () => {
     const kit = await treeHarness();
-    const startOf = (at: string): string => formatSessionRecord({ claudePid: 7, claudeSession: CONVERSATION, at });
+    const startOf = (at: string): string => formatSessionRecord({ claudePid: 7, hostSession: CONVERSATION, at });
     await kit.files.write(startRecordOf('ui', 'pixel'), startOf('2030-01-08T09:00:00.000Z'));
     const asked = [...READ_SESSIONS, '--conversation', CONVERSATION];
     const one = served(await kit.run(asked, AS_UI));
@@ -477,7 +477,7 @@ describe('teamrig read sessions', () => {
 
   it('serves the inbox of the conversation\'s session when no session is named, and --session\'s when one is', async () => {
     const kit = await treeHarness();
-    await kit.files.write(startRecordOf('app', 'alpha'), formatSessionRecord({ claudePid: 7, claudeSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' }));
+    await kit.files.write(startRecordOf('app', 'alpha'), formatSessionRecord({ claudePid: 7, hostSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' }));
     await post(kit, 'lead', 'alpha', 'For alpha');
     await post(kit, 'lead', 'bravo', 'For bravo');
     const own = served(await kit.run(['read', 'inbox', '--json', '--conversation', CONVERSATION]));
@@ -487,7 +487,7 @@ describe('teamrig read sessions', () => {
 
   it('is a usage error for inbox when no session of the caller\'s team holds the conversation', async () => {
     const kit = await treeHarness();
-    await kit.files.write(startRecordOf('ui', 'pixel'), formatSessionRecord({ claudePid: 7, claudeSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' }));
+    await kit.files.write(startRecordOf('ui', 'pixel'), formatSessionRecord({ claudePid: 7, hostSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' }));
     const result = await kit.run(['read', 'inbox', '--json', '--conversation', CONVERSATION]);
     assert.deepEqual([result.code, result.stdout], [EXIT.usage, []]);
     assert.match(result.stderr.join('\n'), new RegExp(`inbox is one session's: no session of team app holds conversation ${CONVERSATION}; name it with --session`));
@@ -525,7 +525,7 @@ describe('teamrig read sessions', () => {
     const since = new Date(kit.clock.now()).toISOString();
     await kit.files.write(tabOf('ui', 'pixel'), formatTabNeed({ session: 'pixel', state: 'ready', kind: null, text: null, task: null, pid: 7, since }));
     const withTab = await revision();
-    await kit.files.write(startRecordOf('ops', 'run'), formatSessionRecord({ claudePid: 7, claudeSession: CONVERSATION, at: since }));
+    await kit.files.write(startRecordOf('ops', 'run'), formatSessionRecord({ claudePid: 7, hostSession: CONVERSATION, at: since }));
     const withStart = await revision();
     await kit.files.write(teamConfigOf('new'), formatConfig({ configVersion: 1, team: { id: 'new', parent: 'app' }, sessions: ['lead'], roles: { lead: 'lead' } }));
     assert.equal(new Set([first, withTab, withStart, await revision()]).size, 4);

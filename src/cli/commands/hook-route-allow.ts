@@ -54,7 +54,7 @@ async function routeAllowReplyOf(runtime: CliRuntime, event: HookEvent, deps: Ro
   if (!(await passed())) {
     return undefined;
   }
-  const record = routeAllowRecord({ at: new Date(runtime.clock.now()), session: envSession(runtime), claudeSession: event.session ?? null, route: route.id });
+  const record = routeAllowRecord({ at: new Date(runtime.clock.now()), session: envSession(runtime), hostSession: event.session ?? null, route: route.id });
   // Best effort, like the prompt answers: a full disk or a held lock must not take the allow away.
   await hookLogOf(runtime, kit.paths, 'prompt-answers').append(toJsonlLine(record)).catch(() => undefined);
   return routeAllowReply(route);
