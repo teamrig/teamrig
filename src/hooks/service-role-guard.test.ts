@@ -300,6 +300,7 @@ describe('config guard: every owner-gated key (T3083)', () => {
       ['pushGuard', changed((c) => ({ ...c, pushGuard: { pushToProtected: 'allow' } }))],
       ['alerts', changed((c) => ({ ...c, alerts: { webhookEnv: 'X' } }))],
       ['ui.path', changed((c) => ({ ...c, ui: { path: 'C:/work/ui/main.js' } }))],
+      ['pluginDirs', changed((c) => ({ ...c, pluginDirs: ['/opt/mallory/hooks'] }))],
     ];
     for (const [key, content] of changes) {
       const output = decisionOf(await outputOf(call('Write', { file_path: CONFIG, content }), env({ text })));
