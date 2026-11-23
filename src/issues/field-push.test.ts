@@ -125,6 +125,34 @@ describe('planFieldPush (T3406)', () => {
   });
 });
 
+describe('planFieldPush with two tasks holding one issue (T5289)', () => {
+  const typesOnly = { ...DEFAULT_ISSUE_FIELDS, priority: '', startDate: '', targetDate: '', score: '' };
+  const active = held(7, { id: 'T20', after: ['T9'] });
+  const finished = held(7, { id: 'T21', status: 'done' });
+
+  it('writes the issue from the active task alone, whichever order the register holds them in', () => {
+    for (const tasks of [
+      [active, finished],
+      [finished, active],
+    ]) {
+      const result = plan({ read: fieldsRead([issue(7)]), tasks, config: typesOnly });
+      assert.deepEqual(result.writes.map(fieldWriteLine), [`TYPE ${REPO}#7 (T20): Feature`]);
+    }
+  });
+
+  it('writes nothing more once the issue holds the active task type, so no run flips it back', () => {
+    const result = plan({ read: fieldsRead([issue(7, {}, 'Feature')]), tasks: [active, finished], config: typesOnly });
+    assert.deepEqual(result.writes, []);
+  });
+
+  it('writes from neither of two active tasks and says why, once', () => {
+    const other = held(7, { id: 'T22' });
+    const result = plan({ read: fieldsRead([issue(7)]), tasks: [active, other], config: typesOnly });
+    assert.deepEqual(result.writes, []);
+    assert.deepEqual(result.notes, [`${REPO}#7 is held by T20, T22, active at once, so none of them writes its fields or type`]);
+  });
+});
+
 describe('kindOf (T3406)', () => {
   it('reads the design label before the goal and the bug', () => {
     assert.equal(kindOf({ after: ['T2'], type: 'bug' }, ['DESIGN']), 'design');
