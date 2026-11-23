@@ -4,15 +4,24 @@ import { join, resolve } from 'node:path';
 import { isRecord, recordField, type JsonRecord } from '../core/guards.ts';
 import type { Env } from '../core/home.ts';
 import { toJsonlLine } from '../core/jsonl.ts';
+import type { HostSource } from '../composition/host-ports.ts';
 import { ASK_REFUSED_NOTE } from '../hooks/permission.ts';
-import { rerunReason } from '../hooks/prompt-refuse.ts';
+import { promptRefusedReason, rerunReason } from '../hooks/prompt-refuse.ts';
+import { routeHintOf } from '../permissions/route-hint.ts';
+import { unsupported } from '../ports/host/index.ts';
 import { APP, CLAUDE_SESSION, CliHarness, CONFIG_PATH, TEAM, TEAM_HOME, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
+import { SHIPPED_HOST } from '../testing/host.ts';
+import { COMMAND_TABLE } from './run.ts';
 import { EXIT } from './runtime.ts';
 
 const ASKS_OFF: JsonRecord = { ...TEAM, prompts: { hookAsks: 'refuse' } };
 const ANSWERS_LOG = join(TEAM_HOME, 'state', 'prompt-answers.jsonl');
 const REFUSED = (tool: string): JsonRecord => ({ behavior: 'deny', message: `Claude Code would ask a person to allow this ${tool} call. ${ASK_REFUSED_NOTE}` });
+/** The shipped host's allow rules for one teamrig command, as its permissions adapter writes them. */
+const SHIPPED_RULES = (command: string): readonly string[] => [`Bash(teamrig ${command} *)`, `PowerShell(teamrig ${command} *)`];
+/** The refusal of a teamrig `line` with the hint it takes on the shipped host. */
+const HINTED = (tool: string, line: string): JsonRecord => ({ behavior: 'deny', message: promptRefusedReason(tool, routeHintOf(line, COMMAND_TABLE, SHIPPED_RULES)) });
 const HOOK = ['hook', 'prompt-refuse'];
 const NOTHING = { code: EXIT.ok, stdout: [], stderr: [] };
 
@@ -96,10 +105,22 @@ describe('hook prompt-refuse', () => {
     assert.deepEqual(permissionOf(result), REFUSED('Bash'));
   });
 
-  it("refuses a route's line from another shell or through a program it does not place", async () => {
+  it("refuses a route's line from another shell or through a program it does not place, a bash line naming the route's form", async () => {
     const kit = new CliHarness(ASKS_OFF);
     assert.deepEqual(permissionOf(await kit.run(HOOK, { stdin: request('PowerShell', { tool_input: { command: 'teamrig merge --session alpha' } }) })), REFUSED('PowerShell'));
-    assert.deepEqual(permissionOf(await kit.run(HOOK, { stdin: bashRequest('./teamrig merge --session alpha') })), REFUSED('Bash'));
+    const relative = './teamrig merge --session alpha';
+    assert.deepEqual(permissionOf(await kit.run(HOOK, { stdin: bashRequest(relative) })), HINTED('Bash', relative));
+    assert.match(routeHintOf(relative, COMMAND_TABLE, SHIPPED_RULES) ?? '', /written `teamrig merge \[--session <id>\].*`, with the program word a bare `teamrig`/u);
+  });
+
+  it("names the allow rule a synced command takes, and gives no hint on a host that keeps no permission rule", async () => {
+    const kit = new CliHarness(ASKS_OFF);
+    const piped = 'teamrig list | sort';
+    const answer = permissionOf(await kit.run(HOOK, { stdin: bashRequest(piped) }));
+    assert.deepEqual(answer, HINTED('Bash', piped));
+    assert.match(routeHintOf(piped, COMMAND_TABLE, SHIPPED_RULES) ?? '', /`teamrig automode install --yes`, which adds the host rule `Bash\(teamrig list \*\)`/u);
+    const noRules: HostSource = (given) => ({ ...SHIPPED_HOST(given), permissions: unsupported('no permission rule is kept') });
+    assert.deepEqual(permissionOf(await kit.run(HOOK, { stdin: bashRequest(piped), host: noRules })), REFUSED('Bash'));
   });
 
   it('refuses on Windows a line whose halved text, the one bash receives there, runs a hidden command', async () => {

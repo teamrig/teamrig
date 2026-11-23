@@ -34,28 +34,34 @@ export type PromptAnswer =
   | { readonly kind: 'route'; readonly route: RouteId }
   | { readonly kind: 'readonly' }
   | { readonly kind: 'rerun'; readonly form: string }
-  | { readonly kind: 'refused' };
+  | { readonly kind: 'refused'; readonly hint?: string };
 
 /**
  * The answer for the prompt of `call`: a line the caller found runs a sanctioned route (`route`,
  * permissions/sanctioned.ts) runs first; a line `reads` proves only reads and prints no secret runs, as the read-only
  * allow would have let it; a shell line with a rerun form (hooks/rerun-forms.ts) is refused quoting it; anything else
- * is refused. `reads` is asked only when no route answers.
+ * is refused, with what `hint` says of a shell line, such as the route or allow rule one of teamrig's own commands
+ * takes (permissions/route-hint.ts). `reads` is asked only when no route answers.
  */
-export function promptAnswerOf(call: ToolCall, reads: () => boolean, route: RouteId | undefined): PromptAnswer {
+export function promptAnswerOf(call: ToolCall, reads: () => boolean, route: RouteId | undefined, hint: (line: string) => string | undefined = () => undefined): PromptAnswer {
   if (route !== undefined) {
     return { kind: 'route', route };
   }
   if (reads()) {
     return { kind: 'readonly' };
   }
-  const form = call.kind === 'shell' && call.command !== undefined ? rerunForm(call.dialect, call.command) : undefined;
-  return form === undefined ? { kind: 'refused' } : { kind: 'rerun', form };
+  const line = call.kind === 'shell' ? call.command : undefined;
+  const form = call.kind === 'shell' && line !== undefined ? rerunForm(call.dialect, line) : undefined;
+  if (form !== undefined) {
+    return { kind: 'rerun', form };
+  }
+  const said = line === undefined ? undefined : hint(line);
+  return said === undefined ? { kind: 'refused' } : { kind: 'refused', hint: said };
 }
 
-/** Why the prompt for a `tool` call is refused, and what to do instead. */
-export function promptRefusedReason(tool: string): string {
-  return `Claude Code would ask a person to allow this ${tool} call. ${ASK_REFUSED_NOTE}`;
+/** Why the prompt for a `tool` call is refused, what the call's `hint` says of it, and what to do instead. */
+export function promptRefusedReason(tool: string, hint?: string): string {
+  return `Claude Code would ask a person to allow this ${tool} call. ${hint === undefined ? '' : `${hint} `}${ASK_REFUSED_NOTE}`;
 }
 
 /** Why the prompt for a `tool` call is refused, quoting the line to run instead. */
@@ -75,7 +81,7 @@ export function promptAnswerReply(tool: string, answer: PromptAnswer): HookReply
     case 'rerun':
       return refusal(rerunReason(tool, answer.form));
     case 'refused':
-      return refusal(promptRefusedReason(tool));
+      return refusal(promptRefusedReason(tool, answer.hint));
   }
 }
 
