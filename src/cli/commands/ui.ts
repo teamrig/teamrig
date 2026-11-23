@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { isUiMode, UI_MODES, type KitConfig, type UiMode } from '../../config/types.ts';
 import type { Env } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE } from '../../core/ids.ts';
@@ -128,56 +129,142 @@ function uiArgv(runtime: CliRuntime, start: UiTeam, session: string | undefined)
 }
 
 /**
- * Opens a terminal window that runs this same command in terminal mode, the way `teamrig open` opens a session's tab
- * (`open.terminal`), in the window `UI_WINDOW`. True when one opened; else it says why, and `otherwise` where the UI shows.
+ * How long a run that opened a window or split waits for the UI in it to mark itself started (`markUiStarted`): a
+ * terminal can take the tab and still run nothing in it, which read as a window opened (T5261). Windows Terminal and
+ * Node.js together start within a few seconds on a loaded host; past this the run says no UI came up.
  */
-async function openUiWindow(runtime: CliRuntime, config: KitConfig, start: UiTeam, session: string | undefined, otherwise: string): Promise<boolean> {
+export const UI_START_WAIT_MS = 20_000;
+const UI_START_POLL_MS = 250;
+
+/** The file a UI run here writes as it starts the UI, read by the run that opened its window or split. */
+export function uiStartedPath(kitHome: string): string {
+  return join(kitHome, 'ui', 'started.json');
+}
+
+/** The started mark: when a UI run here started its UI. */
+interface UiStartedMark {
+  readonly v: 1;
+  readonly at: string;
+}
+
+function isUiStartedMark(value: unknown): value is UiStartedMark {
+  return typeof value === 'object' && value !== null && 'v' in value && value.v === 1 && 'at' in value && typeof value.at === 'string';
+}
+
+/** Marks the UI run here started, so a run that opened this window or split can tell it came up. */
+async function markUiStarted(runtime: CliRuntime, kitHome: string): Promise<void> {
+  const mark: UiStartedMark = { v: 1, at: new Date(runtime.clock.now()).toISOString() };
+  await runtime.files.write(uiStartedPath(kitHome), `${JSON.stringify(mark)}\n`);
+}
+
+/** When the UI last marked itself started, in epoch milliseconds; undefined with no mark or an unreadable one. */
+async function startedAt(runtime: CliRuntime, kitHome: string): Promise<number | undefined> {
+  const text = await runtime.files.read(uiStartedPath(kitHome));
+  if (text === undefined) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isUiStartedMark(parsed) ? Date.parse(parsed.at) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether a UI marked itself started since `since`, looked for until `UI_START_WAIT_MS` has passed. */
+async function uiStartedSince(runtime: CliRuntime, kitHome: string, since: number): Promise<boolean> {
+  const deadline = since + UI_START_WAIT_MS;
+  for (;;) {
+    const at = await startedAt(runtime, kitHome);
+    if (at !== undefined && at >= since) {
+      return true;
+    }
+    if (runtime.clock.now() >= deadline) {
+      return false;
+    }
+    await runtime.sleep(UI_START_POLL_MS);
+  }
+}
+
+/**
+ * How a window or split went: `opened` once the UI in it marked itself started; `none` when none opened, which the
+ * caller falls back from; `silent` when one opened but no UI started in it, which ends the run as failed rather than
+ * start a second UI beside one that may still come up.
+ */
+type Placed = 'opened' | 'none' | 'silent';
+
+/** OPENED once the UI in `where` started; else a FAILED line saying what to run to see why. */
+async function confirmStarted(runtime: CliRuntime, kitHome: string, since: number, where: string): Promise<Placed> {
+  if (await uiStartedSince(runtime, kitHome, since)) {
+    runtime.out.stdout(`OPENED the UI in ${where}`);
+    return 'opened';
+  }
+  const seconds = UI_START_WAIT_MS / 1000;
+  runtime.out.stderr(`FAILED ${where} opened, but no UI started in it within ${seconds} s; run teamrig ui --mode terminal in a terminal to see why`);
+  return 'silent';
+}
+
+/**
+ * Opens a terminal window that runs this same command in terminal mode, the way `teamrig open` opens a session's tab
+ * (`open.terminal`), in the window `UI_WINDOW`, and waits for its UI to start; when none opens it says why, and
+ * `otherwise` where the UI shows.
+ */
+async function openUiWindow(runtime: CliRuntime, config: KitConfig, kit: Kit, start: UiTeam, session: string | undefined, otherwise: string): Promise<Placed> {
   const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: UI_WINDOW, focus: 'take' } as const;
+  const since = runtime.clock.now();
   const outcome = await openTab(runtime, config.open.terminal, tab);
   if (outcome.kind === 'opened') {
-    runtime.out.stdout(`OPENED the UI in a ${outcome.terminal} window`);
-    return true;
+    return confirmStarted(runtime, kit.paths.kitHome, since, `a ${outcome.terminal} window`);
   }
   runtime.out.stdout(`NOTE no terminal window opened (${outcome.reasons.join('; ')}); ${otherwise}`);
-  return false;
+  return 'none';
 }
 
 /**
  * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, the focus left
  * on the session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
- * tool, whose host has no panel (T5105). True when one opened; else it says why.
+ * tool, whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
  */
-async function openUiSplit(runtime: CliRuntime, start: UiTeam, session: string | undefined): Promise<boolean> {
+async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session: string | undefined): Promise<Placed> {
   const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' } as const;
+  const since = runtime.clock.now();
   const outcome = await openSplit(runtime, tab);
   if (outcome.kind === 'opened') {
-    runtime.out.stdout(`OPENED the UI in a split of this ${outcome.terminal} window`);
-    return true;
+    return confirmStarted(runtime, kit.paths.kitHome, since, `a split of this ${outcome.terminal} window`);
   }
   runtime.out.stdout(`NOTE no split of this terminal opened (${outcome.reasons.join('; ')})`);
-  return false;
+  return 'none';
 }
 
 /**
- * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once it opens. The terminal
- * half then shows here when this run has a terminal a person types in; else in a split of the session's terminal,
- * else in a window when none was tried yet, saying so; only when all of these fail does it run here anyway.
+ * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once its UI starts. The
+ * terminal half then shows here when this run has a terminal a person types in; else in a split of the session's
+ * terminal, else in a window when none was tried yet, saying so; only when none of these opens does it run here
+ * anyway. A window or split that opened with no UI starting in it ends the run as `failed`.
  */
-async function placeUi(runtime: CliRuntime, config: KitConfig, mode: UiMode, start: UiTeam, session: string | undefined): Promise<'shown' | 'here'> {
+async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: UiMode, start: UiTeam, session: string | undefined): Promise<'shown' | 'here' | 'failed'> {
   if (mode !== 'terminal') {
     const otherwise = runtime.interactive ? 'the UI shows in this terminal' : 'the UI shows beside the session';
-    if ((await openUiWindow(runtime, config, start, session, otherwise)) && mode === 'window') {
+    const window = await openUiWindow(runtime, config, kit, start, session, otherwise);
+    if (window === 'silent') {
+      return 'failed';
+    }
+    if (window === 'opened' && mode === 'window') {
       return 'shown';
     }
   }
   if (runtime.interactive) {
     return 'here';
   }
-  if (await openUiSplit(runtime, start, session)) {
-    return 'shown';
+  const split = await openUiSplit(runtime, kit, start, session);
+  if (split !== 'none') {
+    return split === 'opened' ? 'shown' : 'failed';
   }
-  if (mode === 'terminal' && (await openUiWindow(runtime, config, start, session, 'the UI shows in this terminal'))) {
-    return 'shown';
+  if (mode === 'terminal') {
+    const window = await openUiWindow(runtime, config, kit, start, session, 'the UI shows in this terminal');
+    if (window !== 'none') {
+      return window === 'opened' ? 'shown' : 'failed';
+    }
   }
   return 'here';
 }
@@ -203,11 +290,13 @@ export function uiCommand(pin: UiPin | undefined): (args: ParsedArgs, runtime: C
     const { entry, env } = await entryOf(config, runtime, kit, pin);
     // A session named is one of this team, so it pins the team too; with neither, the UI covers every team (T5249).
     const start: UiTeam = { team: kit.paths.team, pinned: args.flags.get('team') !== undefined || session !== undefined };
-    if ((await placeUi(runtime, config, mode, start, session)) === 'shown') {
-      return EXIT.ok;
+    const placed = await placeUi(runtime, config, kit, mode, start, session);
+    if (placed !== 'here') {
+      return placed === 'shown' ? EXIT.ok : EXIT.failed;
     }
     const { node, script } = runtime.self;
     const request = uiRequest({ entry, node, script, ...start, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
+    await markUiStarted(runtime, kit.paths.kitHome);
     return uiExit(runtime, node, await runtime.processes.run(request));
   };
 }
