@@ -26,16 +26,16 @@ export interface MergeStanding {
    * lead as `<team>/<id>` (T1140); none for a root team's lead, whose own merge needs no approval.
    */
   readonly approvers: readonly string[];
-  /** The session that answers on GitHub (`githubWatcher`), whose own approval of its head clears a low-risk merge (T3448). */
+  /** The session that answers on the code host (`githubWatcher`), whose own approval of its head clears a low-risk merge (T3448). */
   readonly answerer: string;
   /**
-   * The globs (`github.lowRiskPaths`) that every path of a low-risk change matches (T3448, security verdict): a path
+   * The globs (`pushGuard.lowRiskPaths`) that every path of a low-risk change matches (T3448, security verdict): a path
    * matching none is sensitive, so a path added later is too until the team lists it.
    */
   readonly lowRisk: readonly string[];
   /**
    * The review globs a change must touch none of to be low-risk, low-risk paths too (T3448): the generic review paths,
-   * then `pushGuard.reviewPaths`, then `github.sensitivePaths`.
+   * then `pushGuard.reviewPaths`, then `pushGuard.sensitivePaths`.
    */
   readonly sensitive: readonly string[];
   /** The team's security reviewer, who passes a sensitive change before the GitHub answerer merges it (T3448). */
@@ -65,8 +65,8 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
     task: state.tasks.get(taskId),
     approvers: await approversOf(reader, team, config, caller),
     answerer: githubWatcher(config),
-    lowRisk: config.github.lowRiskPaths,
-    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.github.sensitivePaths],
+    lowRisk: config.pushGuard.lowRiskPaths,
+    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.pushGuard.sensitivePaths],
     securityReviewer: config.roles.securityReviewer,
     open: new Map([...state.tasks.values()].filter((task) => UNSHIPPED.includes(task.status)).map((task) => [task.id, task.owner])),
   };

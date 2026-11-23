@@ -252,6 +252,18 @@ export interface PushGuardConfig {
   readonly pushToProtected: PushToProtected;
   /** The team's review gate entries, read on top of teamrig's generic list: adding one narrows, none removes a generic one. */
   readonly reviewPaths: readonly ReviewPath[];
+  /**
+   * The only paths, as review globs read the way `reviewPaths` reads them, an outside pull request may touch and merge
+   * on the answerer's own approval of its head (T3448). Every other path is sensitive, so a new one is until a team
+   * lists it.
+   */
+  readonly lowRiskPaths: readonly string[];
+  /**
+   * The paths, as review globs, that stay sensitive inside `lowRiskPaths` (T3448), as the generic review paths and the
+   * `reviewPaths` entries do. A change touching a sensitive path merges once the security reviewer approved its head (a
+   * leader's approval clears it too); one touching only low-risk paths, on the answerer's own approval.
+   */
+  readonly sensitivePaths: readonly string[];
 }
 
 /**
@@ -795,18 +807,6 @@ export interface GithubConfig {
   readonly activity: boolean;
   /** The most issues and pull requests one session follows at once (`teamrig follow`); 0 turns following off. */
   readonly followMax: number;
-  /**
-   * The only paths, as review globs read the way `pushGuard.reviewPaths` reads them, an outside pull request may touch
-   * and merge on the GitHub answerer's own approval of its head (T3448). Every other path is sensitive, so a new one is
-   * until a team lists it.
-   */
-  readonly lowRiskPaths: readonly string[];
-  /**
-   * The paths, as review globs, that stay sensitive inside `lowRiskPaths` (T3448), as the generic review paths and the
-   * `pushGuard.reviewPaths` entries do. A change touching a sensitive path merges once the security reviewer approved its
-   * head (a leader's approval clears it too); one touching only low-risk paths, on the GitHub answerer's own approval.
-   */
-  readonly sensitivePaths: readonly string[];
   /**
    * The session that hears the pull request news no task owner takes: a pull request from a fork or by an author
    * outside the repository, or from a branch that names no task. Unset, the first holder of a service role holding

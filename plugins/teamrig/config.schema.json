@@ -423,6 +423,20 @@
             "required": ["glob"]
           },
           "default": []
+        },
+        "lowRiskPaths": {
+          "description": "The only paths an outside pull request may touch and still merge on the answerer's (watcher's) own approval of its head, as review globs: one with no slash names a file at any depth, one with a slash is read from the repository root, ** reaches any depth, and case is ignored. Every other path is sensitive, so a path added later is sensitive until it is listed here; sensitivePaths, the generic review paths and the reviewPaths entries win over these. The default holds docs text and pictures only, never code: tests run on the host as the user in the ship gate and every session's test runs. A team may add its own paths, knowing a code path's merged code runs there. A list given replaces the default.",
+          "type": "array",
+          "maxItems": 128,
+          "items": { "type": "string", "maxLength": 200 },
+          "default": ["docs/**/*.md", "docs/**/*.png", "docs/**/*.svg", "docs/**/*.jpg"]
+        },
+        "sensitivePaths": {
+          "description": "The paths that stay sensitive inside lowRiskPaths, as review globs read the same way. The ship tool's merge lets the answerer (watcher) approve a pull request at its head alone when its branch touches only low-risk paths, none of these, no generic review path, no reviewPaths entry and no file another session's open branch changes; one touching a sensitive path needs the security reviewer's approval of that head first, and the leaders approve one that needs a second session's too. A list given replaces the default.",
+          "type": "array",
+          "maxItems": 128,
+          "items": { "type": "string", "maxLength": 200 },
+          "default": ["tools/**", ".github/**", "**/.githooks/**", "**/*guard*/**", "*guard*", "**/hooks/**", "*hook*", "**/merge/**", "*merge*", "**/permissions/**", "*permission*", "**/github/**", "*github*", "**/issues/**", "issue*", "package.json", "**/config/**", "*config*", "*secret*", "*approval*", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "**/.claude/**", "**/.claude-plugin/**", "**/skills/**"]
         }
       }
     },
@@ -1623,20 +1637,6 @@
           "minimum": 0,
           "maximum": 100,
           "default": 20
-        },
-        "lowRiskPaths": {
-          "description": "The only paths an outside pull request may touch and still merge on the GitHub answerer's (watcher's) own approval of its head, as review globs: one with no slash names a file at any depth, one with a slash is read from the repository root, ** reaches any depth, and case is ignored. Every other path is sensitive, so a path added later is sensitive until it is listed here; sensitivePaths, the generic review paths and the pushGuard.reviewPaths entries win over these. The default holds docs text and pictures only, never code: tests run on the host as the user in the ship gate and every session's test runs. A team may add its own paths, knowing a code path's merged code runs there. A list given replaces the default.",
-          "type": "array",
-          "maxItems": 128,
-          "items": { "type": "string", "maxLength": 200 },
-          "default": ["docs/**/*.md", "docs/**/*.png", "docs/**/*.svg", "docs/**/*.jpg"]
-        },
-        "sensitivePaths": {
-          "description": "The paths that stay sensitive inside lowRiskPaths, as review globs read the same way. The ship tool's merge lets the GitHub answerer (watcher) approve a pull request at its head alone when its branch touches only low-risk paths, none of these, no generic review path, no pushGuard.reviewPaths entry and no file another session's open branch changes; one touching a sensitive path needs the security reviewer's approval of that head first, and the leaders approve one that needs a second session's too. A list given replaces the default.",
-          "type": "array",
-          "maxItems": 128,
-          "items": { "type": "string", "maxLength": 200 },
-          "default": ["tools/**", ".github/**", "**/.githooks/**", "**/*guard*/**", "*guard*", "**/hooks/**", "*hook*", "**/merge/**", "*merge*", "**/permissions/**", "*permission*", "**/github/**", "*github*", "**/issues/**", "issue*", "package.json", "**/config/**", "*config*", "*secret*", "*approval*", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "**/.claude/**", "**/.claude-plugin/**", "**/skills/**"]
         },
         "watcher": {
           "description": "The session that hears the pull request news no task owner takes: a pull request from a fork or by an author outside the repository, or from a branch that names no task, and a mention no one else takes. Unset, the first holder of a service role holding issue close, the session that answers on GitHub, else the lead. Who watches is staffing, so the lead may set it with teamrig config set, to one of the sessions.",

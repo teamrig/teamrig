@@ -154,7 +154,60 @@ export const DEFAULT_CHANGES: ChangesConfig = { sources: [] };
 /** No exec PATH: a privileged command names its program by absolute path until the team lists its tool folders. */
 export const DEFAULT_EXEC: ExecConfig = { path: [] };
 
-export const DEFAULT_PUSH_GUARD: PushGuardConfig = { protectedBranches: ['main', 'master'], pushToProtected: 'ask', reviewPaths: [] };
+/**
+ * `pushGuard.lowRiskPaths` (owner order, T3448, security verdict): the only paths an outside pull request may touch and
+ * merge on the answerer's approval alone, so a path added tomorrow is sensitive until a team lists it. Docs text and
+ * pictures only, which nothing runs: not `docs/**`, which would take a script placed there too, and no test code, as
+ * the ship gate and every session's test runs execute tests on the host as the user. A team may add its own paths,
+ * knowing a code path's merged code runs there; `pushGuard.sensitivePaths` wins over every entry.
+ */
+export const DEFAULT_LOW_RISK_PATHS: readonly string[] = ['docs/**/*.md', 'docs/**/*.png', 'docs/**/*.svg', 'docs/**/*.jpg'];
+
+/**
+ * `pushGuard.sensitivePaths` (owner order, T3448): what stays sensitive inside `pushGuard.lowRiskPaths`, so a team's
+ * broad low-risk folder never clears these. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever
+ * guards, hooks, merges or grants permissions, the code that writes to GitHub, the package file that chooses what
+ * installs (the lock files are generic review paths already), config and the code that reads it (these lists among
+ * it), secrets and approvals, and the instructions agents follow (`CLAUDE.md` and `AGENTS.md` at any depth, `.claude/`,
+ * plugin manifests and skills). A glob with no slash names a file at any depth, so `*hook*` covers a `hook-*.ts`
+ * command beside the others, and `**\/hooks/**` a hooks folder anywhere.
+ */
+export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
+  'tools/**',
+  '.github/**',
+  '**/.githooks/**',
+  '**/*guard*/**',
+  '*guard*',
+  '**/hooks/**',
+  '*hook*',
+  '**/merge/**',
+  '*merge*',
+  '**/permissions/**',
+  '*permission*',
+  '**/github/**',
+  '*github*',
+  '**/issues/**',
+  'issue*',
+  'package.json',
+  '**/config/**',
+  '*config*',
+  '*secret*',
+  '*approval*',
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  'AGENTS.md',
+  '**/.claude/**',
+  '**/.claude-plugin/**',
+  '**/skills/**',
+];
+
+export const DEFAULT_PUSH_GUARD: PushGuardConfig = {
+  protectedBranches: ['main', 'master'],
+  pushToProtected: 'ask',
+  reviewPaths: [],
+  lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
+  sensitivePaths: DEFAULT_SENSITIVE_PATHS,
+};
 
 /**
  * Refused by default: a helper's `npx eslint` once fetched and ran an unvetted package (T450, 10-16), and an install
@@ -338,53 +391,6 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
 };
 
 /**
- * `github.lowRiskPaths` (owner order, T3448, security verdict): the only paths an outside pull request may touch and
- * merge on the GitHub answerer's approval alone, so a path added tomorrow is sensitive until a team lists it. Docs text
- * and pictures only, which nothing runs: not `docs/**`, which would take a script placed there too, and no test code,
- * as the ship gate and every session's test runs execute tests on the host as the user. A team may add its own paths,
- * knowing a code path's merged code runs there; `github.sensitivePaths` wins over every entry.
- */
-export const DEFAULT_LOW_RISK_PATHS: readonly string[] = ['docs/**/*.md', 'docs/**/*.png', 'docs/**/*.svg', 'docs/**/*.jpg'];
-
-/**
- * `github.sensitivePaths` (owner order, T3448): what stays sensitive inside `github.lowRiskPaths`, so a team's broad
- * low-risk folder never clears these. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever guards,
- * hooks, merges or grants permissions, the code that writes to GitHub, the package file that chooses what installs (the
- * lock files are generic review paths already), config and the code that reads it (these lists among it), secrets and
- * approvals, and the instructions agents follow (`CLAUDE.md` and `AGENTS.md` at any depth, `.claude/`, plugin
- * manifests and skills). A glob with no slash names a file at any depth, so `*hook*` covers a
- * `hook-*.ts` command beside the others, and `**\/hooks/**` a hooks folder anywhere.
- */
-export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
-  'tools/**',
-  '.github/**',
-  '**/.githooks/**',
-  '**/*guard*/**',
-  '*guard*',
-  '**/hooks/**',
-  '*hook*',
-  '**/merge/**',
-  '*merge*',
-  '**/permissions/**',
-  '*permission*',
-  '**/github/**',
-  '*github*',
-  '**/issues/**',
-  'issue*',
-  'package.json',
-  '**/config/**',
-  '*config*',
-  '*secret*',
-  '*approval*',
-  'CLAUDE.md',
-  'CLAUDE.local.md',
-  'AGENTS.md',
-  '**/.claude/**',
-  '**/.claude-plugin/**',
-  '**/skills/**',
-];
-
-/**
  * Off until a team lists a repository; two weeks of closed issues covers a sync missed over a holiday. Every 15
  * minutes a new issue reaches its session within a working block, at two gh calls per repository each time (one more
  * per further hundred open, or recently changed closed, issues). An outsider's issue waits for the `teamrig` label,
@@ -404,8 +410,6 @@ export const DEFAULT_GITHUB: GithubConfig = {
   followMax: 20,
   stamp: true,
   fields: DEFAULT_ISSUE_FIELDS,
-  lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
-  sensitivePaths: DEFAULT_SENSITIVE_PATHS,
 };
 
 /**

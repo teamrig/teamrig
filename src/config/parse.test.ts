@@ -30,7 +30,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.steps, { backupDays: 7 });
-    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS, lowRiskPaths: DEFAULT_LOW_RISK_PATHS, sensitivePaths: DEFAULT_SENSITIVE_PATHS });
+    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
@@ -602,8 +602,6 @@ describe('parseConfig', () => {
       activity: true,
       followMax: 20,
       stamp: true,
-      lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
-      sensitivePaths: DEFAULT_SENSITIVE_PATHS,
     });
     assert.equal(parseConfig({ ...ROSTER, github: { statusPush: true } }).config.github.statusPush, true);
     assert.equal(parseConfig({ ...ROSTER, github: { stamp: false } }).config.github.stamp, false);
@@ -685,30 +683,31 @@ describe('parseConfig', () => {
     }
   });
 
-  it("reads the github sensitive paths as a team's own globs, else keeps the owner's default list (T3448)", () => {
-    const defaults = parseConfig(ROSTER).config.github.sensitivePaths;
+  it("reads the push guard's sensitive paths as a team's own globs, else keeps the owner's default list (T3448)", () => {
+    const defaults = parseConfig(ROSTER).config.pushGuard.sensitivePaths;
+    assert.deepEqual(defaults, DEFAULT_SENSITIVE_PATHS);
     assert.ok(defaults.includes('tools/**') && defaults.includes('*guard*') && defaults.includes('package.json'), JSON.stringify(defaults));
-    const { config, issues } = parseConfig({ ...ROSTER, github: { sensitivePaths: ['src/billing/**', '*.sql'] } });
+    const { config, issues } = parseConfig({ ...ROSTER, pushGuard: { sensitivePaths: ['src/billing/**', '*.sql'] } });
     assert.deepEqual(issues, []);
-    assert.deepEqual(config.github.sensitivePaths, ['src/billing/**', '*.sql']);
-    assert.deepEqual(parseConfig({ ...ROSTER, github: { sensitivePaths: [] } }).config.github.sensitivePaths, []);
+    assert.deepEqual(config.pushGuard.sensitivePaths, ['src/billing/**', '*.sql']);
+    assert.deepEqual(parseConfig({ ...ROSTER, pushGuard: { sensitivePaths: [] } }).config.pushGuard.sensitivePaths, []);
     for (const wrong of ['tools/**', [''], ['x'.repeat(201)], ['a\nb'], [7], Array.from({ length: 129 }, (_, i) => `p${i}`)]) {
-      const parsed = parseConfig({ ...ROSTER, github: { sensitivePaths: wrong } });
-      assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('github.sensitivePaths')), JSON.stringify(parsed.issues));
+      const parsed = parseConfig({ ...ROSTER, pushGuard: { sensitivePaths: wrong } });
+      assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('pushGuard.sensitivePaths')), JSON.stringify(parsed.issues));
     }
   });
 
-  it("reads the github low-risk paths as a team's own globs, else keeps docs text and pictures only (T3448)", () => {
-    const defaults = parseConfig(ROSTER).config.github.lowRiskPaths;
+  it("reads the push guard's low-risk paths as a team's own globs, else keeps docs text and pictures only (T3448)", () => {
+    const defaults = parseConfig(ROSTER).config.pushGuard.lowRiskPaths;
     assert.deepEqual(defaults, DEFAULT_LOW_RISK_PATHS);
     assert.ok(defaults.length > 0 && defaults.every((glob) => glob.startsWith('docs/**/*.')), JSON.stringify(defaults));
-    const { config, issues } = parseConfig({ ...ROSTER, github: { lowRiskPaths: ['src/pane/**', 'README.md'] } });
+    const { config, issues } = parseConfig({ ...ROSTER, pushGuard: { lowRiskPaths: ['src/pane/**', 'README.md'] } });
     assert.deepEqual(issues, []);
-    assert.deepEqual(config.github.lowRiskPaths, ['src/pane/**', 'README.md']);
-    assert.deepEqual(parseConfig({ ...ROSTER, github: { lowRiskPaths: [] } }).config.github.lowRiskPaths, [], 'none: every outside change is sensitive');
+    assert.deepEqual(config.pushGuard.lowRiskPaths, ['src/pane/**', 'README.md']);
+    assert.deepEqual(parseConfig({ ...ROSTER, pushGuard: { lowRiskPaths: [] } }).config.pushGuard.lowRiskPaths, [], 'none: every outside change is sensitive');
     for (const wrong of ['docs/**', [''], ['x'.repeat(201)], ['a\nb'], [7], Array.from({ length: 129 }, (_, i) => `p${i}`)]) {
-      const parsed = parseConfig({ ...ROSTER, github: { lowRiskPaths: wrong } });
-      assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('github.lowRiskPaths')), JSON.stringify(parsed.issues));
+      const parsed = parseConfig({ ...ROSTER, pushGuard: { lowRiskPaths: wrong } });
+      assert.ok(parsed.issues.length > 0 && paths(parsed.issues).every((path) => path.startsWith('pushGuard.lowRiskPaths')), JSON.stringify(parsed.issues));
     }
   });
 
@@ -1540,7 +1539,13 @@ describe('parseConfig', () => {
     const bad = parseConfig({ ...ROSTER, pushGuard: { protectedBranches: ['release'], pushToProtected: 'always' } });
     assert.deepEqual(paths(bad.issues), ['pushGuard.pushToProtected']);
     assert.match(bad.issues[0]?.message ?? '', /ask, allow, lead, gated/);
-    assert.deepEqual(bad.config.pushGuard, { protectedBranches: ['release'], pushToProtected: 'ask', reviewPaths: [] });
+    assert.deepEqual(bad.config.pushGuard, {
+      protectedBranches: ['release'],
+      pushToProtected: 'ask',
+      reviewPaths: [],
+      lowRiskPaths: DEFAULT_LOW_RISK_PATHS,
+      sensitivePaths: DEFAULT_SENSITIVE_PATHS,
+    });
   });
 
   it('reads the review paths, defaulting mode and class and leaving out an entry with no glob', () => {
