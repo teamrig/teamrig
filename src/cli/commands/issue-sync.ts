@@ -25,7 +25,7 @@ import { ourLogins } from '../../sync/trust.ts';
 import { applySteps, closedSince } from '../../sync/sync.ts';
 import { GITHUB_REPOS_HOST, type PullRequests, type ReviewPosts } from '../../issues/host.ts';
 import type { HostPull } from '../../issues/pull.ts';
-import { sessionLogins } from '../../issues/status-push.ts';
+import { issueAssigneesOf } from '../../composition/issue-assignees.ts';
 import type { Task } from '../../register/fold.ts';
 import { GITHUB_SOURCE } from '../../register/model.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
@@ -264,8 +264,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
         send: true,
         // No closes: the automatic push sends labels and assignees only (security verdict F1 on T2876); it prints each close held.
         limits: { writesPerRun: Math.max(0, writesPerRun - claimed.writes), closes: false },
-        logins: sessionLogins(config.github.owners),
-        design: config.github.designAssignees,
+        ...issueAssigneesOf(config),
         told,
         fields: await fieldRunOf(runtime, config, kit.paths, register),
       },

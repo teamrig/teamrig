@@ -4,6 +4,7 @@ import { SecretScanner } from '../../core/secrets.ts';
 import { issueRef } from '../../sync/map.ts';
 import { countsLine, parseMigrateRows, planMigration, previewMarkdown, replacedRefNote, type MigrateCreate, type MigratePlan, type MigrateRow, type RefJudge } from '../../sync/migrate.ts';
 import { assignableOf, DESIGN_ASSIGNEE_FIX, readAssignable } from '../../issues/assignable.ts';
+import { issueAssigneesOf } from '../../composition/issue-assignees.ts';
 import { DESIGN_LABEL } from '../../issues/design-label.ts';
 import { GITHUB_REPOS_HOST, type Assignees, type IssueTarget } from '../../issues/host.ts';
 import { RegisterPolicy } from '../../register/policy.ts';
@@ -137,7 +138,7 @@ async function openIssues(runtime: CliRuntime, team: Team, by: string, creates: 
     opened += 1;
     say(`OPENED ${create.id} ${ref}`);
     if (create.draft.labels.includes(DESIGN_LABEL)) {
-      (await assignDesign(host, end.target, team.config.github.designAssignees, `${create.id} ${ref}`)).forEach(say);
+      (await assignDesign(host, end.target, issueAssigneesOf(team.config).design, `${create.id} ${ref}`)).forEach(say);
     }
   }
   say(`DONE opened ${opened} issue(s) and set each task's ref`);

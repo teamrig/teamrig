@@ -4,7 +4,8 @@ import { closedSince } from '../../sync/sync.ts';
 import { GITHUB_REPOS_HOST, targetText, type PullRequests, type Tracker } from '../../issues/host.ts';
 import { applyPush } from '../../issues/push-apply.ts';
 import { planAssigned, viewerOf } from '../../issues/push-assignees.ts';
-import { changeLine, changeWrites, planPush, pushAssignees, SESSION_PUSH, sessionLogins, VIEWER_UNREAD, type PushAssignees, type PushLimits, type PushPlan, type SessionLogins } from '../../issues/status-push.ts';
+import { changeLine, changeWrites, planPush, pushAssignees, SESSION_PUSH, VIEWER_UNREAD, type PushAssignees, type PushLimits, type PushPlan, type SessionLogins } from '../../issues/status-push.ts';
+import { issueAssigneesOf } from '../../composition/issue-assignees.ts';
 import type { Task } from '../../register/fold.ts';
 import { RegisterPolicy } from '../../register/policy.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -63,8 +64,7 @@ export async function issuePush(args: ParsedArgs, runtime: CliRuntime): Promise<
       tasks: async () => (await team.register.snapshot()).state.tasks.values(),
       send,
       limits: SESSION_PUSH,
-      logins: sessionLogins(config.github.owners),
-      design: config.github.designAssignees,
+      ...issueAssigneesOf(config),
       told: new Set(),
       fields: await fieldRunOf(runtime, config, team.paths, team.register),
     },

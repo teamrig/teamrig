@@ -7,7 +7,8 @@ import { CLOSE_REASONS, parseIssueTarget, targetText, type CloseReason, type Iss
 import { bareRef, refOf } from '../../issues/ref.ts';
 import { checkReply, sendReply, type FollowUp, type ReplyWrite } from '../../issues/reply.ts';
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from '../../issues/similar.ts';
-import { holderOf, sessionLogins } from '../../issues/status-push.ts';
+import { holderOf } from '../../issues/status-push.ts';
+import { issueAssigneesOf } from '../../composition/issue-assignees.ts';
 import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue, type IssueWrite } from '../../issues/write.ts';
 import type { Task } from '../../register/fold.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
@@ -62,7 +63,7 @@ export async function issueReply(args: ParsedArgs, runtime: CliRuntime): Promise
   if (check.kind === 'refused') {
     throw new RefusedError(`${check.reason}; nothing was written`);
   }
-  const logins = sessionLogins(checked.config.github.owners);
+  const { logins } = issueAssigneesOf(checked.config);
   if (check.reads.issue.pull) {
     if (status !== undefined) {
       throw new RefusedError(`${targetText(target)} is a pull request, which shows no status of its own: --status sets the issue it answers; nothing was written`);
