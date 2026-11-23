@@ -107,6 +107,22 @@ const CASES: readonly PermissionsCase[] = [
     },
   },
   {
+    id: 'permissions.words-prefix-allow',
+    title: 'words its own allow rules for a command prefix, a different set for each prefix, and reads them back once written',
+    features: ['permissions.auto-mode-routes'],
+    run: ({ port, world }) => {
+      const first = port.prefixAllowRules('kit list');
+      const second = port.prefixAllowRules('kit show');
+      for (const rules of [first, second]) {
+        assert.ok(rules.length > 0, 'a prefix has no allow rule');
+        assert.equal(new Set(rules).size, rules.length, 'a prefix names a rule twice');
+      }
+      assert.deepEqual(first.filter((rule) => second.includes(rule)), [], 'two prefixes share a rule');
+      const written = valueOf(port.writeAllow(world.settings(FIRST), [...FIRST.allow, ...first]), 'the allow write');
+      assert.deepEqual(rulesOf(port.read(written)).allow, [...FIRST.allow, ...first]);
+    },
+  },
+  {
     id: 'permissions.installs-routes',
     title: "puts the team's routes in where there were none, and a second install changes nothing",
     features: ['permissions.auto-mode-routes'],
@@ -175,6 +191,7 @@ export function nothingPermissions(): PermissionsSubject {
       read: () => ({ allow: { ok: true, value: [] }, deny: [], bypass: undefined }),
       denyLines: () => [],
       writeAllow: (settings) => ({ ok: true, value: settings }),
+      prefixAllowRules: () => [],
       installRoutes: unchanged,
       uninstallRoutes: unchanged,
     },
@@ -191,6 +208,7 @@ export function yesPermissions(): PermissionsSubject {
       read: () => ({ allow: { ok: true, value: ['rule'] }, deny: ['rule'], bypass: 'bypass' }),
       denyLines: () => ['rule'],
       writeAllow: () => ({ ok: true, value: {} }),
+      prefixAllowRules: () => ['rule'],
       installRoutes: emptied,
       uninstallRoutes: emptied,
     },

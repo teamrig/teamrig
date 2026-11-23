@@ -92,6 +92,17 @@ function writeAllow(settings: JsonRecord, allow: readonly string[]): Permissions
   return { ok: true, value: { ...settings, [PERMISSIONS_KEY]: { ...permissions.value, [ALLOW_KEY]: [...allow] } } };
 }
 
+/** The shell tools whose rule body is a command line. */
+const SHELL_TOOLS: readonly string[] = ['Bash', 'PowerShell'];
+
+/**
+ * One rule per shell tool, in the ` *` form: the space keeps `teamrig list *` off `teamrig listx`, and the legacy `:*`
+ * form misses a call whose argument goes on past the colon.
+ */
+function prefixAllowRules(prefix: string): readonly string[] {
+  return SHELL_TOOLS.map((tool) => `${tool}(${prefix} *)`);
+}
+
 interface Current {
   readonly autoMode: JsonRecord;
   /** The list, or undefined when there is none. */
@@ -178,6 +189,7 @@ export const hostPermissions: HostPermissions = {
   read,
   denyLines: secretDenyLines,
   writeAllow,
+  prefixAllowRules,
   installRoutes,
   uninstallRoutes,
 };

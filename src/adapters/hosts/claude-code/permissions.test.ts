@@ -78,6 +78,12 @@ describe('the Claude Code permissions port: writeAllow', () => {
   });
 });
 
+describe('the Claude Code permissions port: prefixAllowRules', () => {
+  it('words one space-star rule for each shell tool, never the legacy colon form', () => {
+    assert.deepEqual(hostPermissions.prefixAllowRules('teamrig list'), ['Bash(teamrig list *)', 'PowerShell(teamrig list *)']);
+  });
+});
+
 describe('the Claude Code permissions port: denyLines', () => {
   it('is secretDenyLines, each line once', () => {
     for (const platform of PLATFORMS) {
