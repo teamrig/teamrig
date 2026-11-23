@@ -71,6 +71,12 @@ const EVENTS_CODEX_LACKS: readonly string[] = ['PostToolUseFailure', 'Elicitatio
 const CONTEXT_EVENTS: readonly SharedHookEvent[] = ['SessionStart', 'UserPromptSubmit', 'SubagentStart'];
 const NO_CONTEXT_LIMIT = { additionalContextLimit: 0 } as const;
 
+/**
+ * The most seconds Codex gives a handler of these events: it clamps a longer timeout and warns at every start
+ * ("clamping SessionEnd hook timeout to 3s", seen live on Codex 0.171), so the file asks for no more than it gets.
+ */
+const EVENT_TIMEOUT_CAPS: Readonly<Partial<Record<SharedHookEvent, number>>> = { SessionEnd: 3 };
+
 const PLUGIN_ROOT = '${CLAUDE_PLUGIN_ROOT}';
 const DEFAULT_TIMEOUT_SECONDS = 15;
 const HOST_FLAG = '--host';
@@ -272,6 +278,7 @@ function rewriteEvent(event: SharedHookEvent, source: SourceEvent, pluginRoot: s
   const groups: CodexMatcherGroup[] = [];
   const skipped: SkippedHandler[] = [];
   const limit = CONTEXT_EVENTS.includes(event) ? NO_CONTEXT_LIMIT : {};
+  const cap = EVENT_TIMEOUT_CAPS[event];
   source.groups.forEach((group, groupIndex) => {
     const hooks: CodexHookHandler[] = [];
     group.handlers.forEach((handler, handlerIndex) => {
@@ -280,7 +287,8 @@ function rewriteEvent(event: SharedHookEvent, source: SourceEvent, pluginRoot: s
         return;
       }
       const what = `${event} group ${groupIndex + 1}, handler ${handlerIndex + 1}`;
-      hooks.push({ type: 'command', ...commandLines(handler.words, pluginRoot, what), timeout: handler.timeout, ...limit });
+      const timeout = cap === undefined ? handler.timeout : Math.min(handler.timeout, cap);
+      hooks.push({ type: 'command', ...commandLines(handler.words, pluginRoot, what), timeout, ...limit });
     });
     if (hooks.length > 0) {
       groups.push({ ...(group.matcher === undefined ? {} : { matcher: group.matcher }), hooks });

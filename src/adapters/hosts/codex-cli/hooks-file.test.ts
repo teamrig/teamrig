@@ -104,8 +104,11 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
     }
   });
 
-  it("keeps each handler's own timeout", () => {
-    const timeouts = new Set(handlers.map((handler) => handler.timeout));
+  it("keeps each handler's own timeout, but the 3 seconds Codex gives a SessionEnd handler", () => {
+    const sessionEnd = (file.hooks.SessionEnd ?? []).flatMap((group) => group.hooks);
+    assert.ok(sessionEnd.length > 0);
+    assert.ok(sessionEnd.every((handler) => handler.timeout === 3));
+    const timeouts = new Set(handlers.filter((handler) => !sessionEnd.includes(handler)).map((handler) => handler.timeout));
     assert.deepEqual([...timeouts].sort((a, b) => a - b), [5, 15]);
     assert.equal(file.hooks.PostToolUse?.at(-1)?.hooks[0]?.timeout, 5);
   });
@@ -172,6 +175,12 @@ describe('a Codex hooks file', () => {
   it('gives a handler with no timeout 15 seconds, far under the 600 of Codex', () => {
     assert.equal(onlyHandler(fileWith({ timeout: 30 })).timeout, 30);
     assert.equal(onlyHandler(fileWith({})).timeout, 15);
+  });
+
+  it('writes a SessionEnd timeout of at most the 3 seconds Codex clamps it to, keeping a shorter one', () => {
+    assert.equal(onlyHandler(fileWith({ timeout: 15 }, 'SessionEnd')).timeout, 3);
+    assert.equal(onlyHandler(fileWith({}, 'SessionEnd')).timeout, 3);
+    assert.equal(onlyHandler(fileWith({ timeout: 2 }, 'SessionEnd')).timeout, 2);
   });
 
   it('keeps a matcher as it is', () => {
