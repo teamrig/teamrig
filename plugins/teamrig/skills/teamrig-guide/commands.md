@@ -7495,23 +7495,27 @@ app: 2 commits pushed, not deployed (c1a2b3c4..d5e6f7a8)
 
 ### teamrig redact-exec
 
-Runs a shell command and redacts secret shapes and secret variables from its output before printing it, for hosts
-whose `PostToolUse` hook cannot rewrite tool output. Prints a warning on stderr when any secret was redacted, and exits
-0 when the command passed or 1 otherwise.
+Loads the team's `secretGuard` config, runs a shell command, redacts secret shapes and secret variables from its merged
+stdout/stderr before printing it, files rotation tasks on any leak, and returns the command's own exit code (or
+`128 + signal`). Built for hosts whose `PostToolUse` hook cannot rewrite tool output.
 
-Flags: none.
+Flags:
+
+- `--session <id|name>`: the session the leak is recorded under; default `$TEAMRIG_SESSION`.
+- `--shell <cmd|sh|bash|powershell>`: the shell that runs the command; default the platform shell (`cmd.exe` on Windows, `sh` elsewhere).
+- `--encoded-command <text>`: base64url-encoded command line (mutually exclusive with `-- <command ...>`), avoiding shell re-quoting when wrapped by a `PreToolUse` hook.
 
 Example:
 
 ```sh
-teamrig redact-exec -- env
+teamrig redact-exec --session api -- env
 ```
 
 Output:
 
 ```text
 API_KEY=[redacted secret assignment]
-teamrig: this result held a secret (secret assignment); it was redacted before you saw it. Treat it as leaked: lead rotates it. Do not print it again.
+teamrig: this result held a secret (secret assignment); it was redacted before you saw it. Treat it as leaked: lead rotates it in T1. Do not print it again.
 ```
 
 ### teamrig gh
