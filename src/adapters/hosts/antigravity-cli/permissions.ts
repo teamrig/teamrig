@@ -10,14 +10,15 @@ import {
 
 /**
  * Antigravity CLI's permission rules: `permissions.allow` and `permissions.deny` in `settings.json`, using
- * Antigravity's `read_file(<pattern>)` and `command(<target>)` rule syntax (verified on `agy 1.5.14`).
+ * Antigravity's `read_file(<pattern>)` and `command(<target>)` rule syntax, and `toolPermission` for bypass
+ * (verified on `agy 1.5.14`).
  */
 
 const PERMISSIONS_KEY = 'permissions';
 const ALLOW_KEY = 'allow';
 const DENY_KEY = 'deny';
-const MODE_KEY = 'defaultMode';
-const BYPASS_MODE = 'bypassPermissions';
+const TOOL_PERMISSION_KEY = 'toolPermission';
+const BYPASS_VALUE = 'always-proceed';
 const NO_ROUTES = 'Antigravity CLI has no auto-mode routes';
 
 const SHARED_DENY_LINES: readonly string[] = [
@@ -28,7 +29,17 @@ const SHARED_DENY_LINES: readonly string[] = [
   'command(kubectl exec *printenv*)',
   'command(kubectl exec *-- env*)',
   'command(env)',
+  'command(printenv)',
   'command(printenv*)',
+  'command(set)',
+  'command(type .env)',
+  'command(type *.env*)',
+  'command(type *secrets.yaml*)',
+  'command(Get-Content .env)',
+  'command(Get-Content *.env*)',
+  'command(Get-Content *secrets.yaml*)',
+  'command(Get-ChildItem env:)',
+  'command(Get-ChildItem env*)',
   'read_file(~/.ssh/id_*)',
   'read_file(~/.aws/credentials)',
   'read_file(~/.kube/config)',
@@ -59,7 +70,7 @@ function read(settings: JsonRecord): PermissionsReading {
   const deny = Array.isArray(list) ? list.filter((rule): rule is string => typeof rule === 'string') : [];
   const held = permissionsOf(settings);
   const allow = held.ok ? allowOf(held.value) : held;
-  const bypass = rules[MODE_KEY] === BYPASS_MODE ? `${PERMISSIONS_KEY}.${MODE_KEY} is ${BYPASS_MODE}` : undefined;
+  const bypass = settings[TOOL_PERMISSION_KEY] === BYPASS_VALUE ? `${TOOL_PERMISSION_KEY} is ${BYPASS_VALUE}` : undefined;
   return { allow, deny, bypass };
 }
 
@@ -77,7 +88,7 @@ function noRoutes(): PermissionsAnswer<TrustedRoutesPlan> {
 export const antigravityPermissions: HostPermissions = {
   allowSetting: `${PERMISSIONS_KEY}.${ALLOW_KEY}`,
   denySetting: `${PERMISSIONS_KEY}.${DENY_KEY}`,
-  routesSetting: 'autoMode.environment',
+  routesSetting: 'none (Antigravity CLI has no routes setting)',
   read,
   denyLines: (platform) => [...SHARED_DENY_LINES, ghHostsDenyLine(platform)],
   writeAllow,

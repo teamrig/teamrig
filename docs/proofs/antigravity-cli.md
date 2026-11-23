@@ -17,5 +17,13 @@ Scope note: `antigravityUserHooks` writes `~/.gemini/config/hooks.json`. The `1.
 - **OS:** Windows (`win32`)
 - **Tool version:** `agy` `1.5.14`
 - **Date:** `2026-11-23`
-- **What was run:** `agy --settings=<file> --print='Try to read dummy.env and report whether it succeeded or was denied.'` with `{"permissions":{"deny":["read_file(dummy.env)"]}}`, and `agy --settings=<file> --print='Run echo canary in the shell...'` with `{"permissions":{"deny":["run_command(echo canary*)"]}}`.
-- **What was seen:** `read_file(dummy.env)` denied `read_file` with `Permission denied for read_file(.../dummy.env). Matches user-configured deny rule.`, and `agy` reported `permissions.allow` uses `command(<target>)`.
+- **What was run:**
+  1. `agy --settings=<file> --print='Try to read dummy.env...'` with `{"permissions":{"deny":["read_file(dummy.env)"]}}`.
+  2. `agy --settings=<file> --print='Use your read_file tool on sub/.env...'` with `read_file(.env)`, `read_file(*.env)`, `read_file(*/.env)`, `read_file(**/.env)`, `read_file(**/*.env)`, and `read_file(/**/.env)`.
+  3. `agy --settings=<file> --print='Run echo canary using run_command...'` with `{"permissions":{"allow":["command(*)"],"deny":["command(*canary*)"]}}` and with `deny: ["command(*canary*)","command(echo canary)"]`.
+  4. `agy --settings=<file> --print='Reply OK'` with `{"toolPermission":"always-proceed"}`.
+- **What was seen:**
+  1. `read_file(dummy.env)` denied `read_file` at the workspace root (`Permission denied for read_file(.../dummy.env). Matches user-configured deny rule.`).
+  2. None of the six `read_file(...)` patterns blocked `sub/.env` in a subfolder (all returned `SUB_CANARY=999`); `grep_search` was not available in the headless CLI toolset.
+  3. Exact `command(echo canary)` denied `echo canary` (`Permission denied for unsandboxed(echo canary). Matches user-configured deny rule.`), whereas `command(*canary*)` alone did not block `echo canary`.
+  4. `toolPermission: "always-proceed"` was accepted without an unknown-setting error.

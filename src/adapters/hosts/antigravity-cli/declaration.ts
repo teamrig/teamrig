@@ -65,7 +65,12 @@ export const declaration: HostDeclaration = {
     'hooks.output-redact': NOT_YET('PreToolUse overwrite redact-exec wrapper'),
     'hooks.prompt-secret': PROMPT_SECRET,
     'hooks.tool-failure': UNPROVED,
-    'permissions.deny-lines': { kind: 'supported', proofs: [WIN_PERM_PROOF] },
+    'permissions.deny-lines': {
+      kind: 'partial',
+      missing: 'subfolder globbing in read_file() and wildcard matching in command()',
+      notice: 'agy 1.5.14 blocks root read_file(<file>) and exact command(<cmd>), but did not match ** subfolders or * wildcards in live runs',
+      proofs: [WIN_PERM_PROOF],
+    },
     'permissions.auto-mode-routes': NO_HOST_SUPPORT('Claude Code auto-mode routes'),
     'sessions.open': NO_HOST_SUPPORT('terminal tab launching'),
     'sessions.resume': NO_HOST_SUPPORT('terminal tab resume'),
