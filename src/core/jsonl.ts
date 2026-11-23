@@ -51,6 +51,32 @@ export function toJsonlLine(record: JsonRecord): string {
   return `${JSON.stringify(record)}\n`;
 }
 
+/**
+ * What appendJsonlLines needs of a file store, the shape of core/files.ts's Files. Declared here because this module
+ * reaches no Node built-in: the interface and read entries load it.
+ */
+export interface JsonlAppender {
+  readTail(path: string, maxBytes: number): Promise<string | undefined>;
+  append(path: string, text: string): Promise<void>;
+}
+
+/**
+ * Appends whole JSONL lines (each ending in a newline) so the first starts a line of its own. A last line a writer
+ * left without its newline, torn mid-record or whole, would otherwise swallow the first new line, losing a record
+ * the caller was told is written: it gets its newline first, so its bytes stay, as one unreadable line or its own
+ * record. Reads only the file's last byte (a newline is one byte in UTF-8, never part of another character), so a
+ * long log costs no more; call it under the log's writer lock, which keeps another append from landing in between.
+ * Nothing to append writes nothing.
+ */
+export async function appendJsonlLines(files: JsonlAppender, path: string, lines: string): Promise<void> {
+  if (lines === '') {
+    return;
+  }
+  const last = await files.readTail(path, 1);
+  const separator = last === undefined || last === '' || last === '\n' ? '' : '\n';
+  await files.append(path, `${separator}${lines}`);
+}
+
 /** One line as a JSON object; undefined for anything else, a damaged or torn line included. */
 export function parseObject(raw: string): JsonRecord | undefined {
   try {

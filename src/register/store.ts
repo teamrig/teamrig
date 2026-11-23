@@ -1,5 +1,5 @@
 import type { Files } from '../core/files.ts';
-import { toJsonlLine } from '../core/jsonl.ts';
+import { appendJsonlLines, toJsonlLine } from '../core/jsonl.ts';
 import type { TimeZone } from '../core/zone.ts';
 import { eventRecord, type RegisterEvent } from './events.ts';
 import { RETAIN_DAYS } from './compaction.ts';
@@ -15,8 +15,10 @@ export interface EventLog {
   read(): Promise<RegisterSnapshot>;
   /** Every task ever written, from the whole archive: the cost grows with the history. */
   readHistory(): Promise<RegisterSnapshot>;
-  /** Appends one whole line; readers never need the lock. */
-  /** The events of one write, in order, as one append. */
+  /**
+   * The events of one write, in order, as one append of whole lines, each on a line of its own even after a torn
+   * last line (appendJsonlLines); readers never need the lock.
+   */
   append(events: readonly RegisterEvent[]): Promise<void>;
   /**
    * Under the writer's lock, after an append: rotates the log once its tail reaches AUTO_ROTATE_CHARS (rotate.ts),
@@ -45,7 +47,7 @@ export class JsonlEventLog implements EventLog {
   }
 
   async append(events: readonly RegisterEvent[]): Promise<void> {
-    await this.files.append(this.path, events.map((event) => toJsonlLine(eventRecord(event))).join(''));
+    await appendJsonlLines(this.files, this.path, events.map((event) => toJsonlLine(eventRecord(event))).join(''));
   }
 
   async rotateIfDue(now: Date, zone: TimeZone): Promise<RotationPlan | null> {
