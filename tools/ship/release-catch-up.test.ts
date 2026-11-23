@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { catchUpRelease, releaseMoveRefusal } from './release-catch-up.ts';
 
@@ -26,24 +26,38 @@ describe('release catch-up (T5055)', () => {
   };
   const catchUp = (sha: string, tip: string) => catchUpRelease({ git, log: (line) => logged.push(line) }, { head: RELEASE, sha, tip, main: 'main' });
 
-  beforeEach(() => {
-    repo = new TempRepo('release-catch-up').init();
-    logged = [];
+  const originOf = (of: TempRepo): string => join(of.outside, 'origin.git');
+
+  // main, its bare origin and the release head pushed there, made once with git and copied per test (T5274): their
+  // twelve git runs took most of each test's time on a loaded Windows host.
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('release-catch-up-template').init();
     git('checkout', '-q', '-b', 'main');
     commit('release-please-config.json', '{ "packages": { ".": {} } }\n', 'chore: start');
     commit('src/a.ts', 'export const a = 1;\n', 'feat: a');
-    const origin = join(repo.outside, 'origin.git');
-    git('init', '-q', '--bare', origin);
-    git('remote', 'add', 'origin', origin);
+    git('init', '-q', '--bare', originOf(repo));
+    git('remote', 'add', 'origin', originOf(repo));
     git('push', '-q', 'origin', 'main');
     git('switch', '-q', '-c', RELEASE);
     commit('CHANGELOG.md', '# Changelog\n\n## 1.1.0\n\n- a\n', 'chore(main): release 1.1.0');
     git('push', '-q', 'origin', RELEASE);
     git('switch', '-q', 'main');
     git('branch', '-q', '-D', RELEASE);
+    template = repo;
+  });
+
+  beforeEach(() => {
+    repo = new TempRepo('release-catch-up').copyFrom(template);
+    // The copy's remote still names the template's origin; each test talks only to its own.
+    git('remote', 'set-url', 'origin', originOf(repo));
+    logged = [];
   });
 
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   it('rebases a head main moved past only by hidden types onto main, pushes it to the same branch and goes back', () => {
     const { sha, tip } = moveMain(['.github/ci.yml', 'on: push\n', 'ci: cache downloads'], ['src/a.ts', 'export const a = 1; // same\n', 'refactor(core): a reads plainer']);
