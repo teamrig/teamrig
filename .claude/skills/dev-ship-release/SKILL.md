@@ -37,7 +37,8 @@ without the App: read that summary first, and fix the cause before approving.
 
 - `--release` takes no `--head` and no `--note-file`: the branch is the one `repos.json` names, and the merge never
   opens the pull request. With none open it refuses: the release workflow opens it on its next run.
-- Main moved past the head: release-please rewrites the head only when main gained a commit its changelog shows. When
+- Main moved past the head: release-please rewrites the head only at a preview slot's start or on a run by hand of the
+  release workflow (T5186), and then only when main gained a commit its changelog shows. When
   every commit main gained is a hidden type (`docs`, `style`, `chore`, `refactor`, `test`, `build`, `ci`) with no `!`,
   no `BREAKING CHANGE` or `Release-As` footer and no edit of release-please's config or manifest, the merge rebases
   the head onto main itself, pushes it to the same branch with a lease on the approved sha, and merges it on the same
@@ -45,8 +46,8 @@ without the App: read that summary first, and fix the cause before approving.
   approval of the head `--approved` names as long as both heads hold only a release, and prints both (T5117): keep
   `--approved` at the approved sha and wait for the new head's checks. The repo dir must be clean for the rebase.
 - A hand edit on the release branch (a fixed note, a stray file) is refused like any other path; release-please
-  writes the head again on the next push to main, dropping the edit.
+  writes the head again at the next slot's start, dropping the edit.
 - The approval clears only the task's owner, from its own tab, at the approved sha; a merge from another session is
   refused as for any branch.
 
-Last verified: 2026-11-22
+Last verified: 2026-11-23

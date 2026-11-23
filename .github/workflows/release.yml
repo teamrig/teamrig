@@ -1,9 +1,14 @@
 name: release
 
 on:
-  # Each merge to main updates the release pull request; merging that one tags main and publishes the release.
+  # A push to main tags and publishes a release pull request that merged. The pull request itself opens or takes main's
+  # new commits only once per preview slot, on the hourly run in the slot's first hour, or on a run by hand
+  # (tools/release/pull-update.ts, T5186): an update rewrites its head and starts its ci over, so on a busy main an
+  # update on every push kept the release from ever finishing a ci run.
   push:
     branches: [main]
+  schedule:
+    - cron: '1 * * * *'
   workflow_dispatch:
     inputs:
       main-as-is:
@@ -43,11 +48,22 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
     steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      # No package install and no Node cache, so the gate runs on Node alone, from main's own tools/release.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - id: gate
+        run: node tools/release/pull-update-cli.ts
+      # On a run the gate shuts, release-please only tags and publishes a release pull request that merged.
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-pull-request: ${{ steps.gate.outputs.update != 'true' }}
       # A pull request the workflow's own token opens or updates starts no workflow, so the required check would
       # never report on it. A run by hand is the one event that token may start: ci.yml runs on the release branch's
       # head, where the pull request reads its checks. The pull request goes in as a plain value and the script reads

@@ -28,8 +28,15 @@ function readRecord(path: string): JsonRecord {
 }
 
 describe('release.yml', () => {
-  it('runs on each push to main, and by hand', () => {
-    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
+  it('runs on each push to main, hourly and by hand', () => {
+    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}schedule:\n {4}- cron: '1 \* \* \* \*'\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
+  });
+
+  it('moves the release pull request only when the slot gate opens, so a push to main never restarts its ci', () => {
+    const text = job('release-please');
+    assert.match(text, /^ {6}- id: gate\n {8}run: node tools\/release\/pull-update-cli\.ts\n/m);
+    assert.match(text, /^ {10}skip-github-pull-request: \$\{\{ steps\.gate\.outputs\.update != 'true' \}\}$/m);
+    assert.ok(text.indexOf('id: gate') < text.indexOf('id: release'), 'the gate runs before release-please');
   });
 
   it("can publish main as it stands, for the first release, never by default", () => {

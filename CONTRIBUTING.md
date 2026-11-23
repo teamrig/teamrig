@@ -272,9 +272,12 @@ matrix.
   commits as they are, so the `commit subjects` check (`tools/ci/commit-subjects-cli.ts`, run by the local gate, CI
   and `npm run check`) fails a commit whose subject is not one, and says how to reword it.
 - Nothing is pushed to `main` directly, and release tags are set only by the release workflow.
-- The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`) keeps one release pull request open
-  through release-please (`release-please-config.json`): it raises the version in the plugin's `plugin.json` and
-  `src/core/version.ts` and writes the notes. Once the `teamrig-release` GitHub App is set up (its id in the
+- The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`, hourly and by hand) keeps one
+  release pull request open through release-please (`release-please-config.json`): it raises the version in the
+  plugin's `plugin.json` and `src/core/version.ts` and writes the notes. The pull request takes main's new commits
+  only once per preview slot, on the hourly run in the slot's first hour, or on a run by hand
+  (`tools/release/pull-update.ts`); a push to `main` only tags and publishes a release that merged. So between slots
+  its head stays still and its ci finishes once, however busy `main` is. Once the `teamrig-release` GitHub App is set up (its id in the
   `RELEASE_APP_ID` variable, its key in the `release-merge` environment), the `release merge` workflow
   (`.github/workflows/release-merge.yml`, `tools/release/release-merge.ts`) merges it on its own when ci passed on its
   head: its gate passes only one commit holding the version raises and the notes, with every check green, and the
