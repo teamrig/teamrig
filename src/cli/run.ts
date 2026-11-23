@@ -95,6 +95,7 @@ const budgetRollupCommands = () => import('./commands/budget-rollup.ts');
 const burstCommands = () => import('./commands/burst.ts');
 const scheduleCommands = () => import('./commands/schedule.ts');
 const statuslineCommands = () => import('./commands/statusline.ts');
+const channelCommands = () => import('./commands/channel.ts');
 const automodeCommands = () => import('./commands/automode.ts');
 const permissionsCommands = () => import('./commands/permissions.ts');
 const setupScanCommand = () => import('./commands/setup-scan.ts');
@@ -304,6 +305,9 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   statusline: { effect: 'internal', flags: [], switches: ['pass'], load: async () => (await budgetCommands()).statusline },
   'statusline install': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await statuslineCommands()).install },
   'statusline uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await statuslineCommands()).uninstall },
+  channel: { effect: 'read', flags: [], load: async () => (await channelCommands()).show },
+  'channel stable': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await channelCommands()).stable },
+  'channel preview': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await channelCommands()).preview },
   'automode install': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await automodeCommands()).install },
   'automode uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await automodeCommands()).uninstall },
   'permissions trim': { effect: 'write', flags: [], switches: ['all', 'yes'], load: async () => (await permissionsCommands()).trim },
@@ -1006,6 +1010,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   statusline install [--yes]   makes teamrig statusline Claude Code's status line, in front of the one
       already there; without --yes it shows the change and writes nothing
   statusline uninstall [--yes] takes it back out: the status line before it returns
+  channel                      the release channel this machine's teamrig install follows: stable or preview
+  channel stable [--yes]       moves the install to the stable releases, its marketplace's default branch
+  channel preview [--yes]      moves it to every release as it is cut, its marketplace's preview branch; both
+      change the marketplace's entry in your user settings and reinstall teamrig through the host's own
+      plugin commands; without --yes they show the change and write nothing
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
       worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
