@@ -297,8 +297,9 @@ terminal a **host**: a program teamrig runs, speaking a small protocol, in the m
 teamrig ships a conformance kit with the interface:
 
 - **For hosts**: a test runner that drives a host through scripted cases and checks each answer against the protocol.
-- **For tools**: a fake teamrig that serves read documents and events from a scripted team and records the acts it
-  gets.
+- **For tools**: a scripted team that the real `read` and `events` serve, so no fake can drift from them:
+  `teamrig conformance client` writes a script's team into a private kit home and runs its register and inbox steps
+  there on a fixed clock, with every outward port shut. Recording the acts a tool sends comes with the owner's acts.
 - **One kit with the harness's contract suites.** The same suite runs an adapter inside teamrig directly and an outside
   program through the protocol, so a built-in terminal, an in-repo adapter and an outside host are held to the same
   cases.

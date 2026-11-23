@@ -7564,6 +7564,42 @@ PASS terminal.open-ids-differ
 15 of 15 cases passed, 0 kit request(s) served outside kit mode
 ```
 
+### teamrig conformance client
+
+Builds a scripted team for the tests of a tool that reads teamrig, such as a task board or a dashboard. teamrig writes
+the script's team config into a private kit home at `--home` and runs the script's steps there: the real `add`, `set`,
+`update` and `inbox add`, nothing else, each on the script's fixed clock one minute after the one before, with no
+network, chat, program, shell or wake. The same script gives the same documents on every system, so the tool's tests
+run the real `teamrig read --json` and `teamrig events --json` with `TEAMRIG_HOME` set to the home.
+
+The script is a JSON file: `team` (the team config, as `config.json` holds it), `at` (the first step's ISO time) and
+`steps` (a list of command lines, each a list of words). `--steps <n>` stops after step n; a later run with a larger n
+applies the rest, which a running `events --json` follower sees as a `changed` frame.
+
+Prints one JSON line: `home`, `team`, `applied` (the steps applied so far) and `env` (the variables to run `read` and
+`events` with); each step's own lines go to stderr. Refused for a folder that holds files the kit did not write, a home
+made from another script, a `--steps` smaller than the steps already applied, and a step that runs any other command or
+a flag that reaches past the home (`--issue`, `--issue-body`, `--issue-repo`, `--team`, `--wake`, `--wake-by`); exit 1
+when a step fails, naming it. A missing flag or a relative `--home` is a usage error.
+
+Flags:
+
+- `--script <file.json>`: the scripted team.
+- `--home <absolute path>`: the kit home, empty or missing on the first run, then the same one for each later run.
+- `--steps <n>`: apply the steps up to n; default all.
+
+Example:
+
+```sh
+teamrig conformance client --script tests/board-team.json --home /tmp/board-kit --steps 3
+```
+
+Output:
+
+```text
+{"home":"/tmp/board-kit","team":"board","applied":3,"env":{"TEAMRIG_HOME":"/tmp/board-kit","TEAMRIG_TEAM":"board"}}
+```
+
 ### teamrig git-credential
 
 git's credential helper for https to the code host the saved keys are for: git runs it, not a session. `get` reads
