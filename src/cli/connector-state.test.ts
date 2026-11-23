@@ -24,6 +24,7 @@ describe('connectorState', () => {
         follows: join(state.dir, 'follows.json'),
         claims: join(state.dir, 'claims.json'),
         scope: join(state.dir, 'scope.json'),
+        reporters: join(state.dir, 'reporters.json'),
       },
     );
   });

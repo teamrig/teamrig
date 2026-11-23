@@ -10,6 +10,7 @@ import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts
 import type { ImportRules, ImportTracker } from '../../sync/map.ts';
 import { importedTasks, linkedRefs, planSync, type SyncPlan } from '../../sync/plan.ts';
 import { capPlan, scopeIssues, type CappedPlan, type ImportScope, type ScopeRequest } from '../../sync/scope.ts';
+import { formatReportersFile, insideReporters, parseReportersFile, reporterLines } from '../../sync/reporters.ts';
 import { ACTIVE_STATUSES } from '../../register/model.ts';
 import type { Task } from '../../register/fold.ts';
 import type { IssueTarget } from '../../issues/host.ts';
@@ -37,6 +38,8 @@ export interface TrackerSyncRun {
   readonly kind: ScopeRunKind;
   /** Where each connector's places' taken scopes are kept. */
   readonly scopes: ScopeStore;
+  /** Where each connector's reporters seen at the last `--yes` are kept. */
+  readonly reporters: ReporterStore;
   /** Builds a connector's ports; the adapters teamrig ships unless a test gives its own. */
   readonly load?: ConnectorLoader;
 }
@@ -52,6 +55,20 @@ export function fileScopeStore(files: Pick<Files, 'read' | 'write'>, paths: Team
   return {
     read: async (id) => parseScopeFile((await files.read(connectorState(paths, id).scope)) ?? ''),
     write: (id, places) => files.write(connectorState(paths, id).scope, formatScopeFile(places)),
+  };
+}
+
+/** Where the import keeps, per connector, the ids of the inside reporters a person has taken with `--yes` (sync/reporters.ts). */
+export interface ReporterStore {
+  read(id: ImportSource): Promise<ReadonlySet<string>>;
+  write(id: ImportSource, seen: ReadonlySet<string>): Promise<void>;
+}
+
+/** The reporter store in each connector's state folder (connector-state.ts). */
+export function fileReporterStore(files: Pick<Files, 'read' | 'write'>, paths: TeamPaths): ReporterStore {
+  return {
+    read: async (id) => parseReportersFile((await files.read(connectorState(paths, id).reporters)) ?? ''),
+    write: (id, seen) => files.write(connectorState(paths, id).reporters, formatReportersFile(seen)),
   };
 }
 
@@ -118,9 +135,11 @@ export async function syncTrackers(run: TrackerSyncRun, say: (line: string) => v
     const planned = { adds: 0 };
     const taken = await run.scopes.read(id);
     const places = new Map(taken);
+    const seen = await run.reporters.read(id);
+    const reporters = new Set(seen);
     let wrote = 0;
     for (const target of ports.targets) {
-      const end = await syncTarget(run, { ports, tracker, rules, told, planned, places }, target, say);
+      const end = await syncTarget(run, { ports, tracker, rules, told, planned, places, seen, reporters }, target, say);
       ends.push(end.end);
       added.push(...end.added);
       failures.push(...end.failures);
@@ -129,6 +148,10 @@ export async function syncTrackers(run: TrackerSyncRun, say: (line: string) => v
     }
     if (write && formatScopeFile(places) !== formatScopeFile(taken)) {
       await run.scopes.write(id, places);
+    }
+    // Only a person's --yes takes a reporter, so an automatic run keeps marking a new one until someone has seen it.
+    if (run.kind === 'yes' && formatReportersFile(reporters) !== formatReportersFile(seen)) {
+      await run.reporters.write(id, reporters);
     }
     written += wrote;
     say(
@@ -171,6 +194,10 @@ interface TrackerRun {
   readonly planned: { adds: number };
   /** The scope each place took, as this run leaves it (scope-hold.ts). */
   readonly places: Map<string, PlaceScope>;
+  /** The inside reporters a person took with the last `--yes`, which the REPORTER lines mark NEW against. */
+  readonly seen: ReadonlySet<string>;
+  /** `seen` and every inside reporter this run listed so far, which a `--yes` run keeps. */
+  readonly reporters: Set<string>;
 }
 
 /** How one place's import ended, and what it wrote. */
@@ -221,9 +248,12 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
   const waiting = gate.held > 0 ? addsOf(planned) : 0;
   // A ruled issue's TRUST line already says why it was kept out, so the LEFT OUT line names only the others.
   const ruled = new Set(scoped.issues.filter((issue) => issue.ruled !== undefined).map((issue) => issue.number));
+  const inside = insideReporters(scoped.issues);
+  inside.forEach((reporter) => on.reporters.add(reporter.id));
   const leftOut = [
     ...scopeLines(target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
     ...trustLines(target, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number })),
+    ...reporterLines(target, inside, on.seen),
     ...(waiting > 0 ? [`HELD ${target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : []),
     ...leftOutLine(target, plan.leftOut.filter((number) => !ruled.has(number)).flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
   ];

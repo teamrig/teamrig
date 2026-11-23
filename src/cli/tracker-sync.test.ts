@@ -18,7 +18,7 @@ import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { teamPaths } from '../core/home.ts';
-import { fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import { fileReporterStore, fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
 import type { ConnectorLoader } from './issue-hosts.ts';
 import { connectorState } from './connector-state.ts';
 import { loadConnector } from '../composition/loader.ts';
@@ -45,7 +45,9 @@ const ACCESS = `ACCESS acme: read with the API token saved as ${CREDENTIAL}`;
 const NO_GITHUB = 'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written';
 /** The preview of ENG-1 and ENG-2 on a closed project: the default inside lets their inside reporter in, routed to the lead. */
 const LET_IN = 'TRUST acme/eng: 2 let in, the reporter matches inside (accountType atlassian): jira:ENG-1 jira:ENG-2';
-const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"', LET_IN];
+/** The inside reporter of ENG-1 and ENG-2, which no --yes took yet. */
+const NEW_REPORTER = 'REPORTER acme/eng: a-reporter (Dana Reporter) let in 2 issue(s), NEW since the last --yes';
+const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"', LET_IN, NEW_REPORTER];
 const PREVIEW = 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira';
 /** The TRUST line, standing for the LEFT OUT one, of an issue the rule kept out because Jira gave no edit history. */
 function unreadHistory(key: string): string {
@@ -54,7 +56,7 @@ function unreadHistory(key: string): string {
 
 /** A Jira issue `key`, open, as the search answers it, assigned to `assignee` (the signed-in account by default). */
 function jiraIssue(key: string, assignee: string = 'a-me'): JsonRecord {
-  return { id: '10001', key, fields: { summary: `Issue ${key}`, status: { statusCategory: { key: 'new' } }, assignee: { accountId: assignee }, reporter: { accountId: 'a-reporter', accountType: 'atlassian' } } };
+  return { id: '10001', key, fields: { summary: `Issue ${key}`, status: { statusCategory: { key: 'new' } }, assignee: { accountId: assignee }, reporter: { accountId: 'a-reporter', accountType: 'atlassian', displayName: 'Dana Reporter' } } };
 }
 
 /** The read of project ENG that the public-project guard sends with no credentials. */
@@ -108,7 +110,8 @@ function importer(load: ConnectorLoader): { readonly files: MemoryFiles; readonl
   });
   const runtime = { run: () => Promise.reject(new Error('no program runs here')), http: new FakeHttp(), credentials: savedToken(), env: {} };
   const scopes = fileScopeStore(files, PATHS);
-  return { files, run: (kind) => ({ runtime, config, register, rules: importRules(config), since: '2030-01-01', kind, scopes, load }) };
+  const reporters = fileReporterStore(files, PATHS);
+  return { files, run: (kind) => ({ runtime, config, register, rules: importRules(config), since: '2030-01-01', kind, scopes, reporters, load }) };
 }
 
 /** The team folders the scope files of `importer` are kept under. */
@@ -183,6 +186,25 @@ describe('syncTrackers', () => {
     assert.ok(laterLines.every((line) => !line.startsWith('HELD')), laterLines.join('\n'));
   });
 
+  it('marks an inside reporter NEW until a --yes takes it, which a preview or an automatic run never does (T5012)', async () => {
+    const inside = { trusted: true, why: 'the reporter matches inside (accountType atlassian)' } as const;
+    const fake = new FakeIssueHost().lists(testHostIssue(1, { repo: ENG, labels: ['teamrig'], author: 'a-1', authorName: 'Ari', ruled: inside }));
+    const { files, run } = importer(servingTracker(trackerOnly(fake)));
+    const stored = connectorState(PATHS, 'jira').reporters;
+    const fresh = 'REPORTER acme/eng: a-1 (Ari) let in 1 issue(s), NEW since the last --yes';
+    const reporterLinesOf = async (kind: ScopeRunKind): Promise<string[]> => {
+      const lines: string[] = [];
+      await syncTrackers(run(kind), (line) => lines.push(line));
+      return lines.filter((line) => line.startsWith('REPORTER'));
+    };
+
+    assert.deepEqual(await reporterLinesOf('preview'), [fresh]);
+    assert.deepEqual(await reporterLinesOf('auto'), [fresh]);
+    assert.equal(await files.read(stored), undefined, 'only a --yes keeps a reporter');
+    assert.deepEqual(await reporterLinesOf('yes'), [fresh]);
+    assert.deepEqual(await reporterLinesOf('preview'), ['REPORTER acme/eng: a-1 (Ari) let in 1 issue(s)']);
+  });
+
   it('lets an error it does not know end the run', async () => {
     const load: ConnectorLoader = () => Promise.reject(new Error('disk gone'));
     await assert.rejects(syncTrackers(runWith(load), () => undefined), /disk gone/);
@@ -209,6 +231,7 @@ describe('teamrig issue sync of another tracker', () => {
       'ADD T1 jira:ENG-1 p2 lead: "Issue ENG-1"',
       'ADD T2 jira:ENG-2 p2 lead: "Issue ENG-2"',
       LET_IN,
+      NEW_REPORTER,
       'WROTE 2 change(s) to the task list as jira; Jira was only read',
       NO_GITHUB,
     ]);
@@ -333,6 +356,7 @@ describe('the import scope of another tracker (T5013)', () => {
       'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"',
       'SCOPE acme/eng: 1 issue(s) outside the import scope dropped; sync.scope widens it',
       'TRUST acme/eng: 1 let in, the reporter matches inside (accountType atlassian): jira:ENG-1',
+      'REPORTER acme/eng: a-reporter (Dana Reporter) let in 1 issue(s), NEW since the last --yes',
       PREVIEW,
       NO_GITHUB,
     ]);

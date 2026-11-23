@@ -44,7 +44,7 @@ import { issuePush, pushEndLine, pushRepos } from './issue-push.ts';
 import { CONNECTOR_OFF } from '../connector-off.ts';
 import { githubOffBy, readSyncState, reportAutoSync } from './issue-sync-auto.ts';
 import { leftOutLines, previewLines, pullTaskLines, refusedReason, resultLines, shown, stepLine, syncExit, type RepoEnd } from './issue-sync-lines.ts';
-import { fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from './tracker-sync.ts';
+import { fileReporterStore, fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from './tracker-sync.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
 
 /**
@@ -89,7 +89,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   const started = runtime.clock.now();
   const since = closedSince(new Date(started), config.github.closedDays);
   // --repo names one GitHub repository, so a run given it reads no other tracker.
-  const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, kind: auto ? 'auto' : write ? 'yes' : 'preview', scopes: fileScopeStore(runtime.files, kit.paths) }, say);
+  const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, kind: auto ? 'auto' : write ? 'yes' : 'preview', scopes: fileScopeStore(runtime.files, kit.paths), reporters: fileReporterStore(runtime.files, kit.paths) }, say);
   const offBy = githubOffBy(runtime.env);
   if (offBy !== undefined) {
     say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing of it was read or written`);
