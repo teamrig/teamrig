@@ -1,3 +1,4 @@
+import type { ServiceRoleConfig } from '../config/types.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import { parseJsonl } from '../core/jsonl.ts';
 import { isCappedCommand } from '../permissions/service-commands.ts';
@@ -73,6 +74,23 @@ export function roleAllowRecord(facts: RoleAllowFacts): JsonRecord {
 /** The hook's reply to a role's call: an allow naming the role, the command and the issue or branch. */
 export function roleAllowReply(role: string, call: RoleTarget): HookReply {
   return { verdict: { kind: 'allow', reason: `teamrig: the service role ${role} lets this session run ${call.command} on ${call.target}` } };
+}
+
+/** True when some role gives a queued ship or merge, so a near miss of one is worth a hint. */
+export function anyRoleShips(roles: Readonly<Record<string, ServiceRoleConfig>>): boolean {
+  return Object.values(roles).some((role) => role.commands.includes('queue ship') || role.commands.includes('queue merge'));
+}
+
+/**
+ * The hook's reply for a queued ship or merge that runs the team's ship tool off the role call's form (#1468): context
+ * naming each condition it failed, and no verdict, so the permission check decides as it would have.
+ */
+export function shipNearMissReply(failed: readonly string[]): HookReply {
+  return {
+    context:
+      `teamrig: this queued ship or merge runs the team's ship tool but is not the form a service role allows, so no role allow: ${failed.join('; ')}. ` +
+      'The form: teamrig queue --kind test|ship|merge --session <you> -- node <absolute ship tool> ... (see the service-role allow in hooks.md).',
+  };
 }
 
 /**

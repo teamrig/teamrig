@@ -1,10 +1,11 @@
 import type { KitConfig } from '../../config/types.ts';
 import { toJsonlLine } from '../../core/jsonl.ts';
-import { ROLE_CAP_WINDOW_MS, roleAllowRecord, roleAllowReply, roleAllowsSince, roleCapReply } from '../../hooks/service-role-allow.ts';
+import { anyRoleShips, ROLE_CAP_WINDOW_MS, roleAllowRecord, roleAllowReply, roleAllowsSince, roleCapReply, shipNearMissReply } from '../../hooks/service-role-allow.ts';
 import { roleHolding } from '../../permissions/service-roles.ts';
 import { isCappedCommand, MIGRATE_COMMAND } from '../../permissions/service-commands.ts';
-import { shellRoleCallOf } from '../../permissions/service-role-call.ts';
-import type { HookEvent, HookReply } from '../../ports/host/index.ts';
+import { shellRoleCallOf, shellShipNearMissOf } from '../../permissions/service-role-call.ts';
+import type { ShipCallContext } from '../../permissions/ship-role-call.ts';
+import type { HookEvent, HookReply, ShellCall } from '../../ports/host/index.ts';
 import { migrateRowsFileOf, migrateWeightOf } from '../migrate-role-check.ts';
 import { shipBranchOf, shipToolTest } from '../ship-role-check.ts';
 import type { CommandTable } from '../../slash/plan.ts';
@@ -25,11 +26,23 @@ async function holderOf(runtime: CliRuntime, kit: Kit, config: KitConfig, claude
 }
 
 /**
+ * The hint for a line that is no role call but a queued ship or merge of the team's ship tool off the role call's form
+ * (#1468), when some role gives a ship or merge: context naming each failed condition, no verdict; else none.
+ */
+async function shipNearMissOf(shell: ShellCall, cwd: string | undefined, config: KitConfig, context: ShipCallContext): Promise<HookReply | undefined> {
+  if (!anyRoleShips(config.serviceRoles)) {
+    return undefined;
+  }
+  const failed = await shellShipNearMissOf(shell, context, cwd);
+  return failed.length === 0 ? undefined : shipNearMissReply(failed);
+}
+
+/**
  * The route-allow hook's reply to a service role's call: an allow when the tab's holder holds a role giving the
  * call's command, every guard passed it (`guardsPass`), a close or a migrate's issue rows fit under the role's
  * daily cap, a migrate reads its rows from one of the team's task folders (migrate-role-check.ts) and a ship or merge
  * runs the team's landed ship tool on the holder's own task branch (ship-role-check.ts); an ask of the owner past the
- * cap; else none, so the permission check decides. It answers only with the switch on and a config that loaded with no
+ * cap; a hint for a near-miss ship or merge (shipNearMissOf); else none, so the permission check decides. It answers only with the switch on and a config that loaded with no
  * issue from this release (a newer one's or a broken key's config gives no role), and only once the allow is logged:
  * the cap counts the log, so a log it cannot write lets nothing past.
  */
@@ -46,6 +59,9 @@ export async function roleAllowReplyOf(runtime: CliRuntime, kit: Kit, event: Hoo
   }
   const context = { ...kitContextOf(runtime, event, cli), repos: config.github.repos, isShipTool: shipToolTest(kit, config) };
   const call = await shellRoleCallOf(shell, context);
+  if (call === undefined) {
+    return shipNearMissOf(shell, event.cwd, config, context);
+  }
   const holder = call === undefined ? undefined : await holderOf(runtime, kit, config, claudeSession, call.session);
   const role = call === undefined || holder === undefined ? undefined : roleHolding(config.serviceRoles, call.command, holder);
   if (call === undefined || holder === undefined || role === undefined) {
