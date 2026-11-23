@@ -12,7 +12,7 @@ function requirements(problems: readonly RequirementProblem[]): RequirementsChec
   return { problems: async () => problems };
 }
 
-const FOUND_TEAM: TeamLook = { kind: 'found', team: 'alpha', load: { status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: testConfig(), issues: [] } };
+const FOUND_TEAM: TeamLook = { kind: 'found', team: 'alpha', load: { status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: testConfig(), issues: [], warnings: [] } };
 
 function deps(overrides: Partial<CoreStepDeps> = {}): CoreStepDeps {
   return {
@@ -102,7 +102,7 @@ describe('CLI_STEP', () => {
 
   it('names doctor’s cli-path finding beside the new session when cliOnPath.enabled is false', async () => {
     const config = testConfig();
-    const off: TeamLook = { kind: 'found', team: 'alpha', load: { status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: { ...config, cliOnPath: { enabled: false } }, issues: [] } };
+    const off: TeamLook = { kind: 'found', team: 'alpha', load: { status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: { ...config, cliOnPath: { enabled: false } }, issues: [], warnings: [] } };
     const fix = 'start a new session of a host with the teamrig plugin enabled; cliOnPath.enabled is false, so for a terminal of your own follow teamrig doctor\'s cli-path finding';
     const none = await CLI_STEP.probe(deps({ team: off, probe: new FakePathProbe() }));
     assert.equal(none.kind === 'missing' ? none.fix : '', fix);
@@ -172,7 +172,7 @@ describe('TEAM_STEP', () => {
 
   it('is missing with config validate as the fix when the config has problems', async () => {
     const issues = [{ path: 'roles.lead', message: 'not a session' }];
-    const state = await TEAM_STEP.probe(deps({ team: load({ status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: testConfig(), issues }) }));
+    const state = await TEAM_STEP.probe(deps({ team: load({ status: 'loaded', path: 'C:\\teams\\alpha\\config.json', config: testConfig(), issues, warnings: [] }) }));
     assert.deepEqual(state, {
       kind: 'missing',
       detail: 'the config at C:\\teams\\alpha\\config.json has 1 problem(s), defaults used',
