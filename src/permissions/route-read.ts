@@ -55,6 +55,8 @@ export const READ_ROUTE_COMMANDS: ReadonlyMap<string, ReadPositionals> = new Map
 /** The read commands that are no route, each with why: a person's prompt or the classifier still judges them. */
 export const READ_ROUTE_EXCLUDED: ReadonlyMap<string, string> = new Map([
   ['secrets message', 'it reads a file the caller names and prints from it (C4); its git hook runs it with no tool call'],
+  ['key list', 'it reads the credential store, which holds the keys; a prompt judges each read of it'],
+  ['key check', 'it reads a key from the credential store and sends it over the network to the code host'],
 ]);
 
 /** Flags that make a listed command no route: each opens a folder the caller names and prints from it (C4). */

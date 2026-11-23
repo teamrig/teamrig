@@ -25,6 +25,11 @@ describe('READ_ROUTE_COMMANDS', () => {
   it('C4: leaves out secrets message, which prints from a file the caller names', () => {
     assert.equal(fits('secrets message C:/w/.git/COMMIT_EDITMSG'), false);
   });
+
+  it('leaves out key list and key check, which read the credential store', () => {
+    assert.equal(fits('key list'), false);
+    assert.equal(fits('key check'), false);
+  });
 });
 
 describe('fitsReadRoute', () => {
