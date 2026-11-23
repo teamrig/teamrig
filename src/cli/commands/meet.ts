@@ -112,7 +112,7 @@ export async function meet(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const terminal = terminalFlag(args.flags.get('terminal')) ?? config.open.terminal;
   if ((await runningRecordOf(runtime, kit.paths, roster.ids, id)) !== undefined) {
     const title = sessionDisplay(kit.paths.team, name);
-    runtime.out.stdout(focusLine(await focusTab(runtime, terminal, title, runtime.cwd), name, title));
+    runtime.out.stdout(focusLine(await focusTab(runtime, terminal, title), name, title));
     runtime.out.stdout(await wakeToMeet(runtime, facts));
     return EXIT.ok;
   }

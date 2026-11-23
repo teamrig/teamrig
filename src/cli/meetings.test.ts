@@ -5,7 +5,7 @@ import { MS_PER_MINUTE } from '../core/time.ts';
 import { readMeetings, type ScheduledMeeting } from '../meeting/schedule.ts';
 import { SPOTLIGHT_VARS } from '../meeting/spotlight.ts';
 import { SpotlitStore, type SpotlitMeeting } from '../meeting/spotlit.ts';
-import { FOCUS_EXIT, FOCUS_TITLE_VAR } from '../open/focus.ts';
+import { FOCUS_EXIT, FOCUS_TITLE_VAR } from '../adapters/terminals/windows-terminal/scripts.ts';
 import { decodePrompt } from '../open/prompt.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
 import { APP, CliHarness, KIT, TEAM, TEAM_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';

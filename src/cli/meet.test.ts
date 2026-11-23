@@ -5,7 +5,7 @@ import { projectTranscriptPath } from '../budget/discover.ts';
 import type { CommitCharge } from '../delivery/memory.ts';
 import { inboxLineOf } from '../inbox/inbox.ts';
 import { lineHash } from '../inbox/line-hash.ts';
-import { FOCUS_TITLE_VAR } from '../open/focus.ts';
+import { FOCUS_TITLE_VAR } from '../adapters/terminals/windows-terminal/scripts.ts';
 import { decodePrompt, meetAsk, meetPrompt } from '../open/prompt.ts';
 import { SessionLog, type CloseRecord } from '../sessions/log.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
