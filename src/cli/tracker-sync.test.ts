@@ -42,10 +42,9 @@ const BOTH_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'] }, connec
 
 const ACCESS = `ACCESS acme: read with the API token saved as ${CREDENTIAL}`;
 const NO_GITHUB = 'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written';
-/**
- * Every Jira issue is left out until the trust rule reads Jira's reporters (T4928): a Jira issue has no inside author
- * and no label event, so the accept label alone cannot let it in.
- */
+/** The preview of ENG-1 and ENG-2 on a closed project: the default inside lets their inside reporter in, routed to the lead. */
+const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"'];
+const PREVIEW = 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira';
 const LEFT_OUT = 'LEFT OUT acme/eng: 2 open issue(s) the trust rule kept out: jira:ENG-1 jira:ENG-2';
 
 /** A Jira issue `key`, open, as the search answers it, assigned to `assignee` (the signed-in account by default). */
@@ -53,14 +52,22 @@ function jiraIssue(key: string, assignee: string = 'a-me'): JsonRecord {
   return { id: '10001', key, fields: { summary: `Issue ${key}`, status: { statusCategory: { key: 'new' } }, assignee: { accountId: assignee }, reporter: { accountId: 'a-reporter', accountType: 'atlassian' } } };
 }
 
-/** A Jira API that says the sign-in is account a-me. */
+/** The read of project ENG that the public-project guard sends with no credentials. */
+const PROJECT = 'https://acme.atlassian.net/rest/api/3/project/ENG';
+
+/** A Jira API that says the sign-in is account a-me, and turns away a read of ENG without one, so ENG is closed. */
 function signedIn(): FakeHttp {
-  return new FakeHttp().answers('GET', MYSELF, 200, '{"accountId":"a-me"}');
+  return new FakeHttp().answers('GET', MYSELF, 200, '{"accountId":"a-me"}').answers('GET', PROJECT, 404, '');
 }
 
-/** A Jira API whose search of ENG answers two open issues. */
+/** `http` answering an empty edit history for each of `keys`, so no outside edit keeps the issue out. */
+function noEdits(http: FakeHttp, ...keys: readonly string[]): FakeHttp {
+  return keys.reduce((answered, key) => answered.answers('GET', `https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100`, 200, JSON.stringify({ values: [], isLast: true })), http);
+}
+
+/** A Jira API whose search of ENG answers two open issues, both reported by an inside account and never edited. */
 function twoJiraIssues(): FakeHttp {
-  return signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] }));
+  return noEdits(signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] })), 'ENG-1', 'ENG-2');
 }
 
 /** A store holding the API token of site acme, and the GitHub token of owner acme, so GitHub's import reads too. */
@@ -178,21 +185,53 @@ describe('syncTrackers', () => {
 });
 
 describe('teamrig issue sync of another tracker', () => {
-  it('previews the Jira import, leaving out every issue the trust rule does not let in, and writes nothing', async () => {
+  it('previews the Jira import, adding the issues the trust rule lets in, and writes nothing', async () => {
     const kit = new CliHarness(JIRA_TEAM);
     const http = twoJiraIssues();
     const result = await kit.run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', LEFT_OUT, 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira', NO_GITHUB]);
+    assert.deepEqual(result.stdout, [ACCESS, ...TWO_TO_ADD, PREVIEW, NO_GITHUB]);
     assert.equal(kit.files.get(EVENTS_PATH), undefined);
   });
 
-  it('writes as jira with --yes, so a left-out issue still adds no task', async () => {
+  it('writes the tasks as jira with --yes', async () => {
     const kit = new CliHarness(JIRA_TEAM);
     const result = await kit.run(['issue', 'sync', '--yes'], { http: twoJiraIssues(), credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 added, 0 changed, 0 unchanged', LEFT_OUT, 'WROTE 0 change(s) to the task list as jira; Jira was only read', NO_GITHUB]);
-    assert.equal(kit.files.get(EVENTS_PATH), undefined);
+    assert.deepEqual(result.stdout, [
+      ACCESS,
+      'REPO acme/eng: 2 added, 0 changed, 0 unchanged',
+      'ADD T1 jira:ENG-1 p2 lead: "Issue ENG-1"',
+      'ADD T2 jira:ENG-2 p2 lead: "Issue ENG-2"',
+      'WROTE 2 change(s) to the task list as jira; Jira was only read',
+      NO_GITHUB,
+    ]);
+    assert.notEqual(kit.files.get(EVENTS_PATH), undefined);
+  });
+
+  it('keeps every issue out, with a NOTE naming the key to set, when anyone may browse the project (T5012)', async () => {
+    const http = new FakeHttp()
+      .answers('GET', MYSELF, 200, '{"accountId":"a-me"}')
+      .answers('GET', PROJECT, 200, '{}')
+      .answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] }));
+    const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [
+      ACCESS,
+      'NOTE acme/eng: anyone may browse ENG: its read without a sign-in was answered 200, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside',
+      'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
+      LEFT_OUT,
+      PREVIEW,
+      NO_GITHUB,
+    ]);
+    assert.ok(http.requests.every((request) => !request.url.includes('/changelog')), 'no history is read on an open project');
+  });
+
+  it('keeps out an issue whose edit history Jira does not give (T5012)', async () => {
+    const http = signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] }));
+    const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', LEFT_OUT, PREVIEW, NO_GITHUB]);
   });
 
   it('reads nothing of Jira when the machine turns it off', async () => {
@@ -268,9 +307,8 @@ describe('teamrig issue sync of another tracker', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [
       ACCESS,
-      'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
-      LEFT_OUT,
-      'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira',
+      ...TWO_TO_ADD,
+      PREVIEW,
       'OFF TEAMRIG_GITHUB=off turns the GitHub import off on this machine; nothing of it was read or written',
     ]);
   });
@@ -280,15 +318,15 @@ describe('the import scope of another tracker (T5013)', () => {
   const SCOPED_JQL = /^project = "ENG" AND \(statusCategory != Done OR statusCategoryChangedDate >= "\d{4}-\d{2}-\d{2}"\) AND \(assignee in \(currentUser\(\)\) OR labels in \("teamrig"\)\)$/;
 
   it("asks Jira only for the team's and the labelled issues, and drops what it gave outside the scope with a SCOPE line", async () => {
-    const http = signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2', 'a-stranger')] }));
+    const http = noEdits(signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2', 'a-stranger')] })), 'ENG-1');
     const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [
       ACCESS,
-      'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
+      'REPO acme/eng: 1 to add, 0 to change, 0 unchanged',
+      'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"',
       'SCOPE acme/eng: 1 issue(s) outside the import scope dropped; sync.scope widens it',
-      'LEFT OUT acme/eng: 1 open issue(s) the trust rule kept out: jira:ENG-1',
-      'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira',
+      PREVIEW,
       NO_GITHUB,
     ]);
     const search = http.requests.find((request) => request.url === SEARCH);
@@ -302,7 +340,7 @@ describe('the import scope of another tracker (T5013)', () => {
     const http = twoJiraIssues();
     const result = await new CliHarness({ ...JIRA_TEAM, sync: { scope: { all: true } } }).run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', LEFT_OUT, 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira', NO_GITHUB]);
+    assert.deepEqual(result.stdout, [ACCESS, ...TWO_TO_ADD, PREVIEW, NO_GITHUB]);
     assert.ok(http.requests.every((request) => request.url !== MYSELF));
   });
 
