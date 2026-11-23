@@ -4939,10 +4939,12 @@ WARN cli-path C:\Users\you\.teamrig\bin is not on the user's PATH (HKCU\Environm
 
 ### teamrig ui
 
-Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. In `terminal` it shows in the terminal
-it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens a terminal
-window of its own running the same UI, the way `teamrig open` opens a session's tab ([open.terminal],
-[open.teamWindow]), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
+Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. One UI covers every team on the host:
+it starts on the team of this folder, else the team you last typed a prompt in, and follows the session you type in,
+in any team. `--team` pins it to that team, and `--session` to that session and its team. In `terminal` it shows in
+the terminal it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens
+a terminal window of its own running the same UI, as [open.terminal] says (in Windows Terminal the window named
+`teamrig-ui`, apart from any team's session window), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
 shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
 the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
 or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
@@ -4960,8 +4962,8 @@ which the config guard refuses a session changing. The script runs outside every
 
 Flags:
 
-- `--session <id|name>`: the session whose view it opens on. Without it: the team's.
-- `--team <team>`: the team to show. Without it: the team of this folder.
+- `--session <id|name>`: the session whose view it stays on, in its team. Without it: the session you last typed in.
+- `--team <team>`: the one team to show. Without it: every team, starting on this folder's, else the last typed in.
 - `--mode <terminal|window|both>`: where to show the UI this once, over [ui.mode]. Any other word is a usage error.
 
 Example:
