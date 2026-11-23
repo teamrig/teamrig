@@ -5666,12 +5666,13 @@ Output:
 
 ```text
 PREVIEW nothing written (add --yes to write): the preview channel -> the stable channel
-  CHANGE /home/me/.claude/settings.json: the marketplace teamrig's own entry follows its default branch
+  CHANGE <settings file>: the marketplace teamrig's own entry follows its default branch
   RUN claude plugin marketplace add GeneralA6/teamrig
   RUN claude plugin update teamrig@teamrig
 ```
 
-`UNCHANGED teamrig already follows the stable channel` when nothing would change. A host command that fails is a
+The `CHANGE` line names the host's user settings file in place of `<settings file>`. `UNCHANGED teamrig already
+follows the stable channel` when nothing would change. A host command that fails is a
 `FAILED <command>: <what it said>` line (exit 1) naming the kept settings file. Settings that are not a JSON object
 and a host program not on the PATH are `REFUSED` (exit 2), with nothing written.
 
@@ -5695,7 +5696,7 @@ Output:
 
 ```text
 DONE teamrig follows the preview channel; a new session runs it; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
-  CHANGE /home/me/.claude/settings.json: the marketplace teamrig's own entry follows preview
+  CHANGE <settings file>: the marketplace teamrig's own entry follows preview
   RUN claude plugin marketplace add GeneralA6/teamrig#preview
   RUN claude plugin update teamrig@teamrig
 ```
