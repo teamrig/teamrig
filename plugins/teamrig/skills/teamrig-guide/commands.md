@@ -8229,7 +8229,9 @@ request`, `worktree remove`, a `pr approve` or `pr merge` at the head your leade
 or inbox command, a `git commit` with its hooks, a `git push` of a task branch you own), alone or piped into one
 read-only filter, runs; a line that provably only reads runs; a Bash line teamrig's rules give a rerun form (after a leading
 `cd D &&`, or a plain `git worktree remove`) is refused quoting the line to run instead; anything else is refused with
-the tool's name and the note to record the step as waiting for the owner and take the next task. Each answer is a line
+the tool's name and the note to record the step as waiting for the owner and take the next task, and a refused Bash
+line of one teamrig command also names the synced allow rule `teamrig automode install --yes` adds for it, or its
+route's exact form. Each answer is a line
 in `state/prompt-answers.jsonl`, its command masked of every secret value, a route's by its route alone; lines over 7 days old move to the
 archive (see
 [teamrig compact](#teamrig-compact)). The question picker (`AskUserQuestion`) and plan mode's exit (`ExitPlanMode`)
