@@ -1818,6 +1818,12 @@ export interface MeetingConfig {
    * which meeting is on; only messages to the meeting's own session wait, so the mark never says the tab is held (#1675).
    */
   readonly statusLine: { readonly enabled: boolean; readonly colour: string; readonly heldText: string };
+  /**
+   * How long after the owner's last prompt in the meeting tab the owner counts as still in the meeting, in minutes
+   * (#921): until then `meeting end`, booked or daily, refuses a turn teamrig started (a reopen note, a wake), and
+   * `--owner-left` ends it anyway. 0: never refused.
+   */
+  readonly ownerLeftMinutes: number;
 }
 
 export interface KitConfig {
