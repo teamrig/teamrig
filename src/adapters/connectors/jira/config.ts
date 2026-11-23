@@ -1,4 +1,4 @@
-import { isStringArray, type ConfigReport, type JsonRecord } from '../../../plugin-api/index.ts';
+import { isStringArray, parseTrustRule, type ConfigReport, type JsonRecord, type SiteTrust, type TrustSyntax } from '../../../plugin-api/index.ts';
 import { isSite, projectKey } from './site.ts';
 
 /**
@@ -18,6 +18,11 @@ export interface JiraConfig {
    * (`sync.scope.assigned` = `team`): Jira users have no login, so the team's people are named by account id.
    */
   readonly people: readonly string[];
+  /**
+   * Whose issues become tasks as written: the site's rule and each project's own (sync/trust-rule.ts). Left out, a
+   * site account (accountType atlassian) is inside on a project anonymous users cannot browse.
+   */
+  readonly trust: SiteTrust;
 }
 
 /** The section's keys, each beside the line the declaration says of it. */
@@ -26,13 +31,20 @@ export const CONFIG_KEYS = {
   projects: "the keys of the site's projects the team works in, as Jira spells them (ENG)",
   issueType: "the issue type a new issue opens as; without it a Task, or the project's first type that is no sub-task",
   people: "the account ids whose issues the import takes beside the signed-in account's own (sync.scope.assigned team)",
+  trust: 'whose issues become tasks as written: inside, never and edits for the site, and projects for one project',
 } as const;
+
+/** The account kinds Jira gives a reporter; a reporter with none is anonymous. */
+export const ACCOUNT_TYPES = ['atlassian', 'customer', 'app'] as const;
 
 /**
  * A Jira Cloud account id: letters, digits, `:`, `_` and `-` (`5b10ac8d82e05b22cc7d4ef5`, `712020:2f6e…`). Held to
  * that shape, an id can be quoted into a search with nothing in it Jira would read as syntax.
  */
 const ACCOUNT_ID = /^[A-Za-z0-9:_-]{1,128}$/;
+
+/** What a Jira trust rule may name: its account kinds, ids and project keys. */
+const TRUST_SYNTAX: TrustSyntax = { accountTypes: ACCOUNT_TYPES, accountId: ACCOUNT_ID, projectKey };
 
 /** The most account ids the section names, so a search's assignee clause stays a size Jira takes. */
 export const MAX_PEOPLE = 100;
@@ -122,5 +134,11 @@ export function parseJiraConfig(section: JsonRecord, report: ConfigReport): Jira
   if (section['site'] === undefined && projects.length > 0) {
     report('site', 'must name the site its projects live on');
   }
-  return { site, projects, issueType: issueTypeOf(section['issueType'], report), people: peopleOf(section['people'], report) };
+  return {
+    site,
+    projects,
+    issueType: issueTypeOf(section['issueType'], report),
+    people: peopleOf(section['people'], report),
+    trust: parseTrustRule(section['trust'], 'trust', TRUST_SYNTAX, report),
+  };
 }
