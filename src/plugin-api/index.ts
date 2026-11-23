@@ -169,6 +169,8 @@ export {
   type UserHooksCounts,
   type UserHooksPlan,
   type WebCall,
+  type ConfigLinesAnswer,
+  type HostConfigLines,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a

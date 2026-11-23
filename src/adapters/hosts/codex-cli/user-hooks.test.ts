@@ -150,3 +150,42 @@ describe('codexUserHooks.file', () => {
     assert.ok(port.afterWrite.some((line) => /\/hooks/u.test(line) && /every update/u.test(line)));
   });
 });
+
+describe('codexUserHooks.configLines', () => {
+  function onlyLine(env: Readonly<Record<string, string>> = {}) {
+    const lines = codexUserHooks(env, 'linux').configLines;
+    assert.equal(lines.length, 1);
+    const [line] = lines;
+    assert.ok(line);
+    return line;
+  }
+
+  it('edits config.toml beside the hooks file: in CODEX_HOME when set, else ~/.codex', () => {
+    assert.equal(onlyLine().file('/srv/people/ada'), '/srv/people/ada/.codex/config.toml');
+    assert.equal(onlyLine({ CODEX_HOME: '/srv/codex' }).file('/srv/people/ada'), '/srv/codex/config.toml');
+  });
+
+  it('names the setting as the person reads it in the file', () => {
+    assert.equal(onlyLine().setting, '[features] unified_exec_tty = false');
+  });
+
+  it("turns interactive shells off, keeping the person's other lines, and finds nothing to change on a second run", () => {
+    const first = onlyLine().merge('model = "o4"\n');
+    assert.ok(first.ok && first.text !== undefined);
+    assert.match(first.text, /^model = "o4"$/mu);
+    assert.match(first.text, /^\[features\]\nunified_exec_tty = false$/mu);
+    assert.deepEqual(onlyLine().merge(first.text), { ok: true, text: undefined });
+  });
+
+  it('writes the setting into an empty or missing file', () => {
+    const answer = onlyLine().merge('');
+    assert.ok(answer.ok && answer.text !== undefined);
+    assert.match(answer.text, /^\[features\]\nunified_exec_tty = false$/mu);
+  });
+
+  it('refuses a features inline table, naming the Codex config and the key to set by hand', () => {
+    const answer = onlyLine().merge('features = { other = true }\n');
+    assert.equal(answer.ok, false);
+    assert.match(answer.ok ? '' : answer.problem, /^the Codex config is not one teamrig can set unified_exec_tty in: .*inline table/u);
+  });
+});
