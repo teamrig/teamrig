@@ -44,7 +44,7 @@ describe('the conformance kit', () => {
 
   it('reads an import and a re-export alike, by the file it names', () => {
     const index = join(KIT_DIR, 'index.ts');
-    assert.deepEqual([...new Set(importsOf(index).map((name) => targetOf(index, name)))].sort(), ['conformance/choice.ts', 'conformance/connector/reference.ts', 'conformance/connector/tracker.ts', 'conformance/contract.ts', 'conformance/host/launcher.ts', 'conformance/host/models.ts', 'conformance/host/permissions.ts', 'conformance/host/plugin.ts', 'conformance/host/status-line.ts', 'conformance/host/steps.ts', 'conformance/host/transcript.ts', 'conformance/host/usage.ts', 'conformance/kit.ts', 'conformance/terminal/reference.ts', 'conformance/terminal/terminal.ts']);
+    assert.deepEqual([...new Set(importsOf(index).map((name) => targetOf(index, name)))].sort(), ['conformance/choice.ts', 'conformance/connector/reference.ts', 'conformance/connector/tracker.ts', 'conformance/contract.ts', 'conformance/host/launcher.ts', 'conformance/host/models.ts', 'conformance/host/permissions.ts', 'conformance/host/plugin.ts', 'conformance/host/status-line.ts', 'conformance/host/steps.ts', 'conformance/host/transcript.ts', 'conformance/host/usage.ts', 'conformance/kit.ts', 'conformance/terminal/reference.ts', 'conformance/terminal/terminal.ts', 'plugin-api/index.ts']);
     assert.equal(targetOf(index, '../plugin-api/index.ts'), 'plugin-api/index.ts');
     assert.equal(targetOf(index, 'node:fs'), 'node:fs');
   });

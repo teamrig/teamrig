@@ -27,6 +27,8 @@ export {
   TERMINAL_REQUESTS,
   isPaneState,
   isTerminalRequest,
+  type ShownPane,
+  type TerminalWorld,
   type DeliverAnswer,
   type HeldWhy,
   type IdleAnswer,

@@ -115,3 +115,34 @@ export interface TerminalPort {
   readonly isIdle: (pane: string) => Promise<IdleAnswer>;
   readonly list: () => Promise<ListAnswer>;
 }
+
+type Awaitable<T> = T | Promise<T>;
+
+/** One pane as the terminal's own program shows it, whoever opened it. */
+export interface ShownPane {
+  readonly pane: string;
+  readonly title: string;
+  readonly folder: string;
+  readonly argv: readonly string[];
+  /** The named window it is in; undefined when it opened in none teamrig named. */
+  readonly window: string | undefined;
+}
+
+/**
+ * What a terminal's port sees, as a contract case scripts and reads it: the terminal's program itself, faked. A case
+ * never believes an answer alone; it reads here what the terminal really did.
+ */
+export interface TerminalWorld {
+  /** Every pane there is now, in the order they opened. */
+  readonly panes: () => Awaitable<readonly ShownPane[]>;
+  /** The pane in front; undefined when none is. */
+  readonly front: () => Awaitable<string | undefined>;
+  /** Puts a pane in a state, as its session or a person at it would: a turn starts, a question shows, text is typed and not sent, the pane ends. */
+  readonly put: (pane: string, state: PaneState) => Awaitable<void>;
+  /** Opens a pane teamrig did not ask for, as a person does by hand, and answers its id. */
+  readonly openByHand: (title: string) => Awaitable<string>;
+  /** The wake texts that reached the pane's session, oldest first. */
+  readonly wakes: (pane: string) => Awaitable<readonly string[]>;
+  /** Each restart of the pane's command, oldest first: whether it was asked to resume. */
+  readonly restarts: (pane: string) => Awaitable<readonly boolean[]>;
+}
