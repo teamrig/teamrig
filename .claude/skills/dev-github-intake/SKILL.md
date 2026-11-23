@@ -79,6 +79,18 @@ state first and posts the words last, or nothing when a step fails:
   comment.
 - On a pull request from outside: label it first (`teamrig issue label`), then reply on it.
 
+## Keeping the thread current
+
+The author sees only the thread, never our tasks, so the thread always says where the work stands and whose move
+it is:
+- **Each step on our side gets a comment the same day**: a review or hold, a fix of ours they must take, a check
+  running, the approval, the merge or a revert, each with the next step, who takes it and when. A hold for a
+  security reason names only the hardening.
+- **Their push or comment gets an answer the same day**, even when the answer is "it is with us, next: X by Y". A
+  wait on our side never stays silent.
+- **Every sweep of the board** reads each open thread's last word: an outside author's comment or push with no
+  maintainer reply after it is unanswered, labels or not, and gets its answer in that turn.
+
 ## A design issue
 
 - It is never a task to take: no claim, assignee, branch or pull request until it is agreed. Join the talk by
@@ -112,4 +124,4 @@ reply` refuses a secret it finds, the rest is on you. A security hole someone po
 discussed there: tell the maintainer at once, so the comment is hidden and the report moves to a private advisory
 ([SECURITY.md](../../../SECURITY.md)), and reply only with a pointer to it.
 
-Last verified: 2026-11-22
+Last verified: 2026-11-23
