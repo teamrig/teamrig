@@ -252,8 +252,8 @@ export type { HostPost, HostPosts } from '../issues/post.ts';
 export type { FailedJob, HostPull, PullChecks, PullMergeable, PullReview, PullState } from '../issues/pull.ts';
 // How far a scan of mentions and reviews reads: a connector pages by them, and the scan's caller counts by them.
 export { MENTION_PAGE_SIZE, MENTION_PAGES_MAX, REVIEW_READS_MAX } from '../issues/scan-caps.ts';
-// The name an owner's key is saved under.
-export { tokenName } from '../issues/token-names.ts';
+// The names an owner's key, and one repository's own key, are saved under.
+export { repoTokenName, tokenName } from '../issues/token-names.ts';
 // The length a posted comment is held to, and why a label may not be written.
 export { labelRefusal, MAX_COMMENT } from '../issues/write.ts';
 // How a program ended, as a failure line words it.

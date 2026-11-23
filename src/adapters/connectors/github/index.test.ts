@@ -32,14 +32,14 @@ describe('the GitHub adapter', () => {
     assert.deepEqual(connectorAdapterProblems(adapter), []);
   });
 
-  it('builds one host that is both the tracker and the code host, so the two share one read of an owner key', async () => {
+  it('builds one host that is both the tracker and the code host, so the two share one pick of a repository key', async () => {
     const credentials = new FakeCredentials().savesTokensFor(['acme']);
     const ports = portsOf(adapter, connectorDeps({ credentials }));
     assert.equal(ports.tracker, ports.codeHost);
     assert.equal(ports.tracker.name, 'GitHub');
     assert.equal((await ports.tracker.reach('acme/web', 'read')).kind, 'reached');
     assert.equal((await ports.codeHost.reach('acme/web', 'read')).kind, 'reached');
-    assert.equal(credentials.reads.length, 1);
+    assert.deepEqual(credentials.reads, ['teamrig-gh-acme.web', 'teamrig-gh-acme']);
   });
 
   it('reaches GitHub only through the program runner it is handed, as gh with the key of the repository owner, told not to prompt', async () => {

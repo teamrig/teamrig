@@ -224,7 +224,7 @@ describe('teamrig issue sync', () => {
     ]);
     assert.equal(kit.files.get(EVENTS_PATH), log);
   });
-  it("reads each owner's repositories with the token saved for that owner, once per owner, and never prints it", async () => {
+  it("reads each owner's repositories with the token saved for that owner, picked once per repository, and never prints it", async () => {
     const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web', 'acme/api', 'globex/site'] } });
     const gh = twoIssues().holds('globex/site', []);
     const credentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-read-token').saves('teamrig-gh-globex', 'globex-read-token');
@@ -242,7 +242,9 @@ describe('teamrig issue sync', () => {
         ...Array.from({ length: 4 }, () => ['globex/site', 'globex-read-token']),
       ],
     );
-    assert.deepEqual(credentials.reads, ['teamrig-gh-acme', 'teamrig-gh-globex']);
+    assert.deepEqual(credentials.reads, [
+      'teamrig-gh-acme.web', 'teamrig-gh-acme', 'teamrig-gh-acme.api', 'teamrig-gh-acme', 'teamrig-gh-globex.site', 'teamrig-gh-globex',
+    ]);
     assert.ok(![...result.stdout, ...result.stderr].some((line) => /(acme|globex)-read-token/u.test(line)), 'a token was printed');
   });
 

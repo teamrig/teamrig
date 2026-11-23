@@ -6,7 +6,7 @@ import { isMentionRead, isReviewRead } from './gh.ts';
 import { postOf, readPosts, reviewOf } from './posts.ts';
 import type { RepoAccess } from './tokens.ts';
 
-const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
+const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
 const REPO = 'acme/web';
 const SINCE = '2030-01-10T00:00:00Z';
 const LATER = '2030-01-10T01:00:00Z';

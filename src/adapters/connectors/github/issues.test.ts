@@ -9,7 +9,7 @@ import type { RepoAccess } from './tokens.ts';
 
 const OPEN: IssueListRequest = { repo: 'acme/web', state: 'open', limit: 500 };
 const CLOSED: IssueListRequest = { repo: 'acme/web', state: 'closed', closedSince: '2029-12-25', limit: 500 };
-const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
+const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
 
 /** A gh error, as `spawn` raises it. */
 function spawnError(message: string, code: string): Error {

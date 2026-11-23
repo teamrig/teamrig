@@ -95,6 +95,16 @@ describe('GitHubIssueHost.reach', () => {
     assert.deepEqual(await host.reach('acme/web', 'read'), { kind: 'reached', access: 'acme: read with the token saved as teamrig-gh-acme', scope: 'acme' });
     assert.deepEqual(await host.reach('acme/api', 'open'), { kind: 'reached', access: 'acme: opens issues with the token saved as teamrig-gh-acme', scope: 'acme' });
   });
+
+  it("words the access as the repository's own when it has its own key, and runs gh with that key", async () => {
+    const gh = new FakeGh();
+    const host = hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'owner-key').saves('teamrig-gh-acme.web', 'web-key'));
+    assert.deepEqual(await host.reach('acme/web', 'read'), { kind: 'reached', access: 'acme/web: read with the token saved as teamrig-gh-acme.web', scope: 'acme/web' });
+    assert.deepEqual(await host.reach('acme/api', 'read'), { kind: 'reached', access: 'acme: read with the token saved as teamrig-gh-acme', scope: 'acme' });
+    await host.list('acme/web', '2029-12-25');
+    assert.ok(gh.ran.length > 0);
+    assert.ok(gh.ran.every((request) => request.env['GH_TOKEN'] === 'web-key'));
+  });
 });
 
 describe('GitHubIssueHost.list', () => {

@@ -8,7 +8,7 @@ import type { RepoAccess } from './tokens.ts';
 
 const REPO = 'acme/web';
 
-const ACCESS: RepoAccess = { owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme', env: { HOME: '/u', GH_TOKEN: 'read-token' } };
+const ACCESS: RepoAccess = { owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme', env: { HOME: '/u', GH_TOKEN: 'read-token' } };
 
 function page(nodes: readonly unknown[], next?: string): string {
   return JSON.stringify({ data: { repository: { issues: { pageInfo: { hasNextPage: next !== undefined, endCursor: next ?? null }, nodes } } } });

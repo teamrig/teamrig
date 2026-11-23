@@ -12,17 +12,53 @@ describe('repoOwner', () => {
 });
 
 describe('RepoTokens', () => {
-  it("gives gh an owner's token only for that owner's repositories, reading each credential once", async () => {
+  it("gives gh an owner's token only for that owner's repositories, picking each repository once", async () => {
     const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token');
     const tokens = new RepoTokens(store, ENV);
     assert.deepEqual(await tokens.accessFor('acme/web'), {
-      env: { HOME: '/u', GH_TOKEN: 'acme-token' }, owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme',
+      env: { HOME: '/u', GH_TOKEN: 'acme-token' }, owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme',
     });
+    await tokens.accessFor('Acme/Web');
     const api = await tokens.accessFor('acme/api');
     assert.ok(!(api instanceof NoAccessError));
     assert.equal(api.env['GH_TOKEN'], 'acme-token');
     assert.ok(await tokens.accessFor('globex/api') instanceof NoAccessError);
-    assert.deepEqual(store.reads, ['teamrig-gh-acme', 'teamrig-gh-globex']);
+    assert.deepEqual(store.reads, [
+      'teamrig-gh-acme.web', 'teamrig-gh-acme', 'teamrig-gh-acme.api', 'teamrig-gh-acme', 'teamrig-gh-globex.api', 'teamrig-gh-globex',
+    ]);
+  });
+
+  it("gives a repository's own key ahead of its owner's, and the owner's to the owner's other repositories", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token').saves('teamrig-gh-acme.web', 'web-token');
+    const tokens = new RepoTokens(store, ENV);
+    assert.deepEqual(await tokens.accessFor('Acme/Web'), {
+      env: { HOME: '/u', GH_TOKEN: 'web-token' }, owner: 'acme', scope: 'acme/web', credential: 'teamrig-gh-acme.web', save: 'save teamrig-gh-acme.web',
+    });
+    const api = await tokens.accessFor('acme/api');
+    assert.ok(!(api instanceof NoAccessError));
+    assert.equal(api.scope, 'acme');
+    const owner = await tokens.accessForOwner('acme');
+    assert.ok(!(owner instanceof NoAccessError));
+    assert.equal(owner.env['GH_TOKEN'], 'acme-token');
+  });
+
+  it("gives no access, never the owner's key, when a repository's own key is saved but cannot be read", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token').failsOn('teamrig-gh-acme.web', 'the keyring is locked');
+    const access = await new RepoTokens(store, ENV).accessFor('acme/web');
+    assert.ok(access instanceof TokenReadError);
+    assert.equal(
+      access.message,
+      'could not read teamrig-gh-acme.web from the test store: the keyring is locked; unlock the store and rerun, or save the key again with: save teamrig-gh-acme.web',
+    );
+    assert.deepEqual(store.reads, ['teamrig-gh-acme.web']);
+  });
+
+  it("reaches a repository whose own key name would be too long through its owner's key", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-token');
+    const access = await new RepoTokens(store, ENV).accessFor(`acme/${'w'.repeat(120)}`);
+    assert.ok(!(access instanceof NoAccessError));
+    assert.equal(access.scope, 'acme');
+    assert.deepEqual(store.reads, ['teamrig-gh-acme']);
   });
 
   it('gives no access, never the gh login, when no key is saved for the owner', async () => {

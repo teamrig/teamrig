@@ -139,7 +139,10 @@ export class GitHubIssueHost implements IssueHost {
     return stamped.length <= MAX_COMMENT ? stamped : body;
   }
 
-  /** Reached with the owner's saved token only; the scope is the owner, as one token serves all its repositories. */
+  /**
+   * Reached with the repository's own saved key, else its owner's; never the gh login. The scope is what the picked
+   * key covers, the repository or its owner, so a command says each key it reads with once.
+   */
   async reach(repo: string, use: HostUse): Promise<HostReach> {
     const access = await this.tokens.accessFor(repo);
     if (access instanceof NoAccessError) {
@@ -148,8 +151,8 @@ export class GitHubIssueHost implements IssueHost {
     const verb = USE_VERB[use];
     return {
       kind: 'reached',
-      access: `${access.owner}: ${verb} the token saved as ${access.credential}`,
-      scope: access.owner,
+      access: `${access.scope}: ${verb} the token saved as ${access.credential}`,
+      scope: access.scope,
     };
   }
 
