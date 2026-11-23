@@ -18,7 +18,7 @@ const WIN_PERM_PROOF = {
   os: 'windows',
   toolVersion: '1.5.14',
   date: '2026-11-23',
-  evidence: 'agy 1.5.14 --settings permissions.deny read_file() live run',
+  evidence: 'docs/proofs/antigravity-cli.md#permissionsdeny-lines',
 } as const;
 
 const UNPROVED: Support = {
