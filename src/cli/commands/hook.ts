@@ -836,7 +836,7 @@ async function refreshDecisionOf(runtime: CliRuntime, scope: SessionScope, event
   const claude = looked?.kind === 'found' ? looked.pid : undefined;
   const decision =
     looked !== undefined && decided.kind === 'notice' && decided.restart && target !== undefined
-      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, claude: looked }, decided, { paths: kit.paths, config })
+      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, lookup: looked }, decided, { paths: kit.paths, config })
       : decided;
   switch (decision.kind) {
     case 'write':
