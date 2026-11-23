@@ -35,6 +35,7 @@ export const SYNC_EXCLUDED: ReadonlyMap<string, string> = new Map([
   ['schedule', 'its rule would approve schedule set'],
   ['pipeline', 'its rule would approve pipeline freeze, unfreeze and front'],
   ['decisions', 'its rule would approve decisions asked'],
+  ['steps', 'its rule would approve steps run'],
 ]);
 
 /** The commands whose allow rules install syncs. */
