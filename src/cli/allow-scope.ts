@@ -2,7 +2,7 @@ import type { KitConfig } from '../config/types.ts';
 import { teamPlace } from '../delivery/places.ts';
 import type { TeamPaths } from '../core/home.ts';
 import { SecretScanner } from '../core/secrets.ts';
-import { KeepList } from '../permissions/allow-rules.ts';
+import { keepListOf } from '../permissions/allow-sync.ts';
 import { ownUntracked, settingsScope, type SettingsFile, type SettingsInGit } from '../permissions/settings-scope.ts';
 import { planScope, wideAllowOf, type WideAllow } from '../permissions/trim.ts';
 import type { HostPaths } from '../ports/host/index.ts';
@@ -64,6 +64,6 @@ export async function readWideAllow(runtime: CliRuntime, input: AllowScopeInput)
   if (permissions === undefined) {
     return wideAllowOf([]);
   }
-  const plans = await planScope(permissions, runtime.files, await knownSettingsScope(runtime, input), new KeepList(config.permissions.keepAllow), 'wide', new SecretScanner(config.register.secretPatterns));
+  const plans = await planScope(permissions, runtime.files, await knownSettingsScope(runtime, input), keepListOf(permissions, config.permissions.keepAllow), 'wide', new SecretScanner(config.register.secretPatterns));
   return wideAllowOf(plans);
 }
