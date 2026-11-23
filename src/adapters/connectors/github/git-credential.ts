@@ -36,12 +36,12 @@ export function repoOfGitPath(path: string): { readonly owner: string; readonly 
 }
 
 /**
- * The answer to git's `get`: the key saved for the repository's owner, only for `https` to github.com itself with the
- * repository's path (`credential.useHttpPath`) and no user name in the URL. Anything else, or an owner with no key
- * the store could read, answers `quit=1`: no key, and no later helper or prompt asked for one, so the machine's own
- * login never stands in.
+ * The answer to git's `get`: the key saved for the repository itself, else for its owner, only for `https` to
+ * github.com itself with the repository's path (`credential.useHttpPath`) and no user name in the URL. Anything else,
+ * no key saved, or a key the store could not read, answers `quit=1`: no key, and no later helper or prompt asked for
+ * one, so neither a wider key nor the machine's own login stands in.
  */
-export async function githubGitAnswer(ask: CredentialAsk, keys: Pick<RepoTokens, 'accessForOwner'>): Promise<GitAnswer> {
+export async function githubGitAnswer(ask: CredentialAsk, keys: Pick<RepoTokens, 'accessFor'>): Promise<GitAnswer> {
   if (ask.protocol !== 'https') {
     return quit(`teamrig answers https only, not ${ask.protocol ?? 'no protocol'}`);
   }
@@ -58,7 +58,7 @@ export async function githubGitAnswer(ask: CredentialAsk, keys: Pick<RepoTokens,
   if (repo === undefined) {
     return quit(`git asked for ${ask.path}, which is no <owner>/<name> repository path`);
   }
-  const access = await keys.accessForOwner(repo.owner);
+  const access = await keys.accessFor(`${repo.owner}/${repo.name}`);
   if (access instanceof NoAccessError) {
     return quit(access.message);
   }
@@ -69,11 +69,11 @@ export async function githubGitAnswer(ask: CredentialAsk, keys: Pick<RepoTokens,
 
 /**
  * Where teamrig's git helper answers for a remote URL: `https://github.com`, when the URL is https to github.com itself
- * (no user, password or port), names an `<owner>/<name>` repository, and the store holds a key for its owner. Any
- * other URL, or an owner with no key, is skipped, so git there keeps the helper it had: wiring a helper that could only
- * answer `quit=1` would break a push that works today.
+ * (no user, password or port), names an `<owner>/<name>` repository, and the store holds a key for it or its owner.
+ * Any other URL, or a repository with no key, is skipped, so git there keeps the helper it had: wiring a helper that
+ * could only answer `quit=1` would break a push that works today.
  */
-export async function githubHelperScope(remoteUrl: string, keys: Pick<RepoTokens, 'accessForOwner'>): Promise<HelperScope | HelperSkip> {
+export async function githubHelperScope(remoteUrl: string, keys: Pick<RepoTokens, 'accessFor'>): Promise<HelperScope | HelperSkip> {
   // The raw prefix too: URL drops a default `:443`, which git would still send as the host, so the helper would quit there.
   const url = URL.canParse(remoteUrl) && remoteUrl.toLowerCase().startsWith(`https://${GITHUB_HOST}/`) ? new URL(remoteUrl) : undefined;
   if (url === undefined || url.protocol !== 'https:' || url.hostname !== GITHUB_HOST || url.port !== '' || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
@@ -83,7 +83,7 @@ export async function githubHelperScope(remoteUrl: string, keys: Pick<RepoTokens
   if (repo === undefined) {
     return { skip: `origin ${remoteUrl} names no <owner>/<name> repository` };
   }
-  const access = await keys.accessForOwner(repo.owner);
+  const access = await keys.accessFor(`${repo.owner}/${repo.name}`);
   if (access instanceof NoAccessError) {
     return { skip: access.message };
   }

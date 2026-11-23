@@ -31,7 +31,20 @@ describe('githubGitAnswer', () => {
   it("gives git the owner's saved key for one of its repositories", async () => {
     const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key');
     assert.deepEqual(await githubGitAnswer(ASK, keys(store)), { stdout: 'username=x-access-token\npassword=acme-key\n', note: undefined });
-    assert.deepEqual(store.reads, ['teamrig-gh-acme']);
+    assert.deepEqual(store.reads, ['teamrig-gh-acme.app', 'teamrig-gh-acme']);
+  });
+
+  it("gives git a repository's own saved key ahead of its owner's, and the owner's to its other repositories", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key').saves('teamrig-gh-acme.app', 'app-key');
+    assert.equal((await githubGitAnswer(ASK, keys(store))).stdout, 'username=x-access-token\npassword=app-key\n');
+    assert.equal((await githubGitAnswer({ ...ASK, path: 'acme/site.git' }, keys(store))).stdout, 'username=x-access-token\npassword=acme-key\n');
+  });
+
+  it("answers quit, never the owner's key, when the repository's own key is saved but cannot be read", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key').failsOn('teamrig-gh-acme.app', 'the keyring is locked');
+    const answer = await githubGitAnswer(ASK, keys(store));
+    assert.equal(answer.stdout, 'quit=1\n');
+    assert.match(answer.note ?? '', /could not read teamrig-gh-acme\.app/u);
   });
 
   it('takes the host in any case, never as a suffix or with a port', async () => {
@@ -119,5 +132,10 @@ describe('githubHelperScope', () => {
     const scope = await githubHelperScope('https://github.com/other/app.git', keys(new FakeCredentials().saves('teamrig-gh-acme', 'acme-key')));
     assert.ok('skip' in scope);
     assert.doesNotMatch(scope.skip, /acme-key/u);
+  });
+
+  it("serves an origin whose repository alone has a saved key", async () => {
+    const store = new FakeCredentials().saves('teamrig-gh-other.app', 'app-key');
+    assert.deepEqual(await githubHelperScope('https://github.com/other/app.git', keys(store)), { urlPrefix: 'https://github.com', owner: 'other' });
   });
 });

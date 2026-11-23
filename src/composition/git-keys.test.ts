@@ -22,11 +22,11 @@ describe('gitKeys', () => {
     assert.ok('skip' in (await keys.scopeOf('https://gitlab.example/acme/app.git')));
   });
 
-  it("reads each owner's key once for both answers", async () => {
+  it("picks each repository's key once for both answers", async () => {
     const store = new FakeCredentials().savesTokensFor(['acme']);
     const keys = gitKeys(store);
     await keys.scopeOf('https://github.com/acme/app.git');
     await keys.answer(ASK);
-    assert.equal(store.reads.length, 1);
+    assert.deepEqual(store.reads, ['teamrig-gh-acme.app', 'teamrig-gh-acme']);
   });
 });
