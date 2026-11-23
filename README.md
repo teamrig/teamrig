@@ -52,8 +52,7 @@ settings lack, for you to paste: teamrig never writes your permissions.
 
 Claude Code 2.1.139 or later and Node.js 22.18 or later. teamrig checks for anything else when you set up a team and
 when a session starts, and tells you in plain words what is missing and how to fix it. Auto mode runs `teamrig` as is;
-in default mode, `teamrig automode install` allows the commands that touch only the team's files
-([permissions](plugins/teamrig/skills/teamrig-guide/hooks.md#permissions)).
+in default mode, `teamrig automode install` allows the commands that touch only the team's files ([permissions](plugins/teamrig/skills/teamrig-guide/hooks.md#permissions)).
 Windows and Linux: a fresh install, a first team and every hook pass on both; tab circles and teamrig-pane: Windows only.
 
 ## How it works

@@ -85,7 +85,7 @@ describe('README.md', () => {
     const requirements = section('### Requirements').trim();
     assert.match(requirements, /^Claude Code 2\.1\.139 or later and Node\.js 22\.18 or later\./);
     assert.match(requirements, /teamrig checks for anything else when you set up a team and\nwhen a session starts/);
-    assert.match(requirements, /in default mode, allow `Bash\(teamrig:\*\)` \(\[permissions\]\(plugins\/teamrig\/skills\/teamrig-guide\/hooks\.md#permissions\)\)/);
+    assert.match(requirements, /in default mode, `teamrig automode install` allows the commands that touch only the team's files \(\[permissions\]\(plugins\/teamrig\/skills\/teamrig-guide\/hooks\.md#permissions\)\)/);
     assert.doesNotMatch(requirements, /^\*Coming: /m);
     assert.match(requirements, /^Windows and Linux: a fresh install, a first team and every hook pass on both; /m, 'names the systems it is proven on (T1175, T1176)');
     assert.ok(requirements.split('\n').length <= 4, `Requirements is ${requirements.split('\n').length} lines; keep it to the major needs`);

@@ -294,13 +294,14 @@ describe('the requirements in the guide', () => {
     assert.ok(requirements.includes(`Node ${nodes.join(' and ')}`), `requirements.md names Node ${nodes.join(' and ')}`);
   });
 
-  it('give the one allow rule default mode needs, wherever a new user looks', () => {
-    const rule = '`Bash(teamrig:*)`';
+  it('name the command that writes the allow rules default mode needs, wherever a new user looks', () => {
+    const install = '`teamrig automode install`';
     for (const [name, text] of [['requirements.md', requirements], ['setup-by-hand.md', read('docs/setup-by-hand.md')], ['README.md', read('README.md')]] as const) {
-      assert.ok(text.includes(rule) || text.includes('"Bash(teamrig:*)"'), `${name} names ${rule}`);
+      assert.ok(text.includes(install), `${name} names ${install}`);
     }
     const permissions = guideText('hooks.md').split('## Permissions\n')[1] ?? '';
-    assert.match(permissions, /\{ "permissions": \{ "allow": \["Bash\(teamrig:\*\)"\] \} \}/);
+    assert.match(permissions, /`Bash\(teamrig <command> \*\)` and `PowerShell\(teamrig <command> \*\)`/);
+    assert.match(permissions, /Never add one wide rule such as\s+`Bash\(teamrig:\*\)`/);
     assert.doesNotMatch(permissions, /Default mode\*\*: not tested/);
   });
 });
