@@ -1,5 +1,5 @@
 import {
-  readFirstOneByOne, type CredentialKeeper, type CredentialRead, type CredentialRemove, type CredentialStore, type FirstRead,
+  readFirstOneByOne, type CredentialKeeper, type CredentialRead, type CredentialRemove, type CredentialStore, type FirstRead, type SaveRequest,
 } from '../core/credentials.ts';
 import type { ProgramRequest } from '../core/program-runner.ts';
 import { tokenName } from '../issues/token-names.ts';
@@ -21,6 +21,7 @@ export class FakeCredentials implements CredentialStore, CredentialKeeper {
   readonly removes: string[] = [];
   private readonly held = new Map<string, CredentialRead>();
   private readonly removeFailures = new Map<string, string>();
+  private refusal: string | undefined;
 
   /** From now on, `name` holds `secret`. */
   saves(name: string, secret: string): this {
@@ -52,11 +53,25 @@ export class FakeCredentials implements CredentialStore, CredentialKeeper {
     return `save ${name}`;
   }
 
-  saveRequest(name: string): ProgramRequest {
+  /** From now on, the store's writer is refused with `reason`, as one found inside the repo is. */
+  writerRefused(reason: string): this {
+    this.refusal = reason;
+    return this;
+  }
+
+  async saveRequest(name: string): Promise<SaveRequest> {
+    return this.refusal === undefined ? { kind: 'ready', request: FakeCredentials.saving(name) } : { kind: 'refused', reason: this.refusal };
+  }
+
+  /** The request `saveRequest` gives for `name` while the writer is not refused. */
+  static saving(name: string): ProgramRequest {
     return { program: 'save', args: [name] };
   }
 
   async remove(name: string): Promise<CredentialRemove> {
+    if (this.refusal !== undefined) {
+      return { kind: 'failed', reason: this.refusal };
+    }
     this.removes.push(name);
     const reason = this.removeFailures.get(name);
     if (reason !== undefined) {

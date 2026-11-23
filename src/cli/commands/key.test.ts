@@ -67,7 +67,7 @@ describe('teamrig key add', () => {
     const http = github();
     const run = await new CliHarness(REPOS_TEAM).run(['key', 'add', 'Acme/Web'], { credentials: store, keys: { keeper: store, terminal }, http });
     assert.equal(run.code, EXIT.ok);
-    assert.deepEqual(terminal.ran, [store.saveRequest(WEB)]);
+    assert.deepEqual(terminal.ran, [FakeCredentials.saving(WEB)]);
     assert.match(run.stdout.join('\n'), /saving a key for acme\/web/u);
     assert.match(run.stdout.join('\n'), /saved: acme\/web now uses/u);
     assert.match(run.stdout.join('\n'), /octo, unknown, rights set per repository, expires 2030-03-01/u);
@@ -104,6 +104,16 @@ describe('teamrig key add', () => {
     const terminal = new FakeTerminal(true);
     const run = await new CliHarness(TEAM).run(['key', 'add', 'acme/web/x'], { credentials: store, keys: { keeper: store, terminal } });
     assert.equal(run.code, EXIT.refused);
+    assert.deepEqual(terminal.ran, []);
+  });
+
+  it("fails before asking for the key when the store's tool is refused, running nothing", async () => {
+    const store = new FakeCredentials().writerRefused('C:\\repo\\cmdkey.exe is inside C:\\repo');
+    const terminal = new FakeTerminal(true);
+    const run = await new CliHarness(TEAM).run(['key', 'add', 'acme'], { credentials: store, keys: { keeper: store, terminal } });
+    assert.equal(run.code, EXIT.failed);
+    assert.match(run.stderr.join('\n'), /cmdkey\.exe is inside C:\\repo; nothing new is saved for acme/u);
+    assert.doesNotMatch(run.stdout.join('\n'), /paste it at the prompt/u);
     assert.deepEqual(terminal.ran, []);
   });
 

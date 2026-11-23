@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { systemCredentialKeeper, systemCredentials, windowsReadFirstScript, windowsReadScript } from './credentials.ts';
+import { systemCredentialKeeper, systemCredentials, windowsReadFirstScript, windowsReadScript, type WriterLookup } from './credentials.ts';
 import type { ProgramRequest, ProgramResult, ProgramRunner } from './program-runner.ts';
 
 const NAME = 'teamrig-gh-acme';
@@ -177,45 +177,82 @@ describe('credential names', () => {
   });
 });
 
+/** The absolute writer each platform's lookup finds, as storeWriter would. */
+const WRITERS: Readonly<Record<'win32' | 'darwin' | 'linux', string>> = {
+  win32: 'C:\\Windows\\System32\\cmdkey.exe',
+  darwin: '/usr/bin/security',
+  linux: '/usr/bin/secret-tool',
+};
+
+function foundAt(path: string): WriterLookup {
+  return async () => ({ kind: 'found', path });
+}
+
+const REFUSED_REASON = 'cmdkey.exe is inside the repo';
+const refusedWriter: WriterLookup = async () => ({ kind: 'refused', reason: REFUSED_REASON });
+
 describe('systemCredentialKeeper', () => {
-  it('saves with the store tool that asks for the secret itself, the same command the read failures name', () => {
-    const cases: readonly (readonly [NodeJS.Platform, ProgramRequest])[] = [
-      ['win32', { program: 'cmdkey', args: [`/generic:${NAME}`, '/user:teamrig', '/pass'] }],
-      ['darwin', { program: 'security', args: ['add-generic-password', '-U', '-s', NAME, '-a', 'teamrig', '-w'] }],
-      ['linux', { program: 'secret-tool', args: ['store', `--label=${NAME}`, 'service', NAME] }],
+  it('saves from the writer\'s absolute path with the args that ask for the secret itself, the command the read failures name', async () => {
+    const cases: readonly (readonly ['win32' | 'darwin' | 'linux', string, readonly string[]])[] = [
+      ['win32', 'cmdkey', [`/generic:${NAME}`, '/user:teamrig', '/pass']],
+      ['darwin', 'security', ['add-generic-password', '-U', '-s', NAME, '-a', 'teamrig', '-w']],
+      ['linux', 'secret-tool', ['store', `--label=${NAME}`, 'service', NAME]],
     ];
-    for (const [platform, request] of cases) {
+    for (const [platform, typed, args] of cases) {
       const { run } = answering(exited(0));
-      assert.deepEqual(systemCredentialKeeper(platform, run).saveRequest(NAME), request);
-      assert.equal(systemCredentials(platform, run).saveCommand(NAME), [request.program, ...request.args].join(' '));
+      assert.deepEqual(await systemCredentialKeeper(platform, run, foundAt(WRITERS[platform])).saveRequest(NAME), {
+        kind: 'ready',
+        request: { program: WRITERS[platform], args },
+      });
+      assert.equal(systemCredentials(platform, run).saveCommand(NAME), [typed, ...args].join(' '));
     }
   });
 
-  it('removes with each store tool, finding the item as the read does', async () => {
-    const cases: readonly (readonly [NodeJS.Platform, ProgramRequest])[] = [
-      ['win32', { program: 'cmdkey', args: [`/delete:${NAME}`] }],
-      ['darwin', { program: 'security', args: ['delete-generic-password', '-s', NAME] }],
-      ['linux', { program: 'secret-tool', args: ['clear', 'service', NAME] }],
+  it('gives a refused writer\'s reason instead of a save, and runs nothing', async () => {
+    const { run, ran } = answering(exited(0));
+    assert.deepEqual(await systemCredentialKeeper('win32', run, refusedWriter).saveRequest(NAME), { kind: 'refused', reason: REFUSED_REASON });
+    assert.deepEqual(ran, []);
+  });
+
+  it('removes from the writer\'s absolute path, finding the item as the read does', async () => {
+    const cases: readonly (readonly ['win32' | 'darwin' | 'linux', readonly string[]])[] = [
+      ['win32', [`/delete:${NAME}`]],
+      ['darwin', ['delete-generic-password', '-s', NAME]],
+      ['linux', ['clear', 'service', NAME]],
     ];
-    for (const [platform, request] of cases) {
+    for (const [platform, args] of cases) {
       const { run, ran } = answering(exited(0));
-      assert.deepEqual(await systemCredentialKeeper(platform, run).remove(NAME), { kind: 'removed' });
-      assert.deepEqual(ran, [request]);
+      assert.deepEqual(await systemCredentialKeeper(platform, run, foundAt(WRITERS[platform])).remove(NAME), { kind: 'removed' });
+      assert.deepEqual(ran, [{ program: WRITERS[platform], args }]);
     }
   });
 
   it('gives a failed remove by its first error line, stdout when the tool prints there, and a tool that cannot start', async () => {
     const windows = answering(exited(1, '\nCMDKEY: Element not found.\n'));
-    assert.deepEqual(await systemCredentialKeeper('win32', windows.run).remove(NAME), { kind: 'failed', reason: 'cmdkey exited 1: CMDKEY: Element not found.' });
+    assert.deepEqual(await systemCredentialKeeper('win32', windows.run, foundAt(WRITERS.win32)).remove(NAME), {
+      kind: 'failed',
+      reason: `${WRITERS.win32} exited 1: CMDKEY: Element not found.`,
+    });
     const linux = answering(exited(1, '', 'Cannot autolaunch D-Bus\n'));
-    assert.deepEqual(await systemCredentialKeeper('linux', linux.run).remove(NAME), { kind: 'failed', reason: 'secret-tool exited 1: Cannot autolaunch D-Bus' });
-    const missing = await systemCredentialKeeper('linux', notStarting('ENOENT')).remove(NAME);
-    assert.equal(missing.kind, 'failed');
+    assert.deepEqual(await systemCredentialKeeper('linux', linux.run, foundAt(WRITERS.linux)).remove(NAME), {
+      kind: 'failed',
+      reason: `${WRITERS.linux} exited 1: Cannot autolaunch D-Bus`,
+    });
+    assert.deepEqual(await systemCredentialKeeper('linux', notStarting('ENOENT'), foundAt(WRITERS.linux)).remove(NAME), {
+      kind: 'failed',
+      reason: `${WRITERS.linux} could not start: spawn ${WRITERS.linux} ENOENT`,
+    });
+  });
+
+  it('refuses to remove with a refused writer, without running anything', async () => {
+    const { run, ran } = answering(exited(0));
+    assert.deepEqual(await systemCredentialKeeper('win32', run, refusedWriter).remove(NAME), { kind: 'failed', reason: REFUSED_REASON });
+    assert.deepEqual(ran, []);
   });
 
   it('refuses to remove a name that would need quoting, without running anything', async () => {
     const { run, ran } = answering(exited(0));
-    const removed = await systemCredentialKeeper('win32', run).remove('acme & del');
+    const removed = await systemCredentialKeeper('win32', run, foundAt(WRITERS.win32)).remove('acme & del');
     assert.equal(removed.kind, 'failed');
     assert.deepEqual(ran, []);
   });

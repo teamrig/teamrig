@@ -13,6 +13,7 @@ import { launchingShellsOf, nodeEvery, starterWatch } from '../delivery/starter-
 import { nodeStepRunner } from '../delivery/steps.ts';
 import { realSleep, systemClock } from '../core/lock.ts';
 import { NODE_PATH_PROBE } from '../core/path-probe.ts';
+import { storeWriter } from '../core/store-program.ts';
 import { NODE_STORE_FOLDERS } from '../plugin-store/node-folders.ts';
 import { chatWebhook } from '../core/webhook.ts';
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from '../core/credentials.ts';
@@ -131,7 +132,12 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     cpu: nodeHostCpu(),
     run: nodeProgramRunner(CONNECTOR_RUN_TIMEOUT_MS, CONNECTOR_RUN_MAX_BYTES),
     credentials: systemCredentials(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)),
-    keys: { keeper: systemCredentialKeeper(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)), terminal: nodeTerminal(process.stdin, process.stdout) },
+    keys: {
+      keeper: systemCredentialKeeper(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS), () =>
+        storeWriter({ env: process.env, platform: process.platform, probe: NODE_PATH_PROBE, cwd: process.cwd() }),
+      ),
+      terminal: nodeTerminal(process.stdin, process.stdout),
+    },
     http: nodeHttpClient(),
     probe: NODE_PATH_PROBE,
     pluginStore: NODE_STORE_FOLDERS,

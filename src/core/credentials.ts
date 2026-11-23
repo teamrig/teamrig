@@ -2,6 +2,7 @@ import { errorCode, errorMessage } from './guards.ts';
 import { powerShellRequest } from './powershell.ts';
 import type { ProgramRequest, ProgramResult, ProgramRunner } from './program-runner.ts';
 import type { ShellEnd } from './shell-end.ts';
+import type { StoreProgram } from './store-program.ts';
 
 /** A credential's name: letters, digits, `.`, `_` or `-`, so it never needs quoting on any command line. */
 export const CREDENTIAL_NAME = /^[\w.-]{1,128}$/;
@@ -57,6 +58,9 @@ export async function readFirstOneByOne(read: (name: string) => Promise<Credenti
 /** What removing one credential did. */
 export type CredentialRemove = { readonly kind: 'removed' } | { readonly kind: 'failed'; readonly reason: string };
 
+/** The store's save command, its program an absolute path, or why it will not run. */
+export type SaveRequest = { readonly kind: 'ready'; readonly request: ProgramRequest } | { readonly kind: 'refused'; readonly reason: string };
+
 /**
  * The store's two writes, made only by a person's own `teamrig key` command. Saving runs the store's own tool in the
  * person's terminal, which asks for the secret and shows nothing typed, so the secret never passes teamrig.
@@ -64,18 +68,23 @@ export type CredentialRemove = { readonly kind: 'removed' } | { readonly kind: '
 export interface CredentialKeeper {
   readonly label: string;
   /** The store's own save command for `name`, run with the person's terminal as its stdin and stdout. */
-  saveRequest(name: string): ProgramRequest;
+  saveRequest(name: string): Promise<SaveRequest>;
   remove(name: string): Promise<CredentialRemove>;
 }
+
+/** Where the store's writer is, found by `storeWriter` (store-program.ts) so it never starts by a bare name. */
+export type WriterLookup = () => Promise<StoreProgram>;
 
 /** One operating system's store: the tool that reads it, and how that tool says "no such credential". */
 interface StoreTool {
   readonly label: string;
   /** The program, for a message when it cannot start. */
   readonly program: string;
-  /** The tool that saves a secret, asking for it with nothing shown. */
-  saveRequest(name: string): ProgramRequest;
-  removeRequest(name: string): ProgramRequest;
+  /** The tool that saves and removes a secret, by the name a person types; it runs only from its absolute path. */
+  readonly writer: string;
+  /** The writer's arguments to save a secret, asking for it with nothing shown. */
+  saveArgs(name: string): readonly string[];
+  removeArgs(name: string): readonly string[];
   request(name: string): ProgramRequest;
   missing(result: ProgramResult): boolean;
   secretOf(stdout: string): string;
@@ -149,8 +158,9 @@ namespace TeamrigCredentials {
 const WINDOWS: StoreTool = {
   label: 'the Windows Credential Manager',
   program: 'powershell.exe',
-  saveRequest: (name) => ({ program: 'cmdkey', args: [`/generic:${name}`, '/user:teamrig', '/pass'] }),
-  removeRequest: (name) => ({ program: 'cmdkey', args: [`/delete:${name}`] }),
+  writer: 'cmdkey',
+  saveArgs: (name) => [`/generic:${name}`, '/user:teamrig', '/pass'],
+  removeArgs: (name) => [`/delete:${name}`],
   request: (name) => powerShellRequest(windowsReadScript(name)),
   missing: (result) => result.end.kind === 'exited' && result.end.code === WINDOWS_MISSING_EXIT,
   secretOf: (stdout) => Buffer.from(stdout.trim(), 'base64').toString('utf8'),
@@ -162,9 +172,10 @@ const MACOS_MISSING_EXIT = 44;
 const MACOS: StoreTool = {
   label: 'the macOS keychain',
   program: 'security',
-  saveRequest: (name) => ({ program: 'security', args: ['add-generic-password', '-U', '-s', name, '-a', 'teamrig', '-w'] }),
+  writer: 'security',
+  saveArgs: (name) => ['add-generic-password', '-U', '-s', name, '-a', 'teamrig', '-w'],
   // By service name alone, as the read finds it, so a key saved under another account name goes too.
-  removeRequest: (name) => ({ program: 'security', args: ['delete-generic-password', '-s', name] }),
+  removeArgs: (name) => ['delete-generic-password', '-s', name],
   request: (name) => ({ program: 'security', args: ['find-generic-password', '-s', name, '-w'] }),
   missing: (result) => result.end.kind === 'exited' && result.end.code === MACOS_MISSING_EXIT,
   secretOf: (stdout) => stdout.trimEnd(),
@@ -174,8 +185,9 @@ const MACOS: StoreTool = {
 const LINUX: StoreTool = {
   label: 'the Secret Service keyring',
   program: 'secret-tool',
-  saveRequest: (name) => ({ program: 'secret-tool', args: ['store', `--label=${name}`, 'service', name] }),
-  removeRequest: (name) => ({ program: 'secret-tool', args: ['clear', 'service', name] }),
+  writer: 'secret-tool',
+  saveArgs: (name) => ['store', `--label=${name}`, 'service', name],
+  removeArgs: (name) => ['clear', 'service', name],
   request: (name) => ({ program: 'secret-tool', args: ['lookup', 'service', name] }),
   missing: (result) => result.end.kind === 'exited' && result.end.code === 1 && result.stdout === '' && result.stderr.trim() === '',
   secretOf: (stdout) => stdout.trimEnd(),
@@ -204,27 +216,36 @@ export function systemCredentials(platform: NodeJS.Platform, run: ProgramRunner)
   };
 }
 
-/** The writes to the store of the operating system teamrig runs on, through its own command-line tool. */
-export function systemCredentialKeeper(platform: NodeJS.Platform, run: ProgramRunner): CredentialKeeper {
+/**
+ * The writes to the store of the operating system teamrig runs on, through its own command-line tool, started from the
+ * absolute path `writer` finds and never by its bare name.
+ */
+export function systemCredentialKeeper(platform: NodeJS.Platform, run: ProgramRunner, writer: WriterLookup): CredentialKeeper {
   const tool = toolFor(platform);
   return {
     label: tool.label,
-    saveRequest: (name) => tool.saveRequest(name),
-    remove: (name) => removeWith(tool, run, name),
+    saveRequest: async (name) => {
+      const found = await writer();
+      return found.kind === 'found' ? { kind: 'ready', request: { program: found.path, args: tool.saveArgs(name) } } : found;
+    },
+    remove: (name) => removeWith(tool, run, writer, name),
   };
 }
 
 /** The save command as a person types it; every part is a credential name or a fixed word, so none needs quoting. */
 function saveCommandOf(tool: StoreTool, name: string): string {
-  const request = tool.saveRequest(name);
-  return [request.program, ...request.args].join(' ');
+  return [tool.writer, ...tool.saveArgs(name)].join(' ');
 }
 
-async function removeWith(tool: StoreTool, run: ProgramRunner, name: string): Promise<CredentialRemove> {
+async function removeWith(tool: StoreTool, run: ProgramRunner, writer: WriterLookup, name: string): Promise<CredentialRemove> {
   if (!CREDENTIAL_NAME.test(name)) {
     return { kind: 'failed', reason: `${JSON.stringify(name)} is not a credential name: letters, digits, '.', '_' or '-'` };
   }
-  const request = tool.removeRequest(name);
+  const found = await writer();
+  if (found.kind === 'refused') {
+    return { kind: 'failed', reason: found.reason };
+  }
+  const request: ProgramRequest = { program: found.path, args: tool.removeArgs(name) };
   let result: ProgramResult;
   try {
     result = await run(request);

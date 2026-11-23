@@ -68,10 +68,15 @@ export async function keyAdd(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   requirePerson(runtime, 'add');
   const before = await runtime.credentials.read(scope.credential);
   const { keeper, terminal } = runtime.keys;
+  const save = await keeper.saveRequest(scope.credential);
+  if (save.kind === 'refused') {
+    runtime.out.stderr(`teamrig key add: ${save.reason}; nothing new is saved for ${scope.scope}`);
+    return EXIT.failed;
+  }
   runtime.out.stdout(
     `${before.kind === 'found' ? 'replacing the key' : 'saving a key'} for ${scope.scope} as ${scope.credential} in ${keeper.label}; paste it at the prompt, nothing typed shows`,
   );
-  const end = await terminal.run(keeper.saveRequest(scope.credential));
+  const end = await terminal.run(save.request);
   if (!succeeded(end)) {
     runtime.out.stderr(`teamrig key add: the store's save command ${endText(end)}; nothing new is saved for ${scope.scope}`);
     return EXIT.failed;
