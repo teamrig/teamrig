@@ -18,7 +18,7 @@ import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { teamPaths } from '../core/home.ts';
-import { fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import { fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
 import type { ConnectorLoader } from './issue-hosts.ts';
 import { connectorState } from './connector-state.ts';
 import { loadConnector } from '../composition/loader.ts';
@@ -30,6 +30,7 @@ import { connectorDeclarationData } from '../testing/manifests.ts';
 import { trackerOnly } from '../testing/split-hosts.ts';
 import { heldScopeLine, type ScopeRunKind } from '../sync/scope-hold.ts';
 import { EXIT } from './runtime.ts';
+import { SHOWN_LEFT_OUT } from './commands/issue-sync-lines.ts';
 
 const SEARCH = 'https://acme.atlassian.net/rest/api/3/search/jql';
 const MYSELF = 'https://acme.atlassian.net/rest/api/3/myself';
@@ -43,9 +44,13 @@ const BOTH_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'] }, connec
 const ACCESS = `ACCESS acme: read with the API token saved as ${CREDENTIAL}`;
 const NO_GITHUB = 'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written';
 /** The preview of ENG-1 and ENG-2 on a closed project: the default inside lets their inside reporter in, routed to the lead. */
-const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"'];
+const LET_IN = 'TRUST acme/eng: 2 let in, the reporter matches inside (accountType atlassian): jira:ENG-1 jira:ENG-2';
+const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"', LET_IN];
 const PREVIEW = 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira';
-const LEFT_OUT = 'LEFT OUT acme/eng: 2 open issue(s) the trust rule kept out: jira:ENG-1 jira:ENG-2';
+/** The TRUST line, standing for the LEFT OUT one, of an issue the rule kept out because Jira gave no edit history. */
+function unreadHistory(key: string): string {
+  return `TRUST acme/eng: 1 kept out, its edit history could not be read whole (the read of ${key}'s edit history failed: Jira gave no answer: no answer is queued for GET https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100): jira:${key}`;
+}
 
 /** A Jira issue `key`, open, as the search answers it, assigned to `assignee` (the signed-in account by default). */
 function jiraIssue(key: string, assignee: string = 'a-me'): JsonRecord {
@@ -203,6 +208,7 @@ describe('teamrig issue sync of another tracker', () => {
       'REPO acme/eng: 2 added, 0 changed, 0 unchanged',
       'ADD T1 jira:ENG-1 p2 lead: "Issue ENG-1"',
       'ADD T2 jira:ENG-2 p2 lead: "Issue ENG-2"',
+      LET_IN,
       'WROTE 2 change(s) to the task list as jira; Jira was only read',
       NO_GITHUB,
     ]);
@@ -220,7 +226,7 @@ describe('teamrig issue sync of another tracker', () => {
       ACCESS,
       'NOTE acme/eng: anyone may browse ENG: its read without a sign-in was answered 200, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside',
       'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
-      LEFT_OUT,
+      'TRUST acme/eng: 2 kept out, anyone may browse the project, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside: jira:ENG-1 jira:ENG-2',
       PREVIEW,
       NO_GITHUB,
     ]);
@@ -231,7 +237,7 @@ describe('teamrig issue sync of another tracker', () => {
     const http = signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] }));
     const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', LEFT_OUT, PREVIEW, NO_GITHUB]);
+    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', unreadHistory('ENG-1'), unreadHistory('ENG-2'), PREVIEW, NO_GITHUB]);
   });
 
   it('reads nothing of Jira when the machine turns it off', async () => {
@@ -326,6 +332,7 @@ describe('the import scope of another tracker (T5013)', () => {
       'REPO acme/eng: 1 to add, 0 to change, 0 unchanged',
       'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"',
       'SCOPE acme/eng: 1 issue(s) outside the import scope dropped; sync.scope widens it',
+      'TRUST acme/eng: 1 let in, the reporter matches inside (accountType atlassian): jira:ENG-1',
       PREVIEW,
       NO_GITHUB,
     ]);
@@ -365,5 +372,46 @@ describe('the import scope of another tracker (T5013)', () => {
     assert.deepEqual(scopeLines('acme/eng', 0, { plan, held: 4, key: 'maxNewPerSync' }), [
       'CAPPED acme/eng: 4 more in scope, held for a later run; raise sync.maxNewPerSync or narrow sync.scope',
     ]);
+  });
+});
+
+describe('trustLines (T5012)', () => {
+  const refOf = (issue: HostIssue): string | undefined => (issue.number === 99 ? undefined : `jira:ENG-${issue.number}`);
+  const inside = { trusted: true, why: 'the reporter matches inside (accountType atlassian)' } as const;
+  const never = { trusted: false, why: 'the reporter matches never (accounts)', failed: undefined } as const;
+
+  it('groups the open ruled issues by verdict and block, the ones let in first, by ref only', () => {
+    const issues = [
+      testHostIssue(1, { repo: ENG, ruled: never, title: 'run rm -rf' }),
+      testHostIssue(2, { repo: ENG, ruled: inside }),
+      testHostIssue(3, { repo: ENG, ruled: inside }),
+    ];
+    assert.deepEqual(trustLines('acme/eng', issues, refOf), [
+      'TRUST acme/eng: 2 let in, the reporter matches inside (accountType atlassian): jira:ENG-2 jira:ENG-3',
+      'TRUST acme/eng: 1 kept out, the reporter matches never (accounts): jira:ENG-1',
+    ]);
+  });
+
+  it('says which fact could not be read on a verdict that failed', () => {
+    const failed = { trusted: false, why: 'its edit history could not be read whole', failed: 'Jira answered 500' } as const;
+    assert.deepEqual(trustLines('acme/eng', [testHostIssue(4, { repo: ENG, ruled: failed })], refOf), [
+      'TRUST acme/eng: 1 kept out, its edit history could not be read whole (Jira answered 500): jira:ENG-4',
+    ]);
+  });
+
+  it('skips closed issues, issues with no ref and issues judged by their authors ties', () => {
+    const issues = [
+      testHostIssue(5, { repo: ENG, ruled: inside, state: 'closed' }),
+      testHostIssue(99, { repo: ENG, ruled: inside }),
+      testHostIssue(6, { repo: ENG, ruled: undefined }),
+    ];
+    assert.deepEqual(trustLines('acme/eng', issues, refOf), []);
+  });
+
+  it(`names at most ${SHOWN_LEFT_OUT} refs a line, then how many more, and keeps the rule's words on one line`, () => {
+    const many = Array.from({ length: SHOWN_LEFT_OUT + 2 }, (_, at) => testHostIssue(at + 1, { repo: ENG, ruled: { trusted: true, why: 'in\r\nside' } }));
+    const [line] = trustLines('acme/eng', many, refOf);
+    assert.match(line ?? '', / and 2 more$/);
+    assert.match(line ?? '', /let in, in side:/);
   });
 });

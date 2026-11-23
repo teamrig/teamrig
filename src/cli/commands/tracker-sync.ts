@@ -13,6 +13,8 @@ import { capPlan, scopeIssues, type CappedPlan, type ImportScope, type ScopeRequ
 import { ACTIVE_STATUSES } from '../../register/model.ts';
 import type { Task } from '../../register/fold.ts';
 import type { IssueTarget } from '../../issues/host.ts';
+import type { HostIssue } from '../../issues/issue.ts';
+import { plainLine } from '../../core/printable.ts';
 import { applySteps, type ImportWriter } from '../../sync/sync.ts';
 import { connectorOffBy, CONNECTOR_OFF } from '../connector-off.ts';
 import { HostAdapterError, trackerPortsOf, type ConnectorLoader, type HostRuntime, type TrackerPorts } from '../issue-hosts.ts';
@@ -217,10 +219,13 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
   on.planned.adds += plan.steps.filter((step) => step.kind === 'add').length;
   // The adds the scope hold kept back are told by its own line, so no CAPPED line counts them as well.
   const waiting = gate.held > 0 ? addsOf(planned) : 0;
+  // A ruled issue's TRUST line already says why it was kept out, so the LEFT OUT line names only the others.
+  const ruled = new Set(scoped.issues.filter((issue) => issue.ruled !== undefined).map((issue) => issue.number));
   const leftOut = [
     ...scopeLines(target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
+    ...trustLines(target, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number })),
     ...(waiting > 0 ? [`HELD ${target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : []),
-    ...leftOutLine(target, plan.leftOut.flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
+    ...leftOutLine(target, plan.leftOut.filter((number) => !ruled.has(number)).flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
   ];
   const scopeHolds = gate.tell ? [heldScopeLine(on.tracker.source, target, waiting, run.config.sync.maxNewPerSync)] : [];
   if (run.kind === 'preview') {
@@ -271,6 +276,31 @@ export function scopeLines(target: string, outside: number, capped: CappedPlan):
     ...(outside > 0 ? [`SCOPE ${target}: ${outside} issue(s) outside the import scope dropped; sync.scope widens it`] : []),
     ...(capped.held > 0 && capped.key !== undefined ? [`CAPPED ${target}: ${capped.held} more in scope, held for a later run; raise sync.${capped.key} or narrow sync.scope`] : []),
   ];
+}
+
+/**
+ * Why the tracker's own trust rule (sync/trust-rule.ts) let in or kept out each open issue of a place, one TRUST line
+ * per verdict and block, by ref only (the text is the issue's, never shown here), at most SHOWN_LEFT_OUT refs a line,
+ * then how many more; lines that let in come first. A verdict whose fact could not be read says so. An issue judged by
+ * its authors' ties (no `ruled`) gets no line: the LEFT OUT line tells those.
+ */
+export function trustLines(target: string, issues: readonly HostIssue[], refOf: (issue: HostIssue) => string | undefined): string[] {
+  const groups = new Map<string, string[]>();
+  for (const issue of issues) {
+    const ref = refOf(issue);
+    if (issue.state !== 'open' || issue.ruled === undefined || ref === undefined) {
+      continue;
+    }
+    const { ruled } = issue;
+    const key = ruled.trusted ? `let in, ${plainLine(ruled.why)}` : `kept out, ${plainLine(ruled.why)}${ruled.failed === undefined ? '' : ` (${plainLine(ruled.failed)})`}`;
+    groups.set(key, [...(groups.get(key) ?? []), ref]);
+  }
+  return [...groups]
+    .sort(([a], [b]) => Number(b.startsWith('let in')) - Number(a.startsWith('let in')))
+    .map(([why, refs]) => {
+      const more = refs.length - SHOWN_LEFT_OUT;
+      return `TRUST ${target}: ${refs.length} ${why}: ${refs.slice(0, SHOWN_LEFT_OUT).join(' ')}${more > 0 ? ` and ${more} more` : ''}`;
+    });
 }
 
 /**
