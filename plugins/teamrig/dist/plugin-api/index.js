@@ -41,6 +41,10 @@ export { MENTION_PAGE_SIZE, MENTION_PAGES_MAX, REVIEW_READS_MAX } from "../issue
 export { repoTokenName, tokenName } from "../issues/token-names.js";
 // The length a posted comment is held to, and why a label may not be written.
 export { labelRefusal, MAX_COMMENT } from "../issues/write.js";
-// How a program ended, as a failure line words it.
-export { exitText } from "../open/processes.js";
+// How a program ended, as a failure line words it; what a terminal's adapter starts its launcher and runs its programs
+// with, and how long a launcher may take to return.
+export { EXIT_WAIT_MS, exitText, } from "../open/processes.js";
+// A script for Windows PowerShell as one program run, and a command made into a shell's or a Windows command line's text.
+export { powerShellRequest } from "../core/powershell.js";
+export { shellCommand, windowsCommandLine } from "../open/quote.js";
 export { ProgramOutputCapError } from "../core/program-runner.js";

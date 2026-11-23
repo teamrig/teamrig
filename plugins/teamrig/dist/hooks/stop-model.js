@@ -27,10 +27,10 @@ export async function stopModelNotices(reader, models, files, store, input) {
     if (found.length === 0) {
         return [];
     }
-    const told = await store.told(input.id, input.claude);
+    const told = await store.told(input.id, input.hostSession);
     const fresh = found.filter((notice) => !told.includes(notice.key));
     if (fresh.length > 0) {
-        await store.remember(input.id, input.claude, fresh.map((notice) => notice.key));
+        await store.remember(input.id, input.hostSession, fresh.map((notice) => notice.key));
     }
     return fresh.map((notice) => notice.line);
 }

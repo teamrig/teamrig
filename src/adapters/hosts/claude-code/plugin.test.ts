@@ -139,4 +139,45 @@ describe("Claude Code's plugin store", () => {
       ['plugin', 'update', 'teamrig@kit'],
     ]);
   });
+
+  describe('channelPlan', () => {
+    const known = (source: Record<string, string>): string => JSON.stringify({ kit: { source, installLocation: '/clones/kit' } });
+    const settingsWith = (source: Record<string, string>) => ({ model: 'opus', extraKnownMarketplaces: { kit: { source, autoUpdate: true }, other: { source: { source: 'github', repo: 'o/o' } } } });
+
+    it('adds a git url marketplace again at the ref, then reinstalls the plugin from it', () => {
+      const answer = hostPlugin.channelPlan({}, known({ source: 'git', url: 'https://example.test/kit.git' }), 'teamrig', 'kit', 'preview');
+      assert.deepEqual(answer, {
+        ok: true,
+        value: { settings: undefined, before: undefined, after: 'preview', steps: [['plugin', 'marketplace', 'add', 'https://example.test/kit.git#preview'], ['plugin', 'update', 'teamrig@kit']] },
+      });
+    });
+
+    it("sets the ref on the settings' own entry, keeping every other field and marketplace", () => {
+      const answer = hostPlugin.channelPlan(settingsWith({ source: 'github', repo: 'acme/kit' }), known({ source: 'github', repo: 'acme/kit' }), 'teamrig', 'kit', 'preview');
+      assert.ok(answer.ok);
+      assert.deepEqual(answer.value.settings, settingsWith({ source: 'github', repo: 'acme/kit', ref: 'preview' }));
+    });
+
+    it('drops the ref for the default branch, from the settings and the source added', () => {
+      const answer = hostPlugin.channelPlan(settingsWith({ source: 'github', repo: 'acme/kit', ref: 'preview' }), known({ source: 'github', repo: 'acme/kit', ref: 'preview' }), 'teamrig', 'kit', undefined);
+      assert.ok(answer.ok);
+      assert.deepEqual(answer.value.settings, settingsWith({ source: 'github', repo: 'acme/kit' }));
+      assert.deepEqual(answer.value.steps[0], ['plugin', 'marketplace', 'add', 'acme/kit']);
+    });
+
+    it('fixes a settings entry left on another ref with no step when the clone already follows the ref', () => {
+      const answer = hostPlugin.channelPlan(settingsWith({ source: 'github', repo: 'acme/kit' }), known({ source: 'github', repo: 'acme/kit', ref: 'preview' }), 'teamrig', 'kit', 'preview');
+      assert.ok(answer.ok);
+      assert.deepEqual(answer.value.steps, []);
+      assert.deepEqual(answer.value.settings, settingsWith({ source: 'github', repo: 'acme/kit', ref: 'preview' }));
+    });
+
+    it('refuses a marketplace read from a url or a folder, and a list that is not JSON', () => {
+      for (const text of [known({ source: 'url', url: 'https://example.test/marketplace.json' }), known({ source: 'directory', path: '/work/kit' }), 'not json']) {
+        const answer = hostPlugin.channelPlan({}, text, 'teamrig', 'kit', 'preview');
+        assert.equal(answer.ok, false, text);
+        assert.equal(hostPlugin.marketplaceRef(text, 'kit'), undefined, text);
+      }
+    });
+  });
 });

@@ -1,3 +1,4 @@
+import { DEFAULT_HOST } from "../composition/adapters.js";
 import { DEFAULT_CAPS, DEFAULT_SCOPE } from "../sync/scope.js";
 /** Defaults for every key except the roster (`sessions`, `roles.lead`), which each team supplies. */
 export const DEFAULT_OWNER_GATES = [
@@ -12,6 +13,8 @@ export const DEFAULT_OWNER_GATES = [
  * permission is a grant, a guard or a settings line, so the owner decides it from the reviewer's view.
  */
 export const DEFAULT_SECURITY_GATES = ['permissions'];
+/** The hosts a team runs on until its config names others: the one host teamrig asks its host ports of by default. */
+export const DEFAULT_HOSTS = [DEFAULT_HOST];
 export const DEFAULT_MESSAGES = { maxLines: 10, coldAfterMinutes: 60 };
 /**
  * The most characters a task's description holds, beside `maxTitle` and `maxText` (the note, ref, evidence and

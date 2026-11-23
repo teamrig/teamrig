@@ -43,6 +43,7 @@ const ROSTER_KEYS = new Set(['team', 'sessions', 'names', 'leads', 'roles']);
 const ROSTER_NOTE = 'the roster: changed only by teamrig hire, retire, rename, promote and demote';
 const VERSION_NOTE = 'the config format: teamrig config migrate writes it';
 const STRUCTURE_NOTE = 'a list of records or a map: edit it in config.json or with its own command';
+const ENTRY_NOTE = 'an entry of a map: edit it in config.json or with its own command';
 const SKIPPED_KEYS = new Set(['$schema']);
 /**
  * Every key the schema describes, in its order, read against the team's file (`raw`) and its problems. A key is
@@ -94,7 +95,57 @@ function eachSetting(schema, raw, visit) {
 export function rowsUnder(rows, path) {
     return rows.filter((row) => row.path === path || row.path.startsWith(`${path}.`));
 }
-function rowOf(path, group, node, written, issues, leadKeys) {
+/**
+ * The rows at `path` or under it when the path runs through an entry of a map the team's file holds, such as
+ * `delivery.repos.<name>.shipTool`: settingRows lists such a map as one row, so its entries' keys are found only here.
+ * Empty for an entry the file does not hold, a path with no map entry in it, or a key the schema does not describe.
+ * The rows are read-only: an entry is edited in config.json or with its own command.
+ */
+export function entryRows(schema, raw, issues, path) {
+    const definitions = definitionsOf(schema);
+    const parts = path.split('.');
+    const group = parts[0] ?? path;
+    let node = { type: 'object', properties: isRecord(schema['properties']) ? schema['properties'] : {} };
+    let value = raw;
+    let throughEntry = false;
+    for (const part of parts) {
+        const properties = node !== undefined && isRecord(node['properties']) ? node['properties'] : {};
+        const entry = node === undefined ? undefined : node['additionalProperties'];
+        const values = isRecord(value) ? value : {};
+        if (Object.hasOwn(properties, part)) {
+            node = resolvedNode(properties[part], definitions);
+        }
+        else if (isRecord(entry) && Object.hasOwn(values, part)) {
+            node = resolvedNode(entry, definitions);
+            throughEntry = true;
+        }
+        else {
+            return [];
+        }
+        value = values[part];
+    }
+    if (!throughEntry || node === undefined) {
+        return [];
+    }
+    const rows = [];
+    const walk = (at, here, written) => {
+        const nested = isRecord(here['properties']) ? here['properties'] : undefined;
+        if (here['type'] !== 'object' || nested === undefined || Object.keys(nested).length === 0) {
+            rows.push(rowOf(at, group, here, written, issues, new Set(), ENTRY_NOTE));
+            return;
+        }
+        const values = isRecord(written) ? written : {};
+        for (const [key, child] of Object.entries(nested)) {
+            const resolved = resolvedNode(child, definitions);
+            if (resolved !== undefined) {
+                walk(`${at}.${key}`, resolved, values[key]);
+            }
+        }
+    };
+    walk(path, node, value);
+    return rows;
+}
+function rowOf(path, group, node, written, issues, leadKeys, unlisted = UNLISTED_NOTE) {
     const fallback = node['default'];
     const value = written === undefined ? fallback : written;
     const type = typeOf(node);
@@ -103,7 +154,7 @@ function rowOf(path, group, node, written, issues, leadKeys) {
     // A roster key (roles) is owner-gated too, but its note names the commands that change it.
     const readOnly = gatedBy !== undefined && !ROSTER_KEYS.has(group)
         ? `owner gate: ${gatedBy}`
-        : (readOnlyNote(path, group, type, items) ?? (leadKeys.has(path) ? undefined : UNLISTED_NOTE));
+        : (readOnlyNote(path, group, type, items) ?? (leadKeys.has(path) ? undefined : unlisted));
     const problem = issues.find((issue) => isAtOrUnder(issue.path, path));
     return {
         path,

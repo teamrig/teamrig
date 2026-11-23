@@ -333,6 +333,8 @@ export function weekUseAt(fold: WeekFold, now: number): WeekUse | undefined {
 
 /** What the status line shows beside the snapshot: the session's effort level, where it works, and where the team's pace line stands. */
 export interface StatusLineView {
+  /** The host's name as people know it, shown in the model's place when the status input names no model. */
+  readonly host?: string;
   /** The session's effort level, shown after the model. */
   readonly effort?: string;
   /** The session folder's name. */
@@ -365,8 +367,11 @@ function placeText(view: StatusLineView): string {
  * beside where the pace line stands, such as `Opus 5.5 (high), app on main, week 57% (pace 53%), 5h 6%`.
  */
 export function statusLineText(snapshot: StatusSnapshot, view: StatusLineView): string {
-  const model = snapshot.model ?? 'Claude';
-  const parts = [view.effort === undefined ? model : `${model} (${view.effort})`];
+  const model = snapshot.model ?? view.host;
+  const parts: string[] = [];
+  if (model !== undefined) {
+    parts.push(view.effort === undefined ? model : `${model} (${view.effort})`);
+  }
   const place = placeText(view);
   if (place !== '') {
     parts.push(place);

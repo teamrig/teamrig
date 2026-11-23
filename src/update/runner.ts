@@ -35,11 +35,15 @@ export function hookGit(hooks: HookRunner, env: Env): UpdateGit {
 /** How an update ended: done, or the step that failed with what it printed. */
 export type ApplyOutcome = { readonly ok: true } | { readonly ok: false; readonly step: string; readonly said: string };
 
-export interface ApplyDeps {
+/** What runs the host's program: the runner, its environment and folder, and the program found on this machine. */
+export interface StepDeps {
   readonly hooks: HookRunner;
   readonly env: Env;
   readonly claude: HostProgram;
   readonly cwd: string;
+}
+
+export interface ApplyDeps extends StepDeps {
   /** The host's plugin port, which names the update's steps. */
   readonly plugin: Pick<HostPlugin, 'updateSteps'>;
 }
@@ -49,7 +53,12 @@ export interface ApplyDeps {
  * until one fails. The tab runs the new version once it reloads its plugins.
  */
 export async function applyUpdate(deps: ApplyDeps, plugin: string, marketplace: string): Promise<ApplyOutcome> {
-  for (const step of deps.plugin.updateSteps(plugin, marketplace)) {
+  return runSteps(deps, deps.plugin.updateSteps(plugin, marketplace));
+}
+
+/** Runs each of the host program's `steps` in order, each killed past APPLY_TIMEOUT_MS, until one fails. */
+export async function runSteps(deps: StepDeps, steps: readonly (readonly string[])[]): Promise<ApplyOutcome> {
+  for (const step of steps) {
     const lines: string[] = [];
     const end = await deps.hooks.run({
       argv: [deps.claude.command, ...deps.claude.prefix, ...step],

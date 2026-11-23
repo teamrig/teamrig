@@ -1,5 +1,5 @@
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
@@ -16,6 +16,7 @@ import type { Clock, Sleep } from '../core/lock.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { CredentialStore } from '../core/credentials.ts';
+import type { KeyPorts } from '../core/terminal.ts';
 import type { ProgramRunner } from '../core/program-runner.ts';
 import type { PullGit } from '../sync/pull-conflicts.ts';
 import type { MergeGit } from '../merge/git.ts';
@@ -75,14 +76,23 @@ export interface CliRuntime {
   /** The staged change and the pushed commits `teamrig secrets` scans, read as the git hook that runs it sees them. */
   readonly secretsGit: SecretsGit;
   readonly out: Output;
+  /**
+   * Whether this run's stdin and stdout are a terminal a person types in: false under an AI CLI's shell tool or a
+   * pipe, where `teamrig ui` cannot draw and opens a split of the session's terminal instead (T5105).
+   */
+  readonly interactive: boolean;
   readonly platform: NodeJS.Platform;
-  /** The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts). */
+  /**
+   * The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts).
+   * The process starts with the default host's; `runCli` swaps in the one the run names (src/cli/host-choice.ts).
+   */
   readonly host: HostSource;
   /**
-   * Every host adapter teamrig ships with, the one the run works in among them: for what holds on a machine whatever
-   * host runs the session, the hosts' own secret files (`secretFilesOf`, host.ts).
+   * Every host adapter teamrig ships with by id, the one the run works in among them: for the host a run names
+   * (`--host`), and for what holds on a machine whatever host runs the session, the hosts' own secret files
+   * (`secretFilesOf`, host.ts).
    */
-  readonly shippedHosts: readonly ShippedHost[];
+  readonly shippedHosts: ShippedHosts;
   /** Terminal launchers and Claude Code, for `teamrig open` and `teamrig launch`. */
   readonly processes: Processes;
   /** The running session's Claude Code process and its tab, which the automatic context refresh ends. */
@@ -101,6 +111,8 @@ export interface CliRuntime {
   readonly run: ProgramRunner;
   /** The system's saved secrets, where `teamrig issue sync` finds each owner's read-only GitHub token; only ever read. */
   readonly credentials: CredentialStore;
+  /** The writes to those secrets and the person's terminal, for `teamrig key` alone. */
+  readonly keys: KeyPorts;
   /** The API of an outside tool a connector adapter reaches with no command line (plugin-api/connector.ts): https only. */
   readonly http: HttpClient;
   /** Whether a folder or a program is there. */
@@ -136,6 +148,8 @@ export interface CliRuntime {
   readonly configFormat?: ConfigFormat;
   /** When a hook's every file lock wait gives up (hook-timeouts.ts); runCli sets it for a `hook` command. */
   readonly lockDeadline?: number | undefined;
+  /** The event a hook's `--host-event` named, for a host whose hook input names none; runCli sets it for a `hook` command. */
+  readonly hostEvent?: string | undefined;
   /** cmd.exe's whole command line, which the `teamrig.cmd` shim passes, for the arguments cmd cut at a line break (cmd-shim.ts). */
   readonly cmdShimLine?: string | undefined;
   /** All of stdin, for hooks, which Claude Code feeds one JSON object. */

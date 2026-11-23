@@ -1781,6 +1781,39 @@ describe('parseConfig', () => {
     assert.deepEqual(config.securityGates, ['permissions']);
   });
 
+  it('runs the team on Claude Code alone when hosts is absent', () => {
+    const { config, issues } = parseConfig(ROSTER);
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.hosts, ['claude-code']);
+  });
+
+  it('takes a list of shipped host ids', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, hosts: ['claude-code'] });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.hosts, ['claude-code']);
+  });
+
+  it('drops an unknown host id and a repeated one, each with its issue', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, hosts: ['claude-code', 'no-such-host', 'claude-code', ''] });
+    assert.deepEqual(paths(issues), ['hosts[1]', 'hosts[2]', 'hosts[3]']);
+    assert.match(issues[0]?.message ?? '', /^expected one of claude-code/);
+    assert.equal(issues[1]?.message, '"claude-code" is listed twice');
+    assert.deepEqual(config.hosts, ['claude-code']);
+  });
+
+  it('refuses an empty hosts list, or one with no shipped id, keeping the default', () => {
+    const empty = parseConfig({ ...ROSTER, hosts: [] });
+    assert.deepEqual(paths(empty.issues), ['hosts']);
+    assert.equal(empty.issues[0]?.message, 'expected at least one host');
+    assert.deepEqual(empty.config.hosts, ['claude-code']);
+    const unknown = parseConfig({ ...ROSTER, hosts: ['no-such-host'] });
+    assert.deepEqual(paths(unknown.issues), ['hosts[0]', 'hosts']);
+    assert.deepEqual(unknown.config.hosts, ['claude-code']);
+    const notList = parseConfig({ ...ROSTER, hosts: 'claude-code' });
+    assert.deepEqual(paths(notList.issues), ['hosts']);
+    assert.deepEqual(notList.config.hosts, ['claude-code']);
+  });
+
   it('reads the recorded rule conflicts, dropping each bad one with its issue', () => {
     assert.deepEqual(parseConfig(ROSTER).config.ruleConflicts, []);
     const kept = { file: '~/CLAUDE.md', text: 'Commit straight to main.', rule: 'worktrees', wins: 'local' };

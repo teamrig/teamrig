@@ -146,7 +146,7 @@ export function hooklessLine(tab, session, steps, zone, now) {
         return zone.day(date) === today ? zone.clock(date) : zone.shortMinute(date);
     };
     const minutes = Math.round((tab.turnAt - tab.hookAt) / MS_PER_MINUTE);
-    return (`HOOKLESS ${session}: its tab (Claude session ${tab.claudeSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
+    return (`HOOKLESS ${session}: its tab (host session ${tab.claudeSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
         `(hook ${time(tab.hookAt)}, last reply ${time(tab.turnAt)}), so it gets no inbox, guards or tab status: ` +
         `${steps.exit} that tab and run ${steps.resume(tab.claudeSession)} in ${tab.projectDir}`);
 }

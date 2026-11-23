@@ -1,4 +1,5 @@
 import type { Git } from '../lib/git.ts';
+import { isRecord, recordField } from '../lib/guards.ts';
 
 /**
  * Publishes a release's build (T3346). The marketplace entry installs the plugin from the `release` branch, so a
@@ -6,7 +7,9 @@ import type { Git } from '../lib/git.ts';
  * `v<version>` so an install can pin it. Its parents are the branch's last release and the main commit it was built
  * from, so the branch only moves forward and each build names its source. A tag never moves, and a run again for a
  * release already published changes nothing, so a re-run workflow is safe. The release workflow publishes to
- * `preview` (T5133), whose first commit descends from `release`, and stable moves `release` along that chain.
+ * `preview` (T5133), whose first commit descends from `release`, and stable moves `release` along that chain. Each
+ * commit's marketplace catalog installs from the branch it is published to (T5224), so a marketplace added at
+ * `preview` installs preview builds; stable installs stay on the default branch, whose catalog names `release`.
  */
 
 export interface Publication {
@@ -25,6 +28,32 @@ export interface Publication {
   readonly dist: string;
   /** The remote both the branch and the tag are pushed to. */
   readonly remote: string;
+  /**
+   * The marketplace catalog, its entries' refs set to `branch` in the commit, or undefined to leave it. Main's says
+   * `release`, so without this a marketplace added at `preview` would install the stable build (T5224).
+   */
+  readonly marketplace: string | undefined;
+}
+
+/** The checkout's files, read and written by paths relative to its root. */
+export interface Files {
+  read(path: string): string;
+  write(path: string, text: string): void;
+}
+
+/**
+ * The catalog with each plugin entry whose source names a ref installing from `branch` instead, so the build a branch
+ * holds installs itself. Entries with no ref, which install the default branch, stay as they are.
+ */
+export function marketplaceOnBranch(text: string, branch: string): string {
+  const catalog: unknown = JSON.parse(text);
+  if (!isRecord(catalog) || !Array.isArray(catalog['plugins'])) throw new Error('the marketplace catalog has no "plugins" list');
+  const entries: readonly unknown[] = catalog['plugins'];
+  const plugins = entries.map((entry) => {
+    const source = isRecord(entry) ? recordField(entry, 'source') : undefined;
+    return isRecord(entry) && source !== undefined && typeof source['ref'] === 'string' ? { ...entry, source: { ...source, ref: branch } } : entry;
+  });
+  return `${JSON.stringify({ ...catalog, plugins }, null, 2)}\n`;
 }
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -68,16 +97,20 @@ export function publicationProblem(publication: Publication): string | undefined
  * Returns the release commit's sha. Refuses a checkout not at the source, a missing dist, and a tag that names
  * another commit.
  */
-export async function publishRelease(git: Git, publication: Publication, log: (line: string) => void): Promise<string> {
+export async function publishRelease(git: Git, files: Files, publication: Publication, log: (line: string) => void): Promise<string> {
   const problem = publicationProblem(publication);
   if (problem !== undefined) throw new Error(problem);
-  const { version, source, branch, seed, dist, remote } = publication;
+  const { version, source, branch, seed, dist, remote, marketplace } = publication;
   const head = (await git.text(['rev-parse', 'HEAD'])).trim();
   if (head !== source) throw new Error(`the checkout is at ${head}, not the release's source ${source}`);
 
   // --others lists ignored files too, as the dist is once main stops tracking it.
   if ((await git.text(['ls-files', '--cached', '--others', '--', dist])).trim() === '') throw new Error(`no ${dist} was built to publish`);
   await git.text(['add', '--force', '--', dist]);
+  if (marketplace !== undefined) {
+    files.write(marketplace, marketplaceOnBranch(files.read(marketplace), branch));
+    await git.text(['add', '--', marketplace]);
+  }
   const tree = (await git.text(['write-tree'])).trim();
 
   const tag = tagOf(version);

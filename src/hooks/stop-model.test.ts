@@ -16,7 +16,7 @@ const LEAD: StopModelInput = {
   id: 'lead',
   name: 'app-lead',
   launch: { model: 'opus', effort: 'xhigh' },
-  claude: 'claude-session-1',
+  hostSession: 'host-session-1',
   effort: 'xhigh',
   transcript: TRANSCRIPT,
 };
@@ -50,7 +50,7 @@ describe('stopModelNotices', () => {
     assert.deepEqual(await stopModelNotices(reader, MODELS, files, store, low), [EFFORT_LINE]);
     assert.deepEqual(await stopModelNotices(reader, MODELS, files, store, low), []);
     assert.deepEqual(await stopModelNotices(reader, MODELS, files, store, { ...low, effort: 'high' }), [EFFORT_LINE.replace('low', 'high')]);
-    assert.deepEqual(await stopModelNotices(reader, MODELS, files, store, { ...low, claude: 'claude-session-2' }), [EFFORT_LINE]);
+    assert.deepEqual(await stopModelNotices(reader, MODELS, files, store, { ...low, hostSession: 'host-session-2' }), [EFFORT_LINE]);
   });
 
   it('never checks the effort of a session whose launch entry leaves it unset', async () => {

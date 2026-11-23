@@ -31,6 +31,18 @@ export interface ParsedArgs {
    * `runCli` checks them.
    */
   readonly common: Flags;
+  /**
+   * `--host-event <event>` on a `hook` command: the event a host whose hook input names none (Antigravity CLI) wrote
+   * into the hook's command line. Kept out of `flags`, as every hook takes it and none reads it itself: `runCli` hands
+   * it to the host's hook bridge. Undefined when the line gave none.
+   */
+  readonly hostEvent?: string | undefined;
+  /**
+   * `--host <id>` on any command: the host adapter the process runs under, which a host's hooks file writes into each
+   * hook's command line. Kept out of `flags`, as no command reads it itself: `runCli` loads that host for the run
+   * (src/cli/host-choice.ts). Undefined when the line gave none.
+   */
+  readonly host?: string | undefined;
 }
 
 /** Each command's accepted flags, keyed by the command's words: `add`, `inbox read`. */
@@ -47,6 +59,17 @@ export type CommandRest = ReadonlySet<string>;
  * in its flags; on any other, `runCli` checks them (src/cli/common-flags.ts) and the command ignores them.
  */
 export const COMMON_FLAGS: readonly string[] = ['session', 'team'];
+
+/** The flag every `hook` command takes for the host's event name (`ParsedArgs.hostEvent`). */
+export const HOST_EVENT_FLAG = 'host-event';
+
+/** The flag every command takes for the host it runs under (`ParsedArgs.host`). */
+export const HOST_FLAG = 'host';
+
+/** The commands run as a host's hooks, which take `--host-event`. */
+export function isHookCommand(command: string): boolean {
+  return command.startsWith('hook ');
+}
 
 /** Ends a command's own flags: every word after it belongs to the command line it runs. */
 export const REST_MARKER = '--';
@@ -135,13 +158,28 @@ export function parseArgs(
   const flags = new Map<string, string>();
   const common = new Map<string, string>();
   const switches = new Set<string>();
+  // The flags a host writes into a command line, which no command reads itself: one value each, never in `flags`.
+  const hostFlags = new Map<string, string>();
+  const hostFlagNamed = (name: string): boolean =>
+    !allowed.includes(name) && (name === HOST_FLAG || (name === HOST_EVENT_FLAG && isHookCommand(command)));
+  const parsed = (rest: readonly string[]): ParsedArgs => ({
+    command,
+    positionals,
+    flags,
+    switches,
+    rest,
+    help: false,
+    common,
+    hostEvent: hostFlags.get(HOST_EVENT_FLAG),
+    host: hostFlags.get(HOST_FLAG),
+  });
   for (let index = 0; index < tail.length; index += 1) {
     const token = tail[index] ?? '';
     if (HELP_FLAGS.has(token)) {
       return { command, positionals: [], flags: new Map(), switches: new Set(), rest: [], help: true, common: new Map() };
     }
     if (token === REST_MARKER && restCommands.has(command)) {
-      return { command, positionals, flags, switches, rest: tail.slice(index + 1), help: false, common };
+      return parsed(tail.slice(index + 1));
     }
     if (!token.startsWith('--')) {
       positionals.push(token);
@@ -159,12 +197,21 @@ export function parseArgs(
       switches.add(name);
       continue;
     }
-    if (!allowed.includes(name) && !COMMON_FLAGS.includes(name)) {
+    const hostFlag = hostFlagNamed(name);
+    if (!allowed.includes(name) && !COMMON_FLAGS.includes(name) && !hostFlag) {
       throw new UsageError(`${command} takes no ${token}`, command);
     }
     const value = tail[index + 1];
     if (value === undefined || value.startsWith('--')) {
       throw new UsageError(`${token} needs a value`, command);
+    }
+    if (hostFlag) {
+      if (hostFlags.has(name)) {
+        throw new UsageError(`${token} is given twice`, command);
+      }
+      hostFlags.set(name, value);
+      index += 1;
+      continue;
     }
     if (flags.has(name) || common.has(name)) {
       throw new UsageError(`${token} is given twice`, command);
@@ -172,7 +219,7 @@ export function parseArgs(
     (allowed.includes(name) ? flags : common).set(name, value);
     index += 1;
   }
-  return { command, positionals, flags, switches, rest: [], help: false, common };
+  return parsed([]);
 }
 
 export function noPositionals(args: ParsedArgs): void {

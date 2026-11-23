@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { LEAD_KEYS } from './lead-keys.ts';
 import { OWNER_GATED_KEYS } from './owner-gated.ts';
-import { definitionsOf, resolvedNode, rowsUnder, settingNodes, settingRows, type SettingRow } from './settings.ts';
+import { definitionsOf, entryRows, resolvedNode, rowsUnder, settingNodes, settingRows, type SettingRow } from './settings.ts';
 
 const SCHEMA: JsonRecord = {
   $defs: { sessionName: { description: 'A session id.', type: 'string', pattern: '^[a-z]+$' } },
@@ -169,6 +169,66 @@ describe('settingNodes', () => {
     assert.deepEqual(resolvedNode({ $ref: '#/$defs/gone' }, definitions), { $ref: '#/$defs/gone' });
     assert.equal(resolvedNode('a text', definitions), undefined);
     assert.deepEqual(definitionsOf({ properties: {} }), {});
+  });
+});
+
+describe('entryRows', () => {
+  const schema: JsonRecord = {
+    $defs: {
+      repo: {
+        type: 'object',
+        properties: {
+          mainCheckout: { description: 'The checkout.', type: 'string' },
+          shipTool: { description: 'The ship tool.', type: 'string' },
+          owners: { description: 'Owners by path.', type: 'object', additionalProperties: { type: 'string' } },
+        },
+      },
+    },
+    properties: {
+      delivery: { type: 'object', properties: { repos: { description: 'Repos by name.', type: 'object', additionalProperties: { $ref: '#/$defs/repo' } } } },
+      names: { description: 'Names.', type: 'object', additionalProperties: { type: 'string' } },
+      budget: { type: 'object', properties: { sessions: { description: 'Caps.', type: 'object', additionalProperties: { type: 'number' } } } },
+    },
+  };
+  const raw: JsonRecord = {
+    delivery: { repos: { example: { mainCheckout: 'repo', shipTool: 'tools/ship' } } },
+    names: { alpha: 'Alpha' },
+    budget: { sessions: { alpha: 5 } },
+  };
+
+  it('reads a key under an entry the file holds, read-only, with the problem found in it', () => {
+    const rows = entryRows(schema, raw, [{ path: 'delivery.repos.example.shipTool', message: 'not a file' }], 'delivery.repos.example.shipTool');
+    assert.deepEqual(rows, [
+      {
+        path: 'delivery.repos.example.shipTool',
+        group: 'delivery',
+        type: 'string',
+        value: 'tools/ship',
+        isDefault: false,
+        meaning: 'The ship tool.',
+        editable: false,
+        gatedBy: 'permissions',
+        readOnly: 'owner gate: permissions',
+        problem: 'not a file',
+      },
+    ]);
+  });
+
+  it('lists every key of an entry, and reads an entry of a plain map under its own rule', () => {
+    assert.deepEqual(
+      entryRows(schema, raw, [], 'delivery.repos.example').map((row) => row.path),
+      ['delivery.repos.example.mainCheckout', 'delivery.repos.example.shipTool', 'delivery.repos.example.owners'],
+    );
+    const name = rowAt(entryRows(schema, raw, [], 'names.alpha'), 'names.alpha');
+    assert.deepEqual([name.value, name.readOnly], ['Alpha', 'the roster: changed only by teamrig hire, retire, rename, promote and demote']);
+    const cap = rowAt(entryRows(schema, raw, [], 'budget.sessions.alpha'), 'budget.sessions.alpha');
+    assert.deepEqual([cap.value, cap.gatedBy, cap.editable], [5, 'budget', false]);
+  });
+
+  it('finds nothing for an entry the file does not hold, a key the schema lists itself or an unknown key', () => {
+    for (const path of ['delivery.repos.other.shipTool', 'delivery.repos.example.nope', 'delivery.repos', 'delivery', 'nope.alpha', 'names.alpha.more']) {
+      assert.deepEqual(entryRows(schema, raw, [], path), [], path);
+    }
   });
 });
 

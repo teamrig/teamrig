@@ -343,8 +343,20 @@ describe('execGuardReply', () => {
       assert.equal(found?.decision, 'deny');
       assert.match(found?.reason ?? '', /^teamrig exec guard: `gh issue comment` writes on acme\/web, a repository of the team, .*`teamrig issue reply <owner\/name#n> --body-file <file>`/);
     }
-    assert.equal(await verdict(bash('gh issue view 7'), quiet), undefined);
+    assert.equal(await verdict(bash('gh issue view 7 -R someone/fork'), quiet), undefined);
     assert.equal(await verdict(bash('gh issue close 7'), { ...quiet, ghWrites: { ...quiet.ghWrites, github: { kind: 'none' } } }), undefined);
+    assert.equal(quiet.reads(), 0);
+    assert.equal(quiet.checks(), 0);
+  });
+
+  it('refuses a raw gh read on a team owner, naming the teamrig gh line, without reading the tab or checking a client (T4896)', async () => {
+    const quiet = env();
+    for (const payload of [bash('gh issue view 7'), powershell('gh api repos/acme/other/pulls')]) {
+      const found = await verdict(payload, quiet);
+      assert.equal(found?.decision, 'deny');
+      assert.match(found?.reason ?? '', /^teamrig exec guard: `gh (issue view|api)` reads acme's repositories with this machine's own gh login, .*`teamrig gh -- (issue view 7|api repos\/acme\/other\/pulls)`/);
+    }
+    assert.equal(await verdict(bash('gh issue view 7'), { ...quiet, ghWrites: { ...quiet.ghWrites, github: { kind: 'none' } } }), undefined);
     assert.equal(quiet.reads(), 0);
     assert.equal(quiet.checks(), 0);
   });

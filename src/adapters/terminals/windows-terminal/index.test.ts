@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION, apiVersionNotice, featuresOf, terminalAdapterProblems, terminalDeclarationProblems } from '../../../plugin-api/index.ts';
+import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import adapter from './index.ts';
 
@@ -23,9 +24,11 @@ describe('the Windows Terminal adapter', () => {
     ]);
   });
 
-  it('enters through defineTerminal with that declaration, and builds no port yet', () => {
+  it('enters through defineTerminal with that declaration, and builds its terminal port', async () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(terminalAdapterProblems(adapter), []);
-    assert.deepEqual(adapter.create({ env: {}, platform: 'win32' }), {});
+    const port = adapter.create(terminalDeps({ platform: 'win32' })).terminal;
+    assert.notEqual(port, undefined);
+    assert.deepEqual((await port?.capabilities())?.requests, ['open', 'focus']);
   });
 });

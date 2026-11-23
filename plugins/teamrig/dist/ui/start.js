@@ -35,12 +35,18 @@ function releasedName(name) {
 export function releasedEnv(env) {
     return Object.fromEntries(Object.entries(env).filter(([name, value]) => value !== undefined && releasedName(name)));
 }
-/** The UI as one program run in this terminal: `node <entry> --team <team> [--session <id>]`, in the caller's folder. */
+/**
+ * The UI as one program run in this terminal: `node <entry> [--team <team>] [--session <id>]`, in the caller's
+ * folder, `--team` only when the team is pinned. Its team goes in `$TEAMRIG_TEAM` too, over the caller's, as the UI
+ * starts on that team when none is pinned, and the CLI it calls back takes the caller's team from that variable, else
+ * the folder: a window opened by Windows Terminal has neither of the session's variables, and its folder may be
+ * another team's project, whose reads of this team refuse (T5249).
+ */
 export function uiRequest(start) {
     return {
         command: start.node,
-        args: [start.entry, '--team', start.team, ...(start.session === undefined ? [] : ['--session', start.session])],
+        args: [start.entry, ...(start.pinned ? ['--team', start.team] : []), ...(start.session === undefined ? [] : ['--session', start.session])],
         cwd: start.cwd,
-        env: { ...start.env, [UI_ENV.cli]: start.script, [UI_ENV.node]: start.node },
+        env: { ...start.env, [ENV.team]: start.team, [UI_ENV.cli]: start.script, [UI_ENV.node]: start.node },
     };
 }

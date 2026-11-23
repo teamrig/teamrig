@@ -234,8 +234,11 @@ function placeText(view) {
  * beside where the pace line stands, such as `Opus 5.5 (high), app on main, week 57% (pace 53%), 5h 6%`.
  */
 export function statusLineText(snapshot, view) {
-    const model = snapshot.model ?? 'Claude';
-    const parts = [view.effort === undefined ? model : `${model} (${view.effort})`];
+    const model = snapshot.model ?? view.host;
+    const parts = [];
+    if (model !== undefined) {
+        parts.push(view.effort === undefined ? model : `${model} (${view.effort})`);
+    }
     const place = placeText(view);
     if (place !== '') {
         parts.push(place);

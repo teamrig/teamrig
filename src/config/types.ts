@@ -595,8 +595,8 @@ export interface TurnLogConfig {
 
 export const UI_MODES = ['terminal', 'window', 'both'] as const;
 /**
- * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, `window` in a window of its own,
- * `both` in the two at once.
+ * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, or a split beside the session when
+ * that is no terminal a person types in, `window` in a window of its own, `both` in the two at once.
  */
 export type UiMode = (typeof UI_MODES)[number];
 
@@ -1853,6 +1853,11 @@ export interface KitConfig {
    * spelt as ownerGates spells it.
    */
   readonly securityGates: readonly string[];
+  /**
+   * The hosts the team's sessions run on, each a shipped host adapter's id, unique (T4752): it says which hosts'
+   * files install. A session names its running host itself; the first one is only the fallback for a bare CLI run.
+   */
+  readonly hosts: readonly string[];
   /** The local rules kept although they conflict with a core rule, each with the side that wins (`rules keep`). */
   readonly ruleConflicts: readonly RuleConflict[];
   readonly messages: MessagesConfig;

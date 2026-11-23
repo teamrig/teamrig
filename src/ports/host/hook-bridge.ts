@@ -117,8 +117,12 @@ export interface TitleSwitch {
 
 /** The port that turns a host's hook call into a {@link HookEvent} and a {@link HookReply} into what the host reads. */
 export interface HookBridge {
-  /** The event a hook's input holds; undefined when it is not the host's hook input at all. */
-  parse(raw: string): HookEvent | undefined;
+  /**
+   * The event a hook's input holds; undefined when it is not the host's hook input at all. `hostEvent` is the event
+   * the hook's command line named (`--host-event`), for a host whose input does not name it; a host whose input does
+   * reads its own.
+   */
+  parse(raw: string, hostEvent?: string): HookEvent | undefined;
   /** The text to write on standard output for `reply` to the event `on`; empty when there is nothing to write. */
   reply(on: HookEventName, reply: HookReply): string;
   /** What the host does when a hook itself fails: `blocks` stops the moment, `passes` lets it go on. */

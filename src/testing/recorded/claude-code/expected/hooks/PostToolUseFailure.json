@@ -2,7 +2,7 @@
   {
     "event": "PostToolUseFailure",
     "index": 0,
-    "hook": "hook missing-cli",
+    "hook": "hook missing-cli --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -10,7 +10,7 @@
   {
     "event": "PostToolUseFailure",
     "index": 0,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -18,7 +18,7 @@
   {
     "event": "PostToolUseFailure",
     "index": 1,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

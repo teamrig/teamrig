@@ -37,6 +37,7 @@ const CHILD_TAKES = {
     timeZone: 'copy',
     ownerGates: 'copy',
     securityGates: 'copy',
+    hosts: 'copy',
     ruleConflicts: 'copy',
     messages: 'copy',
     register: 'copy',

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import type { JsonRecord } from '../core/guards.ts';
-import { FOCUS_TITLE_VAR } from '../open/focus.ts';
+import { FOCUS_TITLE_VAR } from '../adapters/terminals/windows-terminal/scripts.ts';
 import { TabNeedStore, type TabNeed } from '../tabs/need.ts';
 import { APP, CliHarness, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { FakeProcesses } from '../testing/fake-processes.ts';

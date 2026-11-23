@@ -253,7 +253,7 @@ export type SpotlightOutcome =
   | { readonly kind: 'start'; readonly outcome: StartOutcome };
 
 /** What starting a spotlight needs: the hidden program's start, and the files that name it the host's holder. */
-export interface SpotlightDeps extends OpenTabDeps {
+export interface SpotlightDeps extends Pick<OpenTabDeps, 'processes' | 'env' | 'platform'> {
   readonly files: Files;
 }
 

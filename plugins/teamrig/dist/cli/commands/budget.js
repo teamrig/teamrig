@@ -39,7 +39,7 @@ import { indexMarks } from "../../inbox/marks.js";
 import { TASK_ID } from "../../register/model.js";
 import { accountWeekOn, kitHomeAccountsOf, otherTeamsOnAccount, peerMarksOf } from "../account-teams.js";
 import { UsageError, onePositional, requiredFlag } from "../args.js";
-import { hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from "../host.js";
+import { hostNameIfKnown, hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from "../host.js";
 import { isUnsupported } from "../../ports/host/index.js";
 import { callerOf } from "../inputs.js";
 import { rushLine, rushSegment } from "../../budget/rush.js";
@@ -646,6 +646,7 @@ function statusLineView(git, dir, show, reading) {
     const branch = show.branch ? git.branch(dir) : undefined;
     const commit = show.branch && branch === undefined ? git.head(dir) : undefined;
     return {
+        ...(reading.host === undefined ? {} : { host: reading.host }),
         ...(reading.effort === undefined ? {} : { effort: reading.effort }),
         ...(show.folder ? { folder: basename(dir) } : {}),
         ...(branch === undefined ? {} : { branch }),
@@ -715,10 +716,11 @@ export async function statusline(args, runtime) {
         runtime.out.stderr(`teamrig statusline: ${statusLine.notice}; nothing saved`);
         return EXIT.ok;
     }
+    const host = hostNameIfKnown(runtime);
     const snapshot = snapshotOfStatus({ statusLine, usage: usageIfMetered(runtime) }, input, runtime.clock.now());
     if (snapshot === undefined) {
-        runtime.out.stdout(pass ? passed : 'Claude');
-        runtime.out.stderr('teamrig statusline: the status input is not Claude Code status JSON with a session id; nothing saved');
+        runtime.out.stdout(pass ? passed : (host ?? ''));
+        runtime.out.stderr(`teamrig statusline: the status input is not ${host ?? 'the host'}'s status JSON with a session id; nothing saved`);
         return EXIT.ok;
     }
     let shown = { show: DEFAULT_STATUS_LINE, paceSource: undefined, team: undefined };
@@ -741,6 +743,7 @@ export async function statusline(args, runtime) {
     }
     const dir = snapshot.cwd === '' ? runtime.cwd : snapshot.cwd;
     const reading = {
+        host,
         effort: effortOfStatus(statusLine, input),
         pacePct: await pacePctOf(runtime, snapshot, shown),
         meeting: await meetingMarkOf(runtime, shown.team, snapshot.sessionId),

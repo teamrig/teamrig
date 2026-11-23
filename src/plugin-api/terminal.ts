@@ -71,8 +71,11 @@ export interface TerminalFailure {
 /** `pane` is the terminal's own id of the pane: the same across the terminal's restart, sent back on every later request. */
 export type OpenAnswer = { readonly kind: 'opened'; readonly pane: string } | Unserved | TerminalFailure;
 
-/** What a request on one pane answers: done, or the pane is no longer there. */
-export type PaneAnswer = { readonly kind: 'done' } | { readonly kind: 'gone' } | Unserved | TerminalFailure;
+/**
+ * What a request on one pane answers: done, or the pane is no longer there. `focus` alone may answer `selected`: the
+ * pane is selected in its window, but the system kept another app's window in front, so the person may not see it.
+ */
+export type PaneAnswer = { readonly kind: 'done' } | { readonly kind: 'selected' } | { readonly kind: 'gone' } | Unserved | TerminalFailure;
 
 /** One wake to deliver: the pane's token, and teamrig's own text, which points the session at its inbox. */
 export interface Wake {

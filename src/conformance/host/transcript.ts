@@ -25,6 +25,8 @@ export interface TranscriptWorld {
   readonly unknown: () => string;
   /** A line cut off while it was written. */
   readonly torn: () => string;
+  /** A line of the session while the host files its plan under `slug`. */
+  readonly planned: (slug: string) => string;
 }
 
 export type TranscriptSubject = Subject<TranscriptReader, TranscriptWorld>;
@@ -165,6 +167,16 @@ const CASES: readonly TranscriptCase[] = [
       assert.equal(kindOf(port.entry(world.unknown())), 'other');
     },
   },
+  {
+    id: 'transcript.last-plan-slug',
+    title: "names the plan slug of the transcript's last line that gives one, and none for a transcript with none",
+    features: ['sessions.carry'],
+    run: ({ port, world }) => {
+      const prompt = world.prompt('Fix the login page', 'main');
+      assert.equal(port.lastPlanSlug([world.planned('first-plan'), world.planned('calm-river'), prompt].join('\n')), 'calm-river');
+      assert.equal(port.lastPlanSlug([prompt, world.reply(REPLY)].join('\n')), undefined);
+    },
+  },
 ];
 
 /** A world whose lines no reader could read: enough for a liar, which looks at none of them. */
@@ -175,14 +187,18 @@ const BLANK_WORLD: TranscriptWorld = {
   title: (text) => `title ${text}`,
   unknown: () => 'unknown',
   torn: () => 'tor',
+  planned: (slug) => `plan ${slug}`,
 };
 
-/** A liar that claims the port and reads nothing: every line is no entry. */
+/** A liar that claims the port and reads nothing: every line is no entry, and no transcript names a plan. */
 export function nothingTranscripts(): TranscriptSubject {
-  return { world: BLANK_WORLD, port: { entry: () => undefined } };
+  return { world: BLANK_WORLD, port: { entry: () => undefined, lastPlanSlug: () => undefined } };
 }
 
-/** A liar that reads every line, whatever it holds and whatever kinds were asked for, as a prompt the person typed. */
+/**
+ * A liar that reads every line, whatever it holds and whatever kinds were asked for, as a prompt the person typed,
+ * and any transcript as naming the plan its whole text spells.
+ */
 export function yesTranscripts(): TranscriptSubject {
   const read = (line: string): InputEntry => ({
     kind: 'input',
@@ -202,7 +218,7 @@ export function yesTranscripts(): TranscriptSubject {
     fromTool: false,
     background: undefined,
   });
-  return { world: BLANK_WORLD, port: { entry: read } };
+  return { world: BLANK_WORLD, port: { entry: read, lastPlanSlug: (text) => text } };
 }
 
 /** What every host's transcript reader must do with the lines its host writes. */

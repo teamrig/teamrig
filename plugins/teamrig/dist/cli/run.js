@@ -11,6 +11,7 @@ import { parseArgs, UsageError } from "./args.js";
 import { RENAMED } from "./renamed.js";
 import { EXIT, RefusedError } from "./runtime.js";
 import { hookLockDeadline } from "./hook-timeouts.js";
+import { chooseHost } from "./host-choice.js";
 const registerCommands = () => import("./commands/register.js");
 const tabSessionCommands = () => import("./commands/tab-session.js");
 const checkCommands = () => import("./commands/check.js");
@@ -73,12 +74,14 @@ const budgetRollupCommands = () => import("./commands/budget-rollup.js");
 const burstCommands = () => import("./commands/burst.js");
 const scheduleCommands = () => import("./commands/schedule.js");
 const statuslineCommands = () => import("./commands/statusline.js");
+const channelCommands = () => import("./commands/channel.js");
 const automodeCommands = () => import("./commands/automode.js");
 const permissionsCommands = () => import("./commands/permissions.js");
 const setupScanCommand = () => import("./commands/setup-scan.js");
 const testCommand = () => import("./commands/test.js");
 const ghCommand = () => import("./commands/gh.js");
 const gitCredentialCommand = () => import("./commands/git-credential.js");
+const keyCommands = () => import("./commands/key.js");
 const queueCommand = () => import("./commands/queue.js");
 const withdrawCommand = () => import("./commands/withdraw.js");
 const stepAsideCommands = () => import("./commands/step-aside.js");
@@ -279,6 +282,9 @@ const COMMANDS = {
     statusline: { effect: 'internal', flags: [], switches: ['pass'], load: async () => (await budgetCommands()).statusline },
     'statusline install': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await statuslineCommands()).install },
     'statusline uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await statuslineCommands()).uninstall },
+    channel: { effect: 'read', flags: [], load: async () => (await channelCommands()).show },
+    'channel stable': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await channelCommands()).stable },
+    'channel preview': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await channelCommands()).preview },
     'automode install': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await automodeCommands()).install },
     'automode uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await automodeCommands()).uninstall },
     'permissions trim': { effect: 'write', flags: [], switches: ['all', 'yes'], load: async () => (await permissionsCommands()).trim },
@@ -303,6 +309,11 @@ const COMMANDS = {
     test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
     gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
     'git-credential': { effect: 'internal', flags: [], load: async () => (await gitCredentialCommand()).gitCredential },
+    'key list': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyList },
+    // add and remove run only in the person's own terminal (C7), never from /teamrig, which has none.
+    'key add': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyAdd },
+    'key remove': { effect: 'internal', flags: [], load: async () => (await keyCommands()).keyRemove },
+    'key check': { effect: 'read', flags: [], load: async () => (await keyCommands()).keyCheck },
     queue: { effect: 'write', flags: QUEUE_FLAGS, switches: QUEUE_SWITCHES, rest: true, load: async () => (await queueCommand()).queue },
     withdraw: { effect: 'write', flags: ['session', 'what'], switches: ['all'], load: async () => (await withdrawCommand()).withdraw },
     'step-away': { effect: 'write', flags: [], load: async () => (await stepAsideCommands()).stepAway },
@@ -381,7 +392,7 @@ export const COMMAND_EFFECTS = Object.fromEntries(Object.entries(COMMANDS).map((
 export const COMMAND_REST = new Set(Object.entries(COMMANDS).flatMap(([name, spec]) => (spec.rest === true ? [name] : [])));
 /** The table a line is read with, and each command's effect: what `/teamrig` plans a line from (src/slash/plan.ts). */
 export const COMMAND_TABLE = { flags: COMMAND_FLAGS, switches: COMMAND_SWITCHES, renamed: RENAMED, rest: COMMAND_REST, effects: COMMAND_EFFECTS };
-export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|name>, else $${ENV.session}; every command takes --session <id|name> and --team <team>)
+export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|name>, else $${ENV.session}; every command takes --session <id|name> and --team <team>, and --host <id> for the host it runs in, else the first in hosts)
   team create <team> --sessions <id,id> [--lead <id>] [--project <dir>] [--parent <team>] [--dry-run]
       writes the team config, ties the project folder to the team (the lead defaults to lead) and
       starts a root team's lead on its first task, setting the team up; --parent hangs it under
@@ -797,10 +808,13 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL
-  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
-      team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
-      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
-      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
+      team, following the session last typed in, or pinned to the team --team or --session names;
+      --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
+      open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
+      own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
+      Terminal window, else in a window; one that cannot open falls back and says so; it runs the
+      entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
       file or the release speaks an interface version this teamrig does not serve
@@ -971,6 +985,11 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   statusline install [--yes]   makes teamrig statusline Claude Code's status line, in front of the one
       already there; without --yes it shows the change and writes nothing
   statusline uninstall [--yes] takes it back out: the status line before it returns
+  channel                      the release channel this machine's teamrig install follows: stable or preview
+  channel stable [--yes]       moves the install to the stable releases, its marketplace's default branch
+  channel preview [--yes]      moves it to every release as it is cut, its marketplace's preview branch; both
+      change the marketplace's entry in your user settings and reinstall teamrig through the host's own
+      plugin commands; without --yes they show the change and write nothing
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
       worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
@@ -1006,7 +1025,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       backup, or NO BACKUP; works before a team exists; it only reads
   config get [<key>] [--json]   every key of the team config, or those at and under <key>: its value
       against its default, and read-only with why (the roster, an owner gate, a folder, a map, a key off
-      the lead's list); --json for a screen
+      the lead's list); <key> may name a key under a map entry the file holds
+      (delivery.repos.<name>.shipTool), read-only; --json for a screen
   config set <key> <value> | config set <key> --unset [--yes] [--session <id|name>]   the lead only:
       changes one key config get marks editable, the value read by the key's type (a list as JSON or
       a,b); --unset removes it to read its default; without --yes it shows the change; the whole new
@@ -1210,8 +1230,19 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
       stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
+  key list                     lists each key the team's github.repos may use, its owner's and each
+      repository's own, by credential name, and whether the store holds it; never a key
+  key add <owner|owner/name>   (from a person's own terminal only, else REFUSED) saves the key for an
+      owner or one repository: the store's own save command asks for it with nothing shown, so the key
+      never passes teamrig; says when it replaces a saved one, then reads it back and checks it as key check does
+  key check [<owner|owner/name>]   asks GitHub, at its API host over https only, whose each saved key is,
+      its kind, rights and expiry, never printing the key; warns on a classic or never-expiring key and
+      one expiring within 7 days; fails on a key GitHub refuses
+  key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
+      at GitHub too, as it says
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
-      (run by Claude Code, hook JSON on stdin)
+      (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
+      --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
       (run by the plugin's mod: the automatic restart's /clear in the tab)
   hook wake-check | hook wake-dropped
@@ -1288,19 +1319,26 @@ export async function runCli(given, runtime) {
         if (spec === undefined) {
             throw new UsageError(`unknown command "${args.command}"`);
         }
-        refuseSettingsWrite(args.command, args.switches, runtime);
+        const teamFlag = args.flags.get('team') ?? args.common.get('team');
+        // Loaded only when the choice needs the team's list (host-choice.ts): a hook loads none of the config code for it.
+        const teamHosts = async () => (await import("./team-hosts.js")).teamHostsOf(runtime, teamFlag);
+        const host = await chooseHost(args.command, args.host, runtime, teamHosts);
+        // Every check and the command itself work in the host the run names, never the process's default one.
+        const hosted = host === runtime.host ? runtime : { ...runtime, host };
+        refuseSettingsWrite(args.command, args.switches, hosted);
         if (args.common.size > 0) {
             // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
             const common = await import("./common-flags.js");
-            await common.checkCommonFlags(args, runtime);
+            await common.checkCommonFlags(args, hosted);
         }
         if (spec.effect === 'write' && spec.bindsTab !== true) {
             // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
-            await (await tabSessionCommands()).refuseAnotherTabSession(args, runtime);
+            await (await tabSessionCommands()).refuseAnotherTabSession(args, hosted);
         }
         const command = await spec.load();
-        const lockDeadline = hookLockDeadline(args.command, runtime.clock.now());
-        return await command(args, lockDeadline === undefined ? runtime : { ...runtime, lockDeadline });
+        const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
+        const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
+        return await command(args, args.hostEvent === undefined ? hookRuntime : { ...hookRuntime, hostEvent: args.hostEvent });
     }
     catch (error) {
         if (error instanceof UsageError) {

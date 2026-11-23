@@ -85,7 +85,9 @@ namespace TeamrigCredentials {
 const WINDOWS = {
     label: 'the Windows Credential Manager',
     program: 'powershell.exe',
-    saveCommand: (name) => `cmdkey /generic:${name} /user:teamrig /pass`,
+    writer: 'cmdkey',
+    saveArgs: (name) => [`/generic:${name}`, '/user:teamrig', '/pass'],
+    removeArgs: (name) => [`/delete:${name}`],
     request: (name) => powerShellRequest(windowsReadScript(name)),
     missing: (result) => result.end.kind === 'exited' && result.end.code === WINDOWS_MISSING_EXIT,
     secretOf: (stdout) => Buffer.from(stdout.trim(), 'base64').toString('utf8'),
@@ -95,7 +97,10 @@ const MACOS_MISSING_EXIT = 44;
 const MACOS = {
     label: 'the macOS keychain',
     program: 'security',
-    saveCommand: (name) => `security add-generic-password -U -s ${name} -a teamrig -w`,
+    writer: 'security',
+    saveArgs: (name) => ['add-generic-password', '-U', '-s', name, '-a', 'teamrig', '-w'],
+    // By service name alone, as the read finds it, so a key saved under another account name goes too.
+    removeArgs: (name) => ['delete-generic-password', '-s', name],
     request: (name) => ({ program: 'security', args: ['find-generic-password', '-s', name, '-w'] }),
     missing: (result) => result.end.kind === 'exited' && result.end.code === MACOS_MISSING_EXIT,
     secretOf: (stdout) => stdout.trimEnd(),
@@ -104,7 +109,9 @@ const MACOS = {
 const LINUX = {
     label: 'the Secret Service keyring',
     program: 'secret-tool',
-    saveCommand: (name) => `secret-tool store --label=${name} service ${name}`,
+    writer: 'secret-tool',
+    saveArgs: (name) => ['store', `--label=${name}`, 'service', name],
+    removeArgs: (name) => ['clear', 'service', name],
     request: (name) => ({ program: 'secret-tool', args: ['lookup', 'service', name] }),
     missing: (result) => result.end.kind === 'exited' && result.end.code === 1 && result.stdout === '' && result.stderr.trim() === '',
     secretOf: (stdout) => stdout.trimEnd(),
@@ -125,10 +132,51 @@ export function systemCredentials(platform, run) {
     const read = (name) => readWith(tool, run, name);
     return {
         label: tool.label,
-        saveCommand: (name) => tool.saveCommand(name),
+        saveCommand: (name) => saveCommandOf(tool, name),
         read,
         readFirst: (names) => (tool === WINDOWS ? windowsReadFirst(run, names) : readFirstOneByOne(read, names)),
     };
+}
+/**
+ * The writes to the store of the operating system teamrig runs on, through its own command-line tool, started from the
+ * absolute path `writer` finds and never by its bare name.
+ */
+export function systemCredentialKeeper(platform, run, writer) {
+    const tool = toolFor(platform);
+    return {
+        label: tool.label,
+        saveRequest: async (name) => {
+            const found = await writer();
+            return found.kind === 'found' ? { kind: 'ready', request: { program: found.path, args: tool.saveArgs(name) } } : found;
+        },
+        remove: (name) => removeWith(tool, run, writer, name),
+    };
+}
+/** The save command as a person types it; every part is a credential name or a fixed word, so none needs quoting. */
+function saveCommandOf(tool, name) {
+    return [tool.writer, ...tool.saveArgs(name)].join(' ');
+}
+async function removeWith(tool, run, writer, name) {
+    if (!CREDENTIAL_NAME.test(name)) {
+        return { kind: 'failed', reason: `${JSON.stringify(name)} is not a credential name: letters, digits, '.', '_' or '-'` };
+    }
+    const found = await writer();
+    if (found.kind === 'refused') {
+        return { kind: 'failed', reason: found.reason };
+    }
+    const request = { program: found.path, args: tool.removeArgs(name) };
+    let result;
+    try {
+        result = await run(request);
+    }
+    catch (error) {
+        return { kind: 'failed', reason: `${request.program} could not start: ${errorMessage(error)}` };
+    }
+    if (result.end.kind === 'exited' && result.end.code === 0) {
+        return { kind: 'removed' };
+    }
+    // cmdkey prints its errors on stdout.
+    return { kind: 'failed', reason: `${request.program} ${endText(result.end)}: ${firstLine(result.stderr === '' ? result.stdout : result.stderr)}` };
 }
 /**
  * `readFirst` in one PowerShell run. A name that is no credential name fails at its place, and only the names before
@@ -166,7 +214,7 @@ async function windowsRun(run, names) {
     const secret = WINDOWS.secretOf(answer[2]);
     return TOKEN_TEXT.test(secret)
         ? { kind: 'found', index, secret }
-        : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${WINDOWS.saveCommand(name)}` };
+        : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${saveCommandOf(WINDOWS, name)}` };
 }
 async function readWith(tool, run, name) {
     if (!CREDENTIAL_NAME.test(name)) {
@@ -188,7 +236,7 @@ async function readWith(tool, run, name) {
     }
     const secret = tool.secretOf(result.stdout);
     if (!TOKEN_TEXT.test(secret)) {
-        return { kind: 'failed', reason: `credential ${name} does not hold a token: save it again with ${tool.saveCommand(name)}` };
+        return { kind: 'failed', reason: `credential ${name} does not hold a token: save it again with ${saveCommandOf(tool, name)}` };
     }
     return { kind: 'found', secret };
 }

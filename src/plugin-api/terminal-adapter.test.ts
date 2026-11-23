@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { terminalDeps } from '../testing/adapter-deps.ts';
 import { manifestOf, terminalDeclarationData } from '../testing/manifests.ts';
 import { defineTerminal, isTerminalAdapter, isTerminalDeclaration, terminalAdapterProblems, terminalDeclarationProblems, type TerminalDeps } from './terminal-adapter.ts';
 
@@ -32,7 +33,7 @@ describe('defineTerminal', () => {
       },
     });
     assert.equal(adapter.declaration, data);
-    assert.deepEqual(adapter.create({ env: {}, platform: 'linux' }), {});
+    assert.deepEqual(adapter.create(terminalDeps()), {});
     assert.deepEqual(seen, ['linux']);
     assert.equal(isTerminalAdapter(adapter), true);
   });

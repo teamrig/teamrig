@@ -326,7 +326,7 @@ async function deliver(runtime, mk, meeting, posted) {
     const asks = new WakeAsks(runtime.files, mk.kit.paths.wakeAsks);
     if ((await liveRunOf(runtime, mk.kit.paths, mk.roster.ids, id)) !== undefined) {
         const title = tabTitleOf(mk, id);
-        const focused = focusLine(await focusTab(runtime, mk.config.open.terminal, title, runtime.cwd), name, title);
+        const focused = focusLine(await focusTab(runtime, mk.config.open.terminal, title), name, title);
         if (!mk.config.wake.enabled) {
             return [focused, `NOT WOKEN ${name}: wake.enabled is false on the team, so the meeting waits in its inbox for its next prompt`];
         }

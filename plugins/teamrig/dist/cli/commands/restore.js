@@ -6,7 +6,7 @@ import { ENV, resolveKitHome } from "../../core/home.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { indexMarks } from "../../inbox/marks.js";
 import { JsonlMarkLog } from "../../inbox/store.js";
-import { launchWords, openTab } from "../../open/open-tab.js";
+import { openedWords, openTab } from "../../open/open-tab.js";
 import { teamWindowOf } from "../../open/terminals.js";
 import { encodePrompt } from "../../open/prompt.js";
 import { shellCommand } from "../../open/quote.js";
@@ -68,7 +68,7 @@ async function restoreTeamsOf(runtime, teams) {
 }
 function reopenOutcomeOf(runtime, outcome, folder, argv) {
     if (outcome.kind === 'opened') {
-        return { kind: 'opened', launch: launchWords(outcome.terminal, outcome.end) };
+        return { kind: 'opened', launch: openedWords(outcome) };
     }
     return { kind: 'failed', why: `no terminal opened (${outcome.reasons.join('; ')}); run: ${shellCommand(runtime.platform, folder, argv)}` };
 }
@@ -231,7 +231,7 @@ export async function restoreCheck(args, runtime) {
     // Opened at login, unasked: the owner's first window keeps the focus (T2510).
     const outcome = await openTab(runtime, terminal ?? 'auto', { title: RESTORE_TAB_TITLE, folder: runtime.userHome, argv, window: undefined, focus: 'keep' });
     if (outcome.kind === 'opened') {
-        await restoreLogOf(homeRuntime)(`check: opened the restore tab; ${launchWords(outcome.terminal, outcome.end)}`);
+        await restoreLogOf(homeRuntime)(`check: opened the restore tab; ${openedWords(outcome)}`);
         runtime.out.stdout(`OPENED the restore of ${count} Claude Code session${count === 1 ? '' : 's'} in a new ${TERMINAL_LABELS[outcome.terminal]}`);
         return EXIT.ok;
     }

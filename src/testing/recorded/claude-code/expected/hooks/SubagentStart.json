@@ -2,7 +2,7 @@
   {
     "event": "SubagentStart",
     "index": 0,
-    "hook": "hook subagent-start",
+    "hook": "hook subagent-start --host claude-code",
     "code": 0,
     "stdout": [
       {
@@ -17,7 +17,7 @@
   {
     "event": "SubagentStart",
     "index": 0,
-    "hook": "hook tab-status",
+    "hook": "hook tab-status --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

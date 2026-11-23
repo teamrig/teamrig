@@ -30,7 +30,11 @@ export function hookGit(hooks, env) {
  * until one fails. The tab runs the new version once it reloads its plugins.
  */
 export async function applyUpdate(deps, plugin, marketplace) {
-    for (const step of deps.plugin.updateSteps(plugin, marketplace)) {
+    return runSteps(deps, deps.plugin.updateSteps(plugin, marketplace));
+}
+/** Runs each of the host program's `steps` in order, each killed past APPLY_TIMEOUT_MS, until one fails. */
+export async function runSteps(deps, steps) {
+    for (const step of steps) {
         const lines = [];
         const end = await deps.hooks.run({
             argv: [deps.claude.command, ...deps.claude.prefix, ...step],

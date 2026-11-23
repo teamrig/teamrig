@@ -5,6 +5,7 @@
 export const HOST_ADAPTERS = {
     'claude-code': '../adapters/hosts/claude-code',
     'codex-cli': '../adapters/hosts/codex-cli',
+    'antigravity-cli': '../adapters/hosts/antigravity-cli',
 };
 /** The host teamrig asks its host ports of, until a team's config names another. */
 export const DEFAULT_HOST = 'claude-code';

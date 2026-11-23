@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { constants } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,17 +8,26 @@ const CLI = fileURLToPath(new URL('./local.ts', import.meta.url));
 
 describe('local (the local gate CLI)', () => {
   let repo: TempRepo;
+  // The repo with one committed file, built once with git and copied by each test that needs it (T5032).
+  let template: TempRepo;
+  let committed: { readonly head: string; readonly tree: string };
+  before(() => {
+    template = new TempRepo('local-cli-template').init();
+    template.write('a.txt', 'a\n');
+    template.git('add', '-A');
+    template.git('commit', '-q', '-m', 'a');
+    committed = { head: template.git('rev-parse', 'HEAD').trim(), tree: template.git('rev-parse', 'HEAD^{tree}').trim() };
+  });
   beforeEach(() => {
     repo = new TempRepo('local-cli');
   });
   afterEach(() => repo.remove());
+  after(() => template.remove());
 
-  /** Commits one file and returns the commit and its tree. */
+  /** Starts this test's repo at one committed file, and returns the commit and its tree. */
   function commit(): { readonly head: string; readonly tree: string } {
-    repo.init().write('a.txt', 'a\n');
-    repo.git('add', '-A');
-    repo.git('commit', '-q', '-m', 'a');
-    return { head: repo.git('rev-parse', 'HEAD').trim(), tree: repo.git('rev-parse', 'HEAD^{tree}').trim() };
+    repo.copyFrom(template);
+    return committed;
   }
 
   /** Writes a pass record for the tree, as an earlier run would. */

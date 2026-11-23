@@ -32,6 +32,22 @@ export function recordVersion(record) {
 export function toJsonlLine(record) {
     return `${JSON.stringify(record)}\n`;
 }
+/**
+ * Appends whole JSONL lines (each ending in a newline) so the first starts a line of its own. A last line a writer
+ * left without its newline, torn mid-record or whole, would otherwise swallow the first new line, losing a record
+ * the caller was told is written: it gets its newline first, so its bytes stay, as one unreadable line or its own
+ * record. Reads only the file's last byte (a newline is one byte in UTF-8, never part of another character), so a
+ * long log costs no more; call it under the log's writer lock, which keeps another append from landing in between.
+ * Nothing to append writes nothing.
+ */
+export async function appendJsonlLines(files, path, lines) {
+    if (lines === '') {
+        return;
+    }
+    const last = await files.readTail(path, 1);
+    const separator = last === undefined || last === '' || last === '\n' ? '' : '\n';
+    await files.append(path, `${separator}${lines}`);
+}
 /** One line as a JSON object; undefined for anything else, a damaged or torn line included. */
 export function parseObject(raw) {
     try {

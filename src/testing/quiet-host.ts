@@ -1,4 +1,5 @@
 import type { CliRuntime } from '../cli/runtime.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
 import { SHIPPED_HOST, shippedHost } from './host.ts';
 import { FakePluginStore } from './fake-plugin-store.ts';
 import { quietRestore } from './fake-restore.ts';
@@ -10,6 +11,7 @@ import { MemoryTranscripts } from './memory-transcripts.ts';
 export type HostWorld = Pick<
   CliRuntime,
   | 'readStdin'
+  | 'interactive'
   | 'platform'
   | 'host'
   | 'shippedHosts'
@@ -25,16 +27,17 @@ export type HostWorld = Pick<
 >;
 
 /**
- * The machine when a run does not care about it: `stdin` on stdin and a Linux host with no programs or folders and an
+ * The machine when a run does not care about it: `stdin` on stdin, a terminal a person types in, and a Linux host with no programs or folders and an
  * empty plugin store, so nothing starts and no session process runs, a shell command prints nothing and exits 0, its
  * requirements check finds nothing missing, and there are no transcripts.
  */
 export function quietHost(stdin: string): HostWorld {
   return {
     readStdin: async () => stdin,
+    interactive: true,
     platform: 'linux',
     host: SHIPPED_HOST,
-    shippedHosts: [shippedHost(SHIPPED_HOST)],
+    shippedHosts: { [DEFAULT_HOST]: shippedHost(SHIPPED_HOST) },
     processes: {
       start: async () => ({ kind: 'missing' }),
       run: async () => ({ kind: 'missing' }),

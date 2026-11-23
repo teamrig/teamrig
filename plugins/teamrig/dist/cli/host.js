@@ -161,11 +161,11 @@ export function launcherIfTold(runtime) {
 }
 /** The way to build the ports of every host adapter teamrig ships with, then the running host's. */
 function sourcesOf(runtime) {
-    return [...runtime.shippedHosts.map((shipped) => shipped.ports), runtime.host];
+    return [...Object.values(runtime.shippedHosts).map((shipped) => shipped.ports), runtime.host];
 }
 /** The session variables every host adapter teamrig ships with declares, its session launcher built or not. */
 function declaredOf(runtime) {
-    return runtime.shippedHosts.map((shipped) => shipped.sessionVariables);
+    return Object.values(runtime.shippedHosts).map((shipped) => shipped.sessionVariables);
 }
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime) {
@@ -355,6 +355,14 @@ export function stepsOf(runtime) {
 export function stepsIfKnown(runtime) {
     const { steps } = hostOf(runtime);
     return isUnsupported(steps) ? undefined : steps;
+}
+/**
+ * The run's host's name as people know it, or undefined on a host with no launcher: for a caller that goes on
+ * without it, such as the status line, which never fails.
+ */
+export function hostNameIfKnown(runtime) {
+    const { launcher } = hostOf(runtime);
+    return isUnsupported(launcher) ? undefined : launcher.programName;
 }
 /** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
 export function hostNameOf(runtime) {

@@ -235,4 +235,10 @@ export interface TranscriptReader {
    * undefined too.
    */
   entry(line: string, only?: readonly EntryKind[]): TranscriptEntry | UnreadLine | undefined;
+  /**
+   * The name the host files the session's plan under, from the last line of the whole transcript `text` that names
+   * one, as that line gives it; undefined when none does. Restore asks it once per tab, so a reader finds it without
+   * parsing every line.
+   */
+  lastPlanSlug(text: string): string | undefined;
 }

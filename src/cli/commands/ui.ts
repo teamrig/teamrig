@@ -1,21 +1,32 @@
 import { isUiMode, UI_MODES, type KitConfig, type UiMode } from '../../config/types.ts';
 import type { Env } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE } from '../../core/ids.ts';
-import { openTab } from '../../open/open-tab.ts';
+import { openSplit, openTab } from '../../open/open-tab.ts';
 import type { RunOutcome } from '../../open/processes.ts';
-import { teamWindowOf } from '../../open/terminals.ts';
 import { RELEASED_UI } from '../../ui/pin.ts';
 import { releasedEntry, type UiPin } from '../../ui/released.ts';
 import { releasedEnv, uiRequest } from '../../ui/start.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
-import { openKit, openTeamKit, requireConfig, rosterOf, sessionIdOf, type Kit } from '../kit.ts';
+import { resolveKitHome } from '../../core/home.ts';
+import { LastTypedStore } from '../../sessions/last-typed.ts';
+import { foundTeamOf, lookForTeam, openKit, requireConfig, rosterOf, sessionIdOf, type Kit } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { homeArgs } from './open.ts';
 
-/** The kit of the team `--team` names, else of the team found here. */
-function kitOf(team: string | undefined, runtime: CliRuntime): Promise<Kit> {
+/**
+ * The kit of the team `--team` names, else of the team found here, else of the one the person last typed in: the UI
+ * covers every team on the host (T5249), so a folder of no team still starts it, on the team last worked in.
+ */
+async function kitOf(team: string | undefined, runtime: CliRuntime): Promise<Kit> {
   if (team === undefined) {
-    return openTeamKit(runtime);
+    const found = await lookForTeam(runtime);
+    if (found.kind === 'none') {
+      const typed = await new LastTypedStore(runtime.files, resolveKitHome(runtime.env, runtime.userHome)).read();
+      if (typed !== undefined && ID_PATTERN.test(typed.team)) {
+        return openKit(runtime, typed.team);
+      }
+    }
+    return openKit(runtime, foundTeamOf(found).team);
   }
   if (!ID_PATTERN.test(team)) {
     throw new UsageError(`--team ${team} is no team id: ${ID_RULE}`, 'ui');
@@ -82,42 +93,101 @@ function modeOf(args: ParsedArgs, config: KitConfig): UiMode {
   return named;
 }
 
-/** The window's tab title: the team, so two teams' UI windows tell apart. */
-function uiWindowTitle(team: string): string {
-  return `teamrig ui ${team}`;
+/** The tab's title: the team when pinned, so two pinned UIs tell apart; else the UI of every team. */
+function uiWindowTitle(start: UiTeam): string {
+  return start.pinned ? `teamrig ui ${start.team}` : 'teamrig ui';
 }
 
 /**
- * Opens a terminal window that runs this same command in terminal mode, the way `teamrig open` opens a session's tab
- * (`open.terminal`, `open.teamWindow`). True when one opened; else it says why and the caller shows the UI here.
+ * The window the UI opens in, of its own, apart from any team's session window (`open.teamWindow`): a tab added to a
+ * team's window, behind its sessions' tabs, read as no window at all (T5249). Only Windows Terminal names windows.
  */
-async function openUiWindow(runtime: CliRuntime, config: KitConfig, team: string, session: string | undefined): Promise<boolean> {
-  const argv = [
+export const UI_WINDOW = 'teamrig-ui';
+
+/** Where the UI starts: its first team, and whether `--team` pinned it there. */
+interface UiTeam {
+  readonly team: string;
+  readonly pinned: boolean;
+}
+
+/**
+ * This same command in terminal mode, with the same kit home and session, and `--team` only when it was named, so a
+ * window left unpinned still covers every team: what a window or split runs.
+ */
+function uiArgv(runtime: CliRuntime, start: UiTeam, session: string | undefined): string[] {
+  return [
     runtime.self.node,
     runtime.self.script,
     'ui',
     '--mode',
     'terminal',
-    '--team',
-    team,
+    ...(start.pinned ? ['--team', start.team] : []),
     ...homeArgs(runtime),
     ...(session === undefined ? [] : ['--session', session]),
   ];
-  const window = teamWindowOf(config.open.teamWindow, team);
-  const outcome = await openTab(runtime, config.open.terminal, { title: uiWindowTitle(team), folder: runtime.cwd, argv, window, focus: 'take' });
+}
+
+/**
+ * Opens a terminal window that runs this same command in terminal mode, the way `teamrig open` opens a session's tab
+ * (`open.terminal`), in the window `UI_WINDOW`. True when one opened; else it says why, and `otherwise` where the UI shows.
+ */
+async function openUiWindow(runtime: CliRuntime, config: KitConfig, start: UiTeam, session: string | undefined, otherwise: string): Promise<boolean> {
+  const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: UI_WINDOW, focus: 'take' } as const;
+  const outcome = await openTab(runtime, config.open.terminal, tab);
   if (outcome.kind === 'opened') {
     runtime.out.stdout(`OPENED the UI in a ${outcome.terminal} window`);
     return true;
   }
-  runtime.out.stdout(`NOTE no terminal window opened (${outcome.reasons.join('; ')}); the UI shows in this terminal`);
+  runtime.out.stdout(`NOTE no terminal window opened (${outcome.reasons.join('; ')}); ${otherwise}`);
   return false;
+}
+
+/**
+ * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, the focus left
+ * on the session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
+ * tool, whose host has no panel (T5105). True when one opened; else it says why.
+ */
+async function openUiSplit(runtime: CliRuntime, start: UiTeam, session: string | undefined): Promise<boolean> {
+  const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' } as const;
+  const outcome = await openSplit(runtime, tab);
+  if (outcome.kind === 'opened') {
+    runtime.out.stdout(`OPENED the UI in a split of this ${outcome.terminal} window`);
+    return true;
+  }
+  runtime.out.stdout(`NOTE no split of this terminal opened (${outcome.reasons.join('; ')})`);
+  return false;
+}
+
+/**
+ * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once it opens. The terminal
+ * half then shows here when this run has a terminal a person types in; else in a split of the session's terminal,
+ * else in a window when none was tried yet, saying so; only when all of these fail does it run here anyway.
+ */
+async function placeUi(runtime: CliRuntime, config: KitConfig, mode: UiMode, start: UiTeam, session: string | undefined): Promise<'shown' | 'here'> {
+  if (mode !== 'terminal') {
+    const otherwise = runtime.interactive ? 'the UI shows in this terminal' : 'the UI shows beside the session';
+    if ((await openUiWindow(runtime, config, start, session, otherwise)) && mode === 'window') {
+      return 'shown';
+    }
+  }
+  if (runtime.interactive) {
+    return 'here';
+  }
+  if (await openUiSplit(runtime, start, session)) {
+    return 'shown';
+  }
+  if (mode === 'terminal' && (await openUiWindow(runtime, config, start, session, 'the UI shows in this terminal'))) {
+    return 'shown';
+  }
+  return 'here';
 }
 
 /**
  * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]`: shows the dedicated UI where `--mode`,
  * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
- * one running the same UI and returns; with both, it opens the window and then shows the UI here too. A window that
- * cannot open falls back to this terminal and says so. The UI is a program of its own that teamrig loads no code of:
+ * one running the same UI and returns; with both, it opens the window and then shows the UI here too. Run with no
+ * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
+ * (`placeUi`). A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec.
  */
@@ -131,14 +201,13 @@ export function uiCommand(pin: UiPin | undefined): (args: ParsedArgs, runtime: C
     const session = named === undefined ? undefined : sessionIdOf(await rosterOf(runtime, kit, config), named);
     // The entry is checked before a window opens, so a window never opens on a UI that cannot start.
     const { entry, env } = await entryOf(config, runtime, kit, pin);
-    if (mode !== 'terminal') {
-      const opened = await openUiWindow(runtime, config, kit.paths.team, session);
-      if (opened && mode === 'window') {
-        return EXIT.ok;
-      }
+    // A session named is one of this team, so it pins the team too; with neither, the UI covers every team (T5249).
+    const start: UiTeam = { team: kit.paths.team, pinned: args.flags.get('team') !== undefined || session !== undefined };
+    if ((await placeUi(runtime, config, mode, start, session)) === 'shown') {
+      return EXIT.ok;
     }
     const { node, script } = runtime.self;
-    const request = uiRequest({ entry, node, script, team: kit.paths.team, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
+    const request = uiRequest({ entry, node, script, ...start, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
     return uiExit(runtime, node, await runtime.processes.run(request));
   };
 }

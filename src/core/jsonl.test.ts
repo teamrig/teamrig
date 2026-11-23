@@ -1,6 +1,47 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertWritable, NewerDataError, parseJsonl, recordVersion, toJsonlLine, writableObject } from './jsonl.ts';
+import { MemoryFiles } from '../testing/memory-files.ts';
+import { appendJsonlLines, assertWritable, NewerDataError, parseJsonl, recordVersion, toJsonlLine, writableObject } from './jsonl.ts';
+
+describe('appendJsonlLines', () => {
+  const PATH = '/logs/events.jsonl';
+  const LINE = '{"v":1,"b":2}\n';
+
+  it('starts the appended lines on a line of their own after a last line left without its newline', async () => {
+    for (const [before, after] of [
+      ['{"v":1,"a":1}\n{"v":1,"to', `{"v":1,"a":1}\n{"v":1,"to\n${LINE}`],
+      ['{"v":1,"a":1}', `{"v":1,"a":1}\n${LINE}`],
+      ['{"v":1,"a":"é"}', `{"v":1,"a":"é"}\n${LINE}`],
+    ] as const) {
+      const files = new MemoryFiles({ [PATH]: before });
+      await appendJsonlLines(files, PATH, LINE);
+      assert.equal(files.get(PATH), after, before);
+      assert.deepEqual(
+        parseJsonl(files.get(PATH) ?? '').records.map((record) => record.raw),
+        [...parseJsonl(`${before}\n`).records.map((record) => record.raw), LINE.trimEnd()],
+        before,
+      );
+    }
+  });
+
+  it('adds no newline to a file ending in one, an empty file or a missing one, and writes nothing for no lines', async () => {
+    for (const [initial, after] of [
+      [{ [PATH]: '{"v":1,"a":1}\r\n' }, `{"v":1,"a":1}\r\n${LINE}`],
+      [{ [PATH]: '' }, LINE],
+      [{}, LINE],
+    ] as const) {
+      const files = new MemoryFiles(initial);
+      await appendJsonlLines(files, PATH, LINE);
+      assert.equal(files.get(PATH), after);
+    }
+    const untouched = new MemoryFiles({ [PATH]: '{"v":1,"to' });
+    await appendJsonlLines(untouched, PATH, '');
+    assert.equal(untouched.get(PATH), '{"v":1,"to');
+    const missing = new MemoryFiles();
+    await appendJsonlLines(missing, PATH, '');
+    assert.equal(missing.get(PATH), undefined);
+  });
+});
 
 describe('parseJsonl', () => {
   it('reads objects with their line numbers and versions, skipping blank lines', () => {

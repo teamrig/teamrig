@@ -1,7 +1,7 @@
 import { extname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { settingAt, settingValueOf, withSetting } from "../../config/setting-edit.js";
-import { rowsUnder, settingRows } from "../../config/settings.js";
+import { entryRows, rowsUnder, settingRows } from "../../config/settings.js";
 import { isRecord } from "../../core/guards.js";
 import { clientRootOf } from "../../exec/client-integrity.js";
 import { noPositionals, UsageError } from "../args.js";
@@ -34,7 +34,7 @@ export async function get(args, runtime) {
     if (load.status === 'unreadable') {
         throw new RefusedError(`${load.path} cannot be read: ${issueText(load.issue)}; teamrig config validate shows it`);
     }
-    const all = await settingRowsOf(runtime, load);
+    const all = await settingRowsOf(runtime, load, key);
     const rows = key === undefined ? all : rowsUnder(all, key);
     if (rows.length === 0) {
         throw new RefusedError(`the config has no key ${key ?? ''}; teamrig config get lists them`);
@@ -61,13 +61,21 @@ export async function schemaSettingsOf(runtime, load) {
     const raw = load.pending?.migrated ?? parsedRecord(await runtime.files.read(load.path)) ?? {};
     return { schema, rows: settingRows(schema, raw, load.issues) };
 }
-/** The rows of {@link schemaSettingsOf} for `config get` and `config set`, which refuse without a schema. */
-async function settingRowsOf(runtime, load) {
+/**
+ * The rows of {@link schemaSettingsOf} for `config get` and `config set`, which refuse without a schema; with `key` under
+ * an entry of a map the file holds (`delivery.repos.<name>.shipTool`), that entry's rows, which the full list shows only
+ * as the map.
+ */
+async function settingRowsOf(runtime, load, key) {
     const settings = await schemaSettingsOf(runtime, load);
     if (settings === undefined) {
         throw new RefusedError(`no config schema at ${configSchemaPathOf(runtime.self.script)}; reinstall teamrig`);
     }
-    return settings.rows;
+    if (key === undefined || rowsUnder(settings.rows, key).length > 0) {
+        return settings.rows;
+    }
+    const raw = load.pending?.migrated ?? parsedRecord(await runtime.files.read(load.path)) ?? {};
+    return entryRows(settings.schema, raw, load.issues, key);
 }
 export const SET_BACKUP_NAME = 'config.set';
 /**

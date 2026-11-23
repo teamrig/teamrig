@@ -15,12 +15,12 @@ const CODEX_HOME = '/srv/codex';
 const CODEX_HOOKS = '/srv/codex/hooks.json';
 const PERSONS: unknown = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo done', timeout: 5 }] }] } };
 
-const shipped = (await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
+const shipped = Object.values(await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
 const codex: HostSource | undefined = shipped.find((source) => !isUnsupported(source(hostDeps()).userHooks));
 
 function options(over: RunOptions = {}): RunOptions {
   assert.ok(codex, 'no shipped host keeps a hooks file of the person');
-  return { shippedHosts: [{ ports: codex, sessionVariables: { marks: [], identity: [] } }], env: { CODEX_HOME }, ...over };
+  return { shippedHosts: { 'codex-cli': { ports: codex, sessionVariables: { marks: [], identity: [] } } }, env: { CODEX_HOME }, ...over };
 }
 
 async function kitWithPlugin(): Promise<CliHarness> {

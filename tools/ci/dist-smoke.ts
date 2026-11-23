@@ -333,6 +333,14 @@ function multiLineFinding(input: SmokeInput, run: Runner): string | undefined {
   return `bin launcher with a multi-line argument: expected exit ${USAGE_EXIT} and ${JSON.stringify(expected)}, got exit ${result.status ?? 'none'} and ${JSON.stringify(said)}`;
 }
 
+/**
+ * The sample a hook line takes: `hook <name>`, without the flags after the name. Those (`--host`, `--host-event`) only
+ * route the run to its host's ports, so every host's line for one hook shares its sample.
+ */
+export function sampleKeyOf(args: readonly string[]): string {
+  return args.slice(1, 3).join(' ');
+}
+
 /** Runs the built plugin the way an installed copy runs; returns what is wrong, empty when nothing is. */
 export function smokeDist(input: SmokeInput, run: Runner): string[] {
   const { commands, findings } = hookCommandsOf(input.manifest, input.pluginRoot);
@@ -342,9 +350,9 @@ export function smokeDist(input: SmokeInput, run: Runner): string[] {
     }
   }
   for (const { event, args } of commands) {
-    const hook = args.slice(1).join(' ');
+    const hook = sampleKeyOf(args);
     const sample = SAMPLES[hook];
-    const what = `${event} (${hook})`;
+    const what = `${event} (${args.slice(1).join(' ')})`;
     if (sample === undefined) {
       findings.push(`${what}: no smoke sample for ${hook}; add one to tools/ci/dist-smoke.ts`);
       continue;

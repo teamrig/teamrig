@@ -1,10 +1,22 @@
 import { SESSION_VARIABLES } from "./session-variables.js";
 /**
- * What teamrig does on Claude Code today: every feature but the two below. No row carries a proof yet: a proof is the
- * record of a live run on the operating system it names, added when that run is made, so until then the parity page
- * shows the row unproved.
+ * What teamrig does on Claude Code today: every feature but the two below. A row with no proof yet shows unproved on
+ * the parity page until a live run on the operating system it names is recorded.
  */
 const SUPPORTED = { kind: 'supported', proofs: [] };
+/** The live Windows runs recorded in docs/proofs/claude-code.md: the scan of 2026-11-20 and its re-run of 2026-11-23. */
+const SCAN = { toolVersion: '2.1.329', date: '2026-11-20' };
+const RESCAN = { toolVersion: '2.1.330', date: '2026-11-23' };
+/**
+ * A feature proved on Windows, its record under the feature id's heading in docs/proofs/claude-code.md (a heading's
+ * anchor drops the id's dot).
+ */
+function provedOnWindows(feature, run) {
+    return {
+        kind: 'supported',
+        proofs: [{ os: 'windows', toolVersion: run.toolVersion, date: run.date, evidence: `proofs/claude-code.md#${feature.replaceAll('.', '')}` }],
+    };
+}
 /** Tuning a session's model and effort from the user's own results is designed and not built on any CLI yet. */
 const TUNING = { kind: 'unsupported', notice: "tuning from a user's own results is not built yet" };
 /**
@@ -24,49 +36,49 @@ export const declaration = {
     name: 'Claude Code',
     sessionVariables: SESSION_VARIABLES,
     manifest: {
-        'rules.session-start': SUPPORTED,
-        'rules.instruction-files': SUPPORTED,
+        'rules.session-start': provedOnWindows('rules.session-start', RESCAN),
+        'rules.instruction-files': provedOnWindows('rules.instruction-files', SCAN),
         'rules.rules-folder': SUPPORTED,
         'rules.memory': SUPPORTED,
         'rules.start-size': SUPPORTED,
-        'inbox.prompt-line': SUPPORTED,
+        'inbox.prompt-line': provedOnWindows('inbox.prompt-line', SCAN),
         'context.compact-hold': SUPPORTED,
-        'context.size': SUPPORTED,
-        'context.refresh': SUPPORTED,
-        'hooks.pretool-guard': SUPPORTED,
-        'hooks.file-guard': SUPPORTED,
+        'context.size': provedOnWindows('context.size', SCAN),
+        'context.refresh': provedOnWindows('context.refresh', RESCAN),
+        'hooks.pretool-guard': provedOnWindows('hooks.pretool-guard', SCAN),
+        'hooks.file-guard': provedOnWindows('hooks.file-guard', SCAN),
         'hooks.exec-review': SUPPORTED,
-        'hooks.readonly-allow': SUPPORTED,
+        'hooks.readonly-allow': provedOnWindows('hooks.readonly-allow', SCAN),
         'hooks.ask-refuse': SUPPORTED,
         'hooks.permission-refuse': SUPPORTED,
         'hooks.output-redact': SUPPORTED,
         'hooks.prompt-secret': SUPPORTED,
-        'hooks.tool-failure': SUPPORTED,
+        'hooks.tool-failure': provedOnWindows('hooks.tool-failure', SCAN),
         'permissions.deny-lines': SUPPORTED,
-        'permissions.auto-mode-routes': SUPPORTED,
-        'sessions.open': SUPPORTED,
-        'sessions.resume': SUPPORTED,
-        'sessions.identity': SUPPORTED,
-        'sessions.wake': SUPPORTED,
-        'sessions.turn-end': SUPPORTED,
+        'permissions.auto-mode-routes': provedOnWindows('permissions.auto-mode-routes', SCAN),
+        'sessions.open': provedOnWindows('sessions.open', SCAN),
+        'sessions.resume': provedOnWindows('sessions.resume', SCAN),
+        'sessions.identity': provedOnWindows('sessions.identity', SCAN),
+        'sessions.wake': provedOnWindows('sessions.wake', SCAN),
+        'sessions.turn-end': provedOnWindows('sessions.turn-end', SCAN),
         'sessions.process': SUPPORTED,
         'sessions.in-tab': SUPPORTED,
         'sessions.carry': SUPPORTED,
         'sessions.effort-writeback': SUPPORTED,
-        'tabs.title-status': SUPPORTED,
+        'tabs.title-status': provedOnWindows('tabs.title-status', SCAN),
         'tabs.waiting-state': SUPPORTED,
         'tabs.memory': SUPPORTED,
         'wake.api-retry': SUPPORTED,
         'wake.cost': SUPPORTED,
-        'skills.plugin': SUPPORTED,
-        'skills.team': SUPPORTED,
-        'skills.session-listing': SUPPORTED,
+        'skills.plugin': provedOnWindows('skills.plugin', RESCAN),
+        'skills.team': provedOnWindows('skills.team', RESCAN),
+        'skills.session-listing': provedOnWindows('skills.session-listing', RESCAN),
         'helpers.start-rules': SUPPORTED,
         'helpers.agent-types': SUPPORTED,
-        'plugin.hooks-file': SUPPORTED,
+        'plugin.hooks-file': provedOnWindows('plugin.hooks-file', SCAN),
         'plugin.hook-trust': SUPPORTED,
         'plugin.install-update': SUPPORTED,
-        'plugin.cli-on-path': SUPPORTED,
+        'plugin.cli-on-path': provedOnWindows('plugin.cli-on-path', RESCAN),
         'budget.transcripts': SUPPORTED,
         'budget.usage': SUPPORTED,
         'budget.model-share': SUPPORTED,
@@ -78,8 +90,8 @@ export const declaration = {
         'budget.windows': SUPPORTED,
         'budget.tuning': TUNING,
         'errors.kinds': ERROR_KINDS,
-        'os.windows-sessions': SUPPORTED,
-        'os.windows-hooks': SUPPORTED,
+        'os.windows-sessions': provedOnWindows('os.windows-sessions', SCAN),
+        'os.windows-hooks': provedOnWindows('os.windows-hooks', SCAN),
         'os.linux': SUPPORTED,
     },
 };

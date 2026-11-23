@@ -1,0 +1,31 @@
+import { defineHost, unsupported } from "../../../plugin-api/index.js";
+import { declaration } from "./declaration.js";
+import { hookBridge } from "./hook-bridge.js";
+import { hostPaths } from "./paths.js";
+import { statusLine } from "./status-line.js";
+import { toolCallShape } from "./tool-call.js";
+/**
+ * The Antigravity host adapter: translates Antigravity's `hooks.json` lifecycle events, tool call shapes, and
+ * workspace/config paths for teamrig. Ports not yet wired for Antigravity return `unsupported(...)`.
+ */
+export default defineHost({
+    declaration,
+    create: (deps) => {
+        const toolCall = toolCallShape(deps.platform);
+        return {
+            hooks: hookBridge(toolCall),
+            toolCall,
+            transcripts: unsupported('Antigravity transcript reader is not wired yet'),
+            usage: unsupported('Antigravity has no usage meter wired yet'),
+            statusLine,
+            paths: hostPaths(deps.platform),
+            secrets: { secretFiles: () => [] },
+            permissions: unsupported('Antigravity CLI permissions port is not built yet'),
+            plugin: unsupported('Antigravity CLI plugin store port is not built yet'),
+            launcher: unsupported('Antigravity CLI session launcher port is not built yet'),
+            models: unsupported('Antigravity CLI models port is not built yet'),
+            steps: unsupported('Antigravity CLI steps port is not built yet'),
+            userHooks: unsupported('Antigravity CLI user hooks port is not built yet'),
+        };
+    },
+});

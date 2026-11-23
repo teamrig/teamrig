@@ -50,12 +50,16 @@ export interface HiddenRequest extends RunRequest {
 
 export type RunOutcome = { readonly kind: 'exited'; readonly code: number } | { readonly kind: 'missing' } | { readonly kind: 'failed'; readonly error: string };
 
-/** The child processes `teamrig open`, `teamrig launch` and the hooks start, as one port so all run in tests. */
-export interface Processes {
+/** What a terminal's adapter starts and runs to open and find its panes: a launcher, and a program it waits for. */
+export interface TerminalProcesses {
   /** Starts a terminal launcher in the background; its output is not shown. */
   start(request: StartRequest): Promise<StartOutcome>;
   /** Runs a program in this terminal, its input and output this process's own, until it exits. */
   run(request: RunRequest): Promise<RunOutcome>;
+}
+
+/** The child processes `teamrig open`, `teamrig launch` and the hooks start, as one port so all run in tests. */
+export interface Processes extends TerminalProcesses {
   /**
    * Starts a program with no window that runs on after this process ends, or is killed with every process it
    * started, with the given variables; its output goes to the request's log, or is dropped without one.

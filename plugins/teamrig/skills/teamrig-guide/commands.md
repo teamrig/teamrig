@@ -4939,13 +4939,17 @@ WARN cli-path C:\Users\you\.teamrig\bin is not on the user's PATH (HKCU\Environm
 
 ### teamrig ui
 
-Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. In `terminal` it shows in the terminal
-it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens a terminal
-window of its own running the same UI, the way `teamrig open` opens a session's tab ([open.terminal],
-[open.teamWindow]), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
+Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. One UI covers every team on the host:
+it starts on the team of this folder, else the team you last typed a prompt in, and follows the session you type in,
+in any team. `--team` pins it to that team, and `--session` to that session and its team. In `terminal` it shows in
+the terminal it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens
+a terminal window of its own running the same UI, as [open.terminal] says (in Windows Terminal the window named
+`teamrig-ui`, apart from any team's session window), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
 shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
-the UI in this terminal instead. Run it yourself in a terminal tab: it draws the whole screen, so it shows nothing through `/teamrig` or a
-session's shell. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
+the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
+or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
+the session works in, the focus left on the session's pane (`OPENED the UI in a split of this <terminal> window`);
+in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
 Without the key it runs the released UI this teamrig pins: the first start fetches its archive over https into
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
@@ -4958,8 +4962,8 @@ which the config guard refuses a session changing. The script runs outside every
 
 Flags:
 
-- `--session <id|name>`: the session whose view it opens on. Without it: the team's.
-- `--team <team>`: the team to show. Without it: the team of this folder.
+- `--session <id|name>`: the session whose view it stays on, in its team. Without it: the session you last typed in.
+- `--team <team>`: the one team to show. Without it: every team, starting on this folder's, else the last typed in.
 - `--mode <terminal|window|both>`: where to show the UI this once, over [ui.mode]. Any other word is a usage error.
 
 Example:
@@ -5090,7 +5094,9 @@ every guard (each `<name>Guard`), `alerts`, `refresh.endCommand`, `register.owne
 `open.idle`). The lead may set only the keys on teamrig's list of lead keys, so a key a new release adds stays the
 owner's until that list names it. Three listed keys rest on the lead's judgment: `register.review.mode` and
 `register.review.requireOn` (what a bug's review needs) and `github.repos` (the repositories teamrig writes issues
-to). A value `config validate` finds wrong is named with its problem, read as its default meanwhile.
+to). A value `config validate` finds wrong is named with its problem, read as its default meanwhile. A map lists as
+one key; `<key>` may name a key under one of its entries the file holds (`delivery.repos.<name>.shipTool`,
+`delivery.repos.<name>`), read-only, so a setup script can read back what it wrote.
 
 Flags:
 
@@ -5111,7 +5117,8 @@ messages.maxLines 12  (default 10)
 messages.coldAfterMinutes 60
 ```
 
-It refuses a key the config does not have, and a config it cannot read.
+It refuses a key the config does not have, a key under a map entry the file does not hold, and a config it cannot
+read.
 
 ### teamrig config set
 
@@ -5613,6 +5620,88 @@ OK 3 commit(s) in origin/main..HEAD, none over 400 non-test lines or 15 files wi
 ```
 
 A commit over the rule without the reason line is `REFUSED` (exit 2).
+
+### teamrig channel
+
+Shows the release channel this machine's teamrig install follows. On the stable channel, the install follows its
+marketplace's default branch, which takes a release once it has been out for a while; on the preview channel, it
+follows the marketplace's `preview` branch, which takes every release as it is cut. It reads the host's own plugin
+list and marketplace records, and changes nothing.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig channel
+```
+
+Output:
+
+```text
+teamrig 0.505.0 follows the stable channel (marketplace teamrig)
+```
+
+A marketplace that follows a branch teamrig does not name shows that branch. No teamrig install from a marketplace,
+a marketplace read from a local folder (which follows no branch) and a host that keeps no plugin store are
+`REFUSED` (exit 2).
+
+### teamrig channel stable
+
+Moves this machine's teamrig install to the stable channel: it changes the marketplace's own entry in your user
+settings, so the host follows the default branch, then re-adds the marketplace and updates teamrig through the host's
+own plugin commands. Without `--yes` it shows the change and the commands and writes nothing; with `--yes` it first
+keeps the old settings file in the kit's `backups` folder. A new session runs the version it installed. It changes
+your settings, not a team's, so it takes no `--session`.
+
+Flags:
+
+- `--yes`: write the change and run the commands; without it, only show them.
+
+Example:
+
+```sh
+teamrig channel stable
+```
+
+Output:
+
+```text
+PREVIEW nothing written (add --yes to write): the preview channel -> the stable channel
+  CHANGE <settings file>: the marketplace teamrig's own entry follows its default branch
+  RUN claude plugin marketplace add GeneralA6/teamrig
+  RUN claude plugin update teamrig@teamrig
+```
+
+The `CHANGE` line names the host's user settings file in place of `<settings file>`. `UNCHANGED teamrig already
+follows the stable channel` when nothing would change. A host command that fails is a
+`FAILED <command>: <what it said>` line (exit 1) naming the kept settings file. Settings that are not a JSON object
+and a host program not on the PATH are `REFUSED` (exit 2), with nothing written.
+
+### teamrig channel preview
+
+Moves this machine's teamrig install to the preview channel, the marketplace's `preview` branch, which takes every
+release as it is cut: the same steps as [channel stable](#teamrig-channel-stable), with the marketplace's entry
+following `preview`. Use it to try each release first; `teamrig channel stable` moves back.
+
+Flags:
+
+- `--yes`: write the change and run the commands; without it, only show them.
+
+Example:
+
+```sh
+teamrig channel preview --yes
+```
+
+Output:
+
+```text
+DONE teamrig follows the preview channel; a new session runs it; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
+  CHANGE <settings file>: the marketplace teamrig's own entry follows preview
+  RUN claude plugin marketplace add GeneralA6/teamrig#preview
+  RUN claude plugin update teamrig@teamrig
+```
 
 ### teamrig changes
 
@@ -7003,6 +7092,99 @@ quit=1
 teamrig git-credential: no key given: teamrig answers https only, not ssh
 ```
 
+### teamrig key list
+
+Lists each code-host key the team's repositories may use: for each owner, the owner's key, then each repository's own
+key, by its credential name in the operating system's credential store, and whether the store holds it (`saved`,
+`missing`, or `unreadable` with the store's reason). A repository with no key of its own uses its owner's, which the
+line says. It reads a key only to know it is there and never prints one. With no repositories set, it says how a key
+is named and how to add one.
+
+Flags: none.
+
+Example, in a team whose one repository is `acme/api`, with only the owner's key saved:
+
+```sh
+teamrig key list
+```
+
+Output:
+
+```text
+acme  teamrig-gh-acme  saved
+acme/api  teamrig-gh-acme.api  missing: its owner's key reaches it
+```
+
+### teamrig key add
+
+Saves the code host's key for an owner (`acme`) or for one repository (`acme/api`), which then wins over the owner's
+key for that repository. It runs only from a person's own terminal, never from a session, a pipe or a script
+(REFUSED, exit 2): the credential store's own save command runs in your terminal and asks for the key with nothing
+shown, so the key never passes teamrig, an argument, the environment or a file. It prints where it saves the key and
+whether it replaces one saved before, then reads the key back from the store and checks it as
+[teamrig key check](#teamrig-key-check) does; it fails, the key kept, when the code host refuses it. Use a
+fine-grained key limited to the repositories and rights the team needs. The store is your user's keychain, not a
+sandbox: any program running as you can read it.
+
+Flags: none.
+
+Example, run by a session:
+
+```sh
+teamrig key add acme/api
+```
+
+Output:
+
+```text
+REFUSED teamrig key add runs only from a person's own terminal, never a session, a pipe or a script; run it in a terminal yourself
+```
+
+### teamrig key check
+
+Asks the code host's API whose each saved key is, sending the key only to that API's host and never printing it:
+the account it belongs to, its kind (fine-grained, classic, app or OAuth), a classic key's scopes and its expiry
+day. With no scope it checks every saved key the team's repositories may use, skipping one not saved; with
+`<owner|owner/name>` only that one. It warns on a classic or app key, which reaches every repository its user can,
+on a key that never expires, and on one that expires within 7 days or has expired. Exit 1 when a key is not saved
+(a named scope), unreadable, refused by the code host (revoked, expired or mistyped) or the host cannot be reached.
+
+Flags: none.
+
+Example, with a classic key saved for the owner `acme`:
+
+```sh
+teamrig key check acme
+```
+
+Output:
+
+```text
+acme  teamrig-gh-acme  octo, classic, scopes repo, workflow, no expiry
+  warning: a classic key reaches every repository its user can; a fine-grained key limited to the team's repositories is safer
+  warning: the key never expires; one with an expiry limits what a leaked key can do
+```
+
+### teamrig key remove
+
+Removes the saved key for an owner or one repository, from a person's own terminal only (REFUSED from a session, a
+pipe or a script). Nothing saved is no failure. It prints the store it removed the key from; the key still works at
+the code host until you revoke it there, which it says with the page to do it on.
+
+Flags: none.
+
+Example, run by a session:
+
+```sh
+teamrig key remove acme/api
+```
+
+Output:
+
+```text
+REFUSED teamrig key remove runs only from a person's own terminal, never a session, a pipe or a script; run it in a terminal yourself
+```
+
 ### teamrig test
 
 Runs a test command in the shell and prints a few lines instead of all it printed, so a long test run costs the
@@ -8025,7 +8207,8 @@ write and the count or dry run to show the owner first, and under `ask` (the def
 
 Before a Bash or PowerShell call, refuses a `teamrig exec approve`, `refuse` or `escalate` run as anyone but the
 tab's own session, any `exec` call while the installed teamrig client differs from what its build
-hashed, and a raw `gh` write on a repository in `github.repos`, or one it cannot place. See [Hooks and permissions](hooks.md#before-a-shell-command-the-exec-guard).
+hashed, a raw `gh` write on a repository in `github.repos`, or one it cannot place, and a raw read on an owner
+of those repositories, naming the line that runs it on the team's saved key. See [Hooks and permissions](hooks.md#before-a-shell-command-the-exec-guard).
 
 Flags: none.
 
@@ -8130,7 +8313,9 @@ request`, `worktree remove`, a `pr approve` or `pr merge` at the head your leade
 or inbox command, a `git commit` with its hooks, a `git push` of a task branch you own), alone or piped into one
 read-only filter, runs; a line that provably only reads runs; a Bash line teamrig's rules give a rerun form (after a leading
 `cd D &&`, or a plain `git worktree remove`) is refused quoting the line to run instead; anything else is refused with
-the tool's name and the note to record the step as waiting for the owner and take the next task. Each answer is a line
+the tool's name and the note to record the step as waiting for the owner and take the next task, and a refused Bash
+line of one teamrig command also names the synced allow rule `teamrig automode install --yes` adds for it, or its
+route's exact form. Each answer is a line
 in `state/prompt-answers.jsonl`, its command masked of every secret value, a route's by its route alone; lines over 7 days old move to the
 archive (see
 [teamrig compact](#teamrig-compact)). The question picker (`AskUserQuestion`) and plan mode's exit (`ExitPlanMode`)
@@ -8813,7 +8998,7 @@ teamrig help
 Output: the usage, starting:
 
 ```text
-teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>)
+teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>, and --host <id> for the host it runs in, else the first in hosts)
 ```
 
 ### teamrig version

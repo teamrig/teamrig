@@ -98,18 +98,19 @@ describe('loadShippedHosts', () => {
       const id = specifier.split('/').at(-2) ?? '';
       return Promise.resolve({ default: { declaration: hostDeclarationData({ id }), create: () => ({ ...everyPortUnsupported(), paths: unsupported(`${id} tells no folder`) }) } });
     };
-    const sources = (await loadShippedHosts(run, importer)).map((shipped) => shipped.ports);
+    const sources = Object.fromEntries(Object.entries(await loadShippedHosts(run, importer)).map(([id, shipped]) => [id, shipped.ports]));
     const ids = Object.keys(HOST_ADAPTERS);
     assert.equal(ids.includes(DEFAULT_HOST), true);
     assert.deepEqual(asked, ids.map((id) => `../adapters/hosts/${id}/index.ts`));
+    assert.deepEqual(Object.keys(sources), ids);
     assert.deepEqual(
-      sources.map((source) => source({ env: {}, platform: 'linux' }).paths),
+      Object.values(sources).map((source) => source({ env: {}, platform: 'linux' }).paths),
       ids.map((id) => unsupported(`${id} tells no folder`)),
     );
   });
 
   it('loads the shipped adapters as they are, each with its secret files', async () => {
-    const sources = (await loadShippedHosts(run)).map((shipped) => shipped.ports);
+    const sources = Object.values(await loadShippedHosts(run)).map((shipped) => shipped.ports);
     assert.equal(sources.length, Object.keys(HOST_ADAPTERS).length);
     assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
   });
@@ -121,12 +122,12 @@ describe('loadShippedHosts', () => {
       return Promise.resolve({ default: { declaration: hostDeclarationData({ id, sessionVariables }), create: () => everyPortUnsupported() } });
     };
     const shipped = await loadShippedHosts(run, importer);
-    assert.deepEqual(shipped.map((host) => host.sessionVariables), Object.keys(HOST_ADAPTERS).map(() => sessionVariables));
+    assert.deepEqual(Object.values(shipped).map((host) => host.sessionVariables), Object.keys(HOST_ADAPTERS).map(() => sessionVariables));
     const real = await loadShippedHosts(run);
-    for (const [index, id] of Object.keys(HOST_ADAPTERS).entries()) {
+    for (const id of Object.keys(HOST_ADAPTERS)) {
       const load = await loadHost(id);
       assert.ok(load.kind !== 'refused', `the shipped host adapter ${id} did not load`);
-      assert.deepEqual(real[index]?.sessionVariables, load.value.declaration.sessionVariables, id);
+      assert.deepEqual(real[id]?.sessionVariables, load.value.declaration.sessionVariables, id);
     }
   });
 

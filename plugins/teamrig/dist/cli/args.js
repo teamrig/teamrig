@@ -15,6 +15,14 @@ export const HELP_FLAGS = new Set(['--help', '-h']);
  * in its flags; on any other, `runCli` checks them (src/cli/common-flags.ts) and the command ignores them.
  */
 export const COMMON_FLAGS = ['session', 'team'];
+/** The flag every `hook` command takes for the host's event name (`ParsedArgs.hostEvent`). */
+export const HOST_EVENT_FLAG = 'host-event';
+/** The flag every command takes for the host it runs under (`ParsedArgs.host`). */
+export const HOST_FLAG = 'host';
+/** The commands run as a host's hooks, which take `--host-event`. */
+export function isHookCommand(command) {
+    return command.startsWith('hook ');
+}
 /** Ends a command's own flags: every word after it belongs to the command line it runs. */
 export const REST_MARKER = '--';
 /** The command a line names: two words when they form a command (`inbox read`), else one; a group word before `--help`. */
@@ -62,13 +70,27 @@ export function parseArgs(argv, commandFlags, commandSwitches = {}, renamed = {}
     const flags = new Map();
     const common = new Map();
     const switches = new Set();
+    // The flags a host writes into a command line, which no command reads itself: one value each, never in `flags`.
+    const hostFlags = new Map();
+    const hostFlagNamed = (name) => !allowed.includes(name) && (name === HOST_FLAG || (name === HOST_EVENT_FLAG && isHookCommand(command)));
+    const parsed = (rest) => ({
+        command,
+        positionals,
+        flags,
+        switches,
+        rest,
+        help: false,
+        common,
+        hostEvent: hostFlags.get(HOST_EVENT_FLAG),
+        host: hostFlags.get(HOST_FLAG),
+    });
     for (let index = 0; index < tail.length; index += 1) {
         const token = tail[index] ?? '';
         if (HELP_FLAGS.has(token)) {
             return { command, positionals: [], flags: new Map(), switches: new Set(), rest: [], help: true, common: new Map() };
         }
         if (token === REST_MARKER && restCommands.has(command)) {
-            return { command, positionals, flags, switches, rest: tail.slice(index + 1), help: false, common };
+            return parsed(tail.slice(index + 1));
         }
         if (!token.startsWith('--')) {
             positionals.push(token);
@@ -86,12 +108,21 @@ export function parseArgs(argv, commandFlags, commandSwitches = {}, renamed = {}
             switches.add(name);
             continue;
         }
-        if (!allowed.includes(name) && !COMMON_FLAGS.includes(name)) {
+        const hostFlag = hostFlagNamed(name);
+        if (!allowed.includes(name) && !COMMON_FLAGS.includes(name) && !hostFlag) {
             throw new UsageError(`${command} takes no ${token}`, command);
         }
         const value = tail[index + 1];
         if (value === undefined || value.startsWith('--')) {
             throw new UsageError(`${token} needs a value`, command);
+        }
+        if (hostFlag) {
+            if (hostFlags.has(name)) {
+                throw new UsageError(`${token} is given twice`, command);
+            }
+            hostFlags.set(name, value);
+            index += 1;
+            continue;
         }
         if (flags.has(name) || common.has(name)) {
             throw new UsageError(`${token} is given twice`, command);
@@ -99,7 +130,7 @@ export function parseArgs(argv, commandFlags, commandSwitches = {}, renamed = {}
         (allowed.includes(name) ? flags : common).set(name, value);
         index += 1;
     }
-    return { command, positionals, flags, switches, rest: [], help: false, common };
+    return parsed([]);
 }
 export function noPositionals(args) {
     const [extra] = args.positionals;

@@ -15,7 +15,7 @@ import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import type { RequirementsCheck } from '../requirements/requirements.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
@@ -26,6 +26,7 @@ import type { ChangeGit } from '../changes/source.ts';
 import type { RepoState } from '../push-guard/push.ts';
 import type { SecretsGit } from '../secret-guard/secrets-git.ts';
 import type { CredentialStore } from '../core/credentials.ts';
+import type { KeyPorts } from '../core/terminal.ts';
 import type { HttpClient } from '../core/http.ts';
 import type { GhRunner } from '../adapters/connectors/github/gh.ts';
 import type { ShellRunner } from '../test-run/shell.ts';
@@ -153,6 +154,8 @@ export interface RunOptions {
   readonly timeZone?: string;
   /** The programs the CLI starts; default none is installed. */
   readonly processes?: Processes;
+  /** Whether stdin and stdout are a terminal a person types in; default true, false as under an AI CLI's shell tool. */
+  readonly interactive?: boolean;
   /** The running session's processes; default the kit's own (`CliHarness.sessionProcesses`). */
   readonly sessionProcesses?: SessionProcesses;
   /** How the CLI waits, such as one that changes the world mid-wait; default the clock's, which only moves time. */
@@ -163,6 +166,8 @@ export interface RunOptions {
   readonly gh?: GhRunner;
   /** The saved secrets `issue sync` reads tokens from; default a store with none. */
   readonly credentials?: CredentialStore;
+  /** What `teamrig key` writes with; default no person at the terminal and writes to a store apart from `credentials`. */
+  readonly keys?: KeyPorts;
   /** The outside API a connector adapter reaches; default one where no request is answered. */
   readonly http?: HttpClient;
   /** The folders and programs the CLI sees; default none. */
@@ -175,8 +180,8 @@ export interface RunOptions {
   readonly transcripts?: TranscriptSource;
   /** The host ports the run is given; default the shipped host's (the quiet world's). */
   readonly host?: HostSource;
-  /** The host adapters teamrig ships with, as the run sees them; default the shipped host alone (the quiet world's). */
-  readonly shippedHosts?: readonly ShippedHost[];
+  /** Every host adapter the run sees shipped, by id (`--host`); default the quiet world's one shipped host. */
+  readonly shippedHosts?: ShippedHosts;
   /** The worktrees `worktree remove` sees; default none. */
   readonly worktrees?: WorktreePorts;
   /**
@@ -277,10 +282,12 @@ export class CliHarness {
       ...(options.secretsGit === undefined ? {} : { secretsGit: options.secretsGit }),
       ...(options.platform === undefined ? {} : { platform: options.platform }),
       ...(options.processes === undefined ? {} : { processes: options.processes }),
+      ...(options.interactive === undefined ? {} : { interactive: options.interactive }),
       sessionProcesses: options.sessionProcesses ?? this.sessionProcesses,
       ...(options.shell === undefined ? {} : { shell: options.shell }),
       ...(options.gh === undefined ? {} : { run: programOverGh(options.gh) }),
       ...(options.credentials === undefined ? {} : { credentials: options.credentials }),
+      ...(options.keys === undefined ? {} : { keys: options.keys }),
       ...(options.http === undefined ? {} : { http: options.http }),
       ...(options.probe === undefined ? {} : { probe: options.probe }),
       ...(options.pluginStore === undefined ? {} : { pluginStore: options.pluginStore }),

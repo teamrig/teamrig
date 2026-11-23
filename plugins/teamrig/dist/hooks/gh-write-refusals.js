@@ -21,7 +21,7 @@ const PLACING_VARIABLES = ['GH_REPO', 'GH_HOST', 'GIT_DIR', 'GIT_WORK_TREE', 'GI
  * runs; or a git command that is none of git's own, which may be an alias or a `git-<name>` program doing anything
  * (git never lets an alias override its own commands).
  */
-function placementInDoubt(runs) {
+export function placementInDoubt(runs) {
     if (PLACING_VARIABLES.some((name) => changesVariable(runs, name))) {
         return true;
     }
@@ -37,15 +37,15 @@ export const ISSUE_COMMANDS = new Set(['sync', 'watch', 'migrate', 'reply', 'edi
 /** The `teamrig issue` commands gh's issue group has too; teamrig's alone names its issue as `owner/name#n`, which gh never takes. */
 const SHARED_ISSUE_COMMANDS = new Set(['edit', 'close']);
 /** True when an unnamed program's words read as a `teamrig issue` call rather than a gh one. */
-function teamrigIssueCall(words) {
+export function teamrigIssueCall(words) {
     const [group, command] = words;
     if (group?.text !== 'issue' || group.dynamic || command === undefined || command.dynamic || !ISSUE_COMMANDS.has(command.text)) {
         return false;
     }
     return !SHARED_ISSUE_COMMANDS.has(command.text) || words.slice(2).some((word) => !word.dynamic && /^[^/#\s]+\/[^/#\s]+#\d+$/u.test(word.text));
 }
-/** The repositories gh picks one from for a write that names none: `GH_REPO`, else the folder's remotes; undefined when the guard cannot tell. */
-function folderReposOf(dir, env, doubt) {
+/** The repositories gh picks one from for a call that names none: `GH_REPO`, else the folder's remotes; undefined when the guard cannot tell. */
+export function folderReposOf(dir, env, doubt) {
     if (doubt) {
         return undefined;
     }
@@ -75,8 +75,8 @@ function ghRefusalOf({ call, route, folder }, github) {
 }
 /**
  * Why the guard refuses each raw `gh` write on the line: its `gh` runs, and each program only known when it runs whose
- * words read as a gh call (`$GH issue close 7`), which has no folder the guard can tell. Reads always pass, and so does
- * every call on a team whose `github.repos` names none.
+ * words read as a gh call (`$GH issue close 7`), which has no folder the guard can tell. Reads pass here (a read on a
+ * team owner is gh-read-refusals.ts's), and so does every call on a team whose `github.repos` names none.
  */
 export function ghWriteRefusals(runs, env) {
     const github = env.github;

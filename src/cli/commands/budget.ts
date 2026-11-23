@@ -71,7 +71,7 @@ import type { RepoState } from '../../push-guard/push.ts';
 import { TASK_ID } from '../../register/model.ts';
 import { accountWeekOn, kitHomeAccountsOf, otherTeamsOnAccount, peerMarksOf } from '../account-teams.ts';
 import { UsageError, onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
-import { hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
+import { hostNameIfKnown, hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
 import { isUnsupported } from '../../ports/host/index.ts';
 import { callerOf, type TypedTimes } from '../inputs.ts';
 import { rushLine, rushSegment } from '../../budget/rush.ts';
@@ -719,6 +719,7 @@ type StatusLineShown = Pick<StatusLineSetup, 'show' | 'paceSource' | 'team'>;
 
 /** What the status line reads beside the snapshot: the session's effort level, where the team's pace line stands, and an open meeting's mark. */
 interface StatusLineReading {
+  readonly host: string | undefined;
   readonly effort: string | undefined;
   readonly pacePct: number | undefined;
   readonly meeting: StatusLineMeeting | undefined;
@@ -791,6 +792,7 @@ function statusLineView(git: Pick<RepoState, 'branch' | 'head'>, dir: string, sh
   const branch = show.branch ? git.branch(dir) : undefined;
   const commit = show.branch && branch === undefined ? git.head(dir) : undefined;
   return {
+    ...(reading.host === undefined ? {} : { host: reading.host }),
     ...(reading.effort === undefined ? {} : { effort: reading.effort }),
     ...(show.folder ? { folder: basename(dir) } : {}),
     ...(branch === undefined ? {} : { branch }),
@@ -861,10 +863,11 @@ export async function statusline(args: ParsedArgs, runtime: CliRuntime): Promise
     runtime.out.stderr(`teamrig statusline: ${statusLine.notice}; nothing saved`);
     return EXIT.ok;
   }
+  const host = hostNameIfKnown(runtime);
   const snapshot = snapshotOfStatus({ statusLine, usage: usageIfMetered(runtime) }, input, runtime.clock.now());
   if (snapshot === undefined) {
-    runtime.out.stdout(pass ? passed : 'Claude');
-    runtime.out.stderr('teamrig statusline: the status input is not Claude Code status JSON with a session id; nothing saved');
+    runtime.out.stdout(pass ? passed : (host ?? ''));
+    runtime.out.stderr(`teamrig statusline: the status input is not ${host ?? 'the host'}'s status JSON with a session id; nothing saved`);
     return EXIT.ok;
   }
   let shown: StatusLineShown = { show: DEFAULT_STATUS_LINE, paceSource: undefined, team: undefined };
@@ -886,6 +889,7 @@ export async function statusline(args: ParsedArgs, runtime: CliRuntime): Promise
   }
   const dir = snapshot.cwd === '' ? runtime.cwd : snapshot.cwd;
   const reading: StatusLineReading = {
+    host,
     effort: effortOfStatus(statusLine, input),
     pacePct: await pacePctOf(runtime, snapshot, shown),
     meeting: await meetingMarkOf(runtime, shown.team, snapshot.sessionId),

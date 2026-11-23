@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION } from '../plugin-api/index.ts';
 import { HOST_PORT_NAMES } from '../ports/host/index.ts';
-import { hostDeps } from '../testing/adapter-deps.ts';
+import { hostDeps, terminalDeps } from '../testing/adapter-deps.ts';
 import { connectorDeclarationData, hostDeclarationData, terminalDeclarationData } from '../testing/manifests.ts';
 import { TERMINAL_ADAPTERS } from './adapters.ts';
 import { importModule, loadConnector, loadHost, loadTerminal, readDeclarations, type Load, type ModuleImporter } from './loader.ts';
@@ -49,12 +49,13 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     assert.equal(local.kind === 'loaded' && local.value.declaration.refPrefix, 'local:');
   });
 
-  it('loads each terminal through the real importer, none building a port yet', async () => {
+  it('loads each terminal through the real importer, each building its terminal port', async () => {
     assert.deepEqual(Object.keys(TERMINAL_ADAPTERS), TERMINAL_IDS);
     for (const id of TERMINAL_IDS) {
       const load = await loadTerminal(id);
       assert.equal(load.kind === 'loaded' && load.value.declaration.id, id);
-      assert.deepEqual(load.kind === 'loaded' && load.value.create({ env: {}, platform: 'linux' }), {});
+      const ports = load.kind === 'loaded' ? load.value.create(terminalDeps()) : undefined;
+      assert.deepEqual(Object.keys(ports ?? {}), ['terminal'], id);
     }
   });
 
@@ -76,6 +77,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
       [
         ['claude-code', 'loaded'],
         ['codex-cli', 'loaded'],
+        ['antigravity-cli', 'loaded'],
       ],
     );
     assert.deepEqual(
@@ -94,6 +96,7 @@ describe('reading the declarations', () => {
     const { importer, asked } = serving({
       '../adapters/hosts/claude-code/declaration.ts': { declaration: hostDeclarationData({ id: 'claude-code' }) },
       '../adapters/hosts/codex-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'codex-cli' }) },
+      '../adapters/hosts/antigravity-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'antigravity-cli' }) },
       '../adapters/connectors/github/declaration.ts': { declaration: connectorDeclarationData({ id: 'github' }) },
       '../adapters/connectors/jira/declaration.ts': { declaration: connectorDeclarationData({ id: 'jira' }) },
       '../adapters/connectors/local/declaration.ts': { declaration: connectorDeclarationData({ id: 'local' }) },
@@ -102,11 +105,12 @@ describe('reading the declarations', () => {
     const { hosts, connectors, terminals } = await readDeclarations(importer);
     assert.deepEqual(
       [...hosts, ...connectors, ...terminals].map((load) => [load.id, load.kind]),
-      ['claude-code', 'codex-cli', 'github', 'jira', 'local', ...TERMINAL_IDS].map((id) => [id, 'loaded']),
+      ['claude-code', 'codex-cli', 'antigravity-cli', 'github', 'jira', 'local', ...TERMINAL_IDS].map((id) => [id, 'loaded']),
     );
     assert.deepEqual(asked, [
       '../adapters/hosts/claude-code/declaration.ts',
       '../adapters/hosts/codex-cli/declaration.ts',
+      '../adapters/hosts/antigravity-cli/declaration.ts',
       '../adapters/connectors/github/declaration.ts',
       '../adapters/connectors/jira/declaration.ts',
       '../adapters/connectors/local/declaration.ts',
@@ -117,12 +121,13 @@ describe('reading the declarations', () => {
   it('refuses the one adapter whose declaration is broken, and still reads the others', async () => {
     const { importer } = serving({
       '../adapters/hosts/claude-code/declaration.ts': { declaration: hostDeclarationData({ id: 'claude-code' }) },
+      '../adapters/hosts/antigravity-cli/declaration.ts': { declaration: hostDeclarationData({ id: 'antigravity-cli' }) },
       '../adapters/connectors/github/declaration.ts': { declaration: connectorDeclarationData({ id: 'github', refPrefix: 'gh' }) },
       ...terminalDeclarations(),
       [terminalDeclarationFile('konsole')]: { declaration: terminalDeclarationData({ id: 'konsole', name: '' }) },
     });
     const { hosts, connectors, terminals } = await readDeclarations(importer);
-    assert.deepEqual(hosts.map(noticesOf), [undefined, ['its declaration.ts did not load: Cannot find module ../adapters/hosts/codex-cli/declaration.ts']]);
+    assert.deepEqual(hosts.map(noticesOf), [undefined, ['its declaration.ts did not load: Cannot find module ../adapters/hosts/codex-cli/declaration.ts'], undefined]);
     assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined]);
     assert.deepEqual(connectors.map(noticesOf), [
       ['its refPrefix must be a lower-case word ending in a colon'],
@@ -135,8 +140,8 @@ describe('reading the declarations', () => {
 describe('an adapter the loader refuses', () => {
   it('is one the table of its side does not name', async () => {
     const { importer, asked } = serving({});
-    assert.deepEqual(await loadHost('codex', importer), { kind: 'refused', id: 'codex', notices: ['no host adapter is named codex: the host adapters are claude-code, codex-cli'] });
-    assert.deepEqual(noticesOf(await loadHost('github', importer)), ['no host adapter is named github: the host adapters are claude-code, codex-cli']);
+    assert.deepEqual(await loadHost('codex', importer), { kind: 'refused', id: 'codex', notices: ['no host adapter is named codex: the host adapters are claude-code, codex-cli, antigravity-cli'] });
+    assert.deepEqual(noticesOf(await loadHost('github', importer)), ['no host adapter is named github: the host adapters are claude-code, codex-cli, antigravity-cli']);
     assert.deepEqual(noticesOf(await loadConnector('claude-code', importer)), ['no connector adapter is named claude-code: the connector adapters are github, jira, local']);
     assert.deepEqual(noticesOf(await loadConnector('constructor', importer)), ['no connector adapter is named constructor: the connector adapters are github, jira, local']);
     assert.deepEqual(noticesOf(await loadTerminal('iterm', importer)), [`no terminal adapter is named iterm: the terminal adapters are ${TERMINAL_LIST}`]);

@@ -1,3 +1,4 @@
+import { DEFAULT_HOST } from '../composition/adapters.ts';
 import type {
   AlertsConfig,
   ChangesConfig,
@@ -62,6 +63,9 @@ export const DEFAULT_OWNER_GATES: readonly string[] = [
  * permission is a grant, a guard or a settings line, so the owner decides it from the reviewer's view.
  */
 export const DEFAULT_SECURITY_GATES: readonly string[] = ['permissions'];
+
+/** The hosts a team runs on until its config names others: the one host teamrig asks its host ports of by default. */
+export const DEFAULT_HOSTS: readonly string[] = [DEFAULT_HOST];
 
 export const DEFAULT_MESSAGES = { maxLines: 10, coldAfterMinutes: 60 } as const;
 

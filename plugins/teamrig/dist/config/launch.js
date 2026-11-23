@@ -1,5 +1,8 @@
 import { EFFORT_LEVELS, isEffortLevel } from "./types.js";
-/** Leaves the model to Claude Code: `launch` passes no `--model` for it. */
+/**
+ * The team config's word that leaves the model to the host: a launch passes no model for it. It is teamrig's own
+ * keyword, the same on every host, so a config means one thing wherever it runs.
+ */
 export const DEFAULT_MODEL_ALIAS = 'default';
 /**
  * The shape of a model name any host could take: an alias or a full id, with a provider or date part and an optional
@@ -36,7 +39,7 @@ export function launchOf(config, id, leadDefault) {
 export function launchModelProblem(launch, host) {
     return isDefaultModel(launch.model) ? undefined : host.modelProblem(launch.model);
 }
-/** True when the settings leave the model to Claude Code. */
+/** True when the settings leave the model to the host. */
 export function isDefaultModel(model) {
     return model === undefined || model === DEFAULT_MODEL_ALIAS;
 }

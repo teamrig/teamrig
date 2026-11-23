@@ -214,7 +214,7 @@ describe('hooklessReader and hooklessLine', () => {
   it('names the session, its Claude session, the gap, both times and a restart in its folder, never a reload', () => {
     assert.equal(
       hooklessLine(TAB, 'alpha', STEPS, TimeZone.UTC, NOW),
-      'HOOKLESS alpha: its tab (Claude session 0123abcd) worked 59 min past its last teamrig hook (hook 11:00 UTC, last reply 11:59 UTC), ' +
+      'HOOKLESS alpha: its tab (host session 0123abcd) worked 59 min past its last teamrig hook (hook 11:00 UTC, last reply 11:59 UTC), ' +
         `so it gets no inbox, guards or tab status: /exit that tab and run claude --resume ${ALPHA} in /work/app`,
     );
     assert.match(hooklessLine(TAB, 'app/alpha', STEPS, TimeZone.UTC, NOW), /^HOOKLESS app\/alpha: its tab /, "a team above's reader reads the session's address");

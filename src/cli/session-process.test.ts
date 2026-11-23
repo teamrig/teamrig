@@ -61,6 +61,6 @@ describe('runsHostSession', () => {
     const { shippedHosts } = quietWorld();
     const bare = (): ReturnType<typeof bareHost> => bareHost();
     assert.deepEqual(await running(runtimeOf({ host: bare, shippedHosts })), [true, false, false, false, false]);
-    assert.deepEqual(await running(runtimeOf({ host: bare, shippedHosts: [] })), [false, false, false, false, false]);
+    assert.deepEqual(await running(runtimeOf({ host: bare, shippedHosts: {} })), [false, false, false, false, false]);
   });
 });

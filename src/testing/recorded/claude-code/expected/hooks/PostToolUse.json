@@ -2,7 +2,7 @@
   {
     "event": "PostToolUse",
     "index": 0,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -10,7 +10,7 @@
   {
     "event": "PostToolUse",
     "index": 0,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -18,7 +18,7 @@
   {
     "event": "PostToolUse",
     "index": 1,
-    "hook": "hook secret-redact",
+    "hook": "hook secret-redact --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -26,7 +26,7 @@
   {
     "event": "PostToolUse",
     "index": 1,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -34,7 +34,7 @@
   {
     "event": "PostToolUse",
     "index": 1,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -42,7 +42,7 @@
   {
     "event": "PostToolUse",
     "index": 2,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -50,7 +50,7 @@
   {
     "event": "PostToolUse",
     "index": 2,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -58,7 +58,7 @@
   {
     "event": "PostToolUse",
     "index": 3,
-    "hook": "hook secret-redact",
+    "hook": "hook secret-redact --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -66,7 +66,7 @@
   {
     "event": "PostToolUse",
     "index": 3,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -74,7 +74,7 @@
   {
     "event": "PostToolUse",
     "index": 3,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -82,7 +82,7 @@
   {
     "event": "PostToolUse",
     "index": 4,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -90,7 +90,7 @@
   {
     "event": "PostToolUse",
     "index": 4,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -98,7 +98,7 @@
   {
     "event": "PostToolUse",
     "index": 5,
-    "hook": "hook secret-redact",
+    "hook": "hook secret-redact --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -106,7 +106,7 @@
   {
     "event": "PostToolUse",
     "index": 5,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -114,7 +114,7 @@
   {
     "event": "PostToolUse",
     "index": 5,
-    "hook": "hook missing-cli",
+    "hook": "hook missing-cli --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -122,7 +122,7 @@
   {
     "event": "PostToolUse",
     "index": 5,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -130,7 +130,7 @@
   {
     "event": "PostToolUse",
     "index": 6,
-    "hook": "hook secret-redact",
+    "hook": "hook secret-redact --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -138,7 +138,7 @@
   {
     "event": "PostToolUse",
     "index": 6,
-    "hook": "hook loop-nudge",
+    "hook": "hook loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -146,7 +146,7 @@
   {
     "event": "PostToolUse",
     "index": 6,
-    "hook": "hook missing-cli",
+    "hook": "hook missing-cli --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -154,7 +154,7 @@
   {
     "event": "PostToolUse",
     "index": 6,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -162,7 +162,7 @@
   {
     "event": "PostToolUse",
     "index": 7,
-    "hook": "hook tool-end",
+    "hook": "hook tool-end --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

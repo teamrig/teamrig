@@ -1,4 +1,3 @@
-import { shellCommand } from "./quote.js";
 /** The window of a team's own its tabs open in when `open.teamWindow` is on, apart from other teams' tabs (T1427). */
 export function teamWindowOf(teamWindow, team) {
     return teamWindow ? `teamrig-${team}` : undefined;
@@ -11,47 +10,43 @@ const WINDOWS_TERMINAL_UNSAFE = /[;"%\p{Cc}]/u;
 function command(command, args, folder, mode) {
     return { kind: 'command', request: { command, args, cwd: folder, mode } };
 }
+/** The first argument Windows Terminal would misread, if any. */
+function windowsTerminalUnsafe(tab) {
+    const { title, folder, window, argv } = tab;
+    return [title, folder, ...(window === undefined ? [] : [window]), ...argv].find((arg) => WINDOWS_TERMINAL_UNSAFE.test(arg));
+}
+function windowsTerminalRefusal(unsafe) {
+    return { kind: 'unusable', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+}
 /**
- * The launcher call that opens the tab, each argument passed as it is, with no shell in between. Only
- * macOS Terminal takes shell text (`do script`), so there every argument is quoted, and the text goes
- * to AppleScript as a run argument, never inside the script.
+ * The terminal this run works in, found by the variables each sets in its panes, when it is one that can split:
+ * tmux first, as it may run inside Windows Terminal and its pane is the nearer one. Other terminals have no split a
+ * launcher can ask for.
  */
-export function tabCommand(terminal, tab) {
-    const { title, folder, argv, window, focus } = tab;
+export function splittableTerminal(env) {
+    if ((env['TMUX'] ?? '') !== '') {
+        return 'tmux';
+    }
+    return (env['WT_SESSION'] ?? '') === '' ? undefined : 'windows-terminal';
+}
+/**
+ * The launcher call that splits the run's own terminal window and runs `argv` in the new pane, side by side (T5105).
+ * tmux splits the pane the run works in (it names it in `TMUX_PANE`), and `-d` keeps the focus there; Windows
+ * Terminal splits the active pane of its most recent window, the one the person is typing in, and `tab.window` is not
+ * read: a split is of the window the run is in.
+ */
+export function splitCommand(terminal, tab) {
+    const { title, folder, argv, focus } = tab;
     switch (terminal) {
         case 'tmux':
-            // tmux 3.0 and later run a command given as several arguments without a shell; -d leaves the current window selected.
-            return command('tmux', ['new-window', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, '-n', title, ...argv], folder, 'exit');
+            return command('tmux', ['split-window', '-h', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, ...argv], folder, 'exit');
         case 'windows-terminal': {
-            const unsafe = [title, folder, ...(window === undefined ? [] : [window]), ...argv].find((arg) => WINDOWS_TERMINAL_UNSAFE.test(arg));
+            const unsafe = windowsTerminalUnsafe({ ...tab, window: undefined });
             if (unsafe !== undefined) {
-                return { kind: 'unusable', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+                return windowsTerminalRefusal(unsafe);
             }
-            // `-w 0` is the most recent window; a name is the window of that name, made when none is open.
-            return command('wt.exe', ['-w', window ?? '0', 'new-tab', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
+            return command('wt.exe', ['-w', '0', 'split-pane', '--vertical', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
         }
-        case 'macos-terminal':
-            // Without `activate`, Terminal opens the window behind the app the owner is in.
-            return command('osascript', [
-                '-e',
-                'on run argv',
-                '-e',
-                'tell application "Terminal"',
-                ...(focus === 'take' ? ['-e', 'activate'] : []),
-                '-e',
-                'do script (item 1 of argv)',
-                '-e',
-                'end tell',
-                '-e',
-                'end run',
-                shellCommand('darwin', folder, argv),
-            ], folder, 'exit');
-        case 'gnome-terminal':
-            return command('gnome-terminal', ['--tab', `--working-directory=${folder}`, '--', ...argv], folder, 'exit');
-        case 'konsole':
-            return command('konsole', ['--new-tab', '--workdir', folder, '-e', ...argv], folder, 'spawn');
-        case 'x-terminal-emulator':
-            return command('x-terminal-emulator', ['-T', title, '-e', ...argv], folder, 'spawn');
     }
 }
 /** The terminals `auto` tries, in order: tmux inside tmux, then the platform's own. */

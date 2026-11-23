@@ -21,6 +21,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `roles` (required) | [object](#roles) |  | Each role's session, by id. |
 | `ownerGates` | array (at most 8 items) of string (1 to 60 characters, matching `^[^\r\n]+$`) | `["destructive data operations","product and design decisions","permissions","budget","resource changes"]` | Decision areas only the human owner can approve; silence never counts as consent for them. |
 | `securityGates` | array (at most 8 items) of string (1 to 60 characters, matching `^[^\r\n]+$`) | `["permissions"]` | The owner gates (each one of ownerGates) whose cards reach the owner only with the security reviewer's verdict on the card, recorded by teamrig audit --verdict. A card edited after the verdict waits for a new one. With the key absent, permissions where ownerGates names it. |
+| `hosts` | array (at least 1 item, unique) of one of `"claude-code"`, `"codex-cli"`, `"antigravity-cli"` | `["claude-code"]` | The hosts the team's sessions run on, by adapter id; it says which hosts' files install. Each session names the host it runs on itself; the first one listed is only the fallback for a bare CLI run in a terminal. |
 | `ruleConflicts` | array (at most 40 items) of [object](#ruleconflicts) | `[]` | Local rules (a line of a CLAUDE.md, rules file, skill, memory file, hook or settings file) kept although they conflict with a core rule, each with the side that wins. teamrig rules scan finds them; teamrig rules keep records one, teamrig rules forget drops one. The core pack lists them. |
 | `messages` | [object](#messages) |  | Messages between sessions: how long one may be, and when a send to an idle session is held as a cold wake. |
 | `register` | [object](#register) |  | The task list (the register): its priority levels, what each status change needs, its text limits and the thresholds of the flags teamrig check raises on tasks. |
@@ -809,7 +810,7 @@ The dedicated UI that teamrig ui starts.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
+| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
 
 ## `meetingNotices`

@@ -12,11 +12,13 @@ import { launchingShellsOf, nodeEvery, starterWatch } from "../delivery/starter-
 import { nodeStepRunner } from "../delivery/steps.js";
 import { realSleep, systemClock } from "../core/lock.js";
 import { NODE_PATH_PROBE } from "../core/path-probe.js";
+import { storeWriter } from "../core/store-program.js";
 import { NODE_STORE_FOLDERS } from "../plugin-store/node-folders.js";
 import { chatWebhook } from "../core/webhook.js";
-import { CREDENTIAL_TIMEOUT_MS, systemCredentials } from "../core/credentials.js";
+import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from "../core/credentials.js";
 import { nodeHttpClient } from "../core/http.js";
 import { nodeProgramRunner } from "../core/program-runner.js";
+import { nodeTerminal } from "../core/terminal.js";
 import { GIT_CHECKOUT } from "../exec/binding.js";
 import { nodeExecSpawner } from "../exec/runner.js";
 import { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS } from "../plugin-api/index.js";
@@ -100,6 +102,7 @@ export async function runWithNode(argv, entry) {
         commitLog: GIT_COMMIT_LOG,
         secretsGit: gitSecrets(process.env),
         out: entry.out,
+        interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
         platform: process.platform,
         host,
         shippedHosts,
@@ -112,6 +115,10 @@ export async function runWithNode(argv, entry) {
         cpu: nodeHostCpu(),
         run: nodeProgramRunner(CONNECTOR_RUN_TIMEOUT_MS, CONNECTOR_RUN_MAX_BYTES),
         credentials: systemCredentials(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)),
+        keys: {
+            keeper: systemCredentialKeeper(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS), () => storeWriter({ env: process.env, platform: process.platform, probe: NODE_PATH_PROBE, cwd: process.cwd() })),
+            terminal: nodeTerminal(process.stdin, process.stdout),
+        },
         http: nodeHttpClient(),
         probe: NODE_PATH_PROBE,
         pluginStore: NODE_STORE_FOLDERS,

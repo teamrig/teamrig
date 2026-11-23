@@ -55,7 +55,7 @@ const PLACING_VARIABLES: readonly string[] = ['GH_REPO', 'GH_HOST', 'GIT_DIR', '
  * runs; or a git command that is none of git's own, which may be an alias or a `git-<name>` program doing anything
  * (git never lets an alias override its own commands).
  */
-function placementInDoubt(runs: LineRuns): boolean {
+export function placementInDoubt(runs: LineRuns): boolean {
   if (PLACING_VARIABLES.some((name) => changesVariable(runs, name))) {
     return true;
   }
@@ -74,7 +74,7 @@ export const ISSUE_COMMANDS: ReadonlySet<string> = new Set(['sync', 'watch', 'mi
 const SHARED_ISSUE_COMMANDS: ReadonlySet<string> = new Set(['edit', 'close']);
 
 /** True when an unnamed program's words read as a `teamrig issue` call rather than a gh one. */
-function teamrigIssueCall(words: readonly ShellWord[]): boolean {
+export function teamrigIssueCall(words: readonly ShellWord[]): boolean {
   const [group, command] = words;
   if (group?.text !== 'issue' || group.dynamic || command === undefined || command.dynamic || !ISSUE_COMMANDS.has(command.text)) {
     return false;
@@ -82,8 +82,8 @@ function teamrigIssueCall(words: readonly ShellWord[]): boolean {
   return !SHARED_ISSUE_COMMANDS.has(command.text) || words.slice(2).some((word) => !word.dynamic && /^[^/#\s]+\/[^/#\s]+#\d+$/u.test(word.text));
 }
 
-/** The repositories gh picks one from for a write that names none: `GH_REPO`, else the folder's remotes; undefined when the guard cannot tell. */
-function folderReposOf(dir: string | undefined, env: GhWriteEnv, doubt: boolean): readonly string[] | undefined {
+/** The repositories gh picks one from for a call that names none: `GH_REPO`, else the folder's remotes; undefined when the guard cannot tell. */
+export function folderReposOf(dir: string | undefined, env: GhWriteEnv, doubt: boolean): readonly string[] | undefined {
   if (doubt) {
     return undefined;
   }
@@ -122,8 +122,8 @@ function ghRefusalOf({ call, route, folder }: GhWrite, github: Exclude<GithubRep
 
 /**
  * Why the guard refuses each raw `gh` write on the line: its `gh` runs, and each program only known when it runs whose
- * words read as a gh call (`$GH issue close 7`), which has no folder the guard can tell. Reads always pass, and so does
- * every call on a team whose `github.repos` names none.
+ * words read as a gh call (`$GH issue close 7`), which has no folder the guard can tell. Reads pass here (a read on a
+ * team owner is gh-read-refusals.ts's), and so does every call on a team whose `github.repos` names none.
  */
 export function ghWriteRefusals(runs: LineRuns, env: GhWriteEnv): string[] {
   const github = env.github;

@@ -694,8 +694,8 @@ async function refreshDecisionOf(runtime, scope, event) {
 }
 /** The model notices for the user at this turn's end (`stopModelNotices`); none when the event names no session. */
 async function modelNoticesOf(runtime, scope, event) {
-    const claude = event.session;
-    if (claude === undefined) {
+    const hostSession = event.session;
+    if (hostSession === undefined) {
         return [];
     }
     const { kit, config, roster, id } = scope;
@@ -704,7 +704,7 @@ async function modelNoticesOf(runtime, scope, event) {
         id,
         name: roster.nameOf(id) ?? id,
         launch: launchOf(config, id, leadLaunchFrom(models)),
-        claude,
+        hostSession,
         effort: event.effort,
         transcript: event.transcript,
     });

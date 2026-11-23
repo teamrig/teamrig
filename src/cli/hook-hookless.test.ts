@@ -99,7 +99,7 @@ describe('the Stop hook checks for tabs that run without their hooks', () => {
     const transcripts = tabTranscript(kit, [reply(kit, MS_PER_MINUTE)], MS_PER_MINUTE);
     await stop(kit, transcripts, 'bravo');
     assert.deepEqual(hooklessLines(kit, 'lead'), [
-      `HOOKLESS alpha: its tab (Claude session 0123abcd) worked 59 min past its last teamrig hook (hook 09:00 UTC, last reply 09:59 UTC), ${NO_HOOKS}: ` +
+      `HOOKLESS alpha: its tab (host session 0123abcd) worked 59 min past its last teamrig hook (hook 09:00 UTC, last reply 09:59 UTC), ${NO_HOOKS}: ` +
         `/exit that tab and run claude --resume ${TAB} in ${APP}`,
     ]);
     assert.deepEqual(parseHooklessState(kit.files.get(STATE) ?? ''), { checkedAt: kit.clock.now(), told: [TAB] });
@@ -127,7 +127,7 @@ describe('the Stop hook checks for tabs that run without their hooks', () => {
     await markRead(kit, 'alpha', 3 * HOOKLESS_MS);
     await stop(kit, tabTranscript(kit, [reply(kit, MS_PER_MINUTE)], MS_PER_MINUTE), 'bravo');
     assert.deepEqual(hooklessLines(kit, 'lead'), [
-      `HOOKLESS alpha: its tab (Claude session 0123abcd) worked 59 min past its last teamrig hook (hook 09:00 UTC, last reply 09:59 UTC), ${NO_HOOKS}: ` +
+      `HOOKLESS alpha: its tab (host session 0123abcd) worked 59 min past its last teamrig hook (hook 09:00 UTC, last reply 09:59 UTC), ${NO_HOOKS}: ` +
         `/exit that tab and run claude --resume ${TAB} in ${APP}`,
     ]);
 
@@ -151,7 +151,7 @@ describe('the Stop hook checks for tabs that run without their hooks', () => {
     await writeTab(kit, 'lead', 2 * HOOKLESS_MS);
     await stop(kit, tabTranscript(kit, [reply(kit, 0)]));
     assert.deepEqual(hooklessLines(kit, 'lead'), []);
-    assert.match(kit.files.get(teamInboxOf('root', 'po')) ?? '', / app\/teamrig: HOOKLESS app\/lead: its tab \(Claude session 0123abcd\) worked /);
+    assert.match(kit.files.get(teamInboxOf('root', 'po')) ?? '', / app\/teamrig: HOOKLESS app\/lead: its tab \(host session 0123abcd\) worked /);
   });
 
   it('shows at the turn end the line it could not post to a team above with no config', async () => {
@@ -176,7 +176,7 @@ describe('the Stop hook checks for tabs that run without their hooks', () => {
     await writeTab(kit, 'alpha', 2 * HOOKLESS_MS);
     await stop(kit, tabTranscript(kit, [reply(kit, 10 * MS_PER_MINUTE), reload(kit, 5 * MS_PER_MINUTE)]), 'bravo');
     assert.deepEqual(hooklessLines(kit, 'lead'), [
-      `HOOKLESS alpha: its tab (Claude session 0123abcd) worked 50 min past its last teamrig hook (hook 09:00 UTC, last reply 09:50 UTC), ${NO_HOOKS}: ` +
+      `HOOKLESS alpha: its tab (host session 0123abcd) worked 50 min past its last teamrig hook (hook 09:00 UTC, last reply 09:50 UTC), ${NO_HOOKS}: ` +
         `/exit that tab and run claude --resume ${TAB} in ${APP}`,
     ]);
   });

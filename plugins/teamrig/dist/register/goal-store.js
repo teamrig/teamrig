@@ -1,4 +1,4 @@
-import { assertWritable, parseJsonl, toJsonlLine } from "../core/jsonl.js";
+import { appendJsonlLines, assertWritable, parseJsonl, toJsonlLine } from "../core/jsonl.js";
 import { goalSliceRefusal } from "./goal-slices.js";
 import { foldGoalLines, GOAL_RECORD_VERSION, goalAddRefusal, goalRankRefusal, goalRecordJson, goalSetRefusal, readGoals, } from "./goals.js";
 /**
@@ -75,7 +75,7 @@ export class GoalStore {
         return foldGoalLines(parsed);
     }
     async append(record) {
-        await this.files.append(this.path, toJsonlLine(goalRecordJson(record)));
+        await appendJsonlLines(this.files, this.path, toJsonlLine(goalRecordJson(record)));
         return { kind: 'written', record };
     }
 }

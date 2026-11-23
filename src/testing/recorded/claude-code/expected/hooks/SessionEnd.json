@@ -2,7 +2,7 @@
   {
     "event": "SessionEnd",
     "index": 0,
-    "hook": "hook restore-track",
+    "hook": "hook restore-track --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -10,7 +10,7 @@
   {
     "event": "SessionEnd",
     "index": 0,
-    "hook": "hook effort-writeback",
+    "hook": "hook effort-writeback --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -18,7 +18,7 @@
   {
     "event": "SessionEnd",
     "index": 0,
-    "hook": "hook tab-status",
+    "hook": "hook tab-status --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -26,7 +26,7 @@
   {
     "event": "SessionEnd",
     "index": 1,
-    "hook": "hook restore-track",
+    "hook": "hook restore-track --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -34,7 +34,7 @@
   {
     "event": "SessionEnd",
     "index": 1,
-    "hook": "hook effort-writeback",
+    "hook": "hook effort-writeback --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -42,7 +42,7 @@
   {
     "event": "SessionEnd",
     "index": 1,
-    "hook": "hook tab-status",
+    "hook": "hook tab-status --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -50,7 +50,7 @@
   {
     "event": "SessionEnd",
     "index": 2,
-    "hook": "hook restore-track",
+    "hook": "hook restore-track --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -58,7 +58,7 @@
   {
     "event": "SessionEnd",
     "index": 2,
-    "hook": "hook effort-writeback",
+    "hook": "hook effort-writeback --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -66,7 +66,7 @@
   {
     "event": "SessionEnd",
     "index": 2,
-    "hook": "hook tab-status",
+    "hook": "hook tab-status --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

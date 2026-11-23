@@ -15,7 +15,7 @@ a channel or `claude -p` sends them. `/teamrig` alone prints this.
 This is what `teamrig help` prints:
 
 ```text
-teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>)
+teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION; every command takes --session <id|name> and --team <team>, and --host <id> for the host it runs in, else the first in hosts)
   team create <team> --sessions <id,id> [--lead <id>] [--project <dir>] [--parent <team>] [--dry-run]
       writes the team config, ties the project folder to the team (the lead defaults to lead) and
       starts a root team's lead on its first task, setting the team up; --parent hangs it under
@@ -431,10 +431,13 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL
-  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
-      team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
-      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
-      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
+      team, following the session last typed in, or pinned to the team --team or --session names;
+      --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
+      open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
+      own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
+      Terminal window, else in a window; one that cannot open falls back and says so; it runs the
+      entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
       file or the release speaks an interface version this teamrig does not serve
@@ -605,6 +608,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   statusline install [--yes]   makes teamrig statusline Claude Code's status line, in front of the one
       already there; without --yes it shows the change and writes nothing
   statusline uninstall [--yes] takes it back out: the status line before it returns
+  channel                      the release channel this machine's teamrig install follows: stable or preview
+  channel stable [--yes]       moves the install to the stable releases, its marketplace's default branch
+  channel preview [--yes]      moves it to every release as it is cut, its marketplace's preview branch; both
+      change the marketplace's entry in your user settings and reinstall teamrig through the host's own
+      plugin commands; without --yes they show the change and write nothing
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
       worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
@@ -640,7 +648,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       backup, or NO BACKUP; works before a team exists; it only reads
   config get [<key>] [--json]   every key of the team config, or those at and under <key>: its value
       against its default, and read-only with why (the roster, an owner gate, a folder, a map, a key off
-      the lead's list); --json for a screen
+      the lead's list); <key> may name a key under a map entry the file holds
+      (delivery.repos.<name>.shipTool), read-only; --json for a screen
   config set <key> <value> | config set <key> --unset [--yes] [--session <id|name>]   the lead only:
       changes one key config get marks editable, the value read by the key's type (a list as JSON or
       a,b); --unset removes it to read its default; without --yes it shows the change; the whole new
@@ -844,8 +853,19 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
       stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
+  key list                     lists each key the team's github.repos may use, its owner's and each
+      repository's own, by credential name, and whether the store holds it; never a key
+  key add <owner|owner/name>   (from a person's own terminal only, else REFUSED) saves the key for an
+      owner or one repository: the store's own save command asks for it with nothing shown, so the key
+      never passes teamrig; says when it replaces a saved one, then reads it back and checks it as key check does
+  key check [<owner|owner/name>]   asks GitHub, at its API host over https only, whose each saved key is,
+      its kind, rights and expiry, never printing the key; warns on a classic or never-expiring key and
+      one expiring within 7 days; fails on a key GitHub refuses
+  key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
+      at GitHub too, as it says
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
-      (run by Claude Code, hook JSON on stdin)
+      (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
+      --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
       (run by the plugin's mod: the automatic restart's /clear in the tab)
   hook wake-check | hook wake-dropped

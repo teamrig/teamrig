@@ -64,7 +64,7 @@ describe('ghWriteRefusals: a write on a team repository (T4819)', () => {
     assert.ok(refusal('gh release create v1').endsWith('no teamrig command does this write yet: ask your lead, who has it done with the team\'s saved key.'));
   });
 
-  it('lets every read pass, and every call on a team with no GitHub repository', () => {
+  it('leaves every read to the read check (gh-read-refusals.ts), and lets every call pass on a team with no GitHub repository', () => {
     for (const line of ['gh issue view 7', 'gh api repos/acme/web/pulls/3', 'gh pr list --state open', 'gh pr checkout 3', 'gh search prs is:open', 'gh api graphql -f query={viewer{login}}', 'gh']) {
       assert.deepEqual(refusals(line), [], line);
     }

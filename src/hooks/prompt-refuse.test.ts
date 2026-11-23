@@ -89,6 +89,20 @@ describe('promptAnswerOf', () => {
     promptAnswerOf(bashCall('cat f'), counted, undefined);
     assert.equal(asked, 1);
   });
+
+  it('refuses a shell line with what the hint says of it, asked only when no rerun form answers', () => {
+    const said: string[] = [];
+    const hint = (line: string): string => {
+      said.push(line);
+      return `hint for ${line}`;
+    };
+    assert.deepEqual(promptAnswerOf(bashCall('teamrig list | sort'), WRITES, undefined, hint), { kind: 'refused', hint: 'hint for teamrig list | sort' });
+    assert.deepEqual(promptAnswerOf(bashCall('cd /w && git status'), WRITES, undefined, hint), { kind: 'rerun', form: 'git -C /w status' });
+    assert.deepEqual(promptAnswerOf(bashCall('teamrig list'), READS, undefined, hint), { kind: 'readonly' });
+    assert.deepEqual(promptAnswerOf(callOf('Edit', { file_path: '/w/a.ts' }), WRITES, undefined, hint), { kind: 'refused' });
+    assert.deepEqual(said, ['teamrig list | sort']);
+    assert.deepEqual(promptAnswerOf(bashCall('rm x'), WRITES, undefined, () => undefined), { kind: 'refused' });
+  });
 });
 
 describe('promptAnswerReply', () => {
@@ -106,6 +120,11 @@ describe('promptAnswerReply', () => {
     assert.equal(answerText('Bash', { kind: 'rerun', form: 'git -C /w status' }), denial(rerunReason('Bash', 'git -C /w status')));
     assert.match(rerunReason('Bash', 'git -C /w status'), /rerun it as: git -C \/w status$/);
     assert.equal(answerText('Edit', { kind: 'refused' }), denial(promptRefusedReason('Edit')));
+  });
+
+  it("puts a refusal's hint between the call and what to do instead", () => {
+    assert.equal(answerText('Bash', { kind: 'refused', hint: 'Use the route.' }), denial(promptRefusedReason('Bash', 'Use the route.')));
+    assert.equal(promptRefusedReason('Bash', 'Use the route.'), `Claude Code would ask a person to allow this Bash call. Use the route. ${ASK_REFUSED_NOTE}`);
   });
 
   it('is a deny on the permission prompt whose message names the call and says what to do instead', () => {

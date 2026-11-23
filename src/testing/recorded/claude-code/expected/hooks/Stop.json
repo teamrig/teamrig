@@ -2,7 +2,7 @@
   {
     "event": "Stop",
     "index": 0,
-    "hook": "hook stop",
+    "hook": "hook stop --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -10,7 +10,7 @@
   {
     "event": "Stop",
     "index": 0,
-    "hook": "hook restore-track",
+    "hook": "hook restore-track --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -18,7 +18,7 @@
   {
     "event": "Stop",
     "index": 1,
-    "hook": "hook stop",
+    "hook": "hook stop --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -26,7 +26,7 @@
   {
     "event": "Stop",
     "index": 1,
-    "hook": "hook restore-track",
+    "hook": "hook restore-track --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

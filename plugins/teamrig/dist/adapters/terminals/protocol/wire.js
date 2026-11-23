@@ -101,6 +101,10 @@ export function paneAnswerOf(method, result) {
     if (result['kind'] === 'done' || result['kind'] === 'gone') {
         return { kind: result['kind'] };
     }
+    // Only a focus can leave its pane selected behind another window; from any other request it is no answer.
+    if (method === 'focus' && result['kind'] === 'selected') {
+        return { kind: 'selected' };
+    }
     return commonAnswer(result) ?? mismatch(method);
 }
 export function deliverAnswerOf(result) {

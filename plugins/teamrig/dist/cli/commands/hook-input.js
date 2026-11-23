@@ -19,13 +19,13 @@ export function parseJson(text) {
     }
 }
 export async function readHookInput(runtime) {
-    return { event: hooksOf(runtime).parse(await runtime.readStdin()) };
+    return { event: hooksOf(runtime).parse(await runtime.readStdin(), runtime.hostEvent) };
 }
 /** The mod's request on standard input; undefined when it is no JSON record, which every command treats as nothing asked. */
 export async function readModRequest(runtime) {
     const raw = await runtime.readStdin();
     const fields = parseJson(raw);
-    const event = hooksOf(runtime).parse(raw);
+    const event = hooksOf(runtime).parse(raw, runtime.hostEvent);
     return isRecord(fields) && event !== undefined ? { event, fields } : undefined;
 }
 /** Prints what the host reads for a hook's `reply` to the event `on`; nothing when the hook has nothing to say. */

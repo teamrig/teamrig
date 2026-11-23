@@ -298,6 +298,14 @@ describe("Claude Code's transcript lines as entries", () => {
     assert.equal(jobOf(JSON.stringify({ type: 'system', subtype: 'turn_duration', entrypoint: 'cli', sessionKind: 'bg' })), true);
   });
 
+  it("reads the plan slug from the transcript's last slug key, past a later line without one or a damaged one", () => {
+    const text = [userLine({ slug: 'first-slug' }), assistantLine({ model: 'model-x' }, { slug: 'calm-river' }), userLine({}), '{"cut":'].join('\n');
+    assert.equal(transcriptReader.lastPlanSlug(text), 'calm-river');
+    assert.equal(transcriptReader.lastPlanSlug(userLine({ slug: 7 })), undefined);
+    assert.equal(transcriptReader.lastPlanSlug(userLine({})), undefined);
+    assert.equal(transcriptReader.lastPlanSlug('{"slug":"cut-off'), undefined, 'a key whose value never ends names no slug');
+  });
+
   it('reads the mark that a session carries on in another, with the session it names', () => {
     const line = JSON.stringify({ type: 'continued-in', timestamp: AT, sessionId: 's-1', continuedInSessionId: 's-2' });
     assert.deepEqual(transcriptReader.entry(line), { ...BARE, at: AT_MS, session: 's-1', kind: 'continued', into: 's-2' });

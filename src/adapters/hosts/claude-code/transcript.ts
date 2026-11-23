@@ -404,6 +404,8 @@ function canBe(line: string, only: readonly EntryKind[]): boolean {
 }
 
 const NOT_BLANK = /\S/;
+/** Claude Code names a session's plan file by the `slug` it stamps on each of the session's lines. */
+const SLUG_KEY = '"slug":"';
 
 /** Claude Code's transcript lines as teamrig's entries. */
 export const transcriptReader: TranscriptReader = {
@@ -413,5 +415,15 @@ export const transcriptReader: TranscriptReader = {
     }
     const found = entryOfLine(line);
     return found.kind === 'unread' || only === undefined || only.includes(found.kind) ? found : undefined;
+  },
+  // One scan from the end, never a parse: each line carries the slug, so the last key found is the session's.
+  lastPlanSlug(text) {
+    const start = text.lastIndexOf(SLUG_KEY);
+    if (start < 0) {
+      return undefined;
+    }
+    const from = start + SLUG_KEY.length;
+    const end = text.indexOf('"', from);
+    return end < 0 ? undefined : text.slice(from, end);
   },
 };

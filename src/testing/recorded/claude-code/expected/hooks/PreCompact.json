@@ -2,7 +2,7 @@
   {
     "event": "PreCompact",
     "index": 0,
-    "hook": "hook pre-compact",
+    "hook": "hook pre-compact --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -10,7 +10,7 @@
   {
     "event": "PreCompact",
     "index": 0,
-    "hook": "hook tab-status",
+    "hook": "hook tab-status --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

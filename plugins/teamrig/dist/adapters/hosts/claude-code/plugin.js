@@ -113,6 +113,65 @@ function updateSteps(plugin, marketplace) {
         ['plugin', 'update', `${plugin}@${marketplace}`],
     ];
 }
+function cloneSourceOf(source) {
+    if (!isFields(source)) {
+        return undefined;
+    }
+    const kind = source['source'];
+    const argument = kind === 'github' ? source['repo'] : kind === 'git' ? source['url'] : undefined;
+    const ref = source['ref'];
+    if (typeof argument !== 'string' || argument === '' || !isOptionalText(ref)) {
+        return undefined;
+    }
+    return { fields: source, argument, ref: ref === '' ? undefined : ref };
+}
+function knownCloneOf(marketplacesText, name) {
+    const known = parsed(marketplacesText);
+    const entry = isFields(known) ? known[name] : undefined;
+    return isFields(entry) ? cloneSourceOf(entry['source']) : undefined;
+}
+function marketplaceRef(marketplacesText, name) {
+    const clone = knownCloneOf(marketplacesText, name);
+    return clone === undefined ? undefined : { ref: clone.ref };
+}
+/** The source record following `ref`, every other field kept; no `ref` field for the default branch. */
+function withRef(source, ref) {
+    const kept = Object.entries(source).filter(([key]) => key !== 'ref');
+    return Object.fromEntries(ref === undefined ? kept : [...kept, ['ref', ref]]);
+}
+/**
+ * The settings with `extraKnownMarketplaces.<marketplace>.source` following `ref`; undefined when they hold no such
+ * entry or it already does. Claude Code refuses `marketplace add <repo>#<ref>` while that entry names the source
+ * without the ref (probed 11-23 on 2.1.330), so the entry changes first.
+ */
+function settingsFollowing(settings, marketplace, ref) {
+    const extra = settings['extraKnownMarketplaces'];
+    const entry = isFields(extra) ? extra[marketplace] : undefined;
+    const source = isFields(entry) ? entry['source'] : undefined;
+    if (!isFields(extra) || !isFields(entry) || !isFields(source)) {
+        return undefined;
+    }
+    const current = source['ref'];
+    if (current === ref || (ref === undefined && current === '')) {
+        return undefined;
+    }
+    return { ...settings, extraKnownMarketplaces: { ...extra, [marketplace]: { ...entry, source: withRef(source, ref) } } };
+}
+/** The marketplace added again at `ref`, so its clone checks the ref out, then the plugin reinstalled from it. */
+function channelPlan(settings, marketplacesText, plugin, marketplace, ref) {
+    const clone = knownCloneOf(marketplacesText, marketplace);
+    if (clone === undefined) {
+        return { ok: false, problem: `the marketplace ${marketplace} is not a git clone Claude Code knows of, so it follows no branch` };
+    }
+    const moves = clone.ref !== ref;
+    const steps = moves
+        ? [
+            ['plugin', 'marketplace', 'add', ref === undefined ? clone.argument : `${clone.argument}#${ref}`],
+            ['plugin', 'update', `${plugin}@${marketplace}`],
+        ]
+        : [];
+    return { ok: true, value: { settings: settingsFollowing(settings, marketplace, ref), before: clone.ref, after: ref, steps } };
+}
 export const hostPlugin = {
     listFile: LIST_FILE,
     marketplacesFile: MARKETPLACES_FILE,
@@ -121,4 +180,6 @@ export const hostPlugin = {
     pluginsFolderOf,
     isCacheBin,
     updateSteps,
+    marketplaceRef,
+    channelPlan,
 };

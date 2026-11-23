@@ -72,7 +72,7 @@ const MARKERS: readonly string[] = ['session_cron_carry', '"CronCreate"', '"Cron
 /** The entries the schedule is followed through: the calls, their results, a compaction's snapshot and a queued prompt. */
 const KINDS: readonly EntryKind[] = ['input', 'reply', 'scheduled-carry', 'queued-prompt'];
 const ENVIRONMENT: readonly EntryKind[] = ['environment'];
-const SLUG_KEY = '"slug":"';
+/** A plan slug names a file, so one holding a path part or another character is never taken. */
 const SLUG = /^[A-Za-z0-9_-]+$/;
 
 /** A pending CronCreate call: what it asked for, until its result names the job. */
@@ -98,15 +98,10 @@ function snapshotOf(tasks: unknown): Map<string, CarriedCron> {
   return crons;
 }
 
-/** The session's slug, from the last entry that names one: its plan file is named by it. */
-function lastSlugOf(text: string): string | undefined {
-  const start = text.lastIndexOf(SLUG_KEY);
-  if (start < 0) {
-    return undefined;
-  }
-  const from = start + SLUG_KEY.length;
-  const slug = text.slice(from, text.indexOf('"', from));
-  return SLUG.test(slug) ? slug : undefined;
+/** The session's plan slug as the host's reader finds it, kept only when it is a safe file name. */
+function lastSlugOf(reader: TranscriptReader, text: string): string | undefined {
+  const slug = reader.lastPlanSlug(text);
+  return slug !== undefined && SLUG.test(slug) ? slug : undefined;
 }
 
 /** Follows a transcript's scheduling calls in order, from its last cron snapshot on. */
@@ -239,7 +234,7 @@ export function carryOf(reader: TranscriptReader, text: string, now: number, inh
   }
   const crons = [...fold.crons.values()].filter((cron) => !cron.recurring || now - cron.createdAt < RECURRING_MAX_AGE_MS);
   const wake = fold.wake !== undefined && fold.wake.dueAt > now ? fold.wake : undefined;
-  return { crons, wake, planSlug: lastSlugOf(text) };
+  return { crons, wake, planSlug: lastSlugOf(reader, text) };
 }
 
 /**
