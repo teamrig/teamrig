@@ -321,7 +321,7 @@ describe('teamrig restore resume', () => {
     const probe = new FakePathProbe({ folders: [APP], files: ['/usr/local/bin/agent-desk'] });
     okResult(await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe, processes, env: OPENER_ENV, host }));
     assert.deepEqual(processes.ran.map((run) => run.args), [['continue', NOTES]]);
-    assert.deepEqual(seen, [{ name: undefined, model: undefined, effort: 'high', resume: NOTES, settingsFile: undefined, prompt: 'Go on' }]);
+    assert.deepEqual(seen, [{ name: undefined, model: undefined, effort: 'high', resume: NOTES, settingsFile: undefined, pluginDirs: [], prompt: 'Go on' }]);
   });
 
   it("resumes with no session variable of any host: the shipped host's and those the running host names", async () => {

@@ -96,6 +96,8 @@ export interface SessionStart {
   readonly resume: string | undefined;
   /** A file of the host's settings to load over the person's own for this session; undefined loads none. */
   readonly settingsFile: string | undefined;
+  /** Plugin folders to load for this session beside the host's installed plugins; empty loads those alone. */
+  readonly pluginDirs: readonly string[];
   /** The first prompt, sent as the session starts; undefined waits for the person. */
   readonly prompt: string | undefined;
 }
@@ -111,6 +113,11 @@ export interface SessionLauncher {
    * looks for it there itself, the way it finds any program, and starts it with `launchArgs`.
    */
   readonly program: string;
+  /**
+   * The file a plugin folder holds for this host, relative to the folder: a start checks each folder of
+   * `SessionStart.pluginDirs` has it before the program runs. Undefined when the host loads no plugin folder.
+   */
+  readonly pluginManifest: string | undefined;
   /**
    * The arguments that start the host's program in a session as `start` says, to follow the program itself. Each
    * is handed to the program as it is, through no shell.

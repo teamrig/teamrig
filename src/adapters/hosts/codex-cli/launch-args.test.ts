@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { SessionStart } from '../../../plugin-api/index.ts';
 import { CodexLaunchRefusedError, launchArgs, PROGRAM } from './launch-args.ts';
 
-const NEW: SessionStart = { name: undefined, model: undefined, effort: undefined, resume: undefined, settingsFile: undefined, prompt: undefined };
+const NEW: SessionStart = { name: undefined, model: undefined, effort: undefined, resume: undefined, settingsFile: undefined, pluginDirs: [], prompt: undefined };
 
 describe("Codex CLI's launch arguments", () => {
   it("names npm's `codex` program", () => {
