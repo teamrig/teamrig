@@ -27,7 +27,7 @@ import { blockReply, stopReply } from "../../hooks/stop.js";
 import { adoptTitle, promptNote, sessionStartNote } from "../../names/detect.js";
 import { JsonlRenameLog } from "../../names/log.js";
 import { TRANSCRIPT_TAIL_BYTES } from "../../names/title.js";
-import { decideStart, decideStop, reaskGrowth, thousands, thresholdOf, } from "../../refresh/decide.js";
+import { decideStart, decideStop, reaskGrowth, thousands, } from "../../refresh/decide.js";
 import { ownerTurnsLine, ownerTurnsText } from "../../refresh/owner-turns.js";
 import { carryLines, carryStartOf, readCarry } from "../../refresh/carry.js";
 import { RefreshStore } from "../../refresh/store.js";
@@ -62,7 +62,7 @@ import { recordSessionStart } from "./hook-session-record.js";
 import { envSession, hookScopeOf, readHookInput, sessionScopeOf, sessionTeam, startSessionOf, teamScopeOf, teamSessionOf, turnLeadPathsOf, writeReply } from "./hook-input.js";
 import { recordTabNeed } from "./hook-tab-need.js";
 import { tabStatusOn, tabTitleOf } from "./hook-tab-status.js";
-import { logPrompt, logReply, logStart } from "./hook-turn-log.js";
+import { logPrompt, logReply, logStart, noteLastTyped, sentPromptOf } from "./hook-turn-log.js";
 import { keepWorkingReasonOf } from "./keep-working.js";
 import { lastTaskAskReasonOf } from "./last-task-ask.js";
 import { verifyByLinesOf, verifyStartNoteOf } from "./verify-queue.js";
@@ -202,8 +202,7 @@ async function cancelledRestartLine(runtime, kit, id, refresh) {
     if (!parked && !pending) {
         return undefined;
     }
-    // The growth past its ask at the session's own threshold: the larger one on a large window.
-    const growth = reaskGrowth({ contextTokens: thresholdOf(await store.state(id), refresh) });
+    const growth = reaskGrowth(refresh);
     return `${KIT_NAME}: the user typed, so the automatic restart is cancelled and you keep this context; a new handover is asked at your next task end, or once your context grew ${thousands(growth)} more`;
 }
 /**
@@ -257,8 +256,11 @@ export async function inboxReminder(args, runtime) {
     const hint = await bindHintOnce(runtime, kit, binding, hostSession);
     // Found like a rename: `$TEAMRIG_SESSION` first, so a session is shown its lines before its first `inbox read`.
     const session = await teamSessionOf(runtime, kit, own.roster, hostSession);
-    if (session !== undefined) {
-        await logPrompt(runtime, { config, paths: kit.paths, id: session }, event).catch(() => undefined);
+    const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => undefined);
+    if (session !== undefined && sent !== undefined) {
+        // Apart, so a log that cannot be written still leaves the UI following the person.
+        await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
+        await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
     }
     const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
     const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);

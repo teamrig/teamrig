@@ -16,7 +16,7 @@ export const DEFAULT_BASE = 'origin/main';
 export function localChecks(base: string): readonly LocalCheck[] {
   return [
     ...commitChecks(base),
-    TYPECHECK,
+    ...TYPECHECKS,
     BOUNDARIES,
     PROVIDER_WORDS,
     ...BUILD,
@@ -39,7 +39,7 @@ export function localChecks(base: string): readonly LocalCheck[] {
 export function prePushChecks(base: string): readonly LocalCheck[] {
   return [
     ...commitChecks(base),
-    TYPECHECK,
+    ...TYPECHECKS,
     BOUNDARIES,
     PROVIDER_WORDS,
     ...BUILD,
@@ -48,7 +48,14 @@ export function prePushChecks(base: string): readonly LocalCheck[] {
   ];
 }
 
-const TYPECHECK: LocalCheck = { name: 'typecheck', argv: ['node', TSC, '-p', 'tsconfig.json'] };
+/**
+ * `npm run typecheck`: the source, then the plugin's mod (its hooks and state contract) under the same strict flags,
+ * each its own step so the check lists stay CI's (#664).
+ */
+const TYPECHECKS: readonly LocalCheck[] = [
+  { name: 'typecheck', argv: ['node', TSC, '-p', 'tsconfig.json'] },
+  { name: 'typecheck: mod', argv: ['node', TSC, '-p', 'tsconfig.mod.json'] },
+];
 
 /** The layer boundaries of `src`, counted in under a second; it fails when a rule's count rose over its baseline. */
 const BOUNDARIES: LocalCheck = { name: 'boundaries', argv: ['node', 'tools/ci/boundaries-cli.ts'] };
@@ -100,13 +107,13 @@ function commitShape(base: string): readonly LocalCheck[] {
 }
 
 /**
- * The short checks (check-scope.ts, T3414): the commit checks (scrub, DCO sign-off, size and subjects), the typecheck
+ * The short checks (check-scope.ts, T3414): the commit checks (scrub, DCO sign-off, size and subjects), the typechecks
  * and the given specs, for a branch whose main merges only on GitHub's required checks, which run the whole suite on
  * the pull request. The pre-push hook runs `teamrig secrets pushed` before them. With no spec to run, the specs' check
  * is left out.
  */
 export function shortChecks(base: string, specs: readonly string[]): readonly LocalCheck[] {
-  const checks = [...commitChecks(base), TYPECHECK];
+  const checks = [...commitChecks(base), ...TYPECHECKS];
   return specs.length === 0 ? checks : [...checks, { name: 'changed specs', argv: ['node', '--test', ...specs] }];
 }
 
@@ -136,10 +143,19 @@ const SPEC = /\.test\.ts$/;
 const EXTENSION = /\.[^./]+$/;
 
 /**
- * The specs of the changed files, sorted, each once: a changed spec, and the `<stem>.test.ts` beside any other changed
- * file `<stem>.<ext>` (so `repos.json` brings `repos.test.ts`), each only when it exists in the tree.
+ * The folders whose specs `npm test` runs (package.json's `test` script). The plugin's own specs elsewhere are its
+ * mod's engine specs: they import `claude-code`, which only Claude Code's mod harness (`claude plugin test`) resolves,
+ * so plain `node --test` fails on them (T4694).
+ */
+export const NPM_TEST_ROOTS: readonly string[] = ['src/', 'tools/'];
+
+/**
+ * The specs of the changed files that `npm test` runs, sorted, each once: a changed spec, and the `<stem>.test.ts`
+ * beside any other changed file `<stem>.<ext>` (so `repos.json` brings `repos.test.ts`), each only when it exists in
+ * the tree and sits under one of {@link NPM_TEST_ROOTS}.
  */
 export function changedSpecs(changed: readonly string[], exists: (path: string) => boolean): string[] {
   const specs = changed.map((path) => (SPEC.test(path) ? path : path.replace(EXTENSION, '.test.ts')));
-  return [...new Set(specs.filter((path) => SPEC.test(path) && exists(path)))].sort();
+  const run = (path: string): boolean => SPEC.test(path) && NPM_TEST_ROOTS.some((root) => path.startsWith(root)) && exists(path);
+  return [...new Set(specs.filter(run))].sort();
 }

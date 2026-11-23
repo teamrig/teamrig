@@ -3,6 +3,7 @@
  * inside teamrig and an outside program reached through the protocol. It imports the plugin API, `node:assert` and
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
+import { LAUNCHER_CONTRACT } from "./host/launcher.js";
 import { PERMISSIONS_CONTRACT } from "./host/permissions.js";
 import { MODELS_CONTRACT } from "./host/models.js";
 import { STEPS_CONTRACT } from "./host/steps.js";
@@ -24,6 +25,7 @@ export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions } from "./host
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin } from "./host/plugin.js";
 export { MODELS_CONTRACT, nothingModels, yesModels } from "./host/models.js";
 export { STEPS_CONTRACT, nothingSteps, yesSteps } from "./host/steps.js";
+export { LAUNCHER_CONTRACT, nothingLauncher, yesLauncher } from "./host/launcher.js";
 /**
  * Every contract of the kit. A port's contract lives in its own file, under `host/`, `connector/` or `terminal/`,
  * and is listed here with one `entryOf(...)` line at the end, so two changes adding contracts never touch the same
@@ -38,4 +40,5 @@ export const CONTRACTS = [
     entryOf(PLUGIN_CONTRACT),
     entryOf(MODELS_CONTRACT),
     entryOf(STEPS_CONTRACT),
+    entryOf(LAUNCHER_CONTRACT),
 ];

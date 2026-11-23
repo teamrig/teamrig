@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { KIT_NAME } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
-import { KeepList, type TrimMode } from '../../permissions/allow-rules.ts';
+import type { TrimMode } from '../../permissions/allow-rules.ts';
+import { keepListOf } from '../../permissions/allow-sync.ts';
 import { planLine, totalLine, writeLine } from '../../permissions/report.ts';
 import { applyTrim, backupStamp, ownerStateDir, planScope, rewritesOf } from '../../permissions/trim.ts';
 import { teamSettingsScope } from '../allow-scope.ts';
@@ -31,7 +32,7 @@ export async function trim(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const mode: TrimMode = args.switches.has('all') ? 'all' : 'wide';
   const scope = await teamSettingsScope(runtime, pathsOf(runtime), { paths: kit.paths, config, project: await projectFolder(runtime, config) });
   const permissions = permissionsOf(runtime);
-  const plans = await planScope(permissions, runtime.files, scope, new KeepList(config.permissions.keepAllow), mode, new SecretScanner(config.register.secretPatterns));
+  const plans = await planScope(permissions, runtime.files, scope, keepListOf(permissions, config.permissions.keepAllow), mode, new SecretScanner(config.register.secretPatterns));
   const lines = plans.flatMap((plan) => planLine(plan) ?? []);
   const what = mode === 'all' ? 'every allow rule' : 'the allow rules that approve a whole tool or program or hold a credential';
   if (rewritesOf(plans).length === 0) {

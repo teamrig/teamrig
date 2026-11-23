@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -20,6 +20,7 @@ const INHERITED_GIT = /^GIT(?:HUB)?_/i;
  * A throwaway folder for one test, where the repo tools run as their own process.
  * - Git there reads no global or system config, so a developer's own settings (a configured
  *   denylist, commit signing, hooks) never leak in, and never finds a repo above the folder.
+ *   Its own config turns auto maintenance off, so no git runs on in the background.
  * - Inherited `GIT_*` variables are dropped (a test run from a git hook gets GIT_DIR and
  *   GIT_INDEX_FILE, which would point git at the real repo), and so are `GITHUB_*` ones, so a
  *   CI run's own event never reaches a CLI under test.
@@ -42,7 +43,10 @@ export class TempRepo {
     mkdirSync(this.dir);
     mkdirSync(this.outside);
     const globalConfig = join(this.root, 'gitconfig');
-    writeFileSync(globalConfig, '');
+    // git 2.47+ ends a commit by starting `git maintenance run --auto --detach`, which outlives it and creates and
+    // deletes .git/objects/maintenance.lock: a copyFrom walking the folder then meets a file gone before it is copied
+    // (macOS CI, cpSync ENOENT, T5182). No git here may change a repo after its command returns.
+    writeFileSync(globalConfig, '[maintenance]\n\tauto = false\n');
     const inherited = Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && !INHERITED_GIT.test(entry[0]));
     this.env = {
       ...Object.fromEntries(inherited),
@@ -57,6 +61,18 @@ export class TempRepo {
     this.git('init', '-q');
     this.git('config', 'user.name', AUTHOR.name);
     this.git('config', 'user.email', AUTHOR.email);
+    return this;
+  }
+
+  /**
+   * Copies `template`'s working and outside folders here, so a spec builds its repos once and each test starts from
+   * its own copy: copying files costs far less than the git runs that made them, which take seconds per test on a
+   * loaded Windows host (T5032). A remote the template names by path still points at the template's folder; a test
+   * that talks to it re-points it here (`git remote set-url`).
+   */
+  copyFrom(template: TempRepo): this {
+    cpSync(template.dir, this.dir, { recursive: true });
+    cpSync(template.outside, this.outside, { recursive: true });
     return this;
   }
 

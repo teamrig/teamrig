@@ -271,6 +271,11 @@ function incidentLines(input) {
     // `list` has no class filter, so the command for all is the whole active list.
     return rows.length === 0 ? [] : listed(`INCIDENTS ${rows.length} active ${input.focus.maintenanceClass} bugs or critical tasks`, rows, `${input.command} list --tree`);
 }
+/** STEPS: each step for the person to take, with what they type; `steps` shows what each changes; no block when none. */
+function stepLines(input) {
+    const rows = input.steps.map((step) => `  ${step.title}: type ${step.command}`);
+    return rows.length === 0 ? [] : listed(`STEPS ${rows.length} for the person to take (${input.command} steps shows what each changes)`, rows, `${input.command} steps`);
+}
 /** The rows of a register's waits the owner put off (ownerLater), in its plan order; `team` labels a register under the lead's. */
 function laterRows(tasks, tree, ownerMarker, requireGate, team) {
     return tree.inPlanOrder(tasks.filter((task) => ownerLater(task, ownerMarker, requireGate, tree.context) !== undefined)).map((task) => rowOf(task, tree, team));
@@ -376,8 +381,9 @@ function doneLines(input) {
 /**
  * The register's agenda: the goals, to read everything after them against, then the owner's decisions, which are what
  * the meeting is for, and the core-business ones it books dedicated meetings for, and the incidents, then those the
- * owner put off and the ungated waits, which are not, then the late tasks, then the finished ones.
+ * owner put off and the ungated waits, which are not, then the late tasks, then the finished ones. The steps for the
+ * person follow the incidents: like a decision, only the person can take them.
  */
 export function agendaLines(input) {
-    return [...goalLines(input), ...decisionLines(input), ...dedicatedLines(input), ...incidentLines(input), ...laterLines(input), ...ungatedLines(input), ...proofLines(input), ...lateLines(input), ...doneLines(input)];
+    return [...goalLines(input), ...decisionLines(input), ...dedicatedLines(input), ...incidentLines(input), ...stepLines(input), ...laterLines(input), ...ungatedLines(input), ...proofLines(input), ...lateLines(input), ...doneLines(input)];
 }

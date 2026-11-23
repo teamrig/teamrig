@@ -21,6 +21,7 @@ import { configSource, teamlessConfigSource } from "./read-config.js";
 import { goalsSource } from "./read-goals.js";
 import { historySource } from "./read-history.js";
 import { statsSource } from "./read-stats.js";
+import { stepsSource } from "./read-steps.js";
 import { rangeOf } from "./stats.js";
 import { meetingsSource } from "./read-meetings.js";
 import { planSource } from "./read-plan.js";
@@ -45,6 +46,7 @@ const SOURCES = {
     goals: goalsSource,
     history: historySource(DOCUMENT_CONNECTORS),
     stats: statsSource(DOCUMENT_CONNECTORS),
+    steps: stepsSource,
 };
 /** The documents a run with no team is still answered: what a setup screen reads before there is a team to read. */
 const TEAMLESS = {

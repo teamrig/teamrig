@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import { claudeProjectsDir, findTranscript } from '../budget/discover.ts';
+import { findTranscript } from '../budget/discover.ts';
 import { LeadTree } from '../config/lead-tree.ts';
 import type { Roster } from '../config/roster.ts';
 import type { KitConfig } from '../config/types.ts';
@@ -27,7 +27,7 @@ import { startableTasks } from '../wake/day-start.ts';
 import type { RestExemption } from '../wake/exempt.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { measureTranscript, type LastSession } from './commands/rehire.ts';
-import { hostProgramsOf, sessionProcessCheckOf, transcriptsIfKept } from './host.ts';
+import { hostProgramsOf, sessionProcessCheckOf, transcriptsFolderIfKnown, transcriptsIfKept } from './host.ts';
 import { teamZone, type Kit } from './kit.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 import { teamRegister } from './team-register.ts';
@@ -126,7 +126,7 @@ type MeasuredSession = LastSession & { readonly changedAt: number };
  * start recorded; seen 10-28, two sessions re-filed under the project folder of the worktree they moved to).
  * Undefined when it has none.
  */
-async function measuredTranscriptOf(runtime: CliRuntime, record: SessionRecord, projectsDir: string, project: string): Promise<MeasuredSession | undefined> {
+async function measuredTranscriptOf(runtime: CliRuntime, record: SessionRecord, projectsDir: string | undefined, project: string): Promise<MeasuredSession | undefined> {
   if (record.transcript !== undefined) {
     const recorded = measuredOf(await measureTranscript(runtime, record.transcript));
     if (recorded !== undefined) {
@@ -153,7 +153,7 @@ export async function tabActivityNow(runtime: CliRuntime, record: SessionRecord,
   if (reader === undefined) {
     return undefined;
   }
-  const last = await measuredTranscriptOf(runtime, record, claudeProjectsDir(runtime.env, runtime.userHome), project);
+  const last = await measuredTranscriptOf(runtime, record, transcriptsFolderIfKnown(runtime), project);
   if (last === undefined) {
     return undefined;
   }
@@ -241,7 +241,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   if (soon !== undefined) {
     return keep(`waits until ${zone.clock(new Date(soon.at))} on ${soon.task.id}, under ${TIME_WAIT_GUARD_MINUTES} min away`);
   }
-  const projectsDir = claudeProjectsDir(runtime.env, runtime.userHome);
+  const projectsDir = transcriptsFolderIfKnown(runtime);
   const last = await measuredTranscriptOf(runtime, record, projectsDir, options.project);
   if (last === undefined) {
     return keep(`has no transcript of Claude Code session ${record.claudeSession} in any project folder, so its idle time is unknown`);
@@ -258,6 +258,9 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   const needed = config.open.headroom.closeIdleMinutes;
   if (idleMinutes < needed) {
     return keep(`has been quiet ${idleMinutes} min; it closes after ${needed} (open.headroom.closeIdleMinutes)`);
+  }
+  if (projectsDir === undefined) {
+    return keep('runs on a host whose transcripts folder teamrig does not know, so the folder it would be resumed in is unknown');
   }
   const folder = resumeFolderOf(last.transcript, tail, options.project, projectsDir, runtime.platform);
   if (folder === undefined) {

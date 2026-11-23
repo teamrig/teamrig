@@ -68,6 +68,7 @@ import { idlePassWarnings } from '../idle-pass-check.ts';
 import { restoreLauncherWarnings } from '../launcher-record-check.ts';
 import { secretGuardOffWarnings } from '../secret-guard-off-check.ts';
 import { secretHookWarnings } from '../secret-hook-check.ts';
+import { stampHookWarnings } from '../stamp-hook-check.ts';
 import { ownerBatchOf, type BatchedTeam } from '../owner-batch.ts';
 import { rollUp, type RolledTeam, type RollUp } from '../roll-up.ts';
 import { splitUnowned } from '../unowned.ts';
@@ -1167,7 +1168,8 @@ function withOverLimit(sections: readonly CheckSection[], fit: WeekFit): CheckSe
  * `contextFiles` budgets: the text every call of a session on this machine re-reads (T393). Those findings, the
  * skill flags no session on the team owns, the own team's idle pass gone stale or failing (FLEET-STALE,
  * src/cli/idle-pass-check.ts), each of its repositories whose git hooks skip the secret scan (SECRET-HOOK,
- * src/cli/secret-hook-check.ts), each secret guard key or settings file that turns a secret check off
+ * src/cli/secret-hook-check.ts) or, while `commits.stamp` is on, the commit stamp (STAMP-HOOK, src/cli/stamp-hook-check.ts),
+ * each secret guard key or settings file that turns a secret check off
  * (SECRET-GUARD-OFF, src/cli/secret-guard-off-check.ts), a five-hour window near full (FIVE-HOUR,
  * src/cli/five-hour-check.ts), a reset grant about to expire unused (RESET-EXPIRING, src/cli/reset-expiry-check.ts),
  * each GitHub thread past its answer target (GH-LATE, src/cli/github-late-check.ts), each part of this machine that
@@ -1233,6 +1235,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const { skills, unowned } = splitUnowned([...context, ...allow, ...deny], lint, new Set(own.config.sessions), own.paths.skills);
   const idle = await idlePassWarnings(runtime.files, own.paths, own.config.open.idle.mode, now.getTime());
   const hooks = await secretHookWarnings(runtime.files, runtime.secretsGit, own.paths, own.config.delivery.repos);
+  const stamps = await stampHookWarnings(runtime.files, runtime.secretsGit, own.paths, own.config);
   const settings = await knownSettingsScope(runtime, { paths: own.paths, config: own.config, project });
   const off = await secretGuardOffWarnings(runtime.files, own.config.secretGuard, settings);
   const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
@@ -1244,7 +1247,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const sessionRuns = (pid: number): Promise<boolean> => runsHostSession(runtime, pid);
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
 }
 
 /**

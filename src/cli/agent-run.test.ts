@@ -1,8 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { HostSource } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { NO_MARK_NAMED, refuseUnlessPerson, runBy, untoldRefusal, type RunBy } from './agent-run.ts';
 import { RefusedError } from './runtime.ts';
@@ -14,7 +14,7 @@ const OTHER_HOST = hostNaming({ marks: ['OTHER_AGENT', 'OTHER_TOOL'], identity: 
 const MARKLESS_HOST = hostNaming({ marks: [], identity: [] });
 const NO_SESSION = 'no session of the host is told';
 
-function by(host: HostSource, env: Readonly<Record<string, string | undefined>>, shippedHosts: readonly HostSource[] = quietWorld().shippedHosts): RunBy {
+function by(host: HostSource, env: Readonly<Record<string, string | undefined>>, shippedHosts: readonly ShippedHost[] = quietWorld().shippedHosts): RunBy {
   return runBy({ host, shippedHosts, env, platform: 'linux' });
 }
 
@@ -37,7 +37,14 @@ describe('runBy', () => {
     }
     assert.deepEqual(by(OTHER_HOST, { OTHER_AGENT: 'yes' }), { kind: 'agent', mark: 'OTHER_AGENT' });
     assert.deepEqual(by(OTHER_HOST, { OTHER_TOOL: '1' }), { kind: 'agent', mark: 'OTHER_TOOL' });
-    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, [SHIPPED_HOST, OTHER_HOST]), { kind: 'agent', mark: 'OTHER_AGENT' });
+    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, [shippedHost(SHIPPED_HOST), shippedHost(OTHER_HOST)]), { kind: 'agent', mark: 'OTHER_AGENT' });
+  });
+
+  it("counts the marks a shipped host declares while its session launcher is not built yet, so its agent never reads as the person (T5188)", () => {
+    const unbuilt: ShippedHost = { ports: bare, sessionVariables: { marks: ['UNBUILT_AGENT'], identity: [] } };
+    for (const host of [SHIPPED_HOST, bare]) {
+      assert.deepEqual(by(host, { UNBUILT_AGENT: '1' }, [shippedHost(SHIPPED_HOST), unbuilt]), { kind: 'agent', mark: 'UNBUILT_AGENT' });
+    }
   });
 
   it('takes no variable but a mark as one: an identity variable set alone is no mark', () => {

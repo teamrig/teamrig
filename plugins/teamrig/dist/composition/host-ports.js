@@ -22,14 +22,21 @@ function build(adapter, id, deps) {
     }
     return ports;
 }
-/** Loads the host adapter `id` and gives the way to build its ports; a refused adapter throws every reason. */
-async function sourceOf(id, run, importer) {
+/** Loads the host adapter `id`; a refused adapter throws every reason. */
+async function adapterOf(id, importer) {
     const load = await loadHost(id, importer);
     if (load.kind === 'refused') {
         throw new Error(`the host adapter ${load.id} did not load: ${load.notices.join('; ')}`);
     }
-    const adapter = load.value;
-    return (seen) => build(adapter, load.id, { ...seen, run });
+    return load.value;
+}
+/** The way to build the ports of `adapter`, loaded as `id`. */
+function sourceFrom(adapter, id, run) {
+    return (seen) => build(adapter, id, { ...seen, run });
+}
+/** Loads the host adapter `id` and gives the way to build its ports; a refused adapter throws every reason. */
+async function sourceOf(id, run, importer) {
+    return sourceFrom(await adapterOf(id, importer), id, run);
 }
 /**
  * Loads the host adapter teamrig runs in, once per process, and gives the way to build its ports. A refused
@@ -41,10 +48,13 @@ export function loadHostPorts(run, importer = importModule) {
 }
 /**
  * Loads every host adapter teamrig ships with (`HOST_ADAPTERS`), the one it runs in among them, and gives the way to
- * build each one's ports. For what holds on a machine whatever host runs the session, such as the files a host keeps
- * a login in. One that does not load throws every reason, as the running one does: an answer drawn from fewer hosts
- * than ship would be a weaker one, told to nobody.
+ * build each one's ports beside the session variables it declares. For what holds on a machine whatever host runs the
+ * session, such as the files a host keeps a login in. One that does not load throws every reason, as the running one
+ * does: an answer drawn from fewer hosts than ship would be a weaker one, told to nobody.
  */
 export function loadShippedHosts(run, importer = importModule) {
-    return Promise.all(Object.keys(HOST_ADAPTERS).map((id) => sourceOf(id, run, importer)));
+    return Promise.all(Object.keys(HOST_ADAPTERS).map(async (id) => {
+        const adapter = await adapterOf(id, importer);
+        return { ports: sourceFrom(adapter, id, run), sessionVariables: adapter.declaration.sessionVariables };
+    }));
 }

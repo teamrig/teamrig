@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { MANAGED_LABEL_SPECS, MAX_COMMENT, withStampFooter, type HostPull, type IssueDraft, type JsonRecord } from '../../../plugin-api/index.ts';
 import { secretScanner } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials, TEST_OWNERS } from '../../../testing/fake-credentials.ts';
-import { commentNode, FakeGh, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
+import { commentNode, FakeGh, ghCommit, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
 import {
   assigneeReadArgs,
+  commitReadArgs,
   isAssigneeRead,
   isCommentsRead,
   isIssueAssign,
@@ -32,6 +33,7 @@ import {
   LabelFileReads,
   labelCreateArgs,
   pullApproveArgs,
+  pullCompareArgs,
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
@@ -44,6 +46,7 @@ import { GitHubIssueHost, issueIdIn, labelNamesIn, loginIn, threadIn } from './h
 import { ISSUE_LIMIT, issuePageArgs } from './issues.ts';
 import { CLOSED_ISSUES_QUERY, PULL_PAGE_SIZE } from './queries.ts';
 import { PULL_LIMIT } from './pulls.ts';
+import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX } from './pull-work.ts';
 import { RepoTokens } from './tokens.ts';
 
 const ENV = { HOME: '/u' };
@@ -91,6 +94,16 @@ describe('GitHubIssueHost.reach', () => {
     const host = hostWith(new FakeGh(), new FakeCredentials().saves('teamrig-gh-acme', 'k'));
     assert.deepEqual(await host.reach('acme/web', 'read'), { kind: 'reached', access: 'acme: read with the token saved as teamrig-gh-acme', scope: 'acme' });
     assert.deepEqual(await host.reach('acme/api', 'open'), { kind: 'reached', access: 'acme: opens issues with the token saved as teamrig-gh-acme', scope: 'acme' });
+  });
+
+  it("words the access as the repository's own when it has its own key, and runs gh with that key", async () => {
+    const gh = new FakeGh();
+    const host = hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'owner-key').saves('teamrig-gh-acme.web', 'web-key'));
+    assert.deepEqual(await host.reach('acme/web', 'read'), { kind: 'reached', access: 'acme/web: read with the token saved as teamrig-gh-acme.web', scope: 'acme/web' });
+    assert.deepEqual(await host.reach('acme/api', 'read'), { kind: 'reached', access: 'acme: read with the token saved as teamrig-gh-acme', scope: 'acme' });
+    await host.list('acme/web', '2029-12-25');
+    assert.ok(gh.ran.length > 0);
+    assert.ok(gh.ran.every((request) => request.env['GH_TOKEN'] === 'web-key'));
   });
 });
 
@@ -186,6 +199,85 @@ describe('GitHubIssueHost.jobLog', () => {
     const odd: GhResult = { end: { kind: 'exited', code: 2 }, stdout: '', stderr: 'boom tok_abcdefgh\n' };
     const failed = await hostWith(new FakeGh().answers('acme/web', odd)).jobLog('acme/web', 41);
     assert.deepEqual(failed.kind === 'failed' && failed.reason.startsWith('gh run view for the failed job logs of acme/web') && !failed.reason.includes('tok_abcdefgh'), true, JSON.stringify(failed));
+  });
+});
+
+describe('GitHubIssueHost.rerunRun', () => {
+  const failing = (code: number, stderr: string): GhResult => ({ end: { kind: 'exited', code }, stdout: '', stderr });
+
+  it('reads the run, then re-runs its failed jobs with the saved token, when it ended failed, cancelled or timed out', async () => {
+    for (const conclusion of ['failure', 'cancelled', 'timed_out']) {
+      const gh = new FakeGh().holdsRun(45027704561, 'completed', conclusion, { workflow: '.github/workflows/check.yml', event: 'pull_request', attempt: 2 });
+      const end = await hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'tok_zzzzzzzz')).rerunRun('acme/web', 45027704561);
+      assert.deepEqual(end, { kind: 'done', workflow: 'check.yml', event: 'pull_request', attempt: 3 }, conclusion);
+      assert.deepEqual(
+        gh.ran.map((request) => [request.args, request.env['GH_TOKEN']]),
+        [
+          [['api', 'repos/acme/web/actions/runs/45027704561'], 'tok_zzzzzzzz'],
+          [['api', 'repos/acme/web/actions/runs/45027704561/rerun-failed-jobs', '-X', 'POST'], 'tok_zzzzzzzz'],
+        ],
+      );
+    }
+  });
+
+  it('refuses, writing nothing, a run that passed (a release would publish again), has not ended, a privileged event started, or ran three times', async () => {
+    const refusalOf = async (gh: FakeGh): Promise<string> => {
+      const end = await hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+      assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/actions/runs/7']]);
+      return end.kind === 'refused' ? end.reason : end.kind;
+    };
+    assert.equal(
+      await refusalOf(new FakeGh().holdsRun(7, 'completed', 'success', { workflow: '.github/workflows/release.yml' })),
+      'run 7 of acme/web (release.yml, push, attempt 1) ended success: only a failed, cancelled or timed-out run is re-run (a passed release run would publish again); nothing was re-run',
+    );
+    assert.match(await refusalOf(new FakeGh().holdsRun(7, 'in_progress', null)), /is in_progress, not ended/u);
+    assert.match(await refusalOf(new FakeGh().holdsRun(7, 'completed', 'action_required')), /ended action_required/u);
+    assert.match(await refusalOf(new FakeGh().holdsRun(7, 'completed', 'failure', { event: 'pull_request_target' })), /was started by pull_request_target/u);
+    assert.match(await refusalOf(new FakeGh().holdsRun(7, 'completed', 'failure', { event: 'workflow_run' })), /was started by workflow_run/u);
+    assert.match(await refusalOf(new FakeGh().holdsRun(7, 'completed', 'failure', { attempt: 3 })), /has run 3 times/u);
+  });
+
+  it('fails, writing nothing, when the run read fails or prints no run', async () => {
+    const reasonOf = async (gh: FakeGh): Promise<string> => {
+      const end = await hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+      assert.equal(gh.ran.length, 1, JSON.stringify(gh.ran));
+      return end.kind === 'failed' ? end.reason : end.kind;
+    };
+    assert.equal(
+      await reasonOf(new FakeGh()),
+      'run 7 of acme/web is not there for the token saved as teamrig-gh-acme: check the run id (the number after /runs/ in its address), and that the token reaches acme/web',
+    );
+    assert.equal(
+      await reasonOf(new FakeGh().answers('acme/web', failing(1, 'HTTP 403: Resource not accessible by personal access token\n'))),
+      'the token saved as teamrig-gh-acme may not read the CI runs of acme/web: on GitHub, edit that token and set Actions to Read-only; its text stays the same, so nothing needs saving again',
+    );
+    assert.equal(await reasonOf(new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: 'not json', stderr: '' })), 'the read of run 7 of acme/web printed no status and conclusion; nothing was re-run');
+  });
+
+  it('names the Actions write, a run not there, or gh\'s own line with any secret shape redacted, when GitHub refuses', async () => {
+    const reasonOf = async (result: GhResult): Promise<string> => {
+      const end = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(result), new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+      return end.kind === 'failed' ? end.reason : 'done';
+    };
+    assert.equal(
+      await reasonOf(failing(1, 'HTTP 403: Resource not accessible by personal access token\n')),
+      'the token saved as teamrig-gh-acme may not re-run run 7 of acme/web: on GitHub, edit that token and set Actions to Read and write; its text stays the same, so nothing needs saving again',
+    );
+    assert.equal(
+      await reasonOf(failing(1, 'HTTP 404: Not Found\n')),
+      'run 7 of acme/web is not there for the token saved as teamrig-gh-acme: check the run id (the number after /runs/ in its address), and that the token reaches acme/web',
+    );
+    const odd = await reasonOf(failing(1, 'HTTP 403: This workflow is already running tok_abcdefgh\n'));
+    assert.equal(odd.startsWith('gh api to re-run run 7 of acme/web') && odd.includes('already running') && !odd.includes('tok_abcdefgh'), true, odd);
+  });
+
+  it('says to look on GitHub after a signal, and fails with no saved token, running nothing', async () => {
+    const stopped = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite({ end: { kind: 'signal', signal: 'SIGTERM' }, stdout: '', stderr: '' })).rerunRun('acme/web', 7);
+    assert.deepEqual(stopped, { kind: 'failed', reason: 'gh was stopped (SIGTERM) on its way to re-run run 7 of acme/web: look on GitHub before a rerun' });
+    const gh = new FakeGh();
+    const none = await hostWith(gh, new FakeCredentials()).rerunRun('acme/web', 7);
+    assert.equal(none.kind, 'failed');
+    assert.deepEqual(gh.ran, []);
   });
 });
 
@@ -760,6 +852,59 @@ describe('GitHubIssueHost pull landing (T4817)', () => {
     assert.deepEqual(await host.pullStand({ repo: 'acme/web', number: 13 }), { kind: 'missing' });
     const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"data":{}}', stderr: '' });
     assert.deepEqual(await hostWith(odd).pullStand(PULL), { kind: 'failed', reason: 'gh printed no pull request for acme/web#12' });
+  });
+
+  describe('pullWork (T5117)', () => {
+    const HEAD = 'c'.repeat(40);
+    const ONE = ghCommit('1'.repeat(40), 'feat: one', [{ path: 'b.ts' }, { path: 'a.ts', status: 'added', patch: '@@ -0,0 +1 @@\n+x' }]);
+    const TWO = ghCommit('2'.repeat(40), 'fix: two', [{ path: 'logo.png', patch: null, blob: 'd'.repeat(40) }]);
+
+    it('reads the compare, then each commit oldest first, with their files as GitHub lists them', async () => {
+      const gh = new FakeGh().holdsCompare('acme/web', 'main', HEAD, [ONE, TWO]);
+      assert.deepEqual(await hostWith(gh).pullWork(PULL, 'main', HEAD), {
+        kind: 'read',
+        commits: [
+          {
+            sha: '1'.repeat(40),
+            subject: 'feat: one',
+            parents: 1,
+            files: [
+              { path: 'b.ts', previousPath: null, status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b', blob: 'b'.repeat(40) },
+              { path: 'a.ts', previousPath: null, status: 'added', patch: '@@ -0,0 +1 @@\n+x', blob: 'b'.repeat(40) },
+            ],
+          },
+          { sha: '2'.repeat(40), subject: 'fix: two', parents: 1, files: [{ path: 'logo.png', previousPath: null, status: 'modified', patch: null, blob: 'd'.repeat(40) }] },
+        ],
+      });
+      assert.deepEqual(
+        gh.ran.map((request) => request.args),
+        [pullCompareArgs('acme/web', 'main', HEAD), commitReadArgs('acme/web', '1'.repeat(40)), commitReadArgs('acme/web', '2'.repeat(40))],
+      );
+      assert.ok(gh.ran.every((request) => typeof request.env['GH_TOKEN'] === 'string'));
+    });
+
+    it('reads partial when GitHub lists fewer commits than the head carries, more than a landing compares, or a commit at the file cap', async () => {
+      const short = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, [ONE], 2)).pullWork(PULL, 'main', HEAD);
+      assert.equal(short.kind, 'partial');
+      const many = Array.from({ length: COMPARE_COMMITS_MAX + 1 }, (_, index) => ghCommit(String(index).padStart(40, 'e'), 'chore: n', [{ path: 'a.ts' }]));
+      const tooMany = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, many)).pullWork(PULL, 'main', HEAD);
+      assert.equal(tooMany.kind, 'partial');
+      const wide = ghCommit('3'.repeat(40), 'feat: wide', Array.from({ length: COMMIT_FILES_MAX }, (_, index) => ({ path: `f${String(index)}.ts` })));
+      const capped = await hostWith(new FakeGh().holdsCompare('acme/web', 'main', HEAD, [wide])).pullWork(PULL, 'main', HEAD);
+      assert.ok(capped.kind === 'partial' && capped.reason.includes('333333333'), JSON.stringify(capped));
+    });
+
+    it('reads partial for a base name a compare path cannot take, running no gh', async () => {
+      const gh = new FakeGh();
+      assert.equal((await hostWith(gh).pullWork(PULL, 'main..evil', HEAD)).kind, 'partial');
+      assert.deepEqual(gh.ran, []);
+    });
+
+    it('reads missing when GitHub knows no such head, and failed on an answer off its shape', async () => {
+      assert.deepEqual(await hostWith(new FakeGh()).pullWork(PULL, 'main', HEAD), { kind: 'missing' });
+      const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"commits":"no"}', stderr: '' });
+      assert.deepEqual(await hostWith(odd).pullWork(PULL, 'main', HEAD), { kind: 'failed', reason: `gh printed no compare for ccccccccc over main in acme/web` });
+    });
   });
 
   it('gives missing when GitHub answers the pull request null', async () => {

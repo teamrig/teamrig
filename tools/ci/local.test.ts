@@ -80,15 +80,15 @@ describe('local (the local gate CLI)', () => {
   it('--light runs the pre-push checks, saying what it leaves to CI, and reuses a light record but no short one (T4344)', () => {
     const { head, tree } = commit();
     const intro = 'pre-push checks: scrub, commit checks, typecheck, build, plugin tests and docs; required CI runs the whole suite, the dist checks and the fresh install on the pull request\n';
-    const run = repo.run(CLI, ['--light']);
+    const run = repo.run(CLI, ['--light', '--base', 'HEAD']);
     assert.equal(run.status, 1, run.stderr);
     assert.ok(run.stdout.startsWith(`${intro}FAIL: scrub: tree (exit 1, `), run.stdout);
 
     repo.write(`.git/local-ci/short/${tree}.json`, JSON.stringify({ tree, commit: head, checks: ['scrub: tree'], passedAt: '2026-10-15T10:00:00.000Z', node: 'v22.0.0' }));
-    assert.equal(repo.run(CLI, ['--light']).status, 1, 'a short record never passes a light proof');
+    assert.equal(repo.run(CLI, ['--light', '--base', 'HEAD']).status, 1, 'a short record never passes a light proof');
 
     repo.write(`.git/local-ci/light/${tree}.json`, JSON.stringify({ tree, commit: head, checks: ['scrub: tree'], passedAt: '2026-10-15T10:00:00.000Z', node: 'v22.0.0' }));
-    const reused = repo.run(CLI, ['--light']);
+    const reused = repo.run(CLI, ['--light', '--base', 'HEAD']);
     assert.equal(reused.status, 0, reused.stderr);
     assert.match(reused.stdout, /\npre-push checks: passed earlier on tree [0-9a-f]{7} \(commit [0-9a-f]{7}, 2026-10-15T10:00:00\.000Z, 1 check\(s\)\)\n$/);
     assert.equal(repo.run(CLI).status, 1, 'a light record never passes a full proof');
@@ -110,6 +110,18 @@ describe('local (the local gate CLI)', () => {
     const run = repo.run(CLI, ['--short', '--base', base]);
     assert.equal(run.status, 1, run.stderr);
     assert.ok(run.stdout.startsWith(`short checks: 1 changed file(s) of the gate itself since ${base}, so every check runs\n  tools/ci/x.ts\nFAIL: scrub: tree (exit 1, `), run.stdout);
+  });
+
+  it('--light runs every check when a changed file is part of the gate itself, as --short does (#1825)', () => {
+    const { head: base } = commit();
+    repo.write('tools/ci/x.ts', 'export const x = 1;\n');
+    repo.write('src/y.ts', 'export const y = 1;\n');
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', 'x');
+
+    const run = repo.run(CLI, ['--light', '--base', base]);
+    assert.equal(run.status, 1, run.stderr);
+    assert.ok(run.stdout.startsWith(`pre-push checks: 1 changed file(s) of the gate itself since ${base}, so every check runs\n  tools/ci/x.ts\nFAIL: scrub: tree (exit 1, `), run.stdout);
   });
 
   it('refuses uncommitted changes', () => {

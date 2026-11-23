@@ -2,7 +2,7 @@ import { posix, win32 } from 'node:path';
 import { OWNER_GATED_KEYS } from '../config/owner-gated.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import type { ProgramsContext } from '../package-guard/programs.ts';
-import type { EditCall, HookEvent, HookReply, TextChange, TextReplacement } from '../ports/host/index.ts';
+import type { EditCall, EditedFile, HookEvent, HookReply, TextChange, TextReplacement } from '../ports/host/index.ts';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
 import { opaqueGuardedWords, runsOfReadings, teamrigLaunchOf } from './exec-guard.ts';
 import { heldBack, refusal } from './permission.ts';
@@ -186,9 +186,9 @@ function nextText(change: TextChange | undefined, current: string | undefined): 
 }
 
 /** Why a file tool's call on the team config is refused, or undefined when it leaves every owner-gated key as it is. */
-async function fileRefusal(call: EditCall, path: string, configFile: string, env: ServiceRoleGuardEnv): Promise<string | undefined> {
+async function fileRefusal(call: EditCall, file: EditedFile, path: string, configFile: string, env: ServiceRoleGuardEnv): Promise<string | undefined> {
   const current = await env.readConfig(configFile);
-  const next = nextText(call.change, current);
+  const next = nextText(file.change, current);
   if (next === undefined) {
     return `this ${call.name} of the team config (${path}) cannot be read as a change of its text, so the guard cannot tell whether it changes an owner-gated key`;
   }
@@ -224,22 +224,29 @@ function editRefusalOf(reach: string): string {
   );
 }
 
-/** The reply to a file tool's call: a refusal when it writes an owner-gated key of a team config or may, else none. */
-async function editReply(call: EditCall, cwd: string, env: ServiceRoleGuardEnv): Promise<HookReply | undefined> {
-  const { path } = call;
+/** Why one file of a file tool's call is refused: it writes an owner-gated key of a team config or may; else undefined. */
+async function editedFileReach(call: EditCall, file: EditedFile, cwd: string, env: ServiceRoleGuardEnv): Promise<string | undefined> {
+  const { path } = file;
   if (path === undefined) {
     return undefined;
   }
   const alias = env.platform === 'win32' ? aliasFormOf(path) : undefined;
   if (alias !== undefined && CONFIG_NAME.test(openedNameOf(path))) {
-    return refusal(editRefusalOf(`this ${call.name} names a config.json through ${alias} (${path}), a spelling the guard cannot hold to one file`));
+    return `this ${call.name} names a config.json through ${alias} (${path}), a spelling the guard cannot hold to one file`;
   }
   const configFile = await teamConfigOf(path, cwd, env);
-  if (configFile === undefined) {
-    return undefined;
+  return configFile === undefined ? undefined : fileRefusal(call, file, path, configFile, env);
+}
+
+/** The reply to a file tool's call: a refusal when any file it touches is refused, else none. */
+async function editReply(call: EditCall, cwd: string, env: ServiceRoleGuardEnv): Promise<HookReply | undefined> {
+  for (const file of call.files) {
+    const reach = await editedFileReach(call, file, cwd, env);
+    if (reach !== undefined) {
+      return refusal(editRefusalOf(reach));
+    }
   }
-  const reach = await fileRefusal(call, path, configFile, env);
-  return reach === undefined ? undefined : refusal(editRefusalOf(reach));
+  return undefined;
 }
 
 /**

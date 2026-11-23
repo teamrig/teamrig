@@ -1,11 +1,11 @@
 import { join, posix } from 'node:path';
 import type { Files } from '../core/files.ts';
 import { isRecord, isStringArray } from '../core/guards.ts';
-import { claudeConfigDir, KIT_NAME } from '../core/home.ts';
+import { KIT_NAME } from '../core/home.ts';
 import { appliesTo } from '../plugin-store/installs.ts';
 import { newestNear, storeTimesOf } from '../plugin-store/store.ts';
 import type { PluginInstall } from '../ports/host/index.ts';
-import { pluginIfKept } from './host.ts';
+import { pathsIfKnown, pluginIfKept } from './host.ts';
 import type { CliRuntime } from './runtime.ts';
 
 /**
@@ -65,15 +65,15 @@ async function lackOf(files: Files, install: PluginInstall): Promise<string | un
  * Whether a session reopened now for `project` would load whole plugins: each teamrig install that applies to it has
  * its hooks file, the mod modules that file names and the CLI they run, and no part of the store an install writes
  * changed within REOPEN_SETTLE_MS (`storeTimesOf`: a copy names the new version before it ends). On a host that keeps
- * no plugin store, or with no plugin list, there is no store to wait for (a plugin run from a folder); a list that
+ * no plugin store or whose folders teamrig does not know, or with no plugin list, there is no store to wait for (a plugin run from a folder); a list that
  * does not read as the host's is a store mid-write.
  */
 export async function installStateOf(runtime: Pick<CliRuntime, 'files' | 'pluginStore' | 'env' | 'userHome' | 'clock' | 'host' | 'platform'>, project: string): Promise<InstallState> {
   const plugin = pluginIfKept(runtime);
-  if (plugin === undefined) {
+  const pluginsFolder = pathsIfKnown(runtime)?.pluginsFolder(runtime.userHome);
+  if (plugin === undefined || pluginsFolder === undefined) {
     return SETTLED;
   }
-  const pluginsFolder = join(claudeConfigDir(runtime.env, runtime.userHome), 'plugins');
   const text = await runtime.files.read(join(pluginsFolder, plugin.listFile));
   if (text === undefined) {
     return SETTLED;

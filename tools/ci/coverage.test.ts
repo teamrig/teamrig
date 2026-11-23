@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   SLOWEST_REPORTER,
   coverageFindings,
+  coverageOptions,
   coverageRun,
   coverageTotals,
   DEFAULT_SUITE_IDLE_SECONDS,
@@ -184,12 +185,28 @@ describe('suiteArgs', () => {
 });
 
 describe('suiteWorkers', () => {
-  it('runs half the cores at once, so the two heavy steps the host queue admits fit the host, and never none (T4064)', () => {
-    assert.deepEqual([20, 9, 4, 2, 1].map(suiteWorkers), [10, 4, 2, 1, 1]);
+  it('runs half the cores at once on a shared host, so the two heavy steps the host queue admits fit it, and never none (T4064)', () => {
+    assert.deepEqual([20, 9, 4, 2, 1].map((cores) => suiteWorkers(cores, 'shared')), [10, 4, 2, 1, 1]);
   });
 
-  it('runs at most 10 files at once on a host with more cores (T4064)', () => {
-    assert.deepEqual([22, 32, 64].map(suiteWorkers), [10, 10, 10]);
+  it('runs a file a core at once on a machine the suite has alone, as a CI runner (T5027)', () => {
+    assert.deepEqual([9, 4, 2, 1].map((cores) => suiteWorkers(cores, 'alone')), [9, 4, 2, 1]);
+  });
+
+  it('runs at most 10 files at once on a host with more cores, shared or alone (T4064)', () => {
+    assert.deepEqual([22, 32, 64].map((cores) => suiteWorkers(cores, 'shared')), [10, 10, 10]);
+    assert.deepEqual([12, 64].map((cores) => suiteWorkers(cores, 'alone')), [10, 10]);
+  });
+});
+
+describe('coverageOptions', () => {
+  it('reads a shared host with no option, and --alone as the machine to itself (T5027)', () => {
+    assert.deepEqual(coverageOptions([]), { kind: 'options', host: 'shared' });
+    assert.deepEqual(coverageOptions(['--alone']), { kind: 'options', host: 'alone' });
+  });
+
+  it('names the first option it does not know', () => {
+    assert.deepEqual(coverageOptions(['--alone', '--fix', '--more']), { kind: 'unknown', option: '--fix' });
   });
 });
 

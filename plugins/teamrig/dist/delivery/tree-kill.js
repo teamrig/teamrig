@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { lineShellOf, powerShellSpec } from "./line-shell.js";
 import { treeOf, wholeNumberTriples } from "./processes.js";
 /** The most list-and-kill rounds a sweep makes: each round ends one more generation, started before its parent ended. */
 export const SWEEP_ROUNDS = 5;
@@ -83,58 +84,82 @@ export function parseStartedProcesses(text) {
 /** Win32_Process with each start as Unix ms; a process with no start (the idle and system ones) prints 0. */
 const LIST_SCRIPT = 'Get-CimInstance Win32_Process | ForEach-Object { ' +
     "'{0},{1},{2}' -f $_.ProcessId,$_.ParentProcessId,$(if ($_.CreationDate) { ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } else { 0 }) }";
-const runOnHost = (file, args) => new Promise((resolve) => {
-    execFile(file, args, { windowsHide: true, maxBuffer: LIST_MAX_BUFFER, timeout: HOST_CALL_TIMEOUT_MS }, (error, stdout) => resolve(error === null ? stdout : undefined));
+/** PowerShell started for one script, which it is given as its command. */
+export const runPowerShellOnce = (script) => new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, maxBuffer: LIST_MAX_BUFFER, timeout: HOST_CALL_TIMEOUT_MS }, (error, stdout) => resolve(error === null ? stdout : undefined));
 });
 /**
  * Ends each target only while its id still names the process the list saw. Windows hands a freed id to the next new
  * process within milliseconds and a list takes about a second, so a listed process that ended by itself meanwhile (a
  * console host whose shell was just killed) can be another program by the kill, which `taskkill /PID` would end
- * (T1562). The script first opens a handle to each target, which holds its id, then reads their starts through the
- * list's own Win32_Process query and ends, through that handle, only a held process whose start is the listed one; a
- * process with no start is never ended. A target that ended or cannot be opened is skipped; the next list finds any
- * member it missed.
+ * (T1562). The script first opens a handle to each target, which holds its id, then reads each start through that
+ * handle and ends, through it, only a held process whose start is the listed one; a process whose start cannot be read
+ * is never ended. The handle's start is the kernel's creation time, the one Win32_Process's CreationDate shows, so it
+ * matches the list to the millisecond, and the kill needs no CIM query of its own: each query loads CimCmdlets and
+ * takes about 0.4 s idle, seconds under load, and a sweep kills at least once (T5031). A target that ended or cannot
+ * be opened is skipped; the next list finds any member it missed.
  */
 export function killScript(targets) {
     const wanted = targets.map((target) => `${target.pid} = ${target.startedMs}`).join('; ');
     return (`$want = @{ ${wanted} }; $held = @{}; ` +
         'foreach ($id in @($want.Keys)) { try { $p = Get-Process -Id $id -ErrorAction Stop; $null = $p.Handle; $held[$id] = $p } catch {} }; ' +
-        'if ($held.Count -gt 0) { ' +
-        "Get-CimInstance Win32_Process -Filter ((@($held.Keys) | ForEach-Object { \"ProcessId=$_\" }) -join ' OR ') | ForEach-Object { " +
-        '$id = [int]$_.ProcessId; ' +
-        'if ($_.CreationDate -and ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() -eq $want[$id]) { try { $held[$id].Kill() } catch {} } } }');
+        'foreach ($id in @($held.Keys)) { try { ' +
+        'if (([DateTimeOffset]$held[$id].StartTime).ToUnixTimeMilliseconds() -eq $want[$id]) { $held[$id].Kill() } } catch {} }');
 }
 /**
- * The Windows host over `run`: PowerShell lists the processes and ends listed ones by id and start (`killScript`). A
- * failed call ends nothing.
+ * The Windows host over `run`, a PowerShell script runner: it lists the processes and ends listed ones by id and start
+ * (`killScript`). A failed call ends nothing.
  */
 export function windowsSweepHostOf(run, now = () => Date.now()) {
     return {
         list: async () => {
-            const printed = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', LIST_SCRIPT]);
+            const printed = await run(LIST_SCRIPT);
             return printed === undefined ? undefined : parseStartedProcesses(printed);
         },
         kill: async (targets) => {
             if (targets.length > 0) {
-                await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', killScript(targets)]);
+                await run(killScript(targets));
             }
         },
         now,
     };
 }
-/** The real Windows host. */
-export const windowsSweepHost = windowsSweepHostOf(runOnHost);
+/** The real Windows host, starting PowerShell for each call. */
+export const windowsSweepHost = windowsSweepHostOf(runPowerShellOnce);
+/**
+ * The Windows host over one PowerShell kept open for the sweep, from `openShell`. A sweep lists, kills and lists again
+ * at least, and a fresh PowerShell costs about 0.45 s to launch and 0.6 s more to load the CIM module before its first
+ * list; one shell pays that once, and its later lists take about 0.4 s (T5031). A call that hangs ends that shell, and
+ * the next call starts another. Closing the session closes the shell.
+ */
+export function windowsSweepOpenerOf(openShell) {
+    return () => {
+        const shell = openShell(powerShellSpec(HOST_CALL_TIMEOUT_MS, LIST_MAX_BUFFER));
+        return { host: windowsSweepHostOf(shell.run), close: shell.close };
+    };
+}
+/** The real Windows host over one PowerShell kept open for each sweep. */
+export const openWindowsSweep = windowsSweepOpenerOf(lineShellOf);
 /**
  * On Windows the sweep ends the tree: killing only the shell would leave the command it started running. When the host
  * cannot be listed, the held process alone is ended through its handle: what it started runs on, but no id walk can
  * reach a stranger. On POSIX the step runs as its own process group, and the group is killed; an orphan stays in its
  * group.
  */
-export function nodeTreeKill(platform, host = windowsSweepHost) {
+export function nodeTreeKill(platform, open = openWindowsSweep) {
     if (platform === 'win32') {
         return async (held) => {
-            if (held.pid !== undefined && (await sweepTree(held.pid, host)) === 'unlisted') {
-                held.kill('SIGKILL');
+            if (held.pid === undefined) {
+                return;
+            }
+            const session = open();
+            try {
+                if ((await sweepTree(held.pid, session.host)) === 'unlisted') {
+                    held.kill('SIGKILL');
+                }
+            }
+            finally {
+                session.close();
             }
         };
     }

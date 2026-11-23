@@ -233,9 +233,10 @@ export function coreRuleTexts(config, command, platform, clock) {
             // which sits outside this cap.
             ` Task files go in \`${command} files T<id>\`, other notes in \`--notes\`.` +
             // T2657: a budget hold on a review or a leader's answer stalls every session waiting on it, so
-            // those answers go first past any budget, and a lead plans its cuts around them.
+            // those answers go first past any budget, and a lead plans its cuts around them. T4388: p0 and blocker work go on
+            // past it too. The unheld roles (budget/unheld.ts) are told by their own budget line, so the rule fits the cap.
             (budget.enabled
-                ? ` Pace the week to ${percent(budget.targetPct)} of the limit, ${percent(budget.reservePct)} kept for incidents [budget]; waited-on answers are blockers, never budget-held.`
+                ? ` Pace the week to ${percent(budget.targetPct)} of the limit, ${percent(budget.reservePct)} kept for incidents [budget]; waited-on answers, p0s, blockers: never budget-held.`
                 : ''),
         investigate: 'Investigate first: frequency × impact, the cheapest fix for the symptom.' +
             // Owner order 11-13 (T2607): a hand step named its files repo-relative and the owner had to ask for full paths.

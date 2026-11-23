@@ -42,6 +42,8 @@ export interface UpdateNotice {
   readonly marketplace: string;
   readonly installed: string;
   readonly newest: string;
+  /** The release channel the newest version was read on (`stable`, `preview`); absent off a channel's branch. */
+  readonly channel?: string;
 }
 
 /** What the `hook update-*` commands answer (src/cli/commands/hook-update.ts UpdateAnswer). */
@@ -104,9 +106,10 @@ export type UpdateAction =
   | { readonly kind: 'dismissed'; readonly plugin: string; readonly version: string }
   | { readonly kind: 'failed'; readonly error: string };
 
-/** The band's line for an update. */
+/** The band's line for an update, naming the release channel it came on when known. */
 export function updateLine(notice: UpdateNotice): string {
-  return `${notice.plugin} ${notice.newest} is out (you run ${notice.installed})`;
+  const channel = notice.channel === undefined ? '' : ` (${notice.channel})`;
+  return `${notice.plugin} ${notice.newest}${channel} is out (you run ${notice.installed})`;
 }
 
 /** The most of a failure's reason the band shows; the toast and the debug log carry it whole. */
@@ -143,10 +146,15 @@ function noticeOf(value: unknown): UpdateNotice | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
-  const { plugin, marketplace, installed, newest } = value;
-  return typeof plugin === 'string' && typeof marketplace === 'string' && typeof installed === 'string' && typeof newest === 'string'
-    ? { plugin, marketplace, installed, newest }
-    : undefined;
+  const { plugin, marketplace, installed, newest, channel } = value;
+  if (typeof plugin !== 'string' || typeof marketplace !== 'string' || typeof installed !== 'string' || typeof newest !== 'string') {
+    return undefined;
+  }
+  if (channel !== undefined && typeof channel !== 'string') {
+    return undefined;
+  }
+  const notice: UpdateNotice = { plugin, marketplace, installed, newest };
+  return channel === undefined ? notice : { ...notice, channel };
 }
 
 function noticesOf(value: unknown): readonly UpdateNotice[] | undefined {

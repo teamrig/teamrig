@@ -21,6 +21,13 @@ export function migrationBackupName(pending) {
     return `config.v${pending.fromVersion}`;
 }
 /**
+ * Whether `name` is a file name `writeConfigWithBackup` gives a migration's backup: `config.v<N>.json`, or with the
+ * minute's stamp and a count when that name was taken (`config.v<N>.<YYYYMMDDHHMM>[-<k>].json`).
+ */
+export function isMigrationBackupFile(name) {
+    return /^config\.v\d+(\.\d{12}(-\d+)?)?\.json$/.test(name);
+}
+/**
  * Replaces the config file with `config`: first a backup of the original (`<backupName>.json`, or with a
  * timestamp when that name is taken), then the new file, atomically. Returns the backup path. A team's config is
  * written only through its lock (`ConfigLock`, config-lock.ts); this is called directly for other JSON files only,

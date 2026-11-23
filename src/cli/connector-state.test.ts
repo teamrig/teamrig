@@ -23,6 +23,7 @@ describe('connectorState', () => {
         watchLock: join(state.dir, 'watch.lock'),
         follows: join(state.dir, 'follows.json'),
         claims: join(state.dir, 'claims.json'),
+        scope: join(state.dir, 'scope.json'),
       },
     );
   });

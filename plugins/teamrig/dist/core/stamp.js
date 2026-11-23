@@ -54,16 +54,38 @@ export function withStampFooter(body, version = KIT_VERSION) {
 export function stampTrailer(version = KIT_VERSION) {
     return `${STAMP_TRAILER_KEY}: ${KIT_NAME} ${version}`;
 }
+/** The trailer key naming the program, model and effort of the session that made a commit. */
+export const MADE_BY_TRAILER_KEY = 'Made-by';
+/** What a `Made-by` trailer writes for a part the host does not tell: never a guess. */
+export const STAMP_UNKNOWN = 'unknown';
+/** The maker trailer: `Made-by: <program> <version>; model <model>; effort <effort>`, `unknown` for an untold part. */
+export function madeByTrailer(maker) {
+    const told = (part) => (part === undefined || part.trim() === '' ? STAMP_UNKNOWN : part.trim());
+    return `${MADE_BY_TRAILER_KEY}: ${maker.program} ${told(maker.version)}; model ${told(maker.model)}; effort ${told(maker.effort)}`;
+}
 /** A trailer line (`Key: value`) or the indented continuation of one, as git reads a trailer block. */
 const TRAILER_LINE = /^(?:[A-Za-z0-9][A-Za-z0-9-]*:\s|[ \t]+\S)/u;
-/** A `Made-with:` line, in any case. */
-const STAMP_TRAILER_LINE = new RegExp(`^${STAMP_TRAILER_KEY}:`, 'iu');
+/** A `Made-with:` or `Made-by:` line, in any case: the trailers a stamp writes, which a restamp drops first. */
+const STAMP_TRAILER_LINE = new RegExp(`^(?:${STAMP_TRAILER_KEY}|${MADE_BY_TRAILER_KEY}):`, 'iu');
+/** The scissors line of a verbose commit: git drops it and everything below it from the message. */
+const SCISSORS_LINE = /^# -+ >8 -+$/u;
 /**
- * `message` with one `Made-with:` trailer in git's trailer block, its last paragraph when every line of that is a
- * trailer, else a new last paragraph. Any `Made-with:` line already in the block is dropped first, so a rerun or an
- * amend keeps one, at `version`.
+ * `message` split where the part git keeps ends: at a verbose commit's scissors line, else before the comment lines
+ * an edited message ends with, which git strips. A commit-msg hook sees both, and a trailer below them would be lost.
+ * A tail of blank lines only is no tail.
  */
-export function withStampTrailer(message, version = KIT_VERSION) {
+function splitKept(message) {
+    const lines = message.split('\n');
+    const scissors = lines.findIndex((line) => SCISSORS_LINE.test(line));
+    let end = scissors === -1 ? lines.length : scissors;
+    while (end > 0 && /^(?:#|\s*$)/u.test(lines[end - 1] ?? '')) {
+        end -= 1;
+    }
+    const tail = lines.slice(end).join('\n');
+    return { kept: lines.slice(0, end).join('\n'), tail: tail.trim() === '' ? '' : tail };
+}
+/** `text` (no comment tail) with `trailers` in its trailer block, after the stamp trailers already there are dropped. */
+function withTrailers(message, trailers) {
     const text = message.trimEnd();
     const split = text.lastIndexOf('\n\n');
     const head = split === -1 ? '' : text.slice(0, split);
@@ -72,8 +94,25 @@ export function withStampTrailer(message, version = KIT_VERSION) {
     // A subject alone is never a trailer block, even one shaped `fix: x`: git reads the first paragraph as the title.
     const isBlock = split !== -1 && lines.every((line) => TRAILER_LINE.test(line)) && !/^[ \t]/u.test(last);
     if (!isBlock) {
-        return text === '' ? stampTrailer(version) : `${text}\n\n${stampTrailer(version)}`;
+        return text === '' ? trailers.join('\n') : `${text}\n\n${trailers.join('\n')}`;
     }
     const kept = lines.filter((line) => !STAMP_TRAILER_LINE.test(line));
-    return `${head}\n\n${[...kept, stampTrailer(version)].join('\n')}`;
+    return `${head}\n\n${[...kept, ...trailers].join('\n')}`;
+}
+/**
+ * `message` with the stamp's trailers in git's trailer block, its last paragraph when every line of that is a
+ * trailer, else a new last paragraph: `Made-with: teamrig <version>`, then `Made-by` when `maker` is given (a commit
+ * a session made). The stamp trailers already in the block are dropped first, so a rerun or an amend keeps one of
+ * each, with the values of the run that stamps last; a commit with no maker drops an old `Made-by`, as no session
+ * made that version of it. A comment tail or a verbose commit's diff stays below the trailers, for git to strip.
+ */
+export function withStampTrailers(message, maker, version = KIT_VERSION) {
+    const { kept, tail } = splitKept(message);
+    const trailers = maker === undefined ? [stampTrailer(version)] : [stampTrailer(version), madeByTrailer(maker)];
+    const stamped = withTrailers(kept, trailers);
+    return tail === '' ? stamped : `${stamped}\n${tail}`;
+}
+/** `message` with one `Made-with:` trailer and no `Made-by` (see `withStampTrailers`). */
+export function withStampTrailer(message, version = KIT_VERSION) {
+    return withStampTrailers(message, undefined, version);
 }

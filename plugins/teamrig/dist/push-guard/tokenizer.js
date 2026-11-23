@@ -1,4 +1,5 @@
 import { ansiCValue } from "./ansi-c.js";
+import { countersHold, plainArithmetic } from "./arithmetic.js";
 import { bareLine, expandedUnits, MARKER, nativeWords, PARSER_MARKER, splitLine, verbatimLine } from "./native-line.js";
 /** How deep substitutions may nest before the parse stops and calls itself incomplete. */
 const MAX_NESTING = 16;
@@ -490,6 +491,8 @@ class Scanner {
     heredocs = [];
     unreadBodies = [];
     bindingsUnclear = false;
+    /** The names plain arithmetic expansions read, here and in the substitutions inside; see {@link noteArithmetic}. */
+    counters = [];
     /** How many bash `${...}`, `$((...))` and `$[...]` or PowerShell `[...]` the reader is inside, bounded like substitutions. */
     expansions = 0;
     subshells;
@@ -508,12 +511,29 @@ class Scanner {
         this.held = scope.held;
     }
     parse() {
-        return this.scan();
+        return this.settled(this.scan());
     }
     /** Reads the whole source as expandable text; the commands are those of the substitutions in it. */
     parseExpandable() {
         this.readExpandable(new WordBuilder(true), this.source.length);
-        return this.result();
+        return this.settled(this.result());
+    }
+    /** The whole line's parse, with its bindings unclear when a counter its plain arithmetic reads may not hold a whole number. */
+    settled(parse) {
+        return parse.bindingsUnclear || countersHold(parse.commands, this.counters) ? parse : { ...parse, bindingsUnclear: true };
+    }
+    /**
+     * At the end of `$((...))` or `$[...]`, whose text is `text`: arithmetic that may assign or read text again marks
+     * the bindings unclear; plain arithmetic leaves the names it reads for {@link settled} to check over the whole line.
+     */
+    noteArithmetic(text, closed) {
+        const names = closed && this.complete && !this.held ? plainArithmetic(text) : undefined;
+        if (names === undefined) {
+            this.bindingsUnclear = true;
+        }
+        else {
+            this.counters.push(...names);
+        }
     }
     /** Reads the whole source; its commands stay open to the separators an enclosing scanner adds after them. */
     scan() {
@@ -1400,12 +1420,13 @@ class Scanner {
         if (next === '(' && this.dialect === 'bash' && this.at(2) === '(') {
             this.index += 3;
             this.readArithmetic('(', ')', 2, quoted);
-            this.bindingsUnclear = true;
+            // bash reads `$((a) )`, with its closing parentheses apart, as a command substitution.
+            this.noteArithmetic(this.source.slice(start + 3, this.index - 2), this.source.slice(this.index - 2, this.index) === '))');
         }
         else if (next === '[' && this.dialect === 'bash') {
             this.index += 2;
             this.readArithmetic('[', ']', 1, quoted);
-            this.bindingsUnclear = true;
+            this.noteArithmetic(this.source.slice(start + 2, this.index - 1), this.source[this.index - 1] === ']');
         }
         else if (next === '(') {
             this.index += 2;
@@ -1579,7 +1600,9 @@ class Scanner {
         else if (runs) {
             const subshells = [...this.subshells, this.ids.next];
             this.ids.next += 1;
-            const nested = new Scanner(plainReading(inner), 'bash', { nesting: this.nesting + 1, subshells, ids: this.ids, held: this.held }).scan();
+            const scanner = new Scanner(plainReading(inner), 'bash', { nesting: this.nesting + 1, subshells, ids: this.ids, held: this.held });
+            const nested = scanner.scan();
+            this.counters.push(...scanner.counters);
             this.commands.push(...nested.commands);
             this.unreadBodies.push(...nested.unreadBodies);
             this.complete &&= nested.complete;

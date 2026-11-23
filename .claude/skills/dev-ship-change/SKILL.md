@@ -5,6 +5,10 @@ description: Land a finished teamrig change through small signed commits with Co
 
 # Ship a change
 
+The steps every repository shares (a branch per change, the description, one merge flow, a rebase back to the same
+branch) are the plugin's [ship-change skill](../../../plugins/teamrig/skills/ship-change/SKILL.md); these are teamrig's
+own on top of it.
+
 1. Before you build, settle the change's reach (CONTRIBUTING.md, Where a change lives): all users by default, so a
    team's value is a config key with a default and a how-to is a plugin skill; teamrig development only for this
    repo's own tooling. Write it in the task's description.
@@ -17,7 +21,8 @@ description: Land a finished teamrig change through small signed commits with Co
    `commit subjects` check fails any other (CONTRIBUTING.md, Branches and releases). A commit past 400 changed non-test lines or 15
    non-test files carries a `Large-commit: <reason>` line.
 4. Commit no dist: main ignores `plugins/teamrig/dist`. `npm run build` writes it for the specs and checks that load
-   it, and the release workflow builds it and publishes it to the `release` branch, which installs read.
+   it, and the release workflow builds it and publishes it to the `preview` branch, along whose chain the `release`
+   branch, which stable installs read, moves.
 5. Never raise the version in `plugins/teamrig/.claude-plugin/plugin.json` or `src/core/version.ts`: the release
    pull request does, from the subjects. While the version is 0.x, a `feat` or a breaking change (`!`) raises the
    minor, a `fix` or `perf` the patch, so pick the type for what the change does for users.

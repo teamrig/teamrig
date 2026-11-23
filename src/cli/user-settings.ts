@@ -12,16 +12,18 @@ import { RefusedError, type CliRuntime } from './runtime.ts';
  * written; a write keeps the old file in the kit's backups folder first.
  */
 
-/** The backup name of Claude Code's settings before a change. */
+/** The backup name of the host's user settings before a change: a stored file name, kept as it was. */
 const SETTINGS_BACKUP_NAME = 'claude-settings';
 
 /** Where the settings live on this machine, and where their old copy is kept. */
 export interface SettingsTarget {
   readonly settingsPath: string;
   readonly backupsDir: string;
+  /** The record of the allow rules `automode install` wrote (src/cli/allow-record.ts). */
+  readonly allowRecordPath: string;
 }
 
-export interface ClaudeSettings {
+export interface UserSettings {
   readonly json: JsonRecord;
   readonly exists: boolean;
 }
@@ -31,14 +33,16 @@ export interface ClaudeSettings {
  * reason, before anything is read or written.
  */
 export function settingsTargetOf(runtime: CliRuntime): SettingsTarget {
+  const kitHome = resolveKitHome(runtime.env, runtime.userHome);
   return {
     settingsPath: pathsOf(runtime).userSettings(runtime.userHome),
-    backupsDir: join(resolveKitHome(runtime.env, runtime.userHome), 'backups'),
+    backupsDir: join(kitHome, 'backups'),
+    allowRecordPath: join(kitHome, 'synced-allow-rules.json'),
   };
 }
 
-/** Claude Code's user settings; a missing file reads as empty, one that is not a JSON object is refused. */
-export async function readClaudeSettings(runtime: CliRuntime, path: string): Promise<ClaudeSettings> {
+/** The host's user settings; a missing file reads as empty, one that is not a JSON object is refused. */
+export async function readUserSettings(runtime: CliRuntime, path: string): Promise<UserSettings> {
   const text = await runtime.files.read(path);
   if (text === undefined) {
     return { json: {}, exists: false };
@@ -56,7 +60,7 @@ export async function readClaudeSettings(runtime: CliRuntime, path: string): Pro
 }
 
 /** Writes the settings, keeping the old file first when there was one; returns where it was kept. */
-export async function writeClaudeSettings(runtime: CliRuntime, target: SettingsTarget, settings: ClaudeSettings, next: JsonRecord): Promise<string | undefined> {
+export async function writeUserSettings(runtime: CliRuntime, target: SettingsTarget, settings: UserSettings, next: JsonRecord): Promise<string | undefined> {
   if (!settings.exists) {
     await runtime.files.write(target.settingsPath, formatConfig(next));
     return undefined;

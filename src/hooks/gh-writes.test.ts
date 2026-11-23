@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
-import { endpointPath, GH_READS, ghCallOf, mayBeGhCall, remoteReposOf, repoFlagValue, repoInWord, type GhCall } from './gh-writes.ts';
+import { apiRepoOf, endpointPath, GH_READS, ghCallOf, mayBeGhCall, remoteReposOf, repoFlagValue, repoInWord, repoValueOf, type GhCall } from './gh-writes.ts';
 
 /** The words of a gh call after `gh`; a word holding `$` is only known when it runs. */
 function words(line: string): ShellWord[] {
@@ -175,6 +175,23 @@ describe('repository names (T3002)', () => {
     }
   });
 
+  it('keeps the host a HOST/OWNER/REPO or URL value names, in lowercase, and none for OWNER/REPO', () => {
+    assert.deepEqual(repoValueOf('Acme/Web'), { repo: 'acme/web', host: undefined });
+    assert.deepEqual(repoValueOf('X.GHE.com/acme/web'), { repo: 'acme/web', host: 'x.ghe.com' });
+    assert.deepEqual(repoValueOf('https://x.ghe.com/acme/web.git'), { repo: 'acme/web', host: 'x.ghe.com' });
+    assert.equal(repoValueOf('a/b/c/d'), undefined);
+  });
+
+  it('places a gh api write on a repos/ path as its repository, without `.git`, and none for a part no name can hold', () => {
+    assert.equal(apiRepoOf('repos/acme/web.git/issues'), 'acme/web');
+    assert.equal(apiRepoOf('repos/acme/web/pulls'), 'acme/web');
+    assert.equal(apiRepoOf('repos/{owner}/{repo}/pulls'), 'folder');
+    for (const path of ['repos/ac$me/web', 'repos/acme/{repo}', 'repos/acme', 'orgs/acme']) {
+      assert.equal(apiRepoOf(path), undefined, path);
+    }
+    assert.deepEqual(callOf('api -X POST repos/acme/web.git/issues'), { kind: 'write', what: 'gh api POST repos/acme/web.git/issues', target: { repos: ['acme/web'], folder: false } });
+  });
+
   it('reads a repository in a URL, an owner/name or an owner/name#number word, and none in a longer path', () => {
     assert.equal(repoInWord('https://github.com/Acme/Web/pull/3'), 'acme/web');
     assert.equal(repoInWord('acme/web#7'), 'acme/web');
@@ -213,7 +230,7 @@ describe('remoteReposOf (T3002)', () => {
   });
 
   it('cannot tell a folder’s repositories when a remote may reach GitHub in a form it cannot read (R5)', () => {
-    for (const url of ['git@work-gh:acme/web.git', 'ssh://git@github.com:22/acme/web.git', 'https://www.github.com/acme/web', 'git@github.com-work:acme/web.git', 'ext::ssh', 'localhost:acme/web']) {
+    for (const url of ['git@work-gh:acme/web.git', 'ssh://git@github.com:22/acme/web.git', 'https://www.github.com/acme/web', 'git@github.com-work:acme/web.git', 'ext::ssh', 'localhost:acme/web', 'https://x.ghe.com/acme/web.git', 'https://X.GHE.COM/acme/web']) {
       assert.equal(remoteReposOf(`origin\thttps://github.com/someone/web (fetch)\nwork\t${url} (fetch)`), undefined, url);
     }
   });

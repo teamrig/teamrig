@@ -66,12 +66,17 @@ export const CONFIG_LIMITS = {
   wakeMinGapMinutes: { min: 0, max: 1440 },
   wakeMaxGapMinutes: { min: 0, max: 1440 },
   maxFailureChars: { min: 500, max: 50_000 },
+  stepBackupDays: { min: 1, max: 365 },
   githubRepos: { maxItems: 20, maxLength: 140 },
   issueTypeNames: { maxItems: 5, maxLength: 100 },
   closedDays: { min: 1, max: 365 },
   githubProbeSeconds: { min: 0, max: 3600 },
   similarThreshold: { min: 0, max: 1 },
   githubFollowMax: { min: 0, max: 100 },
+  /** A label name up to the longest tracker cap (255), past the shortest (50): one list serves every tracker. */
+  syncScopeLabels: { maxItems: 20, maxLength: 255 },
+  syncMaxOpen: { min: 0, max: 5000 },
+  syncMaxNewPerSync: { min: 0, max: 1000 },
   budgetTargetPct: { min: 1, max: 100 },
   budgetReservePct: { min: 0, max: 50 },
   /** 0 turns the floor off; past 50 one team's floor would leave a second less than its own (T2215). */
@@ -154,7 +159,7 @@ export const RULE_CONFLICT_LIMITS = {
   reasonMaxLength: 200,
 } as const;
 
-/** The longest `meeting.statusLine.heldText`: it is appended to every other tab's status line, which must stay one row. */
+/** The longest `meeting.statusLine.heldText`: it and the meeting's title end every other tab's status line, which must stay one row. */
 export const MEETING_HELD_TEXT_MAX_LENGTH = 40;
 
 /** `meeting.statusLine.colour`: a 24-bit `#rrggbb` colour, the form the status line's ANSI foreground code takes. */

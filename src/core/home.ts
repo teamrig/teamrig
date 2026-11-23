@@ -19,16 +19,10 @@ export const ENV = {
    * a `teamrig queue` among them, such as a git hook's checks, runs at once under that lock instead of waiting on its parent.
    */
   hostLock: 'TEAMRIG_HOST_LOCK',
-  /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
-  claudeConfigDir: 'CLAUDE_CONFIG_DIR',
   /** The session `teamrig launch` runs Claude Code for: it starts Claude Code again after an automatic restart. */
   launched: 'TEAMRIG_LAUNCHED',
   /** `off` turns `teamrig issue sync` off on this machine: it reads nothing and writes nothing. */
   github: 'TEAMRIG_GITHUB',
-  /** Claude Code's effort for every session and helper that gets it, over `--effort`, `/effort` and per-call Agent `effort`; `doctor` warns when set. */
-  effortLevel: 'CLAUDE_CODE_EFFORT_LEVEL',
-  /** At 1, Claude Code picks a helper's model over every per-call Agent `model`; `doctor` warns when set. */
-  subagentModelForce: 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
 } as const;
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -41,12 +35,6 @@ export type Env = Readonly<Record<string, string | undefined>>;
 export function resolveKitHome(env: Env, userHome: string): string {
   const fromEnv = env[ENV.home]?.trim();
   return fromEnv ? fromEnv : join(userHome, `.${KIT_NAME}`);
-}
-
-/** Claude Code's own folder: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
-export function claudeConfigDir(env: Env, userHome: string): string {
-  const fromEnv = env[ENV.claudeConfigDir]?.trim();
-  return fromEnv ? fromEnv : join(userHome, '.claude');
 }
 
 /**
@@ -116,6 +104,9 @@ export interface TeamPaths {
   /** The append-only log of session renames, so every name a session has had still finds it. */
   readonly renames: string;
   readonly renamesLock: string;
+  /** The backups a step took before it ran (src/steps/backups.ts): the only files a step's cleanup removes. */
+  readonly stepBackups: string;
+  readonly stepBackupsLock: string;
   /** The skills folder the skills lint and `--skill` checks read: the host's own, unless the config moves it. */
   readonly skills: string;
   /** Each session's context-refresh state, one small file per session. */
@@ -320,6 +311,8 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     ruleVerdicts: join(state, 'rule-verdicts.json'),
     renames: join(state, 'renames.jsonl'),
     renamesLock: join(state, 'renames.lock'),
+    stepBackups: join(state, 'step-backups.jsonl'),
+    stepBackupsLock: join(state, 'step-backups.lock'),
     skills: inHome(overrides.skills) ?? hostSkills ?? join(home, 'skills'),
     refresh: join(state, 'refresh'),
     handover: inHome(overrides.handover) ?? join(home, 'handover'),

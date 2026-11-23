@@ -29,7 +29,7 @@ import { issuePush, pushEndLine, pushRepos } from "./issue-push.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
 import { githubOffBy, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
 import { leftOutLines, previewLines, refusedReason, resultLines, syncExit } from "./issue-sync-lines.js";
-import { NO_TRACKER_SYNC, syncTrackers } from "./tracker-sync.js";
+import { fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from "./tracker-sync.js";
 import { githubWatcher } from "../../sync/watcher.js";
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
@@ -69,7 +69,7 @@ export async function issueSync(args, runtime) {
     const started = runtime.clock.now();
     const since = closedSince(new Date(started), config.github.closedDays);
     // --repo names one GitHub repository, so a run given it reads no other tracker.
-    const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, write }, say);
+    const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, kind: auto ? 'auto' : write ? 'yes' : 'preview', scopes: fileScopeStore(runtime.files, kit.paths) }, say);
     const offBy = githubOffBy(runtime.env);
     if (offBy !== undefined) {
         say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing of it was read or written`);
@@ -263,7 +263,7 @@ export async function issueSync(args, runtime) {
         }
     }
     if (auto) {
-        (await reportAutoSync(runtime, kit, config, { added, failures, leftOut, pulls, pullNews: news, security, mentions, mentionRoutes, mentionCuts, activityRoutes: activity, issues: issueMarks, issueRoutes })).forEach(say);
+        (await reportAutoSync(runtime, kit, config, { added, failures, leftOut, pulls, pullNews: news, security, mentions, mentionRoutes, mentionCuts, activityRoutes: activity, issues: issueMarks, issueRoutes, scopeHolds: others.scopeHolds })).forEach(say);
     }
     else if (news.size > 0) {
         say(`NOTE only ${KIT_NAME} issue sync --auto tells the pull request news and keeps what it read, so the next run names it again`);

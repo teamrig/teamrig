@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { instantField, isRecord, stringField, type JsonRecord } from '../core/guards.ts';
-import { claudeConfigDir, KIT_NAME, type Env } from '../core/home.ts';
+import { KIT_NAME } from '../core/home.ts';
 import { parseObject, recordVersion, VERSION_FIELD } from '../core/jsonl.ts';
 import type { LockTimings } from '../core/lock.ts';
 import { MS_PER_DAY, MS_PER_MINUTE } from '../core/time.ts';
@@ -24,16 +24,6 @@ export function loginMarkerPath(kitHome: string): string {
  * reads with no probe and no retries; one in a newer format reads as no marker, and a write to it is refused.
  */
 export const LOGIN_MARKER_FORMAT = 1;
-
-/**
- * The file Claude Code keeps its login in, which /login and each token refresh rewrite: a change after the last
- * failure is the one sign that a new login may work before any turn proves it. It is only ever stat'ed, never read.
- * Where the login lives in the system's keychain (macOS) there is no file, so a stuck tab waits for another tab's good
- * turn instead.
- */
-export function claudeCredentialsPath(env: Env, userHome: string): string {
-  return join(claudeConfigDir(env, userHome), '.credentials.json');
-}
 
 /** The least time between two retries across the kit home, so a dozen stuck tabs come back one by one, not at once. */
 export const LOGIN_RETRY_GAP_MS = 30_000;

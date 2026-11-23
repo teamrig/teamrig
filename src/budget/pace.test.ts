@@ -8,6 +8,7 @@ import {
   dayPacePct,
   hasRoom,
   holdsPastPart,
+  holdsTeamPast,
   nextConfiguredReset,
   paceLineOfWeek,
   paceLinePct,
@@ -146,9 +147,16 @@ describe('paceLineOfWeek', () => {
 
   it('counts from a start it is given, as `teamrig budget` does after a reset inside the week (T2082)', () => {
     const start = at('2026-10-16T00:00:00Z');
-    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, start);
+    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 0 });
     assert.equal(counted, paceLinePct(weekWindow(RESET, 1, start), 99.5, evening, EVEN));
     assert.notEqual(counted, paceLineOfWeek(RESET, DEFAULT_BUDGET, evening));
+  });
+
+  it('starts at the use a reset inside the week left, as `teamrig budget` does after a Fable reset (T4885)', () => {
+    const start = at('2026-10-16T00:00:00Z');
+    const counted = paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 41 });
+    assert.equal(counted, paceLinePct(weekWindow(RESET, 1, start, 41), 99.5, evening, EVEN));
+    assert.ok((counted ?? 0) > (paceLineOfWeek(RESET, DEFAULT_BUDGET, evening, { start, startPct: 0 }) ?? 0));
   });
 
   it("counts only the active time outside the budget's quiet hours", () => {
@@ -279,6 +287,14 @@ describe('dayPacePct and hasRoom', () => {
     assert.equal(holdsPastPart({ usedPct: 3, pacePct: 3 }, false), true);
     assert.equal(holdsPastPart(undefined, false), true);
     assert.equal(holdsPastPart({ usedPct: 2.9, pacePct: 3 }, true), true);
+  });
+
+  it('holds the team for the day only past its own part and without room, never while either is unknown (#1737)', () => {
+    assert.equal(holdsTeamPast({ usedPct: 3, pacePct: 3 }, 2.1, 2), true);
+    assert.equal(holdsTeamPast({ usedPct: 2.9, pacePct: 3 }, 2.1, 2), false);
+    assert.equal(holdsTeamPast({ usedPct: 3, pacePct: 3 }, 2, 2), false);
+    assert.equal(holdsTeamPast({ usedPct: 3, pacePct: 3 }, undefined, 2), false);
+    assert.equal(holdsTeamPast({ usedPct: 3, pacePct: 3 }, 2.1, undefined), false);
   });
 });
 

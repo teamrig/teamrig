@@ -1,4 +1,5 @@
-import { claudeProjectsDir, lastWriteOf } from "../../budget/discover.js";
+import { lastWriteOf } from "../../budget/discover.js";
+import { transcriptsFolderIfKnown } from "../host.js";
 import { KIT_NAME } from "../../core/home.js";
 import { decideColdSend, JsonlColdSendLog } from "../../hooks/cold-send.js";
 import { refusal } from "../../hooks/permission.js";
@@ -25,7 +26,7 @@ export async function coldSendHold(runtime, kit, config, roster, message, claude
     if (tabs.includes(claudeSession)) {
         return undefined;
     }
-    const last = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), tabs);
+    const last = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), tabs);
     if (last === undefined) {
         return undefined;
     }

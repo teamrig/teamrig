@@ -1,5 +1,5 @@
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
@@ -82,7 +82,7 @@ export interface CliRuntime {
    * Every host adapter teamrig ships with, the one the run works in among them: for what holds on a machine whatever
    * host runs the session, the hosts' own secret files (`secretFilesOf`, host.ts).
    */
-  readonly shippedHosts: readonly HostSource[];
+  readonly shippedHosts: readonly ShippedHost[];
   /** Terminal launchers and Claude Code, for `teamrig open` and `teamrig launch`. */
   readonly processes: Processes;
   /** The running session's Claude Code process and its tab, which the automatic context refresh ends. */

@@ -27,8 +27,11 @@ import {
   type HostLanding,
   type HostPosts,
   type HostPulls,
+  type HostCommit,
   type HostPullStand,
+  type HostPullWork,
   type HostReach,
+  type HostRerun,
   type HostThread,
   type HostUse,
   type HostViewer,
@@ -65,6 +68,11 @@ import {
   pullEnqueueArgs,
   pullMergeArgs,
   pullStandArgs,
+  BASE_BRANCH,
+  commitReadArgs,
+  pullCompareArgs,
+  runReadArgs,
+  runRerunArgs,
   labelReadArgs,
   labelCreateArgs,
   labelFileReadArgs,
@@ -78,18 +86,23 @@ import {
   type WatchPath,
 } from './gh.ts';
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
-import { createdNumber, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
 import { readFields } from './fields.ts';
 import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
 import { readPosts } from './posts.ts';
 import { pullStandIn } from './pull-stand.ts';
+import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX, commitIn, compareIn } from './pull-work.ts';
 import { listPulls, PULL_LIMIT } from './pulls.ts';
 import { PULL_PAGE_SIZE } from './queries.ts';
+import { rerunRefusal, runStateOf } from './run-state.ts';
 import { NoAccessError, type RepoAccess, type RepoTokens } from './tokens.ts';
 
 /** A failed job's log read, as a failure line words it: the Actions permission lets a token read it. */
 const JOB_LOG_READ: ReadKind = { noun: 'failed job logs', permission: 'Actions', command: 'gh run view' };
+
+/** A CI run's read before its re-run, as a failure line words it: the Actions permission lets a token read it. */
+const RUN_READ: ReadKind = { noun: 'CI runs', permission: 'Actions', command: 'gh api' };
 
 /** What each use does with an access, as its ACCESS line words it. */
 const USE_VERB: Readonly<Record<HostUse, string>> = { read: 'read with', open: 'opens issues with', write: 'writes with' };
@@ -126,7 +139,10 @@ export class GitHubIssueHost implements IssueHost {
     return stamped.length <= MAX_COMMENT ? stamped : body;
   }
 
-  /** Reached with the owner's saved token only; the scope is the owner, as one token serves all its repositories. */
+  /**
+   * Reached with the repository's own saved key, else its owner's; never the gh login. The scope is what the picked
+   * key covers, the repository or its owner, so a command says each key it reads with once.
+   */
   async reach(repo: string, use: HostUse): Promise<HostReach> {
     const access = await this.tokens.accessFor(repo);
     if (access instanceof NoAccessError) {
@@ -135,8 +151,8 @@ export class GitHubIssueHost implements IssueHost {
     const verb = USE_VERB[use];
     return {
       kind: 'reached',
-      access: `${access.owner}: ${verb} the token saved as ${access.credential}`,
-      scope: access.owner,
+      access: `${access.scope}: ${verb} the token saved as ${access.credential}`,
+      scope: access.scope,
     };
   }
 
@@ -200,6 +216,56 @@ export class GitHubIssueHost implements IssueHost {
       return { kind: 'failed', reason: this.scanner.redact(run.reason) };
     }
     return { kind: 'read', ...failedLogExcerpt(run.stdout, (text) => this.scanner.redact(text)) };
+  }
+
+  /**
+   * Reads the run first (gh.ts isRunRead) and refuses, writing nothing, unless run-state.ts rerunRefusal lets it be
+   * re-run: ended failed, cancelled or timed out (a passed release run re-run would publish again), started by a push,
+   * pull request, merge queue or schedule, before its third attempt. Then starts its failed jobs again (gh.ts
+   * isRunRerun), with the owner's saved token, which needs Actions Read and write. A run stopped by a signal may still
+   * have started it, so its line says to look first; GitHub's own refusal (one too old) is the reason, any secret
+   * shape redacted.
+   */
+  async rerunRun(repo: string, runId: number): Promise<HostRerun> {
+    const access = await this.tokens.accessFor(repo);
+    if (access instanceof NoAccessError) {
+      return { kind: 'failed', reason: access.message };
+    }
+    let read: GhResult;
+    try {
+      read = await this.gh.run({ args: runReadArgs(repo, runId), env: access.env });
+    } catch (error) {
+      return { kind: 'failed', reason: startFailureText(error) };
+    }
+    const readEnd = read.end;
+    if (readEnd.kind === 'exited' && readEnd.code !== 0 && ghFailureKind(readEnd.code, read.stderr) === 'not-visible') {
+      // A team repository the token reaches answers Not Found for a wrong run id: the line names the id first.
+      return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, readEnd.code, read.stderr, access)) };
+    }
+    if (readEnd.kind !== 'exited' || readEnd.code !== 0) {
+      return { kind: 'failed', reason: this.scanner.redact(failureText(repo, read, access, RUN_READ)) };
+    }
+    const state = runStateOf(read.stdout);
+    if (state === undefined) {
+      return { kind: 'failed', reason: `the read of run ${String(runId)} of ${repo} printed no status and conclusion; nothing was re-run` };
+    }
+    const refusal = rerunRefusal(repo, runId, state);
+    if (refusal !== undefined) {
+      return { kind: 'refused', reason: refusal };
+    }
+    let result: GhResult;
+    try {
+      result = await this.gh.run({ args: runRerunArgs(repo, runId), env: access.env });
+    } catch (error) {
+      return { kind: 'failed', reason: startFailureText(error) };
+    }
+    if (result.end.kind === 'signal') {
+      return { kind: 'failed', reason: `gh was stopped (${result.end.signal}) on its way to re-run run ${String(runId)} of ${repo}: look on GitHub before a rerun` };
+    }
+    if (result.end.code !== 0) {
+      return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access)) };
+    }
+    return { kind: 'done', workflow: state.workflow, event: state.event, attempt: state.attempt + 1 };
   }
 
   /** The posts of `repo` changed since `since` (posts.ts), as the owner's saved token reads them. */
@@ -577,6 +643,45 @@ export class GitHubIssueHost implements IssueHost {
     return answer.kind === 'unreadable' ? { kind: 'failed', reason: `gh printed no pull request for ${shown}` } : answer;
   }
 
+  /**
+   * The commits `head` carries over `base` (T5117): the compare's list, then each commit read for its files' patches.
+   * Partial when GitHub lists fewer commits than the head carries, more than COMPARE_COMMITS_MAX, or a commit at
+   * COMMIT_FILES_MAX files; missing on Not Found; failed on any other end or an answer off its shape.
+   */
+  async pullWork(target: IssueTarget, base: string, head: string): Promise<HostPullWork> {
+    const shown = `${head.slice(0, 9)} over ${base} in ${target.repo}`;
+    if (!BASE_BRANCH.test(base)) {
+      return { kind: 'partial', reason: `the branch name ${base} is not one a compare read takes` };
+    }
+    const read = await this.read(target.repo, pullCompareArgs(target.repo, base, head), `the commits of ${shown}`);
+    if (read.kind !== 'found') {
+      return read;
+    }
+    const compare = compareIn(read.stdout);
+    if (compare === undefined) {
+      return { kind: 'failed', reason: `gh printed no compare for ${shown}` };
+    }
+    if (compare.total > compare.shas.length || compare.total > COMPARE_COMMITS_MAX) {
+      return { kind: 'partial', reason: `${shown} carries ${String(compare.total)} commits, more than one landing compares (${String(Math.min(compare.shas.length, COMPARE_COMMITS_MAX))})` };
+    }
+    const commits: HostCommit[] = [];
+    for (const sha of compare.shas) {
+      const one = await this.read(target.repo, commitReadArgs(target.repo, sha), `the commit ${sha.slice(0, 9)} of ${target.repo}`);
+      if (one.kind !== 'found') {
+        return one.kind === 'missing' ? { kind: 'failed', reason: `GitHub listed the commit ${sha.slice(0, 9)} of ${shown} but no longer shows it` } : one;
+      }
+      const commit = commitIn(one.stdout);
+      if (commit === undefined) {
+        return { kind: 'failed', reason: `gh printed no commit ${sha.slice(0, 9)} of ${target.repo}` };
+      }
+      if (commit.files.length >= COMMIT_FILES_MAX) {
+        return { kind: 'partial', reason: `the commit ${sha.slice(0, 9)} changes ${String(COMMIT_FILES_MAX)} files or more, more than GitHub lists in one read` };
+      }
+      commits.push(commit);
+    }
+    return { kind: 'read', commits };
+  }
+
   /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */
   approvePull(target: IssueTarget, head: string): Promise<HostEnd> {
     return this.write(target, pullApproveArgs(target, head), 'approve');
@@ -637,6 +742,22 @@ export function writeFailureText(target: IssueTarget, what: string, code: number
       return `${shown} is not there for ${token}: check the number, and that the token reaches ${target.repo}`;
     case undefined:
       return plainLine(`gh api to ${what} ${shown} ${exitText(code, stderr)}`);
+  }
+}
+
+/** Why a run's re-run failed, with the fix when it is a known one: a refused token, a missing Actions write, no such run. */
+export function rerunFailureText(repo: string, runId: number, code: number, stderr: string, access: RepoAccess): string {
+  const shown = `run ${String(runId)} of ${repo}`;
+  const token = `the token saved as ${access.credential}`;
+  switch (ghFailureKind(code, stderr)) {
+    case 'no-login':
+      return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
+    case 'no-permission':
+      return `${token} may not re-run ${shown}: on GitHub, edit that token and set Actions to Read and write; its text stays the same, so nothing needs saving again`;
+    case 'not-visible':
+      return `${shown} is not there for ${token}: check the run id (the number after /runs/ in its address), and that the token reaches ${repo}`;
+    case undefined:
+      return plainLine(`gh api to re-run ${shown} ${exitText(code, stderr)}`);
   }
 }
 

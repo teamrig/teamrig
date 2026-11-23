@@ -147,9 +147,9 @@ function nextText(change, current) {
     return current === undefined ? undefined : replaced(current, change.replacements);
 }
 /** Why a file tool's call on the team config is refused, or undefined when it leaves every owner-gated key as it is. */
-async function fileRefusal(call, path, configFile, env) {
+async function fileRefusal(call, file, path, configFile, env) {
     const current = await env.readConfig(configFile);
-    const next = nextText(call.change, current);
+    const next = nextText(file.change, current);
     if (next === undefined) {
         return `this ${call.name} of the team config (${path}) cannot be read as a change of its text, so the guard cannot tell whether it changes an owner-gated key`;
     }
@@ -178,22 +178,28 @@ function editRefusalOf(reach) {
         '`revoke`, which ask the owner, the rest in the owner\'s own editor. Change the config\'s other keys without touching ' +
         'them, read it with the Read tool, and do not retry this or route around it: the lead puts the change to the owner.');
 }
-/** The reply to a file tool's call: a refusal when it writes an owner-gated key of a team config or may, else none. */
-async function editReply(call, cwd, env) {
-    const { path } = call;
+/** Why one file of a file tool's call is refused: it writes an owner-gated key of a team config or may; else undefined. */
+async function editedFileReach(call, file, cwd, env) {
+    const { path } = file;
     if (path === undefined) {
         return undefined;
     }
     const alias = env.platform === 'win32' ? aliasFormOf(path) : undefined;
     if (alias !== undefined && CONFIG_NAME.test(openedNameOf(path))) {
-        return refusal(editRefusalOf(`this ${call.name} names a config.json through ${alias} (${path}), a spelling the guard cannot hold to one file`));
+        return `this ${call.name} names a config.json through ${alias} (${path}), a spelling the guard cannot hold to one file`;
     }
     const configFile = await teamConfigOf(path, cwd, env);
-    if (configFile === undefined) {
-        return undefined;
+    return configFile === undefined ? undefined : fileRefusal(call, file, path, configFile, env);
+}
+/** The reply to a file tool's call: a refusal when any file it touches is refused, else none. */
+async function editReply(call, cwd, env) {
+    for (const file of call.files) {
+        const reach = await editedFileReach(call, file, cwd, env);
+        if (reach !== undefined) {
+            return refusal(editRefusalOf(reach));
+        }
     }
-    const reach = await fileRefusal(call, path, configFile, env);
-    return reach === undefined ? undefined : refusal(editRefusalOf(reach));
+    return undefined;
 }
 /**
  * The reply to a shell or file tool call before it runs: a refusal when it writes an owner-gated key or may (a file

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Requires a DCO sign-off by the author, refuses a message line in a secret shape (teamrig secrets message), then
-# scrubs the commit message.
+# Requires a DCO sign-off by the author, refuses a message line in a secret shape (teamrig secrets message), adds
+# the Made-with and Made-by trailers (teamrig stamp commit; a failure there never blocks the commit), then scrubs the
+# commit message.
 node tools/dco/cli.ts --message "$1" || exit 1
 node src/cli/main.ts secrets message "$1" || exit 1
+node src/cli/main.ts stamp commit "$1" || true
 exec node tools/scrub/cli.ts --message "$1"

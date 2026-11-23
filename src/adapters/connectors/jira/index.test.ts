@@ -100,7 +100,7 @@ describe('the Jira adapter', () => {
     const problems: string[] = [];
     adapter.configure({ site: 'acme.atlassian.net', board: 7 }, (key, problem) => problems.push(`${key} ${problem}`));
     assert.deepEqual(problems, [
-      `board is no key of the ${declaration.name} connector; it takes site, projects, issueType`,
+      `board is no key of the ${declaration.name} connector; it takes site, projects, issueType, people`,
       'site must be the site\'s name, the part before .atlassian.net (acme for acme.atlassian.net), not "acme.atlassian.net"',
     ]);
   });

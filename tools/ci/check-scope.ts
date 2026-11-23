@@ -7,7 +7,8 @@ import { type RepoProfile, slugOf } from '../ship/repos.ts';
  * - `full`: every check CI runs. It is recorded as the tree's pass record, the proof every reader of a pass takes.
  * - `light`: the pre-push checks of a repo whose main merges on GitHub's required checks (the `ci` gate): the
  *   scrubs, the commit checks, the typecheck, the compile, the plugin's tests and the docs' checks, about
- *   45 s. The whole suite, the dist checks and the fresh install are left to CI, which runs them on every OS.
+ *   45 s. The whole suite, the dist checks and the fresh install are left to CI, which runs them on every OS. Every
+ *   check runs instead when a changed file is part of the gate itself (local-checks.ts `gateChanges`, #1825).
  * - `short`: the commit checks (scrub, DCO sign-off, size rule, subjects), the typecheck and the changed files' specs;
  *   every check when a changed file is part of the gate itself (local-checks.ts `gateChanges`, T4080). It is for a
  *   branch of a repo whose main merges only on GitHub's required checks (repos.json `"mergeChecks": "changed"`), which

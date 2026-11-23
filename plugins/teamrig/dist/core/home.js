@@ -17,16 +17,10 @@ export const ENV = {
      * a `teamrig queue` among them, such as a git hook's checks, runs at once under that lock instead of waiting on its parent.
      */
     hostLock: 'TEAMRIG_HOST_LOCK',
-    /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
-    claudeConfigDir: 'CLAUDE_CONFIG_DIR',
     /** The session `teamrig launch` runs Claude Code for: it starts Claude Code again after an automatic restart. */
     launched: 'TEAMRIG_LAUNCHED',
     /** `off` turns `teamrig issue sync` off on this machine: it reads nothing and writes nothing. */
     github: 'TEAMRIG_GITHUB',
-    /** Claude Code's effort for every session and helper that gets it, over `--effort`, `/effort` and per-call Agent `effort`; `doctor` warns when set. */
-    effortLevel: 'CLAUDE_CODE_EFFORT_LEVEL',
-    /** At 1, Claude Code picks a helper's model over every per-call Agent `model`; `doctor` warns when set. */
-    subagentModelForce: 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
 };
 /**
  * The kit home is the machine root: each team keeps its config, rules and state in its own folder
@@ -36,11 +30,6 @@ export const ENV = {
 export function resolveKitHome(env, userHome) {
     const fromEnv = env[ENV.home]?.trim();
     return fromEnv ? fromEnv : join(userHome, `.${KIT_NAME}`);
-}
-/** Claude Code's own folder: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
-export function claudeConfigDir(env, userHome) {
-    const fromEnv = env[ENV.claudeConfigDir]?.trim();
-    return fromEnv ? fromEnv : join(userHome, '.claude');
 }
 /** The team's folder. The id is checked here too, since it becomes part of a path. */
 export function teamHome(kitHome, team) {
@@ -104,6 +93,8 @@ export function teamPaths(kitHome, team, hostSkills, overrides = {}) {
         ruleVerdicts: join(state, 'rule-verdicts.json'),
         renames: join(state, 'renames.jsonl'),
         renamesLock: join(state, 'renames.lock'),
+        stepBackups: join(state, 'step-backups.jsonl'),
+        stepBackupsLock: join(state, 'step-backups.lock'),
         skills: inHome(overrides.skills) ?? hostSkills ?? join(home, 'skills'),
         refresh: join(state, 'refresh'),
         handover: inHome(overrides.handover) ?? join(home, 'handover'),

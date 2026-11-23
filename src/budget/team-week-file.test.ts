@@ -40,12 +40,16 @@ function input(extra: Partial<TeamWeekInput> = {}): TeamWeekInput {
 
 describe('teamWeekSummaryOf', () => {
   it("reads the team's W since the week began at its own rate, and plans it all the account has left alone on it, naming the account", () => {
-    assert.deepEqual(teamWeekSummaryOf(input()), { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, at: NOW, limits: [] });
+    assert.deepEqual(teamWeekSummaryOf(input()), { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, startPct: 0, at: NOW, limits: [] });
   });
 
   it("names where the week's use counts from, a reset inside the week when there was one (T2082)", () => {
     const start = NOW - 3_600_000;
     assert.equal(teamWeekSummaryOf(input({ window: { ...WINDOW, start } }))?.start, start);
+  });
+
+  it("names the use a reset inside the week left, where the status line's pace line starts, to hundredths (T4885)", () => {
+    assert.equal(teamWeekSummaryOf(input({ window: { ...WINDOW, start: NOW - 3_600_000, startPct: 41.234 } }))?.startPct, 41.23);
   });
 
   it("carries the account's stretches at its usage limit (T2050)", () => {
@@ -71,7 +75,7 @@ describe('teamWeekSummaryOf', () => {
 
   it('rounds the percents to hundredths and the time down to the minute', () => {
     const summary = teamWeekSummaryOf(input({ usedPct: 30.123_45, wPerPct: 3_000_000, now: NOW + 59_999 }));
-    assert.deepEqual(summary, { account: 'work', usedPct: 50, plannedPct: 119.38, accountUsedPct: 30.12, resetsAt: WINDOW.reset, start: WINDOW.start, at: NOW, limits: [] });
+    assert.deepEqual(summary, { account: 'work', usedPct: 50, plannedPct: 119.38, accountUsedPct: 30.12, resetsAt: WINDOW.reset, start: WINDOW.start, startPct: 0, at: NOW, limits: [] });
   });
 
   it('reads nothing while the week, its use or the rate is unknown', () => {
@@ -83,7 +87,7 @@ describe('teamWeekSummaryOf', () => {
 });
 
 describe('readTeamWeek', () => {
-  const summary = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, at: NOW, limits: [] };
+  const summary = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, startPct: 0, at: NOW, limits: [] };
 
   it('reads the summary a hook kept (T2082)', async () => {
     const files = new MemoryFiles();
@@ -100,7 +104,7 @@ describe('readTeamWeek', () => {
 });
 
 describe('keepTeamWeek', () => {
-  const summary = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, at: NOW, limits: [] };
+  const summary = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: WINDOW.reset, start: WINDOW.start, startPct: 0, at: NOW, limits: [] };
 
   it('writes the summary, and again only when it changes', async () => {
     const files = new MemoryFiles();

@@ -25,6 +25,7 @@ describe('ghRouteOf (T4819)', () => {
       ['issue create --title x', 'teamrig add'],
       ['pr create --fill', 'teamrig merge'],
       ['pr merge 3 --rebase', 'teamrig merge'],
+      ['run rerun 45027704561 --failed', 'teamrig ci rerun'],
     ] as const) {
       assert.ok(routeOf(line).includes(`\`${command}`), `${line}: ${routeOf(line)}`);
     }
@@ -41,6 +42,9 @@ describe('ghRouteOf (T4819)', () => {
       ['api repos/acme/web/issues -f title=x', 'teamrig add'],
       ['api repos/acme/web/pulls -f head=x -f base=main', 'teamrig merge'],
       ['api -X PUT repos/acme/web/pulls/3/merge', 'teamrig merge'],
+      ['api -X POST repos/acme/web/actions/runs/7/rerun', 'teamrig ci rerun'],
+      ['api -X POST repos/acme/web/actions/runs/7/rerun-failed-jobs', 'teamrig ci rerun'],
+      ['api -X POST repos/acme/web/actions/jobs/7/rerun', 'teamrig ci rerun'],
     ] as const) {
       assert.ok(routeOf(line).includes(`\`${command}`), `${line}: ${routeOf(line)}`);
     }
@@ -51,6 +55,8 @@ describe('ghRouteOf (T4819)', () => {
       'pr review 3 --approve',
       'release create v1',
       'workflow run ci.yml',
+      'run cancel 7',
+      'api -X POST repos/acme/web/actions/runs/7/cancel',
       'issue $VERB 7',
       '$GROUP close 7',
       'api repos/acme/web/git/refs -f ref=x',

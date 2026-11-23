@@ -127,10 +127,10 @@ export function apiRepoOf(path) {
     if (FOLDER_OWNER.has(owner) && FOLDER_NAME.has(name)) {
         return 'folder';
     }
-    return /[{}:]/u.test(owner) || /[{}:]/u.test(name) ? undefined : `${owner}/${name}`;
+    return repoFromParts(owner, name);
 }
 /** True when a path has a `.` or `..` segment, or a `%`-escape, which GitHub's front end may resolve to another path. */
-function mayResolveElsewhere(path) {
+export function mayResolveElsewhere(path) {
     return path.split('/').some((segment) => segment === '.' || segment === '..' || segment.includes('%'));
 }
 /**
@@ -173,16 +173,22 @@ function repoFromParts(owner, name) {
     }
     return `${owner}/${name.replace(/\.git$/iu, '')}`.toLowerCase();
 }
-/** The repository a `-R`/`--repo` value names: `OWNER/REPO`, `HOST/OWNER/REPO` or a URL; undefined when it names none. */
-export function repoFlagValue(text) {
+/** What a `-R`/`--repo` value (or `GH_REPO`) names: `OWNER/REPO`, `HOST/OWNER/REPO` or a URL; undefined when it names no repository. */
+export function repoValueOf(text) {
     const parts = text
         .replace(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]+@)?/iu, '')
         .split('/')
         .filter((part) => part !== '');
     if (parts.length === 2) {
-        return repoFromParts(parts[0], parts[1]);
+        const repo = repoFromParts(parts[0], parts[1]);
+        return repo === undefined ? undefined : { repo, host: undefined };
     }
-    return parts.length === 3 ? repoFromParts(parts[1], parts[2]) : undefined;
+    const repo = parts.length === 3 ? repoFromParts(parts[1], parts[2]) : undefined;
+    return repo === undefined ? undefined : { repo, host: parts[0]?.toLowerCase() };
+}
+/** The repository a `-R`/`--repo` value names, whatever its host; undefined when it names none. */
+export function repoFlagValue(text) {
+    return repoValueOf(text)?.repo;
 }
 /**
  * The repository a word may name, as gh takes it in place of a number or a name: a URL (`https://github.com/o/n/pull/3`),
@@ -197,9 +203,13 @@ export function repoInWord(text) {
     const named = /^([\w.-]+)\/([\w.-]+)(?:#\d+)?$/u.exec(text);
     return named === null ? undefined : repoFromParts(named[1], named[2]);
 }
-/** The repositories a call's words name through `-R`/`--repo`, and whether one is given; undefined when a value names none. */
+/**
+ * The repositories a call's words name through `-R`/`--repo`, the hosts those values name, and whether one is given;
+ * undefined when a value names none.
+ */
 export function repoFlagsOf(words) {
     const repos = [];
+    const hosts = [];
     let given = false;
     for (let index = 0; index < words.length; index += 1) {
         const word = words[index];
@@ -209,14 +219,17 @@ export function repoFlagsOf(words) {
         }
         const text = flag.value ?? words[index + 1]?.text;
         index += flag.value === undefined ? 1 : 0;
-        const repo = text === undefined ? undefined : repoFlagValue(text);
-        if (repo === undefined) {
+        const value = text === undefined ? undefined : repoValueOf(text);
+        if (value === undefined) {
             return undefined;
         }
-        repos.push(repo);
+        repos.push(value.repo);
+        if (value.host !== undefined) {
+            hosts.push(value.host);
+        }
         given = true;
     }
-    return { repos, given };
+    return { repos, hosts, given };
 }
 /** A write of a group that acts on one repository, placed by its words. */
 function repoWriteOf(group, what, words) {
@@ -327,15 +340,16 @@ function remoteHostOf(url) {
 }
 /**
  * True when a remote URL plainly reaches no GitHub host: a folder on this machine, or a host with a dot and no
- * `github` in it. A host with no dot may be an SSH alias (`git@work-gh:o/n.git`), which gh resolves to github.com,
- * and a remote helper (`ext::<command>`) may run anything.
+ * `github` in it that is no GitHub Enterprise Cloud tenant (`*.ghe.com`), which gh picks and sends `GH_TOKEN` to. A
+ * host with no dot may be an SSH alias (`git@work-gh:o/n.git`), which gh resolves to github.com, and a remote helper
+ * (`ext::<command>`) may run anything.
  */
 function plainlyOffGithub(url) {
     if (url.includes('::')) {
         return false;
     }
     const host = remoteHostOf(url);
-    return host === '' || (host.includes('.') && !host.includes('github'));
+    return host === '' || (host.includes('.') && !host.includes('github') && host !== 'ghe.com' && !host.endsWith('.ghe.com'));
 }
 /**
  * The GitHub repositories (`owner/name`, lowercase) a `git remote -v` listing names; undefined when a remote names

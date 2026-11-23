@@ -12,7 +12,7 @@ describe('hookGit', () => {
     const [request] = hooks.ran;
     assert.equal(request?.cwd, '/repo');
     assert.equal(request?.timeoutMs, GIT_TIMEOUT_MS);
-    assert.deepEqual(request?.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0' });
+    assert.deepEqual(request?.env, { PATH: '/bin', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' });
   });
 
   it('answers undefined when git fails or is killed', async () => {

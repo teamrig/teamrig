@@ -38,6 +38,11 @@ export interface HostPermissions {
   denyLines(platform: NodeJS.Platform): readonly string[];
   /** The settings with this allow list in place of the one they hold, every other setting as it was. */
   writeAllow(settings: JsonRecord, allow: readonly string[]): PermissionsAnswer<JsonRecord>;
+  /**
+   * The allow rules, in the host's wording, that approve a shell line starting with these words, whatever arguments
+   * follow, in every shell tool the host has: how teamrig words the rules it syncs for its own commands.
+   */
+  prefixAllowRules(prefix: string): readonly string[];
   /** Puts the lines starting with `tag` in: where its lines were, else after the ones already there. */
   installRoutes(settings: JsonRecord, tag: string, lines: readonly string[]): PermissionsAnswer<TrustedRoutesPlan>;
   /** Takes the lines starting with `tag` out, and leaves every other line as it was. */

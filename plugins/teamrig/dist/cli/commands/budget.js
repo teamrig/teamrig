@@ -15,7 +15,6 @@ import { BurstLog } from "../../budget/burst-log.js";
 import { calibrationOf } from "../../budget/calibration.js";
 import { classRowsOf } from "../../budget/class-spend.js";
 import { activeCut, CutLog, cutText, decideCut } from "../../budget/cut.js";
-import { claudeProjectsDir } from "../../budget/discover.js";
 import { ExtraLog, lastSpentOf } from "../../budget/extra.js";
 import { formatPct, formatUsd } from "../../budget/format.js";
 import { activeGroupLift, activeLift, decideLift, LiftLog, liftText, parentBudgetText } from "../../budget/lift.js";
@@ -40,7 +39,7 @@ import { indexMarks } from "../../inbox/marks.js";
 import { TASK_ID } from "../../register/model.js";
 import { accountWeekOn, kitHomeAccountsOf, otherTeamsOnAccount, peerMarksOf } from "../account-teams.js";
 import { UsageError, onePositional, requiredFlag } from "../args.js";
-import { hostOf, transcriptsOf, usageIfMetered, usageOf } from "../host.js";
+import { hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from "../host.js";
 import { isUnsupported } from "../../ports/host/index.js";
 import { callerOf } from "../inputs.js";
 import { rushLine, rushSegment } from "../../budget/rush.js";
@@ -81,7 +80,7 @@ async function readBudget(runtime, kit, config, roster, options) {
         outside: recount ? new MemoryUsageStore() : new UsageStore(files, outsideUsageDir(kit.paths.usage)),
         clock,
     }, {
-        projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+        projectsDir: transcriptsFolderIfKnown(runtime),
         since: options.recountDay ?? dayStartOf(now) - (CURSOR_DAYS_KEPT - 1) * MS_PER_DAY,
         team: kit.paths.team,
         roster,
@@ -612,14 +611,14 @@ async function meetingMarkOf(runtime, team, claudeSession) {
     }
 }
 /**
- * Where the team's hooks last said the week resetting at `resetsAt` counts from; undefined with no file, one of another
- * week, or one that names no start. A failed read is told on stderr, never breaking the status bar: it is caught here
- * so it cannot read as a snapshot that was not saved.
+ * Where the team's hooks last said the week resetting at `resetsAt` counts from, and its use there; undefined with no
+ * file, one of another week, or one that names no start. A failed read is told on stderr, never breaking the status
+ * bar: it is caught here so it cannot read as a snapshot that was not saved.
  */
 async function keptWeekStart(runtime, path, resetsAt) {
     try {
         const kept = await readTeamWeek(runtime.files, path);
-        return kept?.resetsAt === resetsAt ? kept.start : undefined;
+        return kept?.resetsAt === resetsAt && kept.start !== undefined ? { start: kept.start, startPct: kept.startPct } : undefined;
     }
     catch (error) {
         runtime.out.stderr(`teamrig statusline: the team's week was not read: ${errorMessage(error)}`);

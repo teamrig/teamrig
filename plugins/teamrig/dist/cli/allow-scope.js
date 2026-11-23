@@ -1,6 +1,6 @@
 import { teamPlace } from "../delivery/places.js";
 import { SecretScanner } from "../core/secrets.js";
-import { KeepList } from "../permissions/allow-rules.js";
+import { keepListOf } from "../permissions/allow-sync.js";
 import { ownUntracked, settingsScope } from "../permissions/settings-scope.js";
 import { planScope, wideAllowOf } from "../permissions/trim.js";
 import { pathsIfKnown, permissionsIfKept } from "./host.js";
@@ -48,6 +48,6 @@ export async function readWideAllow(runtime, input) {
     if (permissions === undefined) {
         return wideAllowOf([]);
     }
-    const plans = await planScope(permissions, runtime.files, await knownSettingsScope(runtime, input), new KeepList(config.permissions.keepAllow), 'wide', new SecretScanner(config.register.secretPatterns));
+    const plans = await planScope(permissions, runtime.files, await knownSettingsScope(runtime, input), keepListOf(permissions, config.permissions.keepAllow), 'wide', new SecretScanner(config.register.secretPatterns));
     return wideAllowOf(plans);
 }

@@ -79,6 +79,8 @@ const rules = (...contexts: readonly JsonRecord[]): readonly JsonRecord[] => [
 ];
 
 const PULLS = `/repos/${REPO}/pulls?state=open&base=main&head=${encodeURIComponent(`acme:${TARGET.head}`)}&per_page=100`;
+const CLOSED = `/repos/${REPO}/pulls?state=closed&base=main&head=${encodeURIComponent(`acme:${TARGET.head}`)}&sort=updated&direction=desc&per_page=100`;
+const LAST_MERGE = '2026-11-22T07:10:00Z';
 const checksPath = (page: number): string => `/repos/${REPO}/commits/${SHA}/check-runs?filter=latest&per_page=100&page=${page}`;
 
 /** A GitHub where everything passes; each test changes the one answer it is about. */
@@ -88,12 +90,14 @@ function passing(): FakeGitHub {
     .on('GET', `/repos/${REPO}/actions/runs/7`, run())
     .on('GET', PULLS, [{ number: 12 }])
     .on('GET', `/repos/${REPO}/pulls/12`, pull())
+    .on('GET', CLOSED, [{ number: 11, merged_at: '2026-11-21T07:00:00Z' }, { number: 9, merged_at: null }, { number: 8, merged_at: LAST_MERGE }])
     .on('GET', `/repos/${REPO}/rules/branches/main?per_page=100`, rules({ context: 'every check passed', integration_id: ACTIONS_APP_ID }))
     .on('GET', checksPath(1), { total_count: runs.length, check_runs: runs })
     .on('GET', `/repos/${REPO}/commits/${SHA}/status`, { state: 'pending', total_count: 0 });
 }
 
-const gateOf = (github: FakeGitHub, filesRefusal: (sha: string) => string | null = () => null) => releaseGate(TARGET, { api: github.api, token: 'read-token', filesRefusal });
+const gateOf = (github: FakeGitHub, filesRefusal: (sha: string) => string | null = () => null, clockHold: (lastMerge: Date | null) => string | null = () => null) =>
+  releaseGate(TARGET, { api: github.api, token: 'read-token', filesRefusal, clockHold });
 
 async function refusal(github: FakeGitHub, filesRefusal?: (sha: string) => string | null): Promise<string> {
   const outcome = await gateOf(github, filesRefusal);
@@ -126,6 +130,40 @@ describe('releaseGate', () => {
       assert.match(await refusal(passing().on('GET', `/repos/${REPO}/actions/runs/7`, run(over))), expected);
     });
   }
+
+  it("holds a release the clock holds, asking it with the newest merge of the release branch's closed pull requests", async () => {
+    const asked: (Date | null)[] = [];
+    const filesAsked: string[] = [];
+    const outcome = await gateOf(
+      passing(),
+      (sha) => {
+        filesAsked.push(sha);
+        return null;
+      },
+      (lastMerge) => {
+        asked.push(lastMerge);
+        return 'a preview release already merged in the 09:00 slot';
+      },
+    );
+    assert.deepEqual(outcome, { kind: 'held', reason: 'a preview release already merged in the 09:00 slot' });
+    assert.deepEqual(asked, [new Date(LAST_MERGE)]);
+    assert.deepEqual(filesAsked, []);
+  });
+
+  it('asks the clock with no merge when the release branch never merged', async () => {
+    const asked: (Date | null)[] = [];
+    const outcome = await gateOf(passing().on('GET', CLOSED, [{ number: 9, merged_at: null }]), undefined, (lastMerge) => {
+      asked.push(lastMerge);
+      return null;
+    });
+    assert.equal(outcome.kind, 'pass');
+    assert.deepEqual(asked, [null]);
+  });
+
+  it('refuses a closed pull list whose merge time is not a time', async () => {
+    assert.match(await refusal(passing().on('GET', CLOSED, [{ number: 11, merged_at: 'soon' }])), /closed pull list\[0\]\.merged_at is not a time/);
+    assert.match(await refusal(passing().on('GET', CLOSED, [{ number: 11, merged_at: 7 }])), /merged_at is not a time/);
+  });
 
   it('is stale when no release pull request is open', async () => {
     assert.deepEqual(await gateOf(passing().on('GET', PULLS, [])), { kind: 'stale', reason: 'no release pull request is open' });

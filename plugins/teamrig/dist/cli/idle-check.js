@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import { claudeProjectsDir, findTranscript } from "../budget/discover.js";
+import { findTranscript } from "../budget/discover.js";
 import { LeadTree } from "../config/lead-tree.js";
 import { KIT_NAME } from "../core/home.js";
 import { resumeVerdict } from "../hiring/rehire.js";
@@ -20,7 +20,7 @@ import { asksNowOf, urgentLinesText, WakeAsks } from "../wake/asks.js";
 import { startableTasks } from "../wake/day-start.js";
 import { inboxDepsOf } from "./commands/inbox.js";
 import { measureTranscript } from "./commands/rehire.js";
-import { hostProgramsOf, sessionProcessCheckOf, transcriptsIfKept } from "./host.js";
+import { hostProgramsOf, sessionProcessCheckOf, transcriptsFolderIfKnown, transcriptsIfKept } from "./host.js";
 import { teamZone } from "./kit.js";
 import { RefusedError } from "./runtime.js";
 import { teamRegister } from "./team-register.js";
@@ -92,7 +92,7 @@ export async function tabActivityNow(runtime, record, project) {
     if (reader === undefined) {
         return undefined;
     }
-    const last = await measuredTranscriptOf(runtime, record, claudeProjectsDir(runtime.env, runtime.userHome), project);
+    const last = await measuredTranscriptOf(runtime, record, transcriptsFolderIfKnown(runtime), project);
     if (last === undefined) {
         return undefined;
     }
@@ -177,7 +177,7 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
     if (soon !== undefined) {
         return keep(`waits until ${zone.clock(new Date(soon.at))} on ${soon.task.id}, under ${TIME_WAIT_GUARD_MINUTES} min away`);
     }
-    const projectsDir = claudeProjectsDir(runtime.env, runtime.userHome);
+    const projectsDir = transcriptsFolderIfKnown(runtime);
     const last = await measuredTranscriptOf(runtime, record, projectsDir, options.project);
     if (last === undefined) {
         return keep(`has no transcript of Claude Code session ${record.claudeSession} in any project folder, so its idle time is unknown`);
@@ -194,6 +194,9 @@ export async function idleVerdictOf(runtime, config, roster, facts, id, options)
     const needed = config.open.headroom.closeIdleMinutes;
     if (idleMinutes < needed) {
         return keep(`has been quiet ${idleMinutes} min; it closes after ${needed} (open.headroom.closeIdleMinutes)`);
+    }
+    if (projectsDir === undefined) {
+        return keep('runs on a host whose transcripts folder teamrig does not know, so the folder it would be resumed in is unknown');
     }
     const folder = resumeFolderOf(last.transcript, tail, options.project, projectsDir, runtime.platform);
     if (folder === undefined) {

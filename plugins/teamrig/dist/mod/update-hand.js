@@ -30,9 +30,10 @@ export const UPDATED_SHOW_MS = 30_000;
 export function updateCliArgv(pluginRoot, command) {
     return ['node', `${pluginRoot}/dist/cli/main.js`, 'hook', `update-${command}`];
 }
-/** The band's line for an update. */
+/** The band's line for an update, naming the release channel it came on when known. */
 export function updateLine(notice) {
-    return `${notice.plugin} ${notice.newest} is out (you run ${notice.installed})`;
+    const channel = notice.channel === undefined ? '' : ` (${notice.channel})`;
+    return `${notice.plugin} ${notice.newest}${channel} is out (you run ${notice.installed})`;
 }
 /** The most of a failure's reason the band shows; the toast and the debug log carry it whole. */
 const BAND_WHY_CHARS = 80;
@@ -58,10 +59,15 @@ function noticeOf(value) {
     if (!isRecord(value)) {
         return undefined;
     }
-    const { plugin, marketplace, installed, newest } = value;
-    return typeof plugin === 'string' && typeof marketplace === 'string' && typeof installed === 'string' && typeof newest === 'string'
-        ? { plugin, marketplace, installed, newest }
-        : undefined;
+    const { plugin, marketplace, installed, newest, channel } = value;
+    if (typeof plugin !== 'string' || typeof marketplace !== 'string' || typeof installed !== 'string' || typeof newest !== 'string') {
+        return undefined;
+    }
+    if (channel !== undefined && typeof channel !== 'string') {
+        return undefined;
+    }
+    const notice = { plugin, marketplace, installed, newest };
+    return channel === undefined ? notice : { ...notice, channel };
 }
 function noticesOf(value) {
     if (!Array.isArray(value)) {

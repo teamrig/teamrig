@@ -438,6 +438,8 @@ describe('execGuardReply', () => {
       [bash('git status && teamrig statusline install --yes'), 'statusline install'],
       [bash('teamrig setup restore --yes --remove-new'), 'setup restore'],
       [bash('teamrig config migrate --yes'), 'config migrate'],
+      [bash('teamrig steps run config-format --yes'), 'steps run'],
+      [powershell('teamrig steps run config-format --yes'), 'steps run'],
       [bash('teamrig restore install --yes'), 'restore install'],
       [bash("bash -c 'teamrig automode install --yes'"), 'automode install'],
       [bash(`node ${INSTALL}/dist/cli/main.js permissions trim --yes`), 'permissions trim'],

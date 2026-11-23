@@ -1,4 +1,5 @@
 import { SecretScanner } from "../../core/secrets.js";
+import { LastTypedStore } from "../../sessions/last-typed.js";
 import { cappedText } from "../../turn-log/entry.js";
 import { REPLY_TAIL_BYTES, replyOf } from "../../turn-log/reply.js";
 import { TurnLog } from "../../turn-log/store.js";
@@ -22,16 +23,31 @@ function logOf(runtime, scope) {
     return new TurnLog(runtime.files, scope.paths.turnLog);
 }
 /**
- * UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`;
- * nothing with the log off or an empty prompt.
+ * The prompt of a UserPromptSubmit, told the person's from teamrig's: the wake teamrig answered that tab with is taken
+ * once, so the same text typed again is the person's. Undefined for no tab or an empty prompt.
  */
-export async function logPrompt(runtime, scope, { session, prompt }) {
-    if (!scope.config.turnLog.enabled || session === undefined || prompt === undefined || prompt.trim() === '') {
+export async function sentPromptOf(runtime, wake, id, { session, prompt }) {
+    if (session === undefined || prompt === undefined || prompt.trim() === '') {
+        return undefined;
+    }
+    const woke = await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt });
+    return { tab: session, text: prompt, woke };
+}
+/** UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`; nothing with the log off. */
+export async function logPrompt(runtime, scope, sent) {
+    if (!scope.config.turnLog.enabled) {
         return;
     }
-    const woke = await new WakePrompts(runtime.files, scope.paths.wake).take(scope.id, { tab: session, text: prompt });
-    const said = { kind: 'prompt', claude: session, text: prompt, ...(woke ? { from: 'teamrig' } : {}) };
+    const said = { kind: 'prompt', claude: sent.tab, text: sent.text, ...(sent.woke ? { from: 'teamrig' } : {}) };
     await logOf(runtime, scope).append(scope.id, entryOf(runtime, scope, said));
+}
+/** UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101). */
+export async function noteLastTyped(runtime, paths, id, sent) {
+    if (sent.woke) {
+        return;
+    }
+    const at = new Date(runtime.clock.now()).toISOString();
+    await new LastTypedStore(runtime.files, paths.kitHome).write({ team: paths.team, session: id, tab: sent.tab, at });
 }
 /**
  * The turn's reply from the transcript, ending with the last reply the turn end's hook event names when the

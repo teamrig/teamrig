@@ -2,12 +2,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
-import { APP, CliHarness, TEAM } from '../testing/cli-harness.ts';
+import { APP, CliHarness, TEAM, type CliResult } from '../testing/cli-harness.ts';
+import { FakeCredentials } from '../testing/fake-credentials.ts';
 import { FakeHooks } from '../testing/fake-hooks.ts';
 import { FakeWorktreeFiles, FakeWorktreeGit, type FakeGitAnswers } from '../testing/fake-worktrees.ts';
 import { NO_PATHS_HOST } from '../testing/host.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
-import { EXIT } from './runtime.ts';
+import { EXIT, type SelfLocation } from './runtime.ts';
 
 const SETUP = ['node', 'tools/link-modules.ts'];
 const MAIN = resolve('/w/main');
@@ -15,6 +16,9 @@ const MAIN = resolve('/w/main');
 const IN_TEAM = { CLAUDE_PROJECT_DIR: APP };
 /** The team's app repository, its worktrees in /w/wt and linked to its modules by SETUP. */
 const LISTED = { ...TEAM, delivery: { repos: { app: { mainCheckout: '/w/main', worktreeFolder: '../wt', worktreeSetup: SETUP }, web: { mainCheckout: '/w/web' } } } };
+
+/** What worktree add says of git's credential helper in a repository whose origin it cannot read. */
+const NO_ORIGIN = `NOTE git's credential helper left as it was: ${MAIN} has no origin remote git could read`;
 
 /** A repository whose main checkout is /w/main, run from its worktree /w/t4, with origin/HEAD naming origin/main. */
 function world(answers: FakeGitAnswers = {}): { git: FakeWorktreeGit; ports: WorktreePorts } {
@@ -36,7 +40,7 @@ describe('runCli: worktree add (T1305)', () => {
     const path = join(MAIN, '.claude', 'worktrees', 't9-parser');
     const result = await new CliHarness(null, null).run(['worktree', 'add', 't9/parser'], { worktrees: ports, cwd: '/w/t4' });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.deepEqual(result.stdout, [`added the worktree ${path} on the new branch t9/parser, from origin/main as just fetched`, `OK added ${path}`]);
+    assert.deepEqual(result.stdout, [`added the worktree ${path} on the new branch t9/parser, from origin/main as just fetched`, `OK added ${path}`, NO_ORIGIN]);
     assert.deepEqual(git.steps, [`fetch origin main in ${MAIN}`, `worktree add -b t9/parser ${path} origin/main in ${MAIN}`]);
   });
 
@@ -46,7 +50,7 @@ describe('runCli: worktree add (T1305)', () => {
     const path = resolve('/w/wt', 't9-parser');
     const result = await new CliHarness(LISTED).run(['worktree', 'add', 't9-parser'], { worktrees: ports, hooks, cwd: '/w/t4', env: IN_TEAM });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.deepEqual(result.stdout.slice(1), ['linked node_modules', 'ran its setup node tools/link-modules.ts', `OK added ${path}`]);
+    assert.deepEqual(result.stdout.slice(1), ['linked node_modules', 'ran its setup node tools/link-modules.ts', `OK added ${path}`, NO_ORIGIN]);
     assert.deepEqual(git.steps.slice(1), [`worktree add -b t9-parser ${path} origin/main in ${MAIN}`]);
     assert.equal(hooks.ran[0]?.cwd, path);
     assert.equal(hooks.ran[0]?.env['TEAMRIG_MAIN_CHECKOUT'], MAIN);
@@ -107,6 +111,47 @@ describe('runCli: worktree add (T1305)', () => {
     const failed = await new CliHarness(LISTED).run(['worktree', 'add', 't9-parser'], { worktrees: ports, hooks, cwd: '/w/t4', env: IN_TEAM });
     assert.equal(failed.code, EXIT.failed);
     assert.match(failed.stdout.at(-1) ?? '', /^FAILED its setup node tools\/link-modules.ts exited 2; the worktree stays at .*t9-parser: finish its setup by hand/);
+  });
+});
+
+describe("runCli: worktree add makes teamrig git's credential helper (T4897)", () => {
+  const ORIGIN = 'https://github.com/acme/app.git';
+  const HELPER = `credential.https://github.com.helper`;
+  const add = async (answers: FakeGitAnswers, options: { readonly credentials?: FakeCredentials; readonly self?: SelfLocation } = {}): Promise<{ git: FakeWorktreeGit; result: CliResult }> => {
+    const { git, ports } = world(answers);
+    const credentials = options.credentials ?? new FakeCredentials().saves('teamrig-gh-acme', 'acme-key');
+    const result = await new CliHarness(null, null).run(['worktree', 'add', 't9/parser'], { worktrees: ports, cwd: '/w/t4', credentials, ...(options.self === undefined ? {} : { self: options.self }) });
+    return { git, result };
+  };
+
+  it("sets the helper for github.com in the repository's config when its owner has a saved key, reading no key", async () => {
+    const credentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-key');
+    const { git, result } = await add({ origin: ORIGIN }, { credentials });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.equal(result.stdout.at(-1), `OK git in ${MAIN} now takes the key saved for acme for https://github.com, through teamrig git-credential`);
+    assert.deepEqual(git.steps.filter((step) => step.startsWith('config')).map((step) => step.split(' = ')[0]), [`config --local ${HELPER}`, 'config --local credential.https://github.com.useHttpPath']);
+    assert.match(git.steps.find((step) => step.startsWith(`config --local ${HELPER}`)) ?? '', / = "", "!'.+' git-credential" in /u);
+    assert.doesNotMatch(result.stdout.join('\n'), /acme-key/u);
+  });
+
+  it('leaves git as it was, the worktree added, for an owner with no saved key', async () => {
+    const { git, result } = await add({ origin: 'https://github.com/other/app.git' });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.match(result.stdout.at(-1) ?? '', /^NOTE git's credential helper left as it was: /u);
+    assert.deepEqual(git.steps.filter((step) => step.startsWith('config')), []);
+  });
+
+  it('refuses to name a teamrig script inside a worktree, the worktree added', async () => {
+    const { git, result } = await add({ origin: ORIGIN }, { self: { node: '/usr/bin/node', script: '/w/t4/dist/cli/main.js', execArgv: [] } });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.match(result.stdout.at(-1) ?? '', /^NOTE git's credential helper left as it was, REFUSED: .*main\.js is inside the worktree \/w\/t4/u);
+    assert.deepEqual(git.steps.filter((step) => step.startsWith('config')), []);
+  });
+
+  it('fails when git refuses a config write, saying how to undo it', async () => {
+    const { result } = await add({ origin: ORIGIN, configFailsOn: HELPER });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stdout.at(-1) ?? '', /^FAILED git config --local .* undo it with git config --local --remove-section credential\.https:\/\/github\.com there$/u);
   });
 });
 

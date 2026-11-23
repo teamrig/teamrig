@@ -20,6 +20,8 @@ import { startMeetingLine } from "./meetings.js";
 import { checkReport, list, waitingReport } from "./register.js";
 import { fileLockOf } from "../file-locks.js";
 import { sweepDeadDetachedRuns } from "../detached-sweep.js";
+import { sweepOldStepBackups } from "../step-backup-sweep.js";
+import { pendingSteps, startStepLines } from "../../steps/pending.js";
 /** The most inbox lines one start posts the lead on warnings no session owns; the rest wait for the next start. */
 export const MAX_UNOWNED_NOTICES = 5;
 /**
@@ -34,7 +36,9 @@ export const MAX_UNOWNED_NOTICES = 5;
  * --all` and `check --all` do, and every task waiting on it. Any session's start also posts the lead one inbox line on
  * each warning no session owns that the lead was not told of yet (T951), at most MAX_UNOWNED_NOTICES per start; a told
  * warning is told again only after no start saw it for a day. Before its inbox lines it tells each of the team's
- * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts). It records the flags it showed,
+ * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts), and the lead's removes the step
+ * backups kept past `steps.backupDays` (src/cli/step-backup-sweep.ts) and names each step the person must take
+ * (`teamrig steps`). It records the flags it showed,
  * so a later `check --new` prints only those that came since (T2536).
  */
 export async function start(args, runtime) {
@@ -58,6 +62,15 @@ export async function start(args, runtime) {
     }
     // Before the inbox read, so a death it tells this session of is in this start's lines.
     (await sweepDeadDetachedRuns(runtime, kit, config)).problems.forEach((problem) => runtime.out.stderr(`WARN ${problem}`));
+    if (id === tree.lead) {
+        const swept = await sweepOldStepBackups(runtime, kit, config);
+        swept.lines.forEach((line) => runtime.out.stdout(line));
+        swept.warnings.forEach((warning) => runtime.out.stderr(`WARN ${warning}`));
+        if (swept.problem !== undefined) {
+            runtime.out.stderr(`WARN ${swept.problem}`);
+        }
+        startStepLines(pendingSteps({ config: kit.load })).forEach((line) => runtime.out.stdout(line));
+    }
     await read(own, runtime);
     await list(own, runtime);
     (await waitingReport(own, runtime)).forEach((line) => runtime.out.stdout(line));

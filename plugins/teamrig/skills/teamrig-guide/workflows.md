@@ -99,6 +99,14 @@ A change that removes or loosens a safety step (a guard, a gate, a check, a retr
 covers, its run history (how often it fired, and on what), what is still unknown, and a first step that can be
 undone, such as a warn-only mode or a flag.
 
+## Review a change or an issue
+
+Before reviewing a change, yours to land or one waiting on your approval, or an issue, check that main has not changed
+the code it touches since it was written, no later change already fixed or replaced it, the behaviour it changes is
+still wanted, and landing it now undoes no newer work. A stale one is closed or re-scoped with a comment saying what
+changed, never landed as written. `git log <base>..origin/main -- <its paths>` lists what main changed under a change,
+`git log --since=<the issue's date> origin/main -- <its paths>` under an issue. Then review it on its merits.
+
 ## Close a task with proof
 
 1. Finish and verify: tests pass, the change is merged or deployed as the task needs, and you checked that it
@@ -246,7 +254,7 @@ teamrig refreshes a long-running session at a turn end once its context is large
 so it never loses work to a compaction.
 
 1. At the end of every turn, the Stop hook measures your context. When it is at or over
-   `refresh.contextTokens` (120,000 by default; `refresh.largeWindowContextTokens`, 250,000, for a session on a 1M window: a `[1m]` model, or one whose window teamrig infers from the window the mod reports, a context past 200k or a fresh start measured over `refresh.contextTokens`), at a task end after every third finished task with the context at 80,000 or more
+   `refresh.contextTokens` (120,000 by default, on every context window, a 1M one too), at a task end after every third finished task with the context at 80,000 or more
    (`refresh.everyTasks`, `refresh.everyTasksMinTokens`), or the lead asked for a refresh (`teamrig refresh <id>`), it
    keeps you going with this instruction. While background work you started (subagents, background commands,
    monitors, workflows) still runs, it adds before `Then end your turn` how many still run, asks the handover to say what
@@ -264,7 +272,9 @@ so it never loses work to a compaction.
    threshold is never asked again before it did any work. Within a long turn teamrig's mod asks as soon as a tool
    result shows the context past the threshold (`so refresh within this turn: finish the step you are on and start
    no other`, ending `and end your turn: the fresh start follows it`), and until the fresh start Claude Code's own
-   compaction waits, up to `refresh.compactCeilingTokens` (185,000).
+   compaction waits, up to `refresh.compactCeilingTokens` (185,000). The first automatic compaction of a tab is held
+   back once in favour of the refresh even with none asked for: the turn's end asks for the handover instead; the
+   next one goes.
 
 2. Write the handover at that path, with what the register lacks, in two sections: `## State` (where things are:
    branches, worktrees, files, ids; the scratchpad files, plan file and scheduled jobs the next session still needs;

@@ -25,6 +25,7 @@ import type { SettingsEnv } from './settings-env.ts';
 
 const NOW = new Date('2030-01-20T10:00:00Z');
 const LOG = '/kit/teams/app/state/renames.jsonl';
+const CLI_FOLDER = '/kit/bin';
 
 function input(overrides: Partial<DoctorInput> & { readonly names?: Record<string, string>; readonly renames?: readonly Rename[] } = {}): DoctorInput {
   const { names = {}, renames = [], ...rest } = overrides;
@@ -42,6 +43,7 @@ function input(overrides: Partial<DoctorInput> & { readonly names?: Record<strin
     sessionLists: undefined,
     tree: { problems: [], clashes: [] },
     env: {},
+    routingOverrides: shippedModels().routingOverrides,
     settingsEnv: [],
     settingsDeny: {
       files: [{ kind: 'deny', path: '/u/.claude/settings.json', deny: SECRET_DENY_LINES }],
@@ -53,6 +55,7 @@ function input(overrides: Partial<DoctorInput> & { readonly names?: Record<strin
     projects: [],
     shellHistory: { history: undefined, profiles: [], gated: false },
     page: undefined,
+    cliPath: { folder: CLI_FOLDER, where: 'HKCU\\Environment Path', onPath: true, enabled: true },
     budget: { enabled: true },
     now: NOW,
     zone: TimeZone.UTC,
@@ -323,6 +326,12 @@ describe('doctorFindings of model and effort overrides', () => {
     ]);
   });
 
+  it('is quiet on a host with no override variables, even with the variables set and a settings file it could not read', () => {
+    const set = { CLAUDE_CODE_EFFORT_LEVEL: 'high', CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' };
+    const unreadable: SettingsEnv = { kind: 'unreadable', path: USER };
+    assert.deepEqual(lines(input({ routingOverrides: [], env: set, settingsEnv: [unreadable, settings(PROJECT, set)] })), []);
+  });
+
   it('flags a settings file whose env block it could not read, and still checks the others', () => {
     const unreadable: SettingsEnv = { kind: 'unreadable', path: USER };
     assert.deepEqual(lines(input({ settingsEnv: [unreadable, settings(PROJECT, { CLAUDE_CODE_EFFORT_LEVEL: 'high' })] })), [
@@ -459,6 +468,24 @@ describe('doctorFindings of the PowerShell history', () => {
   it('is quiet when a profile gates the history, or there is no history file', () => {
     assert.deepEqual(lines(input({ shellHistory: { history, profiles: ['/u/profile.ps1'], gated: true } })), []);
     assert.deepEqual(lines(input({ shellHistory: { history: undefined, profiles: [], gated: false } })), []);
+  });
+});
+
+describe('doctorFindings of teamrig on the PATH (T5095)', () => {
+  const where = 'HKCU\\Environment Path';
+  const missing = `WARN cli-path ${CLI_FOLDER} is not on the user's PATH (${where}), so \`teamrig\` is not found in a terminal you open`;
+
+  it('says a session start adds the folder when cliOnPath is on, and how to add it when it is off', () => {
+    assert.deepEqual(lines(input({ cliPath: { folder: CLI_FOLDER, where, onPath: false, enabled: true } })), [
+      `${missing}: the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal`,
+    ]);
+    assert.deepEqual(lines(input({ cliPath: { folder: CLI_FOLDER, where, onPath: false, enabled: false } })), [
+      `${missing}: cliOnPath.enabled is false, so no session start adds it: set it to true and start a session, or add the folder to the PATH yourself, then open a new terminal`,
+    ]);
+  });
+
+  it('is quiet when the folder is on the PATH, whatever the switch', () => {
+    assert.deepEqual(lines(input({ cliPath: { folder: CLI_FOLDER, where, onPath: true, enabled: false } })), []);
   });
 });
 

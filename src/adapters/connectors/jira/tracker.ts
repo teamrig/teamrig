@@ -28,6 +28,7 @@ import {
   type JsonRecord,
   type LabelSpec,
   type ReadComment,
+  type ScopeRequest,
   type Tracker,
   type WatchMarks,
 } from '../../../plugin-api/index.ts';
@@ -37,6 +38,7 @@ import type { JiraConfig } from './config.ts';
 import { NOT_BUILT } from './declaration.ts';
 import { openableNames, openingType } from './issue-type.ts';
 import { stateReasonOf } from './resolution.ts';
+import { scopeClause } from './scope.ts';
 import { browseUrl, credentialName, issueKey, issueNumber, parseProject, projectProblem, type JiraProject } from './site.ts';
 import { closingStep, isDoneStatus } from './transitions.ts';
 
@@ -53,6 +55,12 @@ export const PAGE_SIZE = 100;
 
 /** The pages one list reads at most, so a search that never ends cannot hold a run: past it the list says it may leave some out. */
 export const MAX_PAGES = 50;
+
+/** The keys one read of held issues asks for at once: the most Jira's bulk fetch takes. */
+export const BULK_KEYS = 100;
+
+/** The held keys a note names before it counts the rest, so a project that lost many cannot flood the line. */
+export const LISTED_MISSING = 10;
 
 /** The comments one read of an issue's new comments asks for: one bounded page, the newest. */
 export const COMMENT_PAGE = 100;
@@ -81,6 +89,13 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ISSUE_ID = /^\d{1,15}$/;
 
 type Failed = { readonly kind: 'failed'; readonly reason: string };
+
+/** The issues one read gave, and what the list says of that read. */
+interface Searched {
+  readonly kind: 'searched';
+  readonly issues: readonly HostIssue[];
+  readonly notes: readonly string[];
+}
 
 function failed(reason: string): Failed {
   return { kind: 'failed', reason };
@@ -268,12 +283,17 @@ export class JiraTracker implements Tracker {
    * other site is refused before a request, so a task's ref can never carry the sign-in to a site the owner did not name.
    */
   private readonly site: string | undefined;
+  /** The account ids the team's config counts as its people (`connectors.jira.people`), beside the signed-in account. */
+  private readonly people: readonly string[];
+  /** The signed-in account's id by site, read once (`/myself`): a scoped list counts it among the team's people. */
+  private readonly viewers = new Map<string, string>();
 
-  constructor(client: JiraClient, stamp: boolean, config: Pick<JiraConfig, 'site' | 'issueType'> = { site: undefined, issueType: undefined }) {
+  constructor(client: JiraClient, stamp: boolean, config: Partial<Pick<JiraConfig, 'site' | 'issueType' | 'people'>> = {}) {
     this.client = client;
     this.stamp = stamp;
     this.issueType = config.issueType;
     this.site = config.site;
+    this.people = config.people ?? [];
   }
 
   /** Reached with the site's saved sign-in only; the scope is the site, as one sign-in serves all its projects. */
@@ -293,8 +313,12 @@ export class JiraTracker implements Tracker {
    * The project's open issues and those closed on or after `closedSince`, page by page. Jira reads a day of a search
    * in the account's own time zone, so the search asks from a day earlier and the closed ones are cut to the UTC day
    * here. When a page fails nothing of the project is given, so its tasks are not judged on half a read.
+   *
+   * With a `request` whose scope is not `all`, the search asks only for the scope's issues (scope.ts), so a large
+   * project is never read whole, and the held issues it did not give are read by key (`heldIssues`). The list then
+   * names the team's people as this site counts them: the request's, the config's and the signed-in account.
    */
-  async list(repo: string, closedSince: string): Promise<HostList> {
+  async list(repo: string, closedSince: string, request?: ScopeRequest): Promise<HostList> {
     const found = this.projectOf(repo);
     if (found.kind === 'failed') {
       return found;
@@ -306,6 +330,38 @@ export class JiraTracker implements Tracker {
     }
     const jql = `project = "${project.key}" AND (statusCategory != Done OR statusCategoryChangedDate >= "${from}")`;
     const closedFrom = `${closedSince}T00:00:00.000Z`;
+    if (request === undefined || request.scope.all) {
+      const searched = await this.search(repo, project, jql, closedFrom);
+      return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: searched.notes };
+    }
+    return await this.scopedList(repo, project, jql, closedFrom, request);
+  }
+
+  /** The scoped half of `list`: one search of the scope's issues, the held ones it left out read by key. */
+  private async scopedList(repo: string, project: JiraProject, jql: string, closedFrom: string, request: ScopeRequest): Promise<HostList> {
+    const viewer = await this.viewerOn(project.site);
+    if (viewer.kind === 'failed') {
+      return viewer;
+    }
+    const people = [...new Set([...request.people, ...this.people, viewer.login])];
+    const clause = scopeClause(request.scope, people.filter((id) => id !== viewer.login));
+    if (clause.kind === 'failed') {
+      return clause;
+    }
+    const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } as const : await this.search(repo, project, `${jql} AND (${clause.jql})`, closedFrom);
+    if (searched.kind === 'failed') {
+      return searched;
+    }
+    const listed = new Set(searched.issues.map((issue) => issue.number));
+    const held = await this.heldIssues(repo, project, [...new Set(request.held)].filter((number) => !listed.has(number)));
+    if (held.kind === 'failed') {
+      return held;
+    }
+    return { kind: 'listed', issues: [...searched.issues, ...held.issues], notes: [...searched.notes, ...held.notes], people };
+  }
+
+  /** The pages of one search of `jql`: the issues read, the closed ones cut to `closedFrom`, and what the list says of its read. */
+  private async search(repo: string, project: JiraProject, jql: string, closedFrom: string): Promise<Searched | Failed> {
     const issues: HostIssue[] = [];
     let unreadable = 0;
     let token: string | undefined;
@@ -329,11 +385,52 @@ export class JiraTracker implements Tracker {
       }
     }
     return {
-      kind: 'listed',
+      kind: 'searched',
       issues,
       notes: [
         ...(token === undefined ? [] : [`the list reached ${MAX_PAGES * PAGE_SIZE} issues, so it may leave some out`]),
         ...(unreadable > 0 ? [`${unreadable} item(s) Jira listed did not read as issues of ${project.key} and were left out`] : []),
+      ],
+    };
+  }
+
+  /**
+   * The held issues `numbers` names, read by key in batches of BULK_KEYS (`/issue/bulkfetch`), each whatever its state
+   * or close day: a held task's close must arrive. Not by a `key in` search, which Jira refuses whole when one key is
+   * gone; a key Jira does not give (deleted, moved, out of the sign-in's sight) is named in a note instead.
+   */
+  private async heldIssues(repo: string, project: JiraProject, numbers: readonly number[]): Promise<Searched | Failed> {
+    const issues: HostIssue[] = [];
+    let unreadable = 0;
+    for (let start = 0; start < numbers.length; start += BULK_KEYS) {
+      const keys = numbers.slice(start, start + BULK_KEYS).map((number) => issueKey(project, number));
+      const answer = await this.client.post(project.site, '/issue/bulkfetch', { issueIdsOrKeys: keys, fields: LIST_FIELDS });
+      if (answer.kind === 'failed') {
+        return answer;
+      }
+      const items: unknown = answer.kind === 'ok' && isRecord(answer.body) ? answer.body['issues'] : undefined;
+      if (!Array.isArray(items)) {
+        return failed(`Jira's answer to the read of ${repo}'s held issues did not read as a list of issues`);
+      }
+      for (const item of items) {
+        const issue = hostIssue(repo, project, item);
+        if (issue === undefined) {
+          unreadable += 1;
+        } else {
+          issues.push(issue);
+        }
+      }
+    }
+    const given = new Set(issues.map((issue) => issue.number));
+    const missing = numbers.filter((number) => !given.has(number)).map((number) => issueKey(project, number));
+    const more = missing.length - LISTED_MISSING;
+    const named = `${missing.slice(0, LISTED_MISSING).join(', ')}${more > 0 ? ` and ${more} more` : ''}`;
+    return {
+      kind: 'searched',
+      issues,
+      notes: [
+        ...(missing.length > 0 ? [`Jira gave no issue for ${missing.length} held key(s), deleted, moved or out of the sign-in's sight: ${named}`] : []),
+        ...(unreadable > 0 ? [`${unreadable} held item(s) Jira gave did not read as issues of ${project.key} and were left out`] : []),
       ],
     };
   }
@@ -536,13 +633,25 @@ export class JiraTracker implements Tracker {
     if (found.kind === 'failed') {
       return found;
     }
-    const { project } = found;
-    const answer = await this.client.get(project.site, '/myself');
+    return await this.viewerOn(found.project.site);
+  }
+
+  /** The signed-in account of `site`, read once and kept: who signs in does not change within a run. */
+  private async viewerOn(site: string): Promise<HostViewer> {
+    const known = this.viewers.get(site);
+    if (known !== undefined) {
+      return { kind: 'found', login: known };
+    }
+    const answer = await this.client.get(site, '/myself');
     if (answer.kind !== 'ok') {
-      return answer.kind === 'missing' ? failed(`Jira on ${project.site} does not say whose sign-in it is`) : answer;
+      return answer.kind === 'missing' ? failed(`Jira on ${site} does not say whose sign-in it is`) : answer;
     }
     const id = isRecord(answer.body) ? accountId(answer.body) : '';
-    return id === '' ? failed(`Jira's answer on ${project.site} names no account for the sign-in`) : { kind: 'found', login: id };
+    if (id === '') {
+      return failed(`Jira's answer on ${site} names no account for the sign-in`);
+    }
+    this.viewers.set(site, id);
+    return { kind: 'found', login: id };
   }
 
   /** Whether the account `login` names may be assigned to the issue. */

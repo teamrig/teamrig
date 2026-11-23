@@ -14,7 +14,7 @@ import { SessionRecordStore } from '../sessions/record.ts';
 import { HOLDING_BUDGET, holdAlpha } from '../testing/budget-hold.ts';
 import { APP, CLAUDE_SESSION, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { ok } from '../testing/hired-team.ts';
-import { hostRunning } from '../testing/host.ts';
+import { hostRunning, NO_PATHS_HOST } from '../testing/host.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
@@ -186,6 +186,16 @@ describe('teamrig close', () => {
     assert.deepEqual(alpha.processes.ends, []);
   });
 
+  it('keeps open a session measured at its recorded transcript on a host whose transcripts folder teamrig does not know', async () => {
+    const alpha = await runningAlpha(75, reply(40_000), TRANSCRIPT);
+    const unplaced = { ...alpha, options: { ...alpha.options, host: NO_PATHS_HOST } };
+    assertRefused(
+      await close(unplaced, ['alpha', '--yes', '--session', 'lead']),
+      /alpha \(session alpha\) runs on a host whose transcripts folder teamrig does not know, so the folder it would be resumed in is unknown/,
+    );
+    assert.deepEqual(alpha.processes.ends, [], 'no Claude Code folder stands in for the folder it would be resumed in');
+  });
+
   it('finds a session by its id once its transcript left the folder its start recorded, and resumes it where it now is (T1357)', async () => {
     const projects = join(USER_HOME, '.claude', 'projects');
     const moved = join(APP, '.claude', 'worktrees', 'moved');
@@ -238,7 +248,8 @@ describe('teamrig close', () => {
 
     assertRefused(await close(await runningAlpha(30), ['alpha', '--yes', '--session', 'lead']), /quiet 30 min; it closes after 60 \(open\.headroom\.closeIdleMinutes\)/);
 
-    const helping = await runningAlpha(75, `${reply(40_000)}${backgroundAgent(80)}${reply(40_000)}`);
+    // Recorded at its start, so the bare host below, which names no transcripts folder, still measures it there.
+    const helping = await runningAlpha(75, `${reply(40_000)}${backgroundAgent(80)}${reply(40_000)}`, TRANSCRIPT);
     assertRefused(await close(helping, ['alpha', '--yes', '--session', 'lead']), /still runs background work its transcript shows/);
 
     // A host with no transcript teamrig can read hides that work: the session stays open, never closed on a guess.

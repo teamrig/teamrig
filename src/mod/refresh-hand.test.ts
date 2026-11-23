@@ -90,12 +90,12 @@ describe('RefreshHand.afterTool', () => {
     assert.equal(host.asks(), 2);
   });
 
-  it('sends the window Claude Code reports, which tells the CLI a large one', async () => {
+  it('sends the CLI the context alone: one threshold holds for every window', async () => {
     const host = new FakeHost();
     const hand = new RefreshHand(host);
-    host.answer({ kind: 'wait', nextAt: 250_000 });
-    assert.deepEqual(await hand.afterTool(130_000, 1_000_000), { kind: 'waiting', nextAt: 250_000 });
-    assert.deepEqual(host.calls[0]?.stdin, { session_id: TAB, cwd: '/work/app/src', tokens: 130_000, window: 1_000_000 });
+    host.answer({ kind: 'wait', nextAt: 120_000 });
+    assert.deepEqual(await hand.afterTool(40_000), { kind: 'waiting', nextAt: 120_000 });
+    assert.deepEqual(host.calls[0]?.stdin, { session_id: TAB, cwd: '/work/app/src', tokens: 40_000 });
   });
 
   it('looks again a hold gap after a held ask, while background work runs, and asks once it ended', async () => {

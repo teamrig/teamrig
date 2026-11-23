@@ -6,6 +6,21 @@ export const CREDENTIAL_NAME = /^[\w.-]{1,128}$/;
 const TOKEN_TEXT = /^[\x21-\x7e]+$/;
 /** How long a store's tool may take to answer: a local read takes well under a second. */
 export const CREDENTIAL_TIMEOUT_MS = 30_000;
+/** `readFirst` over one read per name, for a store whose reads are quick. */
+export async function readFirstOneByOne(read, names) {
+    for (const [index, name] of names.entries()) {
+        const found = await read(name);
+        switch (found.kind) {
+            case 'found':
+                return { kind: 'found', index, secret: found.secret };
+            case 'failed':
+                return { kind: 'failed', index, reason: found.reason };
+            case 'missing':
+                break;
+        }
+    }
+    return { kind: 'missing' };
+}
 /** The exit code the Windows script ends with when the credential does not exist. */
 const WINDOWS_MISSING_EXIT = 3;
 /**
@@ -13,7 +28,33 @@ const WINDOWS_MISSING_EXIT = 3;
  * argv, which other processes can read. cmdkey saves the blob as UTF-16LE and CredentialBlobSize counts bytes.
  */
 export function windowsReadScript(name) {
-    return `$ErrorActionPreference = 'Stop'
+    return `${WINDOWS_CRED_TYPE}
+$secret = [TeamrigCredentials.Cred]::Read('${name}')
+if ($null -eq $secret) { exit ${WINDOWS_MISSING_EXIT} }
+[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
+`;
+}
+/**
+ * Reads `names` in order in one PowerShell run, which takes most of a second to start: the first one saved leaves as
+ * `<index> <base64>`, and none saved ends with the missing exit. Each name was checked against CREDENTIAL_NAME first,
+ * so it sits in single quotes with nothing to escape.
+ */
+export function windowsReadFirstScript(names) {
+    const list = names.map((name) => `'${name}'`).join(', ');
+    return `${WINDOWS_CRED_TYPE}
+$names = @(${list})
+for ($index = 0; $index -lt $names.Count; $index++) {
+  $secret = [TeamrigCredentials.Cred]::Read($names[$index])
+  if ($null -ne $secret) {
+    [Console]::Out.Write("$index " + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
+    exit 0
+  }
+}
+exit ${WINDOWS_MISSING_EXIT}
+`;
+}
+/** The CredReadW wrapper both Windows scripts load. */
+const WINDOWS_CRED_TYPE = `$ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -40,12 +81,7 @@ namespace TeamrigCredentials {
     }
   }
 }
-'@
-$secret = [TeamrigCredentials.Cred]::Read('${name}')
-if ($null -eq $secret) { exit ${WINDOWS_MISSING_EXIT} }
-[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
-`;
-}
+'@`;
 const WINDOWS = {
     label: 'the Windows Credential Manager',
     program: 'powershell.exe',
@@ -86,11 +122,51 @@ function toolFor(platform) {
 /** The store of the operating system teamrig runs on, read through its own command-line tool. */
 export function systemCredentials(platform, run) {
     const tool = toolFor(platform);
+    const read = (name) => readWith(tool, run, name);
     return {
         label: tool.label,
         saveCommand: (name) => tool.saveCommand(name),
-        read: (name) => readWith(tool, run, name),
+        read,
+        readFirst: (names) => (tool === WINDOWS ? windowsReadFirst(run, names) : readFirstOneByOne(read, names)),
     };
+}
+/**
+ * `readFirst` in one PowerShell run. A name that is no credential name fails at its place, and only the names before
+ * it are read, so the order still decides; a run that fails is a failure at the first name, so no wider key stands in.
+ */
+async function windowsReadFirst(run, names) {
+    const bad = names.findIndex((name) => !CREDENTIAL_NAME.test(name));
+    const asked = bad === -1 ? names : names.slice(0, bad);
+    const found = asked.length === 0 ? { kind: 'missing' } : await windowsRun(run, asked);
+    if (found.kind !== 'missing' || bad === -1) {
+        return found;
+    }
+    return { kind: 'failed', index: bad, reason: `${JSON.stringify(names[bad])} is not a credential name: letters, digits, '.', '_' or '-'` };
+}
+async function windowsRun(run, names) {
+    let result;
+    try {
+        result = await run(powerShellRequest(windowsReadFirstScript(names)));
+    }
+    catch (error) {
+        return { kind: 'failed', index: 0, reason: `${WINDOWS.program} could not start: ${errorMessage(error)}` };
+    }
+    if (WINDOWS.missing(result)) {
+        return { kind: 'missing' };
+    }
+    if (result.end.kind !== 'exited' || result.end.code !== 0) {
+        return { kind: 'failed', index: 0, reason: `${WINDOWS.program} ${endText(result.end)}: ${firstLine(result.stderr)}` };
+    }
+    const answer = /^(\d+) ([A-Za-z0-9+/=]*)$/u.exec(result.stdout.trim());
+    const index = answer?.[1] === undefined ? -1 : Number(answer[1]);
+    const name = names[index];
+    if (answer?.[2] === undefined || name === undefined) {
+        return { kind: 'failed', index: 0, reason: `${WINDOWS.program} gave no answer teamrig reads` };
+    }
+    const secret = WINDOWS.secretOf(answer[2]);
+    return TOKEN_TEXT.test(secret)
+        ? { kind: 'found', index, secret }
+        : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${WINDOWS.saveCommand(name)}` };
 }
 async function readWith(tool, run, name) {
     if (!CREDENTIAL_NAME.test(name)) {

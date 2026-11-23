@@ -1,11 +1,10 @@
 import { resolve } from 'node:path';
-import { claudeProjectsDir } from "../../budget/discover.js";
 import { DEFAULT_PERMISSIONS } from "../../config/defaults.js";
 import { KIT_NAME } from "../../core/home.js";
 import { expandHome } from "../../core/paths.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { sessionSettingsFiles } from "../../doctor/settings-env.js";
-import { KeepList } from "../../permissions/allow-rules.js";
+import { keepListOf } from "../../permissions/allow-sync.js";
 import { coreRuleTexts } from "../../rules/pack.js";
 import { isCleared, RULE_HASH_CLOCK, ruleHashesOf, verdictsByText, VerdictStore } from "../../rules/verdicts.js";
 import { teamSkillsOf } from "../../setup/backup-places.js";
@@ -83,19 +82,20 @@ export async function scan(args, runtime) {
         hooks: runtime.hooks,
         program: launcherIfTold(runtime)?.program,
     });
-    const found = await scanSetup({ files: runtime.files, permissions: permissionsOf(runtime), plugin: pluginIfKept(runtime), probe: runtime.probe, transcripts: runtime.transcripts, reader: transcriptsOf(runtime), paths: host, doctor }, {
+    const permissions = permissionsOf(runtime);
+    const found = await scanSetup({ files: runtime.files, permissions, plugin: pluginIfKept(runtime), probe: runtime.probe, transcripts: runtime.transcripts, reader: transcriptsOf(runtime), paths: host, doctor }, {
         paths: host,
         claudeDir,
         userHome: runtime.userHome,
         project,
         skills: team?.kit.paths.skills ?? host.skills(runtime.userHome),
         teamRules: team === undefined ? [] : await teamRulesPathsOf(runtime, team.kit),
-        projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+        projectsDir: host.transcriptsFolder(runtime.userHome),
         since: runtime.clock.now() - days * DAY_MS,
         maxBytes: maxMb * BYTES_PER_MB,
         settings: await settingsOf(runtime, team, host, project),
         sessionSettings: sessionSettingsFiles({ paths: host, userHome: runtime.userHome }, project),
-        keep: new KeepList((team?.config.permissions ?? DEFAULT_PERMISSIONS).keepAllow),
+        keep: keepListOf(permissions, (team?.config.permissions ?? DEFAULT_PERMISSIONS).keepAllow),
         secrets,
         conflicts: team?.config.ruleConflicts ?? [],
         cleared: await clearedOf(runtime, team),

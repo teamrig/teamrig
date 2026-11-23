@@ -152,4 +152,14 @@ describe('teamrig permissions trim', () => {
       'TOTAL 1 file(s) to rewrite: 2 allow rules -> 1 (remove 1: Edit wide 1)',
     ]);
   });
+
+  it('keeps the allow rules automode install syncs, which it would only put back, and still removes a wider teamrig rule', async () => {
+    const kit = new CliHarness();
+    await kit.files.write(LOCAL, formatConfig({ permissions: { allow: ['Bash(teamrig show *)', 'PowerShell(teamrig inbox add:*)', 'Bash(teamrig budget *)'] } }));
+    const result = await kit.run(['permissions', 'trim'], OPTIONS);
+    assert.deepEqual(result.stdout.slice(1), [
+      `  ${LOCAL}: 3 allow rules -> 2, remove 1 (Bash wide 1); keeps 2 on the keep-list`,
+      'TOTAL 1 file(s) to rewrite: 3 allow rules -> 2 (remove 1: Bash wide 1)',
+    ]);
+  });
 });

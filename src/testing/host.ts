@@ -1,14 +1,16 @@
-import { loadHostPorts, type HostSource } from '../composition/host-ports.ts';
+import { loadHostPorts, type HostSource, type ShippedHost } from '../composition/host-ports.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import {
   isUnsupported,
   unsupported,
   type ChildEnvironment,
+  type EditedFile,
   type HookBridge,
   type HookEvent,
   type HookEventName,
   type HookReply,
   type HostPaths,
+  type HostSecrets,
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
@@ -24,6 +26,15 @@ import { bareHost } from './bare-host.ts';
  * wrote through the code teamrig runs with, so a pin fails when that code changes.
  */
 export const SHIPPED_HOST: HostSource = await loadHostPorts(hostDeps().run);
+
+/**
+ * A shipped-host entry for `ports`, as `loadShippedHosts` gives one: the session variables it declares are its session
+ * launcher's when that launcher is built, else none. For a spec that ships a fake host beside the real ones.
+ */
+export function shippedHost(ports: HostSource): ShippedHost {
+  const { launcher } = ports({ env: {}, platform: 'linux' });
+  return { ports, sessionVariables: isUnsupported(launcher) ? { marks: [], identity: [] } : launcher.variables };
+}
 
 /**
  * A bare host (`bareHost`) whose hooks still run: the shipped host's hook bridge and tool calls, and no other port.
@@ -156,6 +167,13 @@ export function testPaths(env: Readonly<Record<string, string | undefined>> = {}
   return paths;
 }
 
+/** The shipped host's secret files in the environment `env` on `platform`, as a run would be told them. */
+export function testSecrets(env: Readonly<Record<string, string | undefined>> = {}, platform: NodeJS.Platform = 'linux'): HostSecrets {
+  const { secrets } = SHIPPED_HOST({ env, platform });
+  if (isUnsupported(secrets)) throw new Error(`the shipped host tells none of its secret files: ${secrets.notice}`);
+  return secrets;
+}
+
 /** The shipped host's hook bridge on `platform`. */
 export function testHooks(platform: NodeJS.Platform = 'linux'): HookBridge {
   const { hooks } = SHIPPED_HOST({ env: {}, platform });
@@ -176,6 +194,14 @@ export function hookEventOf(payload: JsonRecord, platform: NodeJS.Platform = 'li
   const event = testHooks(platform).parse(JSON.stringify(payload));
   if (event === undefined) throw new Error('the hook bridge read no event out of the payload');
   return event;
+}
+
+/**
+ * The event the shipped host reads out of `payload`, its call made one edit of `files`: the shipped host's file tools
+ * touch one file each, so a spec of a guard on a patch that touches several builds the call itself.
+ */
+export function editEventOf(payload: JsonRecord, files: readonly EditedFile[], platform: NodeJS.Platform = 'linux'): HookEvent {
+  return { ...hookEventOf(payload, platform), call: { kind: 'edit', name: 'apply_patch', input: {}, files } };
 }
 
 /**

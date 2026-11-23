@@ -43,8 +43,8 @@ export interface MeasureDeps {
 }
 
 export interface MeasureInput {
-  /** Claude Code's projects folder, where the transcripts are. */
-  readonly projectsDir: string;
+  /** The host's transcripts folder, one folder per project; undefined on a host whose folders teamrig does not know, where no session is measured. */
+  readonly projectsDir: string | undefined;
   /** Transcripts last changed before this are not read. */
   readonly since: number;
   readonly team: string;

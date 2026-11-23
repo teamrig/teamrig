@@ -7,7 +7,7 @@ description: Use when working in a teamrig team or learning how teamrig works (c
 
 teamrig runs a team of Claude Code sessions in one project: each session is a terminal tab that owns one area,
 one of them is the lead, and they coordinate through a shared task register and per-session inboxes, all plain
-files on this machine. The `teamrig` command is on the PATH of your Bash and PowerShell tools while the plugin is enabled.
+files on this machine. The `teamrig` command is on the PATH of your Bash and PowerShell tools while the plugin is enabled, and of the user's own terminals opened after the first session start.
 
 This page is the model and the daily loop. The detail lives beside it:
 

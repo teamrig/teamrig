@@ -81,6 +81,15 @@ function writeAllow(settings, allow) {
     }
     return { ok: true, value: { ...settings, [PERMISSIONS_KEY]: { ...permissions.value, [ALLOW_KEY]: [...allow] } } };
 }
+/** The shell tools whose rule body is a command line. */
+const SHELL_TOOLS = ['Bash', 'PowerShell'];
+/**
+ * One rule per shell tool, in the ` *` form: the space keeps `teamrig list *` off `teamrig listx`, and the legacy `:*`
+ * form misses a call whose argument goes on past the colon.
+ */
+function prefixAllowRules(prefix) {
+    return SHELL_TOOLS.map((tool) => `${tool}(${prefix} *)`);
+}
 /**
  * Install puts the team's lines where its tagged lines were (or at the end), and leaves the person's own lines and
  * other teams' tagged lines as they are. A list without `"$defaults"` replaces Claude Code's built-in entries, so a
@@ -156,6 +165,7 @@ export const hostPermissions = {
     read,
     denyLines: secretDenyLines,
     writeAllow,
+    prefixAllowRules,
     installRoutes,
     uninstallRoutes,
 };

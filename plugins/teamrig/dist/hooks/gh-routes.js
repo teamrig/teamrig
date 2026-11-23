@@ -11,6 +11,7 @@ const ASSIGN = '`teamrig issue assign <owner/name#n> --add|--remove <login,...>`
 const EDIT = `\`teamrig issue edit <owner/name#n> --body-file <file>\` replaces its body; ${LABEL}; ${ASSIGN}; ${CLOSE}`;
 const OPEN_ISSUE = '`teamrig add ... --issue "<title>" --issue-body "<text>"` opens an issue with its task';
 const MERGE = '`teamrig merge`, run in the branch\'s folder, lands a branch (a repository\'s own merge command, such as its pull request flow, runs in its place)';
+const RERUN = '`teamrig ci rerun <owner/name> --run <id>` starts the failed jobs of one CI run again (T5063)';
 /** What a session does when no teamrig command does the write. */
 export const ASK_LEAD = 'no teamrig command does this write yet: ask your lead, who has it done with the team\'s saved key';
 /** The teamrig command for each `gh <group> <command>` write; every other write asks the lead. */
@@ -24,6 +25,7 @@ export const GH_WRITE_ROUTES = new Map([
     ['issue create', OPEN_ISSUE],
     ['pr create', MERGE],
     ['pr merge', MERGE],
+    ['run rerun', RERUN],
 ]);
 /** The teamrig command for a `gh api` write, by the `repos/<owner>/<name>/...` path it reaches. */
 const API_ROUTES = [
@@ -33,6 +35,7 @@ const API_ROUTES = [
     [/^repos\/[^/]+\/[^/]+\/(?:issues|pulls)\/\d+$/u, EDIT],
     [/^repos\/[^/]+\/[^/]+\/issues$/u, OPEN_ISSUE],
     [/^repos\/[^/]+\/[^/]+\/pulls(?:\/\d+\/merge)?$/u, MERGE],
+    [/^repos\/[^/]+\/[^/]+\/actions\/(?:runs|jobs)\/\d+\/rerun(?:-failed-jobs)?$/u, RERUN],
 ];
 /** The teamrig command to run in place of a raw gh write, from its words after `gh`; `ASK_LEAD` when none does it. */
 export function ghRouteOf(words) {

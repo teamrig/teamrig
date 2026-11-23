@@ -21,9 +21,9 @@ describe('route allow', () => {
     assert.equal(routeAllowOn({ hookAsks: 'ask', routeAllow: 'on', serviceRoleDailyCap: 10 }), false);
   });
 
-  it('takes the routes the owner granted or that stay local, never a push or the register', () => {
+  it('takes the routes the owner granted or that stay local, never a push or a register write', () => {
     const allowed = SANCTIONED_ROUTES.filter((route) => preToolUseRouteOf(route) !== undefined).map((route) => route.id);
-    assert.deepEqual(allowed, ['merge', 'deploy', 'exec-request', 'worktree-remove', 'git-commit']);
+    assert.deepEqual(allowed, ['merge', 'deploy', 'exec-request', 'worktree-remove', 'pr-landing', 'read', 'git-commit']);
     assert.equal(preToolUseRouteOf(undefined), undefined);
   });
 

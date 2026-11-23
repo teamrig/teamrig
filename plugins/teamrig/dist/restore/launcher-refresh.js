@@ -170,7 +170,7 @@ export async function refreshLaunchers(refresh) {
 }
 /** Reads what is out of date and takes each step in order, logging each; writes the record once all are done. */
 async function refreshUnderLock(refresh, recorded) {
-    const { machine, others, version, now } = refresh;
+    const { machine, others, parts = [], version, now } = refresh;
     const { files, kitHome } = machine;
     const from = recorded.kind === 'version' ? recorded.text : 'none';
     const log = async (line) => {
@@ -185,8 +185,9 @@ async function refreshUnderLock(refresh, recorded) {
     let after;
     try {
         const otherSteps = await Promise.all(others.map((launcher) => launcherStep(files, launcher, 'refresh')));
+        const partSteps = await Promise.all(parts.map((part) => part()));
         const plan = await restorePlan(machine, 'refresh');
-        steps = [...otherSteps.flat(), ...plan.steps];
+        steps = [...otherSteps.flat(), ...partSteps.flat(), ...plan.steps];
         after = plan.after;
     }
     catch (error) {

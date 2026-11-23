@@ -13,18 +13,15 @@ export const REFRESH_FORMAT = 1;
 export const REFRESH_RESTART_NEXT_FORMAT = 2;
 
 /**
- * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 the `largeWindow` every phase
- * carries. A format 1 or 2 file reads as it did, with neither field; a file in a newer format reads as absent and is
- * never overwritten (`RefreshStore.setState`).
+ * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 added a `largeWindow` that
+ * raised the threshold on a large context window. One threshold holds for every window since (T4083), so this code
+ * writes no `largeWindow` and ignores one a file still has; the format stays 3, so a tab on an older release still
+ * reads what this one writes. A format 1 or 2 file reads as it did, without a baseline; a file in a newer format reads
+ * as absent and is never overwritten (`RefreshStore.setState`).
  */
 export const REFRESH_STATE_FORMAT = 3;
 /** The format before `largeWindow`, still read. */
 const REFRESH_STATE_FORMAT_2 = 2;
-
-/** The window field every phase of a `RefreshState` carries (its `largeWindow`): absent while nothing told. */
-export interface WindowField {
-  readonly largeWindow?: boolean;
-}
 
 /**
  * An ask for the handover that `refresh --ready` has not answered yet: the fields of the `asked` phase it was made in
@@ -41,6 +38,12 @@ export interface StandingAsk {
    * that leaves it as it is cannot loop the Stop hook.
    */
   readonly fixHash?: string;
+  /**
+   * Set when this ask came from an automatic compaction the refresh held back in its place (`decideCompact`, T4119),
+   * and kept on the ask's handover and on the asks made again after it until a fresh start: the compaction is held so
+   * once per tab, so a session whose restart never comes still compacts at the next one. Absent before.
+   */
+  readonly compactHeld?: true;
 }
 
 /**
@@ -66,18 +69,13 @@ export interface StandingAsk {
  *   real growth past it (`decide.ts` `askAt`), so a fresh session that starts over the threshold is never asked to
  *   refresh again before it did any work. null from a fresh start (a /clear, a new process) until that turn end
  *   measures it, which asks nothing; absent after a compaction and in a format 1 file.
- * - `largeWindow` (on every phase): whether the session runs on a context window larger than 200k, as teamrig
- *   inferred it (`decide.ts` `windowOf`): true on evidence (the window the plugin's mod reports, a context past
- *   200k, or a fresh start measured over `refresh.contextTokens`), false when the mod reported a 200k window. It is
- *   carried through every phase, so a /clear, an ask and a compaction keep it; absent while nothing told (a file from
- *   before it has none). On it the threshold rises to `refresh.largeWindowContextTokens`.
  * In `asked`, `ready` and `refreshed`, `task` is the task whose end asked for the refresh, null when another
  * turn end asked. In `asked` and `ready`, `tokens` is the context the refresh was asked at, null when unknown or
  * when the context was made small since (a compaction, a /clear): a session that goes on without its fresh
- * start is asked again only once its context grew well past it.
+ * start is asked again only once its context grew well past it. `compactHeld` (on `asked`, `ready` and a standing
+ * ask) marks that an automatic compaction was already held back for the refresh, as in `StandingAsk`.
  */
-export type RefreshState = WindowField &
-  (
+export type RefreshState =
   | {
       readonly phase: 'boundary';
       readonly task: string;
@@ -96,6 +94,8 @@ export type RefreshState = WindowField &
       readonly midTurn: boolean;
       /** As in `StandingAsk`: the handover version the turn end asked to be fixed. */
       readonly fixHash?: string;
+      /** As in `StandingAsk`: an automatic compaction was held back for this refresh. */
+      readonly compactHeld?: true;
     }
   | {
       readonly phase: 'ready';
@@ -105,9 +105,10 @@ export type RefreshState = WindowField &
       readonly noticed: boolean;
       readonly transcript: string | null;
       readonly claudePid: number | null;
+      /** As in `StandingAsk`: an automatic compaction was held back for this refresh. */
+      readonly compactHeld?: true;
     }
-  | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null }
-  );
+  | { readonly phase: 'refreshed'; readonly task: string | null; readonly at: string; readonly baseline?: number | null };
 
 /** The lead's ask that a session refresh at its next finished task, whatever its context. */
 export interface RefreshRequest {
@@ -213,6 +214,15 @@ function fixHashOf(record: JsonRecord): { readonly fixHash?: string } | false {
   return typeof hash === 'string' ? { fixHash: hash } : false;
 }
 
+/** The `compactHeld` marker as fields to spread: none when absent (a file from before it, or nothing held), false when damaged. */
+function compactHeldOf(record: JsonRecord): { readonly compactHeld?: true } | false {
+  const held = record['compactHeld'];
+  if (held === undefined) {
+    return {};
+  }
+  return held === true ? { compactHeld: held } : false;
+}
+
 /** A boundary's standing ask: null for none, undefined when damaged. */
 function standingAskOf(value: unknown): StandingAsk | null | undefined {
   if (value === null) {
@@ -226,36 +236,29 @@ function standingAskOf(value: unknown): StandingAsk | null | undefined {
   const tokens = tokensOf(value);
   const handoverHash = hashOf(value);
   const fix = fixHashOf(value);
-  return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false
+  const held = compactHeldOf(value);
+  return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false || held === false
     ? undefined
-    : { task, at, tokens, handoverHash, ...fix };
+    : { task, at, tokens, handoverHash, ...fix, ...held };
 }
 
-/** The window field as a spread: absent while nothing told; undefined when damaged. */
-function windowFieldOf(record: JsonRecord): WindowField | undefined {
-  const largeWindow = record['largeWindow'];
-  if (largeWindow === undefined) {
-    return {};
-  }
-  return typeof largeWindow === 'boolean' ? { largeWindow } : undefined;
-}
-
-/** A refresh state file's content; undefined when it is damaged, from another format or names no known phase. */
+/**
+ * A refresh state file's content; undefined when it is damaged, from another format or names no known phase. A
+ * `largeWindow` an older release wrote is not read (`REFRESH_STATE_FORMAT`).
+ */
 export function parseRefreshState(text: string): RefreshState | undefined {
   const record = stateRecordOf(text);
   // Only a task end names its task: a refresh another turn end asked for has none.
   const task = record === undefined ? undefined : nullableString(record, 'task');
   const at = record === undefined ? undefined : stringField(record, 'at');
   const base = record === undefined ? undefined : baselineOf(record);
-  const window = record === undefined ? undefined : windowFieldOf(record);
-  if (record === undefined || task === undefined || at === undefined || base === undefined || window === undefined) {
+  if (record === undefined || task === undefined || at === undefined || base === undefined) {
     return undefined;
   }
-  const phase = phaseOf(record, task, at, base);
-  return phase === undefined ? undefined : { ...phase, ...window };
+  return phaseOf(record, task, at, base);
 }
 
-/** The phase a refresh state file names, its window field aside; undefined when damaged or unknown. */
+/** The phase a refresh state file names; undefined when damaged or unknown. */
 function phaseOf(record: JsonRecord, task: string | null, at: string, base: { readonly baseline?: number | null }): RefreshState | undefined {
   switch (record['phase']) {
     case 'boundary': {
@@ -275,9 +278,10 @@ function phaseOf(record: JsonRecord, task: string | null, at: string, base: { re
       // A file from before the mod asked within a turn was always the Stop hook's.
       const midTurn = record['midTurn'] ?? false;
       const fix = fixHashOf(record);
-      return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false
+      const held = compactHeldOf(record);
+      return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false || held === false
         ? undefined
-        : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix };
+        : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix, ...held };
     }
     case 'ready': {
       const noticed = record['noticed'];
@@ -286,8 +290,9 @@ function phaseOf(record: JsonRecord, task: string | null, at: string, base: { re
       const claudePid = nullablePidOf(record['claudePid']);
       // A file from before the size was recorded has none.
       const tokens = record['tokens'] === undefined ? null : tokensOf(record);
-      return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined
-        ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid }
+      const held = compactHeldOf(record);
+      return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined && held !== false
+        ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid, ...held }
         : undefined;
     }
     case 'refreshed':

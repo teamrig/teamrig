@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { claudeProjectsDir } from "../../budget/discover.js";
 import { DEFAULT_HEADROOM } from "../../config/defaults.js";
 import { ownLaunchOf } from "../../config/launch.js";
 import { errorMessage } from "../../core/guards.js";
@@ -20,7 +19,7 @@ import { noRoomText } from "../../sessions/headroom.js";
 import { onePositional, requiredFlag, UsageError } from "../args.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
-import { cacheBinOf, childEnvOf, launcherOf, transcriptsOf } from "../host.js";
+import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from "../host.js";
 import { runsHostSession } from "../session-process.js";
 import { loadTree } from "../tree.js";
 import { claudeExit, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
@@ -169,7 +168,7 @@ async function endSession(runtime, entry) {
 /** The restore over this machine: the kit home's sessions folder, every team on it, its processes and terminals. */
 async function restoreDepsOf(runtime, terminal) {
     const kitHome = resolveKitHome(runtime.env, runtime.userHome);
-    const projectsDir = claudeProjectsDir(runtime.env, runtime.userHome);
+    const projectsDir = transcriptsFolderOf(runtime);
     const finder = new TranscriptFinder(runtime.files, runtime.probe, projectsDir);
     const { teams } = await loadTree(runtime);
     return {

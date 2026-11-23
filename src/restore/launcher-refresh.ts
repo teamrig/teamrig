@@ -182,6 +182,11 @@ export interface LauncherRefresh {
    * there, or written when missing too when it is a `create` one (the inbox-add launcher).
    */
   readonly others: readonly Launcher[];
+  /**
+   * Other parts a plugin update keeps in place, each read to the steps that bring it up to date, taken after the
+   * launchers and before the restore's parts: the `teamrig` launchers and the user's PATH (cli-on-path.ts).
+   */
+  readonly parts?: readonly (() => Promise<readonly MachineStep[]>)[];
   /** The lock on `<record>.lock`, with `LAUNCHER_REFRESH_LOCK`'s timings. */
   readonly lock: Mutex;
   /** The running plugin's version (KIT_VERSION); one that is no release version refreshes nothing. */
@@ -221,7 +226,7 @@ export async function refreshLaunchers(refresh: LauncherRefresh): Promise<Launch
 
 /** Reads what is out of date and takes each step in order, logging each; writes the record once all are done. */
 async function refreshUnderLock(refresh: LauncherRefresh, recorded: Recorded): Promise<LauncherRefreshOutcome> {
-  const { machine, others, version, now } = refresh;
+  const { machine, others, parts = [], version, now } = refresh;
   const { files, kitHome } = machine;
   const from = recorded.kind === 'version' ? recorded.text : 'none';
   const log = async (line: string): Promise<void> => {
@@ -236,8 +241,9 @@ async function refreshUnderLock(refresh: LauncherRefresh, recorded: Recorded): P
   let after: LauncherSurvey;
   try {
     const otherSteps = await Promise.all(others.map((launcher) => launcherStep(files, launcher, 'refresh')));
+    const partSteps = await Promise.all(parts.map((part) => part()));
     const plan = await restorePlan(machine, 'refresh');
-    steps = [...otherSteps.flat(), ...plan.steps];
+    steps = [...otherSteps.flat(), ...partSteps.flat(), ...plan.steps];
     after = plan.after;
   } catch (error) {
     return failed('reading what is out of date', error);

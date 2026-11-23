@@ -18,6 +18,8 @@ const CONTEXT: RouteContext = {
   isRemote: async (_folders, name) => name === 'origin',
   pushesToSameName: async () => true,
   protectedBranches: ['main', 'master'],
+  /** Every session here has a leader but `lead`, the root team's lead. */
+  approversOf: async (named) => (named === 'lead' ? [] : ['lead']),
 };
 
 const idOf = async (line: string, context: RouteContext = CONTEXT): Promise<RouteId | undefined> => (await routeOf(line, context))?.id;
@@ -48,6 +50,13 @@ describe('SANCTIONED_ROUTES', () => {
     const notAtPreToolUse = SANCTIONED_ROUTES.filter((route) => !route.preToolUse).map((route) => route.id);
     assert.deepEqual(notAtPreToolUse, ['register', 'git-push']);
   });
+
+  it('C1: takes a pull request landing only for a session that has a leader, piped or not', async () => {
+    const head = '0123456789abcdef0123456789abcdef01234567';
+    assert.equal(await idOf(`teamrig pr merge acme/web#7 --head ${head} --session tr-x`), 'pr-landing');
+    assert.equal(await idOf(`teamrig pr approve acme/web#7 --head ${head} --session tr-x | tail -n 3`), 'pr-landing');
+    assert.equal(await idOf(`teamrig pr approve acme/web#7 --head ${head} --session lead`), undefined);
+  });
 });
 
 describe('shellRouteOf', () => {
@@ -63,6 +72,14 @@ describe('shellRouteOf', () => {
   it('finds no route in a Windows Bash line whose halved text bash runs is not that route', async () => {
     assert.equal(await idOf(halvedOf(SPLIT_BY_HALVING)), undefined);
     assert.equal(await shellRouteOf(shellCallOf('Bash', SPLIT_BY_HALVING, 'win32'), CONTEXT), undefined);
+  });
+
+  it('F3: finds a piped route only when every reading pipes into the same filter words', async () => {
+    const piped = `teamrig merge --session tr-canary | grep 'a\\\\b'`;
+    assert.equal((await shellRouteOf(shellCallOf('Bash', piped, 'linux'), CONTEXT))?.id, 'merge');
+    assert.notEqual(halvedOf(piped), piped);
+    assert.equal(await shellRouteOf(shellCallOf('Bash', piped, 'win32'), CONTEXT), undefined);
+    assert.equal((await shellRouteOf(shellCallOf('Bash', 'teamrig merge --session tr-canary | tail -n 5', 'win32'), CONTEXT))?.id, 'merge');
   });
 
   it('finds the route of a Windows Bash line with no backslash run to halve', async () => {
@@ -87,6 +104,9 @@ describe('routeOf', () => {
       ['teamrig worktree remove "C:/w/t1 canary" --delete-branch', 'worktree-remove'],
       ['teamrig set T1 --session tr-canary --status done --note "a note, quoted"', 'register'],
       ['teamrig inbox add --to teamrig --text x', 'register'],
+      ['teamrig inbox read --session tr-canary', 'register'],
+      ['teamrig show T1 T2 --session tr-canary', 'read'],
+      ['teamrig doctor', 'read'],
       ['git commit -s -m "fix: the route (T1)"', 'git-commit'],
       ['git -C C:/w push origin t1-canary', 'git-push'],
       ['git -C C:/w push --force-with-lease --force-if-includes origin t1-canary', 'git-push'],
@@ -95,6 +115,36 @@ describe('routeOf', () => {
     for (const [line, id] of routes) {
       assert.equal(await idOf(line), id, line);
     }
+  });
+
+  it('F1: finds the route of a line piped into one read-only filter', async () => {
+    const routes: ReadonlyArray<readonly [string, RouteId]> = [
+      ['teamrig merge --session tr-canary | tail -n 5', 'merge'],
+      ['teamrig deploy --repo web 2>&1 | head -20', 'deploy'],
+      [`teamrig list --session tr-canary | grep -i 'open task'`, 'read'],
+      ['teamrig budget --day 2026-11-22 | tail -3', 'read'],
+      ['teamrig inbox add --to teamrig --text x | wc -l', 'register'],
+      ['git -C C:/w push origin t1-canary 2>&1 | tail -3', 'git-push'],
+    ];
+    for (const [line, id] of routes) {
+      assert.equal(await idOf(line), id, line);
+    }
+  });
+
+  it('F1, F4: finds none where the pipe feeds anything but a filter as allowed', async () => {
+    await assertNoRoute([
+      'teamrig list | tee out.txt',
+      'teamrig list | xargs rm',
+      'teamrig list | bash',
+      'teamrig list | node',
+      'teamrig list | pwsh',
+      'teamrig list | tail -f',
+      'teamrig list | grep -r open',
+      'teamrig list | grep open secrets.yaml',
+      'teamrig list | head secrets.yaml',
+      'teamrig merge --force | tail',
+      'git status | tail',
+    ]);
   });
 
   it('C1: finds none in a line that joins, feeds, redirects, substitutes or sets a variable', async () => {

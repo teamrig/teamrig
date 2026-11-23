@@ -38,7 +38,7 @@ const HELD = '0123456789abcdef';
  * Every document in one run, the inbox being alpha's and the history that of the first task a team adds: the five of
  * interface 1.0 and those a minor added, so the specs that hold the store unwritten cover each new one.
  */
-const ALL_DOCUMENTS = ['tasks', 'inbox', 'sessions', 'meetings', 'config', 'plan', 'goals', 'history', 'stats'] as const;
+const ALL_DOCUMENTS = ['tasks', 'inbox', 'sessions', 'meetings', 'config', 'plan', 'goals', 'history', 'stats', 'steps'] as const;
 const READ_ALL = ['read', ...ALL_DOCUMENTS, '--task', 'T1', '--json', '--session', 'alpha'] as const;
 const ALL_UNCHANGED = ALL_DOCUMENTS.map(() => true);
 /** A text one of teamrig's own secret shapes matches, built from parts so this file holds none. */
@@ -423,7 +423,7 @@ describe('teamrig read sessions', () => {
     const resetsAt = Date.parse('2030-01-09T01:00:00.000Z');
     const at = kit.clock.now();
     const start = resetsAt - 6 * 24 * 60 * 60 * 1000;
-    await kit.files.write(join(teamHomeOf('web'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    await kit.files.write(join(teamHomeOf('web'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt, start, startPct: 0, at, limits: [] }));
     await kit.files.write(join(teamHomeOf('ops'), 'state', ...TEAM_WEEK_IN_STATE), '{"torn');
     const before = served(await kit.run(READ_SESSIONS));
     const teams = Array.isArray(before['teams']) ? before['teams'] : [];
@@ -437,7 +437,7 @@ describe('teamrig read sessions', () => {
       ],
     );
     assert.equal(JSON.stringify(before).includes('"main"'), false, 'the account is not served');
-    await kit.files.write(join(teamHomeOf('app'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 1, plannedPct: 2, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    await kit.files.write(join(teamHomeOf('app'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 1, plannedPct: 2, accountUsedPct: 48, resetsAt, start, startPct: 0, at, limits: [] }));
     assert.notEqual(served(await kit.run(READ_SESSIONS))['revision'], before['revision']);
   });
 
@@ -725,7 +725,7 @@ describe('teamrig read --unless', () => {
     const [tasks, , , meetings] = first;
     assert.ok(tasks !== undefined && meetings !== undefined);
     const again = allServed(await kit.run([...READ_ALL, '--unless', heldOf([meetings, tasks])]));
-    assert.deepEqual(unchangedOf(again), [['tasks', true], ['inbox', false], ['sessions', false], ['meetings', true], ['config', false], ['plan', false], ['goals', false], ['history', false], ['stats', false]]);
+    assert.deepEqual(unchangedOf(again), [['tasks', true], ['inbox', false], ['sessions', false], ['meetings', true], ['config', false], ['plan', false], ['goals', false], ['history', false], ['stats', false], ['steps', false]]);
     assert.deepEqual(again[0], { interface: INTERFACE_VERSION, document: 'tasks', revision: tasks['revision'], unchanged: true });
     assert.deepEqual(again.slice(1, 3), first.slice(1, 3));
   });
@@ -752,7 +752,7 @@ describe('teamrig read --unless', () => {
     await post(kit, 'lead', 'alpha', 'the gate is merged');
     assert.deepEqual(
       unchangedOf(allServed(await kit.run([...READ_ALL, '--unless', held]))),
-      [['tasks', true], ['inbox', false], ['sessions', false], ['meetings', true], ['config', true], ['plan', true], ['goals', true], ['history', true], ['stats', true]],
+      [['tasks', true], ['inbox', false], ['sessions', false], ['meetings', true], ['config', true], ['plan', true], ['goals', true], ['history', true], ['stats', true], ['steps', true]],
     );
   });
 

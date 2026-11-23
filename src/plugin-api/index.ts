@@ -91,6 +91,7 @@ export {
   type CompactEntry,
   type ContinuedEntry,
   type EditCall,
+  type EditedFile,
   type EntryKind,
   type EntryThread,
   type EnvironmentEntry,
@@ -109,6 +110,8 @@ export {
   type HostPlugin,
   type HostSteps,
   type HostPorts,
+  type HostSecrets,
+  type HostUserHooks,
   type InputEntry,
   type InputOrigin,
   type InstallReach,
@@ -124,6 +127,7 @@ export {
   type ReadCall,
   type ReplyCall,
   type ReplyEntry,
+  type RoutingOverride,
   type RunningProgram,
   type ScheduledCarryEntry,
   type ScheduledJob,
@@ -158,6 +162,9 @@ export {
   type UnreadLine,
   type Unsupported,
   type UsageMeter,
+  type UserHooksAnswer,
+  type UserHooksCounts,
+  type UserHooksPlan,
   type WebCall,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
@@ -176,13 +183,19 @@ export {
   type JsonRecord,
 } from '../core/guards.ts';
 export type { Env } from '../core/home.ts';
+// git's credential helper protocol: what a connector answers git's `get` with, and where its helper is wired.
+export { CREDENTIAL_QUIT, credentialAnswer, type CredentialAsk, type HelperScope, type HelperSkip } from '../core/git-credential.ts';
 export type { HttpClient, HttpMethod, HttpRequest, HttpResult } from '../core/http.ts';
+// Which saved key reaches a target: the narrowest scope's credential first, a failed read never falling to a wider one.
+export { pickKey, type KeyCandidate, type KeyPick } from '../core/key-pick.ts';
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from '../core/printable.ts';
 // The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
 export { INTERFACE_MAJOR, INTERFACE_VERSION, parseInterfaceVersion } from '../interface/version.ts';
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter, type StampCredit } from '../core/stamp.ts';
+// A host's own folder an environment variable moved, as the secret guard's globs of its secret files there.
+export { folderGlob, movedFolderSecrets } from '../secret-guard/folder-glob.ts';
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
 export { isClaim } from '../issues/claim.ts';
 // A tracker as the public interface's documents name it, and the issue a task's ref names: a tracker's adapter builds
@@ -197,6 +210,8 @@ export {
   type CodeHost,
   type HostAssignee,
   type HostComments,
+  type HostCommit,
+  type HostCommitFile,
   type HostEnd,
   type HostIssueId,
   type HostIssueLabels,
@@ -205,10 +220,12 @@ export {
   type HostLabelFile,
   type HostLinks,
   type HostList,
+  type HostRerun,
   type HostLanding,
   type HostOpen,
   type HostPulls,
   type HostPullStand,
+  type HostPullWork,
   type HostReach,
   type HostThread,
   type HostUse,
@@ -223,6 +240,8 @@ export {
   type Tracker,
   type WatchMarks,
 } from '../issues/host.ts';
+// The scope a tracker's list may be asked with: which of a place's issues the import takes (sync/scope.ts).
+export type { AssignedScope, ImportScope, ScopeRequest } from '../sync/scope.ts';
 export type { HostIssue, IssueComment, IssueState, IssueThread, LabelEvent, LinkedIssue, ReadComment } from '../issues/issue.ts';
 // A repository's label file, and the labels teamrig keeps: the only labels a tracker may make.
 export { LABEL_FILE, parseLabelFile } from '../issues/label-file.ts';
@@ -233,8 +252,8 @@ export type { HostPost, HostPosts } from '../issues/post.ts';
 export type { FailedJob, HostPull, PullChecks, PullMergeable, PullReview, PullState } from '../issues/pull.ts';
 // How far a scan of mentions and reviews reads: a connector pages by them, and the scan's caller counts by them.
 export { MENTION_PAGE_SIZE, MENTION_PAGES_MAX, REVIEW_READS_MAX } from '../issues/scan-caps.ts';
-// The name an owner's key is saved under.
-export { tokenName } from '../issues/token-names.ts';
+// The names an owner's key, and one repository's own key, are saved under.
+export { repoTokenName, tokenName } from '../issues/token-names.ts';
 // The length a posted comment is held to, and why a label may not be written.
 export { labelRefusal, MAX_COMMENT } from '../issues/write.ts';
 // How a program ended, as a failure line words it.

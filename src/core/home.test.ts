@@ -6,21 +6,13 @@ import { SESSIONS_WEEK_IN_STATE } from '../budget/session-week-summary.ts';
 import { TASKS_WEEK_IN_STATE } from '../budget/task-week-summary.ts';
 import { TEAM_WEEK_IN_STATE } from '../budget/team-week-summary.ts';
 import { SESSION_LOG_IN_STATE } from '../sessions/log.ts';
-import { claudeConfigDir, resolveKitHome, taskFolder, teamConfigFile, teamHome, teamPaths } from './home.ts';
+import { resolveKitHome, taskFolder, teamConfigFile, teamHome, teamPaths } from './home.ts';
 
 const USER_HOME = join('/', 'u');
 const KIT = join('/', 'kit');
 const TEAM_HOME = join(KIT, 'teams', 'app');
 /** The folder the run's host loads a person's skills from, outside the kit home. */
 const HOST_SKILLS = join('/', 'cfg', 'skills');
-
-describe('claudeConfigDir', () => {
-  it('uses $CLAUDE_CONFIG_DIR, else ~/.claude', () => {
-    assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }, USER_HOME), join('/', 'cfg'));
-    assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: ' ' }, USER_HOME), join(USER_HOME, '.claude'));
-    assert.equal(claudeConfigDir({}, USER_HOME), join(USER_HOME, '.claude'));
-  });
-});
 
 describe('resolveKitHome', () => {
   it('prefers the env override, then a dot folder in the user home', () => {
@@ -80,6 +72,8 @@ describe('teamPaths', () => {
     assert.equal(paths.inbox, join(TEAM_HOME, 'state', 'inbox'));
     assert.equal(paths.renames, join(TEAM_HOME, 'state', 'renames.jsonl'));
     assert.equal(paths.renamesLock, join(TEAM_HOME, 'state', 'renames.lock'));
+    assert.equal(paths.stepBackups, join(TEAM_HOME, 'state', 'step-backups.jsonl'));
+    assert.equal(paths.stepBackupsLock, join(TEAM_HOME, 'state', 'step-backups.lock'));
     assert.equal(paths.skills, HOST_SKILLS);
     assert.equal(paths.refresh, join(TEAM_HOME, 'state', 'refresh'));
     assert.equal(paths.handover, join(TEAM_HOME, 'handover'));

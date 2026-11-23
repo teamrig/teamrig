@@ -60,6 +60,40 @@ describe('credentialReadFindings', () => {
     }
   });
 
+  it("finds teamrig's git credential helper asked for a key, under every launcher and with any stdin", () => {
+    const cases: readonly (readonly [string, ShellDialect])[] = [
+      ['teamrig git-credential get', 'bash'],
+      ["printf 'protocol=https\\nhost=github.com\\npath=acme/web\\n' | teamrig git-credential get", 'bash'],
+      ['teamrig git-credential get < req.txt', 'bash'],
+      ['teamrig.cmd git-credential get', 'powershell'],
+      ['C:/u/.teamrig/bin/teamrig.cmd git-credential get', 'bash'],
+      ['node C:/u/.claude/plugins/cache/teamrig/teamrig/0.1.0/dist/main.js git-credential get', 'bash'],
+      ['node "C:\\Program Files\\teamrig\\dist\\main.js" git-credential get', 'powershell'],
+      ["'protocol=https' | teamrig git-credential get", 'powershell'],
+      ['teamrig "git-credential" "get"', 'bash'],
+      ['TEAMRIG_SESSION=x teamrig GIT-CREDENTIAL GET', 'bash'],
+      ['T=$(teamrig git-credential get <<< "host=github.com") && echo ok', 'bash'],
+    ];
+    for (const [line, dialect] of cases) {
+      assert.deepEqual(reads(line, dialect), ['teamrig git-credential get'], line);
+    }
+  });
+
+  it('lets a line that only names the helper or asks it to store or erase pass', () => {
+    for (const line of [
+      `git config --local --add credential.https://github.com.helper '!teamrig git-credential'`,
+      `git config credential.helper "!node C:/x/dist/main.js git-credential"`,
+      'git config --get-all credential.https://github.com.helper',
+      'teamrig git-credential store',
+      'teamrig git-credential erase',
+      'teamrig git-credential --help',
+      'grep -rn git-credential-getter src',
+      'teamrig git-credentials get',
+    ]) {
+      assert.deepEqual(reads(line), [], line);
+    }
+  });
+
   it('names each read once, the commands before the texts', () => {
     assert.deepEqual(reads('gh auth token; cmdkey /list; gh auth token; node x.mjs teamrig-ship-gh'), ['gh auth token', 'cmdkey /list', 'teamrig-ship-gh']);
   });

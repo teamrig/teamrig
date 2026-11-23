@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { plainWordsOf } from './route-line.ts';
+import { plainWordsOf, routeLineOf } from './route-line.ts';
 
 describe('plainWordsOf', () => {
   it('gives the words of one plain command, after quote removal', () => {
@@ -34,6 +34,53 @@ describe('plainWordsOf', () => {
       `git commit -m "a > b"`,
       `git commit -m 'a|b'`,
       `git commit -m 'a $(b)'`,
+    ]) {
+      assert.equal(plainWordsOf(line), undefined, line);
+    }
+  });
+
+  it('lets a # through only inside a bare owner/name#number word, which bash reads as literal text', () => {
+    assert.deepEqual(plainWordsOf('teamrig pr approve acme/web#7 --session tr-x'), ['teamrig', 'pr', 'approve', 'acme/web#7', '--session', 'tr-x']);
+    assert.deepEqual(plainWordsOf('teamrig pr merge my.org/my_repo-2#1234567890'), ['teamrig', 'pr', 'merge', 'my.org/my_repo-2#1234567890']);
+    const head = '0123456789abcdef0123456789abcdef01234567';
+    assert.deepEqual(plainWordsOf(`teamrig pr approve acme/web#7 --head ${head} --session x`), ['teamrig', 'pr', 'approve', 'acme/web#7', '--head', head, '--session', 'x']);
+    for (const line of [
+      'teamrig pr approve a#7',
+      'teamrig pr approve x.y#7',
+      'teamrig pr approve --flag#7',
+      'teamrig pr approve -a/b#7',
+      'teamrig pr approve .a/b#7',
+      'teamrig pr approve a/b#07',
+      'teamrig pr approve a/b#7x',
+      'teamrig pr approve a/b#7#',
+      'teamrig pr approve ${a#b}',
+      'teamrig pr approve $#',
+      'teamrig pr approve --head=a/b#7',
+      'teamrig pr approve @a/b#7',
+      'teamrig pr approve !a/b#7',
+      'teamrig pr approve (a/b#7)',
+      'teamrig pr approve a/b#7;x',
+      'teamrig pr approve x#y',
+    ]) {
+      assert.equal(plainWordsOf(line), undefined, line);
+    }
+    for (const line of [
+      'teamrig pr approve #7',
+      'teamrig pr approve a #7',
+      'teamrig pr approve acme/web #7',
+      'teamrig pr approve x#7',
+      'teamrig pr approve web#7#8',
+      'teamrig pr approve acme/web#7#8',
+      'teamrig pr approve acme/web#x',
+      'teamrig pr approve acme/web#07',
+      'teamrig pr approve acme/web#12345678901',
+      'teamrig pr approve acme/web#',
+      'teamrig pr approve acme/web#7;id',
+      'teamrig pr approve acme/web#7x',
+      `teamrig pr approve 'acme/web#7'`,
+      `teamrig pr approve "acme/web#7"`,
+      `git commit -m '#'`,
+      'git status # acme/web#7',
     ]) {
       assert.equal(plainWordsOf(line), undefined, line);
     }
@@ -78,5 +125,46 @@ describe('plainWordsOf', () => {
 
   it('refuses a word that holds a substitution an expansion may run again', () => {
     assert.equal(plainWordsOf(`printf -v 'a[$(id)]' x`), undefined);
+  });
+});
+
+describe('routeLineOf', () => {
+  it('gives a plain line with no filter', () => {
+    assert.deepEqual(routeLineOf('teamrig list --session tr-x'), { words: ['teamrig', 'list', '--session', 'tr-x'], filter: undefined });
+  });
+
+  it('F2: splits a line at one top-level | into the route and its filter', () => {
+    assert.deepEqual(routeLineOf('teamrig list --session tr-x | tail -n 5'), {
+      words: ['teamrig', 'list', '--session', 'tr-x'],
+      filter: ['tail', '-n', '5'],
+    });
+    assert.deepEqual(routeLineOf(`teamrig list 2>&1 | grep -i 'open task'`), { words: ['teamrig', 'list'], filter: ['grep', '-i', 'open task'] });
+    assert.deepEqual(routeLineOf('teamrig list|wc -l'), { words: ['teamrig', 'list'], filter: ['wc', '-l'] });
+  });
+
+  it('F2: finds no route line where the | is quoted, escaped, doubled, joined to & or not alone', () => {
+    for (const line of [
+      `teamrig set T1 --note 'a | b'`,
+      'teamrig set T1 --note "a | b"',
+      'teamrig set T1 --note a\\|b',
+      'teamrig list || tail',
+      'teamrig list |& tail',
+      'teamrig list | tail | sh',
+      'teamrig list | tail -n 5 2>&1',
+      'teamrig list | tail > out.txt',
+      'teamrig list | grep "$HOME"',
+      'teamrig list | grep "x"',
+      'teamrig list | tail; rm x',
+      'teamrig list | tail &',
+      'teamrig list | $(echo tail)',
+      'teamrig list | tail\nrm x',
+      'teamrig list | X=1 tail',
+      'teamrig list |',
+      '| tail',
+      'teamrig list > out.txt | tail',
+      '(teamrig list) | tail',
+    ]) {
+      assert.equal(routeLineOf(line), undefined, line);
+    }
   });
 });

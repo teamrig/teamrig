@@ -1,0 +1,50 @@
+name: release slot
+
+on:
+  # Each hour, runs ci on the open release pull request's head when its preview slot opened and no release merged in
+  # it yet (T5133, tools/release/channels.json): release-merge.yml merges only after a passed ci run, so this is what
+  # starts a held release head again once its next slot opens. By hand it runs the same check at once.
+  schedule:
+    - cron: '5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One check at a time, so two runs never both start ci on the same head.
+concurrency:
+  group: release-slot
+  cancel-in-progress: false
+
+jobs:
+  slot:
+    name: release slot
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A job's permissions replace the workflow's: actions to read ci's runs and start one, pull-requests to read the
+    # release pull requests, contents to check out main.
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      # No package install and no Node cache, so the check runs on Node alone, from main's own tools/release.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - id: slot
+        run: node tools/release/release-slot-cli.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      # A run by hand is the one event the workflow's own token may start, as in release.yml. The branch goes in by env
+      # alone: release-slot-cli.ts wrote it from the profile, never from a pull request's text.
+      - name: run ci on the release pull request
+        if: ${{ steps.slot.outputs.dispatch == 'true' }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$REF"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.slot.outputs.ref }}

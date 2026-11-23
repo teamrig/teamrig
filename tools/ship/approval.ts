@@ -4,6 +4,7 @@ import { RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, tabCallerOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { ENV, type Env } from '../../src/core/home.ts';
 import { answerNamesHead, approvedTaskOf, isCommitSha } from '../../src/register/approval.ts';
+import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
 import { branchTaskOf } from '../../src/worktree/owner.ts';
 import { shipsInVersions, shipVersionFileOf, TEAMRIG_RELEASE_STAMPS, versionIn, type ReleaseStamp, type Version, type VersionFile } from './version-bump.ts';
 
@@ -347,24 +348,11 @@ function changesNothing(hunk: readonly string[]): boolean {
   return removed.length === added.length && removed.every((line, i) => line === added[i]);
 }
 
-/** One commit a branch carries over main. */
-export interface WorkCommit {
-  readonly sha: string;
-  readonly subject: string;
-  /** A merge commit, whose own changes no patch shows. */
-  readonly merge: boolean;
-  /**
-   * The commit's patch id, like `git patch-id` (what `git range-diff` marks `=`): the hash of its diff with 3 lines of
-   * context, blob ids and hunk positions dropped, so a rebase over other lines keeps it; whitespace counts, unlike in
-   * git's, so a whitespace edit moves it too. Empty for a merge commit.
-   */
-  readonly patch: string;
-}
-
 /**
  * The work commits `rev` carries over `mainRef`, oldest first: every commit not on main whose diff, read as `writes`
  * says, changes anything, with its patch id, and every merge commit. A commit that only rebuilds a generated folder or
- * raises the version is no work commit: a ship sets those again each run.
+ * raises the version is no work commit: a ship sets those again each run. Each patch id hashes the diff with 3 lines
+ * of context, blob ids and hunk positions dropped; whitespace counts, unlike in git's, so a whitespace edit moves it.
  */
 export function workCommitsOf(git: GitText, rev: string, mainRef: string, writes: ShipWrites): WorkCommit[] {
   const rows = git(['rev-list', '--reverse', '--parents', rev, `^${mainRef}`]).split('\n').filter((row) => row.trim() !== '');
@@ -377,39 +365,6 @@ export function workCommitsOf(git: GitText, rev: string, mainRef: string, writes
     const changes = normalizedOf(diff, writes, shipsIn).some((line) => line.trim() !== '');
     return changes ? [{ sha, subject: subject(), merge: false, patch: diffHash(diff, writes, shipsIn) }] : [];
   });
-}
-
-const named = (commit: WorkCommit): string => `${commit.sha.slice(0, 9)} "${commit.subject}"`;
-
-/**
- * How `head`'s work commits differ from `approved`'s, each change named (changed, dropped, added, reordered); empty
- * when they are the same patches in the same order, all a rebase leaves that `git range-diff` marks `=` throughout.
- * A merge commit on either side always differs: its own changes have no patch to compare.
- */
-export function workChanges(approved: readonly WorkCommit[], head: readonly WorkCommit[]): string[] {
-  const merges = [...approved, ...head].filter((commit) => commit.merge).map((commit) => `merge commit ${named(commit)}: rebase it away`);
-  const unmatched = head.filter((commit) => !commit.merge);
-  const missing: WorkCommit[] = [];
-  for (const commit of approved.filter((one) => !one.merge)) {
-    const at = unmatched.findIndex((other) => other.patch === commit.patch);
-    if (at === -1) missing.push(commit);
-    else unmatched.splice(at, 1);
-  }
-  const changes = [...merges];
-  for (const commit of missing) {
-    const at = unmatched.findIndex((other) => other.subject === commit.subject);
-    if (at === -1) {
-      changes.push(`dropped ${named(commit)}`);
-    } else {
-      changes.push(`changed ${named(commit)}, now ${unmatched[at]?.sha.slice(0, 9) ?? ''}`);
-      unmatched.splice(at, 1);
-    }
-  }
-  changes.push(...unmatched.map((commit) => `added ${named(commit)}`));
-  if (changes.length === 0 && approved.some((commit, i) => commit.patch !== head[i]?.patch)) {
-    changes.push(`reordered, now ${head.map((commit) => commit.sha.slice(0, 9)).join(', ')}`);
-  }
-  return changes;
 }
 
 /**

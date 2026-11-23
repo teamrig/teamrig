@@ -51,7 +51,7 @@ flowchart LR
 | --- | --- | --- |
 | SessionStart hook | a session starts, resumes, is cleared or is compacted | gives the session the core rules, its name, the lead's name, where its team sits in a tree of teams and your team's `rules.md`, after those of the teams above, all within Claude Code's 10,000-character cap for a start (a task list that does not fit comes as one line naming the command that prints it); tells you and the session, in one MODEL line, when it runs on another model than its `launch` entry asks, with the `/model` to type. It also ties a tab `$TEAMRIG_SESSION` names to that session, so the task pane keeps showing it after a /clear, marks a /clear or a compaction in the session's [turn log](guides/recover.md#the-turn-log) and removes the log's hours past `turnLog.keepHours` |
 | SubagentStart hook | a session starts a helper | gives the helper the same core rules and team rules files, and says whose helper it is: the session, not the helper, sets task statuses, adds register entries and sends messages unless the helper's brief asks for them, and the helper saves its full findings in the task's folder (`teamrig files T<id>`) and returns their path; a compaction inside a helper gets the same context ([A helper's start](../plugins/teamrig/skills/teamrig-guide/hooks.md#a-helpers-start)) |
-| UserPromptSubmit hook | you send a prompt | first, a prompt that looks like it holds a secret is stopped before Claude reads it, its value cleaned out of Claude Code's prompt history, and nothing below runs ([Each prompt](../plugins/teamrig/skills/teamrig-guide/hooks.md#each-prompt)); otherwise the session's new inbox lines, each shown once; to a leader, when `register.leaderDigest` is on (off by default), one digest of the register changes in its tree since its last prompt ([the leader digest](../plugins/teamrig/skills/teamrig-guide/hooks.md#each-prompt-the-leader-digest)); a line when it binds a hand-started tab by its title, once per cause when it cannot, when it records a Claude Code rename of the session as its team name, or when `.teamrig.json` is broken; once per level, a line telling the session it is past its daily budget while the team has no room today and, by default, is ahead of its pace line; once each, a line when a burst the session is in starts (how to work in it) and when it ends (wind down), and on the lead's tab, once a week, a line when the week's projected surplus is worth a burst ([Bursts](guides/plan-the-week.md#bursts)); nothing otherwise. It writes the prompt to the session's [turn log](guides/recover.md#the-turn-log) |
+| UserPromptSubmit hook | you send a prompt | first, a prompt that looks like it holds a secret is stopped before Claude reads it, its value cleaned out of Claude Code's prompt history, and nothing below runs ([Each prompt](../plugins/teamrig/skills/teamrig-guide/hooks.md#each-prompt)); otherwise the session's new inbox lines, each shown once; to a leader, when `register.leaderDigest` is on (off by default), one digest of the register changes in its tree since its last prompt ([the leader digest](../plugins/teamrig/skills/teamrig-guide/hooks.md#each-prompt-the-leader-digest)); a line when it binds a hand-started tab by its title, once per cause when it cannot, when it records a Claude Code rename of the session as its team name, or when `.teamrig.json` is broken; once per level, a line telling the session it is past its daily budget while the team has no room today and, by default, is ahead of its pace line; once each, a line when a burst the session is in starts (how to work in it) and when it ends (wind down), and on the lead's tab, once a week, a line when the week's projected surplus is worth a burst ([Bursts](guides/plan-the-week.md#bursts)); nothing otherwise. It writes the prompt to the session's [turn log](guides/recover.md#the-turn-log) and, for a prompt you typed (not a wake), marks that session the one you last typed in, for the dedicated UI to follow |
 | PreToolUse hook on Bash and PowerShell | Claude runs a Bash or PowerShell command | finds every `git push` in it, through wrappers, nested shells and git aliases, and asks you or refuses; asks when it cannot read the command ([Safe pushes](guides/keep-it-safe.md#safe-pushes)) |
 | PreToolUse hook on SendMessage | Claude messages another session of the team | when the receiver has been idle `messages.coldAfterMinutes` (60 by default) or longer, the message would wake it cold: its first call re-reads its whole context at full price, about 8 times a warm wake. It holds the message once with a note: an inbox line if the receiver need not act now, else every ask for it in one message, sent again; the same tab's next send to it within 15 minutes goes through. Idle time runs from the receiver's last write to its own transcript; a helper, a receiver off the team or one with no transcript yet is never held |
 | PreToolUse hook on Agent and Task | Claude launches a helper | with the budget on, asks you or refuses when the session is past its daily budget while the team has no room today and, by default, is ahead of its pace line, or in quiet hours, as `budget.overAction` and `budget.quietHours` say; the lead's helpers, a lifted session's and those of a session with an open or in-progress p0 task or an answer another session waits on always go |
@@ -73,8 +73,11 @@ child teams, hires and retires, and setting up a team with a tab for each sessio
 ## Updating the plugin
 
 Claude Code installs the version that the plugin's `plugin.json` gives and moves an install only when that version
-rises, so every change to the plugin raises it. It installs from the repository's `release` branch, where each
-release is main's commit with the built plugin on top. To take the newest one:
+rises, so every change to the plugin raises it. It installs from the repository's `release` branch, the stable
+channel, where each release is main's commit with the built plugin on top. Each release is published first on the
+`preview` branch, at most one per preview slot (09:00, 12:00, 15:00, 18:00 and 21:00 Israel time,
+`tools/release/channels.json`), and `release` only ever moves to a commit `preview` already holds: once a day at
+20:00 Israel time, to the newest preview release out for at least 3 hours. To take the newest one:
 
 ```sh
 claude plugin marketplace update teamrig
@@ -91,8 +94,8 @@ still needs `/reload-plugins` typed, or a restart. Claude Code does not check th
 unless you turn on its auto-update in `/plugin`, under Marketplaces.
 
 teamrig's mod tells you instead: once a newer teamrig or teamrig-pane is published, a band above the prompt names it
-(`teamrig: teamrig 0.334.0 is out (you run 0.333.0)`) with an Update button, which runs the two commands above for
-that plugin and shows "updating", then "updated, reloading" (or the failure in red, with Update again), and a
+(`teamrig: teamrig 0.334.0 (stable) is out (you run 0.333.0)`, with its release channel) with an Update button,
+which runs the two commands above for that plugin and shows "updating", then "updated, reloading" (or the failure in red, with Update again), and a
 Dismiss button, which hides that version until a newer one is out. An update made in any tab hides the band in every
 other tab within seconds. The network is asked at most
 every 6 hours across the machine, and a failed check shows nothing (the guide's
@@ -281,7 +284,8 @@ turns this off: `register.autoArchive: false` in the team's `config.json`, after
   from `src/read/index.ts`, reads it). The file names the Claude account it counts in (`budget.account`, else the
   config dir the team's sessions run in) and the stretches that account's week sat at its usage limit, for a reader
   that marks those days without the meter log, such as the pane's Stats tab. It also says where the week's use
-  counts from, a reset inside the week when there was one, so the status line's pace stands where `teamrig budget`
+  counts from, a reset inside the week when there was one, and the use that reset left (`startPct`, as a reset of one
+  model's limit leaves the rest), so the status line's pace stands where `teamrig budget`
   reads it without opening the account's period on every tick. A child team keeps its own; a reader that shows it
   under its parent adds it when both name one account.
   Beside it, `usage/sessions.week.json` holds each session on the team's roster: its use of the week so far,

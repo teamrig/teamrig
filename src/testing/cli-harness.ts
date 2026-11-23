@@ -6,14 +6,16 @@ import type { CliRuntime, ExitCode, Output, SelfLocation } from '../cli/runtime.
 import { CONFIG_LIMITS, RULE_CONFLICT_LIMITS } from '../config/limits.ts';
 import { formatConfig } from '../config/load.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
+import { CONFIG_VERSION } from '../config/types.ts';
 import type { FileBytes } from '../core/file-bytes.ts';
 import type { Files } from '../core/files.ts';
 import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
-import type { Env } from '../core/home.ts';
+import { resolveKitHome, type Env } from '../core/home.ts';
+import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
 import type { RequirementsCheck } from '../requirements/requirements.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
@@ -41,6 +43,7 @@ import type { ExecPorts } from '../exec/ports.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
 import type { PointerGit } from '../setup/pointer-ignore.ts';
 import { FakeClock } from './fake-clock.ts';
+import { FakeUserPath, quietRestore } from './fake-restore.ts';
 import { FakeSessionProcesses } from './fake-session-processes.ts';
 import { MemoryFiles } from './memory-files.ts';
 import { programOverGh } from './program-over-gh.ts';
@@ -73,7 +76,8 @@ export const POINTER = join(APP, '.teamrig.json');
 export const CLAUDE_SESSION = '0123abcd-0000-4000-8000-00000000000a';
 /** The pid of every run of the CLI. */
 export const CLI_PID = 4242;
-export const TEAM: JsonRecord = { sessions: ['lead', 'alpha', 'bravo'], roles: { lead: 'lead' } };
+/** A team in the current config format, as `team create` writes it: an older one has a pending step. */
+export const TEAM: JsonRecord = { configVersion: CONFIG_VERSION, sessions: ['lead', 'alpha', 'bravo'], roles: { lead: 'lead' } };
 /** {@link TEAM} with the context refresh's automatic restart on (`refresh.autoRestart`, on for the lead only by default). */
 export const AUTO_RESTART_TEAM: JsonRecord = { ...TEAM, refresh: { autoRestart: true } };
 const longestList = (limit: { readonly maxItems: number; readonly maxLength: number }, letter: string) =>
@@ -171,9 +175,15 @@ export interface RunOptions {
   readonly transcripts?: TranscriptSource;
   /** The host ports the run is given; default the shipped host's (the quiet world's). */
   readonly host?: HostSource;
+  /** The host adapters teamrig ships with, as the run sees them; default the shipped host alone (the quiet world's). */
+  readonly shippedHosts?: readonly ShippedHost[];
   /** The worktrees `worktree remove` sees; default none. */
   readonly worktrees?: WorktreePorts;
-  /** The shutdown log and countdown `restore` sees; default no shutdown on record and a countdown that goes at once. */
+  /**
+   * The shutdown log and countdown `restore` sees; default no shutdown on record, a countdown that goes at once, and a
+   * user PATH that already holds the kit home's bin folder, as on a machine a session start set up (T5095), so a
+   * doctor run is clean unless a spec empties it.
+   */
   readonly restore?: RestorePorts;
   /** The runner `teamrig queue` runs its step in; default one whose steps exit 0 at once. */
   readonly steps?: StepRunner;
@@ -247,9 +257,11 @@ export class CliHarness {
 
   /** The runtime a run gets, for a spec of a class that takes one; by default what it prints goes nowhere. */
   runtime(options: RunOptions = {}, out: Output = { stdout: () => undefined, stderr: () => undefined }): CliRuntime {
+    const env: Env = { TEAMRIG_HOME: KIT, ...options.env };
+    const userHome = options.userHome ?? USER_HOME;
     return {
-      env: { TEAMRIG_HOME: KIT, ...options.env },
-      userHome: options.userHome ?? USER_HOME,
+      env,
+      userHome,
       cwd: options.cwd ?? APP,
       pid: CLI_PID,
       files: options.files ?? this.files,
@@ -275,8 +287,9 @@ export class CliHarness {
       ...(options.requirements === undefined ? {} : { requirements: options.requirements }),
       ...(options.transcripts === undefined ? {} : { transcripts: options.transcripts }),
       ...(options.host === undefined ? {} : { host: options.host }),
+      ...(options.shippedHosts === undefined ? {} : { shippedHosts: options.shippedHosts }),
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
-      ...(options.restore === undefined ? {} : { restore: options.restore }),
+      restore: options.restore ?? cliOnPathRestore(env, userHome),
       ...(options.steps === undefined ? {} : { steps: options.steps }),
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),
@@ -294,6 +307,11 @@ export class CliHarness {
       ...(options.cmdShimLine === undefined ? {} : { cmdShimLine: options.cmdShimLine }),
     };
   }
+}
+
+/** Quiet restore ports on a machine whose user PATH already holds the kit home's bin folder (T5095). */
+function cliOnPathRestore(env: Env, userHome: string): RestorePorts {
+  return { ...quietRestore(), userPath: new FakeUserPath([cliLauncherFolder(resolveKitHome(env, userHome))]) };
 }
 
 /** A PreToolUse payload for a Bash call in the project folder. */

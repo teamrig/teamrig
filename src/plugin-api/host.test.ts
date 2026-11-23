@@ -55,11 +55,13 @@ describe('defineHost', () => {
         usage: unsupported('no call is priced'),
         statusLine: unsupported('no status line is drawn'),
         paths: unsupported('no folder is known'),
+        secrets: unsupported('no secret file is known'),
         permissions: unsupported('no permission rule is kept'),
         plugin: unsupported('no plugin is installed'),
         launcher: unsupported('no session is told'),
         models: unsupported('no models are known'),
         steps: unsupported('no steps are known'),
+        userHooks: unsupported('no hooks file is kept'),
       }),
     });
     assert.equal(adapter.declaration, data);
@@ -70,11 +72,13 @@ describe('defineHost', () => {
       usage: { kind: 'unsupported', notice: 'no call is priced' },
       statusLine: { kind: 'unsupported', notice: 'no status line is drawn' },
       paths: { kind: 'unsupported', notice: 'no folder is known' },
+      secrets: { kind: 'unsupported', notice: 'no secret file is known' },
       permissions: { kind: 'unsupported', notice: 'no permission rule is kept' },
       plugin: { kind: 'unsupported', notice: 'no plugin is installed' },
       launcher: { kind: 'unsupported', notice: 'no session is told' },
       models: { kind: 'unsupported', notice: 'no models are known' },
       steps: { kind: 'unsupported', notice: 'no steps are known' },
+      userHooks: { kind: 'unsupported', notice: 'no hooks file is kept' },
     });
     assert.equal(isHostAdapter(adapter), true);
   });

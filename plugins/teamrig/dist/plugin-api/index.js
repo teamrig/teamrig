@@ -14,12 +14,18 @@ export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a
 // thrown value's code and text.
 export { errorCode, errorMessage, instantField, isNonNegativeInteger, isRecord, isStringArray, numberField, recordField, stringField, } from "../core/guards.js";
+// git's credential helper protocol: what a connector answers git's `get` with, and where its helper is wired.
+export { CREDENTIAL_QUIT, credentialAnswer } from "../core/git-credential.js";
+// Which saved key reaches a target: the narrowest scope's credential first, a failed read never falling to a wider one.
+export { pickKey } from "../core/key-pick.js";
 // Outside text as one printable line: what a connector puts of a tool's answer into a line a person reads.
 export { plainLine } from "../core/printable.js";
 // The interface version this teamrig serves: a protocol adapter sends it and holds an outside program's answers to its major.
 export { INTERFACE_MAJOR, INTERFACE_VERSION, parseInterfaceVersion } from "../interface/version.js";
 // The footer of a text a connector posts: put on, taken off a text already stamped, and its parts for a tool with no Markdown.
 export { stampCredit, withStampFooter, withoutStampFooter } from "../core/stamp.js";
+// A host's own folder an environment variable moved, as the secret guard's globs of its secret files there.
+export { folderGlob, movedFolderSecrets } from "../secret-guard/folder-glob.js";
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
 export { isClaim } from "../issues/claim.js";
 export { parseRef } from "../issues/ref.js";
@@ -31,8 +37,8 @@ export { areaLabelSpec, MANAGED_LABEL_SPECS } from "../issues/managed-labels.js"
 export { isLogin } from "../issues/login.js";
 // How far a scan of mentions and reviews reads: a connector pages by them, and the scan's caller counts by them.
 export { MENTION_PAGE_SIZE, MENTION_PAGES_MAX, REVIEW_READS_MAX } from "../issues/scan-caps.js";
-// The name an owner's key is saved under.
-export { tokenName } from "../issues/token-names.js";
+// The names an owner's key, and one repository's own key, are saved under.
+export { repoTokenName, tokenName } from "../issues/token-names.js";
 // The length a posted comment is held to, and why a label may not be written.
 export { labelRefusal, MAX_COMMENT } from "../issues/write.js";
 // How a program ended, as a failure line words it.

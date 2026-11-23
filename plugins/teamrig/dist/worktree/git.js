@@ -123,6 +123,23 @@ export function worktreeGit(run) {
         fetch: (dir, remote, branch) => outcome(run(dir, ['fetch', '--quiet', remote, branch], ADD_TIMEOUT_MS), 'git fetch'),
         // The caller gives an absolute path and a branch name it checked starts with a letter or digit, so neither reads as an option.
         addWorktree: (mainDir, path, branch, base) => outcome(run(mainDir, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, path, base], ADD_TIMEOUT_MS), 'git worktree add'),
+        originUrl: (dir) => queryLine(dir, ['remote', 'get-url', 'origin']),
+        setLocalConfig(dir, key, values) {
+            // git config takes no `--` (it would store it as the value), so a word starting with `-` is refused, never run.
+            const option = [key, ...values].find((word) => word.startsWith('-'));
+            if (option !== undefined) {
+                return { ok: false, reason: `git config would read ${option} as an option` };
+            }
+            const [first, ...more] = values;
+            let set = outcome(run(dir, ['config', '--local', '--replace-all', key, first]), 'git config');
+            for (const value of more) {
+                if (!set.ok) {
+                    return set;
+                }
+                set = outcome(run(dir, ['config', '--local', '--add', key, value]), 'git config');
+            }
+            return set;
+        },
     };
 }
 /** The git CLI. */

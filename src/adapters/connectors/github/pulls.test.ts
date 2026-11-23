@@ -6,7 +6,7 @@ import type { HostPull } from '../../../plugin-api/index.ts';
 import { listPulls, pullOf, type PullListRequest } from './pulls.ts';
 import type { RepoAccess } from './tokens.ts';
 
-const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
+const TOKEN: RepoAccess = { env: { HOME: '/u', GH_TOKEN: 'read-token' }, owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme' };
 const ALL: PullListRequest = { repo: 'acme/web', read: 'changed', since: undefined, limit: 200 };
 
 /** A pull request of acme/web as read from what ghPull gives when a test sets nothing. */

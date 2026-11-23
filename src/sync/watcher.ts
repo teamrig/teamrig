@@ -7,7 +7,16 @@ import type { KitConfig } from '../config/types.ts';
  * as roleHolding reads them, so the pick never hangs on the config file's key order.
  */
 export function githubWatcher(config: Pick<KitConfig, 'github' | 'serviceRoles' | 'roles'>): string {
-  return config.github.watcher ?? intakeHolder(config.serviceRoles) ?? config.roles.lead;
+  return githubAnswerer(config) ?? config.roles.lead;
+}
+
+/**
+ * The session the team named to answer on GitHub: `github.watcher`, else the first holder of a service role holding
+ * `issue close`; undefined when it named none. Unlike githubWatcher it never falls back to the lead, so a team that
+ * does not work on GitHub has no answerer the budget keeps (src/budget/unheld.ts, T4388).
+ */
+export function githubAnswerer(config: Pick<KitConfig, 'github' | 'serviceRoles'>): string | undefined {
+  return config.github.watcher ?? intakeHolder(config.serviceRoles);
 }
 
 function intakeHolder(roles: KitConfig['serviceRoles']): string | undefined {

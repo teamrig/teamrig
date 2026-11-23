@@ -1,6 +1,6 @@
 import { formatPct, formatW } from "../budget/format.js";
 import { MEASURED_DAYS } from "../budget/turn-average.js";
-import { isHeld, quietSpanOf, sessionQuietSpan } from "../budget/warn.js";
+import { isHeld, isTeamHeld, quietSpanOf, sessionQuietSpan } from "../budget/warn.js";
 import { DEFAULT_MESSAGES } from "../config/defaults.js";
 import { NOW_PRIORITY } from "../config/priorities.js";
 import { KIT_NAME } from "../core/home.js";
@@ -218,7 +218,8 @@ function isPausedNow(facts) {
 }
 /**
  * Where the session stands against its budget at `now`: held (past its daily budget, its lift's while lifted, while
- * the team has no room today or a leader's cut holds it, or paused: {@link isPausedNow}), and in quiet hours unless
+ * the team has no room today or a leader's cut holds it; its team held for the day: `isTeamHeld`; or paused:
+ * {@link isPausedNow}), and in quiet hours unless
  * its lift exempts it. The turn a wake would start counts as spent (`turnW`, in W), so a session with less left than
  * that turn is held before it, not after (T1322). With no facts (the week's use is not known yet) it is never held,
  * and quiet hours go by the clock alone.
@@ -229,8 +230,10 @@ export function wakeRestOf(facts, quietHours, now, turnW) {
     }
     const turnPct = facts.todayWPerPct > 0 ? turnW / facts.todayWPerPct : 0;
     const paused = isPausedNow(facts);
-    const held = paused || isHeld(facts, turnPct);
-    return { held, quiet: sessionQuietSpan(facts, quietHours) !== undefined, yields: held && !paused && facts.cut?.stop !== true };
+    // A team held for the day wakes for p0 alone, so it never yields to a waited-on task the way a cap does.
+    const teamHeld = isTeamHeld(facts, turnPct);
+    const held = paused || isHeld(facts, turnPct) || teamHeld;
+    return { held, quiet: sessionQuietSpan(facts, quietHours) !== undefined, yields: held && !paused && !teamHeld && facts.cut?.stop !== true };
 }
 /**
  * The least urgent priority that wakes the session now: p0 only while its budget holds or pauses it, in quiet hours

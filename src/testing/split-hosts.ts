@@ -11,7 +11,7 @@ export function trackerOnly(fake: FakeIssueHost): Tracker {
   return {
     name: fake.name,
     reach: (repo, use) => fake.reach(repo, use),
-    list: (repo) => fake.list(repo),
+    list: (repo, closedSince, request) => fake.list(repo, closedSince, request),
     open: (draft) => fake.open(draft),
     editBody: (target, body) => fake.editBody(target, body),
     close: (target, reason, duplicateId) => fake.close(target, reason, duplicateId),
@@ -48,9 +48,11 @@ export function codeHostOnly(fake: FakeIssueHost): CodeHost {
     reach: (repo, use) => fake.reach(repo, use),
     pulls: (repo, since) => fake.pulls(repo, since),
     jobLog: (repo, jobId) => fake.jobLog(repo, jobId),
+    rerunRun: (repo, runId) => fake.rerunRun(repo, runId),
     posts: (repo, since) => fake.posts(repo, since),
     labelFile: (repo) => fake.labelFile(repo),
     pullStand: (target) => fake.pullStand(target),
+    pullWork: (target, base, head) => fake.pullWork(target, base, head),
     approvePull: (target, head) => fake.approvePull(target, head),
     landPull: (target, pull) => fake.landPull(target, pull),
   };

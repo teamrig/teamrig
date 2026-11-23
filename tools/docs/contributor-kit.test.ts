@@ -112,4 +112,16 @@ describe('the contributor kit', () => {
       assert.ok(text.includes(rule), `dev-github-intake says "${rule}"`);
     }
   });
+
+  it('gives the still-relevant review step in one wording in the intake skill, the approvals skill and the guide', () => {
+    const step =
+      'main has not changed the code it touches since it was written, no later change already fixed or replaced it, ' +
+      'the behaviour it changes is still wanted, and landing it now undoes no newer work. A stale one is closed or ' +
+      're-scoped with a comment saying what changed, never landed as written.';
+    const places = [`${SKILLS}/dev-github-intake/SKILL.md`, 'plugins/teamrig/skills/approvals/SKILL.md', 'plugins/teamrig/skills/teamrig-guide/workflows.md'];
+    for (const path of places) {
+      const text = read(path).replace(/\s+/g, ' ').replace(/ (\d+\.|-) /g, ' ');
+      assert.ok(text.includes(step), `${path} gives the still-relevant step as written`);
+    }
+  });
 });

@@ -515,6 +515,42 @@ export function isJobLogRead(args) {
         args[5] === '--repo' &&
         REPO_NAME.test(args[6] ?? ''));
 }
+/** The command line that reads one Actions run of `repo`, its status and conclusion among the rest, before a re-run (T5063). */
+export function runReadArgs(repo, runId) {
+    return ['api', `repos/${repo}/actions/runs/${String(runId)}`];
+}
+/** `repos/<owner>/<name>/actions/runs/<id>`: the run itself, never its jobs, logs or a list of runs. */
+const RUN_READ_PATH = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/([^/]+)$/u;
+/**
+ * True for runReadArgs's line and nothing more: one run of one repository read, a GET. A run id is shaped as a job's
+ * (JOB_ID), so a query string or a further path is refused, and so is any flag (`-X`, `-f`, `--paginate`).
+ */
+export function isRunRead(args) {
+    const match = RUN_READ_PATH.exec(args[1] ?? '');
+    const repo = match?.[1] ?? '';
+    const runId = match?.[2] ?? '';
+    return REPO_NAME.test(repo) && JOB_ID.test(runId) && sameArgs(args, runReadArgs(repo, Number(runId)));
+}
+/**
+ * The command line that re-runs the failed jobs of one Actions run of `repo`, and the jobs that need them, the run
+ * named by its id (T5063). Never the whole run: the jobs that passed (a release's publish or tag) stay done (T5077 C2).
+ */
+export function runRerunArgs(repo, runId) {
+    return ['api', `repos/${repo}/actions/runs/${String(runId)}/rerun-failed-jobs`, '-X', 'POST'];
+}
+/** `repos/<owner>/<name>/actions/runs/<id>/rerun-failed-jobs`: the failed jobs of one run, never the whole run or one job. */
+const RUN_RERUN_PATH = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/([^/]+)\/rerun-failed-jobs$/u;
+/**
+ * True for runRerunArgs's line and nothing more: the failed jobs of one run of one repository started again, a write
+ * that changes no code, setting or secret. A run id is shaped as a job's (JOB_ID). Re-running the whole run, one job,
+ * a cancel, the debug log flag or any other flag is refused.
+ */
+export function isRunRerun(args) {
+    const match = RUN_RERUN_PATH.exec(args[1] ?? '');
+    const repo = match?.[1] ?? '';
+    const runId = match?.[2] ?? '';
+    return REPO_NAME.test(repo) && JOB_ID.test(runId) && sameArgs(args, runRerunArgs(repo, Number(runId)));
+}
 /** A host id as a link write sends it: 1 to 15 digits, so it stays an exact JavaScript number. */
 export const HOST_ID = /^[1-9][0-9]{0,14}$/;
 /** The id field of each link endpoint: a sub-issue's, and the blocking issue's. */
@@ -618,9 +654,10 @@ const PULL_NODE_ID = /^PR_[A-Za-z0-9_-]{1,100}$/;
  * The read of where one pull request stands before `pr approve` or `pr merge` writes (T4817): its node id, state,
  * draft, head, base, whether GitHub finds it conflicting and whether it is queued, and the repository's default branch
  * and whether that branch lands through a merge queue (Repository.mergeQueue, which names the default branch's queue;
- * PullRequest.isMergeQueueEnabled is not served everywhere).
+ * PullRequest.isMergeQueueEnabled is not served everywhere). The head's check suites and runs ride along for a head
+ * whose rollup GitHub answers null though its runs exist (T5164, pull-stand.ts).
  */
-export const PULL_STAND_QUERY = 'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}}}';
+export const PULL_STAND_QUERY = 'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){defaultBranchRef{name} mergeQueue{id} pullRequest(number:$number){id state isDraft headRefOid baseRefName mergeable mergeQueueEntry{state} commits(last:1){nodes{commit{statusCheckRollup{state} checkSuites(first:20){totalCount nodes{checkRuns(first:50){totalCount nodes{status conclusion}}}}}}}}}}';
 /** The enqueue of one pull request pinned to its head, word for word as the ship tool's queue landing sends it (tools/ship/merge-queue.ts). */
 export const ENQUEUE_MUTATION = 'mutation($id:ID!,$head:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}';
 /**
@@ -640,6 +677,41 @@ export function isPullStandRead(args) {
     const number = NUMBER_PAIR.exec(args[9] ?? '')?.[1];
     const repo = `${owner}/${name}`;
     return number !== undefined && REPO_NAME.test(repo) && sameArgs(args, pullStandArgs({ repo, number: Number(number) }));
+}
+/**
+ * A base branch's name as a compare read puts it in its path: git's own characters, no `..` (which would split the
+ * range), no leading dash or slash, no query or further path part.
+ */
+export const BASE_BRANCH = /^(?![-/])(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/u;
+/**
+ * The command line that reads the commits `head` (a full sha) carries over the branch `base` (T5117): GitHub's compare
+ * of the two, its commits oldest first and their total, so a reader can tell when GitHub listed only some.
+ */
+export function pullCompareArgs(repo, base, head) {
+    return ['api', `repos/${repo}/compare/${base}...${head}`];
+}
+/** `repos/<owner>/<name>/compare/<base>...<sha>`: one compare of a branch with one commit. */
+const COMPARE_PATH = /^repos\/([^/]+\/[^/]+)\/compare\/(.+)\.\.\.([^.]+)$/u;
+/** True for pullCompareArgs's line and nothing more: one compare read, a GET, a branch name to a full sha. */
+export function isPullCompareRead(args) {
+    const match = COMPARE_PATH.exec(args[1] ?? '');
+    const repo = match?.[1] ?? '';
+    const base = match?.[2] ?? '';
+    const head = match?.[3] ?? '';
+    return REPO_NAME.test(repo) && BASE_BRANCH.test(base) && FULL_SHA.test(head) && sameArgs(args, pullCompareArgs(repo, base, head));
+}
+/** The command line that reads one commit of `repo` (T5117): its parents, message and each file's patch. */
+export function commitReadArgs(repo, sha) {
+    return ['api', `repos/${repo}/commits/${sha}`];
+}
+/** `repos/<owner>/<name>/commits/<sha>`: one commit, never a list, its statuses or its comments. */
+const COMMIT_PATH = /^repos\/([^/]+\/[^/]+)\/commits\/([^/]+)$/u;
+/** True for commitReadArgs's line and nothing more: one commit read by its full sha, a GET. */
+export function isCommitRead(args) {
+    const match = COMMIT_PATH.exec(args[1] ?? '');
+    const repo = match?.[1] ?? '';
+    const sha = match?.[2] ?? '';
+    return REPO_NAME.test(repo) && FULL_SHA.test(sha) && sameArgs(args, commitReadArgs(repo, sha));
 }
 /**
  * The body of the review `pr approve` posts: a fixed line saying it is automated and lead-reviewed, naming the head it
@@ -696,11 +768,11 @@ export function isPullMerge(args) {
     const head = field.startsWith('sha=') ? field.slice('sha='.length) : '';
     return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullMergeArgs(target, head));
 }
-/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a mention scan's read, or a pull request's stand read, approval or landing. */
+/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a CI run's read or re-run, a mention scan's read, or a pull request's stand read, approval or landing. */
 export class GhRefusedError extends Error {
     name = 'GhRefusedError';
     constructor(args) {
-        super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read the posts that may mention a user, and to read, approve at its head or land one pull request: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+        super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
     }
 }
 /** True for each fixed command line the runner starts, an area label's create among them; it also makes a label a read label file named (isFileLabelCreate). */
@@ -729,9 +801,13 @@ export function isAllowedGh(args) {
         isIssueTypeSet(args) ||
         isWatchProbe(args) ||
         isJobLogRead(args) ||
+        isRunRead(args) ||
+        isRunRerun(args) ||
         isMentionRead(args) ||
         isReviewRead(args) ||
         isPullStandRead(args) ||
+        isPullCompareRead(args) ||
+        isCommitRead(args) ||
         isPullApprove(args) ||
         isPullEnqueue(args) ||
         isPullMerge(args));

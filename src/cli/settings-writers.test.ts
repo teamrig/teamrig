@@ -15,7 +15,7 @@ const WRITERS = [...SETTINGS_WRITERS].flatMap(([group, actions]) => [...actions]
 
 describe('settings writers where Claude Code runs them (T3083)', () => {
   it('names only write commands of the CLI that take --yes, and knows none else', () => {
-    assert.equal(WRITERS.length, 7);
+    assert.equal(WRITERS.length, 9);
     for (const command of WRITERS) {
       assert.equal(COMMAND_EFFECTS[command], 'write', command);
       assert.ok(COMMAND_SWITCHES[command]?.includes(WRITE_SWITCH), command);
@@ -35,7 +35,7 @@ describe('settings writers where Claude Code runs them (T3083)', () => {
     }
     assert.match(
       settingsWriteRefusal('permissions trim', 'CLAUDECODE'),
-      /^`teamrig permissions trim --yes` changes Claude Code's settings, .* refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
+      /^`teamrig permissions trim --yes` changes Claude Code's settings, a host's hooks, .* refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
     );
     assert.match(settingsWriteRefusal('permissions trim', undefined), / refused where Claude Code runs it \(an agent's tool call, a script it runs or a hook\); /);
   });

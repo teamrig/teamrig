@@ -1,4 +1,5 @@
 import { ADMISSION_MODES, isAdmissionMode } from '../delivery/admission.ts';
+import { ASSIGNED_SCOPES, isAssignedScope } from '../sync/scope.ts';
 import { CHANGE_SOURCE_IDS, isChangeSourceId } from '../changes/ids.ts';
 import { deployTargetsOf } from '../delivery/targets.ts';
 import { ADDRESS_PATTERN, splitAddress } from '../core/address.ts';
@@ -27,6 +28,7 @@ import {
   DEFAULT_CHECK_TIMEOUT_SECONDS,
   DEFAULT_PASS_ENV,
   DEFAULT_GITHUB,
+  DEFAULT_SYNC,
   DEFAULT_ISSUE_FIELDS,
   DEFAULT_QUEUE,
   DEFAULT_HIRING,
@@ -60,12 +62,14 @@ import {
   DEFAULT_SKILLS,
   DEFAULT_STATUS_LINE,
   DEFAULT_FOCUS,
+  DEFAULT_STEPS,
   DEFAULT_TESTS,
   DEFAULT_WAKE,
   DEFAULT_STABLE_PERIODS,
   DEFAULT_BRANCHES,
   DEFAULT_MEETING,
   QUEUE_TTL_MARGIN_MINUTES,
+  DEFAULT_UI,
 } from './defaults.ts';
 import { isEffort, isModel } from './launch.ts';
 import {
@@ -86,7 +90,7 @@ import {
   RULE_CONFLICT_LIMITS,
   SERVICE_ROLE_LIMITS,
 } from './limits.ts';
-import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from './migrate.ts';
+import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ConfigReader, describe, isValidRegex, shortLine, type Check, type ConfigIssue } from './reader.ts';
 import {
   AUTO_RESTART_LEAD,
@@ -171,6 +175,7 @@ import {
   type DeployCheckConfig,
   type CommitsConfig,
   type GithubConfig,
+  type SyncConfig,
   type IssueFieldsConfig,
   type IssueKind,
   type HiringConfig,
@@ -210,6 +215,8 @@ import {
   type TeamLink,
   type TurnLogConfig,
   type UiConfig,
+  UI_MODES,
+  isUiMode,
   type NeedsYouConfig,
   type MeetingNoticesConfig,
   type WakeConfig,
@@ -521,6 +528,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
   const lock = read.section(raw, 'lock', '');
   const tabStatus = read.section(raw, 'tabStatus', '');
   const pickerGuard = read.section(raw, 'pickerGuard', '');
+  const cliOnPath = read.section(raw, 'cliOnPath', '');
   const budget = parseBudget(read, read.section(raw, 'budget', ''), sessions, above);
   const decisions = read.section(raw, 'decisions', '');
   // T2256: the question picker stopped the lead's session in the meeting too; the meeting asks only in plain text.
@@ -606,7 +614,11 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     tests: {
       maxFailureChars: read.integer(read.section(raw, 'tests', ''), 'maxFailureChars', 'tests', DEFAULT_TESTS.maxFailureChars, CONFIG_LIMITS.maxFailureChars),
     },
+    steps: {
+      backupDays: read.integer(read.section(raw, 'steps', ''), 'backupDays', 'steps', DEFAULT_STEPS.backupDays, CONFIG_LIMITS.stepBackupDays),
+    },
     github: parseGithub(read, read.section(raw, 'github', ''), sessions),
+    sync: parseSync(read, read.section(raw, 'sync', '')),
     serviceRoles: parseServiceRoles(read, read.section(raw, 'serviceRoles', ''), sessions),
     connectors: parseConnectors(read, read.section(raw, 'connectors', '')),
     alerts: parseAlerts(read, read.section(raw, 'alerts', '')),
@@ -619,6 +631,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     tabStatus: { enabled: read.boolean(tabStatus, 'enabled', 'tabStatus', false) },
     needsYou: parseNeedsYou(read, read.section(raw, 'needsYou', '')),
     pickerGuard: { enabled: read.boolean(pickerGuard, 'enabled', 'pickerGuard', true) },
+    cliOnPath: { enabled: read.boolean(cliOnPath, 'enabled', 'cliOnPath', true) },
     meeting: parseMeeting(read, read.section(raw, 'meeting', '')),
     turnLog: parseTurnLog(read, read.section(raw, 'turnLog', '')),
     ui: parseUi(read, read.section(raw, 'ui', '')),
@@ -779,6 +792,31 @@ function parseGithub(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     ...readGithubWatcher(read, raw, sessions),
     ...(issueAtAdd === undefined ? {} : { issueAtAdd }),
     stamp: read.boolean(raw, 'stamp', 'github', DEFAULT_GITHUB.stamp),
+  };
+}
+
+/**
+ * `sync` (T5013): the import scope, `assigned` one of its words and each label one line, kept once whatever its case
+ * (the scope matches labels without case), and the caps within their bounds.
+ */
+function parseSync(read: ConfigReader, raw: JsonRecord): SyncConfig {
+  const scope = read.section(raw, 'scope', 'sync');
+  const { maxItems, maxLength } = CONFIG_LIMITS.syncScopeLabels;
+  const labels: string[] = [];
+  for (const label of read.stringList(scope, 'labels', 'sync.scope', DEFAULT_SYNC.scope.labels, shortLine(maxLength), maxItems)) {
+    if (!labels.some((kept) => kept.toLowerCase() === label.toLowerCase())) {
+      labels.push(label);
+    }
+  }
+  const assigned = read.string(scope, 'assigned', 'sync.scope', DEFAULT_SYNC.scope.assigned, oneOf(ASSIGNED_SCOPES));
+  return {
+    scope: {
+      all: read.boolean(scope, 'all', 'sync.scope', DEFAULT_SYNC.scope.all),
+      assigned: isAssignedScope(assigned) ? assigned : DEFAULT_SYNC.scope.assigned,
+      labels,
+    },
+    maxOpen: read.integer(raw, 'maxOpen', 'sync', DEFAULT_SYNC.maxOpen, CONFIG_LIMITS.syncMaxOpen),
+    maxNewPerSync: read.integer(raw, 'maxNewPerSync', 'sync', DEFAULT_SYNC.maxNewPerSync, CONFIG_LIMITS.syncMaxNewPerSync),
   };
 }
 
@@ -1714,10 +1752,15 @@ function parseExec(read: ConfigReader, raw: JsonRecord): ExecConfig {
   };
 }
 
-/** `ui`: a bad path is dropped, so `teamrig ui` starts the released UI rather than a file nobody named. */
+/**
+ * `ui`: a bad path is dropped, so `teamrig ui` starts the released UI rather than a file nobody named; a bad mode
+ * keeps the default, the UI in the terminal it is run in.
+ */
 function parseUi(read: ConfigReader, raw: JsonRecord): UiConfig {
+  const named = read.string(raw, 'mode', 'ui', DEFAULT_UI.mode, oneOf(UI_MODES));
+  const mode = isUiMode(named) ? named : DEFAULT_UI.mode;
   const path = read.optionalString(raw, 'path', 'ui', isAbsoluteFile);
-  return path === undefined ? {} : { path };
+  return path === undefined ? { mode } : { mode, path };
 }
 
 function parseAlerts(read: ConfigReader, raw: JsonRecord): AlertsConfig {
@@ -2177,13 +2220,12 @@ function parseCommits(read: ConfigReader, raw: JsonRecord): CommitsConfig {
       CONFIG_LIMITS.sourcePatterns.maxItems,
     ),
     gate: isCommitGate(gate) ? gate : defaults.gate,
+    stamp: read.boolean(raw, 'stamp', path, defaults.stamp),
   };
 }
 
 /** From a 200k window's compaction point up to far past any window today. */
 const REFRESH_TOKENS = { min: 10_000, max: 10_000_000 } as const;
-/** 0: the same threshold on every window. */
-const LARGE_WINDOW_TOKENS = { min: 0, max: 10_000_000 } as const;
 /** 0 turns the task count off. */
 const REFRESH_TASKS = { min: 0, max: 100 } as const;
 /** Long enough to read the notice and type, short enough that the fresh start is not missed. */
@@ -2213,10 +2255,10 @@ function parseRefresh(read: ConfigReader, raw: JsonRecord): RefreshConfig {
   const path = 'refresh';
   const defaults = DEFAULT_REFRESH;
   const handoverDir = read.optionalString(raw, 'handoverDir', path);
+  read.dropped(raw, 'largeWindowContextTokens', path, LARGE_WINDOW_DROPPED);
   return {
     enabled: read.boolean(raw, 'enabled', path, defaults.enabled),
     contextTokens: read.integer(raw, 'contextTokens', path, defaults.contextTokens, REFRESH_TOKENS),
-    largeWindowContextTokens: read.integer(raw, 'largeWindowContextTokens', path, defaults.largeWindowContextTokens, LARGE_WINDOW_TOKENS),
     everyTasks: read.integer(raw, 'everyTasks', path, defaults.everyTasks, REFRESH_TASKS),
     everyTasksMinTokens: read.integer(raw, 'everyTasksMinTokens', path, defaults.everyTasksMinTokens, REFRESH_TOKENS),
     tabTitle: read.boolean(raw, 'tabTitle', path, defaults.tabTitle),

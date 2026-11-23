@@ -73,10 +73,10 @@ only `p1`, `p2` or `p3` (a blocker or a p0 as `p1`), as it creates no label but 
 ## 2. Give teamrig read access
 
 teamrig reads and writes issues through the GitHub CLI, [`gh`](https://cli.github.com), with **a token saved for
-each owner** (the `acme` in `acme/web`), handed to `gh` for that run only. It never uses the `gh` login
-(`gh auth login`) in its place, which may reach more than the token was given: an owner with no saved token, or
-one the credential store cannot read (a locked keyring, for one), stops with a `FAILED` line naming the store and
-the fix, and nothing runs for it. `teamrig issue sync` reads the other owners on.
+each owner** (the `acme` in `acme/web`), or for one repository, handed to `gh` for that run only. It never uses the
+`gh` login (`gh auth login`) in its place, which may reach more than the token was given: an owner with no saved
+token, or one the credential store cannot read (a locked keyring, for one), stops with a `FAILED` line naming the
+store and the fix, and nothing runs for it. `teamrig issue sync` reads the other owners on.
 
 ### What each command needs
 
@@ -95,6 +95,21 @@ A fine-grained GitHub token belongs to one *resource owner*: your personal accou
 reach the repositories of another owner. So a team that reads `you/tool` and `your-org/app` creates two tokens, one
 for each owner. teamrig finds each by its name, `teamrig-gh-<owner>`, so no config names them.
 
+### A token for one repository
+
+To give one repository fewer rights than the rest of its owner's, or a token of its own, save a token under
+`teamrig-gh-<owner>.<name>`, both in lowercase: `teamrig-gh-acme.web` for `acme/web`. For each repository teamrig
+reads the repository's own token first and its owner's token only when none is saved. A repository token it cannot
+read stops that repository with a `FAILED` line: the owner's token, which may reach more, never stands in for it.
+The `ACCESS` line names which one a command used (`ACCESS acme/web: read with the token saved as
+teamrig-gh-acme.web`). Only a person saving or removing a token changes which one reaches a repository: no config
+maps repositories to tokens. A `teamrig gh` run that reaches several repositories of one owner (two `-R` values, or a
+folder with two remotes of that owner) is refused when any of them has a token of its own: name one with `-R`.
+
+A repository token changes which token teamrig picks; it does not cap what the owner's token can reach. For the
+repository to really have fewer rights, leave it out of the owner token's repository selection on GitHub too, since
+a call that reaches the owner as a whole (such as a GraphQL query) runs on the owner's token.
+
 ### Create a token
 
 Do this once per owner:
@@ -112,7 +127,8 @@ it.
 
 ### Save it
 
-Save the token in your system's credential store under `teamrig-gh-<owner>`, the owner in lowercase. Each command asks
+Save the token in your system's credential store under `teamrig-gh-<owner>`, the owner in lowercase (or
+`teamrig-gh-<owner>.<name>` for [one repository](#a-token-for-one-repository)). Each command asks
 for the token and shows nothing as you paste it. Run it in a terminal window of your own:
 
 | System | Save | Remove |
@@ -154,6 +170,19 @@ The same run first imports any other tracker your team config has a `connectors`
 (`connectors.jira`), each with its own `ACCESS`, `REPO` and `PREVIEW` lines and tasks of source `jira`. Until Jira's
 trust rule ships, every Jira issue is left out, so it adds no task yet. A Jira section that is wrong or cannot be read
 gets its own `REFUSED` or `FAILED` line, and GitHub is read on; `--repo` reads GitHub alone.
+
+Another tracker's import reads only the team's issues by default: those assigned to the signed-in account or to a
+person `connectors.jira.people` names, and those carrying a label of `sync.scope.labels` (`teamrig`) or the accept
+label. The issues of the team's active tasks there are always read, so a narrower scope never closes a task. A
+`SCOPE` line counts the issues the tracker gave outside the scope. `sync.maxOpen` (200) caps the open tasks one
+tracker's import holds and `sync.maxNewPerSync` (50) the adds of one run; past either, a `CAPPED` line says how many
+wait for a later run. To read every open issue of a project, as before, set `"sync": { "scope": { "all": true } }`.
+
+A person takes each place's scope: an automatic run (`--auto`) adds no task at a place whose scope is new or wider
+than the one last taken, says `HELD` with how many issues wait, and gives the lead one inbox line per scope; the
+held place's tasks still change and close. `teamrig issue sync` shows what would come in, and `teamrig issue sync
+--yes` takes the scope, after which automatic runs add again. A scope the same or narrower passes on its own. So a
+team upgrading, or widening `sync.scope`, runs `--yes` once.
 
 ## Then it runs on its own
 
@@ -454,7 +483,10 @@ every gate before writing anything: one task holds the pull request, the caller 
 names the full 40-hex head (a root team's lead needs no one's), and the pull request is open, no draft, on its
 default branch and still at `--head`; a merge also needs it free of conflicts, not queued already and every check on
 its head passed, which teamrig reads itself, since an admin token may bypass the branch's own rules. Each write is pinned to the
-head read, so a push after the approval makes GitHub refuse it, and a newer head needs its own approval.
+head read, so a push between the read and the write makes GitHub refuse it. `--head` stays the approved head: a pull
+request rebased onto a newer base after the approval keeps it when its commits are the approved head's, the same in
+number, order and patch, and a `CARRIED` line says so; a head with any other change, a merge commit, or commits
+GitHub cannot show whole needs its own approval.
 
 ```sh
 teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef --check   # every gate, nothing written

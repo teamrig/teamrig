@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { APP, CLAUDE_SESSION, CliHarness, decisionOf, TEAM, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
+import { NO_PATHS_HOST } from '../testing/host.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
@@ -73,6 +74,11 @@ describe('the cold-send hook', () => {
     assert.deepEqual((await kit.run(['hook', 'cold-send'], { stdin: send('explore-helper'), transcripts })).stdout, []);
     assert.deepEqual((await kit.run(['hook', 'cold-send'], { stdin: send('bravo'), transcripts })).stdout, []);
     assert.deepEqual((await kit.run(['hook', 'cold-send'], { stdin: send('alpha', ALPHA_TAB), transcripts })).stdout, []);
+  });
+
+  it("reads no Claude Code folder on a host whose folders teamrig does not know, so it holds nothing there", async () => {
+    const { kit, transcripts } = await teamWithAlphaIdle(125);
+    assert.deepEqual((await kit.run(['hook', 'cold-send'], { stdin: send('alpha'), transcripts, host: NO_PATHS_HOST })).stdout, []);
   });
 
   it('never holds with messages.coldAfterMinutes 0', async () => {

@@ -1,7 +1,6 @@
 import { quietSpanOf } from "../budget/warn.js";
 import { isDefaultModel } from "../config/launch.js";
 import { describeNameClash, describeTreeProblem } from "../config/tree.js";
-import { ENV } from "../core/home.js";
 import { isReservedName, RESERVED_RULE } from "../core/ids.js";
 import { MS_PER_DAY, MS_PER_MINUTE, utcMinuteOf } from "../core/time.js";
 import { unreadSince } from "../inbox/inbox.js";
@@ -234,33 +233,25 @@ function treeFindings({ tree, command }) {
         ...tree.clashes.map((clash) => ({ kind: 'name-two-teams', detail: describeNameClash(clash, command) })),
     ];
 }
-const ROUTING_OVERRIDES = [
-    {
-        kind: 'effort-env',
-        name: ENV.effortLevel,
-        effect: (value) => `it beats every --effort (the team config's launch efforts among them), /effort and per-call Agent effort, so a session or helper that gets it runs at ${value} whatever it was given`,
-    },
-    {
-        kind: 'model-env',
-        name: ENV.subagentModelForce,
-        effect: () => 'set to 1 it beats every per-call Agent model, so a helper that gets it never runs on the model its caller gives it',
-    },
-];
+const OVERRIDE_FINDING = { effort: 'effort-env', model: 'model-env' };
 /**
- * A variable set in doctor's own environment or in a settings file's `env` block that overrides every effort or
- * helper model a session or its caller picks, and a settings file whose block could not be read. Only the
- * overriding variables' values are printed.
+ * A host variable (`routingOverrides`) set in doctor's own environment or in a settings file's `env` block that
+ * overrides every effort or helper model a session or its caller picks, and a settings file whose block could not be
+ * read. Only the overriding variables' values are printed. A host with no such variable gives no finding.
  */
-function routingEnvFindings({ env, settingsEnv }) {
+function routingEnvFindings({ env, settingsEnv, routingOverrides }) {
+    if (routingOverrides.length === 0) {
+        return [];
+    }
     const sources = [
         { where: 'the environment doctor runs in', env },
         ...settingsEnv.flatMap((settings) => (settings.kind === 'env' ? [{ where: `the env block of ${settings.path}`, env: settings.env }] : [])),
     ];
-    const overrides = ROUTING_OVERRIDES.flatMap(({ kind, name, effect }) => sources.flatMap(({ where, env: set }) => {
-        const value = set[name]?.trim();
-        return value ? [{ kind, detail: `${name}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
+    const overrides = routingOverrides.flatMap(({ kind, variable, effect }) => sources.flatMap(({ where, env: set }) => {
+        const value = set[variable]?.trim();
+        return value ? [{ kind: OVERRIDE_FINDING[kind], detail: `${variable}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
     }));
-    const names = ROUTING_OVERRIDES.map(({ name }) => name).join(' or ');
+    const names = routingOverrides.map(({ variable }) => variable).join(' or ');
     const unreadable = settingsEnv.flatMap((settings) => settings.kind === 'unreadable' ? [{ kind: 'settings-json', detail: `${settings.path} is not a JSON object, so doctor could not check its env block for ${names}` }] : []);
     return [...overrides, ...unreadable];
 }
@@ -345,6 +336,20 @@ function pageFindings({ page, command }) {
     return [{ kind: 'page-webhook', detail }];
 }
 /**
+ * The kit home's bin folder missing from the user's PATH: the CLI then runs only where a hook or a session names its
+ * full path, never as `teamrig` in a terminal the user opens. On, a session start adds it; off, only the user can.
+ */
+function cliPathFindings({ cliPath, command }) {
+    if (cliPath.onPath) {
+        return [];
+    }
+    const missing = `${cliPath.folder} is not on the user's PATH (${cliPath.where}), so \`${command}\` is not found in a terminal you open`;
+    const fix = cliPath.enabled
+        ? `the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal`
+        : `cliOnPath.enabled is false, so no session start adds it: set it to true and start a session, or add the folder to the PATH yourself, then open a new terminal`;
+    return [{ kind: 'cli-path', detail: `${missing}: ${fix}` }];
+}
+/**
  * Quiet hours whose action is `ask`: in them a helper launch raises a permission prompt (`helperGate`), which nobody
  * at the host answers at night, so the tab waits until someone does (T1983: 222 minutes on 11-04). `block` refuses
  * the launch with its reason and the tab goes on. The budget off lets every launch go, and quiet hours of no length
@@ -370,7 +375,7 @@ function quietHoursFindings({ budget, now, zone }) {
  * inboxes nobody reads, rules too long to show, a lead's start past the cap or with a rules file cut to a pointer, text every call re-reads over its budget (files, and the lists the newest
  * session holds), a broken tree of teams or a session name two teams use, a variable that overrides every model or effort
  * choice, a launch with a model but no effort, local allow rules that approve a whole tool or program or hold a credential,
- * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, and a page webhook that gives no URL.
+ * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, and a teamrig bin folder off the user's PATH.
  * It reads only; every fix is the user's.
  */
 export function doctorFindings(input) {
@@ -392,6 +397,7 @@ export function doctorFindings(input) {
         ...projectFindings(input),
         ...shellHistoryFindings(input),
         ...pageFindings(input),
+        ...cliPathFindings(input),
     ];
 }
 export function formatFinding(finding) {

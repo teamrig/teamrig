@@ -49,6 +49,10 @@ export interface WorktreeGit {
   fetch(dir: string, remote: string, branch: string): GitOutcome;
   /** `git worktree add` of the new branch `branch` at `path`, from `base` and with no upstream, run in `mainDir`. */
   addWorktree(mainDir: string, path: string, branch: string, base: string): GitOutcome;
+  /** The URL of the remote `origin` in the repository `dir` belongs to. */
+  originUrl(dir: string): string | undefined;
+  /** Sets `key` in the repository's own config (`--local`) to exactly `values`, in order, replacing any it held. */
+  setLocalConfig(dir: string, key: string, values: readonly [string, ...string[]]): GitOutcome;
 }
 
 const BRANCH_REF = 'refs/heads/';
@@ -182,6 +186,23 @@ export function worktreeGit(run: GitRunner): WorktreeGit {
     fetch: (dir, remote, branch) => outcome(run(dir, ['fetch', '--quiet', remote, branch], ADD_TIMEOUT_MS), 'git fetch'),
     // The caller gives an absolute path and a branch name it checked starts with a letter or digit, so neither reads as an option.
     addWorktree: (mainDir, path, branch, base) => outcome(run(mainDir, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, path, base], ADD_TIMEOUT_MS), 'git worktree add'),
+    originUrl: (dir) => queryLine(dir, ['remote', 'get-url', 'origin']),
+    setLocalConfig(dir, key, values) {
+      // git config takes no `--` (it would store it as the value), so a word starting with `-` is refused, never run.
+      const option = [key, ...values].find((word) => word.startsWith('-'));
+      if (option !== undefined) {
+        return { ok: false, reason: `git config would read ${option} as an option` };
+      }
+      const [first, ...more] = values;
+      let set = outcome(run(dir, ['config', '--local', '--replace-all', key, first]), 'git config');
+      for (const value of more) {
+        if (!set.ok) {
+          return set;
+        }
+        set = outcome(run(dir, ['config', '--local', '--add', key, value]), 'git config');
+      }
+      return set;
+    },
   };
 }
 

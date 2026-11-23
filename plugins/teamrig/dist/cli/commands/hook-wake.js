@@ -4,7 +4,8 @@ import { liveRunsOf } from "../../delivery/detached-runs.js";
 import { deliveryPlaces, detachedDirOf } from "../../delivery/places.js";
 import { changedSincePoke, decideRushPoke, pokeMarkOf, queuedTasksOf, rushPokePrompt, rushPokeToast, stepRunningFor } from "../../wake/rush-poke.js";
 import { BurstLog } from "../../budget/burst-log.js";
-import { claudeProjectsDir, lastWriteOf } from "../../budget/discover.js";
+import { lastWriteOf } from "../../budget/discover.js";
+import { pathsIfKnown, transcriptsFolderIfKnown } from "../host.js";
 import { autoRestartOf } from "../../config/refresh.js";
 import { stringField } from "../../core/guards.js";
 import { LockBusyError } from "../../core/lock.js";
@@ -14,7 +15,7 @@ import { RefreshStore } from "../../refresh/store.js";
 import { seenLinesOf, unseenLinesOf } from "../../inbox/inbox.js";
 import { dayProbeClaimLine, dayProbePath } from "../../restore/day-probe.js";
 import { DayProbeStore } from "../../restore/day-probe-store.js";
-import { claudeCredentialsPath, LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath, loginRetryLine } from "../../restore/login.js";
+import { LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath, loginRetryLine } from "../../restore/login.js";
 import { LoginStore } from "../../restore/login-store.js";
 import { apiRetryLine, claimApiRetry } from "../../restore/api-error.js";
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from "../../restore/registry.js";
@@ -65,15 +66,23 @@ function loginScopeOf(runtime, kitHome) {
     return {
         store: new LoginStore(runtime.files, marker, fileLockOf(runtime, `${marker}.lock`, LOGIN_LOCK)),
         marker,
-        credentials: claudeCredentialsPath(runtime.env, runtime.userHome),
+        credentials: pathsIfKnown(runtime)?.loginFile(runtime.userHome),
         log: restoreLogPath(kitHome),
         probe: new DayProbeStore(runtime.files, probeFile, fileLockOf(runtime, `${probeFile}.lock`, LOGIN_LOCK)),
         probeFile,
     };
 }
+/** When the credentials file last changed; undefined with no such file, which no renewed login can then show. */
+async function credentialsAtOf(runtime, login) {
+    return login.credentials === undefined ? undefined : runtime.files.modifiedAt(login.credentials);
+}
+/** What a tab stuck on the login watches: the marker, and the credentials file where there is one. */
+function loginWatchOf(login) {
+    return login.credentials === undefined ? [login.marker] : [login.marker, login.credentials];
+}
 /** The login as the day's moments see it before the probe: expired while the marker holds them (`loginHoldsDayStart`). */
 async function dayLoginOf(runtime, login) {
-    return loginHoldsDayStart(await login.store.read(), await runtime.files.modifiedAt(login.credentials)) ? { kind: 'expired' } : { kind: 'ok' };
+    return loginHoldsDayStart(await login.store.read(), await credentialsAtOf(runtime, login)) ? { kind: 'expired' } : { kind: 'ok' };
 }
 /** The scope of the call `origin` names: the hook event's, or the mod's own request; undefined when the input was no JSON record. */
 export async function wakeScopeOf(runtime, origin, needsWake) {
@@ -123,7 +132,7 @@ async function restCappedDecision(runtime, scope, input) {
         return decision;
     }
     const facts = await budgetFactsOf(runtime, { kit: scope.kit, config, roster: scope.roster, id: scope.id }, undefined);
-    const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [scope.tab]);
+    const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [scope.tab]);
     const rest = wakeRestOf(facts, config.budget.quietHours, input.now, wakeWOf(config, lastTurnAt, input.now));
     const maxPriority = effectivePriority(input.maxPriority, rest, config.budget.quietHours);
     const exemption = restExemptionOf(rest, input.maxPriority, input.tasks, input.elsewhere);
@@ -182,7 +191,7 @@ async function pokeOf(runtime, scope, tasks, elsewhere, state, now) {
     }
     const zone = teamZone(config, runtime);
     const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config));
-    const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+    const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
     const idleMs = config.rush.pokeAfterMinutes * MINUTE_MS;
     const pokeInput = { rush, startable, lastTurnAt, now, idleMs, lastPokeAt: state.settled.poke, queued: new Set() };
     const due = decideRushPoke(pokeInput);
@@ -250,7 +259,7 @@ async function momentsOf(runtime, scope, login, tasks, elsewhere, state, now) {
         return none;
     }
     const facts = await budgetFactsOf(runtime, { kit, config, roster, id }, undefined);
-    const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+    const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
     const input = {
         due: dueMoments(now, dayStart.at, facts === undefined ? inBurst : facts.burst, state.settled),
         startable,
@@ -264,7 +273,7 @@ async function momentsOf(runtime, scope, login, tasks, elsewhere, state, now) {
     };
     const decision = decideDayStart(input);
     if (decision.verdict.kind !== 'wake') {
-        const watch = input.login.kind === 'expired' ? [login.marker, login.credentials] : [];
+        const watch = input.login.kind === 'expired' ? loginWatchOf(login) : [];
         return { verdict: decision.verdict, state: { ...state, settled: decision.settled }, lastTurnAt, next, watch };
     }
     const gate = await login.probe.claim(Math.max(...decision.verdict.moments.map((moment) => moment.at)), tab, now);
@@ -298,7 +307,7 @@ async function decide(runtime, scope, store, fresh, login) {
     const lock = fileLockOf(runtime, store.lockOf(id), { ...config.lock, waitMs: 0 });
     return lock.run(async () => {
         const now = clock.now();
-        const retry = await login.store.claimRetry(tab, now, await files.modifiedAt(login.credentials));
+        const retry = await login.store.claimRetry(tab, now, await credentialsAtOf(runtime, login));
         if (retry.kind === 'retry') {
             return { kind: 'login', why: retry.why, failAt: retry.failAt };
         }
@@ -359,7 +368,7 @@ async function decide(runtime, scope, store, fresh, login) {
         const apiAt = api.kind === 'later' ? api.at : undefined;
         const pokeAt = poke.kind === 'later' ? poke.at : undefined;
         const recheckAt = earliest(handedAt, askedAt, day.verdict.kind === 'later' ? day.verdict.at : undefined, day.next, retryAt, apiAt, pokeAt);
-        const watch = new Set([...(retry.kind === 'none' ? [] : [login.marker, login.credentials]), ...day.watch]);
+        const watch = new Set([...(retry.kind === 'none' ? [] : loginWatchOf(login)), ...day.watch]);
         return { kind: 'wait', recheckAt, watch: [...watch] };
     });
 }
@@ -418,7 +427,7 @@ export async function wakeCheck(args, runtime) {
         return answer(runtime, waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS));
     }
     const now = runtime.clock.now();
-    const last = verdict.kind === 'moments' || verdict.kind === 'poke' ? verdict.lastTurnAt : await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+    const last = verdict.kind === 'moments' || verdict.kind === 'poke' ? verdict.lastTurnAt : await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
     const wPerPct = await readTodayWPerPct(runtime, kit.paths, config, now);
     const measured = await readMeasuredTurns(runtime, kit.paths, id, config.sessions, now);
     const cost = wakeCost(last === undefined ? undefined : now - last, config.messages.coldAfterMinutes, wPerPct, measured);

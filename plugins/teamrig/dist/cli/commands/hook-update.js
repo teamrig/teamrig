@@ -1,27 +1,29 @@
 import { join } from 'node:path';
 import { isRecord, stringField } from "../../core/guards.js";
-import { claudeConfigDir, resolveKitHome } from "../../core/home.js";
+import { resolveKitHome } from "../../core/home.js";
 import { findProgram } from "../../open/host-program.js";
 import { isUnsupported } from "../../ports/host/index.js";
 import { UpdateCheck } from "../../update/check.js";
 import { applyUpdate, hookGit } from "../../update/runner.js";
 import { noPositionals } from "../args.js";
-import { hostOf, launcherIfTold } from "../host.js";
+import { hostOf, launcherIfTold, pathsIfKnown } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { parseJson } from "./hook-input.js";
 function answer(runtime, value) {
     runtime.out.stdout(JSON.stringify(value));
     return EXIT.ok;
 }
-/** Claude Code's plugins folder, and the kit home's updates folder. */
+/** The host's plugins folder and the kit home's updates folder; undefined on a host whose folders teamrig does not know. */
 export function updatePathsOf(runtime) {
-    return {
-        pluginsFolder: join(claudeConfigDir(runtime.env, runtime.userHome), 'plugins'),
-        updatesFolder: join(resolveKitHome(runtime.env, runtime.userHome), 'updates'),
-    };
+    const paths = pathsIfKnown(runtime);
+    return paths === undefined ? undefined : { pluginsFolder: paths.pluginsFolder(runtime.userHome), updatesFolder: join(resolveKitHome(runtime.env, runtime.userHome), 'updates') };
 }
+/** Why a plugin store's check cannot run: teamrig knows none of the host's folders, so not where its plugins are. */
+const NO_PLUGINS_FOLDER = 'teamrig knows no folder of this host, so not where its plugins are';
+/** The update check of the host's plugin store; undefined where its plugins folder is unknown. */
 function checkOf(runtime, plugin) {
-    return new UpdateCheck({ files: runtime.files, git: hookGit(runtime.hooks, runtime.env), paths: updatePathsOf(runtime), plugin, now: () => runtime.clock.now() });
+    const paths = updatePathsOf(runtime);
+    return paths === undefined ? undefined : new UpdateCheck({ files: runtime.files, git: hookGit(runtime.hooks, runtime.env), paths, plugin, now: () => runtime.clock.now() });
 }
 /** The `plugin` a request on stdin names; undefined when stdin is not JSON or names none. */
 function pluginRequested(stdin) {
@@ -37,7 +39,8 @@ export async function updateCheck(args, runtime) {
     noPositionals(args);
     // A host that keeps no plugin store installs nothing teamrig can update: no band to show, and no error in a tab.
     const { plugin } = hostOf(runtime);
-    return answer(runtime, { kind: 'notices', notices: isUnsupported(plugin) ? [] : await checkOf(runtime, plugin).notices() });
+    const check = isUnsupported(plugin) ? undefined : checkOf(runtime, plugin);
+    return answer(runtime, { kind: 'notices', notices: check === undefined ? [] : await check.notices() });
 }
 /** `hook update-dismiss`, stdin `{"plugin", "version"}`: hides that plugin's update band until a newer version is out. */
 export async function updateDismiss(args, runtime) {
@@ -52,7 +55,11 @@ export async function updateDismiss(args, runtime) {
     if (isUnsupported(store)) {
         return answer(runtime, { kind: 'failed', why: store.notice });
     }
-    await checkOf(runtime, store).dismiss(plugin, version);
+    const check = checkOf(runtime, store);
+    if (check === undefined) {
+        return answer(runtime, { kind: 'failed', why: NO_PLUGINS_FOLDER });
+    }
+    await check.dismiss(plugin, version);
     return answer(runtime, { kind: 'dismissed' });
 }
 /**
@@ -67,7 +74,11 @@ export async function updateApply(args, runtime) {
     if (isUnsupported(store)) {
         return answer(runtime, { kind: 'failed', why: store.notice });
     }
-    const notice = (await checkOf(runtime, store).notices()).find((each) => each.plugin === plugin);
+    const check = checkOf(runtime, store);
+    if (check === undefined) {
+        return answer(runtime, { kind: 'failed', why: NO_PLUGINS_FOLDER });
+    }
+    const notice = (await check.notices()).find((each) => each.plugin === plugin);
     if (notice === undefined) {
         return answer(runtime, { kind: 'failed', why: `no newer ${plugin ?? 'plugin'} is published` });
     }

@@ -196,14 +196,16 @@ that edits `tools/ci` cannot name itself docs; a base from before the tool is `c
 review) and, on ubuntu alone, the build, the docs' specs, the pictures, the config reference, the parity page and the doc links; a
 `design` change runs the commit checks and the doc links; a `code` change runs everything on every OS (the test
 matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
-gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Each job still runs and skips only its steps,
+gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Windows, the
+slowest leg, runs as three: the suite in two shards (`test (windows-latest, node 22, 1/2)` and `2/2`) and every other
+step (`checks`). Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
 dependency review, which reads GitHub's dependency graph ([Security checks](#security-checks)):
 - It refuses a push to `main`, before any check: every change lands through a pull request. On GitHub,
-  the `main` ruleset refuses the same push from a clone without the hooks: it has no bypass actor, so no one can
-  change main outside a pull request (see [Rules on `main`](#pull-requests)).
+  the `main` rulesets refuse the same push from a clone without the hooks: their bypass actors skip them only through
+  a pull request, so no one can change main outside one (see [Rules on `main`](#pull-requests)).
 - It proves a committed tree: it refuses uncommitted changes, and a pushed commit that is not checked out.
 - It stops at the first failing check and prints its output.
 - A pass is recorded in the clone's git folder (`local-ci/<tree>.json`, shared by its worktrees), so a tree is
@@ -216,14 +218,16 @@ dependency review, which reads GitHub's dependency graph ([Security checks](#sec
   and the docs checks. GitHub CI is the full gate: the whole suite with its coverage gate, the dist checks and the
   fresh install run there, on every OS, before anything lands. The build writes the dist the plugin's tests load,
   which main does not track, so it leaves the checkout clean. A light pass is recorded apart
-  (`local-ci/light/<tree>.json`), never taken for a full or a short one; a full pass counts as a light one. A push
+  (`local-ci/light/<tree>.json`), never taken for a full or a short one; a full pass counts as a light one. A change
+  to the gate itself (the paths listed under the short checks) runs every check instead, as it does there. A push
   to `main`, and a repository with the `local` gate, run every check as above.
 - **Short checks** (off by default): when the repository's entry in `tools/ship/repos.json` says
   `"mergeChecks": "changed"`, which needs the `ci` gate, a push to any branch but `main` runs only the short checks:
   the scrub, the DCO sign-off, the size rule, the commit subjects, the typecheck and the specs beside the changed
-  files (`foo.ts` brings `foo.test.ts`, a changed spec runs itself). A change to the gate itself (`.githooks/`,
-  `.github/`, `tools/ci/`, `tools/ship/`, `src/push-guard/`, `package.json`, the lockfile or a `tsconfig*.json`) runs
-  every check instead. `tools/ship/ship.ts --merge` proves the tree the same way in place of the typecheck,
+  files (`foo.ts` brings `foo.test.ts`, a changed spec runs itself), only those under `src/` and `tools/` that
+  `npm test` runs: the plugin's mod specs run in `claude plugin test`, part of the full checks. A change to the gate
+  itself (`.githooks/`, `.github/`, `tools/ci/`, `tools/ship/`, `src/push-guard/`, `package.json`, the lockfile or a
+  `tsconfig*.json`) runs every check instead. `tools/ship/ship.ts --merge` proves the tree the same way in place of the typecheck,
   coverage gate and full run, then pushes and merges once the required CI checks pass, so the merge holds the ship
   slot only for those steps. A short pass is recorded apart (`local-ci/short/<tree>.json`), never taken for a full
   one; a full pass counts as a short one. A run without `--merge`, and every repository left at `"full"`, run every
@@ -268,13 +272,20 @@ matrix.
   commits as they are, so the `commit subjects` check (`tools/ci/commit-subjects-cli.ts`, run by the local gate, CI
   and `npm run check`) fails a commit whose subject is not one, and says how to reword it.
 - Nothing is pushed to `main` directly, and release tags are set only by the release workflow.
-- The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`) keeps one release pull request open
-  through release-please (`release-please-config.json`): it raises the version in the plugin's `plugin.json` and
-  `src/core/version.ts` and writes the notes. Once the `teamrig-release` GitHub App is set up (its id in the
+- The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`, hourly and by hand) keeps one
+  release pull request open through release-please (`release-please-config.json`): it raises the version in the
+  plugin's `plugin.json` and `src/core/version.ts` and writes the notes. The pull request takes main's new commits
+  only once per preview slot, on the hourly run in the slot's first hour, or on a run by hand
+  (`tools/release/pull-update.ts`); a push to `main` only tags and publishes a release that merged. So between slots
+  its head stays still and its ci finishes once, however busy `main` is. Once the `teamrig-release` GitHub App is set up (its id in the
   `RELEASE_APP_ID` variable, its key in the `release-merge` environment), the `release merge` workflow
   (`.github/workflows/release-merge.yml`, `tools/release/release-merge.ts`) merges it on its own when ci passed on its
   head: its gate passes only one commit holding the version raises and the notes, with every check green, and the
-  merge leaves a comment naming the head, paths and checks. Until then, or when the gate refuses, it merges like any
+  merge leaves a comment naming the head, paths and checks. The gate also holds a second release in one preview slot
+  (`tools/release/channels.json`: the slots, the zone, the stable time and the soak): the first green release head
+  after a slot starts merges, even late in it, and the hourly `release slot` workflow
+  (`.github/workflows/release-slot.yml`, `tools/release/release-slot.ts`) runs ci again on a held head once its next
+  slot opens, so the gate sees it pass there. Until then, or when the gate refuses, it merges like any
   pull request, through `tools/ship`: the lead approves
   a release task at the release pull request's head, and `node tools/ship/ship.ts merge <repo dir> --release T<id>
   --approved <sha>` merges it (skill `dev-ship-release`). That merge refuses a head holding anything but the version
@@ -283,9 +294,17 @@ matrix.
   hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
   merged, the next run tags
   main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
-  the dist on top to the `release` branch, tagged `v<version>` (`tools/release/publish.ts`). The marketplace entry
-  installs from that branch (a `git-subdir` source on ref `release`), so main ignores `plugins/teamrig/dist` and no
-  pull request carries one.
+  the dist on top to the `preview` branch, tagged `v<version>` (`tools/release/publish.ts`; its first commit
+  descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the
+  stable channel (a `git-subdir` source on ref `release`), which only ever moves along `preview`'s chain, so main
+  ignores `plugins/teamrig/dist` and no pull request carries one.
+- Stable moves once a day: `.github/workflows/release-promote.yml` runs hourly and fast-forwards `release`, without
+  force, to the newest preview release published at least `soakHours` before the last `stableAt`
+  (`tools/release/promote.ts`), so every run from one move to the next picks the same release. A version listed in
+  `tools/release/release-hold.json` (`{ "v0.510.0": "why" }`, written through a pull request) is skipped; only that
+  one. A hotfix goes to stable at once, with no soak: once the lead approves its preview tag and sha on the release
+  task, run the workflow by hand with both; it refuses a tag that names another commit, a held one and anything but a
+  fast-forward.
 - Installs take the version in `plugins/teamrig/.claude-plugin/plugin.json`, not the newest commit:
   `claude plugin update` moves an install only when that version rises. A pull request never raises it: the release
   pull request does, from the commit subjects since the last release. While it is 0.x, a `feat` or a breaking
@@ -377,13 +396,15 @@ as how teamrig works today.
   still fire?" and wants the spec of it firing in the real flow ([Tests](#tests)). A change to the git hooks, CI, the scrub or teamrig's guards
   (`.githooks/`, `.github/`, `tools/scrub/`, `tools/ci/`, `src/hooks/`, `src/push-guard/`, `src/secret-guard/`,
   `src/package-guard/`, `src/permissions/`) also gets a security review.
-- **Rules on `main`**: `.github/rulesets/` holds the repository's rulesets, the two for `main` and the three for
-  releases, imported under Settings, Rules, Rulesets. `main` lets no one push, force-push or delete it and takes a change only through a pull request,
-  rebase-merged once its `every check passed` check passed on the newest `main`; `main review` asks a code owner
-  to approve the last push, which only the maintainer's own pull requests skip. `tools/ci/rulesets.test.ts` holds
-  them to `ci.yml` and `.github/CODEOWNERS`.
-- **Rules on releases**: the `release` branch, which every install reads, and a `v<version>` tag, which an install
-  can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
+- **Rules on `main`**: `.github/rulesets/` holds the repository's rulesets, the three for `main` and the three for
+  releases, imported under Settings, Rules, Rulesets. `main` lets no one push, force-push or delete it and takes a
+  change only through a pull request, landed by the rebasing merge queue; `main checks` lands it only once its
+  `every check passed` check from GitHub Actions passed, on a linear history; `main review` asks a code owner to
+  approve the last push. The maintainer and the `teamrig-release` App, which merges the release pull request, may
+  skip `main` and `main review` through a pull request only; no one skips `main checks`, since a bypass skips every
+  rule of its ruleset. `tools/ci/rulesets.test.ts` holds them to `ci.yml` and `.github/CODEOWNERS`.
+- **Rules on releases**: the `release` and `preview` branches, which installs read, and a `v<version>` tag, which an
+  install can pin, only the release workflow's publish job may create or push (`release`, `release tags`): it pushes with a
   deploy key, the rulesets' one bypass actor, whose private half is a secret of the `release` environment, which only
   `main` may use. No one moves or deletes a `v<version>` tag, nor the `teamrig-v<version>` tag release-please puts
   on `main` (`release-please tags`).

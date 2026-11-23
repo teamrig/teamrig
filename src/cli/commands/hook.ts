@@ -34,7 +34,6 @@ import {
   decideStop,
   reaskGrowth,
   thousands,
-  thresholdOf,
   type RefreshSettings,
   type StopContext,
   type StopDecision,
@@ -75,7 +74,7 @@ import { recordSessionStart } from './hook-session-record.ts';
 import { envSession, hookScopeOf, readHookInput, sessionScopeOf, sessionTeam, startSessionOf, teamScopeOf, teamSessionOf, turnLeadPathsOf, writeReply, type SessionScope, type TeamScope } from './hook-input.ts';
 import { recordTabNeed } from './hook-tab-need.ts';
 import { tabStatusOn, tabTitleOf } from './hook-tab-status.ts';
-import { logPrompt, logReply, logStart } from './hook-turn-log.ts';
+import { logPrompt, logReply, logStart, noteLastTyped, sentPromptOf } from './hook-turn-log.ts';
 import { keepWorkingReasonOf } from './keep-working.ts';
 import { lastTaskAskReasonOf } from './last-task-ask.ts';
 import { verifyByLinesOf, verifyStartNoteOf } from './verify-queue.ts';
@@ -211,7 +210,7 @@ async function titleOutcome(runtime: CliRuntime, kit: Kit, config: KitConfig, ho
  * work (T1383), cancels it, so the session keeps its context; one line tells the model, with the context growth
  * (`growth` tokens) that asks again. None when no restart waits, or one is already ending the session.
  */
-async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, refresh: Pick<RefreshSettings, 'contextTokens' | 'largeWindowContextTokens'>): Promise<string | undefined> {
+async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, refresh: Pick<RefreshSettings, 'contextTokens'>): Promise<string | undefined> {
   const store = new RefreshStore(runtime.files, kit.paths);
   const parked = (await store.parked(id)) !== undefined;
   const pending = (await store.restart(id))?.phase === 'pending';
@@ -224,8 +223,7 @@ async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, r
   if (!parked && !pending) {
     return undefined;
   }
-  // The growth past its ask at the session's own threshold: the larger one on a large window.
-  const growth = reaskGrowth({ contextTokens: thresholdOf(await store.state(id), refresh) });
+  const growth = reaskGrowth(refresh);
   return `${KIT_NAME}: the user typed, so the automatic restart is cancelled and you keep this context; a new handover is asked at your next task end, or once your context grew ${thousands(growth)} more`;
 }
 
@@ -280,8 +278,11 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
   const hint = await bindHintOnce(runtime, kit, binding, hostSession);
   // Found like a rename: `$TEAMRIG_SESSION` first, so a session is shown its lines before its first `inbox read`.
   const session = await teamSessionOf(runtime, kit, own.roster, hostSession);
-  if (session !== undefined) {
-    await logPrompt(runtime, { config, paths: kit.paths, id: session }, event).catch(() => undefined);
+  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => undefined);
+  if (session !== undefined && sent !== undefined) {
+    // Apart, so a log that cannot be written still leaves the UI following the person.
+    await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
+    await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
   }
   const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
   const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);

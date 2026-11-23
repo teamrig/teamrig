@@ -14,6 +14,7 @@ import { MeetingSchedule } from "../../meeting/schedule.js";
 import { SPOTLIGHT_LOG, spotlightHolderPath, spotlightLine, startSpotlight } from "../../meeting/spotlight.js";
 import { MEETING_LAPSE_MS, MeetingStore, phaseOf, startingKindOf, stoppedAt } from "../../meeting/state.js";
 import { MergeLog } from "../../merge/merge-log.js";
+import { pendingSteps } from "../../steps/pending.js";
 import { goalScores } from "../../register/goal-board.js";
 import { windowOpensAfter } from "../../register/snapshot.js";
 import { currentWeekOf } from "../../register/week.js";
@@ -176,6 +177,7 @@ async function printAgenda(args, runtime, mk, phase) {
     const lines = agendaLines({
         ...decisionAgendaOf(rolled, runtime, mk.now, phase.kind === 'none' ? [] : phase.meeting.carried),
         since,
+        steps: pendingSteps({ config: mk.kit.load }),
         lead: mk.lead,
         command: KIT_NAME,
         board: await goalBoard(runtime, mk, rolled),

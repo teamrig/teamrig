@@ -19,7 +19,7 @@ they all stay silent, but `hook restore-track` and `hook tool-end` still record 
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
-| `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, a `git commit` with its hooks) run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
+| `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, `pr approve` or `pr merge` at the head your leader approved, a teamrig command that only reads, a `git commit` with its hooks), alone or piped into one read-only filter, run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
 | `PreToolUse` on `AskUserQuestion` and `Bash` | `hook picker-guard` | With `pickerGuard.enabled` (on unless a team sets it false), refuses the question picker to every session and helper, to the lead in and outside the owner's daily meeting, to a sub-team's lead, and to a session in its own meeting with the owner, with the reason to decide it if it is the session's own, else record it on its task and go on, and a session's Bash `cd` compound Claude Code would hold on a permission prompt, quoting its form to rerun, or saying to drop the `cd` when it has none ([the picker guard](#before-a-question-the-picker-guard)) |
 | `PermissionRequest` | `hook prompt-refuse` | With `prompts.hookAsks: refuse` (the default), answers each permission prompt Claude Code is about to raise but the question picker's and plan mode's exit, per case: a line that runs a sanctioned route or provably only reads runs, a line with a rerun form is refused quoting it, anything else is refused with the reason to record the step for the owner and go on ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)) |
 | `PreToolUse` on `SendMessage` | `hook cold-send` | Holds once a message that would wake an idle session cold; with `open.idle.mode` on, turns a message to a session teamrig closed into its urgent line; during the daily meeting, holds every message to the lead but a CRITICAL one, and during a booked or on-the-spot meeting every message to the session met |
@@ -33,7 +33,7 @@ they all stay silent, but `hook restore-track` and `hook tool-end` still record 
 | The mod, every 10 s in each tab | `hook needs-you`, `hook needs-you-focus` | Names another tab of the team that asks the user something (a permission prompt, a question, a decision line) in a toast and a band above the prompt, whose Focus brings that tab to the front ([the needs-you band](#the-mod-the-needs-you-band)) |
 | The mod, every 15 s in each tab | `hook meeting-panel` | While the owner's daily meeting is open, shows its cards in a pane beside the chat of the team's lead that started it, and while a booked `M<n>` is started, its cards beside the chat of the session it meets, in sections (on the table, up next, decided), each with a one-line summary and a decided one with its decision ([the meeting's agenda panel](#the-mod-the-meetings-agenda-panel)) |
 | The mod, a minute after a tab starts and every 10 minutes, and when an install changes `installed_plugins.json` | `hook update-check`, `hook update-dismiss`, `hook update-apply` | Tells, in a band above the prompt, of a newer teamrig or teamrig-pane than the one installed, and runs the band's Update or Dismiss ([the update notice](#the-mod-the-update-notice)) |
-| `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
+| `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, and a tab's first one once for the refresh, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
 | `Stop` (end of each turn) | `hook stop` | Sends the session back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit), once to [a hand step typed into its reply](#end-of-a-turn-a-hand-step-typed-into-the-reply), and after a task is set waiting, once to [its other work](#end-of-a-turn-keep-working-while-a-task-waits); asks for a handover when a context refresh is due, then starts the automatic restart; writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) to the session's `launch` entry; tells the user of another effort than `launch` asks, or of a model Claude Code switched to; shows the budget lines; names a verifying task whose verify-by day has come; starts the team's `issue watch` hidden in the background when none runs; every 10 minutes for the whole team, tells the lead of [a tab that runs without its hooks](#end-of-a-turn-hookless-tabs); with tab status on, sets the tab's ready circle, or the decision circle after a turn that asks the user to decide |
 | `SubagentStop` (a helper about to hand back) | `hook subagent-stop` | Sends the helper back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit) |
 | `SessionEnd` (a tab closes) | `hook effort-writeback` | Writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) with no turn after it to the session's `launch` entry |
@@ -461,7 +461,11 @@ allow, in a mode that asks, or a check of its own that always asks): `hook promp
 
 - **A line that runs one of the session's own jobs runs** (since 0.268.0): one plain Bash command, read as the CLI
   reads it, that is a sanctioned route: `teamrig merge`, `teamrig deploy --repo <name>`, `teamrig exec request`,
-  `teamrig worktree remove` (no `--base`), a register or inbox command (`start`, `add`, `set`, `list`, `inbox`...), a
+  `teamrig worktree remove` (no `--base`), `teamrig pr approve|merge <owner/name#n> --head <full 40-hex head>
+  [--session <you>] [--check]` from a tab bound to you, for a session that has a leader (a root team's lead keeps the
+  check: no one approves its landings), a teamrig command that only reads (`list`, `show`, `budget`, `doctor`...; not
+  `secrets message`, nor `sessions` or `setup scan` with `--project`, which open a path you name), a register or inbox
+  command (`start`, `add`, `set`, `inbox`...), a
   `git commit` with its hooks running (only `-a -s -q -m -F` and paths), or a `git push [-u] [-q] <remote> <branch>`
   of a task branch you own (`t<id>-...`) to a remote the repository names, never a protected branch, and only while
   git pushes it to the remote branch of its own name. A rebased branch goes back to that same branch, so its review
@@ -471,8 +475,13 @@ allow, in a mode that asks, or a check of its own that always asks): `hook promp
   `upstream` or `tracking` (which sends it to its upstream, `origin/main` for a branch cut from it), keeps the
   prompt. One plain
   command: no `;`, `&`, `|`, `<`, `>` but a lone `2>&1`, no substitution, variable, `$'`, `$"` or `#`, inside quotes
-  too, so a commit message holding one of them gets the cases below. On Windows the line must be that same route
-  both as written and with its backslash runs halved, as Claude Code's Bash tool hands it to bash (since 0.370.0).
+  too (but the `#` of a bare `<owner>/<name>#<n>` word, which no shell reads as a comment), so a commit message holding one of them gets the cases below. The one `|` taken pipes the route into one
+  filter that reads only the pipe: `head`/`tail` with `-n <n>`, `-<n>` or `-c <n>` (never `-f`), `grep` with one bare
+  or single-quoted pattern and `-i -v -n -c -E -F -w -x -o -m -A -B -C`, or `wc -l -w -c -m`; no file operand, no
+  second pipe, no redirection on the right. A piped line exits with the filter's status, so a `pr merge` that failed
+  can exit 0: read its `MERGED`, `APPROVED` or `FAILED` line, not the exit code. On Windows the line must be that same
+  route, with the same filter, both as written and with its backslash runs halved, as Claude Code's Bash tool hands it
+  to bash (since 0.370.0). PowerShell lines are not read as routes yet.
 - **A line that provably only reads runs**, by the [read-only allow](#before-a-shell-command-the-read-only-allow)'s
   check and its trusted prefixes, even with `readonlyShell.enabled` off; one that would print a secret does not. This
   allow also answers a prompt a settings `ask` rule raised, which a `PreToolUse` allow never overrides: keep a line
@@ -571,7 +580,8 @@ a session that only captures a key (`T=$(gh auth token)`) holds it all the same:
 `find-internet-password`, `dump-keychain`), `secret-tool lookup` or `search`, `cmdkey /list`, `vaultcmd /listcreds`,
 `keyring get` and `Get-Secret`; and a line that anywhere names a store API (`CredRead`, `CredEnumerate`,
 `PasswordVault`, `Get-StoredCredential`, `keyring.get_password`, `keytar`) or a credential teamrig saves its GitHub
-tokens under (`teamrig-gh-<owner>`, `teamrig-ship-gh`). Without this any session could read every key its user saved,
+tokens under (`teamrig-gh-<owner>`, `teamrig-ship-gh`), or asks teamrig's own git credential helper for a key
+(`git-credential get`, however teamrig is launched; a `git config` line that only names the helper passes). Without this any session could read every key its user saved,
 so a key kept for one tool drew no line between sessions; teamrig's own commands still read theirs, in their own
 process. A line that only mentions one of these words is refused as well (`grep -rn teamrig-gh- src`): search with the
 Grep tool instead, which runs no shell. `secretGuard.secretReads` settles it; no `!pattern` lets one through. The
@@ -805,9 +815,9 @@ them (`echo "exec approve R1"`). A command word only known when it runs counts o
   the owner whoever runs it. The owner runs it in their own terminal, or types `/teamrig owner next T<n>` in a tab,
   which [the mod](#the-mod-the-teamrig-command) runs as a write only when the person types it.
 - **a settings writer's write**: `automode install` or `uninstall`, `permissions trim`, `statusline install`,
-  `setup restore`, `config migrate` or `restore install` with `--yes` (or a word only known when the line runs
-  after the command), whatever client starts it: each changes Claude Code's settings, the team config's format or
-  what runs at login, permissions only the owner changes. The CLI refuses the same `--yes` wherever `$CLAUDECODE`
+  `setup restore`, `setup hooks`, `config migrate` or `restore install` with `--yes` (or a word only known when the
+  line runs after the command), whatever client starts it: each changes Claude Code's settings, a host's hooks, the
+  team config's format or what runs at login, permissions only the owner changes. The CLI refuses the same `--yes` wherever `$CLAUDECODE`
   is set, and on a host whose adapter names no such mark, where an agent's run cannot be told from the owner's (the
   refusal says what the adapter must name). Its preview, without `--yes`, runs; the owner types
   `/teamrig permissions trim --yes` in a tab, or runs it in their own terminal.
@@ -1304,8 +1314,13 @@ Before Claude Code compacts the main conversation on its own (its automatic comp
 ahead), the mod runs `teamrig hook compact-check` with Claude Code's estimate of the context. While your handover
 is asked for or written and the estimate is under `refresh.compactCeilingTokens` (185,000 by default: past the
 167k where Claude Code compacts a 200k window, 15k under the window; 0 turns it off), the mod skips the compaction,
-since the fresh start replaces it. At or past the ceiling, or when the CLI cannot answer, the compaction goes, so a
-session never runs out of room. The user's `/compact`, a plugin's and a helper's compaction are left alone.
+since the fresh start replaces it. Once per tab it also holds back the first automatic compaction with no refresh
+pending, or one that comes after a handover announced whose restart never came, at any size: it records an ask for
+the handover, so the turn's end asks for it and the fresh start follows in place of the compaction. A fresh
+session's own start, before its context grew past the size it started at, is not taken for one. A tab is never held
+back twice, so if the fresh start still does not come, the next compaction goes. Past that, at or past the ceiling,
+or when the CLI cannot answer, the compaction goes, so a session never runs out of room. The user's `/compact`, a
+plugin's and a helper's compaction are left alone.
 
 On a machine with managed settings, Claude Code can seat a managed mod before the plugin's that sends the
 compaction on past the user's mods, so the mod's check never runs. Claude Code's `PreCompact` hook runs either way:
@@ -1595,18 +1610,20 @@ Claude Code does not check teamrig's marketplace for updates by itself, so a per
 teamrig-pane until they happened to update it. In each interactive tab, a minute after the mod loads and then every
 10 minutes, the mod runs [`teamrig hook update-check`](commands.md#teamrig-hook-update-check). The CLI asks the network
 at most every 6 hours across the machine, and the first tab to look claims that check, so tabs that look together ask
-once: for a cloned marketplace, `git ls-remote` of its `origin` names the newest commit, and only a commit not seen
-before is fetched, one commit deep and without file contents, into a bare repository teamrig keeps under
-`~/.teamrig/updates/` (never Claude Code's own clone), which `git gc` keeps from growing; a directory marketplace is
-read in place. The version is the `.claude-plugin/plugin.json` one in the folder the marketplace's entry names: a
-relative `./` source, or the `path` of a `git-subdir` source, read in the marketplace's own commit, since a release
-branch is its main's commit with the build on top. The answer is kept in `~/.teamrig/updates/check.json`, and every
-other look reads that file only. A marketplace that cannot be asked (offline, no access) keeps what was known, and
-nothing shows.
+once: for a cloned marketplace, `git ls-remote` of its `origin` names the newest commit of the branch the clone is on
+and of each branch, and only a commit not seen before is fetched, one commit deep and without file contents, into a
+bare repository teamrig keeps under `~/.teamrig/updates/` (never Claude Code's own clone), which `git gc` keeps from
+growing; a directory marketplace is read in place. The version is the `.claude-plugin/plugin.json` one in the folder
+the marketplace's entry names: a relative `./` source in the marketplace's own commit, or the `path` of a `git-subdir`
+source on the branch its `ref` names (`release` for stable, `preview`), since main runs ahead of every release
+channel. A `git-subdir` source in another repository than the marketplace's is not read. The answer is kept in
+`~/.teamrig/updates/check.json`, and every other look reads that file only. A marketplace that cannot be asked
+(offline, no access) keeps what was known, and nothing shows.
 
 While a newer version than the installed one is published, the band above the prompt reads, in green,
-`teamrig: teamrig 0.334.0 is out (you run 0.333.0)`, with two buttons, plain and without digits, so a key typed at
-the prompt never presses one:
+`teamrig: teamrig 0.334.0 (stable) is out (you run 0.333.0)`, naming the release channel the version was read on
+(`stable` for the `release` branch, `preview`; none off a channel's branch), with two buttons, plain and without
+digits, so a key typed at the prompt never presses one:
 
 - **Update** runs [`teamrig hook update-apply`](commands.md#teamrig-hook-update-apply): Claude Code's own
   `claude plugin marketplace update` and `claude plugin update`, so the install lands as `/plugin` would land it, then
@@ -1737,7 +1754,8 @@ With `budget.pauseByPriority` on, a short day (what is left of the week gives th
 funds the queued work in priority order, and a session none of it reaches has a daily budget of 0: its line reads
 `its daily budget is 0.0% (paused)`. Room or not, only p0 work wakes it, keeps its idle tab open or sends it back to
 work at a turn end, and once the team has no room it is held like any session past its part. The
-lead, the delivery owner and lifted sessions are never paused, and a burst's floor still holds a paused session up.
+lead, the delivery owner, the security reviewer, the tracker answerer and lifted sessions are never paused, and a
+burst's floor still holds a paused session up.
 Past its part while the team has room, a session is not held, and its line says so: `The team has room today: 2.0%
 of the week used, below its in-day pace of 4.0%, so nothing more happens.` Past its part once the team has no room,
 it is held: only p0 work wakes it or keeps its idle tab open, and it is escalated when `budget.escalate` is `session`, or, with
@@ -1763,6 +1781,12 @@ A session held by the daily cap or a plain cut, never a stop, quiet hours or a s
 two kinds of task up to its configured wake priority, since a waited-on answer is never budget-held: a task another
 session's active task waits on (`--waits task:T<id>`, in this register or another of the team tree), and a task a
 leader above its owner marked with [teamrig update](commands.md#teamrig-update) `--exempt`.
+
+The budget never holds two sessions, as other work waits on them: the security reviewer (`roles.securityReviewer`,
+when the team holds it itself) and the tracker answerer, who answers outside people on the team's issue tracker (its
+connector's watcher key, else the holder of a service role with `issue close`; a team that names neither has none,
+and the lead is not one by default). Past their part, under a cut or on a short day they wake, work and launch
+helpers as if within it; only a leader's stop (`--stop`) holds them.
 
 While escalated, the model is told with the next prompt, once per level: `teamrig budget: you are past today's
 budget and the team has no room left today, and it is ahead of its pace line. Finish the step in hand and start
@@ -1934,6 +1958,11 @@ most 64,000 characters, the end of a longer one; `truncated` marks that cut, or 
 the part of the transcript read. A tab that is no session of the team writes nothing, and any error leaves the
 turn as it was.
 
+The same prompt hook also keeps where the person last typed, for the dedicated UI to follow: each prompt the person
+sends in a team session's tab, with `turnLog` on or off, replaces `~/.teamrig/last-typed.json`, one file for every
+team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A wake teamrig
+submitted never moves it, and a failed write leaves the turn log and the prompt as they were.
+
 ## A guard that cannot answer
 
 Claude Code lets a tool call through when a `PreToolUse` command hook ends with any exit code but 0 or 2, or
@@ -1966,22 +1995,22 @@ Node.js.
 
 ## Permissions
 
-teamrig never edits Claude Code's permission or auto-mode settings, and it adds no allow rules. Only the opt-in
-read-only allow lets a call skip the prompt, and only a shell line it proves only reads.
+teamrig changes Claude Code's permission settings only when you run `teamrig automode install` (the team's auto-mode
+lines and teamrig's own allow rules below) or `teamrig permissions trim`. Past those rules, only the opt-in read-only
+allow lets a call skip the prompt, and only a shell line it proves only reads.
 
 - **Auto mode**: no settings entry is needed. In a hand test on Claude Code 2.1.300 with no user settings at all,
   the auto-mode classifier allowed every teamrig command it was given (43 calls: creating a team, adding and
   setting tasks, inbox lines, reads and lists, from Bash and from PowerShell, whether the user named the command or
   the session chose it from the team rules): none was denied or asked.
-- **Default mode**: Claude Code asks before each `teamrig` command until you allow it. One rule covers them all;
-  put it in your user settings (`~/.claude/settings.json`) or the project's `.claude/settings.json`:
-  ```json
-  { "permissions": { "allow": ["Bash(teamrig:*)"] } }
-  ```
-  In a hand test on Claude Code 2.1.301 with no user settings, that rule, given in a settings file
-  (`claude --settings`) and as `--allowedTools`, let every teamrig command run with no question (`--version`,
-  `team create`, and a chain of two, `teamrig who && teamrig list`), while `git --version` was still asked.
-  `Bash(teamrig *)` worked the same. The rule is for the Bash tool, where Claude Code puts `teamrig`.
+- **Default mode**: Claude Code asks before each `teamrig` command until it is allowed. `teamrig automode install`
+  adds `Bash(teamrig <command> *)` and `PowerShell(teamrig <command> *)` to your user settings for each command that
+  reads or writes only the team's files whatever its arguments, and whose words start no other command (`list`,
+  `set`, `inbox add` and the like); every other command still asks. Never add one wide rule such as
+  `Bash(teamrig:*)`: a prefix rule approves its command with any arguments before the classifier, so it would also
+  approve `add --issue`, `budget lift` or `merge` with no question. In a hand test on Claude Code 2.1.301, a prefix
+  rule given in a settings file and as `--allowedTools` let its commands run with no question while `git --version`
+  was still asked.
 - **The push guard** refuses on its own, whatever the mode: a push to a protected branch is refused with its route
   unless `pushGuard.pushToProtected` clears it.
 - **The commit guard** refuses a git command run without the repository's hooks on its own, whatever the mode,
@@ -1996,9 +2025,8 @@ read-only allow lets a call skip the prompt, and only a shell line it proves onl
 - **The db-write guard** refuses a line that writes to a database by hand on its own, whatever the mode, unless
   `dbWriteGuard.writes` is `allow`.
 - **The exec guard** refuses a privileged command's review run as another session or the owner, any
-  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories, on its own, whatever the mode, so `Bash(teamrig:*)` stays safe for
-  `exec` too. A team that wants each review asked as well allows the rest by name (`Bash(teamrig exec request:*)`,
-  `dry-run`, `status`, `run`) instead of the one rule.
+  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories, on its own, whatever the mode
+  or allow rules.
 - **The read-only allow** (`readonlyShell.enabled`) lets a shell line that only reads run with no prompt in default
   mode too; it never asks or refuses, so in a mode that already allows the line it changes nothing.
 - **The picker guard** (`pickerGuard.enabled`, on by default) refuses the question picker to every session and helper,

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES } from './defaults.ts';
-import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED } from './migrate.ts';
+import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC } from './defaults.ts';
+import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
 import { parseConfig } from './parse.ts';
@@ -29,7 +29,9 @@ describe('parseConfig', () => {
     assert.deepEqual(config.needsYou, { enabled: true, kinds: ['permission', 'question', 'elicitation', 'decision'], osToast: false });
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
+    assert.deepEqual(config.steps, { backupDays: 7 });
     assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
+    assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
     assert.deepEqual(config.delivery, {
@@ -301,17 +303,31 @@ describe('parseConfig', () => {
   });
 
   it('reads ui.path as an absolute file, absent by default, and drops one that is not (T4761)', () => {
-    assert.deepEqual(parseConfig(ROSTER).config.ui, {});
+    assert.deepEqual(parseConfig(ROSTER).config.ui, { mode: 'terminal' });
     for (const path of ['D:\\pane\\out\\ui\\main.js', '/srv/pane/out/ui/main.js']) {
       const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
-      assert.deepEqual(config.ui, { path });
+      assert.deepEqual(config.ui, { mode: 'terminal', path });
       assert.deepEqual(issues, []);
     }
     for (const path of ['out/ui/main.js', 'C:out', '/a\n/b', 'https://example.com/main.js', 7]) {
       const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
       assert.deepEqual(paths(issues), ['ui.path'], String(path));
-      assert.deepEqual(config.ui, {}, String(path));
+      assert.deepEqual(config.ui, { mode: 'terminal' }, String(path));
     }
+  });
+
+  it('reads ui.mode as terminal, window or both, terminal by default, and keeps the default for any other value (T5105)', () => {
+    for (const mode of ['terminal', 'window', 'both'] as const) {
+      const { config, issues } = parseConfig({ ...ROSTER, ui: { mode } });
+      assert.deepEqual(config.ui, { mode });
+      assert.deepEqual(issues, []);
+    }
+    for (const mode of ['Window', 'tab', '', 7, true]) {
+      const { config, issues } = parseConfig({ ...ROSTER, ui: { mode } });
+      assert.deepEqual(paths(issues), ['ui.mode'], String(mode));
+      assert.deepEqual(config.ui, { mode: 'terminal' }, String(mode));
+    }
+    assert.match(parseConfig({ ...ROSTER, ui: { mode: 'tab' } }).issues[0]?.message ?? '', /expected one of terminal, window, both/);
   });
 
   it('reads needsYou, leaves out an unknown kind, and refuses a list that is no list or names more kinds than there are', () => {
@@ -370,6 +386,14 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, meeting: { panel: true } }).issues), ['meeting.panel']);
   });
 
+  it('reads cliOnPath.enabled, on by default, and refuses a value that is not a boolean (T5095)', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.cliOnPath, { enabled: true });
+    assert.deepEqual(parseConfig({ ...ROSTER, cliOnPath: { enabled: false } }).config.cliOnPath, { enabled: false });
+    const bad = parseConfig({ ...ROSTER, cliOnPath: { enabled: 'no' } });
+    assert.deepEqual([paths(bad.issues), bad.config.cliOnPath], [['cliOnPath.enabled'], { enabled: true }]);
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, cliOnPath: false }).issues), ['cliOnPath']);
+  });
+
   it('reads meeting.spotlight, on at 0.6 by default, and refuses a dim outside 0.1 to 0.9 or a non-boolean enabled (T2517, T2523)', () => {
     assert.deepEqual(parseConfig(ROSTER).config.meeting.spotlight, { enabled: true, dim: 0.6, breakthroughSeconds: 120 });
     assert.deepEqual(parseConfig({ ...ROSTER, meeting: { spotlight: { enabled: false, dim: 0.3 } } }).config.meeting.spotlight, {
@@ -399,8 +423,8 @@ describe('parseConfig', () => {
     }
   });
 
-  it('reads meeting.statusLine, on in magenta with "meeting on: held" by default, and refuses a bad colour or held text (T2513)', () => {
-    const defaults = { enabled: true, colour: '#8b57e3', heldText: 'meeting on: held' };
+  it('reads meeting.statusLine, on in magenta with "owner in meeting" by default, and refuses a bad colour or held text (T2513, #1675)', () => {
+    const defaults = { enabled: true, colour: '#8b57e3', heldText: 'owner in meeting' };
     assert.deepEqual(parseConfig(ROSTER).config.meeting.statusLine, defaults);
     const set = { enabled: false, colour: '#FF8800', heldText: 'held for the meeting' };
     assert.deepEqual(parseConfig({ ...ROSTER, meeting: { statusLine: set } }).config.meeting.statusLine, set);
@@ -447,6 +471,16 @@ describe('parseConfig', () => {
     }
   });
 
+  it('reads steps.backupDays, and refuses a value under 1, past 365 or not a whole number', () => {
+    assert.equal(parseConfig({ ...ROSTER, steps: { backupDays: 1 } }).config.steps.backupDays, 1);
+    assert.equal(parseConfig({ ...ROSTER, steps: { backupDays: 365 } }).config.steps.backupDays, 365);
+    for (const wrong of [0, 366, 2.5, '7']) {
+      const { config, issues } = parseConfig({ ...ROSTER, steps: { backupDays: wrong } });
+      assert.deepEqual(paths(issues), ['steps.backupDays']);
+      assert.equal(config.steps.backupDays, 7);
+    }
+  });
+
   it('reads github.activity as a boolean and github.followMax within 0 to 100, reporting a wrong one and keeping its default', () => {
     const set = parseConfig({ ...ROSTER, github: { activity: false, followMax: 0 } });
     assert.deepEqual(set.issues, []);
@@ -460,6 +494,40 @@ describe('parseConfig', () => {
       const parsed = parseConfig({ ...ROSTER, github: { followMax: wrong } });
       assert.deepEqual(paths(parsed.issues), ['github.followMax']);
       assert.equal(parsed.config.github.followMax, 20);
+    }
+  });
+
+  it('reads sync: the scope switch, its assigned word, its labels kept once whatever their case, and the caps within bounds (T5013)', () => {
+    const set = parseConfig({ ...ROSTER, sync: { scope: { all: true, assigned: 'none', labels: ['Ops', 'ops', 'triage'] }, maxOpen: 0, maxNewPerSync: 1000 } });
+    assert.deepEqual(set.issues, []);
+    assert.deepEqual(set.config.sync, { scope: { all: true, assigned: 'none', labels: ['Ops', 'triage'] }, maxOpen: 0, maxNewPerSync: 1000 });
+    assert.deepEqual(parseConfig({ ...ROSTER, sync: { scope: { labels: [] } } }).config.sync.scope.labels, []);
+  });
+
+  it('reports each wrong sync value and keeps its default (T5013)', () => {
+    const cases: readonly (readonly [Record<string, unknown>, string])[] = [
+      [{ scope: { all: 'yes' } }, 'sync.scope.all'],
+      [{ scope: { assigned: 'everyone' } }, 'sync.scope.assigned'],
+      [{ scope: { labels: 'teamrig' } }, 'sync.scope.labels'],
+      [{ scope: { labels: Array.from({ length: 21 }, (_, index) => 'l' + String(index)) } }, 'sync.scope.labels'],
+      [{ scope: 'all' }, 'sync.scope'],
+      [{ maxOpen: -1 }, 'sync.maxOpen'],
+      [{ maxOpen: 5001 }, 'sync.maxOpen'],
+      [{ maxNewPerSync: 2.5 }, 'sync.maxNewPerSync'],
+      [{ maxNewPerSync: 1001 }, 'sync.maxNewPerSync'],
+    ];
+    for (const [sync, path] of cases) {
+      const { config, issues } = parseConfig({ ...ROSTER, sync });
+      assert.deepEqual(paths(issues), [path], path);
+      assert.deepEqual(config.sync, DEFAULT_SYNC, path);
+    }
+  });
+
+  it('reports a wrong sync label and drops it alone, keeping the good ones (T5013)', () => {
+    for (const wrong of ['a\nb', 'x'.repeat(256)]) {
+      const { config, issues } = parseConfig({ ...ROSTER, sync: { scope: { labels: [wrong, 'ops'] } } });
+      assert.deepEqual(paths(issues), ['sync.scope.labels[0]']);
+      assert.deepEqual(config.sync.scope.labels, ['ops']);
     }
   });
 
@@ -1396,12 +1464,14 @@ describe('parseConfig', () => {
   it('reads the commits rule, refusing a bad gate, trailer key, bound or pattern', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,
-      commits: { maxLines: 10, maxFiles: 20, largeCommitTrailer: 'Large commit', testPatterns: ['^fixtures/', '(('], sourcePatterns: ['^lib/', '['], gate: 'block' },
+      commits: { maxLines: 10, maxFiles: 20, largeCommitTrailer: 'Large commit', testPatterns: ['^fixtures/', '(('], sourcePatterns: ['^lib/', '['], gate: 'block', stamp: 'no' },
     });
-    assert.deepEqual(paths(issues).sort(), ['commits.gate', 'commits.largeCommitTrailer', 'commits.maxLines', 'commits.sourcePatterns[1]', 'commits.testPatterns[1]']);
+    assert.deepEqual(paths(issues).sort(), ['commits.gate', 'commits.largeCommitTrailer', 'commits.maxLines', 'commits.sourcePatterns[1]', 'commits.stamp', 'commits.testPatterns[1]']);
     assert.deepEqual(config.commits, { ...DEFAULT_COMMITS, maxFiles: 20, testPatterns: ['^fixtures/'], sourcePatterns: ['^lib/'] });
     const refuse = parseConfig({ ...ROSTER, commits: { gate: 'refuse', largeCommitTrailer: 'Big-change' } }).config.commits;
     assert.deepEqual([refuse.gate, refuse.largeCommitTrailer], ['refuse', 'Big-change']);
+    assert.equal(parseConfig(ROSTER).config.commits.stamp, true);
+    assert.equal(parseConfig({ ...ROSTER, commits: { stamp: false } }).config.commits.stamp, false);
   });
 
   it('reads what a normal push to a protected branch does, defaulting to ask and refusing another word', () => {
@@ -1750,7 +1820,6 @@ describe('parseConfig', () => {
     const chosen = {
       enabled: false,
       contextTokens: 150_000,
-      largeWindowContextTokens: 0,
       everyTasks: 0,
       everyTasksMinTokens: 60_000,
       tabTitle: false,
@@ -1771,7 +1840,6 @@ describe('parseConfig', () => {
       refresh: {
         enabled: 'yes',
         contextTokens: 9_999,
-        largeWindowContextTokens: -1,
         everyTasks: 101,
         everyTasksMinTokens: 9_999,
         tabTitle: 1,
@@ -1797,7 +1865,6 @@ describe('parseConfig', () => {
       'refresh.handoverDir',
       'refresh.handoverMaxBytes',
       'refresh.holdAfterActivityMinutes',
-      'refresh.largeWindowContextTokens',
       'refresh.restartDelaySeconds',
       'refresh.tabTitle',
     ]);
@@ -1878,6 +1945,13 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(issues), ['hiring.idleHours']);
     assert.equal(issues[0]?.message, `is no longer read: ${IDLE_RETIRE_DROPPED}; delete it`);
     assert.deepEqual(config.hiring, DEFAULT_HIRING);
+  });
+
+  it('flags refresh.largeWindowContextTokens a current-format file still holds, as one threshold holds for every window (T4083)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, refresh: { contextTokens: 150_000, largeWindowContextTokens: 250_000 } });
+    assert.deepEqual(paths(issues), ['refresh.largeWindowContextTokens']);
+    assert.equal(issues[0]?.message, `is no longer read: ${LARGE_WINDOW_DROPPED}; delete it`);
+    assert.deepEqual(config.refresh, { ...DEFAULT_REFRESH, contextTokens: 150_000 });
   });
 
   it('reads the terminal teamrig open uses and the room it needs, refusing a terminal it does not know or a bad size', () => {

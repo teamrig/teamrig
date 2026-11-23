@@ -179,6 +179,10 @@ export interface FakeGitAnswers {
   readonly branches?: readonly string[] | undefined;
   readonly fetching?: GitOutcome;
   readonly adding?: GitOutcome;
+  /** The URL of the remote `origin`. */
+  readonly origin?: string | undefined;
+  /** The config key whose `setLocalConfig` fails; every other one is set. */
+  readonly configFailsOn?: string | undefined;
 }
 
 /** A `WorktreeGit` with set answers, which records each step that would change something. */
@@ -258,6 +262,15 @@ export class FakeWorktreeGit implements WorktreeGit {
   addWorktree(mainDir: string, path: string, branch: string, base: string): GitOutcome {
     this.steps.push(`worktree add -b ${branch} ${path} ${base} in ${mainDir}`);
     return this.answers.adding ?? { ok: true };
+  }
+
+  originUrl(): string | undefined {
+    return this.answers.origin;
+  }
+
+  setLocalConfig(dir: string, key: string, values: readonly [string, ...string[]]): GitOutcome {
+    this.steps.push(`config --local ${key} = ${values.map((value) => JSON.stringify(value)).join(', ')} in ${dir}`);
+    return this.answers.configFailsOn === key ? { ok: false, reason: 'could not lock config file' } : { ok: true };
   }
 }
 

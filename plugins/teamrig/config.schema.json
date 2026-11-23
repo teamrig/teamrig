@@ -655,6 +655,11 @@
           "type": "string",
           "enum": ["off", "warn", "refuse"],
           "default": "warn"
+        },
+        "stamp": {
+          "description": "The commit-msg hook adds a Made-by trailer naming the program, model and effort that made the commit, beside the Made-with trailer naming teamrig's version. false leaves the message as written.",
+          "type": "boolean",
+          "default": true
         }
       }
     },
@@ -1204,7 +1209,7 @@
           "default": {}
         },
         "pauseByPriority": {
-          "description": "On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team and lifted sessions are never paused. Off: no session of the team is paused.",
+          "description": "On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team, the sessions the budget never holds (the security reviewer held in the team and the GitHub answerer) and lifted sessions are never paused. Off: no session of the team is paused.",
           "type": "boolean",
           "default": false
         },
@@ -1337,7 +1342,7 @@
           "default": true
         },
         "priority": {
-          "description": "The least urgent priority that wakes a session: 1 wakes for p0 and p1 only. A session its budget holds (past its daily budget while the team has no room today, the wake's own turn counted for both) or a short day pauses (`budget.pauseByPriority`) wakes for p0 only, and one in the budget's quiet hours for p0 and p1 only (p0 alone when their action is block), whatever this says.",
+          "description": "The least urgent priority that wakes a session: 1 wakes for p0 and p1 only. A session its budget holds (past its daily budget while the team has no room today, or its team past its own part with no room and no lift or burst for the session; the wake's own turn counted for both) or a short day pauses (`budget.pauseByPriority`) wakes for p0 only, and one in the budget's quiet hours for p0 and p1 only (p0 alone when their action is block), whatever this says.",
           "type": "integer",
           "minimum": 1,
           "maximum": 99,
@@ -1381,6 +1386,19 @@
           "minimum": 500,
           "maximum": 50000,
           "default": 4000
+        }
+      }
+    },
+    "steps": {
+      "description": "The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run.",
+      "type": "object",
+      "properties": {
+        "backupDays": {
+          "description": "Days the backup a step takes is kept; the lead's teamrig start then removes it, removing only backups teamrig recorded for a step.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 7
         }
       }
     },
@@ -1578,6 +1596,55 @@
         }
       }
     },
+    "sync": {
+      "description": "What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand.",
+      "type": "object",
+      "properties": {
+        "scope": {
+          "description": "Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig.",
+          "type": "object",
+          "properties": {
+            "all": {
+              "description": "Every open issue of each place, whoever it is assigned to and whatever its labels. Off by default, so a large project never floods the register.",
+              "type": "boolean",
+              "default": false
+            },
+            "assigned": {
+              "description": "team takes an issue assigned to one of the team's people (GitHub logins in github.owners, Jira account ids in connectors.jira.people, else the saved token's own account); none takes labelled issues only.",
+              "type": "string",
+              "enum": ["team", "none"],
+              "default": "team"
+            },
+            "labels": {
+              "description": "An issue carrying one of these labels is in scope, whoever it is assigned to. Matched without case.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[^\r\n]+$"
+              },
+              "maxItems": 20,
+              "default": ["teamrig"]
+            }
+          }
+        },
+        "maxOpen": {
+          "description": "The most open tasks one tracker's import holds; past it a run adds none and prints a CAPPED line. 0 adds none.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "default": 200
+        },
+        "maxNewPerSync": {
+          "description": "The most tasks one run adds per tracker; the rest wait for the next run, assigned issues first, then the oldest change. 0 adds none.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 50
+        }
+      }
+    },
     "serviceRoles": {
       "description": "Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused.",
       "type": "object",
@@ -1724,6 +1791,17 @@
         }
       }
     },
+    "cliOnPath": {
+      "description": "Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Writes the launchers and the PATH entry at a session start of the team. On unless a team sets it false; off, a session of the team writes neither, so an entry the user removed stays removed through each new version, while a session of another team that leaves it on still writes them.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "meeting": {
       "description": "The owner's daily meeting with the lead, in the lead's tab.",
       "type": "object",
@@ -1765,7 +1843,7 @@
           }
         },
         "statusLine": {
-          "description": "The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text, so a glance at any tab tells the meeting is on.",
+          "description": "The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text and the meeting's title, so a glance at any tab tells which meeting is on.",
           "type": "object",
           "properties": {
             "enabled": {
@@ -1774,15 +1852,15 @@
               "default": true
             },
             "colour": {
-              "description": "The colour of the meeting marks in the status lines while a meeting is open, as #rrggbb: the meeting tab's leading Meeting title and every other tab's held text; the terminal must show 24-bit colour.",
+              "description": "The colour of the meeting marks in the status lines while a meeting is open, as #rrggbb: the meeting tab's leading Meeting title and every other tab's meeting name; the terminal must show 24-bit colour.",
               "type": "string",
               "default": "#8b57e3",
               "pattern": "^#[0-9a-fA-F]{6}$"
             },
             "heldText": {
-              "description": "The words every other tab's status line adds while a meeting is open, on one line.",
+              "description": "The words every other tab's status line adds before the open meeting's title (`owner in meeting: daily`), on one line. Only messages to the meeting's own session wait, so the words should not say the tab is held.",
               "type": "string",
-              "default": "meeting on: held",
+              "default": "owner in meeting",
               "minLength": 1,
               "maxLength": 40,
               "pattern": "^[^\\r\\n]+$"
@@ -1810,9 +1888,15 @@
       }
     },
     "ui": {
-      "description": "The dedicated UI that teamrig ui starts in the terminal it is run in.",
+      "description": "The dedicated UI that teamrig ui starts.",
       "type": "object",
       "properties": {
+        "mode": {
+          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
+          "type": "string",
+          "enum": ["terminal", "window", "both"],
+          "default": "terminal"
+        },
         "path": {
           "description": "The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI.",
           "type": "string",
@@ -2107,19 +2191,11 @@
         "enabled": { "description": "Off: no session is asked for a handover or refreshed.", "type": "boolean", "default": true },
         "contextTokens": {
           "x-teamrig-served": "value",
-          "description": "The context size, in tokens, that asks for a refresh: under the about 167k where Claude Code compacts a 200k window.",
+          "description": "The context size, in tokens, that asks for a refresh, on every context window: under the about 167k where Claude Code compacts a 200k window.",
           "type": "integer",
           "minimum": 10000,
           "maximum": 10000000,
           "default": 120000
-        },
-        "largeWindowContextTokens": {
-          "x-teamrig-served": "value",
-          "description": "The context size, in tokens, that asks for a refresh of a session on a context window larger than 200k, when larger than contextTokens: its launch model ends in [1m], or its refresh state shows the window, since a model can run a 1M window without the suffix (the lead's plain opus) and no hook is told it: the window the plugin's mod reports, a context past 200k, or a fresh start measured over contextTokens. A fresh session on it starts at over 120k (its system prompt, rules and handover), and the window has room far past it. 0: contextTokens for every window.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 10000000,
-          "default": 250000
         },
         "everyTasks": {
           "description": "Also refresh once this many tasks were finished since the context was last fresh (a /clear, a new process or a compaction); 0 turns it off.",
@@ -2165,7 +2241,7 @@
         },
         "compactCeilingTokens": {
           "x-teamrig-served": "value",
-          "description": "While a session's handover is asked for or written, the plugin's mod stops Claude Code's own compaction (trigger auto) of its main conversation as long as its context, as Claude Code estimates it, is under this many tokens: the /clear at the turn's end replaces it. Where a managed mod runs first and sends the compaction on past the plugin's mod, the classic PreCompact hook stops it instead, on the context it estimates from the transcript and a 200,000-token window. Past it a compaction goes through; /compact and a subagent's own compaction are never stopped. 0: never stopped. It also bounds an open owner meeting (the lead's daily one, or a booked one from its meeting start M<n>), which holds the refresh of each session in it only under it; 0 holds it until the meeting ends.",
+          "description": "While a session's handover is asked for or written, the plugin's mod stops Claude Code's own compaction (trigger auto) of its main conversation as long as its context, as Claude Code estimates it, is under this many tokens: the /clear at the turn's end replaces it. Where a managed mod runs first and sends the compaction on past the plugin's mod, the classic PreCompact hook stops it instead, on the context it estimates from the transcript and a 200,000-token window. Past it a compaction goes through; /compact and a subagent's own compaction are never stopped. Apart from it, the first automatic compaction of a tab is held back once for the refresh, which then asks for the handover. 0: never stopped, not even that once. It also bounds an open owner meeting (the lead's daily one, or a booked one from its meeting start M<n>), which holds the refresh of each session in it only under it; 0 holds it until the meeting ends.",
           "type": "integer",
           "minimum": 0,
           "maximum": 10000000,

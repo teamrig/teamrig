@@ -1,10 +1,14 @@
+import { isUiMode, UI_MODES } from "../../config/types.js";
 import { ID_PATTERN, ID_RULE } from "../../core/ids.js";
+import { openTab } from "../../open/open-tab.js";
+import { teamWindowOf } from "../../open/terminals.js";
 import { RELEASED_UI } from "../../ui/pin.js";
 import { releasedEntry } from "../../ui/released.js";
 import { releasedEnv, uiRequest } from "../../ui/start.js";
 import { noPositionals, UsageError } from "../args.js";
 import { openKit, openTeamKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
+import { homeArgs } from "./open.js";
 /** The kit of the team `--team` names, else of the team found here. */
 function kitOf(team, runtime) {
     if (team === undefined) {
@@ -54,20 +58,70 @@ function uiExit(runtime, node, result) {
             return EXIT.failed;
     }
 }
+/** `--mode`, else `ui.mode`. */
+function modeOf(args, config) {
+    const named = args.flags.get('mode');
+    if (named === undefined) {
+        return config.ui.mode;
+    }
+    if (!isUiMode(named)) {
+        throw new UsageError(`--mode ${named} is no UI mode: expected one of ${UI_MODES.join(', ')}`, 'ui');
+    }
+    return named;
+}
+/** The window's tab title: the team, so two teams' UI windows tell apart. */
+function uiWindowTitle(team) {
+    return `teamrig ui ${team}`;
+}
 /**
- * `ui [--session <id|name>] [--team <team>]`: starts the dedicated UI in this terminal, its input and output on it,
- * and ends when the UI does. The UI is a program of its own that teamrig loads no code of: it runs under this CLI's
- * Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it starts without `ui.path`:
- * `RELEASED_UI` in the CLI, another in a spec.
+ * Opens a terminal window that runs this same command in terminal mode, the way `teamrig open` opens a session's tab
+ * (`open.terminal`, `open.teamWindow`). True when one opened; else it says why and the caller shows the UI here.
+ */
+async function openUiWindow(runtime, config, team, session) {
+    const argv = [
+        runtime.self.node,
+        runtime.self.script,
+        'ui',
+        '--mode',
+        'terminal',
+        '--team',
+        team,
+        ...homeArgs(runtime),
+        ...(session === undefined ? [] : ['--session', session]),
+    ];
+    const window = teamWindowOf(config.open.teamWindow, team);
+    const outcome = await openTab(runtime, config.open.terminal, { title: uiWindowTitle(team), folder: runtime.cwd, argv, window, focus: 'take' });
+    if (outcome.kind === 'opened') {
+        runtime.out.stdout(`OPENED the UI in a ${outcome.terminal} window`);
+        return true;
+    }
+    runtime.out.stdout(`NOTE no terminal window opened (${outcome.reasons.join('; ')}); the UI shows in this terminal`);
+    return false;
+}
+/**
+ * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]`: shows the dedicated UI where `--mode`,
+ * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
+ * one running the same UI and returns; with both, it opens the window and then shows the UI here too. A window that
+ * cannot open falls back to this terminal and says so. The UI is a program of its own that teamrig loads no code of:
+ * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
+ * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec.
  */
 export function uiCommand(pin) {
     return async (args, runtime) => {
         noPositionals(args);
         const kit = await kitOf(args.flags.get('team'), runtime);
         const config = requireConfig(kit, runtime, 'read');
+        const mode = modeOf(args, config);
         const named = args.flags.get('session');
         const session = named === undefined ? undefined : sessionIdOf(await rosterOf(runtime, kit, config), named);
+        // The entry is checked before a window opens, so a window never opens on a UI that cannot start.
         const { entry, env } = await entryOf(config, runtime, kit, pin);
+        if (mode !== 'terminal') {
+            const opened = await openUiWindow(runtime, config, kit.paths.team, session);
+            if (opened && mode === 'window') {
+                return EXIT.ok;
+            }
+        }
         const { node, script } = runtime.self;
         const request = uiRequest({ entry, node, script, team: kit.paths.team, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
         return uiExit(runtime, node, await runtime.processes.run(request));

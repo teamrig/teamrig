@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { endOf } from "../core/shell-end.js";
 import { posixQuote } from "../open/quote.js";
+/** How long the run still reads output after the command itself ended, before it takes the pipe as held by an orphan. */
+export const HELD_OUTPUT_GRACE_MS = 2_000;
 /** Characters a POSIX shell reads as plain text; a word with any other is single-quoted. */
 const POSIX_PLAIN = /^[\w@%+=:,./-]+$/;
 /** Characters `cmd.exe` reads as syntax or a word break; a word with any of them is double-quoted. */
@@ -51,8 +53,12 @@ export function posixWord(word) {
 function cmdWord(word) {
     return word !== '' && !CMD_SPECIAL.test(word) ? word : `"${word.replaceAll('"', '\\"')}"`;
 }
-/** The real shell: Node's `spawn` with `shell: true`, stdin closed, stdout and stderr read as they come. */
-export function nodeShellRunner() {
+/**
+ * The real shell: Node's `spawn` with `shell: true`, stdin closed, stdout and stderr read as they come. It ends at
+ * `close`, once every pipe has ended; when the command exits while a process it started still holds a pipe, it stops
+ * reading `graceMs` later and ends with the command's own end, `heldOpen` set (#719).
+ */
+export function nodeShellRunner(graceMs = HELD_OUTPUT_GRACE_MS) {
     return {
         run: (request) => new Promise((resolve, reject) => {
             const child = spawn(request.command, {
@@ -65,11 +71,28 @@ export function nodeShellRunner() {
             const chunks = [];
             const keep = (chunk) => {
                 chunks.push(chunk);
+                request.onOutput?.(chunk);
+            };
+            let grace;
+            let settled = false;
+            const settle = (result) => {
+                clearTimeout(grace);
+                if (!settled) {
+                    settled = true;
+                    resolve(result);
+                }
             };
             child.stdout.setEncoding('utf8').on('data', keep);
             child.stderr.setEncoding('utf8').on('data', keep);
             child.once('error', reject);
-            child.once('close', (code, signal) => resolve({ end: endOf(code, signal), output: chunks.join('') }));
+            child.once('exit', (code, signal) => {
+                grace = setTimeout(() => {
+                    child.stdout.destroy();
+                    child.stderr.destroy();
+                    settle({ end: endOf(code, signal), output: chunks.join(''), heldOpen: true });
+                }, graceMs);
+            });
+            child.once('close', (code, signal) => settle({ end: endOf(code, signal), output: chunks.join('') }));
         }),
     };
 }

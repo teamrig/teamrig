@@ -5,7 +5,7 @@ import { errorMessage } from "../../core/guards.js";
 import { ENV, resolveKitHome } from "../../core/home.js";
 import { resolveTeam } from "../../core/team.js";
 import { treeHeader } from "../../delivery/run-tree.js";
-import { commandHeader, logBody, pruneLogs, reserveLog } from "../../test-run/logs.js";
+import { commandHeader, LiveLog, pruneLogs, reserveLog } from "../../test-run/logs.js";
 import { cleanOutput, parseTestOutput } from "../../test-run/parse.js";
 import { labelOf, reportLines } from "../../test-run/report.js";
 import { commandLine } from "../../test-run/shell.js";
@@ -64,9 +64,9 @@ export function queuedWords(self, words, session) {
     return [self.node, self.script, 'queue', '--kind', 'test', ...size, '--what', `test: ${labelOf(words)}`, ...owner, '--', ...words];
 }
 /** Runs the command; when it cannot start, the log (holding the command line) says why before the error goes on. */
-async function runLogged(runtime, request, log) {
+async function runLogged(runtime, request, log, live) {
     try {
-        return await runtime.shell.run(request);
+        return await runtime.shell.run({ ...request, onOutput: (chunk) => live.write(chunk) });
     }
     catch (error) {
         await runtime.files.append(log, `could not start: ${errorMessage(error)}\n`);
@@ -87,10 +87,11 @@ export async function test(args, runtime) {
     const log = await reserveLog(runtime.files, place.dir, place.session, header);
     const run = place.queued ? commandLine(queuedWords(runtime.self, words, place.session), runtime.platform) : command;
     const started = runtime.clock.now();
-    const result = await runLogged(runtime, { command: run, cwd: runtime.cwd, env: withoutCredentials(runtime.env, place.passEnv) }, log);
+    const live = new LiveLog(runtime.files, log);
+    const result = await runLogged(runtime, { command: run, cwd: runtime.cwd, env: withoutCredentials(runtime.env, place.passEnv) }, log, live);
     const tookMs = runtime.clock.now() - started;
     const output = cleanOutput(result.output);
-    await runtime.files.append(log, logBody(output, result.end));
+    await live.end(result.end, result.heldOpen === true);
     await pruneLogs(runtime.files, place.dir, place.session);
     const lines = reportLines({ label: labelOf(words), end: result.end, tookMs, log, output, parsed: parseTestOutput(output), maxFailureChars: place.maxFailureChars });
     for (const line of lines) {

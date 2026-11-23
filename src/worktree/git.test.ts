@@ -195,6 +195,34 @@ describe('GIT_WORKTREES', () => {
     }
   });
 
+  it('reads the origin URL and sets a local config key to exactly the values given, again with the same result (T4897)', () => {
+    const { repo } = repoWithWorktree('wt-config');
+    try {
+      assert.equal(git.originUrl(repo.dir), undefined, 'no origin yet');
+      repo.git('remote', 'add', 'origin', 'https://example.test/acme/app.git');
+      assert.equal(git.originUrl(repo.dir), 'https://example.test/acme/app.git');
+      const key = 'credential.https://example.test.helper';
+      repo.git('config', '--local', '--add', key, 'old-helper');
+      for (const run of [1, 2]) {
+        assert.deepEqual(git.setLocalConfig(repo.dir, key, ['', '!helper get']), { ok: true }, `run ${run}`);
+        assert.deepEqual(repo.git('config', '--local', '--get-all', key).split('\n'), ['', '!helper get', ''], `run ${run}: the old value replaced, no value twice`);
+      }
+    } finally {
+      repo.remove();
+    }
+  });
+
+  it('refuses a config key or value git would read as an option, running nothing (T4897)', () => {
+    const calls: (readonly string[])[] = [];
+    const recording = worktreeGit((_dir, args) => {
+      calls.push(args);
+      return { status: 0, stdout: '', stderr: '' };
+    });
+    assert.deepEqual(recording.setLocalConfig('/repo', 'credential.helper', ['--global']), { ok: false, reason: 'git config would read --global as an option' });
+    assert.deepEqual(recording.setLocalConfig('/repo', '-n', ['x']), { ok: false, reason: 'git config would read -n as an option' });
+    assert.deepEqual(calls, []);
+  });
+
   it('reads as unknown where git cannot answer', () => {
     const missing = join(tmpdir(), 'teamrig-no-such-worktree');
     assert.equal(git.topOf(missing), undefined);

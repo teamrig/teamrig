@@ -48,14 +48,15 @@ export function paceLinePct(window, targetPct, at, profile) {
 /**
  * Where the pace line of the week resetting at `reset` stands at `now`, its active time from the budget's quiet hours:
  * the status line's cheap reading, which opens no stored period. It runs from `start`, where `teamrig budget` counts
- * the week from, a reset inside the week included; with no start known, over the seven days before the reset.
- * Undefined once the week reset.
+ * the week from, a reset inside the week included, and from the use there (`from.startPct`); with no start known,
+ * from 0 over the seven days before the reset. Undefined once the week reset.
  */
-export function paceLineOfWeek(reset, budget, now, start) {
+export function paceLineOfWeek(reset, budget, now, from) {
     if (reset <= now) {
         return undefined;
     }
-    return paceLinePct(weekWindow(reset, budget.paceEndHoursBeforeReset, start), budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
+    const window = weekWindow(reset, budget.paceEndHoursBeforeReset, from?.start, from?.startPct);
+    return paceLinePct(window, budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
 }
 /**
  * A span's allowance for today, in percent of the week, never a fixed number: recomputed at every reading from what
@@ -116,6 +117,19 @@ export function hasRoom(day) {
  */
 export function holdsPastPart(day, cut) {
     return cut || day === undefined || !hasRoom(day);
+}
+/** Whether use today (`usedPct`) is past a daily part (`partPct`), both in % of the week; never while either is unknown. */
+export function isPastPart(usedPct, partPct) {
+    return usedPct !== undefined && partPct !== undefined && usedPct > partPct;
+}
+/**
+ * Whether the team is held for the day: its own use today (`usedPct`) past its part of the account's day (`partPct`)
+ * while it has no room (`holdsPastPart`, no cut). `teamrig budget` names the team on its held line by it, and the wake
+ * and idle pass cap the team's sessions at p0 by it (`wakeRestOf`), so the report never tells the team to start no new
+ * work while its sessions are still kept open or woken for p1 work (#1737).
+ */
+export function holdsTeamPast(day, usedPct, partPct) {
+    return isPastPart(usedPct, partPct) && holdsPastPart(day, false);
 }
 /** The week's use against the pace line; within `paceTolerancePct` points it is on pace. */
 export function readPace(window, budget, now, usedPct, profile) {

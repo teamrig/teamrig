@@ -5,7 +5,7 @@ import { HOST_PORT_NAMES } from '../ports/host/index.ts';
 import { hostDeclarationData } from '../testing/manifests.ts';
 import { DEFAULT_HOST, HOST_ADAPTERS } from './adapters.ts';
 import { loadHostPorts, loadShippedHosts } from './host-ports.ts';
-import type { ModuleImporter } from './loader.ts';
+import { loadHost, type ModuleImporter } from './loader.ts';
 
 const run: ProgramRunner = () => Promise.reject(new Error('no program runs here'));
 
@@ -22,7 +22,7 @@ function building(ports: unknown): ModuleImporter {
 describe('loadHostPorts', () => {
   it('gives the shipped host adapter a filled transcript reader, usage meter, status line, permissions, plugin store, models and steps', async () => {
     const ports = (await loadHostPorts(run))({ env: {}, platform: 'linux' });
-    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'permissions', 'plugin', 'launcher', 'models', 'steps']);
+    assert.deepEqual(Object.keys(ports), ['hooks', 'toolCall', 'transcripts', 'usage', 'statusLine', 'paths', 'secrets', 'permissions', 'plugin', 'launcher', 'models', 'steps', 'userHooks']);
     assert.equal(isUnsupported(ports.models), false);
     assert.equal(isUnsupported(ports.steps), false);
     assert.equal(isUnsupported(ports.plugin), false);
@@ -98,7 +98,7 @@ describe('loadShippedHosts', () => {
       const id = specifier.split('/').at(-2) ?? '';
       return Promise.resolve({ default: { declaration: hostDeclarationData({ id }), create: () => ({ ...everyPortUnsupported(), paths: unsupported(`${id} tells no folder`) }) } });
     };
-    const sources = await loadShippedHosts(run, importer);
+    const sources = (await loadShippedHosts(run, importer)).map((shipped) => shipped.ports);
     const ids = Object.keys(HOST_ADAPTERS);
     assert.equal(ids.includes(DEFAULT_HOST), true);
     assert.deepEqual(asked, ids.map((id) => `../adapters/hosts/${id}/index.ts`));
@@ -108,10 +108,26 @@ describe('loadShippedHosts', () => {
     );
   });
 
-  it('loads the shipped adapters as they are, each with its paths', async () => {
-    const sources = await loadShippedHosts(run);
+  it('loads the shipped adapters as they are, each with its secret files', async () => {
+    const sources = (await loadShippedHosts(run)).map((shipped) => shipped.ports);
     assert.equal(sources.length, Object.keys(HOST_ADAPTERS).length);
-    assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).paths)), sources.map(() => false));
+    assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
+  });
+
+  it("gives each shipped host the session variables its declaration names, its ports built or not (T5188)", async () => {
+    const sessionVariables = { marks: ['STANDIN_AGENT'], identity: ['STANDIN_SESSION'] };
+    const importer: ModuleImporter = (specifier) => {
+      const id = specifier.split('/').at(-2) ?? '';
+      return Promise.resolve({ default: { declaration: hostDeclarationData({ id, sessionVariables }), create: () => everyPortUnsupported() } });
+    };
+    const shipped = await loadShippedHosts(run, importer);
+    assert.deepEqual(shipped.map((host) => host.sessionVariables), Object.keys(HOST_ADAPTERS).map(() => sessionVariables));
+    const real = await loadShippedHosts(run);
+    for (const [index, id] of Object.keys(HOST_ADAPTERS).entries()) {
+      const load = await loadHost(id);
+      assert.ok(load.kind !== 'refused', `the shipped host adapter ${id} did not load`);
+      assert.deepEqual(real[index]?.sessionVariables, load.value.declaration.sessionVariables, id);
+    }
   });
 
   it('throws when one of them does not load, as the running one does: none is left out in silence', async () => {

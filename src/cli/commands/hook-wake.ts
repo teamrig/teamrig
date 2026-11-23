@@ -4,7 +4,8 @@ import { liveRunsOf } from '../../delivery/detached-runs.ts';
 import { deliveryPlaces, detachedDirOf } from '../../delivery/places.ts';
 import { changedSincePoke, decideRushPoke, pokeMarkOf, queuedTasksOf, rushPokePrompt, rushPokeToast, stepRunningFor, type PokeInput, type PokeMark, type PokeNow } from '../../wake/rush-poke.ts';
 import { BurstLog } from '../../budget/burst-log.ts';
-import { claudeProjectsDir, lastWriteOf } from '../../budget/discover.ts';
+import { lastWriteOf } from '../../budget/discover.ts';
+import { pathsIfKnown, transcriptsFolderIfKnown } from '../host.ts';
 import { autoRestartOf } from '../../config/refresh.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
@@ -16,7 +17,7 @@ import { RefreshStore } from '../../refresh/store.ts';
 import { seenLinesOf, unseenLinesOf } from '../../inbox/inbox.ts';
 import { dayProbeClaimLine, dayProbePath } from '../../restore/day-probe.ts';
 import { DayProbeStore } from '../../restore/day-probe-store.ts';
-import { claudeCredentialsPath, LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath, loginRetryLine, type LoginRetryWhy } from '../../restore/login.ts';
+import { LOGIN_LOCK, loginHoldsDayStart, loginMarkerPath, loginRetryLine, type LoginRetryWhy } from '../../restore/login.ts';
 import { LoginStore } from '../../restore/login-store.ts';
 import { apiRetryLine, claimApiRetry } from '../../restore/api-error.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../../restore/registry.ts';
@@ -89,13 +90,14 @@ function waitAnswer(scope: Extract<WakeScope, { kind: 'found' }>, recheckAt: num
 
 /**
  * Where a stuck tab's retry is claimed (src/restore/login.ts): the kit home's login marker in its store, the
- * credentials file whose change tests a renewed login, and the restore log each retry is written to; and where the
- * day-start probe is claimed (src/restore/day-probe.ts), in its store and file.
+ * credentials file whose change tests a renewed login (none on a host that keeps the login in no file, or whose
+ * folders teamrig does not know), and the restore log each retry is written to; and where the day-start probe is
+ * claimed (src/restore/day-probe.ts), in its store and file.
  */
 interface LoginScope {
   readonly store: LoginStore;
   readonly marker: string;
-  readonly credentials: string;
+  readonly credentials: string | undefined;
   readonly log: string;
   readonly probe: DayProbeStore;
   readonly probeFile: string;
@@ -107,16 +109,26 @@ function loginScopeOf(runtime: CliRuntime, kitHome: string): LoginScope {
   return {
     store: new LoginStore(runtime.files, marker, fileLockOf(runtime, `${marker}.lock`, LOGIN_LOCK)),
     marker,
-    credentials: claudeCredentialsPath(runtime.env, runtime.userHome),
+    credentials: pathsIfKnown(runtime)?.loginFile(runtime.userHome),
     log: restoreLogPath(kitHome),
     probe: new DayProbeStore(runtime.files, probeFile, fileLockOf(runtime, `${probeFile}.lock`, LOGIN_LOCK)),
     probeFile,
   };
 }
 
+/** When the credentials file last changed; undefined with no such file, which no renewed login can then show. */
+async function credentialsAtOf(runtime: CliRuntime, login: LoginScope): Promise<number | undefined> {
+  return login.credentials === undefined ? undefined : runtime.files.modifiedAt(login.credentials);
+}
+
+/** What a tab stuck on the login watches: the marker, and the credentials file where there is one. */
+function loginWatchOf(login: LoginScope): string[] {
+  return login.credentials === undefined ? [login.marker] : [login.marker, login.credentials];
+}
+
 /** The login as the day's moments see it before the probe: expired while the marker holds them (`loginHoldsDayStart`). */
 async function dayLoginOf(runtime: CliRuntime, login: LoginScope): Promise<DayStartLogin> {
-  return loginHoldsDayStart(await login.store.read(), await runtime.files.modifiedAt(login.credentials)) ? { kind: 'expired' } : { kind: 'ok' };
+  return loginHoldsDayStart(await login.store.read(), await credentialsAtOf(runtime, login)) ? { kind: 'expired' } : { kind: 'ok' };
 }
 
 /** Where the check stands: the team session the tab is, and the kit it is in, found from the pointer `from`. */
@@ -175,7 +187,7 @@ async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope,
     return decision;
   }
   const facts = await budgetFactsOf(runtime, { kit: scope.kit, config, roster: scope.roster, id: scope.id }, undefined);
-  const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [scope.tab]);
+  const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [scope.tab]);
   const rest = wakeRestOf(facts, config.budget.quietHours, input.now, wakeWOf(config, lastTurnAt, input.now));
   const maxPriority = effectivePriority(input.maxPriority, rest, config.budget.quietHours);
   const exemption = restExemptionOf(rest, input.maxPriority, input.tasks, input.elsewhere);
@@ -258,7 +270,7 @@ async function pokeOf(
   }
   const zone = teamZone(config, runtime);
   const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config));
-  const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+  const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
   const idleMs = config.rush.pokeAfterMinutes * MINUTE_MS;
   const pokeInput: PokeInput = { rush, startable, lastTurnAt, now, idleMs, lastPokeAt: state.settled.poke, queued: new Set() };
   const due = decideRushPoke(pokeInput);
@@ -357,7 +369,7 @@ async function momentsOf(
     return none;
   }
   const facts = await budgetFactsOf(runtime, { kit, config, roster, id }, undefined);
-  const lastTurnAt = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+  const lastTurnAt = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
   const input: DayStartInput = {
     due: dueMoments(now, dayStart.at, facts === undefined ? inBurst : facts.burst, state.settled),
     startable,
@@ -371,7 +383,7 @@ async function momentsOf(
   };
   const decision = decideDayStart(input);
   if (decision.verdict.kind !== 'wake') {
-    const watch = input.login.kind === 'expired' ? [login.marker, login.credentials] : [];
+    const watch = input.login.kind === 'expired' ? loginWatchOf(login) : [];
     return { verdict: decision.verdict, state: { ...state, settled: decision.settled }, lastTurnAt, next, watch };
   }
   const gate = await login.probe.claim(Math.max(...decision.verdict.moments.map((moment) => moment.at)), tab, now);
@@ -412,7 +424,7 @@ async function decide(
   const lock = fileLockOf(runtime, store.lockOf(id), { ...config.lock, waitMs: 0 });
   return lock.run(async (): Promise<CheckVerdict> => {
     const now = clock.now();
-    const retry = await login.store.claimRetry(tab, now, await files.modifiedAt(login.credentials));
+    const retry = await login.store.claimRetry(tab, now, await credentialsAtOf(runtime, login));
     if (retry.kind === 'retry') {
       return { kind: 'login', why: retry.why, failAt: retry.failAt };
     }
@@ -473,7 +485,7 @@ async function decide(
     const apiAt = api.kind === 'later' ? api.at : undefined;
     const pokeAt = poke.kind === 'later' ? poke.at : undefined;
     const recheckAt = earliest(handedAt, askedAt, day.verdict.kind === 'later' ? day.verdict.at : undefined, day.next, retryAt, apiAt, pokeAt);
-    const watch = new Set([...(retry.kind === 'none' ? [] : [login.marker, login.credentials]), ...day.watch]);
+    const watch = new Set([...(retry.kind === 'none' ? [] : loginWatchOf(login)), ...day.watch]);
     return { kind: 'wait', recheckAt, watch: [...watch] };
   });
 }
@@ -532,7 +544,7 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
     return answer(runtime, waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS));
   }
   const now = runtime.clock.now();
-  const last = verdict.kind === 'moments' || verdict.kind === 'poke' ? verdict.lastTurnAt : await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), [tab]);
+  const last = verdict.kind === 'moments' || verdict.kind === 'poke' ? verdict.lastTurnAt : await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
   const wPerPct = await readTodayWPerPct(runtime, kit.paths, config, now);
   const measured = await readMeasuredTurns(runtime, kit.paths, id, config.sessions, now);
   const cost = wakeCost(last === undefined ? undefined : now - last, config.messages.coldAfterMinutes, wPerPct, measured);

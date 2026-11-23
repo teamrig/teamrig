@@ -1,5 +1,5 @@
 import { transcriptTitleOf } from "../../budget/attribute.js";
-import { claudeProjectsDir, discoverTranscripts } from "../../budget/discover.js";
+import { discoverTranscripts } from "../../budget/discover.js";
 import { CATCH_UP_CHUNK_BYTES } from "../../budget/measure.js";
 import { applyPlans, attributeInTree, foldTeam, outcomeCounts, planDays } from "../../budget/rollup-run.js";
 import { rollupDayOf } from "../../budget/rollup-file.js";
@@ -10,7 +10,7 @@ import { JsonlMarkLog } from "../../inbox/store.js";
 import { noPositionals, UsageError } from "../args.js";
 import { openTeamKit, requireConfig, rosterOf } from "../kit.js";
 import { logRollupRun } from "../rollup-start.js";
-import { transcriptsOf, usageOf } from "../host.js";
+import { transcriptsFolderOf, transcriptsOf, usageOf } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { loadTree } from "../tree.js";
 /**
@@ -86,7 +86,7 @@ export async function rollup(args, runtime) {
     const team = kit.paths.team;
     const roster = await rosterOf(runtime, kit, config);
     const since = (parseUtcDay(range.from) ?? new Date(now - MS_PER_DAY)).getTime();
-    const sessions = await discoverTranscripts(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), since);
+    const sessions = await discoverTranscripts(runtime.transcripts, transcriptsFolderOf(runtime), since);
     const tree = await treeMembersOf(runtime, await loadTree(runtime), team);
     const byTeamSession = await attributeInTree({ own: team, tree, sessions, titleOf: (path) => transcriptTitleOf(reader, runtime.transcripts, path) });
     const rollups = await foldTeam({ bytes: runtime.transcripts, reader, usage }, { byTeamSession, lead: roster.holderOf('lead'), chunkBytes: CATCH_UP_CHUNK_BYTES });

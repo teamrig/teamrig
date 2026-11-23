@@ -7,7 +7,7 @@ import { ISSUE_FIELDS_QUERY } from './queries.ts';
 import type { RepoAccess } from './tokens.ts';
 
 const REPO = 'acme/web';
-const ACCESS: RepoAccess = { owner: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme', env: { HOME: '/u', GH_TOKEN: 'read-token' } };
+const ACCESS: RepoAccess = { owner: 'acme', scope: 'acme', credential: 'teamrig-gh-acme', save: 'save teamrig-gh-acme', env: { HOME: '/u', GH_TOKEN: 'read-token' } };
 
 const FIELDS = [
   { __typename: 'IssueFieldSingleSelect', name: 'Priority', fullDatabaseId: '11', options: [{ name: 'P0' }, { name: 'P1' }, { name: '' }] },

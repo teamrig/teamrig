@@ -19,12 +19,11 @@ import { BurstLog } from '../../budget/burst-log.ts';
 import { calibrationOf } from '../../budget/calibration.ts';
 import { classRowsOf } from '../../budget/class-spend.ts';
 import { activeCut, CutLog, cutText, decideCut, type Cut } from '../../budget/cut.ts';
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { ExtraLog, lastSpentOf, type ExtraEntry } from '../../budget/extra.ts';
 import { formatPct, formatUsd } from '../../budget/format.ts';
 import { activeGroupLift, activeLift, decideLift, LiftLog, liftText, parentBudgetText, type Lift, type LiftNames } from '../../budget/lift.ts';
 import { CATCH_UP_CHUNK_BYTES, MAX_RUNS_PER_SESSION, measure, OUTSIDE_ID, outsideUsageDir, type Measured } from '../../budget/measure.ts';
-import { paceLineOfWeek } from '../../budget/pace.ts';
+import { paceLineOfWeek, type WeekWindow } from '../../budget/pace.ts';
 import { resetStockLines } from '../../budget/resets.ts';
 import { budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, groupPartsOf, liftPlaceOf, liftWeekPctOf, teamPartOf, type BudgetSplit, type TeamsOnAccount } from '../../budget/parts.ts';
 import { fundForDay, isPaused, pausableOf } from '../../budget/pause.ts';
@@ -72,7 +71,7 @@ import type { RepoState } from '../../push-guard/push.ts';
 import { TASK_ID } from '../../register/model.ts';
 import { accountWeekOn, kitHomeAccountsOf, otherTeamsOnAccount, peerMarksOf } from '../account-teams.ts';
 import { UsageError, onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
-import { hostOf, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
+import { hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
 import { isUnsupported } from '../../ports/host/index.ts';
 import { callerOf, type TypedTimes } from '../inputs.ts';
 import { rushLine, rushSegment } from '../../budget/rush.ts';
@@ -140,7 +139,7 @@ async function readBudget(runtime: CliRuntime, kit: Kit, config: KitConfig, rost
       clock,
     },
     {
-      projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+      projectsDir: transcriptsFolderIfKnown(runtime),
       since: options.recountDay ?? dayStartOf(now) - (CURSOR_DAYS_KEPT - 1) * MS_PER_DAY,
       team: kit.paths.team,
       roster,
@@ -185,7 +184,7 @@ export async function weekLineOf(runtime: CliRuntime, kit: Kit, config: KitConfi
 }
 
 /** How the team's part of the day is split among its sessions: down its lead tree, by their queued work (`work`), the lifts in force and the sessions a short day may pause. */
-function splitOf(reading: Reading, team: string, roster: Roster, config: Pick<KitConfig, 'budget' | 'leads' | 'roles'>, work: ReadonlyMap<string, WorkByPriority>, asks: ReadonlyMap<string, readonly string[]>): BudgetSplit {
+function splitOf(reading: Reading, team: string, roster: Roster, config: Pick<KitConfig, 'budget' | 'leads' | 'roles' | 'github' | 'serviceRoles'>, work: ReadonlyMap<string, WorkByPriority>, asks: ReadonlyMap<string, readonly string[]>): BudgetSplit {
   return budgetSplitOf({ team, ids: roster.ids, sessions: config.budget.sessions, leads: config.leads, work, asks, pausable: pausableOf(config, team, roster.ids), lifts: reading.lifts, now: reading.now, usedPct: reading.week.usedPct });
 }
 
@@ -756,14 +755,14 @@ async function meetingMarkOf(runtime: CliRuntime, team: LoadedTeam | undefined, 
 }
 
 /**
- * Where the team's hooks last said the week resetting at `resetsAt` counts from; undefined with no file, one of another
- * week, or one that names no start. A failed read is told on stderr, never breaking the status bar: it is caught here
- * so it cannot read as a snapshot that was not saved.
+ * Where the team's hooks last said the week resetting at `resetsAt` counts from, and its use there; undefined with no
+ * file, one of another week, or one that names no start. A failed read is told on stderr, never breaking the status
+ * bar: it is caught here so it cannot read as a snapshot that was not saved.
  */
-async function keptWeekStart(runtime: CliRuntime, path: string, resetsAt: number): Promise<number | undefined> {
+async function keptWeekStart(runtime: CliRuntime, path: string, resetsAt: number): Promise<Pick<WeekWindow, 'start' | 'startPct'> | undefined> {
   try {
     const kept = await readTeamWeek(runtime.files, path);
-    return kept?.resetsAt === resetsAt ? kept.start : undefined;
+    return kept?.resetsAt === resetsAt && kept.start !== undefined ? { start: kept.start, startPct: kept.startPct } : undefined;
   } catch (error) {
     runtime.out.stderr(`teamrig statusline: the team's week was not read: ${errorMessage(error)}`);
     return undefined;

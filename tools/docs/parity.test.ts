@@ -101,9 +101,9 @@ describe('renderParity', () => {
     );
   });
 
-  it('draws the adapters teamrig ships: Claude Code, then GitHub, Jira and the local connector, then the six terminals side by side', async () => {
+  it('draws the adapters teamrig ships: Claude Code and Codex CLI, then GitHub, Jira and the local connector, then the six terminals side by side', async () => {
     const text = renderParity(await readDeclarations());
-    assert.ok(text.includes('\n| Feature | What it does | Claude Code |\n'));
+    assert.ok(text.includes('\n| Feature | What it does | Claude Code | Codex CLI |\n'));
     assert.ok(text.includes('\n| Feature | What it does | GitHub | Jira | Local |\n'));
     assert.ok(text.includes('\n| Feature | What it does | tmux | Windows Terminal | macOS Terminal | GNOME Terminal | Konsole | x-terminal-emulator |\n'));
     assert.match(rowOf(text, 'pane.window') ?? '', /^\| `pane\.window` \| [^|]+ \| unsupported: [^|]+ \| supported, unproved \| unsupported: /);

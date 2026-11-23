@@ -9,7 +9,7 @@ import { gitEnvironment } from "../core/git-run.js";
 export const GIT_TIMEOUT_MS = 60_000;
 /** Claude Code's marketplace update clones or pulls a whole marketplace; past this it is killed and the update failed. */
 export const APPLY_TIMEOUT_MS = 180_000;
-/** git through `hooks`, never asking for a login (`GIT_TERMINAL_PROMPT=0`): a remote that wants one fails quietly. */
+/** git through `hooks`, never asking for a login (`gitEnvironment` turns prompts off): a remote that wants one fails quietly. */
 export function hookGit(hooks, env) {
     return {
         async run(cwd, args) {
@@ -17,7 +17,7 @@ export function hookGit(hooks, env) {
             const end = await hooks.run({
                 argv: ['git', ...args],
                 cwd,
-                env: { ...gitEnvironment(env), GIT_TERMINAL_PROMPT: '0' },
+                env: gitEnvironment(env),
                 timeoutMs: GIT_TIMEOUT_MS,
                 onLine: (line) => lines.push(line),
             });

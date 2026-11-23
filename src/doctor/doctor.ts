@@ -3,7 +3,7 @@ import { isDefaultModel } from '../config/launch.ts';
 import type { Roster } from '../config/roster.ts';
 import { describeNameClash, describeTreeProblem, type NameClash, type TreeProblem } from '../config/tree.ts';
 import type { BudgetConfig, ContextFilesConfig, KitConfig, LaunchConfig } from '../config/types.ts';
-import { ENV, type Env } from '../core/home.ts';
+import type { Env } from '../core/home.ts';
 import { isReservedName, RESERVED_RULE } from '../core/ids.ts';
 import type { PathKind } from '../core/path-probe.ts';
 import { MS_PER_DAY, MS_PER_MINUTE, utcMinuteOf } from '../core/time.ts';
@@ -11,6 +11,7 @@ import type { TimeZone } from '../core/zone.ts';
 import { unreadSince } from '../inbox/inbox.ts';
 import type { Unread } from '../inbox/unread.ts';
 import type { RenameLogRead } from '../names/rename.ts';
+import type { RoutingOverride } from '../ports/host/index.ts';
 import { wideAllowText } from '../permissions/report.ts';
 import type { WideAllow } from '../permissions/trim.ts';
 import { describeRequirement, type RequirementProblem } from '../requirements/requirements.ts';
@@ -46,8 +47,10 @@ export const UNREAD_INBOX_DAYS = 7;
  * - `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`: a broken link in the
  *   team's tree of teams (see `TreeProblem`);
  * - `name-two-teams`: a session name this team shares with another team, though names are machine-wide;
- * - `effort-env`: `CLAUDE_CODE_EFFORT_LEVEL` set, which beats every `--effort`, `/effort` and per-call Agent effort;
- * - `model-env`: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set, which at 1 beats every per-call Agent model;
+ * - `effort-env`: the host's effort override variable set (Claude Code: `CLAUDE_CODE_EFFORT_LEVEL`), which beats every
+ *   effort a session or helper is given;
+ * - `model-env`: the host's helper model override variable set (Claude Code: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`), which
+ *   beats every per-call helper model;
  * - `settings-json`: a Claude Code settings file that is not a JSON object, so its `env` block went unchecked;
  * - `launch-effort`: a session's `launch` names a model but no effort, so it starts at the model's default effort;
  * - `launch-model`: a session's `launch` names a model this host does not run, so `open` refuses to start it;
@@ -63,7 +66,9 @@ export const UNREAD_INBOX_DAYS = 7;
  * - `shell-history`: a PowerShell history file that keeps every line typed in the console, a credential in a URL too,
  *   while no PowerShell profile sets a history handler or turns saving off;
  * - `page-webhook`: the page webhook the team's alerts (or a team's above) name gives no https URL, so an expired
- *   Claude login pages nobody until the day it is needed (T2349: host alerts dead 19 h unseen).
+ *   Claude login pages nobody until the day it is needed (T2349: host alerts dead 19 h unseen);
+ * - `cli-path`: the kit home's bin folder is not on the user's PATH, so `teamrig` runs in no terminal of the user's
+ *   own (T5095: the owner's `teamrig ui` was not found in PowerShell).
  */
 export type FindingKind =
   | 'requirement'
@@ -90,7 +95,8 @@ export type FindingKind =
   | 'deny-missing'
   | 'project-missing'
   | 'shell-history'
-  | 'page-webhook';
+  | 'page-webhook'
+  | 'cli-path';
 
 /** A project folder the team config names, and what is at its path on this machine. */
 export interface ConfiguredProject {
@@ -137,6 +143,17 @@ export interface PageProblem {
   readonly team: string;
   readonly key: string;
   readonly problem: string;
+}
+
+/** Whether teamrig runs from the user's own terminals: its bin folder, the PATH it goes on, and the team's switch. */
+export interface CliPathState {
+  /** The kit home's bin folder, which holds the teamrig launchers. */
+  readonly folder: string;
+  /** Where the user's PATH is kept (`UserPath.where`). */
+  readonly where: string;
+  readonly onPath: boolean;
+  /** The team's `cliOnPath.enabled`: whether its session starts add the folder. */
+  readonly enabled: boolean;
 }
 
 /** A session and the model and effort it starts on. */
@@ -187,6 +204,8 @@ export interface DoctorInput {
   readonly tree: { readonly problems: readonly TreeProblem[]; readonly clashes: readonly NameClash[] };
   /** The environment doctor runs in; only the variables that override a model or effort choice are read. */
   readonly env: Env;
+  /** The host's variables that override a model or effort choice (`HostModels.routingOverrides`); none where the host knows no models. */
+  readonly routingOverrides: readonly RoutingOverride[];
   /** The local allow rules off `permissions.keepAllow` that approve a whole tool or program or hold a credential (`readWideAllow`), as counts. */
   readonly wideAllow: WideAllow;
   /** The `env` blocks of the Claude Code settings files the team's sessions read (`readSettingsEnv`). */
@@ -201,6 +220,7 @@ export interface DoctorInput {
   readonly shellHistory: ShellHistory;
   /** Why the page webhook the team's alerts name gives no URL (`pageCheckOf`); undefined when it resolves or none is named. */
   readonly page: PageProblem | undefined;
+  readonly cliPath: CliPathState;
   /** The team's own budget switch and quiet hours: `quietHours` is no account key, so a child team is checked on its own. */
   readonly budget: Pick<BudgetConfig, 'enabled' | 'quietHours'>;
   readonly now: Date;
@@ -461,43 +481,28 @@ function treeFindings({ tree, command }: DoctorInput): Finding[] {
   ];
 }
 
-/** A variable that overrides a choice made anywhere else, and what it does to the sessions and helpers that get it. */
-interface RoutingOverride {
-  readonly kind: 'effort-env' | 'model-env';
-  readonly name: string;
-  readonly effect: (value: string) => string;
-}
-
-const ROUTING_OVERRIDES: readonly RoutingOverride[] = [
-  {
-    kind: 'effort-env',
-    name: ENV.effortLevel,
-    effect: (value) => `it beats every --effort (the team config's launch efforts among them), /effort and per-call Agent effort, so a session or helper that gets it runs at ${value} whatever it was given`,
-  },
-  {
-    kind: 'model-env',
-    name: ENV.subagentModelForce,
-    effect: () => 'set to 1 it beats every per-call Agent model, so a helper that gets it never runs on the model its caller gives it',
-  },
-];
+const OVERRIDE_FINDING = { effort: 'effort-env', model: 'model-env' } as const;
 
 /**
- * A variable set in doctor's own environment or in a settings file's `env` block that overrides every effort or
- * helper model a session or its caller picks, and a settings file whose block could not be read. Only the
- * overriding variables' values are printed.
+ * A host variable (`routingOverrides`) set in doctor's own environment or in a settings file's `env` block that
+ * overrides every effort or helper model a session or its caller picks, and a settings file whose block could not be
+ * read. Only the overriding variables' values are printed. A host with no such variable gives no finding.
  */
-function routingEnvFindings({ env, settingsEnv }: DoctorInput): Finding[] {
+function routingEnvFindings({ env, settingsEnv, routingOverrides }: DoctorInput): Finding[] {
+  if (routingOverrides.length === 0) {
+    return [];
+  }
   const sources = [
     { where: 'the environment doctor runs in', env },
     ...settingsEnv.flatMap((settings) => (settings.kind === 'env' ? [{ where: `the env block of ${settings.path}`, env: settings.env }] : [])),
   ];
-  const overrides = ROUTING_OVERRIDES.flatMap(({ kind, name, effect }) =>
+  const overrides = routingOverrides.flatMap(({ kind, variable, effect }) =>
     sources.flatMap(({ where, env: set }): Finding[] => {
-      const value = set[name]?.trim();
-      return value ? [{ kind, detail: `${name}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
+      const value = set[variable]?.trim();
+      return value ? [{ kind: OVERRIDE_FINDING[kind], detail: `${variable}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
     }),
   );
-  const names = ROUTING_OVERRIDES.map(({ name }) => name).join(' or ');
+  const names = routingOverrides.map(({ variable }) => variable).join(' or ');
   const unreadable = settingsEnv.flatMap((settings): Finding[] =>
     settings.kind === 'unreadable' ? [{ kind: 'settings-json', detail: `${settings.path} is not a JSON object, so doctor could not check its env block for ${names}` }] : [],
   );
@@ -594,6 +599,21 @@ function pageFindings({ page, command }: DoctorInput): Finding[] {
 }
 
 /**
+ * The kit home's bin folder missing from the user's PATH: the CLI then runs only where a hook or a session names its
+ * full path, never as `teamrig` in a terminal the user opens. On, a session start adds it; off, only the user can.
+ */
+function cliPathFindings({ cliPath, command }: DoctorInput): Finding[] {
+  if (cliPath.onPath) {
+    return [];
+  }
+  const missing = `${cliPath.folder} is not on the user's PATH (${cliPath.where}), so \`${command}\` is not found in a terminal you open`;
+  const fix = cliPath.enabled
+    ? `the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal`
+    : `cliOnPath.enabled is false, so no session start adds it: set it to true and start a session, or add the folder to the PATH yourself, then open a new terminal`;
+  return [{ kind: 'cli-path', detail: `${missing}: ${fix}` }];
+}
+
+/**
  * Quiet hours whose action is `ask`: in them a helper launch raises a permission prompt (`helperGate`), which nobody
  * at the host answers at night, so the tab waits until someone does (T1983: 222 minutes on 11-04). `block` refuses
  * the launch with its reason and the tab goes on. The budget off lets every launch go, and quiet hours of no length
@@ -621,7 +641,7 @@ function quietHoursFindings({ budget, now, zone }: DoctorInput): Finding[] {
  * inboxes nobody reads, rules too long to show, a lead's start past the cap or with a rules file cut to a pointer, text every call re-reads over its budget (files, and the lists the newest
  * session holds), a broken tree of teams or a session name two teams use, a variable that overrides every model or effort
  * choice, a launch with a model but no effort, local allow rules that approve a whole tool or program or hold a credential,
- * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, and a page webhook that gives no URL.
+ * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, and a teamrig bin folder off the user's PATH.
  * It reads only; every fix is the user's.
  */
 export function doctorFindings(input: DoctorInput): Finding[] {
@@ -643,6 +663,7 @@ export function doctorFindings(input: DoctorInput): Finding[] {
     ...projectFindings(input),
     ...shellHistoryFindings(input),
     ...pageFindings(input),
+    ...cliPathFindings(input),
   ];
 }
 

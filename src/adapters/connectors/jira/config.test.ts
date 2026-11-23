@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JsonRecord } from '../../../plugin-api/index.ts';
-import { CONFIG_KEYS, parseJiraConfig, type JiraConfig } from './config.ts';
+import { CONFIG_KEYS, MAX_PEOPLE, parseJiraConfig, type JiraConfig } from './config.ts';
 
 interface Read {
   readonly config: JiraConfig;
@@ -15,10 +15,12 @@ function read(section: JsonRecord): Read {
   return { config, problems };
 }
 
-const NOTHING: JiraConfig = { site: undefined, projects: [], issueType: undefined };
+const NOTHING: JiraConfig = { site: undefined, projects: [], issueType: undefined, people: [] };
 const SITE = "site must be the site's name, the part before .atlassian.net (acme for acme.atlassian.net), not ";
 const PROJECTS = 'projects must be a list of project keys, as Jira spells them (["ENG"])';
 const ISSUE_TYPE = 'issueType must be the name of an issue type on one line, as the project lists it (Task), not ';
+const PEOPLE = 'people must be a list of Jira account ids (["5b10ac8d82e05b22cc7d4ef5"])';
+const ACCOUNT = 'must be a Jira account id, letters, digits, :, _ or - (5b10ac8d82e05b22cc7d4ef5), not';
 
 describe("the Jira connector's config section (T4766)", () => {
   it('reads an empty section as no site, no project and its own pick of a type', () => {
@@ -27,14 +29,14 @@ describe("the Jira connector's config section (T4766)", () => {
 
   it('reads the site in lowercase, each project key in capitals and the issue type as written', () => {
     assert.deepEqual(read({ site: ' Acme ', projects: ['ENG', 'ops', ' Web_2 '], issueType: ' Bug ' }), {
-      config: { site: 'acme', projects: ['ENG', 'OPS', 'WEB_2'], issueType: 'Bug' },
+      config: { site: 'acme', projects: ['ENG', 'OPS', 'WEB_2'], issueType: 'Bug', people: [] },
       problems: [],
     });
     assert.deepEqual(read({ site: 'acme-labs' }).config, { ...NOTHING, site: 'acme-labs' });
   });
 
   it('declares the keys it reads, each with its line', () => {
-    assert.deepEqual(Object.keys(CONFIG_KEYS), ['site', 'projects', 'issueType']);
+    assert.deepEqual(Object.keys(CONFIG_KEYS), ['site', 'projects', 'issueType', 'people']);
     assert.deepEqual(Object.keys(read({ site: 'acme' }).config), Object.keys(CONFIG_KEYS));
   });
 
@@ -74,7 +76,33 @@ describe("the Jira connector's config section (T4766)", () => {
     }
   });
 
+  it('reads the people as trimmed account ids, each once (T5013)', () => {
+    assert.deepEqual(read({ people: [' 5b10ac8d82e05b22cc7d4ef5 ', '712020:2f6e-a_b'] }).config, { ...NOTHING, people: ['5b10ac8d82e05b22cc7d4ef5', '712020:2f6e-a_b'] });
+  });
+
+  it('reports people that are no list of ids, and reads none (T5013)', () => {
+    for (const people of ['abc', { abc: true }, ['abc', 7], null]) {
+      assert.deepEqual(read({ people }), { config: NOTHING, problems: [PEOPLE] }, JSON.stringify(people));
+    }
+  });
+
+  it('reports each person that is no account id, names one again or is past the bound, and keeps the rest (T5013)', () => {
+    assert.deepEqual(read({ people: ['abc', 'a"b', 'abc', '', 'x y', 'def'] }), {
+      config: { ...NOTHING, people: ['abc', 'def'] },
+      problems: [
+        `people[1] ${ACCOUNT} "a\\"b"`,
+        'people[2] names abc a second time',
+        `people[3] ${ACCOUNT} ""`,
+        `people[4] ${ACCOUNT} "x y"`,
+      ],
+    });
+    const many = Array.from({ length: MAX_PEOPLE + 1 }, (_, index) => `id${index}`);
+    const read101 = read({ people: many });
+    assert.deepEqual(read101.config.people, many.slice(0, MAX_PEOPLE));
+    assert.deepEqual(read101.problems, [`people[${MAX_PEOPLE}] is past the ${MAX_PEOPLE} account ids the section may name`]);
+  });
+
   it('reports every problem of a section at once', () => {
-    assert.equal(read({ site: 7, projects: 'ENG', issueType: '' }).problems.length, 3);
+    assert.equal(read({ site: 7, projects: 'ENG', issueType: '', people: 'abc' }).problems.length, 4);
   });
 });

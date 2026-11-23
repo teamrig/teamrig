@@ -6,7 +6,8 @@ import { nodeFiles } from '../../src/core/files.ts';
 import { ENV } from '../../src/core/home.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
-import { type ClearMerge, type ClearTaskMerge, type MergeClearance, type WorkCommit, approvedRebase, clearMergeFrom, clearTaskMergeFrom, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import type { WorkCommit } from '../../src/merge/work-commits.ts';
+import { type ClearMerge, type ClearTaskMerge, type MergeClearance, approvedRebase, clearMergeFrom, clearTaskMergeFrom, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { type CatchUp, type CatchUpRequest, catchUp } from './catch-up.ts';
 import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
@@ -42,7 +43,8 @@ import { describeCredential } from './token-check.ts';
  * from origin, only while it holds nothing but a release (release-pull.ts), on that task's approval; the merge never
  * opens that pull request. The release tool rewrites its head when main gains a commit its changelog shows; a main
  * that gained only hidden ones leaves the head behind, so the merge catches that head up itself and merges it on the
- * same approval (release-catch-up.ts, T5055), and refuses any other move.
+ * same approval (release-catch-up.ts, T5055). A head the release tool wrote again merges on the approval of the head
+ * `--approved` names when both hold only a release (T5117), both heads printed.
  *
  * A rebase merge replays the branch onto main as it is at merge time, and GitHub merges a stale branch
  * whenever it does not conflict: what lands is then a tree no check ran on, and a commit that repeats one
@@ -74,17 +76,24 @@ const rerunWhy = (outcomes: readonly CheckOutcome[]): string =>
   outcomes.some(outcome => outcome.state === 'flaky') ? 'failed on a check listed as flaky (repos.json), so the same sha goes once more' : 'cancelled before any step ran (no runner came)';
 
 /**
- * The required checks of `sha`, or the error of a read GitHub gave no answer to (a 5xx, a timeout, a reset: T2988),
- * which the wait reads once more at its next poll, so one bad read does not end a wait of up to 45 minutes. GitHub's
- * own refusal (a 4xx) and a second bad read in a row throw.
+ * How many check reads in a row GitHub may give no answer to before the wait ends (#1234): a network blip often
+ * outlasts one poll, and ending the wait costs the rebased head a fresh approval and a new run.
  */
-function readOnceMore(read: () => CheckOutcome[], failedBefore: boolean, log: (line: string) => void): CheckOutcome[] | Error {
+export const CHECK_READ_TRIES = 4;
+
+/**
+ * The required checks of `sha`, or the error of a read GitHub gave no answer to (a 5xx, a timeout, a reset: T2988),
+ * which the wait reads again at its next poll, so a short outage does not end a wait of up to 45 minutes. GitHub's
+ * own refusal (a 4xx) throws at once, and so does the CHECK_READ_TRIES-th bad read in a row (`failedInRow` before it).
+ */
+function readAgain(read: () => CheckOutcome[], failedInRow: number, log: (line: string) => void): CheckOutcome[] | Error {
   try {
     return read();
   } catch (error) {
     const message = messageOf(error);
-    if (failedBefore || REFUSAL.test(message)) throw error;
-    log(`reading the checks got no answer from GitHub (${message}): reading them once more at the next poll`);
+    const tries = failedInRow + 1;
+    if (tries >= CHECK_READ_TRIES || REFUSAL.test(message)) throw error;
+    log(`reading the checks got no answer from GitHub (${message}): no answer ${tries} of ${CHECK_READ_TRIES} in a row, reading them again at the next poll`);
     return error instanceof Error ? error : new Error(message);
   }
 }
@@ -93,7 +102,7 @@ function readOnceMore(read: () => CheckOutcome[], failedBefore: boolean, log: (l
  * Polls the required checks until they pass, one fails, or the deadline. A run whose required jobs GitHub cancelled
  * before any step ran (no runner came), or whose only failures are checks listed as flaky (T2532, T2988), is re-run
  * once, then waited on again; `evaluate` fails the same in a later attempt, and a run already re-run here is not
- * re-run again while GitHub starts the new attempt. A read with no answer from GitHub is tried once more (readOnceMore).
+ * re-run again while GitHub starts the new attempt. A read with no answer from GitHub is tried again (readAgain).
  */
 export async function waitForChecks(
   gh: Gh,
@@ -107,10 +116,10 @@ export async function waitForChecks(
 ): Promise<ChecksResult> {
   const deadline = waiter.now() + polling.timeoutMs;
   const rerun = new Set<number>();
-  let readFailed = false;
+  let readsFailed = 0;
   for (;;) {
-    const read = readOnceMore(() => readChecks(gh, repo, sha, branch, required), readFailed, log);
-    readFailed = read instanceof Error;
+    const read = readAgain(() => readChecks(gh, repo, sha, branch, required), readsFailed, log);
+    readsFailed = read instanceof Error ? readsFailed + 1 : 0;
     if (read instanceof Error) {
       if (waiter.now() >= deadline) throw read;
       await waiter.sleep(Math.min(polling.intervalMs, Math.max(deadline - waiter.now(), 0)));
@@ -668,8 +677,12 @@ interface ReleaseGate {
 /**
  * The gate of `ship.ts merge --release` (T4645): the caller's clearance of the release pull request's head on the
  * approval of the release task `task`, since the branch the release tool names names no task. A head runMerge caught
- * up from the cleared one (release-catch-up.ts: the same diff rebased onto main, T5055) passes on that clearance; any
- * other head, one the release tool wrote meanwhile among them, is asked again, so it needs its own approval.
+ * up from the cleared one (release-catch-up.ts: the same diff rebased onto main, T5055) passes on that clearance.
+ *
+ * Any other head, one the release tool wrote again on a newer main among them, clears on the approval of the head
+ * `--approved` names when both hold only a release (T5117, owner order 11-22): mergeRun refused the live head
+ * otherwise before this gate, and `approvedRelease` holds the approved one to the same check. The release tool writes
+ * a release from commit subjects main already merged, so a new version and notes on a newer main need no new round.
  */
 function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGate {
   let cleared: { sha: string; by: string } | null = null;
@@ -681,10 +694,13 @@ function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGat
         cleared = { sha, by: cleared.by };
         return null;
       }
-      const clearance = await deps.clearTaskMerge(task, sha, args.approved);
+      const approved = args.approved === null || sha.startsWith(args.approved) ? null : approvedRelease(deps, args.approved);
+      if (approved !== null && approved.kind === 'refused') return approved.reason;
+      const clearance = await deps.clearTaskMerge(task, approved === null ? sha : approved.sha, args.approved);
       if (clearance.kind === 'refused') return clearance.reason;
       const by = clearedBy(clearance);
-      deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${by} on ${task}`);
+      const carries = approved === null ? '' : `carries the approved ${approved.sha.slice(0, 9)}, both heads only a release, `;
+      deps.out(`merge of the release pull request ${head} ${sha.slice(0, 9)}: ${carries}${by} on ${task}`);
       cleared = { sha, by };
       return null;
     },
@@ -693,6 +709,44 @@ function releaseGate(task: string, args: MergeArgs, deps: MergeDeps): ReleaseGat
       carried = sha;
     },
   };
+}
+
+/** The release head `--approved` names, read in full, or why an approval of it cannot carry to another head. */
+type ApprovedRelease = { readonly kind: 'release'; readonly sha: string } | { readonly kind: 'refused'; readonly reason: string };
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The release head `approved` names, when it holds only a release (release-pull.ts, as the live head was held to): the
+ * commit as this repo has it, else fetched from origin by its full sha, since the release tool's push of a newer head
+ * leaves the approved one on no branch. Refused when it cannot be read or holds more than a release.
+ */
+function approvedRelease(deps: MergeDeps, approved: string): ApprovedRelease {
+  const commitOf = (): string | null => {
+    try {
+      return deps.git('rev-parse', '--verify', '--quiet', `${approved}^{commit}`);
+    } catch {
+      return null;
+    }
+  };
+  let sha = commitOf();
+  if (sha === null && FULL_SHA.test(approved)) {
+    try {
+      deps.git('fetch', '--quiet', 'origin', approved);
+    } catch {
+      // Not on origin either: refused below, as an unknown sha.
+    }
+    sha = commitOf();
+  }
+  if (sha === null) {
+    return { kind: 'refused', reason: `--approved ${approved} is not the release head, nor a commit here or on origin to carry its approval from: give the approved head's full sha` };
+  }
+  const profile = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
+  // mergeRun's releaseHead refused a repo with no release pull request before any gate ran.
+  if (profile.release === null) throw new Error('the release gate ran for a repo that lists no release pull request');
+  const refusal = deps.releaseRefusal(profile, profile.release, sha);
+  if (refusal !== null) return { kind: 'refused', reason: `the approved ${sha.slice(0, 9)} holds more than a release, so its approval carries to no other head: ${refusal}` };
+  return { kind: 'release', sha };
 }
 
 /** Catches up the release head `gate` cleared onto main's tip `move` names (release-catch-up.ts, T5055). */

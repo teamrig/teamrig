@@ -224,13 +224,33 @@ export function strayTests(listing: readonly string[]): string[] {
 }
 
 /**
- * How many test files the suite runs at once on a host with `cores` logical cores: half of them. `node --test` defaults
- * to cores - 1, and the host queue admits two heavy steps at a time, so two suites asked for twice the host's cores in
- * coverage-instrumented processes, each starting git and node children of its own, and the host froze (T4064). At most
- * MAX_SUITE_WORKERS: past that, each more file at once adds process starts faster than it saves time.
+ * Whether the suite shares its machine with other heavy steps (a person's host, where the queue admits two at a
+ * time) or has it alone (a CI runner's own VM, which runs one job).
  */
-export function suiteWorkers(cores: number): number {
-  return Math.min(MAX_SUITE_WORKERS, Math.max(1, Math.floor(cores / 2)));
+export type SuiteHost = 'shared' | 'alone';
+
+/**
+ * How many test files the suite runs at once on a host with `cores` logical cores. On a shared host, half of them:
+ * `node --test` defaults to cores - 1, and the host queue admits two heavy steps at a time, so two suites asked for
+ * twice the host's cores in coverage-instrumented processes, each starting git and node children of its own, and the
+ * host froze (T4064). Alone on its machine, one a core: nothing else competes, and halving left a 4-core CI runner
+ * running 2 files (T5027). At most MAX_SUITE_WORKERS either way: past that, each more file at once adds process starts
+ * faster than it saves time.
+ */
+export function suiteWorkers(cores: number, host: SuiteHost): number {
+  const wanted = host === 'alone' ? cores : Math.floor(cores / 2);
+  return Math.min(MAX_SUITE_WORKERS, Math.max(1, wanted));
+}
+
+/** The coverage CLI's own options, after `--root`: `--alone` when the suite has its machine to itself. */
+export type CoverageOptions = { readonly kind: 'options'; readonly host: SuiteHost } | { readonly kind: 'unknown'; readonly option: string };
+
+export const COVERAGE_USAGE = 'coverage-cli.ts [--root <repo>] [--alone]';
+
+/** Reads the options left after `--root`; the first one it does not know is named back. */
+export function coverageOptions(rest: readonly string[]): CoverageOptions {
+  const unknown = rest.find((option) => option !== '--alone');
+  return unknown === undefined ? { kind: 'options', host: rest.includes('--alone') ? 'alone' : 'shared' } : { kind: 'unknown', option: unknown };
 }
 
 /** The most test files the suite runs at once on any host, by the owner's order (T4064). */

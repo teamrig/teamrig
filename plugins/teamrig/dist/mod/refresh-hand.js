@@ -7,8 +7,9 @@
  *   asks the CLI (`hook refresh-mid`); an ask it answers with is added after the tool's result, which the model
  *   reads and the person does not see (src/refresh/decide.ts `decideMidTurn`);
  * - before Claude Code compacts the main conversation on its own, the hand asks the CLI (`hook compact-check`)
- *   and skips the compaction while the handover is asked for or written, up to `refresh.compactCeilingTokens`
- *   (`decideCompact`): the fresh start that follows the turn replaces it.
+ *   and skips the compaction while the handover is asked for or written, up to `refresh.compactCeilingTokens`,
+ *   and once per tab in favour of the refresh, the CLI then asking for the handover (`decideCompact`): the fresh
+ *   start that follows the turn replaces it.
  *
  * The mod runs inside Claude Code without Node, so this file imports nothing at run time: it compiles to a module
  * the mod imports as it is.
@@ -82,7 +83,7 @@ export class RefreshHand {
         this.host = host;
     }
     /** At a tool result of the main conversation, with the context the last reply read; never rejects. */
-    async afterTool(tokens, window) {
+    async afterTool(tokens) {
         if (this.looking) {
             return { kind: 'overlap' };
         }
@@ -97,7 +98,7 @@ export class RefreshHand {
         }
         this.looking = true;
         try {
-            return await this.look(now, tokens, window);
+            return await this.look(now, tokens);
         }
         catch (error) {
             // Not asked again at every tool result while the CLI fails: only at the recheck.
@@ -119,8 +120,8 @@ export class RefreshHand {
             return { kind: 'failed', error: messageOf(error) };
         }
     }
-    async look(now, tokens, window) {
-        const run = await this.run('refresh-mid', window === undefined ? { tokens } : { tokens, window });
+    async look(now, tokens) {
+        const run = await this.run('refresh-mid', { tokens });
         const answer = run.exitCode === 0 ? parseMidTurnAnswer(run.stdout) : undefined;
         if (answer === undefined) {
             throw new Error(`hook refresh-mid exited ${run.exitCode}: ${run.stdout.trim().slice(0, 200)}`);

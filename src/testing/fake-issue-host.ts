@@ -1,8 +1,9 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostReach, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
 import type { HostPull } from '../issues/pull.ts';
+import type { ScopeRequest } from '../sync/scope.ts';
 
 /** The login a fake host's access, and FakeGh's token, belong to until a test says otherwise: the account the sync runs as. */
 export const FAKE_VIEWER = 'sync-bot';
@@ -29,7 +30,8 @@ export type HostCall =
   | { readonly kind: 'field'; readonly target: IssueTarget; readonly field: string; readonly value: FieldValue }
   | { readonly kind: 'type'; readonly target: IssueTarget; readonly type: string }
   | { readonly kind: 'approve'; readonly target: IssueTarget; readonly head: string }
-  | { readonly kind: 'land'; readonly target: IssueTarget; readonly pull: PullStand };
+  | { readonly kind: 'land'; readonly target: IssueTarget; readonly pull: PullStand }
+  | { readonly kind: 'rerun'; readonly repo: string; readonly runId: number };
 
 /**
  * An issue host that reaches nothing: a list gives the issues a test gave it, none until then, a pull request read gives what a test set,
@@ -52,6 +54,8 @@ export class FakeIssueHost implements IssueHost {
   private readonly removeEnds = new Map<string, HostEnd>();
   private labelReadFailure: string | undefined;
   private listed: readonly HostIssue[] = [];
+  /** The scope request of each list, in order, undefined for a list asked with none. */
+  readonly listRequests: (ScopeRequest | undefined)[] = [];
   private readonly labels = new Set<string>();
   /** How it names a label; as it is, until a test says otherwise. */
   private naming: LabelNaming = (label) => label;
@@ -273,7 +277,8 @@ export class FakeIssueHost implements IssueHost {
     return this;
   }
 
-  list(repo: string): Promise<HostList> {
+  list(repo: string, _closedSince: string, request?: ScopeRequest): Promise<HostList> {
+    this.listRequests.push(request);
     return Promise.resolve({ kind: 'listed', issues: this.listed.filter((issue) => issue.repo === repo), notes: [] });
   }
 
@@ -317,12 +322,20 @@ export class FakeIssueHost implements IssueHost {
   }
 
   private readonly stands = new Map<string, HostPullStand>();
+  /** Work reads by `<target> <base>...<head>`. */
+  private readonly works = new Map<string, HostPullWork>();
   private approveEnd: HostEnd = { kind: 'done' };
   private landing: HostLanding | undefined;
 
   /** From now on, a read of where `target` stands gives `stand`; a pull request a test gave none reads as missing. */
   standsAt(target: IssueTarget, stand: HostPullStand): this {
     this.stands.set(targetText(target), stand);
+    return this;
+  }
+
+  /** From now on, a read of the commits `head` carries over `base` in `target`'s repository gives `work`; one a test gave none reads as missing. */
+  carries(target: IssueTarget, base: string, head: string, work: HostPullWork): this {
+    this.works.set(`${targetText(target)} ${base}...${head}`, work);
     return this;
   }
 
@@ -342,6 +355,10 @@ export class FakeIssueHost implements IssueHost {
     return Promise.resolve(this.stands.get(targetText(target)) ?? { kind: 'missing' });
   }
 
+  pullWork(target: IssueTarget, base: string, head: string): Promise<HostPullWork> {
+    return Promise.resolve(this.works.get(`${targetText(target)} ${base}...${head}`) ?? { kind: 'missing' });
+  }
+
   approvePull(target: IssueTarget, head: string): Promise<HostEnd> {
     this.calls.push({ kind: 'approve', target, head });
     return Promise.resolve(this.approveEnd);
@@ -355,6 +372,25 @@ export class FakeIssueHost implements IssueHost {
   jobLog(repo: string, jobId: number): Promise<HostJobLog> {
     this.jobLogReads.push({ repo, jobId });
     return Promise.resolve(this.jobLogs.get(jobId) ?? { kind: 'read', step: undefined, lines: [] });
+  }
+
+  private rerunEnd: HostRerun = { kind: 'done', workflow: 'ci.yml', event: 'push', attempt: 2 };
+
+  /** From now on, a run's re-run fails for `reason`. */
+  failsRerun(reason: string): this {
+    this.rerunEnd = { kind: 'failed', reason };
+    return this;
+  }
+
+  /** From now on, a run's re-run is refused for `reason`, as a run that did not end failed is. */
+  refusesRerun(reason: string): this {
+    this.rerunEnd = { kind: 'refused', reason };
+    return this;
+  }
+
+  rerunRun(repo: string, runId: number): Promise<HostRerun> {
+    this.calls.push({ kind: 'rerun', repo, runId });
+    return Promise.resolve(this.rerunEnd);
   }
 
   pulls(repo: string, since: string | undefined): Promise<HostPulls> {

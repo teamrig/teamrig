@@ -14,7 +14,7 @@ import { FakePathProbe, FakeProcesses, NO_POWERSHELL } from '../testing/fake-pro
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import type { SessionStart } from '../ports/host/index.ts';
 import { hostNaming, hostStarting, NO_SESSION_HOST } from '../testing/host.ts';
-import { FakeCountdown, FakeShutdownLog, FakeStopWatch } from '../testing/fake-restore.ts';
+import { FakeCountdown, FakeShutdownLog, FakeStopWatch, quietRestore } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
 import { RESTORE_TAB_TITLE, TAB_CLOSE_DELAY_MS, TAB_SETTLE_MS } from './commands/restore.ts';
@@ -90,7 +90,7 @@ function machine(
   const sessionProcesses = new FakeSessionProcesses()
     .add({ pid: LIVE_PID, parentPid: 1, name: 'claude.exe', commandLine: 'claude' })
     .add({ pid: REUSED_PID, parentPid: 1, name: 'notepad.exe', commandLine: 'notepad.exe' });
-  return { platform: 'win32', processes, memory, probe: new MemoryPathProbe(kit.files), sessionProcesses, restore: { shutdowns: new FakeShutdownLog({ start: SHUTDOWN, end: SHUTDOWN + 60_000 }), countdown, stops: new FakeStopWatch(), logon: undefined, shortcuts: undefined }, countdown };
+  return { platform: 'win32', processes, memory, probe: new MemoryPathProbe(kit.files), sessionProcesses, restore: { ...quietRestore(), shutdowns: new FakeShutdownLog({ start: SHUTDOWN, end: SHUTDOWN + 60_000 }), countdown, stops: new FakeStopWatch() }, countdown };
 }
 
 function windowsTab(title: string, folder: string, argv: readonly string[]): string[] {
@@ -308,7 +308,7 @@ describe('teamrig restore resume', () => {
     const processes = new FakeProcesses();
     const result = await new CliHarness(TEAM).run(['restore', 'resume', NOTES, '--project', APP, '--effort', 'high', '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: OPENER_ENV });
     assert.deepEqual(result, { code: EXIT.ok, stdout: [`Resuming Claude Code session ${NOTES} in ${APP} at high effort`], stderr: [] });
-    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--effort', 'high', '--resume', NOTES, 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
+    assert.deepEqual(processes.ran, [{ command: CLAUDE, args: ['--effort', 'high', '--resume', NOTES, '--', 'Go on'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin' } }]);
   });
 
   it('resumes with the arguments the running host spells, telling it the session, effort and prompt and no flag of its own', async () => {

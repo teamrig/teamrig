@@ -1,11 +1,10 @@
 import { resolve } from 'node:path';
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { DEFAULT_PERMISSIONS } from '../../config/defaults.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { expandHome } from '../../core/paths.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import { sessionSettingsFiles } from '../../doctor/settings-env.ts';
-import { KeepList } from '../../permissions/allow-rules.ts';
+import { keepListOf } from '../../permissions/allow-sync.ts';
 import type { SettingsFile } from '../../permissions/settings-scope.ts';
 import type { HostPaths } from '../../ports/host/index.ts';
 import { coreRuleTexts } from '../../rules/pack.ts';
@@ -92,19 +91,20 @@ export async function scan(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
     hooks: runtime.hooks,
     program: launcherIfTold(runtime)?.program,
   });
-  const found = await scanSetup({ files: runtime.files, permissions: permissionsOf(runtime), plugin: pluginIfKept(runtime), probe: runtime.probe, transcripts: runtime.transcripts, reader: transcriptsOf(runtime), paths: host, doctor }, {
+  const permissions = permissionsOf(runtime);
+  const found = await scanSetup({ files: runtime.files, permissions, plugin: pluginIfKept(runtime), probe: runtime.probe, transcripts: runtime.transcripts, reader: transcriptsOf(runtime), paths: host, doctor }, {
     paths: host,
     claudeDir,
     userHome: runtime.userHome,
     project,
     skills: team?.kit.paths.skills ?? host.skills(runtime.userHome),
     teamRules: team === undefined ? [] : await teamRulesPathsOf(runtime, team.kit),
-    projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+    projectsDir: host.transcriptsFolder(runtime.userHome),
     since: runtime.clock.now() - days * DAY_MS,
     maxBytes: maxMb * BYTES_PER_MB,
     settings: await settingsOf(runtime, team, host, project),
     sessionSettings: sessionSettingsFiles({ paths: host, userHome: runtime.userHome }, project),
-    keep: new KeepList((team?.config.permissions ?? DEFAULT_PERMISSIONS).keepAllow),
+    keep: keepListOf(permissions, (team?.config.permissions ?? DEFAULT_PERMISSIONS).keepAllow),
     secrets,
     conflicts: team?.config.ruleConflicts ?? [],
     cleared: await clearedOf(runtime, team),

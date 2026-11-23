@@ -1,5 +1,6 @@
 import type { On, RenderPropsOf, SessionCompacted, SessionContextBreakdown, SessionMessage, ToolCallResult } from 'claude-code';
 import { describe, expect, mock, test, type Engine, type MockClock, type Mounted } from 'claude-code/testing';
+import type { NeedsYouAsk } from '../dist/mod/needs-you-hand.js';
 
 /**
  * The mod's refresh wiring (`register.ts`) against the engine itself: the test's hooks stand for the engine
@@ -112,7 +113,8 @@ describe('the refresh within a turn', () => {
     const runs = await tab($, on, { 'refresh-mid': { kind: 'ask', text: ASK, nextAt: 154_000 } });
     const result = await $.tool.call({ tool: 'mcp__demo__ping', tool_use_id: 'toolu_1' });
     expect(result.context).toEqual([ASK]);
-    expect(runs).toEqual([{ command: 'refresh-mid', stdin: { session_id: TAB, cwd: '/work/app/src', tokens: 130_000, window: 200_000 } }]);
+    // One threshold on every window (T4083): the hand sends the context alone, never the window it sits in.
+    expect(runs).toEqual([{ command: 'refresh-mid', stdin: { session_id: TAB, cwd: '/work/app/src', tokens: 130_000 } }]);
   });
 
   test('asks nothing after a subagent tool, a denied call or a quiet answer', async ($, on) => {
@@ -582,7 +584,7 @@ interface NeedsYouTab {
   readonly clock: MockClock;
   readonly runs: CliRun[];
   readonly toasts: { readonly text: string; readonly timeoutMs: number | undefined }[];
-  asks: readonly (typeof BRAVO_ASK)[];
+  asks: readonly NeedsYouAsk[];
 }
 
 /**

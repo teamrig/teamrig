@@ -4,6 +4,8 @@ import { defineContract } from "../contract.js";
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 /** Names no host takes as a model. */
 const NOT_MODELS = ['', 'not a model', 'opus; rm -rf /'];
+/** A name a shell on every OS takes for an environment variable. */
+const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const CASES = [
     {
         id: 'models.names',
@@ -58,6 +60,19 @@ const CASES = [
             assert.notEqual(port.switchEffortStep('low'), port.switchEffortStep('max'), 'two effort levels share one step');
         },
     },
+    {
+        id: 'models.routing-overrides',
+        title: 'names each variable that overrides an effort or helper model once, as a variable name, with what it does',
+        features: ['sessions.open'],
+        run: ({ port }) => {
+            const variables = port.routingOverrides.map(({ variable }) => variable);
+            for (const { variable, effect } of port.routingOverrides) {
+                assert.match(variable, VARIABLE_NAME, `${JSON.stringify(variable)} is no environment variable name`);
+                assert.notEqual(effect('high').trim(), '', `${variable} says nothing of what it does`);
+            }
+            assert.equal(new Set(variables).size, variables.length, `a variable is named twice: ${variables.join(', ')}`);
+        },
+    },
 ];
 /** The liars' world: ids no liar's fixed answer equals. */
 const WORLD = { model: 'model-one', otherModel: 'model-two', unplaced: 'model-unknown' };
@@ -66,6 +81,7 @@ export function nothingModels() {
     return {
         world: WORLD,
         port: {
+            routingOverrides: [],
             defaultName: '',
             aliases: [],
             problemOf: () => 'expected nothing',
@@ -77,11 +93,18 @@ export function nothingModels() {
         },
     };
 }
-/** A liar that says yes to all: it takes every name, calls every running model another and has one fixed step. */
+/**
+ * A liar that says yes to all: it takes every name, calls every running model another, has one fixed step and names
+ * one variable twice.
+ */
 export function yesModels() {
     return {
         world: WORLD,
         port: {
+            routingOverrides: [
+                { kind: 'effort', variable: 'ANY', effect: () => 'always' },
+                { kind: 'model', variable: 'ANY', effect: () => 'always' },
+            ],
             defaultName: 'any',
             aliases: ['any'],
             problemOf: () => undefined,

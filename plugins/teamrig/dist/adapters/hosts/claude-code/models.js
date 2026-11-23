@@ -47,6 +47,18 @@ function isOtherModel(wanted, running) {
  * cost 2.4 times as much.
  */
 export const hostModels = {
+    routingOverrides: [
+        {
+            kind: 'effort',
+            variable: 'CLAUDE_CODE_EFFORT_LEVEL',
+            effect: (value) => `it beats every --effort (the team config's launch efforts among them), /effort and per-call Agent effort, so a session or helper that gets it runs at ${value} whatever it was given`,
+        },
+        {
+            kind: 'model',
+            variable: 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
+            effect: () => 'set to 1 it beats every per-call Agent model, so a helper that gets it never runs on the model its caller gives it',
+        },
+    ],
     defaultName: DEFAULT_NAME,
     aliases: ALIASES,
     problemOf: (model) => ALIASES.some((alias) => alias === model) || (model.length <= MODEL_ID_MAX_LENGTH && MODEL_ID_PATTERN.test(model))

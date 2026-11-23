@@ -4,7 +4,7 @@ import { parseObject } from "../core/jsonl.js";
 import { isTemporaryName } from "../core/files.js";
 import { MS_PER_DAY, MS_PER_HOUR } from "../core/time.js";
 import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
-import { coloured, meetingLabel } from "../meeting/status-line.js";
+import { coloured, meetingLabel, otherTabLabel } from "../meeting/status-line.js";
 const MS_PER_SECOND = 1000;
 function finite(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -253,8 +253,8 @@ export function statusLineText(snapshot, view) {
         parts.push(view.rush);
     }
     const meeting = view.meeting;
-    if (meeting?.kind === 'held') {
-        parts.push(coloured(meeting.text, meeting.colour));
+    if (meeting?.kind === 'other') {
+        parts.push(coloured(otherTabLabel(meeting.text, meeting.title), meeting.colour));
     }
     const text = parts.join(', ');
     return meeting?.kind === 'tab' ? `${coloured(meetingLabel(meeting.title), meeting.colour)} | ${text}` : text;

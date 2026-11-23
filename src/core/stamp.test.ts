@@ -2,7 +2,20 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isRecord } from './guards.ts';
-import { STAMP_LINK, STAMP_MARKER, stampCredit, stampFooter, stampTrailer, withoutStampFooter, withStampFooter, withStampTrailer } from './stamp.ts';
+import {
+  STAMP_LINK,
+  STAMP_MARKER,
+  STAMP_UNKNOWN,
+  madeByTrailer,
+  stampCredit,
+  stampFooter,
+  stampTrailer,
+  withoutStampFooter,
+  withStampFooter,
+  withStampTrailer,
+  withStampTrailers,
+  type StampMaker,
+} from './stamp.ts';
 import { KIT_VERSION } from './version.ts';
 
 /** How many times `part` is in `text`. */
@@ -91,5 +104,55 @@ describe('withStampTrailer', () => {
     assert.equal(withStampTrailer(once, '1.0.0'), once);
     const again = withStampTrailer(once.replace('Made-with', 'made-with'), '2.0.0');
     assert.equal(again, 'fix: a thing\n\nReviewed-by: A Reviewer\nMade-with: teamrig 2.0.0');
+  });
+});
+
+const MAKER: StampMaker = { program: 'Claude Code', version: '2.1.3', model: 'Claude Opus 5.5', effort: 'high' };
+
+describe('madeByTrailer', () => {
+  it('names the program and its version, the model and the effort', () => {
+    assert.equal(madeByTrailer(MAKER), 'Made-by: Claude Code 2.1.3; model Claude Opus 5.5; effort high');
+  });
+
+  it('writes unknown for each part the host does not tell, never a guess', () => {
+    assert.equal(
+      madeByTrailer({ program: 'Codex CLI', version: undefined, model: ' ', effort: undefined }),
+      `Made-by: Codex CLI ${STAMP_UNKNOWN}; model ${STAMP_UNKNOWN}; effort ${STAMP_UNKNOWN}`,
+    );
+  });
+});
+
+describe('withStampTrailers', () => {
+  const signed = 'fix: a thing\n\nWhy it was broken.\n\nSigned-off-by: A Person <a@example.com>\nCo-Authored-By: A Model <m@example.com>';
+
+  it('adds Made-with then Made-by after the trailers already there, keeping them', () => {
+    assert.equal(withStampTrailers(`${signed}\n`, MAKER, '1.0.0'), `${signed}\nMade-with: teamrig 1.0.0\n${madeByTrailer(MAKER)}`);
+  });
+
+  it('replaces both on a restamp, as an amend does, with the values of the run that stamps last', () => {
+    const once = withStampTrailers(signed, MAKER, '1.0.0');
+    const amended = withStampTrailers(once.replace('Made-by', 'made-by'), { ...MAKER, effort: 'max' }, '2.0.0');
+    assert.equal(amended, `${signed}\nMade-with: teamrig 2.0.0\n${madeByTrailer({ ...MAKER, effort: 'max' })}`);
+    assert.equal(withStampTrailers(amended, { ...MAKER, effort: 'max' }, '2.0.0'), amended);
+  });
+
+  it('drops an old Made-by when no session made this version of the commit', () => {
+    const once = withStampTrailers(signed, MAKER, '1.0.0');
+    assert.equal(withStampTrailers(once, undefined, '1.0.0'), `${signed}\nMade-with: teamrig 1.0.0`);
+  });
+
+  it("puts the trailers above an edited message's comment lines, which git strips", () => {
+    const edited = 'fix: a thing\n\n# Please enter the commit message.\n# Lines starting with # are ignored.\n';
+    assert.equal(withStampTrailers(edited, undefined, '1.0.0'), 'fix: a thing\n\nMade-with: teamrig 1.0.0\n\n# Please enter the commit message.\n# Lines starting with # are ignored.\n');
+  });
+
+  it("puts the trailers above a verbose commit's scissors line and the diff below it", () => {
+    const verbose = `${signed}\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x\nKey: not a trailer\n`;
+    const stamped = withStampTrailers(verbose, MAKER, '1.0.0');
+    assert.equal(stamped, `${signed}\nMade-with: teamrig 1.0.0\n${madeByTrailer(MAKER)}\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x\nKey: not a trailer\n`);
+  });
+
+  it('stamps an empty message with the trailers alone, for git to refuse as it would', () => {
+    assert.equal(withStampTrailers('', MAKER, '1.0.0'), `Made-with: teamrig 1.0.0\n${madeByTrailer(MAKER)}`);
   });
 });

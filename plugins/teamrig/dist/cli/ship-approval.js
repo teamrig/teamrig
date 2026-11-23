@@ -38,7 +38,8 @@ export async function tabCallerOf(reader, team, claudeSession, callerText) {
     }
     return bound;
 }
-async function approversOf(reader, team, config, caller) {
+/** {@link approversIn} for `caller`, reading the parent team's lead when `caller` leads a child team. */
+export async function approversOf(reader, team, config, caller) {
     const above = caller === config.roles.lead && config.team?.parent !== undefined ? await leadAboveOf(reader, team, config) : undefined;
     return approversIn(team, config, caller, above);
 }

@@ -39,6 +39,8 @@ import { LOGON_QUERY_TIMEOUT_MS, systemLogonEntry } from "../restore/logon.js";
 import { SHORTCUT_QUERY_TIMEOUT_MS, systemShortcutPlace } from "../restore/shortcut.js";
 import { SHUTDOWN_QUERY_TIMEOUT_MS, systemShutdownLog } from "../restore/shutdowns.js";
 import { processStopWatch } from "../restore/stops.js";
+import { nodeMarkExecutable } from "../restore/cli-on-path.js";
+import { USER_PATH_TIMEOUT_MS, systemUserPath } from "../restore/user-path.js";
 import { CMD_SHIM_LINE_ENV } from "./cmd-shim.js";
 import { sessionProcessCheckOf } from "./host.js";
 import { runCli } from "./run.js";
@@ -115,7 +117,7 @@ export async function runWithNode(argv, entry) {
         pluginStore: NODE_STORE_FOLDERS,
         transcripts: nodeTranscriptSource,
         self: { node: process.execPath, script: entry.script, execArgv: process.execArgv },
-        requirements: requirementsCheck({ env: process.env, platform: process.platform, probe: NODE_PATH_PROBE, nodeVersion: process.versions.node }),
+        requirements: requirementsCheck({ env: process.env, platform: process.platform, probe: NODE_PATH_PROBE, nodeVersion: process.versions.node, gitVersion: async () => GIT_MERGE.gitVersion(process.cwd()) }),
         worktrees: { git: GIT_WORKTREES, files: NODE_WORKTREE_FILES },
         restore: {
             shutdowns: systemShutdownLog(process.platform, nodeProgramRunner(SHUTDOWN_QUERY_TIMEOUT_MS)),
@@ -123,6 +125,8 @@ export async function runWithNode(argv, entry) {
             stops: processStopWatch(process),
             logon: systemLogonEntry(process.platform, process.env['SystemRoot'], nodeProgramRunner(LOGON_QUERY_TIMEOUT_MS)),
             shortcuts: systemShortcutPlace(process.platform, nodeProgramRunner(SHORTCUT_QUERY_TIMEOUT_MS)),
+            userPath: systemUserPath(process.platform, nodeProgramRunner(USER_PATH_TIMEOUT_MS), nodeFiles(realSleep), homedir()),
+            markExecutable: nodeMarkExecutable(process.platform),
         },
         mergeGit: GIT_MERGE,
         pulls: GIT_PULLS,

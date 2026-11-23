@@ -18,6 +18,15 @@ export type CredentialRead =
   | { readonly kind: 'missing' }
   | { readonly kind: 'failed'; readonly reason: string };
 
+/**
+ * What reading several credentials in order found: the first one saved, or the first the store could not read, by
+ * its place in the list; missing when none is saved. No credential after that one is read.
+ */
+export type FirstRead =
+  | { readonly kind: 'found'; readonly index: number; readonly secret: string }
+  | { readonly kind: 'failed'; readonly index: number; readonly reason: string }
+  | { readonly kind: 'missing' };
+
 /** The operating system's store of saved secrets, read by name. teamrig never writes to it. */
 export interface CredentialStore {
   /** The store as a message names it, e.g. "the Windows Credential Manager". */
@@ -25,6 +34,24 @@ export interface CredentialStore {
   /** The command a person runs to save a secret under `name`: it asks for the secret and shows nothing typed. */
   saveCommand(name: string): string;
   read(name: string): Promise<CredentialRead>;
+  /** Reads `names` in order, stopping at the first one saved or unreadable; a store whose reads are slow reads them all in one run. */
+  readFirst(names: readonly string[]): Promise<FirstRead>;
+}
+
+/** `readFirst` over one read per name, for a store whose reads are quick. */
+export async function readFirstOneByOne(read: (name: string) => Promise<CredentialRead>, names: readonly string[]): Promise<FirstRead> {
+  for (const [index, name] of names.entries()) {
+    const found = await read(name);
+    switch (found.kind) {
+      case 'found':
+        return { kind: 'found', index, secret: found.secret };
+      case 'failed':
+        return { kind: 'failed', index, reason: found.reason };
+      case 'missing':
+        break;
+    }
+  }
+  return { kind: 'missing' };
 }
 
 /** One operating system's store: the tool that reads it, and how that tool says "no such credential". */
@@ -46,7 +73,35 @@ const WINDOWS_MISSING_EXIT = 3;
  * argv, which other processes can read. cmdkey saves the blob as UTF-16LE and CredentialBlobSize counts bytes.
  */
 export function windowsReadScript(name: string): string {
-  return `$ErrorActionPreference = 'Stop'
+  return `${WINDOWS_CRED_TYPE}
+$secret = [TeamrigCredentials.Cred]::Read('${name}')
+if ($null -eq $secret) { exit ${WINDOWS_MISSING_EXIT} }
+[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
+`;
+}
+
+/**
+ * Reads `names` in order in one PowerShell run, which takes most of a second to start: the first one saved leaves as
+ * `<index> <base64>`, and none saved ends with the missing exit. Each name was checked against CREDENTIAL_NAME first,
+ * so it sits in single quotes with nothing to escape.
+ */
+export function windowsReadFirstScript(names: readonly string[]): string {
+  const list = names.map((name) => `'${name}'`).join(', ');
+  return `${WINDOWS_CRED_TYPE}
+$names = @(${list})
+for ($index = 0; $index -lt $names.Count; $index++) {
+  $secret = [TeamrigCredentials.Cred]::Read($names[$index])
+  if ($null -ne $secret) {
+    [Console]::Out.Write("$index " + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
+    exit 0
+  }
+}
+exit ${WINDOWS_MISSING_EXIT}
+`;
+}
+
+/** The CredReadW wrapper both Windows scripts load. */
+const WINDOWS_CRED_TYPE = `$ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -73,12 +128,7 @@ namespace TeamrigCredentials {
     }
   }
 }
-'@
-$secret = [TeamrigCredentials.Cred]::Read('${name}')
-if ($null -eq $secret) { exit ${WINDOWS_MISSING_EXIT} }
-[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($secret)))
-`;
-}
+'@`;
 
 const WINDOWS: StoreTool = {
   label: 'the Windows Credential Manager',
@@ -125,11 +175,52 @@ function toolFor(platform: NodeJS.Platform): StoreTool {
 /** The store of the operating system teamrig runs on, read through its own command-line tool. */
 export function systemCredentials(platform: NodeJS.Platform, run: ProgramRunner): CredentialStore {
   const tool = toolFor(platform);
+  const read = (name: string): Promise<CredentialRead> => readWith(tool, run, name);
   return {
     label: tool.label,
     saveCommand: (name) => tool.saveCommand(name),
-    read: (name) => readWith(tool, run, name),
+    read,
+    readFirst: (names) => (tool === WINDOWS ? windowsReadFirst(run, names) : readFirstOneByOne(read, names)),
   };
+}
+
+/**
+ * `readFirst` in one PowerShell run. A name that is no credential name fails at its place, and only the names before
+ * it are read, so the order still decides; a run that fails is a failure at the first name, so no wider key stands in.
+ */
+async function windowsReadFirst(run: ProgramRunner, names: readonly string[]): Promise<FirstRead> {
+  const bad = names.findIndex((name) => !CREDENTIAL_NAME.test(name));
+  const asked = bad === -1 ? names : names.slice(0, bad);
+  const found = asked.length === 0 ? ({ kind: 'missing' } satisfies FirstRead) : await windowsRun(run, asked);
+  if (found.kind !== 'missing' || bad === -1) {
+    return found;
+  }
+  return { kind: 'failed', index: bad, reason: `${JSON.stringify(names[bad])} is not a credential name: letters, digits, '.', '_' or '-'` };
+}
+
+async function windowsRun(run: ProgramRunner, names: readonly string[]): Promise<FirstRead> {
+  let result: ProgramResult;
+  try {
+    result = await run(powerShellRequest(windowsReadFirstScript(names)));
+  } catch (error) {
+    return { kind: 'failed', index: 0, reason: `${WINDOWS.program} could not start: ${errorMessage(error)}` };
+  }
+  if (WINDOWS.missing(result)) {
+    return { kind: 'missing' };
+  }
+  if (result.end.kind !== 'exited' || result.end.code !== 0) {
+    return { kind: 'failed', index: 0, reason: `${WINDOWS.program} ${endText(result.end)}: ${firstLine(result.stderr)}` };
+  }
+  const answer = /^(\d+) ([A-Za-z0-9+/=]*)$/u.exec(result.stdout.trim());
+  const index = answer?.[1] === undefined ? -1 : Number(answer[1]);
+  const name = names[index];
+  if (answer?.[2] === undefined || name === undefined) {
+    return { kind: 'failed', index: 0, reason: `${WINDOWS.program} gave no answer teamrig reads` };
+  }
+  const secret = WINDOWS.secretOf(answer[2]);
+  return TOKEN_TEXT.test(secret)
+    ? { kind: 'found', index, secret }
+    : { kind: 'failed', index, reason: `credential ${name} does not hold a token: save it again with ${WINDOWS.saveCommand(name)}` };
 }
 
 async function readWith(tool: StoreTool, run: ProgramRunner, name: string): Promise<CredentialRead> {

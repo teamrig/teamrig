@@ -109,10 +109,12 @@ sequenceDiagram
   past the threshold it adds the ask to the result (finish the step, write the handover, end the turn). Until the
   fresh start, Claude Code's own compaction waits, up to `refresh.compactCeilingTokens` (185,000 by default, 15k
   under a 200k window), so the fresh start replaces it; past that it compacts, so the session never runs out of room.
+  A tab's first automatic compaction is held back once for a refresh even with none asked for, or after a restart
+  that never came: the turn's end asks for the handover instead. The next one goes, so no tab is stuck at its limit.
 - An owner's meeting is never cut off: while the daily meeting is open, the lead is not asked and not restarted,
   and while a booked one started with `teamrig meeting start M<n>` is on, neither are the session met and those
   joining, up to `refresh.compactCeilingTokens`; the end of the turn that runs `teamrig meeting end` asks at once.
-- Two rules in the team config ask for it. `refresh.contextTokens` (120,000 by default; `refresh.largeWindowContextTokens`, 250,000, for a session on a 1M window: a `[1m]` model, or one whose window teamrig infers) refreshes at that size,
+- Two rules in the team config ask for it. `refresh.contextTokens` (120,000 by default, on every context window, a 1M one too) refreshes at that size,
   well before Claude Code compacts a 200k window at about 167k. `refresh.everyTasks` (3 by default) refreshes at
   every third finished task once the context is at `refresh.everyTasksMinTokens` (80,000) or more, so a session
   that grows slowly still gets a fresh start; a `/clear`, a new process or a compaction starts the count over.

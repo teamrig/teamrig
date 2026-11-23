@@ -5,7 +5,8 @@ import type { Git } from '../lib/git.ts';
  * release's commit on main is made again there with the compiled dist on top: the next commit of that branch, tagged
  * `v<version>` so an install can pin it. Its parents are the branch's last release and the main commit it was built
  * from, so the branch only moves forward and each build names its source. A tag never moves, and a run again for a
- * release already published changes nothing, so a re-run workflow is safe.
+ * release already published changes nothing, so a re-run workflow is safe. The release workflow publishes to
+ * `preview` (T5133), whose first commit descends from `release`, and stable moves `release` along that chain.
  */
 
 export interface Publication {
@@ -15,6 +16,11 @@ export interface Publication {
   readonly source: string;
   /** The branch the marketplace entry installs from. */
   readonly branch: string;
+  /**
+   * The branch a first publication starts from when `branch` is not made yet, or undefined for none. `preview` starts
+   * from `release` (T5133), so stable can later fast-forward `release` to any preview build.
+   */
+  readonly seed: string | undefined;
   /** The folder the build writes, added to the commit even when the repo ignores it. */
   readonly dist: string;
   /** The remote both the branch and the tag are pushed to. */
@@ -30,6 +36,17 @@ const tagOf = (version: string): string => `refs/tags/v${version}`;
 async function remoteSha(git: Git, remote: string, ref: string): Promise<string | undefined> {
   const line = (await git.text(['ls-remote', remote, ref])).split('\n').find((row) => row.endsWith(`\t${ref}`));
   return line?.split('\t')[0];
+}
+
+/** The last commit of the first of the branches the remote has, fetched here, with that branch's name. */
+async function lastOf(git: Git, remote: string, branches: readonly string[]): Promise<{ readonly sha: string; readonly branch: string } | undefined> {
+  for (const branch of branches) {
+    const sha = await remoteSha(git, remote, `refs/heads/${branch}`);
+    if (sha === undefined) continue;
+    await git.text(['fetch', '--quiet', '--no-tags', remote, `refs/heads/${branch}`]);
+    return { sha, branch };
+  }
+  return undefined;
 }
 
 /** The `Name <email>` of the commits git makes here, for the Signed-off-by line. */
@@ -54,7 +71,7 @@ export function publicationProblem(publication: Publication): string | undefined
 export async function publishRelease(git: Git, publication: Publication, log: (line: string) => void): Promise<string> {
   const problem = publicationProblem(publication);
   if (problem !== undefined) throw new Error(problem);
-  const { version, source, branch, dist, remote } = publication;
+  const { version, source, branch, seed, dist, remote } = publication;
   const head = (await git.text(['rev-parse', 'HEAD'])).trim();
   if (head !== source) throw new Error(`the checkout is at ${head}, not the release's source ${source}`);
 
@@ -64,9 +81,10 @@ export async function publishRelease(git: Git, publication: Publication, log: (l
   const tree = (await git.text(['write-tree'])).trim();
 
   const tag = tagOf(version);
-  const [last, tagged] = [await remoteSha(git, remote, `refs/heads/${branch}`), await remoteSha(git, remote, tag)];
-  if (last !== undefined) {
-    await git.text(['fetch', '--quiet', '--no-tags', remote, `refs/heads/${branch}`]);
+  const [found, tagged] = [await lastOf(git, remote, seed === undefined ? [branch] : [branch, seed]), await remoteSha(git, remote, tag)];
+  // Only the branch's own last commit can already hold this build; a seed's never does, as the branch is not made yet.
+  if (found !== undefined && found.branch === branch) {
+    const last = found.sha;
     const [lastTree, lastParents] = (await git.text(['log', '-1', '--format=%T%n%P', last])).trim().split('\n');
     if (lastTree === tree && (lastParents ?? '').split(' ').includes(source)) {
       if (tagged === last) {
@@ -86,9 +104,10 @@ export async function publishRelease(git: Git, publication: Publication, log: (l
     `The plugin as main's ${source} holds it, with ${dist} built by the release workflow.`,
     `Signed-off-by: ${await signer(git)}`,
   ].join('\n\n');
-  const parents = last === undefined ? ['-p', source] : ['-p', last, '-p', source];
+  const parents = found === undefined ? ['-p', source] : ['-p', found.sha, '-p', source];
   const commit = (await git.text(['commit-tree', tree, ...parents, '-m', message])).trim();
   await git.text(['push', '--atomic', remote, `${commit}:refs/heads/${branch}`, `${commit}:${tag}`]);
+  if (found !== undefined && found.branch !== branch) log(`release: ${branch} starts from ${found.branch}'s ${found.sha}`);
   log(`release: published ${version} as ${commit} on ${branch}, tagged v${version}`);
   return commit;
 }

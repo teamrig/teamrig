@@ -14,6 +14,7 @@ import {
   type RenamedCallersDeps,
   type RenamedCallersRequest,
   RENAMED_FILE,
+  claudeDirOf,
   newlyRenamed,
   parseGrep,
   parseRenamedCommands,
@@ -334,6 +335,13 @@ test('the real gate reads git repos, a kit home and a Claude Code folder found f
   put(join(shipped, RENAMED_FILE), BASE_TEXT);
   const dropped = commit(shipped, 'main drops the renames');
   assert.equal(renamedCallersRefusal({ base: dropped, tip: older, repo: 'owner/teamrig' }, home, deps), null);
+});
+
+test("finds Claude Code's own folder at $CLAUDE_CONFIG_DIR, else ~/.claude", () => {
+  const userHome = join('/u');
+  assert.equal(claudeDirOf({ env: { CLAUDE_CONFIG_DIR: join('/cfg') }, userHome }), join('/cfg'));
+  assert.equal(claudeDirOf({ env: { CLAUDE_CONFIG_DIR: ' ' }, userHome }), join(userHome, '.claude'));
+  assert.equal(claudeDirOf({ env: {}, userHome }), join(userHome, '.claude'));
 });
 
 test('reads git grep -n -z output: path, line and the line text, which may hold a NUL', () => {

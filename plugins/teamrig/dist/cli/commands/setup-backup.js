@@ -1,10 +1,11 @@
 import { join } from 'node:path';
-import { claudeConfigDir, KIT_NAME } from "../../core/home.js";
+import { KIT_NAME } from "../../core/home.js";
 import { readManifest } from "../../setup/backup-manifest.js";
 import { SETUP_KINDS, teamSkillsOf } from "../../setup/backup-places.js";
 import { applyRestore, planRestore } from "../../setup/backup-restore.js";
 import { backupSetup, listBackups, setupBackupsDir, STAMP } from "../../setup/backup.js";
 import { noPositionals, UsageError } from "../args.js";
+import { hostHomeOf } from "../host.js";
 import { EXIT } from "../runtime.js";
 import { projectOf, setupTeamOf } from "./setup.js";
 /**
@@ -38,7 +39,7 @@ export async function backup(args, runtime) {
     const project = await projectOf(runtime, flag);
     // The team setup scan reads for the same --project, so the backup keeps the skills folder a slimming edits.
     const team = await setupTeamOf(runtime, flag === undefined ? undefined : project);
-    const claudeDir = claudeConfigDir(runtime.env, runtime.userHome);
+    const claudeDir = hostHomeOf(runtime);
     const at = { claudeDir, project, teamSkills: teamSkillsOf(team?.kit.paths.skills, claudeDir) };
     const result = await backupSetup(portsOf(runtime), at, rootOf(runtime), runtime.clock.now());
     backedUpLines(result).forEach((line) => runtime.out.stdout(line));

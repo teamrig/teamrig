@@ -22,6 +22,9 @@ const EVERY_PHASE: readonly RefreshState[] = [
   { phase: 'asked', task: null, at: AT, tokens: 262_000, handoverHash: null, midTurn: false },
   { phase: 'ready', task: null, at: AT, tokens: 262_000, noticed: true, transcript: null, claudePid: null },
   { phase: 'refreshed', task: null, at: AT },
+  { phase: 'asked', task: null, at: AT, tokens: 170_000, handoverHash: null, midTurn: true, compactHeld: true },
+  { phase: 'ready', task: null, at: AT, tokens: 170_000, noticed: true, transcript: null, claudePid: null, compactHeld: true },
+  { phase: 'boundary', task: 'T13', at: AT, finished: 1, ask: { task: null, at: AT, tokens: 170_000, handoverHash: null, compactHeld: true } },
 ];
 
 describe('refresh state files', () => {
@@ -64,6 +67,9 @@ describe('refresh state files', () => {
       '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"fixHash":7}',
       '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"fixHash":null}',
       '{"v":1,"phase":"boundary","task":"T1","at":"x","finished":1,"ask":{"task":null,"at":"x","tokens":1,"handoverHash":null,"fixHash":false}}',
+      '{"v":1,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"compactHeld":false}',
+      '{"v":1,"phase":"ready","task":"T1","at":"x","noticed":true,"compactHeld":1}',
+      '{"v":1,"phase":"boundary","task":"T1","at":"x","finished":1,"ask":{"task":null,"at":"x","tokens":1,"handoverHash":null,"compactHeld":"yes"}}',
       '[1]',
     ]) {
       assert.equal(parseRefreshState(text), undefined, text);
@@ -90,6 +96,13 @@ describe('refresh state files', () => {
     assert.equal(asked !== undefined && 'fixHash' in asked, false);
     const boundary = parseRefreshState('{"v":1,"phase":"boundary","task":"T2","at":"x","finished":1,"ask":{"task":"T1","at":"x","tokens":1,"handoverHash":null}}');
     assert.deepEqual(boundary, { phase: 'boundary', task: 'T2', at: 'x', finished: 1, ask: { task: 'T1', at: 'x', tokens: 1, handoverHash: null } });
+  });
+
+  it('reads an ask or a handover from before a compaction was held back as none held (T4119)', () => {
+    const asked = parseRefreshState('{"v":3,"phase":"asked","task":"T1","at":"x","tokens":1,"handoverHash":null,"midTurn":true}');
+    assert.equal(asked !== undefined && 'compactHeld' in asked, false);
+    const ready = parseRefreshState('{"v":3,"phase":"ready","task":"T1","at":"x","noticed":true}');
+    assert.equal(ready !== undefined && 'compactHeld' in ready, false);
   });
 
   it('reads a boundary or a judged one from before the task count as its first task, or none counted', () => {
@@ -123,34 +136,33 @@ describe('the baseline field ', () => {
 });
 
 describe('the state file format', () => {
-  it('writes format 3, reads formats 1 and 2 as files with no window or baseline, and pins the fields of the format', () => {
+  it('writes format 3, reads formats 1 and 2 as files with no baseline, and pins the fields of the format', () => {
     const old = '{"v":1,"phase":"idle","task":"T1","at":"x","tokens":5,"finished":2}';
     assert.deepEqual(parseRefreshState(old), { phase: 'idle', task: 'T1', at: 'x', tokens: 5, finished: 2 });
     const second = '{"v":2,"phase":"idle","task":"T1","at":"x","tokens":5,"finished":2,"baseline":4}';
     assert.deepEqual(parseRefreshState(second), { phase: 'idle', task: 'T1', at: 'x', tokens: 5, finished: 2, baseline: 4 });
-    const state: RefreshState = { phase: 'boundary', task: 'T1', at: AT, finished: 1, ask: { task: 'T0', at: AT, tokens: 1, handoverHash: 'h', fixHash: 'f' }, baseline: 7, largeWindow: true };
+    const state: RefreshState = { phase: 'boundary', task: 'T1', at: AT, finished: 1, ask: { task: 'T0', at: AT, tokens: 1, handoverHash: 'h', fixHash: 'f' }, baseline: 7 };
     const written = JSON.parse(formatRefreshState(state));
-    assert.deepEqual(fieldPaths(written), ['ask.at', 'ask.fixHash', 'ask.handoverHash', 'ask.task', 'ask.tokens', 'at', 'baseline', 'finished', 'largeWindow', 'phase', 'task', 'v']);
+    assert.deepEqual(fieldPaths(written), ['ask.at', 'ask.fixHash', 'ask.handoverHash', 'ask.task', 'ask.tokens', 'at', 'baseline', 'finished', 'phase', 'task', 'v']);
   });
 });
 
-describe('the window field', () => {
-  it('round-trips a large or small window on every phase, and refuses a bad one', () => {
+describe("an older release's largeWindow field", () => {
+  it('is ignored on every phase, whatever its value, so one threshold holds for every window', () => {
     for (const phase of EVERY_PHASE) {
-      for (const largeWindow of [true, false]) {
-        const state = { ...phase, largeWindow };
-        assert.deepEqual(parseRefreshState(formatRefreshState(state)), state, `${phase.phase} ${String(largeWindow)}`);
+      for (const largeWindow of ['true', 'false', '"yes"']) {
+        const text = formatRefreshState(phase).replace(/}(\s*)$/, `,"largeWindow":${largeWindow}}$1`);
+        const read = parseRefreshState(text);
+        assert.deepEqual(read, phase, `${phase.phase} ${largeWindow}`);
+        assert.equal(read !== undefined && 'largeWindow' in read, false);
       }
     }
-    assert.equal(parseRefreshState(formatRefreshState({ phase: 'refreshed', task: 'T1', at: AT }).replace('}', ',"largeWindow":"yes"}')), undefined);
   });
 
-  it('reads a file from before it as telling no window: the live shapes', () => {
-    const fresh = '{"v":1,"phase":"refreshed","task":null,"at":"2030-01-08T10:00:00.000Z"}';
-    assert.deepEqual(parseRefreshState(fresh), { phase: 'refreshed', task: null, at: AT });
-    const judged = '{"v":1,"phase":"idle","task":"T3","at":"2030-01-08T10:00:00.000Z","tokens":140000,"finished":1,"baseline":122000}';
-    const read = parseRefreshState(judged);
+  it('is not written back: a state read from such a file writes none', () => {
+    const live = '{"v":3,"phase":"idle","task":"T3","at":"2030-01-08T10:00:00.000Z","tokens":140000,"finished":1,"baseline":122000,"largeWindow":true}';
+    const read = parseRefreshState(live);
     assert.deepEqual(read, { phase: 'idle', task: 'T3', at: AT, tokens: 140_000, finished: 1, baseline: 122_000 });
-    assert.equal(read !== undefined && 'largeWindow' in read, false);
+    assert.equal(read === undefined ? undefined : formatRefreshState(read).includes('largeWindow'), false);
   });
 });

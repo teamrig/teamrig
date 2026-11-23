@@ -1,4 +1,5 @@
-import { claudeProjectsDir, lastWriteOf } from '../../budget/discover.ts';
+import { lastWriteOf } from '../../budget/discover.ts';
+import { transcriptsFolderIfKnown } from '../host.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { KIT_NAME } from '../../core/home.ts';
@@ -31,7 +32,7 @@ export async function coldSendHold(runtime: CliRuntime, kit: Kit, config: KitCon
   if (tabs.includes(claudeSession)) {
     return undefined;
   }
-  const last = await lastWriteOf(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), tabs);
+  const last = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), tabs);
   if (last === undefined) {
     return undefined;
   }

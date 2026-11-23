@@ -93,7 +93,7 @@ export async function reportAutoSync(runtime: CliRuntime, kit: Kit, config: KitC
   });
   const posts = [...addedLines(run.added)].map(([to, text]) => ({ to, text, wake: false }));
   const news = [failureNews(before?.failing ?? [], run.failures), leftOutNews(before?.leftOut ?? new Map(), after.leftOut, config.github.acceptLabel)];
-  for (const text of news) {
+  for (const text of [...news, ...run.scopeHolds]) {
     if (text !== undefined) {
       posts.push({ to: config.roles.lead, text, wake: false });
     }

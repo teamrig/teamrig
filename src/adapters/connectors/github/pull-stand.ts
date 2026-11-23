@@ -75,8 +75,8 @@ export function pullStandIn(stdout: string): PullStandAnswer {
 }
 
 /**
- * The head's checks from `commits(last:1)`: its statusCheckRollup's state, `none` when GitHub answers the rollup null
- * (the head has no checks); undefined when the part is off its shape or names a state GitHub does not send.
+ * The head's checks from `commits(last:1)`: its statusCheckRollup's state; when GitHub answers the rollup null, its
+ * check runs (checkRunsChecks). undefined when the part is off its shape or names a state GitHub does not send.
  */
 function headChecksOf(commits: unknown): PullChecks | undefined {
   const nodes = isRecord(commits) ? commits['nodes'] : undefined;
@@ -87,7 +87,69 @@ function headChecksOf(commits: unknown): PullChecks | undefined {
   }
   const rollup = commit['statusCheckRollup'];
   if (rollup === null) {
-    return 'none';
+    return checkRunsChecks(commit['checkSuites']);
   }
   return isRecord(rollup) ? rollupChecks(rollup['state']) : undefined;
+}
+
+/** A finished check run's conclusions that pass, as GitHub's own rollup counts them; every other conclusion fails. */
+const PASSING_CONCLUSIONS: ReadonlySet<string> = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+
+/**
+ * The head's checks read from its check runs, for a head whose rollup GitHub answers null (T5164): it does so for a
+ * commit that also holds a check suite awaiting approval, as release-please's head does beside the ci run started by
+ * hand, though that run's checks passed. A run not finished is pending, one finished on any conclusion but
+ * PASSING_CONCLUSIONS is failing; none at all is `none`. A suite or run list longer than the query reads (its
+ * totalCount above its nodes) is pending, since the runs left unread could fail. undefined when off its shape.
+ */
+function checkRunsChecks(checkSuites: unknown): PullChecks | undefined {
+  const suites = pageOf(checkSuites);
+  if (suites === undefined) {
+    return undefined;
+  }
+  let runs = 0;
+  let pending = suites.partial;
+  for (const suite of suites.nodes) {
+    const page = isRecord(suite) ? pageOf(suite['checkRuns']) : undefined;
+    if (page === undefined) {
+      return undefined;
+    }
+    pending ||= page.partial;
+    for (const run of page.nodes) {
+      const check = runCheck(run);
+      if (check === undefined || check === 'failing') {
+        return check;
+      }
+      pending ||= check === 'pending';
+      runs += 1;
+    }
+  }
+  return pending ? 'pending' : runs === 0 ? 'none' : 'passing';
+}
+
+/** A connection's nodes and whether GitHub holds more than it sent (`totalCount` above the nodes); undefined off its shape. */
+function pageOf(connection: unknown): { readonly nodes: readonly unknown[]; readonly partial: boolean } | undefined {
+  if (!isRecord(connection)) {
+    return undefined;
+  }
+  const { nodes, totalCount } = connection;
+  if (!Array.isArray(nodes) || typeof totalCount !== 'number') {
+    return undefined;
+  }
+  return { nodes, partial: totalCount > nodes.length };
+}
+
+/** One check run: pending until COMPLETED, then passing or failing by its conclusion; undefined off its shape. */
+function runCheck(run: unknown): PullChecks | undefined {
+  if (!isRecord(run) || typeof run['status'] !== 'string') {
+    return undefined;
+  }
+  if (run['status'] !== 'COMPLETED') {
+    return 'pending';
+  }
+  const conclusion = run['conclusion'];
+  if (typeof conclusion !== 'string') {
+    return undefined;
+  }
+  return PASSING_CONCLUSIONS.has(conclusion) ? 'passing' : 'failing';
 }

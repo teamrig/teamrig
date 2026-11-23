@@ -32,6 +32,9 @@ import type { ReviewGateSetup } from './review-gate-step.ts';
 import { ReviewHolds } from './review-holds.ts';
 import { KEEPALIVE_SSH_COMMAND } from './ssh-keepalive.ts';
 
+/** What git's environment always carries so a queued push never waits on a prompt (core/git-run.ts, T4897). */
+const PROMPTS_OFF = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' };
+
 const PLACES: DeliveryPlaces = {
   ledger: '/team/deploys/ledger.jsonl',
   ledgerMd: '/team/deploys/ledger.md',
@@ -458,7 +461,7 @@ describe('merge pushes a branch to the default branch', () => {
       {
         command: commandLine(['git', 'push', 'origin', 'HEAD:refs/heads/main'], 'linux'),
         cwd: WORKTREE,
-        env: { PATH: '/bin', GIT_SSH_COMMAND: KEEPALIVE_SSH_COMMAND, TEAMRIG_HOST_LOCK: 'lock-1' },
+        env: { PATH: '/bin', ...PROMPTS_OFF, GIT_SSH_COMMAND: KEEPALIVE_SSH_COMMAND, TEAMRIG_HOST_LOCK: 'lock-1' },
         timeoutMs: DEFAULT_QUEUE.maxRunMinutes * 60_000,
       },
     ]);
@@ -483,7 +486,7 @@ describe('merge pushes a branch to the default branch', () => {
     const world = new World();
     world.git.sshCommandIs = 'ssh -i deploy_key';
     assert.equal((await world.run()).kind, 'done');
-    assert.deepEqual(world.steps.ran.map((step) => step.env), [{ PATH: '/bin', TEAMRIG_HOST_LOCK: 'lock-1' }]);
+    assert.deepEqual(world.steps.ran.map((step) => step.env), [{ PATH: '/bin', ...PROMPTS_OFF, TEAMRIG_HOST_LOCK: 'lock-1' }]);
   });
 
   it("records the task its branch names, at that task's register priority, on the push's start and end records (T2209)", async () => {
@@ -579,7 +582,7 @@ describe('merge goes through the repository’s merge command, where one is set'
     const [run] = world.hooks.ran;
     assert.deepEqual(run?.argv, MERGE);
     assert.equal(run?.cwd, WORKTREE);
-    assert.deepEqual(run?.env, { PATH: '/bin', TEAMRIG_HOST_LOCK: 'lock-1', TEAMRIG_MERGE_BRANCH: 'feat', TEAMRIG_MERGE_BASE: 'main', TEAMRIG_MERGE_HEAD: 'rebased', TEAMRIG_SESSION: 'api' });
+    assert.deepEqual(run?.env, { PATH: '/bin', ...PROMPTS_OFF, TEAMRIG_HOST_LOCK: 'lock-1', TEAMRIG_MERGE_BRANCH: 'feat', TEAMRIG_MERGE_BASE: 'main', TEAMRIG_MERGE_HEAD: 'rebased', TEAMRIG_SESSION: 'api' });
     assert.deepEqual(during, { head: 'rebased', lockHeld: true });
     assert.deepEqual(world.steps.ran, [], 'nothing is pushed');
     assert.deepEqual(world.git.log, [

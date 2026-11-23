@@ -4,7 +4,7 @@ import { parseObject } from "../core/jsonl.js";
 /** Plans over a history that keeps changing between the read and the write before the clean gives up on it. */
 const ATTEMPTS = 3;
 const PASTE_SUFFIX = '.txt';
-/** The history places in Claude Code's folder (`claudeConfigDir`). */
+/** The history places in Claude Code's folder (its paths port's `home`). */
 export function historyPlaces(claudeDir) {
     return { history: join(claudeDir, 'history.jsonl'), pasteCache: join(claudeDir, 'paste-cache') };
 }

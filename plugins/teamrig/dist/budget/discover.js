@@ -1,7 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorCode } from "../core/guards.js";
-import { claudeConfigDir } from "../core/home.js";
 import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 import { nodeTranscriptBytes } from "./cursor.js";
 /** The real filesystem. An entry removed while it is listed is left out. */
@@ -49,19 +48,19 @@ export const nodeTranscriptSource = { ...nodeTranscriptBytes, ...nodeTranscriptF
 export function claudeProjectSlug(project) {
     return project.replace(/[^A-Za-z0-9]/g, '-');
 }
-/** Claude Code's folder of project transcripts: `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects`. */
-export function claudeProjectsDir(env, userHome) {
-    return join(claudeConfigDir(env, userHome), 'projects');
-}
 /** Where Claude Code keeps a session's own transcript for a project folder: `<projects>/<project slug>/<session>.jsonl`. */
 export function projectTranscriptPath(projectsDir, project, claudeSession) {
     return join(projectsDir, claudeProjectSlug(project), `${claudeSession}${TRANSCRIPT}`);
 }
 /**
  * A Claude Code session's own transcript: in its project's folder when it has one there, else the newest of that
- * session in any project folder (a session Claude Code filed under another folder); undefined when it has none.
+ * session in any project folder (a session Claude Code filed under another folder); undefined when it has none, or
+ * when `projectsDir` is undefined: a host whose transcripts folder teamrig does not know.
  */
 export async function findTranscript(folders, projectsDir, project, claudeSession) {
+    if (projectsDir === undefined) {
+        return undefined;
+    }
     if (project !== undefined) {
         const own = projectTranscriptPath(projectsDir, project, claudeSession);
         if ((await folders.changedAt(own)) !== undefined) {
@@ -104,9 +103,13 @@ function jsonlChangedSince(entry, since) {
 /**
  * Every Claude Code session with a transcript written since `since`: `<projects>/<project>/<session>.jsonl`,
  * and its subagents' `<projects>/<project>/<session>/subagents/*.jsonl`, which count as the session's.
- * Sorted by session id, so a run reads them in the same order every time.
+ * Sorted by session id, so a run reads them in the same order every time. None when `projectsDir` is undefined: a host
+ * whose transcripts folder teamrig does not know.
  */
 export async function discoverTranscripts(folders, projectsDir, since) {
+    if (projectsDir === undefined) {
+        return [];
+    }
     const found = new Map();
     const sessionOf = (id) => {
         const existing = found.get(id);
@@ -146,10 +149,14 @@ export async function discoverTranscripts(folders, projectsDir, since) {
 }
 /**
  * When any of these Claude Code sessions last wrote its own transcript, in any project folder (epoch
- * ms); undefined when none has one. It checks one path per session and project folder and never lists
- * every transcript, so a hook can afford it.
+ * ms); undefined when none has one, or when `projectsDir` is undefined (a host whose transcripts folder teamrig does
+ * not know). It checks one path per session and project folder and never lists every transcript, so a hook can
+ * afford it.
  */
 export async function lastWriteOf(folders, projectsDir, claudeSessions) {
+    if (projectsDir === undefined) {
+        return undefined;
+    }
     let last;
     for (const project of await folders.entries(projectsDir)) {
         if (!project.folder) {

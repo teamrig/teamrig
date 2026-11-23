@@ -7,7 +7,9 @@ import {
   type HostPermissions,
   type HostPlugin,
   type HostPorts,
+  type HostSecrets,
   type HostSteps,
+  type HostUserHooks,
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
@@ -16,10 +18,10 @@ import {
   type TranscriptReader,
   type UsageMeter,
 } from '../ports/host/index.ts';
+import type { HostSource } from '../composition/host-ports.ts';
 import type { LaunchHost } from '../config/launch.ts';
 import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
 import type { ContextSource } from '../refresh/usage.ts';
-import type { HostSecretFiles } from '../secret-guard/rules.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
 /**
@@ -134,13 +136,13 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
  * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
  * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
  * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
- * its folders adds none.
+ * its secret files adds none.
  */
-export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecretFiles {
+export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecrets {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
-    const { paths } = source(seen);
-    return isUnsupported(paths) ? [] : paths.secretFiles();
+  const named = sourcesOf(runtime).flatMap((source) => {
+    const { secrets } = source(seen);
+    return isUnsupported(secrets) ? [] : secrets.secretFiles();
   });
   const once: readonly string[] = [...new Set(named)];
   return { secretFiles: () => once };
@@ -160,13 +162,15 @@ export function identityOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'
 }
 
 /**
- * The session variables teamrig holds in this run: those of every host adapter it ships with, then the running
- * host's, each name once. A machine may run a host other than the one this run works in, and a variable says who a
- * run is whatever host set it: so the running host adds to the shipped hosts' names and takes none away. It never
- * refuses: a host that tells nothing of its sessions adds none.
+ * The session variables teamrig holds in this run: those every host adapter it ships with declares, its session
+ * launcher built or not, then those of the launchers that tell of their sessions, each name once. A machine may run a
+ * host other than the one this run works in, and a variable says who a run is whatever host set it: so the running
+ * host adds to the shipped hosts' names and takes none away. A shipped host's agent sets its marks before teamrig
+ * starts its sessions, so its declared names count even while its launcher is not built. It never refuses: a host
+ * that tells nothing of its sessions adds none.
  */
 export function sessionVariablesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): SessionVariables {
-  const named = launchersOf(runtime).map((launcher) => launcher.variables);
+  const named = [...declaredOf(runtime), ...launchersOf(runtime).map((launcher) => launcher.variables)];
   return {
     marks: [...new Set(named.flatMap((variables) => variables.marks))],
     identity: [...new Set(named.flatMap((variables) => variables.identity))],
@@ -195,10 +199,20 @@ export function launcherIfTold(runtime: Pick<CliRuntime, 'host' | 'env' | 'platf
   return isUnsupported(launcher) ? undefined : launcher;
 }
 
+/** The way to build the ports of every host adapter teamrig ships with, then the running host's. */
+function sourcesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts'>): readonly HostSource[] {
+  return [...runtime.shippedHosts.map((shipped) => shipped.ports), runtime.host];
+}
+
+/** The session variables every host adapter teamrig ships with declares, its session launcher built or not. */
+function declaredOf(runtime: Pick<CliRuntime, 'shippedHosts'>): readonly SessionVariables[] {
+  return runtime.shippedHosts.map((shipped) => shipped.sessionVariables);
+}
+
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly SessionLauncher[] {
   const seen = { env: runtime.env, platform: runtime.platform };
-  return [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  return sourcesOf(runtime).flatMap((source) => {
     const { launcher } = source(seen);
     return isUnsupported(launcher) ? [] : [launcher];
   });
@@ -210,14 +224,19 @@ function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' |
  * the running host's: its session variables, the marks and identity variables it tells a run by, and what it parks.
  * A machine may run a host other than the one this run works in, and a child inheriting any host's variables would be
  * taken for that host's session. `parked` joins them the same way, with every mark: a step parked by an agent's run
- * keeps the mark of that run whichever host set it, so it never runs as the person's own. `login` is the running
- * host's alone, as the session started is a session of that host and keeps no other host's login. It never refuses:
- * a host that tells nothing of its sessions adds no name.
+ * keeps the mark of that run whichever host set it, so it never runs as the person's own. A shipped host's declared
+ * variables count in both, its session launcher built or not, as `sessionVariablesOf` counts them. `login` is the
+ * running host's alone, as the session started is a session of that host and keeps no other host's login. It never
+ * refuses: a host that tells nothing of its sessions adds no name.
  */
 export function childEnvOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): ChildEnvironment {
   const launchers = launchersOf(runtime);
-  const parked = launchers.flatMap(({ childEnv, variables }) => [...childEnv.parked, ...variables.marks]);
-  const session = launchers.flatMap(({ childEnv, variables }) => [...childEnv.session, ...variables.marks, ...variables.identity, ...childEnv.parked]);
+  const declared = declaredOf(runtime);
+  const parked = [...declared.flatMap(({ marks }) => marks), ...launchers.flatMap(({ childEnv, variables }) => [...childEnv.parked, ...variables.marks])];
+  const session = [
+    ...declared.flatMap(({ marks, identity }) => [...marks, ...identity]),
+    ...launchers.flatMap(({ childEnv, variables }) => [...childEnv.session, ...variables.marks, ...variables.identity, ...childEnv.parked]),
+  ];
   const { launcher: running } = hostOf(runtime);
   return {
     session: [...new Set(session)],
@@ -267,6 +286,26 @@ export function sessionCommandLinesOf(runtime: Pick<CliRuntime, 'host' | 'shippe
   };
 }
 
+/**
+ * The person's own hooks file of the host named `name` (as `setup hooks --host` takes it), from every host adapter
+ * teamrig ships with and the run's own host: a person sets up the hooks of a host other than the one this run works
+ * in, as from one host for another. A name no host answers to refuses, naming those that do.
+ */
+export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostUserHooks {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const offered = sourcesOf(runtime).flatMap((source) => {
+    const { userHooks } = source(seen);
+    return isUnsupported(userHooks) ? [] : [userHooks];
+  });
+  const found = offered.find((port) => port.host === name);
+  if (found !== undefined) {
+    return found;
+  }
+  const names = [...new Set(offered.map((port) => port.host))];
+  const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
+  throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
+}
+
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
 export function hostHomeOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
   return pathsOf(runtime).home(runtime.userHome);
@@ -275,6 +314,19 @@ export function hostHomeOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'
 /** The host's own folder for the person of this run, or undefined on a host whose folders teamrig does not know. */
 export function hostHomeIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string | undefined {
   return pathsIfKnown(runtime)?.home(runtime.userHome);
+}
+
+/** The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
+export function transcriptsFolderOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
+  return pathsOf(runtime).transcriptsFolder(runtime.userHome);
+}
+
+/**
+ * The folder of the person's session transcripts, or undefined on a host whose folders teamrig does not know: for a
+ * hook or check that must go on, reading such a run as one with no transcript.
+ */
+export function transcriptsFolderIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string | undefined {
+  return pathsIfKnown(runtime)?.transcriptsFolder(runtime.userHome);
 }
 
 /** The run's permission rules. A host that keeps none refuses with its own reason, as `transcriptsOf` does. */

@@ -23,5 +23,6 @@ export function connectorState(paths, id) {
         watchLock: join(dir, 'watch.lock'),
         follows: join(dir, 'follows.json'),
         claims: join(dir, 'claims.json'),
+        scope: join(dir, 'scope.json'),
     };
 }

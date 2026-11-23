@@ -17,9 +17,18 @@ export const QUERY_TIMEOUT_MS = 10_000;
  */
 const REPOSITORY_VARIABLES = new Set(['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE', 'GIT_PREFIX']);
 
-/** The process environment without the variables that redirect git. */
+/**
+ * Variables that would have git ask a person for a user name or key, set so it never does: git runs unattended here,
+ * where a prompt waits for no one, and a key typed into one would bypass the key teamrig picks. An empty GIT_ASKPASS
+ * also stops git falling back to `core.askPass` and SSH_ASKPASS.
+ */
+const NO_PROMPTS: Readonly<Record<string, string>> = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' };
+const PROMPT_VARIABLES = new Set(Object.keys(NO_PROMPTS));
+
+/** The process environment without the variables that redirect git, and with git's prompts off. */
 export function gitEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => !REPOSITORY_VARIABLES.has(name.toUpperCase())));
+  const kept = Object.entries(env).filter(([name]) => !REPOSITORY_VARIABLES.has(name.toUpperCase()) && !PROMPT_VARIABLES.has(name.toUpperCase()));
+  return { ...Object.fromEntries(kept), ...NO_PROMPTS };
 }
 
 export interface GitRun {

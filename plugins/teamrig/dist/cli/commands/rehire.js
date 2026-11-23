@@ -1,11 +1,11 @@
-import { claudeProjectsDir, projectTranscriptPath } from "../../budget/discover.js";
+import { projectTranscriptPath } from "../../budget/discover.js";
 import { errorMessage } from "../../core/guards.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { lastClaudeSessionOf } from "../../inbox/marks.js";
 import { JsonlMarkLog } from "../../inbox/store.js";
 import { resumeVerdict } from "../../hiring/rehire.js";
 import { readContextTokens } from "../../refresh/usage.js";
-import { contextSourceIfTold } from "../host.js";
+import { contextSourceIfTold, transcriptsFolderOf } from "../host.js";
 /**
  * Measures whether rehired session `id` resumes its last Claude Code session in `project`: that session is the
  * one that last read its inbox, its transcript is `<projects>/<project slug>/<session>.jsonl`, its idle time
@@ -35,7 +35,7 @@ function unmeasured(error) {
 }
 /** Measures Claude Code session `claudeSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
 export function lastSessionOf(runtime, claudeSession, project) {
-    return measureTranscript(runtime, projectTranscriptPath(claudeProjectsDir(runtime.env, runtime.userHome), project, claudeSession));
+    return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, claudeSession));
 }
 /** Measures the Claude Code transcript at `transcript`, in whatever folder it sits. It throws when a read fails. */
 export async function measureTranscript(runtime, transcript) {

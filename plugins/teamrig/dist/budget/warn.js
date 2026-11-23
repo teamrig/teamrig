@@ -4,7 +4,7 @@ import { budgetMarkOf, burstPromptLines, burstStopLines } from "./burst-lines.js
 import { cutClause } from "./cut.js";
 import { formatEndTime, formatPct, noRoomText } from "./format.js";
 import { liftedLine } from "./lift.js";
-import { holdsPastPart } from "./pace.js";
+import { holdsPastPart, holdsTeamPast } from "./pace.js";
 /**
  * The live budget warning, pure: from a session's use today and the team's pace, which line its
  * person sees at a turn's end, which line the model gets with the next prompt, whether its leader gets
@@ -91,13 +91,28 @@ export function isPastDailyBudget(facts, extraPct = 0) {
  * team: a session with next to nothing left, idle since the night, is held before its wake, not after the wake's own
  * turn spent it; and as the quiet hours end the in-day pace is the night's use alone, so the team's room is a few
  * seconds of pace, which the wake's turn would spend at once (T1322). A leader's stop (a cut with `stop`) holds it
- * whatever its use, from the day's start on, when it has all its part left (T3455).
+ * whatever its use, from the day's start on, when it has all its part left (T3455). A session the budget never holds
+ * (`unheld`) is held by that stop alone (T4388).
  */
 export function isHeld(facts, extraPct = 0) {
     if (facts.cut?.stop === true) {
         return true;
     }
+    if (facts.unheld) {
+        return false;
+    }
     return isPastDailyBudget(facts, extraPct) && holdsPastPart({ ...facts.teamDay, usedPct: facts.teamDay.usedPct + extraPct }, facts.cut !== undefined);
+}
+/**
+ * True when the session's team is held for the day (`holdsTeamPast`, as `teamrig budget` names it) and nothing of the
+ * session's own lifts it: a leader's lift or a burst in force keeps it on its own part. A turn about to start counts as
+ * spent (`extraPct`), for the team's use and the in-day pace alike, as in `isHeld`.
+ */
+export function isTeamHeld(facts, extraPct = 0) {
+    if (facts.teamToday === undefined || facts.lift !== undefined || facts.burst !== undefined) {
+        return false;
+    }
+    return holdsTeamPast({ ...facts.teamDay, usedPct: facts.teamDay.usedPct + extraPct }, facts.teamToday.usedPct + extraPct, facts.teamToday.partPct);
 }
 /** The quiet hours the session is in; undefined outside them, or while its lift exempts it. */
 export function sessionQuietSpan(facts, quiet) {

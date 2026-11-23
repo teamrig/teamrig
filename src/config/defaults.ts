@@ -28,12 +28,15 @@ import type {
   PromptsConfig,
   SecretGuardConfig,
   PushGuardConfig,
+  UiConfig,
   ReadonlyShellConfig,
   RefreshConfig,
   RegisterConfig,
   ScaleOutConfig,
   SkillsConfig,
   StatusLineConfig,
+  StepsConfig,
+  SyncConfig,
   TestsConfig,
   TurnLogConfig,
   NeedsYouConfig,
@@ -43,6 +46,7 @@ import type {
   BranchesConfig,
   MeetingConfig,
 } from './types.ts';
+import { DEFAULT_CAPS, DEFAULT_SCOPE } from '../sync/scope.ts';
 
 /** Defaults for every key except the roster (`sessions`, `roles.lead`), which each team supplies. */
 export const DEFAULT_OWNER_GATES: readonly string[] = [
@@ -219,6 +223,7 @@ export const DEFAULT_COMMITS: CommitsConfig = {
   testPatterns: ['(^|/)(tests?|__tests__|spec)/', '\\.(test|spec)\\.[^/]+$', '(^|/)test_[^/]+\\.py$'],
   sourcePatterns: ['\\.([cm]?[jt]sx?|py|go|rs|java|kt|cs|c|cc|cpp|h|hpp|rb|swift|vue|svelte|sh|ps1)$'],
   gate: 'warn',
+  stamp: true,
 };
 
 /**
@@ -252,6 +257,9 @@ export const DEFAULT_BUDGET: BudgetConfig = {
 export const DEFAULT_SESSION_SHARE = 1;
 
 export const DEFAULT_ALERTS: AlertsConfig = { persistentFailureHours: 24 };
+
+/** The UI shows in the terminal `teamrig ui` is run in, as it did before `ui.mode` (T5105). */
+export const DEFAULT_UI: UiConfig = { mode: 'terminal' };
 
 /** The remote a repository's merge command merges into when `merge.remote` is unset. */
 export const DEFAULT_MERGE_REMOTE = 'origin';
@@ -299,11 +307,14 @@ export const DEFAULT_WAKE: WakeConfig = { enabled: true, priority: 1, batchSecon
 export const DEFAULT_MEETING: MeetingConfig = {
   panel: { enabled: true },
   spotlight: { enabled: true, dim: 0.6, breakthroughSeconds: 120 },
-  statusLine: { enabled: true, colour: '#8b57e3', heldText: 'meeting on: held' },
+  statusLine: { enabled: true, colour: '#8b57e3', heldText: 'owner in meeting' },
 };
 
 /** About a screenful: two or three failing tests with their errors and first stack frames. */
 export const DEFAULT_TESTS: TestsConfig = { maxFailureChars: 4000 };
+
+/** A week: time to notice a step went wrong and take its backup back. */
+export const DEFAULT_STEPS: StepsConfig = { backupDays: 7 };
 
 /**
  * GitHub's own field names and default issue types. A goal is a Feature, as an issue opened for one is typed
@@ -329,14 +340,20 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
 export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS };
 
 /**
+ * The import a team gets with no setup (T5013): its people's issues and those labelled `teamrig`, at most 200 open
+ * tasks per tracker and 50 new ones a run, so a large project never floods the register.
+ */
+export const DEFAULT_SYNC: SyncConfig = { scope: DEFAULT_SCOPE, ...DEFAULT_CAPS };
+
+/**
  * Claude Code compacts a 200k window at about 167k, so 120k refreshes before that; every 3 tasks catches a
  * session that grows slowly, from 80k up. Measured over 8 days of 12 sessions: about 9 refreshes a day in all.
  * The user types /clear for the fresh start of a member (`autoRestart` 'lead'): an automatic /clear wiped the screen
  * while the user was still reading the last reply, still had its question to answer, or was away. The lead restarts
  * on its own: with it off, a lead grew unasked through the night, and the mod's activity hold and countdown keep the
- * /clear from landing under the user. A session on a 1M window refreshes at 250k (a `[1m]` launch, or one whose
- * state shows the window, as a plain `opus` lead's fresh start past 120k does): a fresh one starts at about 122k,
- * and the window has room far past it. While a handover is pending, the compaction at 167k waits up to 185k: 18k of
+ * /clear from landing under the user. A session on a 1M window refreshes at 120k too (T4083): a fresh one starts at
+ * about 122k, which its baseline holds, and a larger threshold left a tab that never reached it unrefreshed. While a
+ * handover is pending, the compaction at 167k waits up to 185k: 18k of
  * room to finish the step and write it, and 15k under the window for a large tool result. A handover over 20 KB is
  * refused: on 10-24 most were 4 to 8 KB, and one appended
  * to section by section (29 of them) reached 88 KB, which its every fresh start read whole.
@@ -344,7 +361,6 @@ export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners:
 export const DEFAULT_REFRESH: RefreshConfig = {
   enabled: true,
   contextTokens: 120_000,
-  largeWindowContextTokens: 250_000,
   everyTasks: 3,
   everyTasksMinTokens: 80_000,
   tabTitle: true,

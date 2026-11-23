@@ -27,6 +27,10 @@ Read it to find what is wrong, not to agree, and hold it to every line whoever a
 with the reason and the better way: a bad direction accepted costs far more than one more round trip. Approve only
 when every line holds:
 
+- Still relevant: check that main has not changed the code it touches since it was written, no later change already
+  fixed or replaced it, the behaviour it changes is still wanted, and landing it now undoes no newer work. A stale one
+  is closed or re-scoped with a comment saying what changed, never landed as written. You decline it with that
+  comment.
 - Its own, finished change: the requester's task and branch, never another session's work, as only the session
   that made a change merges it.
 - It fits the design: the repository's principles and architecture, the decisions already taken, or it names the

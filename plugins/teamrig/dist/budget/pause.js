@@ -1,18 +1,20 @@
 import { roleHolderOf } from "../config/roster.js";
 import { formatAddress } from "../core/address.js";
 import { sessionWeightOf, shareOf, teamTreeOf } from "./parts.js";
+import { unheldOf } from "./unheld.js";
 import { workWeightOf } from "./work.js";
 /** The roles whose holder a short day never pauses: the lead leads the cut, the delivery owner keeps the fleet up. */
 const KEPT_ROLES = ['lead', 'deliveryOwner'];
 /**
  * The sessions of `team` (its roster `ids`) a short day may pause: none while its `budget.pauseByPriority` is off,
- * else all but the holders of the kept roles that the team holds itself (a `<team>/<id>` holder is a team above's).
+ * else all but the holders of the kept roles that the team holds itself (a `<team>/<id>` holder is a team above's)
+ * and the sessions the budget never holds (`unheldOf`).
  */
 export function pausableOf(config, team, ids) {
     if (!config.budget.pauseByPriority) {
         return new Set();
     }
-    const kept = new Set();
+    const kept = new Set(unheldOf(config, team));
     for (const role of KEPT_ROLES) {
         const holder = roleHolderOf(config.roles, role, team);
         if (holder !== undefined && holder.team === team) {

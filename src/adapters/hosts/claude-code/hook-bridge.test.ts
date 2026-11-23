@@ -350,8 +350,8 @@ describe('the recorded session read as hook events', () => {
           assert.equal(call.path, stringField(call.input, 'file_path'));
           break;
         case 'edit':
-          assert.equal(call.path, stringField(call.input, 'file_path'));
-          assert.equal(call.change?.kind, call.name === 'Write' ? 'whole' : 'replacements');
+          assert.equal(call.files[0]?.path, stringField(call.input, 'file_path'));
+          assert.equal(call.files[0]?.change?.kind, call.name === 'Write' ? 'whole' : 'replacements');
           break;
         case 'search':
           assert.equal(call.path, stringField(call.input, 'path'));

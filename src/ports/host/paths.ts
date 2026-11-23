@@ -60,12 +60,13 @@ export interface HostPaths {
   planFile(userHome: string, slug: string): string;
   /** The folder of the snapshots the host takes of that person's shell and sources before each shell call. */
   shellSnapshots(userHome: string): string;
+  /** The folder the host keeps that person's session transcripts in, one folder per project below it. */
+  transcriptsFolder(userHome: string): string;
+  /** The folder the host keeps that person's installed plugins and their marketplaces in. */
+  pluginsFolder(userHome: string): string;
   /**
-   * The host's own files whose content is a secret, such as its login and what a person typed into it: globs as the
-   * secret guard reads its list (`secretGuard.paths`), in which `~/` starts at the person's home folder and a glob
-   * with no leading `/` or drive matches at any depth. The guard reads them after its own defaults and before a
-   * team's globs, so a team's `!glob` still keeps one of them readable. A host only adds secret files: the guard
-   * keeps every shipped host's whatever host runs, and leaves out a `!glob` named here.
+   * The file the host keeps that person's login in, which a new login or token refresh rewrites: a caller only stats
+   * it. Undefined where the host keeps the login in no file of its own.
    */
-  secretFiles(): readonly string[];
+  loginFile(userHome: string): string | undefined;
 }

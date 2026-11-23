@@ -1,4 +1,4 @@
-import { claudeProjectsDir, findTranscript } from "../../budget/discover.js";
+import { findTranscript } from "../../budget/discover.js";
 import { sessionRefreshOf } from "../../config/refresh.js";
 import { isNonNegativeInteger } from "../../core/guards.js";
 import { KIT_NAME } from "../../core/home.js";
@@ -8,7 +8,7 @@ import { decideCompact, decideMidTurn, handoverHashOf } from "../../refresh/deci
 import { readRunningWork } from "../../refresh/running.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { readContextEstimate } from "../../refresh/usage.js";
-import { contextSourceIfTold, identityOf, transcriptsIfKept } from "../host.js";
+import { contextSourceIfTold, identityOf, transcriptsFolderIfKnown, transcriptsIfKept } from "../host.js";
 import { noPositionals } from "../args.js";
 import { EXIT } from "../runtime.js";
 import { hookScopeOf, readHookInput, readModRequest, writeReply } from "./hook-input.js";
@@ -55,7 +55,7 @@ async function transcriptOf(runtime, origin) {
         return undefined;
     }
     const project = identityOf(runtime).projectDir ?? origin.cwd;
-    return findTranscript(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project, origin.session);
+    return findTranscript(runtime.transcripts, transcriptsFolderIfKnown(runtime), project, origin.session);
 }
 function askContextOf(runtime, scope, store) {
     const { config, roster, id } = scope;
@@ -73,8 +73,8 @@ function askContextOf(runtime, scope, store) {
  * threshold (`decideMidTurn`), so a long turn refreshes before Claude Code compacts it. The ask is recorded
  * before it is answered, so the turn's end asks again only when the handover is not written by then. The
  * running work, which takes the transcript's last 8 MiB, is read only once the context is past the size.
- * stdin: `{session_id, cwd, tokens, window?}`, `tokens` the context the last reply read, `window` the context window
- * Claude Code reports, which raises the threshold on a large one.
+ * stdin: `{session_id, cwd, tokens}`, `tokens` the context the last reply read. One threshold holds for every window
+ * (T4083), so a `window` an older mod still sends is not read.
  */
 export async function refreshMid(args, runtime) {
     noPositionals(args);
@@ -88,15 +88,13 @@ export async function refreshMid(args, runtime) {
     if (tokens === undefined || scope === undefined || !scope.config.refresh.enabled) {
         return answer(runtime, OFF);
     }
-    // The window Claude Code reports, which tells a large one apart; a mod from before it sends none.
-    const window = countOf(fields, 'window');
     const store = new RefreshStore(runtime.files, scope.kit.paths);
     const state = await store.state(scope.id);
     const context = askContextOf(runtime, scope, store);
     const meeting = await inMeetingNow(runtime, scope);
-    const first = decideMidTurn(state, context, { tokens, window, meeting, due: undefined });
+    const first = decideMidTurn(state, context, { tokens, meeting, due: undefined });
     const decision = first.kind === 'measure'
-        ? decideMidTurn(state, context, { tokens, window, meeting, due: await dueFactsAt(runtime, store, scope.id, await transcriptOf(runtime, event)) })
+        ? decideMidTurn(state, context, { tokens, meeting, due: await dueFactsAt(runtime, store, scope.id, await transcriptOf(runtime, event)) })
         : first;
     switch (decision.kind) {
         case 'ask':
@@ -105,7 +103,7 @@ export async function refreshMid(args, runtime) {
             return answer(runtime, { kind: 'ask', text: decision.reason, nextAt: decision.nextAt });
         case 'none':
             if (decision.state !== undefined) {
-                // A fresh start's first measure, its baseline, or the window the session showed.
+                // A fresh start's first measure, its baseline.
                 await store.setState(scope.id, decision.state);
             }
             return answer(runtime, { kind: 'wait', nextAt: decision.nextAt });
@@ -115,10 +113,30 @@ export async function refreshMid(args, runtime) {
     }
 }
 /**
+ * One automatic compaction's answer (`decideCompact`), on the session's state and its handover as they are now. A
+ * compaction held back once for the refresh (T4119) records its ask for the handover before it is answered, so the
+ * turn's end asks for it and a second compaction is not held back again.
+ */
+async function compactAnswerOf(runtime, scope, facts) {
+    const store = new RefreshStore(runtime.files, scope.kit.paths);
+    const context = { settings: scope.config.refresh, command: KIT_NAME, now: new Date(runtime.clock.now()).toISOString() };
+    const handoverHash = handoverHashOf(await store.handover(scope.id));
+    const decision = decideCompact(await store.state(scope.id), context, { ...facts, handoverHash });
+    if (decision.kind === 'go') {
+        return GO;
+    }
+    if (decision.state !== undefined) {
+        // Written before it is answered: a hold whose ask is not recorded would hold every compaction after it too.
+        await store.setState(scope.id, decision.state);
+    }
+    return { kind: 'skip', reason: decision.reason };
+}
+/**
  * Run by the plugin's mod before Claude Code compacts the conversation, at its threshold or for the summary it
- * computes ahead: `skip`, with the line that says why, while the session's handover is asked for or written and
- * its fresh start follows this turn, so the compaction waits until `refresh.compactCeilingTokens`
- * (`decideCompact`); else `go`, on any input it cannot read too. stdin: `{session_id, cwd, tokens, window}`.
+ * computes ahead: `skip`, with the line that says why, once per tab in favour of the refresh (T4119), and while the
+ * session's handover is asked for or written and its fresh start follows this turn, so the compaction waits until
+ * `refresh.compactCeilingTokens` (`decideCompact`, `compactAnswerOf`); else `go`, on any input it cannot read too.
+ * stdin: `{session_id, cwd, tokens, window}`.
  */
 export async function compactCheck(args, runtime) {
     noPositionals(args);
@@ -133,16 +151,16 @@ export async function compactCheck(args, runtime) {
     if (tokens === undefined || window === undefined || scope === undefined) {
         return answer(runtime, GO);
     }
-    const store = new RefreshStore(runtime.files, scope.kit.paths);
-    return answer(runtime, decideCompact(await store.state(scope.id), { settings: scope.config.refresh, command: KIT_NAME }, { tokens, window }));
+    return answer(runtime, await compactAnswerOf(runtime, scope, { tokens, window }));
 }
 /**
  * Claude Code's classic PreCompact hook: `compactCheck`'s hold where the mod's never runs, on a host whose managed
  * mods seat one first that sends `session.compact` on past the user's mods (T2015). The same decision for a
  * compaction Claude Code runs on its own (trigger `auto`; a `/compact` the user typed goes), on the context
- * estimated from the transcript (`readContextEstimate`) and no window, which this hook is not told. A hold answers
- * `{decision: 'block', reason}`, a go prints nothing, both with exit 0: exit 2 blocks a compaction too, so this hook
- * never answers by a refusal. stdin: `{session_id, transcript_path, cwd, trigger}`.
+ * estimated from the transcript (`readContextEstimate`) and no window, which this hook is not told; a hold once for
+ * the refresh records its ask the same way (`compactAnswerOf`). A hold answers `{decision: 'block', reason}`, a go
+ * prints nothing, both with exit 0: exit 2 blocks a compaction too, so this hook never answers by a refusal. stdin:
+ * `{session_id, transcript_path, cwd, trigger}`.
  */
 export async function preCompact(args, runtime) {
     noPositionals(args);
@@ -158,8 +176,7 @@ export async function preCompact(args, runtime) {
     // No readable transcript or no meter, no estimate: the compaction goes, since a refusal here would block it.
     const source = contextSourceIfTold(runtime);
     const tokens = source === undefined ? undefined : await readContextEstimate(source, runtime.files, transcript);
-    const state = await new RefreshStore(runtime.files, scope.kit.paths).state(scope.id);
-    const decision = tokens === undefined ? GO : decideCompact(state, { settings: scope.config.refresh, command: KIT_NAME }, { tokens, window: undefined });
+    const decision = tokens === undefined ? GO : await compactAnswerOf(runtime, scope, { tokens, window: undefined });
     if (decision.kind === 'skip') {
         writeReply(runtime, 'compact-start', { verdict: { kind: 'block', reason: decision.reason } });
     }

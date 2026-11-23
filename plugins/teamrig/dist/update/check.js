@@ -7,15 +7,17 @@
  * what was known, and nothing shows: a failed check stays quiet until the next one.
  *
  * A cloned marketplace (github, git, url) is asked through a bare repository teamrig keeps for it, never Claude Code's
- * own clone: `git ls-remote` of the clone's `origin` names the newest commit (under 2 s), and only a commit not seen
- * before is fetched, one commit deep and without file contents (`--filter=blob:none`), so the two files read are the
- * only contents downloaded (about 4 s and 160 KB on 11-11). `git gc --prune=now` then drops the fetched objects,
- * so the repository never grows. A directory marketplace is read in place.
+ * own clone: `git ls-remote` of the clone's `origin` names the newest commit of the branch the clone is on (under
+ * 2 s), and only a commit not seen before is fetched, one commit deep and without file contents
+ * (`--filter=blob:none`), so the two files read are the only contents downloaded (about 4 s and 160 KB on 11-11).
+ * A plugin a `git-subdir` entry installs from a branch of the same repository (`release`, `preview`: T5133) is read
+ * on that branch the same way, since main runs ahead of every release channel. `git gc --prune=now` then drops the
+ * fetched objects, so the repository never grows. A directory marketplace is read in place.
  */
 import { join } from 'node:path';
 import { isRecord } from "../core/guards.js";
 import { compareVersions, parseVersion } from "../core/release-version.js";
-import { MARKETPLACE_FILE, pluginFilePath, pluginFolderOf, pluginVersionOf, trackedInstallsOf } from "./sources.js";
+import { channelOf, isBranchName, MARKETPLACE_FILE, pluginFilePath, pluginSourceOf, pluginVersionOf, sameRepository, trackedInstallsOf } from "./sources.js";
 /** How often the network is asked at most, across every tab of the machine. */
 export const CHECK_EVERY_MS = 6 * 60 * 60_000;
 const STATE_FILE = 'check.json';
@@ -32,8 +34,9 @@ function publishedRecord(value) {
     }
     const entries = [];
     for (const [name, entry] of Object.entries(value)) {
-        if (isRecord(entry) && typeof entry['sha'] === 'string') {
-            entries.push([name, { sha: entry['sha'], versions: textRecord(entry['versions']) }]);
+        // An entry with no `refs` was kept before plugins were read on their branches (T5133): read it again.
+        if (isRecord(entry) && typeof entry['sha'] === 'string' && isRecord(entry['refs'])) {
+            entries.push([name, { sha: entry['sha'], refs: textRecord(entry['refs']), versions: textRecord(entry['versions']), channels: textRecord(entry['channels']) }]);
         }
     }
     return Object.fromEntries(entries);
@@ -66,7 +69,8 @@ export function isNewer(a, b) {
 /** The installs a newer version is published for, leaving out those the person dismissed that version or a newer one of. */
 export function noticesOf(installs, state) {
     return installs.flatMap((install) => {
-        const newest = state.published[install.marketplace]?.versions[install.plugin];
+        const published = state.published[install.marketplace];
+        const newest = published?.versions[install.plugin];
         if (newest === undefined || !isNewer(newest, install.version)) {
             return [];
         }
@@ -74,7 +78,9 @@ export function noticesOf(installs, state) {
         if (dismissed !== undefined && !isNewer(newest, dismissed)) {
             return [];
         }
-        return [{ plugin: install.plugin, marketplace: install.marketplace, installed: install.version, newest }];
+        const notice = { plugin: install.plugin, marketplace: install.marketplace, installed: install.version, newest };
+        const channel = published?.channels[install.plugin];
+        return [channel === undefined ? notice : { ...notice, channel }];
     });
 }
 /** A marketplace name as a folder name: anything but letters, digits, `.`, `_` and `-` becomes `_`. */
@@ -140,8 +146,7 @@ export class UpdateCheck {
     }
     async publishedBy(marketplace, source, plugins, before) {
         if (source.kind === 'directory') {
-            const read = (path) => this.deps.files.read(join(source.path, path));
-            return this.versionsIn(read, plugins, '');
+            return this.versionsInFolder(source.path, plugins);
         }
         const { git } = this.deps;
         const url = (await git.run(source.installLocation, ['remote', 'get-url', 'origin']))?.trim();
@@ -152,20 +157,82 @@ export class UpdateCheck {
         if (!(await this.ensureRepo(repo, url))) {
             return undefined;
         }
-        const sha = (await git.run(repo, ['ls-remote', 'origin', 'HEAD']))?.split(/\s/)[0];
-        if (sha === undefined || sha === '') {
+        // The branch the clone is on: a marketplace added at a branch (a preview channel's) lists what that branch installs.
+        const branch = (await git.run(source.installLocation, ['symbolic-ref', '-q', '--short', 'HEAD']))?.trim();
+        const marketRef = branch !== undefined && isBranchName(branch) ? `refs/heads/${branch}` : 'HEAD';
+        const heads = refsOf(await git.run(repo, ['ls-remote', 'origin', marketRef, 'refs/heads/*']));
+        const sha = heads.get(marketRef);
+        if (sha === undefined) {
             return undefined;
         }
-        if (before?.sha === sha && plugins.every((plugin) => before.versions[plugin] !== undefined)) {
+        const unchanged = before !== undefined && before.sha === sha && Object.entries(before.refs).every(([ref, seen]) => heads.get(`refs/heads/${ref}`) === seen);
+        if (unchanged && plugins.every((plugin) => before.versions[plugin] !== undefined)) {
             return before;
         }
-        if ((await git.run(repo, ['fetch', '-q', '--depth', '1', '--filter=blob:none', '--no-tags', 'origin', 'HEAD'])) === undefined) {
-            return undefined;
-        }
-        const read = (path) => git.run(repo, ['show', `FETCH_HEAD:${path}`]);
-        const found = await this.versionsIn(read, plugins, sha);
+        const found = await this.versionsOnBranches(repo, url, marketRef, sha, heads, plugins);
         await git.run(repo, ['gc', '--prune=now', '--quiet']);
         return found;
+    }
+    /** Fetches `ref` one commit deep with no file contents, and gives a reader of its files; undefined when it cannot. */
+    async fetched(repo, ref) {
+        const { git } = this.deps;
+        if ((await git.run(repo, ['fetch', '-q', '--depth', '1', '--filter=blob:none', '--no-tags', 'origin', ref])) === undefined) {
+            return undefined;
+        }
+        return (path) => git.run(repo, ['show', `FETCH_HEAD:${path}`]);
+    }
+    /**
+     * The versions at the marketplace's commit `sha` of `marketRef`: a plugin installed from a branch of the same
+     * repository is read on that branch, one fetch per branch; one installed from another repository's branch is not
+     * read, as its version there is unknown.
+     */
+    async versionsOnBranches(repo, url, marketRef, sha, heads, plugins) {
+        const read = await this.fetched(repo, marketRef);
+        const marketplace = read === undefined ? undefined : await read(MARKETPLACE_FILE);
+        if (read === undefined || marketplace === undefined) {
+            return undefined;
+        }
+        const sources = new Map();
+        for (const plugin of plugins) {
+            const found = pluginSourceOf(marketplace, plugin);
+            if (found !== undefined && (found.url === undefined || sameRepository(found.url, url))) {
+                sources.set(plugin, found);
+            }
+        }
+        const onBranch = (ref) => ref !== undefined && `refs/heads/${ref}` !== marketRef;
+        const versions = await this.versionsAt(read, [...sources].filter(([, each]) => !onBranch(each.ref)));
+        const refs = {};
+        for (const ref of new Set([...sources.values()].flatMap((each) => (each.ref !== undefined && onBranch(each.ref) ? [each.ref] : [])))) {
+            const head = heads.get(`refs/heads/${ref}`);
+            const readRef = head === undefined ? undefined : await this.fetched(repo, `refs/heads/${ref}`);
+            if (head === undefined || readRef === undefined) {
+                continue;
+            }
+            refs[ref] = head;
+            Object.assign(versions, await this.versionsAt(readRef, [...sources].filter(([, each]) => each.ref === ref)));
+        }
+        // A plugin read on its own branch carries that branch's channel; one read with the marketplace, the clone's branch's.
+        const marketBranch = marketRef.startsWith('refs/heads/') ? marketRef.slice('refs/heads/'.length) : undefined;
+        const channels = {};
+        for (const [plugin, each] of sources) {
+            const channel = channelOf(onBranch(each.ref) ? each.ref : marketBranch);
+            if (channel !== undefined && versions[plugin] !== undefined) {
+                channels[plugin] = channel;
+            }
+        }
+        return { sha, refs, versions, channels };
+    }
+    /** Each plugin's version read from its folder through `read`, leaving out one whose plugin.json names none. */
+    async versionsAt(read, sources) {
+        const versions = {};
+        for (const [plugin, { folder }] of sources) {
+            const text = await read(pluginFilePath(folder));
+            const version = text === undefined ? undefined : pluginVersionOf(text);
+            if (version !== undefined) {
+                versions[plugin] = version;
+            }
+        }
+        return versions;
     }
     /** Makes the bare repository once, and points its `origin` at `url` with blobs fetched on demand. */
     async ensureRepo(repo, url) {
@@ -183,20 +250,28 @@ export class UpdateCheck {
         }
         return true;
     }
-    async versionsIn(read, plugins, sha) {
+    /** The versions a directory marketplace holds in place: a folder has no branches, so every plugin is read in it. */
+    async versionsInFolder(folder, plugins) {
+        const read = (path) => this.deps.files.read(join(folder, path));
         const marketplace = await read(MARKETPLACE_FILE);
         if (marketplace === undefined) {
             return undefined;
         }
-        const versions = {};
-        for (const plugin of plugins) {
-            const folder = pluginFolderOf(marketplace, plugin);
-            const text = folder === undefined ? undefined : await read(pluginFilePath(folder));
-            const version = text === undefined ? undefined : pluginVersionOf(text);
-            if (version !== undefined) {
-                versions[plugin] = version;
-            }
-        }
-        return { sha, versions };
+        const sources = plugins.flatMap((plugin) => {
+            const found = pluginSourceOf(marketplace, plugin);
+            return found === undefined ? [] : [[plugin, found]];
+        });
+        return { sha: '', refs: {}, versions: await this.versionsAt(read, sources), channels: {} };
     }
+}
+/** The refs `git ls-remote` printed, by name; none for no answer. */
+function refsOf(listing) {
+    const refs = new Map();
+    for (const line of (listing ?? '').split('\n')) {
+        const [sha, name] = line.trim().split(/\s+/);
+        if (sha !== undefined && sha !== '' && name !== undefined) {
+            refs.set(name, sha);
+        }
+    }
+    return refs;
 }

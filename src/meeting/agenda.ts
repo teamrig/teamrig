@@ -9,6 +9,7 @@ import { ACTIVE_STATUSES } from '../register/model.ts';
 import { asksOwner, isDedicated, isProofAsk, isUngated, ownerLater } from '../register/owner-waits.ts';
 import type { TaskTree } from '../register/tree.ts';
 import { cut, formatShortTask } from '../register/views.ts';
+import type { PendingStep } from '../steps/pending.ts';
 import { decisionKey, decisionOrder, isImprovementsDay, type Decision, type DecisionFocus, type DecisionRead } from './decision-order.ts';
 
 /**
@@ -87,6 +88,8 @@ export interface AgendaInput {
    * only DECISIONS and DEDICATED leave their waits out, DECISIONS giving each such team one count line instead.
    */
   readonly ownMeetings: readonly OwnMeetingTeam[];
+  /** The steps teamrig needs the person to take (pendingSteps): the meeting is where the person is there to type them. */
+  readonly steps: readonly PendingStep[];
 }
 
 /** A team under the lead's whose own lead meets the owner (#1430), and the registers of it and the teams under it. */
@@ -375,6 +378,12 @@ function incidentLines(input: AgendaInput): string[] {
   return rows.length === 0 ? [] : listed(`INCIDENTS ${rows.length} active ${input.focus.maintenanceClass} bugs or critical tasks`, rows, `${input.command} list --tree`);
 }
 
+/** STEPS: each step for the person to take, with what they type; `steps` shows what each changes; no block when none. */
+function stepLines(input: AgendaInput): string[] {
+  const rows = input.steps.map((step) => `  ${step.title}: type ${step.command}`);
+  return rows.length === 0 ? [] : listed(`STEPS ${rows.length} for the person to take (${input.command} steps shows what each changes)`, rows, `${input.command} steps`);
+}
+
 /** The rows of a register's waits the owner put off (ownerLater), in its plan order; `team` labels a register under the lead's. */
 function laterRows(tasks: readonly Task[], tree: TaskTree, ownerMarker: string, requireGate: boolean, team?: string): string[] {
   return tree.inPlanOrder(tasks.filter((task) => ownerLater(task, ownerMarker, requireGate, tree.context) !== undefined)).map((task) => rowOf(task, tree, team));
@@ -496,8 +505,9 @@ function doneLines(input: AgendaInput): string[] {
 /**
  * The register's agenda: the goals, to read everything after them against, then the owner's decisions, which are what
  * the meeting is for, and the core-business ones it books dedicated meetings for, and the incidents, then those the
- * owner put off and the ungated waits, which are not, then the late tasks, then the finished ones.
+ * owner put off and the ungated waits, which are not, then the late tasks, then the finished ones. The steps for the
+ * person follow the incidents: like a decision, only the person can take them.
  */
 export function agendaLines(input: AgendaInput): string[] {
-  return [...goalLines(input), ...decisionLines(input), ...dedicatedLines(input), ...incidentLines(input), ...laterLines(input), ...ungatedLines(input), ...proofLines(input), ...lateLines(input), ...doneLines(input)];
+  return [...goalLines(input), ...decisionLines(input), ...dedicatedLines(input), ...incidentLines(input), ...stepLines(input), ...laterLines(input), ...ungatedLines(input), ...proofLines(input), ...lateLines(input), ...doneLines(input)];
 }

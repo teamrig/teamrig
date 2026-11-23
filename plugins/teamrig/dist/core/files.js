@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { appendFile, link, lstat, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, link, lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { errorCode } from "./guards.js";
 import { REPLACE_RETRY_DELAYS_MS, retryTransient } from "./retry.js";
@@ -211,5 +211,29 @@ export function nodeFiles(sleep) {
         async size(path) {
             return (await fileStatsOf(path))?.size;
         },
+        async realPath(path) {
+            try {
+                return await realpath(path);
+            }
+            catch (error) {
+                if (MISSING_PATH_CODES.has(errorCode(error) ?? '')) {
+                    return undefined;
+                }
+                throw error;
+            }
+        },
+        async isPlainFile(path) {
+            try {
+                return (await lstat(path)).isFile();
+            }
+            catch (error) {
+                if (MISSING_PATH_CODES.has(errorCode(error) ?? '')) {
+                    return false;
+                }
+                throw error;
+            }
+        },
     };
 }
+/** What `fs` throws for a path with nothing there: missing, or a file where a folder in it should be. */
+const MISSING_PATH_CODES = new Set(['ENOENT', 'ENOTDIR']);

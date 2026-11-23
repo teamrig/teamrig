@@ -1,13 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { HostSource } from '../composition/host-ports.ts';
-import { isUnsupported, type HostPorts } from '../ports/host/index.ts';
+import { isUnsupported, unsupported, type HostPorts } from '../ports/host/index.ts';
 import type { SecretGuardConfig } from '../config/types.ts';
 import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, shippedHost, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { shippedModels } from '../testing/shipped-models.ts';
 import { shippedSteps } from '../testing/shipped-steps.ts';
@@ -261,13 +261,16 @@ const DEFAULTS_BEFORE_THE_PORT = [
 ];
 
 /** A host that names secret files of its own, one of them a shipped host's too. */
-const OWN_FILES_HOST: HostSource = () => ({ ...BARE, paths: { ...testPaths(), secretFiles: () => ['~/.agent/login.json', '~/.claude/history.jsonl'] } });
+const OWN_FILES_HOST: HostSource = () => ({ ...BARE, secrets: { secretFiles: () => ['~/.agent/login.json', '~/.claude/history.jsonl'] } });
 
-/** The hosts a run may work in: the shipped one, ones telling none of their folders, and one naming files of its own. */
+/** The shipped host, telling none of its secret files: every other port is the shipped one. */
+const NO_SECRETS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), secrets: unsupported('no secret file of the host is known') });
+
+/** The hosts a run may work in: the shipped one, ones telling none of their secret files, and one naming files of its own. */
 const RUNNING_HOSTS: readonly (readonly [string, HostSource])[] = [
   ['the shipped host', SHIPPED_HOST],
   ['a host with no port filled', bare],
-  ['the shipped host telling no folder', NO_PATHS_HOST],
+  ['the shipped host telling no secret file', NO_SECRETS_HOST],
   ['a host with hooks only', HOOKS_ONLY_HOST],
   ['a host naming its own files', OWN_FILES_HOST],
 ];
@@ -284,10 +287,10 @@ describe('secretFilesOf', () => {
     const { shippedHosts, platform } = quietWorld();
     assert.deepEqual(secretFilesOf({ host: OWN_FILES_HOST, shippedHosts, env: {}, platform }).secretFiles(), [...SHIPPED_SECRET_FILES, '~/.agent/login.json']);
     assert.deepEqual(secretFilesOf({ host: OWN_FILES_HOST, shippedHosts: [], env: {}, platform }).secretFiles(), ['~/.agent/login.json', '~/.claude/history.jsonl']);
-    assert.deepEqual(secretFilesOf({ host: bare, shippedHosts: [bare, NO_PATHS_HOST], env: {}, platform }).secretFiles(), []);
+    assert.deepEqual(secretFilesOf({ host: bare, shippedHosts: [shippedHost(bare), shippedHost(NO_SECRETS_HOST)], env: {}, platform }).secretFiles(), []);
   });
 
-  it("gives the files a shipped host keeps in a folder the run's environment moves, under a host telling none of its folders too", () => {
+  it("gives the files a shipped host keeps in a folder the run's environment moves, under a host telling none of its secret files too", () => {
     const { shippedHosts } = quietWorld();
     const env = { CLAUDE_CONFIG_DIR: '/cfg' };
     for (const [name, host] of RUNNING_HOSTS.slice(0, 4)) {
@@ -301,7 +304,7 @@ describe('secretFilesOf', () => {
       seen.push(given);
       return BARE;
     };
-    secretFilesOf({ host: watching, shippedHosts: [watching], env: { RUN: 'one' }, platform: 'darwin' });
+    secretFilesOf({ host: watching, shippedHosts: [{ ports: watching, sessionVariables: { marks: [], identity: [] } }], env: { RUN: 'one' }, platform: 'darwin' });
     assert.deepEqual(seen, [
       { env: { RUN: 'one' }, platform: 'darwin' },
       { env: { RUN: 'one' }, platform: 'darwin' },
@@ -366,7 +369,7 @@ describe('launcherOf and launcherIfTold', () => {
     const world = quietWorld();
     const shipped = launcherOf({ host: world.host, env: {}, platform: world.platform });
     assert.equal(shipped.program, 'claude');
-    assert.deepEqual(shipped.launchArgs(START), ['--effort', 'high', '--name', 'app-alpha', 'Go on']);
+    assert.deepEqual(shipped.launchArgs(START), ['--effort', 'high', '--name', 'app-alpha', '--', 'Go on']);
     const desk = hostStarting('agent-desk', (start) => ['start', `--as=${start.name ?? ''}`]);
     for (const launcher of [launcherOf({ host: desk, env: {}, platform: 'linux' }), launcherIfTold({ host: desk, env: {}, platform: 'linux' })]) {
       assert.equal(launcher?.program, 'agent-desk');
@@ -406,7 +409,7 @@ describe('sessionVariablesOf', () => {
       identity: ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_PROJECT_DIR', 'OTHER_SESSION'],
     });
     assert.deepEqual(sessionVariablesOf({ host: OTHER, shippedHosts: [], env: {}, platform }), { marks: ['OTHER_AGENT', 'CLAUDECODE'], identity: ['OTHER_SESSION', 'CLAUDE_PROJECT_DIR'] });
-    assert.deepEqual(sessionVariablesOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { marks: [], identity: [] });
+    assert.deepEqual(sessionVariablesOf({ host: bare, shippedHosts: [shippedHost(bare)], env: {}, platform }), { marks: [], identity: [] });
   });
 });
 
@@ -414,6 +417,7 @@ describe('childEnvOf', () => {
   const SHIPPED_SESSION = [
     'CLAUDECODE',
     'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_PROJECT_DIR',
     'CLAUDE_CODE_CHILD_SESSION',
     'CLAUDE_CODE_ENTRYPOINT',
     'CLAUDE_CODE_EXECPATH',
@@ -421,7 +425,6 @@ describe('childEnvOf', () => {
     'CLAUDE_CODE_MESSAGING_TOKEN',
     'CLAUDE_CODE_SESSION_ATTENDED',
     'CLAUDE_PID',
-    'CLAUDE_PROJECT_DIR',
   ];
   const SHIPPED_PARKED = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_PROJECT_DIR'];
   const SHIPPED_LOGIN = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
@@ -450,13 +453,19 @@ describe('childEnvOf', () => {
       parked: [...SHIPPED_PARKED, 'OTHER_SESSION', 'OTHER_TAB', 'OTHER_AGENT'],
       login: ['OTHER_KEY'],
     });
-    assert.deepEqual(childEnvOf({ host: bare, shippedHosts: [bare], env: {}, platform }), { session: [], parked: [], login: [] });
+    assert.deepEqual(childEnvOf({ host: bare, shippedHosts: [shippedHost(bare)], env: {}, platform }), { session: [], parked: [], login: [] });
+  });
+
+  it("parks the marks a shipped host declares while its session launcher is not built, and keeps its declared names from a child (T5188)", () => {
+    const unbuilt = { ports: bare, sessionVariables: { marks: ['UNBUILT_AGENT'], identity: ['UNBUILT_SESSION'] } };
+    const { session, parked } = childEnvOf({ host: bare, shippedHosts: [unbuilt], env: {}, platform: 'linux' });
+    assert.deepEqual([session, parked], [['UNBUILT_AGENT', 'UNBUILT_SESSION'], ['UNBUILT_AGENT']]);
   });
 
   it('ships no host whose login is not a credential variable, nor one that parks a credential', () => {
     const { shippedHosts, platform } = quietWorld();
     assert.ok(shippedHosts.length > 0);
-    for (const host of shippedHosts) {
+    for (const { ports: host } of shippedHosts) {
       const { login, parked } = childEnvOf({ host, shippedHosts: [], env: {}, platform });
       assert.ok(login.length > 0 && login.every((name) => CREDENTIAL_VARIABLES.includes(name)), login.join(' '));
       assert.ok(parked.every((name) => !CREDENTIAL_VARIABLES.includes(name)), parked.join(' '));
@@ -486,7 +495,7 @@ describe('sessionProcessCheckOf', () => {
   it('knows the running host alone when no host is shipped, and no process at all where no host tells of its sessions', () => {
     const alone = sessionProcessCheckOf({ host: hostRunning('agent-desk'), shippedHosts: [], env: {}, platform: 'linux' });
     assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(alone), [false, true, false]);
-    const none = sessionProcessCheckOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
+    const none = sessionProcessCheckOf({ host: bare, shippedHosts: [shippedHost(bare)], env: {}, platform: 'linux' });
     assert.deepEqual([SHIPPED_PROGRAM, OTHER_PROGRAM, SHELL].map(none), [false, false, false]);
   });
 });
@@ -522,7 +531,7 @@ describe('sessionCommandLinesOf', () => {
   });
 
   it('reads no fork or job where no host tells of its sessions', () => {
-    const lines = sessionCommandLinesOf({ host: bare, shippedHosts: [bare], env: {}, platform: 'linux' });
+    const lines = sessionCommandLinesOf({ host: bare, shippedHosts: [shippedHost(bare)], env: {}, platform: 'linux' });
     assert.deepEqual([SHIPPED_FORK, OWN_FORK].map((line) => lines.isForkOf(line, 'c0')), [false, false]);
     assert.equal(lines.backgroundJobSession(SHIPPED_JOB), undefined);
   });

@@ -1,7 +1,6 @@
-import { claudeProjectsDir } from "../../budget/discover.js";
 import { launchModelProblem, launchOf, ownLaunchOf } from "../../config/launch.js";
 import { Roster } from "../../config/roster.js";
-import { KIT_NAME } from "../../core/home.js";
+import { KIT_NAME, resolveKitHome } from "../../core/home.js";
 import { readContextFiles } from "../../doctor/context-files.js";
 import { readSettingsDeny } from "../../doctor/deny-lines.js";
 import { doctorFindings, formatFinding } from "../../doctor/doctor.js";
@@ -12,9 +11,10 @@ import { HiringLog } from "../../hiring/log.js";
 import { retiredSessions } from "../../hiring/record.js";
 import { inboxStatus } from "../../inbox/inbox.js";
 import { JsonlRenameLog } from "../../names/log.js";
+import { cliLauncherFolder } from "../../restore/cli-launcher.js";
 import { readWideAllow } from "../allow-scope.js";
 import { noPositionals } from "../args.js";
-import { launchHostOf, pathsIfKnown, permissionsIfKept } from "../host.js";
+import { launchHostOf, modelsIfKnown, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from "../host.js";
 import { openTeamKit, projectFolder, requireConfig, teamZone } from "../kit.js";
 import { readLeadStart } from "../lead-start.js";
 import { pageCheckOf } from "../login-page.js";
@@ -30,9 +30,10 @@ import { inboxDepsOf } from "./inbox.js";
  */
 export async function readContextInput(runtime, project, skills, budgets) {
     const at = { paths: pathsIfKnown(runtime), userHome: runtime.userHome, project, skills };
+    const transcriptsFolder = transcriptsFolderIfKnown(runtime);
     return {
         contextFiles: { read: await readContextFiles(runtime.files, at), budgets },
-        sessionLists: await readSessionLists(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project),
+        sessionLists: transcriptsFolder === undefined ? undefined : await readSessionLists(runtime.transcripts, transcriptsFolder, project),
     };
 }
 /** The project folders the config names, `team.project` first, then each session's `launch.<id>.project`, and what is at each. */
@@ -76,14 +77,15 @@ function pageProblemOf(check) {
  * read from every team config of the kit home), and the text every call of a session in the project re-reads
  * (CLAUDE.md files, the memory index, the skill listing, and the lists of skills, deferred tools, agent types and
  * MCP server instructions the project's newest session transcript announced) against the team's `contextFiles` budgets. Last, what
- * silently overrides the model or effort a session or helper is given: `CLAUDE_CODE_EFFORT_LEVEL` or
- * `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` in doctor's own environment or in the `env` block of the user's or the
+ * silently overrides the model or effort a session or helper is given: the host's override variables
+ * (`HostModels.routingOverrides`) in doctor's own environment or in the `env` block of the user's or the
  * project's Claude Code settings, a session whose `launch` names a model but no effort, and a `team.project` or
  * `launch.<id>.project` that is no folder on this machine; and the local allow rules off `permissions.keepAllow` that
  * approve a whole tool or program or hold a credential (src/cli/allow-scope.ts); the secret deny lines no settings file
  * holds (src/doctor/deny-lines.ts); and the user's PowerShell history file when no PowerShell profile keeps
  * credentials out of it (src/doctor/shell-history.ts; the history is probed, never read); and a page webhook the team's
- * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed). It reads only and exits 0
+ * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed); and the kit home's
+ * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). It reads only and exits 0
  * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
  */
 /** Each session's launch as it starts on this host, with why the host would not run its model. */
@@ -93,6 +95,12 @@ function sessionLaunches(config, ids, host) {
         const modelProblem = launchModelProblem(launch, host);
         return { id, launch, ...(modelProblem === undefined ? {} : { modelProblem }) };
     });
+}
+/** Whether the kit home's bin folder is on the user's PATH, read where the PATH is kept, never the doctor's own PATH. */
+async function cliPathOf(runtime, config) {
+    const { userPath } = runtime.restore;
+    const folder = cliLauncherFolder(resolveKitHome(runtime.env, runtime.userHome));
+    return { folder, where: userPath.where, onPath: await userPath.holds(folder), enabled: config.cliOnPath.enabled };
 }
 export async function doctor(args, runtime) {
     noPositionals(args);
@@ -117,6 +125,7 @@ export async function doctor(args, runtime) {
         ...(await readContextInput(runtime, project, paths.skills, config.contextFiles)),
         tree: { problems: tree.problemsOf(paths.team), clashes: tree.nameClashesOf(paths.team) },
         env: runtime.env,
+        routingOverrides: modelsIfKnown(runtime)?.routingOverrides ?? [],
         settingsEnv: await readSettingsEnv(runtime.files, sessionSettingsOf(runtime, project)),
         settingsDeny: await readSecretDeny(runtime, project),
         wideAllow: await readWideAllow(runtime, { paths, config, project }),
@@ -124,6 +133,7 @@ export async function doctor(args, runtime) {
         projects: await configuredProjects(runtime.probe, config, roster.ids),
         shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
         page: pageProblemOf(await pageCheckOf(runtime, paths.team)),
+        cliPath: await cliPathOf(runtime, config),
         budget: config.budget,
         now: new Date(runtime.clock.now()),
         zone: teamZone(config, runtime),

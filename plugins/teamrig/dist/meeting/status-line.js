@@ -7,8 +7,9 @@ import { phaseOf } from "./state.js";
 export const MEETING_TITLES = { daily: 'daily', extra: 'extra' };
 /**
  * The tab's meeting mark: the meeting tab's when its session started its team's open meeting (titled by its kind), or
- * is met in a booked or on-the-spot meeting on now (titled by what it is about); else the held text while its team or
- * a team above has its meeting open, daily or extra; undefined with the marks off or none on, ended or lapsed alike.
+ * is met in a booked or on-the-spot meeting on now (titled by what it is about); else the other tabs' mark, titled by
+ * its own team's open meeting or else the nearest team above's, daily or extra; undefined with the marks off or none
+ * on, ended or lapsed alike.
  */
 export function statusLineMeetingOf(input) {
     const { shown, own, above, booked, now, tab } = input;
@@ -16,14 +17,19 @@ export function statusLineMeetingOf(input) {
         return undefined;
     }
     const open = (meeting) => meeting !== undefined && phaseOf(meeting, now).kind === 'open';
-    if (own !== undefined && open(own) && own.by === tab) {
+    if (open(own) && own.by === tab) {
         return { kind: 'tab', colour: shown.colour, title: MEETING_TITLES[own.kind] };
     }
     const inTab = tab === undefined ? undefined : meetingInTabOf(booked, tab, now);
     if (inTab !== undefined) {
         return { kind: 'tab', colour: shown.colour, title: meetingTitleOf(inTab) };
     }
-    return open(own) || above.some(open) ? { kind: 'held', colour: shown.colour, text: shown.heldText } : undefined;
+    const covering = [own, ...above].find(open);
+    return covering === undefined ? undefined : { kind: 'other', colour: shown.colour, text: shown.heldText, title: MEETING_TITLES[covering.kind] };
+}
+/** The other tabs' mark as their status line ends with it, uncoloured: `owner in meeting: daily`. */
+export function otherTabLabel(text, title) {
+    return `${text}: ${title}`;
 }
 /** The meeting tab's mark as its status line leads with it, uncoloured: `Meeting: daily`. */
 export function meetingLabel(title) {

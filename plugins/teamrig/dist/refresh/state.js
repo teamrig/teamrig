@@ -11,9 +11,11 @@ export const REFRESH_FORMAT = 1;
  */
 export const REFRESH_RESTART_NEXT_FORMAT = 2;
 /**
- * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 the `largeWindow` every phase
- * carries. A format 1 or 2 file reads as it did, with neither field; a file in a newer format reads as absent and is
- * never overwritten (`RefreshStore.setState`).
+ * The format of the state file (`<id>.json`): 2 adds the `baseline` of a fresh start, 3 added a `largeWindow` that
+ * raised the threshold on a large context window. One threshold holds for every window since (T4083), so this code
+ * writes no `largeWindow` and ignores one a file still has; the format stays 3, so a tab on an older release still
+ * reads what this one writes. A format 1 or 2 file reads as it did, without a baseline; a file in a newer format reads
+ * as absent and is never overwritten (`RefreshStore.setState`).
  */
 export const REFRESH_STATE_FORMAT = 3;
 /** The format before `largeWindow`, still read. */
@@ -67,6 +69,14 @@ function fixHashOf(record) {
     }
     return typeof hash === 'string' ? { fixHash: hash } : false;
 }
+/** The `compactHeld` marker as fields to spread: none when absent (a file from before it, or nothing held), false when damaged. */
+function compactHeldOf(record) {
+    const held = record['compactHeld'];
+    if (held === undefined) {
+        return {};
+    }
+    return held === true ? { compactHeld: held } : false;
+}
 /** A boundary's standing ask: null for none, undefined when damaged. */
 function standingAskOf(value) {
     if (value === null) {
@@ -80,33 +90,27 @@ function standingAskOf(value) {
     const tokens = tokensOf(value);
     const handoverHash = hashOf(value);
     const fix = fixHashOf(value);
-    return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false
+    const held = compactHeldOf(value);
+    return task === undefined || at === undefined || tokens === undefined || handoverHash === undefined || fix === false || held === false
         ? undefined
-        : { task, at, tokens, handoverHash, ...fix };
+        : { task, at, tokens, handoverHash, ...fix, ...held };
 }
-/** The window field as a spread: absent while nothing told; undefined when damaged. */
-function windowFieldOf(record) {
-    const largeWindow = record['largeWindow'];
-    if (largeWindow === undefined) {
-        return {};
-    }
-    return typeof largeWindow === 'boolean' ? { largeWindow } : undefined;
-}
-/** A refresh state file's content; undefined when it is damaged, from another format or names no known phase. */
+/**
+ * A refresh state file's content; undefined when it is damaged, from another format or names no known phase. A
+ * `largeWindow` an older release wrote is not read (`REFRESH_STATE_FORMAT`).
+ */
 export function parseRefreshState(text) {
     const record = stateRecordOf(text);
     // Only a task end names its task: a refresh another turn end asked for has none.
     const task = record === undefined ? undefined : nullableString(record, 'task');
     const at = record === undefined ? undefined : stringField(record, 'at');
     const base = record === undefined ? undefined : baselineOf(record);
-    const window = record === undefined ? undefined : windowFieldOf(record);
-    if (record === undefined || task === undefined || at === undefined || base === undefined || window === undefined) {
+    if (record === undefined || task === undefined || at === undefined || base === undefined) {
         return undefined;
     }
-    const phase = phaseOf(record, task, at, base);
-    return phase === undefined ? undefined : { ...phase, ...window };
+    return phaseOf(record, task, at, base);
 }
-/** The phase a refresh state file names, its window field aside; undefined when damaged or unknown. */
+/** The phase a refresh state file names; undefined when damaged or unknown. */
 function phaseOf(record, task, at, base) {
     switch (record['phase']) {
         case 'boundary': {
@@ -126,9 +130,10 @@ function phaseOf(record, task, at, base) {
             // A file from before the mod asked within a turn was always the Stop hook's.
             const midTurn = record['midTurn'] ?? false;
             const fix = fixHashOf(record);
-            return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false
+            const held = compactHeldOf(record);
+            return tokens === undefined || handoverHash === undefined || typeof midTurn !== 'boolean' || fix === false || held === false
                 ? undefined
-                : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix };
+                : { phase: 'asked', task, at, tokens, handoverHash, midTurn, ...fix, ...held };
         }
         case 'ready': {
             const noticed = record['noticed'];
@@ -137,8 +142,9 @@ function phaseOf(record, task, at, base) {
             const claudePid = nullablePidOf(record['claudePid']);
             // A file from before the size was recorded has none.
             const tokens = record['tokens'] === undefined ? null : tokensOf(record);
-            return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined
-                ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid }
+            const held = compactHeldOf(record);
+            return typeof noticed === 'boolean' && transcript !== undefined && claudePid !== undefined && tokens !== undefined && held !== false
+                ? { phase: 'ready', task, at, tokens, noticed, transcript, claudePid, ...held }
                 : undefined;
         }
         case 'refreshed':

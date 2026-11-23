@@ -75,14 +75,20 @@ export function paceLinePct(window: WeekWindow, targetPct: number, at: number, p
 /**
  * Where the pace line of the week resetting at `reset` stands at `now`, its active time from the budget's quiet hours:
  * the status line's cheap reading, which opens no stored period. It runs from `start`, where `teamrig budget` counts
- * the week from, a reset inside the week included; with no start known, over the seven days before the reset.
- * Undefined once the week reset.
+ * the week from, a reset inside the week included, and from the use there (`from.startPct`); with no start known,
+ * from 0 over the seven days before the reset. Undefined once the week reset.
  */
-export function paceLineOfWeek(reset: number, budget: Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'quietHours'>, now: number, start?: number): number | undefined {
+export function paceLineOfWeek(
+  reset: number,
+  budget: Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'quietHours'>,
+  now: number,
+  from?: Pick<WeekWindow, 'start' | 'startPct'>,
+): number | undefined {
   if (reset <= now) {
     return undefined;
   }
-  return paceLinePct(weekWindow(reset, budget.paceEndHoursBeforeReset, start), budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
+  const window = weekWindow(reset, budget.paceEndHoursBeforeReset, from?.start, from?.startPct);
+  return paceLinePct(window, budget.targetPct, now, DailyProfile.ofQuietHours(budget.quietHours));
 }
 
 export type PaceBudget = Pick<BudgetConfig, 'targetPct' | 'paceEndHoursBeforeReset' | 'paceTolerancePct'>;
@@ -199,6 +205,21 @@ export function hasRoom(day: TeamDay): boolean {
  */
 export function holdsPastPart(day: TeamDay | undefined, cut: boolean): boolean {
   return cut || day === undefined || !hasRoom(day);
+}
+
+/** Whether use today (`usedPct`) is past a daily part (`partPct`), both in % of the week; never while either is unknown. */
+export function isPastPart(usedPct: number | undefined, partPct: number | undefined): boolean {
+  return usedPct !== undefined && partPct !== undefined && usedPct > partPct;
+}
+
+/**
+ * Whether the team is held for the day: its own use today (`usedPct`) past its part of the account's day (`partPct`)
+ * while it has no room (`holdsPastPart`, no cut). `teamrig budget` names the team on its held line by it, and the wake
+ * and idle pass cap the team's sessions at p0 by it (`wakeRestOf`), so the report never tells the team to start no new
+ * work while its sessions are still kept open or woken for p1 work (#1737).
+ */
+export function holdsTeamPast(day: TeamDay | undefined, usedPct: number | undefined, partPct: number | undefined): boolean {
+  return isPastPart(usedPct, partPct) && holdsPastPart(day, false);
 }
 
 export type PaceState = 'ahead' | 'behind' | 'on pace';

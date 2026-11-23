@@ -33,7 +33,8 @@ describe('publishRelease', () => {
     return repo.git('rev-parse', 'HEAD').trim();
   }
 
-  const at = (source: string, version: string): Publication => ({ version, source, branch: 'release', dist: DIST, remote: 'origin' });
+  const at = (source: string, version: string): Publication => ({ version, source, branch: 'release', seed: undefined, dist: DIST, remote: 'origin' });
+  const preview = (source: string, version: string): Publication => ({ ...at(source, version), branch: 'preview', seed: 'release' });
   const remote = (ref: string): string => repo.git('ls-remote', origin, ref).split('\t')[0] ?? '';
 
   beforeEach(() => {
@@ -71,6 +72,42 @@ describe('publishRelease', () => {
     assert.equal(remote('refs/heads/release'), commit);
     assert.equal(remote('refs/tags/v1.0.0'), first);
     assert.equal(repo.git('show', `${commit}:${DIST}/index.js`), 'built two');
+  });
+
+  it("starts a branch not made yet from its seed's last commit, leaving the seed where it was", async () => {
+    const stable = await publishRelease(git, at(release('one'), '1.0.0'), () => {});
+    const source = release('two');
+    const commit = await publishRelease(git, preview(source, '1.1.0'), (line) => lines.push(line));
+    assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${stable} ${source}`);
+    assert.equal(remote('refs/heads/preview'), commit);
+    assert.equal(remote('refs/tags/v1.1.0'), commit);
+    assert.equal(remote('refs/heads/release'), stable);
+    assert.deepEqual(lines, [`release: preview starts from release's ${stable}`, `release: published 1.1.0 as ${commit} on preview, tagged v1.1.0`]);
+  });
+
+  it('builds on the branch itself once it exists, never on its seed again', async () => {
+    await publishRelease(git, at(release('one'), '1.0.0'), () => {});
+    const first = await publishRelease(git, preview(release('two'), '1.1.0'), () => {});
+    const source = release('three');
+    const commit = await publishRelease(git, preview(source, '1.2.0'), () => {});
+    assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${first} ${source}`);
+  });
+
+  it("makes the branch even when the seed's last commit holds the same build, as only the branch's own can", async () => {
+    const source = release('one');
+    const stable = await publishRelease(git, at(source, '1.0.0'), () => {});
+    repo.git('push', '-q', origin, ':refs/tags/v1.0.0');
+    const commit = await publishRelease(git, preview(source, '1.0.0'), () => {});
+    assert.notEqual(commit, stable);
+    assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${stable} ${source}`);
+    assert.equal(remote('refs/heads/preview'), commit);
+  });
+
+  it('makes a first release on the source alone when the seed is not made either', async () => {
+    const source = release('one');
+    const commit = await publishRelease(git, preview(source, '1.0.0'), () => {});
+    assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), source);
+    assert.equal(remote('refs/heads/release'), '');
   });
 
   it('changes nothing when run again for a release already published', async () => {
@@ -120,7 +157,7 @@ describe('publishRelease', () => {
 });
 
 describe('publicationProblem', () => {
-  const good: Publication = { version: '0.448.0', source: 'f'.repeat(40), branch: 'release', dist: 'dist', remote: 'origin' };
+  const good: Publication = { version: '0.448.0', source: 'f'.repeat(40), branch: 'release', seed: undefined, dist: 'dist', remote: 'origin' };
 
   it('takes a MAJOR.MINOR.PATCH version and a full sha', () => {
     assert.equal(publicationProblem(good), undefined);

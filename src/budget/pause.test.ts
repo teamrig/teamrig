@@ -59,6 +59,11 @@ describe('pausableOf', () => {
     assert.deepEqual([...pausableOf(config, 'app', IDS)], ['alpha', 'bravo']);
   });
 
+  it('never pauses the security reviewer or the GitHub answerer (T4388)', () => {
+    const config = testConfig({ budget: { pauseByPriority: true }, roles: { lead: 'lead', securityReviewer: 'alpha' }, github: { watcher: 'bravo' } });
+    assert.deepEqual([...pausableOf(config, 'app', [...IDS, 'charlie'])], ['charlie']);
+  });
+
   it('keeps only the lead on a team with no delivery owner', () => {
     assert.deepEqual([...pausableOf(testConfig({ budget: { pauseByPriority: true } }), 'app', IDS)], ['alpha', 'bravo']);
   });

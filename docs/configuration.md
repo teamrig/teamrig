@@ -42,7 +42,9 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `loops` | [object](#loops) |  | Loop discipline inside a turn. |
 | `wake` | [object](#wake) |  | Waking a session idle at its prompt when work is handed to it, instead of at its next prompt. Only work the session can go on with wakes (open or started past every task it comes after, or waiting with every wait cleared or answered), tasks handed together wake once, and each wake says what it costs. |
 | `tests` | [object](#tests) |  | What teamrig test prints of a failed run. |
+| `steps` | [object](#steps) |  | The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run. |
 | `github` | [object](#github) |  | The team's GitHub repositories. teamrig issue sync reads their issues into the register as tasks of source github, and never writes to GitHub; local tasks stay local. teamrig issue migrate, teamrig issue reply, teamrig issue assign, teamrig issue label, teamrig issue edit and teamrig issue close, run by hand, write only to these repositories. Each owner's repositories are reached with the token saved as teamrig-gh-\<owner> in the system's credential store, never the gh login; no saved token, or one that cannot be read, stops the read or write for that owner (docs/github-sync.md). |
+| `sync` | [object](#sync) |  | What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand. |
 | `serviceRoles` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9-]{0,31}$`) to [object](#serviceroles) | `{}` | Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused. |
 | `connectors` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`) to object | `{}` | Each connector's own settings, by the connector's id: a connector is the adapter that reaches an outside tool holding issues or code. The keys under an id are that connector's, so it reads and checks them itself, and a key it does not take is refused by the command that reaches the connector, naming the keys it takes. Only the owner changes it, since it says what outside tool a connector reaches and how. |
 | `alerts` | [object](#alerts) |  | The alerting rule the core rules state, and where a page to the owner goes. |
@@ -50,9 +52,10 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `tabStatus` | [object](#tabstatus) |  | A colored circle before each terminal tab's title for what its session is doing: green ready, yellow working (or a helper still running), orange waiting on the user, blue waiting on the user's decision (a turn whose last message has a `Decision needed:` line), red an API error, purple compacting. |
 | `needsYou` | [object](#needsyou) |  | The needs-you band: every tab of the team shows which other tab asks the user something (a permission prompt, a question, a `Decision needed:` line), read from the tab files under state/tabs/, with a Focus button that brings that tab to the front. During an open meeting only a p0 task's ask gets the Focus button. |
 | `pickerGuard` | [object](#pickerguard) |  | Refuses Claude Code's question picker (AskUserQuestion) in every session and helper of the team, the lead's own thread included, in the owner's daily meeting too, where the lead asks each card in plain text: the picker stops the session until the person answers, and the owner may be away for hours, so none of its other tasks moves meanwhile. The refusal tells the session to decide it when it is its own, else to record it on its task (a waiting status with its decision card, --default included), which reaches the owner through the lead, and go on with its next task; only with no task left, to end its turn with the question and a `Decision needed:` line. A helper ends its report with the decision instead. Plan mode's ExitPlanMode stays allowed. It also refuses a session's Bash line that leads with `cd D &&` and runs git or leaves the session's folder, which Claude Code would hold on a permission prompt, quoting the line's git -C / env -C form to rerun (since 0.375.0). |
+| `cliOnPath` | [object](#clionpath) |  | Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH. |
 | `meeting` | [object](#meeting) |  | The owner's daily meeting with the lead, in the lead's tab. |
 | `turnLog` | [object](#turnlog) |  | Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour>.jsonl for the task pane, so a /clear or a compaction never takes away what the person was reading in the tab. Secret shapes are redacted. |
-| `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts in the terminal it is run in. |
+| `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts. |
 | `meetingNotices` | [object](#meetingnotices) |  | What a booked meeting (teamrig meeting schedule) tells the person, and when: a notice some minutes before its slot, one at the slot, and an alert once it is some minutes past its slot with no meeting start. Each notice goes out once, by whichever tab of the team looks first, on each channel left on. |
 | `readonlyShell` | [object](#readonlyshell) |  | Lets a Bash or PowerShell line run without a permission prompt when every command in it provably only reads: known readers (grep, cat, Get-Content, Select-Object...), git and kubectl reading subcommands, and no write, file redirection, command that runs code, or variable a program reads. It only ever allows: any other line gets Claude Code's own permission check. |
 | `permissions` | [object](#permissions) |  | Which local allow rules stay. An allow rule in a Claude Code settings file approves a call before auto mode's classifier sees it, so a rule that approves a whole tool or a program with any arguments skips the one check that stops an injected or mistaken action. teamrig permissions trim removes the rules off keepAllow (the owner runs it with --yes); doctor flags the ones that approve a whole tool or program, or hold a credential (text in a secret's shape) that Claude Code saved with an approved command. |
@@ -334,6 +337,7 @@ The small-commits rule: one logical change per commit; a commit over either boun
 | `testPatterns` | array (at most 8 items) of string (at most 100 characters) | `["(^\|/)(tests?\|__tests__\|spec)/","\\.(test\|spec)\\.[^/]+$","(^\|/)test_[^/]+\\.py$"]` | Regular expressions over /-separated paths; a file that matches one is a test and never counts. |
 | `sourcePatterns` | array (at most 8 items) of string (at most 100 characters) | `["\\.([cm]?[jt]sx?\|py\|go\|rs\|java\|kt\|cs\|c\|cc\|cpp\|h\|hpp\|rb\|swift\|vue\|svelte\|sh\|ps1)$"]` | Regular expressions over /-separated paths; a non-test file that matches one is source. A change of source with no test changed misses the self-merge gate (pushGuard.pushToProtected gated). |
 | `gate` | one of `"off"`, `"warn"`, `"refuse"` | `"warn"` | A push to a protected branch: off ignores large commits, warn lists them in the push guard's refusal, refuse refuses the push for them. |
+| `stamp` | boolean | `true` | The commit-msg hook adds a Made-by trailer naming the program, model and effort that made the commit, beside the Made-with trailer naming teamrig's version. false leaves the message as written. |
 
 ## `delivery`
 
@@ -504,7 +508,7 @@ The weekly token budget: the pace line the team is measured against and each ses
 | `shareFloorPct` | integer (0 to 50) | `10` | The least share of each weekly split a team with planned work gets, in % of the part being split; when the floors do not fit, each team gets an equal part. 0: no floor. The team's own, never taken from the team above. The lead's rules print it while the budget is enabled. |
 | `paceEndHoursBeforeReset` | number (0 to 48) | `1` | The pace line reaches targetPct this many hours before the reset. |
 | `sessions` | map from [session name](#shared-types) to [object](#budgetsessions) | `{}` | Each session's weight in the split of the team's daily budget, by id: its part is the budget × share × (its top queued task's weight (by priority, however many tasks it has queued), plus 1 for each answer another session waits on it for, up to 5) / the sum over the sessions, recomputed at every reading. A session not listed has a share of 1. |
-| `pauseByPriority` | boolean | `false` | On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team and lifted sessions are never paused. Off: no session of the team is paused. |
+| `pauseByPriority` | boolean | `false` | On a short day, when what is left of the week gives less than the pace line plans for the day, fund the team's sessions in the priority order of their top queued task (p0 first, idle sessions last) and pause the sessions none of it reaches, so the top work keeps its pace. The lead, the delivery owner held in the team, the sessions the budget never holds (the security reviewer held in the team and the GitHub answerer) and lifted sessions are never paused. Off: no session of the team is paused. |
 | `warnAtPct` | array (at most 8 items) of number (1 to 1000) | `[80,100]` | The live warning shows a line as a session passes each of these % of its daily budget. |
 | `fiveHourWarnPct` | number (1 to 100) | `80` | The five-hour check warns the lead once the account's five-hour window reaches this %; a rise forecast to fill the window warns sooner. Only a plan whose status line reports the window is warned: on any other nothing is read or shown. |
 | `paceTolerancePct` | number (0 to 10) | `0.5` | The team is ahead of its pace line once its used % is more than this many points above it. |
@@ -598,7 +602,7 @@ Waking a session idle at its prompt when work is handed to it, instead of at its
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Off: a session sees new work only at its next prompt. |
-| `priority` | integer (1 to 99) | `1` | The least urgent priority that wakes a session: 1 wakes for p0 and p1 only. A session its budget holds (past its daily budget while the team has no room today, the wake's own turn counted for both) or a short day pauses (`budget.pauseByPriority`) wakes for p0 only, and one in the budget's quiet hours for p0 and p1 only (p0 alone when their action is block), whatever this says. |
+| `priority` | integer (1 to 99) | `1` | The least urgent priority that wakes a session: 1 wakes for p0 and p1 only. A session its budget holds (past its daily budget while the team has no room today, or its team past its own part with no room and no lift or burst for the session; the wake's own turn counted for both) or a short day pauses (`budget.pauseByPriority`) wakes for p0 only, and one in the budget's quiet hours for p0 and p1 only (p0 alone when their action is block), whatever this says. |
 | `batchSeconds` | integer (0 to 3600) | `120` | How long a wake waits after the first new task it is for, so tasks handed together wake the session once. |
 | `minGapMinutes` | integer (0 to 1440) | `15` | The least time between two wakes of one session, for one task due; work handed meanwhile waits and wakes it once. A blocker skips it. |
 | `maxGapMinutes` | integer (0 to 1440) | `30` | The time between two wakes of one session once five tasks or more are due, stepped evenly up from minGapMinutes, so a session with much waiting takes it in fewer, fuller wakes; read as minGapMinutes when it is less. A blocker skips it. |
@@ -611,6 +615,14 @@ What teamrig test prints of a failed run.
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `maxFailureChars` | integer (500 to 50000) | `4000` | The most characters of failing tests teamrig test prints after a failed run, all of them together; the rest stays in its log. |
+
+## `steps`
+
+The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `backupDays` | integer (1 to 365) | `7` | Days the backup a step takes is kept; the lead's teamrig start then removes it, removing only backups teamrig recorded for a step. |
 
 ## `github`
 
@@ -658,6 +670,26 @@ The issue types each kind of task is set as, the first one the repository has wi
 | `bug` | array (at most 5 items) of string (1 to 100 characters) | `["Bug"]` | The types a bug is set as. |
 | `goal` | array (at most 5 items) of string (1 to 100 characters) | `["Feature","Goal"]` | The types a goal is set as: a Feature, as an issue opened for one is typed, else a Goal where the organization made that type. |
 | `design` | array (at most 5 items) of string (1 to 100 characters) | `["Design"]` | The types a design issue is set as. |
+
+## `sync`
+
+What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `scope` | [object](#syncscope) |  | Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig. |
+| `maxOpen` | integer (0 to 5000) | `200` | The most open tasks one tracker's import holds; past it a run adds none and prints a CAPPED line. 0 adds none. |
+| `maxNewPerSync` | integer (0 to 1000) | `50` | The most tasks one run adds per tracker; the rest wait for the next run, assigned issues first, then the oldest change. 0 adds none. |
+
+## `sync.scope`
+
+Which issues of each place are read. With no setup: those assigned to one of the team's people and those labelled teamrig.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `all` | boolean | `false` | Every open issue of each place, whoever it is assigned to and whatever its labels. Off by default, so a large project never floods the register. |
+| `assigned` | one of `"team"`, `"none"` | `"team"` | team takes an issue assigned to one of the team's people (GitHub logins in github.owners, Jira account ids in connectors.jira.people, else the saved token's own account); none takes labelled issues only. |
+| `labels` | array (at most 20 items) of string (1 to 255 characters, matching `^[^ ]+$`) | `["teamrig"]` | An issue carrying one of these labels is in scope, whoever it is assigned to. Matched without case. |
 
 ## `serviceRoles.*`
 
@@ -716,6 +748,14 @@ Refuses Claude Code's question picker (AskUserQuestion) in every session and hel
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Refuses the question picker in every session and helper of the team, the lead's own thread included, in the owner's daily meeting too. On unless a team sets it false. |
 
+## `cliOnPath`
+
+Puts the teamrig command on the user's PATH, so it runs in any terminal: at each session start, a session of the team writes the teamrig launchers in the bin folder of the teamrig home and adds that folder to the user's PATH when it lacks it (on Windows the user's Path in the registry, elsewhere a marked block in the shell's startup file). Terminals opened before that keep their PATH. `teamrig doctor` names a teamrig home whose bin folder is not on the PATH.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` | Writes the launchers and the PATH entry at a session start of the team. On unless a team sets it false; off, a session of the team writes neither, so an entry the user removed stays removed through each new version, while a session of another team that leaves it on still writes them. |
+
 ## `meeting`
 
 The owner's daily meeting with the lead, in the lead's tab.
@@ -724,7 +764,7 @@ The owner's daily meeting with the lead, in the lead's tab.
 | --- | --- | --- | --- |
 | `panel` | [object](#meetingpanel) |  | The agenda panel beside the chat of the session the owner meets while a meeting is open (the lead's daily one, or a started M\<n>). |
 | `spotlight` | [object](#meetingspotlight) |  | The spotlight while a meeting is open: every screen dimmed but the window holding the lead's tab. Windows Terminal on Windows only. |
-| `statusLine` | [object](#meetingstatusline) |  | The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text, so a glance at any tab tells the meeting is on. |
+| `statusLine` | [object](#meetingstatusline) |  | The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text and the meeting's title, so a glance at any tab tells which meeting is on. |
 
 ## `meeting.panel`
 
@@ -746,13 +786,13 @@ The spotlight while a meeting is open: every screen dimmed but the window holdin
 
 ## `meeting.statusLine`
 
-The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text, so a glance at any tab tells the meeting is on.
+The status line while a meeting is open: the lead's tab shows its line in the meeting colour, every other tab adds the held text and the meeting's title, so a glance at any tab tells which meeting is on.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Marks the status lines while the owner's daily meeting is open; they go back as they were at meeting end, or when the meeting lapses. On unless a team sets it false. |
-| `colour` | string (matching `^#[0-9a-fA-F]{6}$`) | `"#8b57e3"` | The colour of the meeting marks in the status lines while a meeting is open, as #rrggbb: the meeting tab's leading Meeting title and every other tab's held text; the terminal must show 24-bit colour. |
-| `heldText` | string (1 to 40 characters, matching `^[^\r\n]+$`) | `"meeting on: held"` | The words every other tab's status line adds while a meeting is open, on one line. |
+| `colour` | string (matching `^#[0-9a-fA-F]{6}$`) | `"#8b57e3"` | The colour of the meeting marks in the status lines while a meeting is open, as #rrggbb: the meeting tab's leading Meeting title and every other tab's meeting name; the terminal must show 24-bit colour. |
+| `heldText` | string (1 to 40 characters, matching `^[^\r\n]+$`) | `"owner in meeting"` | The words every other tab's status line adds before the open meeting's title (`owner in meeting: daily`), on one line. Only messages to the meeting's own session wait, so the words should not say the tab is held. |
 
 ## `turnLog`
 
@@ -765,10 +805,11 @@ Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour
 
 ## `ui`
 
-The dedicated UI that teamrig ui starts in the terminal it is run in.
+The dedicated UI that teamrig ui starts.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
+| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
 
 ## `meetingNotices`
@@ -924,8 +965,7 @@ Context refresh: when a session finishes a task (teamrig set \<id> --status done
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Off: no session is asked for a handover or refreshed. |
-| `contextTokens` | integer (10000 to 10000000) | `120000` | The context size, in tokens, that asks for a refresh: under the about 167k where Claude Code compacts a 200k window. |
-| `largeWindowContextTokens` | integer (0 to 10000000) | `250000` | The context size, in tokens, that asks for a refresh of a session on a context window larger than 200k, when larger than contextTokens: its launch model ends in [1m], or its refresh state shows the window, since a model can run a 1M window without the suffix (the lead's plain opus) and no hook is told it: the window the plugin's mod reports, a context past 200k, or a fresh start measured over contextTokens. A fresh session on it starts at over 120k (its system prompt, rules and handover), and the window has room far past it. 0: contextTokens for every window. |
+| `contextTokens` | integer (10000 to 10000000) | `120000` | The context size, in tokens, that asks for a refresh, on every context window: under the about 167k where Claude Code compacts a 200k window. |
 | `everyTasks` | integer (0 to 100) | `3` | Also refresh once this many tasks were finished since the context was last fresh (a /clear, a new process or a compaction); 0 turns it off. |
 | `everyTasksMinTokens` | integer (10000 to 10000000) | `80000` | The smallest context, in tokens, the task count refreshes at. |
 | `tabTitle` | boolean | `true` | Title the tab once the handover is written: '[\<team>] \<name>: restarting', or '[\<team>] \<name>: type /clear'. |
@@ -933,7 +973,7 @@ Context refresh: when a session finishes a task (teamrig set \<id> --status done
 | `restartDelaySeconds` | integer (5 to 600) | `15` | How long after the turn's end the automatic restart waits, so the user can still type to keep the context. |
 | `holdAfterActivityMinutes` | integer (0 to 60) | `30` | The plugin's mod holds the automatic /clear while the person typed in the tab's prompt (a key, a paste) or sent a prompt there this recently, and while the prompt holds a draft: a /clear never lands under the person. The default 30 min keeps the context through the person's talk in the tab (reading a reply, thinking it over), the restart coming once they have been away that long. 0: only a draft holds it. |
 | `countdownSeconds` | integer (0 to 120) | `20` | Before the plugin's mod runs the automatic /clear, a band above the prompt counts down this many seconds, with Refresh now and Hold 10 min; a key in the prompt holds it too. 0: no count, the /clear runs once nothing else holds it. |
-| `compactCeilingTokens` | integer (0 to 10000000) | `185000` | While a session's handover is asked for or written, the plugin's mod stops Claude Code's own compaction (trigger auto) of its main conversation as long as its context, as Claude Code estimates it, is under this many tokens: the /clear at the turn's end replaces it. Where a managed mod runs first and sends the compaction on past the plugin's mod, the classic PreCompact hook stops it instead, on the context it estimates from the transcript and a 200,000-token window. Past it a compaction goes through; /compact and a subagent's own compaction are never stopped. 0: never stopped. It also bounds an open owner meeting (the lead's daily one, or a booked one from its meeting start M\<n>), which holds the refresh of each session in it only under it; 0 holds it until the meeting ends. |
+| `compactCeilingTokens` | integer (0 to 10000000) | `185000` | While a session's handover is asked for or written, the plugin's mod stops Claude Code's own compaction (trigger auto) of its main conversation as long as its context, as Claude Code estimates it, is under this many tokens: the /clear at the turn's end replaces it. Where a managed mod runs first and sends the compaction on past the plugin's mod, the classic PreCompact hook stops it instead, on the context it estimates from the transcript and a 200,000-token window. Past it a compaction goes through; /compact and a subagent's own compaction are never stopped. Apart from it, the first automatic compaction of a tab is held back once for the refresh, which then asks for the handover. 0: never stopped, not even that once. It also bounds an open owner meeting (the lead's daily one, or a booked one from its meeting start M\<n>), which holds the refresh of each session in it only under it; 0 holds it until the meeting ends. |
 | `handoverMaxBytes` | integer (0 to 1000000) | `20000` | The turn end (and teamrig refresh --ready) takes no handover larger than this many bytes: the fresh start reads all of it, so a handover that grows section by section fills the next session's context before its work begins. 0: no cap. |
 | `endCommand` | array (at most 16 items) of string (at least 1 character) | `[]` | A program (its path, then its arguments) run after an automatic restart ended a session, given Claude Code's SessionEnd hook input (reason clear) on stdin: for a SessionEnd hook the end skipped, since on Windows a process is ended without running them. Empty: none. |
 | `handoverDir` | string (at least 1 character) |  | The folder of the sessions' handovers, \<session>.md each; a relative path is in the team's folder. Unset: handover in the team's folder. |

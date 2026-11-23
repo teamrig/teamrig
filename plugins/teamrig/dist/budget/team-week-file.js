@@ -21,6 +21,7 @@ export function teamWeekSummaryOf(input) {
         accountUsedPct: summaryPct(usedPct),
         resetsAt: window.reset,
         start: window.start,
+        startPct: summaryPct(window.startPct),
         at: summaryMinute(now),
         limits: input.limits,
     };

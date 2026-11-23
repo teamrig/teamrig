@@ -272,10 +272,12 @@ describe('teamrig budget', () => {
     const { kit, run } = await world({ ...TEAM, budget: { weeklyLimitW: 1_000_000_000, account: 'work' } });
     await kit.files.write(teamConfigOf('web'), formatConfig({ configVersion: 1, sessions: ['lead', 'front', 'back'], roles: { lead: 'lead' } }));
     await recordConfigDir(kit.files, join(teamHomeOf('web'), 'state', 'usage', 'claude-config-dir.json'), join(USER_HOME, '.claude'));
-    assert.deepEqual(ok(await run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team    2.5%   12.4%  25.00M      3']);
+    // Such a host names no transcripts folder either, so the team measures no session of its own (never Claude Code's
+    // folder): only the account's share moves.
+    assert.deepEqual(ok(await run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team  0.0%   12.4%  0      0']);
     const unrecorded = await world({ ...TEAM, budget: { weeklyLimitW: 1_000_000_000, account: 'work' } });
     await unrecorded.kit.files.write(teamConfigOf('web'), formatConfig({ configVersion: 1, sessions: ['lead', 'front', 'back'], roles: { lead: 'lead' } }));
-    assert.deepEqual(ok(await unrecorded.run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team    2.5%    6.2%  25.00M      3'], 'a team with no folder recorded is on its login');
+    assert.deepEqual(ok(await unrecorded.run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team  0.0%    6.2%  0      0'], 'a team with no folder recorded is on its login');
   });
 
   it('reads the week from the newest snapshot of any team on the account, never of a team on another account', async () => {
@@ -1054,7 +1056,7 @@ describe('teamrig statusline', () => {
   const SHOWN = `Opus 5.5, ${basename(APP)} on dev, week 30% (pace 20%), 5h 6%`;
   const TEAM_WEEK = join(TEAM_HOME, 'state', ...TEAM_WEEK_IN_STATE);
   /** This week as the team's hooks keep it, but for the start a format 3 file names. */
-  const KEPT_WEEK = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: RESET, at: Date.parse('2030-01-08T09:00:00Z'), limits: [] };
+  const KEPT_WEEK = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 30, resetsAt: RESET, startPct: 0, at: Date.parse('2030-01-08T09:00:00Z'), limits: [] };
 
   /** A repository whose branch and HEAD answers are counted. */
   function countedRepo(branch: string | undefined, head: string | undefined) {
@@ -1173,6 +1175,12 @@ describe('teamrig statusline', () => {
     const kit = new CliHarness(LIMITED);
     await kit.files.write(TEAM_WEEK, formatTeamWeek({ ...KEPT_WEEK, start: Date.parse('2030-01-08T00:00:00Z') }));
     assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [SHOWN.replace('pace 20%', 'pace 7%')]);
+  });
+
+  it('starts the pace line at the use a reset inside the week left: 25%, then 10 of the 144 hours of the 74.5 to go (T4885)', async () => {
+    const kit = new CliHarness(LIMITED);
+    await kit.files.write(TEAM_WEEK, formatTeamWeek({ ...KEPT_WEEK, start: Date.parse('2030-01-08T00:00:00Z'), startPct: 25 }));
+    assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [SHOWN.replace('pace 20%', 'pace 30%')]);
   });
 
   it("keeps the seven days before the reset with no start for this week: another week's file, a format 2 one or a torn one (T2082)", async () => {
@@ -1335,7 +1343,7 @@ describe('teamrig statusline', () => {
     const MEETING_FILE = join(TEAM_HOME, 'state', 'meeting.json');
     /** The lead's meeting, started an hour before the harness's clock. */
     const OPEN_MEETING: Meeting = { startedAt: '2030-01-08T09:00:00.000Z', by: 'lead', endedAt: null, since: null, carried: [], kind: 'daily' };
-    const HELD = `${SHOWN}, \x1b[38;2;139;87;227mmeeting on: held\x1b[0m`;
+    const OTHER = `${SHOWN}, \x1b[38;2;139;87;227mowner in meeting: daily\x1b[0m`;
     const COLOURED = `\x1b[38;2;139;87;227mMeeting: daily\x1b[0m | ${SHOWN}`;
 
     async function meetingKit(config: JsonRecord = LIMITED, meeting: Meeting = OPEN_MEETING): Promise<CliHarness> {
@@ -1352,23 +1360,23 @@ describe('teamrig statusline', () => {
       assert.deepEqual(ok(await named.run(['statusline'], { stdin: status(APP), env: { TEAMRIG_SESSION: 'lead' } })), [COLOURED]);
     });
 
-    it("adds the held text to every other tab's line: another session's, or one no session holds", async () => {
+    it("names the meeting on every other tab's line, never held (#1675): another session's, or one no session holds", async () => {
       const kit = await meetingKit();
-      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP), env: { TEAMRIG_SESSION: 'alpha' } })), [HELD]);
-      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [HELD]);
+      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP), env: { TEAMRIG_SESSION: 'alpha' } })), [OTHER]);
+      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [OTHER]);
     });
 
-    it("shows the team's own colour and held text", async () => {
+    it("shows the team's own colour and words before the meeting's title", async () => {
       const kit = await meetingKit({ ...LIMITED, meeting: { statusLine: { colour: '#00ff00', heldText: 'owner meeting' } } });
-      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [`${SHOWN}, \x1b[38;2;0;255;0mowner meeting\x1b[0m`]);
+      assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP) })), [`${SHOWN}, \x1b[38;2;0;255;0mowner meeting: daily\x1b[0m`]);
       assert.deepEqual(ok(await kit.run(['statusline'], { stdin: status(APP), env: { TEAMRIG_SESSION: 'lead' } })), [`\x1b[38;2;0;255;0mMeeting: daily\x1b[0m | ${SHOWN}`]);
     });
 
-    it("holds a sub-team's tabs, its own lead's too, by the root team's meeting", async () => {
+    it("names the root team's meeting on a sub-team's tabs, its own lead's too", async () => {
       const kit = await treeHarness();
       await kit.files.write(MEETING_FILE, formatMeeting(OPEN_MEETING));
       const line = ok(await kit.run(['statusline'], { stdin: status(APP), env: { TEAMRIG_TEAM: 'ui', TEAMRIG_SESSION: 'lead' } }));
-      assert.match(line.join('\n'), /^Opus 5\.5, .*, \x1b\[38;2;139;87;227mmeeting on: held\x1b\[0m$/);
+      assert.match(line.join('\n'), /^Opus 5\.5, .*, \x1b\[38;2;139;87;227mowner in meeting: daily\x1b\[0m$/);
     });
 
     it('marks nothing once the meeting ended, or with the marks off', async () => {

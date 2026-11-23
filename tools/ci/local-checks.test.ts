@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isRecord } from '../lib/guards.ts';
-import { DEFAULT_BASE, changedSpecs, gateChanges, localChecks, prePushChecks, shortChecks } from './local-checks.ts';
+import { DEFAULT_BASE, NPM_TEST_ROOTS, changedSpecs, gateChanges, localChecks, prePushChecks, shortChecks } from './local-checks.ts';
 
 const read = (path: string): string => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -69,10 +69,10 @@ describe('prePushChecks (T4344)', () => {
   const full = new Map(localChecks('upstream/main').map((check) => [check.name, check]));
   const checks = prePushChecks('upstream/main');
 
-  it('runs the scrubs, the commit checks, the typecheck, the boundaries, the provider words, the build, the plugin tests and the docs checks, in that order', () => {
+  it('runs the scrubs, the commit checks, the typechecks, the boundaries, the provider words, the build, the plugin tests and the docs checks, in that order', () => {
     assert.deepEqual(
       checks.map((check) => check.name),
-      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck', 'boundaries', 'provider words', 'build: clean', 'build: compile', 'build: integrity', 'plugin tests', 'doc pictures', 'doc config reference', 'doc parity page', 'doc links'],
+      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck', 'typecheck: mod', 'boundaries', 'provider words', 'build: clean', 'build: compile', 'build: integrity', 'plugin tests', 'doc pictures', 'doc config reference', 'doc parity page', 'doc links'],
     );
   });
 
@@ -97,21 +97,21 @@ describe('prePushChecks (T4344)', () => {
 });
 
 describe('shortChecks (T3414)', () => {
-  it('runs the scrub, the DCO sign-off, the size rule, the commit subjects and the typecheck of the full list, then the given specs, and no suite or build (T4080 C1)', () => {
+  it('runs the scrub, the DCO sign-off, the size rule, the commit subjects and the typechecks of the full list, then the given specs, and no suite or build (T4080 C1)', () => {
     const full = new Map(localChecks('upstream/main').map((check) => [check.name, check]));
     const checks = shortChecks('upstream/main', ['src/a.test.ts', 'tools/b.test.ts']);
     assert.deepEqual(
       checks.map((check) => check.name),
-      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck', 'changed specs'],
+      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck', 'typecheck: mod', 'changed specs'],
     );
-    for (const check of checks.slice(0, 6)) assert.deepEqual(check, full.get(check.name), check.name);
+    for (const check of checks.slice(0, 7)) assert.deepEqual(check, full.get(check.name), check.name);
     assert.deepEqual(checks.at(-1)?.argv, ['node', '--test', 'src/a.test.ts', 'tools/b.test.ts']);
   });
 
   it('leaves the specs out when no changed file has one', () => {
     assert.deepEqual(
       shortChecks(DEFAULT_BASE, []).map((check) => check.name),
-      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck'],
+      ['scrub: tree', 'scrub: commits', 'DCO', 'size rule', 'commit subjects', 'typecheck', 'typecheck: mod'],
     );
   });
 });
@@ -137,5 +137,18 @@ describe('changedSpecs (T3414)', () => {
 
   it('takes no spec for a file with none beside it, a deleted spec, or a name with no extension', () => {
     assert.deepEqual(changedSpecs(['src/b.ts', 'src/gone.test.ts', '.githooks/pre-push', 'docs/a.md', 'dir.v2/name'], exists), []);
+  });
+
+  it("leaves out the plugin's mod specs, which npm test does not run and plain node cannot load (T4694)", () => {
+    const withMod = new Set([...tree, 'plugins/teamrig/hooks/register.test.ts', 'plugins/teamrig/hooks/lead.test.ts']);
+    const found = changedSpecs(['plugins/teamrig/hooks/register.test.ts', 'plugins/teamrig/hooks/lead.ts', 'src/a.ts'], (path) => withMod.has(path));
+    assert.deepEqual(found, ['src/a.test.ts']);
+  });
+
+  it("names the same roots as npm test's spec globs", () => {
+    const test = npmScripts().get('test');
+    assert.ok(test !== undefined, 'package.json has no test script');
+    const globs = [...test.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(globs.sort(), NPM_TEST_ROOTS.map((root) => `${root}**/*.test.ts`).sort());
   });
 });

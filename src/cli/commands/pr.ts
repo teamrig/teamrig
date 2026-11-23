@@ -1,6 +1,7 @@
 import { parseIssueTarget, targetText, type IssueTarget, type PullStand } from '../../issues/host.ts';
 import { printable } from '../../core/printable.ts';
 import { holderOf } from '../../issues/status-push.ts';
+import { pullCarry } from '../../merge/pull-carry.ts';
 import { answerNamesFullHead, approvedTaskOf, isFullCommitSha } from '../../register/approval.ts';
 import type { Task } from '../../register/fold.ts';
 import { pullConflicts } from '../../sync/pull-conflicts.ts';
@@ -53,14 +54,27 @@ export async function prConflicts(args: ParsedArgs, runtime: CliRuntime): Promis
 /** Which write a landing makes: an approving review, or the landing itself. */
 type LandingStep = 'approve' | 'merge';
 
-/** A pull request cleared for its step (the hosts to write through and where it stood when read), or the exit of a landing that ends before any write. */
-type Clearing = { readonly kind: 'cleared'; readonly target: IssueTarget; readonly hosts: Hosts; readonly pull: PullStand } | { readonly kind: 'ended'; readonly code: ExitCode };
+/**
+ * A pull request cleared for its step (the hosts to write through, where it stood when read and, when its live head is
+ * not the approved one, the approved head with the work commits it carried there), or the exit of a landing that ends
+ * before any write.
+ */
+type Clearing =
+  | { readonly kind: 'cleared'; readonly target: IssueTarget; readonly hosts: Hosts; readonly pull: PullStand; readonly carried: Carried | undefined }
+  | { readonly kind: 'ended'; readonly code: ExitCode };
+
+/** The approved head an approval carried from, and how many work commits it carried patch for patch (T5117). */
+interface Carried {
+  readonly approved: string;
+  readonly commits: number;
+}
 
 /**
  * `pr approve <owner/name#n> --head <sha> [--check]` (T4817): approves one pull request of the team's repositories at
- * its head, so the session holding its task can review an outside pull request on GitHub with no person's hand. It
- * writes only once every gate in clearedPull passes. `--check` prints what it would do and writes nothing. Exit 2
- * when refused, 1 when the host failed, else 0.
+ * its live head, so the session holding its task can review an outside pull request on GitHub with no person's hand.
+ * `--head` is the head the approval names; a live head past it is approved only when it is that head rebased, the
+ * same work commits patch for patch (T5117). It writes only once every gate in clearedPull passes. `--check` prints
+ * what it would do and writes nothing. Exit 2 when refused, 1 when the host failed, else 0.
  */
 export async function prApprove(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   return land(args, runtime, 'approve');
@@ -69,9 +83,10 @@ export async function prApprove(args: ParsedArgs, runtime: CliRuntime): Promise<
 /**
  * `pr merge <owner/name#n> --head <sha> [--check]` (T4817): lands one pull request of the team's repositories, through
  * its repository's merge queue when it has one, else merged by rebase, both pinned to the head read, so GitHub
- * refuses it if the head moved. The same gates as `pr approve`, plus no conflicts, not queued already and the head's
- * checks all passed: an admin token may bypass the branch's own required checks, so this gate does not leave them to
- * GitHub (T4958 C3). Exit 2 when refused, 1 when the host failed, else 0.
+ * refuses it if the head moved. The same gates as `pr approve` (an approved head carries to the same work rebased,
+ * T5117), plus no conflicts, not queued already and the live head's checks all passed: an admin token may bypass the
+ * branch's own required checks, so this gate does not leave them to GitHub (T4958 C3). Exit 2 when refused, 1 when
+ * the host failed, else 0.
  */
 export async function prMerge(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   return land(args, runtime, 'merge');
@@ -83,9 +98,13 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
   if (cleared.kind === 'ended') {
     return cleared.code;
   }
-  const { target, hosts, pull } = cleared;
+  const { target, hosts, pull, carried } = cleared;
   const name = targetText(target);
   const head = pull.head.slice(0, SHORT_SHA);
+  if (carried !== undefined) {
+    const count = carried.commits === 1 ? '1 commit' : `${String(carried.commits)} commits`;
+    say(`CARRIED ${name} at ${head}: it carries the approved ${carried.approved.slice(0, 9)}'s ${count}, patch for patch, onto a newer base`);
+  }
   if (args.switches.has('check')) {
     const would = step === 'approve' ? 'approve' : pull.mergeQueue ? 'add to the merge queue' : 'merge by rebase';
     say(`CHECK ${name} at ${head}: every gate passes, so pr ${step} would ${would} it; nothing was written`);
@@ -112,10 +131,11 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
 /**
  * The pull request `args` names once every gate of a landing passes, reads before any write: the caller on the team
  * and the repository the team's; one task holding the pull request, owned by the caller (only a change's owner lands
- * it); that task approved by the caller's leader with a note naming the full 40-hex head (an approval covers only the head it
- * names, T2788), which a root team's lead needs from no one; and the pull request open, no draft, on its default
- * branch, its head the one `--head` names. A merge also needs no conflicts, not queued already and its head's checks
- * passed (pending, failing or none is refused). Ended with exit 0,
+ * it); that task approved by the caller's leader with a note naming `--head` in full, all 40 hex digits (an approval
+ * covers only the head it names, T2788), which a root team's lead needs from no one; and the pull request open, no
+ * draft, on its default branch, its live head either `--head` or that head rebased onto a newer base with the same
+ * work commits, patch for patch (pullCarry, T5117). A merge also needs no conflicts, not queued already and its live
+ * head's checks passed (pending, failing or none is refused). Ended with exit 0,
  * after an OFF line, while GitHub is off on this machine, and with exit 1 when the read failed. Refused or failed, it
  * writes nothing.
  */
@@ -148,11 +168,23 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
   if (read.kind === 'missing') {
     throw new RefusedError(`${target.repo} has no pull request #${target.number} this access can see; nothing was written`);
   }
-  const refused = standRefusal(read.pull, given, step) ?? (approvers.length > 0 && !answerNamesFullHead(task, read.pull.head) ? `the approval of ${task.id} does not name its head ${read.pull.head} in full: ask for an approval naming all 40 hex digits of that head` : undefined);
+  const refused = standRefusal(read.pull, step) ?? (approvers.length > 0 && !answerNamesFullHead(task, given) ? `the approval of ${task.id} does not name the head ${given} in full: ask for an approval naming all 40 hex digits of that head` : undefined);
   if (refused !== undefined) {
     throw new RefusedError(`${name}: ${refused}; nothing was written`);
   }
-  return { kind: 'cleared', target, hosts, pull: read.pull };
+  if (read.pull.head === given) {
+    return { kind: 'cleared', target, hosts, pull: read.pull, carried: undefined };
+  }
+  const carry = await pullCarry(hosts.codeHost, target, read.pull, given);
+  switch (carry.kind) {
+    case 'failed':
+      runtime.out.stderr(`FAILED ${name}: ${carry.reason}; nothing was written`);
+      return { kind: 'ended', code: EXIT.failed };
+    case 'refused':
+      throw new RefusedError(`${name}: ${carry.reason}; nothing was written`);
+    case 'carried':
+      return { kind: 'cleared', target, hosts, pull: read.pull, carried: { approved: given, commits: carry.commits } };
+  }
 }
 
 /** The one task holding `target`, refused when none or several do, or when it is another session's. */
@@ -171,16 +203,13 @@ function ownTask(target: IssueTarget, tasks: Iterable<Task>, caller: string): Ta
   return holder.task;
 }
 
-/** Why the pull request as read may not take `step` at `given`, or undefined when it may. */
-function standRefusal(pull: PullStand, given: string, step: LandingStep): string | undefined {
+/** Why the pull request as read may not take `step`, or undefined when it may; its head is pullCarry's to judge. */
+function standRefusal(pull: PullStand, step: LandingStep): string | undefined {
   if (pull.state !== 'open') {
     return `it is ${pull.state}`;
   }
   if (pull.draft) {
     return 'it is a draft';
-  }
-  if (pull.head !== given) {
-    return `its head is ${pull.head.slice(0, SHORT_SHA)}, not ${given}: a newer head needs its own approval`;
   }
   if (pull.base !== pull.defaultBranch) {
     return `it targets ${pull.base}, not the default branch ${pull.defaultBranch}`;

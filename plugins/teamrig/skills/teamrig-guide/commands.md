@@ -764,7 +764,9 @@ closes and reopens no one, and SECRET-HOOK: a repository in `delivery.repos` who
 pre-push hook (in the folder `core.hooksPath` names, else `.git/hooks`; husky's scripts in `.husky`) does not call
 `teamrig secrets staged`, `teamrig secrets message` or `teamrig secrets pushed`, so a secret there can be committed or
 pushed, with the line to add to each (a new hook file starts `#!/bin/sh` and must be executable), or one git cannot
-read, and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
+read, STAMP-HOOK: while `commits.stamp` is on, a repository in `delivery.repos` whose commit-msg hook does
+not call `teamrig stamp commit`, with the line to add (`teamrig stamp commit "$1" || true`; a repository git cannot
+read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
 `disableAllHooks`, which stops every teamrig hook, the secret guard's included, FIVE-HOUR: the account's five-hour
@@ -1363,6 +1365,16 @@ line names them by key) until its trust rule ships. A section the connector refu
 cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
 tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
 
+Import scope: by default another tracker's import reads only the team's issues, those assigned to the signed-in
+account or to a person its connector section lists as the team's people, and those carrying a label of
+`sync.scope.labels` or the accept label; the issues of the team's active tasks there are read too, so a narrower scope
+never closes a task. A `SCOPE` line counts the issues the tracker gave outside the scope, which were dropped.
+`sync.maxOpen` (200) caps the open imported tasks and `sync.maxNewPerSync` (50) the adds of one run, across a
+tracker's places; a `CAPPED` line says how many adds waited for a later run and which key held them. The one line back
+to the whole project is `sync.scope.all: true`. An `--auto` run adds nothing at a place whose scope is new or wider
+than a person last took: a `HELD` line counts the issues waiting, the lead gets one inbox line per scope, and the
+place's tasks still change and close; `teamrig issue sync --yes` takes the scope, and a same or narrower scope passes.
+
 On its own: with `github.repos` listed and `github.probeSeconds` above 0 (60 by default), the team's
 `teamrig issue watch` runs `teamrig issue sync --auto` within a probe of a change on GitHub. A new issue so reaches its
 owner while sessions work; a run by hand still works at any time.
@@ -1821,13 +1833,16 @@ owner, so the session holding an outside PR's task reviews it there with no pers
 gate passes, reading them all first: exactly one task holds the PR (its ref), the caller owns that task (only a
 change's owner lands it), the caller's leader approved it with a note naming the full 40-hex head (an approval covers
 only the head it names; a root team's lead needs no one's), and the PR is open, no draft, targets its repository's
-default branch and is at the head `--head` names. A refusal writes nothing and says which gate failed: a newer head needs its
-own approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
+default branch and is at the head `--head` names. A head that only moved onto a newer base keeps the approval: when
+the PR's head holds the approved head's commits, the same in number, order and patch, rebased onto a newer base, a
+`CARRIED` line says so before the write. A head the code host cannot read whole, with a merge commit, or with any
+other change is refused. A refusal writes nothing and says which gate failed: a head with new work needs its own
+approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
 when the code host failed, 2 when refused, else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits, even after a rebase moved the PR's head.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
@@ -1843,6 +1858,13 @@ Output:
 APPROVED acme/web#12 at d00d5ee
 ```
 
+After the PR was rebased onto a newer base with no other change:
+
+```text
+CARRIED acme/web#12 at 7c41a90: it carries the approved d00d5eed1's 2 commits, patch for patch, onto a newer base
+APPROVED acme/web#12 at 7c41a90
+```
+
 ### teamrig pr merge
 
 Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
@@ -1854,7 +1876,8 @@ else 0.
 
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, all 40 hex digits.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits; a head rebased onto a newer base with the
+  same commits carries it, as in `teamrig pr approve`.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
@@ -1868,6 +1891,36 @@ Output:
 
 ```text
 ENQUEUED acme/web#12 at d00d5ee: it lands once the merge queue's checks pass
+```
+
+### teamrig ci rerun
+
+Starts the failed jobs of one CI run of one of the team's repositories again, with the token saved for its owner, for
+a run a glitch on the code host's side failed (a job reported passed while still running, the run marked failed). Use
+it in place of the code host's own re-run command, which teamrig refuses as a write. It reads the run first and
+re-runs its failed jobs only, never the whole run, so a release's publish or tag job that passed does not run again.
+It is refused, with nothing re-run, for a run that passed or has not ended (only failed, cancelled or timed out), one
+started by any event but push, pull_request, merge_group or schedule (a re-run takes the run's old workflow file with
+its token), one that ran 3 times already, a caller off the team or a repository the team config does not list. It
+changes no code, setting or secret, so it needs no task or approval. Its line names the run's workflow file, event and
+new attempt. The token needs Actions Read and write; a refusal says which permission is missing. Exit 1 when the code
+host failed (a run not there, one too old), 2 when refused, else 0.
+
+Flags:
+
+- `--run <id>`: the run's id, the number after `/runs/` in its address.
+- `--session <id|name>`: the caller, who must be on the team.
+
+Example:
+
+```sh
+teamrig ci rerun acme/web --run 45027704561
+```
+
+Output:
+
+```text
+RERUN acme/web run 45027704561 (ci.yml, push): its failed jobs started again as attempt 2
 ```
 
 ### teamrig issue links
@@ -2422,7 +2475,7 @@ DRY RUN nothing is written
 TEAM front under shop: lead web (shop-web); sessions web (shop-web), ui (shop-ui)
 WOULD CREATE /home/you/.teamrig/teams/front/config.json:
 {
-  "configVersion": 9,
+  "configVersion": 10,
   "team": {
     "id": "front",
     "parent": "shop"
@@ -2541,17 +2594,18 @@ Nothing else is written to stdout, so every line there parses; a refusal is one 
 and no document, where other commands print it to stdout. It writes no file, marks nothing read and takes no lock.
 
 The five documents of interface 1.0 are served, and `plan`, which 1.1 added, `goals`, which 1.2 added, `history`,
-which 1.3 added, and `stats`, which 1.4 added. `tasks` is the register's working set, the active tasks and the
+which 1.3 added, `stats`, which 1.4 added, and `steps`, which 1.9 added. `tasks` is the register's working set, the active tasks and the
 finished ones not yet archived. `plan` is the team's active tasks in plan order, each as teamrig's own lists place
 it. `goals` is the goals a task of the team may serve. `history` is every event of the one task `--task` names.
-`stats` is the register's numbers over `--range`, as `teamrig stats` counts them. `inbox` is the asking
+`stats` is the register's numbers over `--range`, as `teamrig stats` counts them. `steps` is the one-time steps
+teamrig needs its person to take, as `teamrig steps` lists them. `inbox` is the asking
 session's own inbox. `sessions` is every session of your tree of teams. `meetings` is the team's meetings still
 scheduled or started. `config` is the team's config key by key, and the one document a run with no team is
 answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.8`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.9`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2736,6 +2790,13 @@ not in a loop. It also reads the goals of the team and the teams above it and th
 found as `teamrig stats` finds it. When an archive segment is gone, no event is counted, so every number is 0, and
 `problems` names the segment: numbers counted without it would be wrong.
 
+`steps` (since interface 1.9) holds the steps `teamrig steps` lists, in the order they are taken, and `cuts`. Each
+step is `{ "id", "title", "why", "preview", "command" }`: `id` the step's kind (`config-format`), what `teamrig
+steps run` takes; `title` and `why` plain words for the person; `preview` what the step changes, a line each, as
+`teamrig steps` prints them; `command` what the person types in a tab to take it. Show the step and offer to type
+its `command` in the person's own tab; never run it yourself, since it changes their files. An empty `steps` means
+none is pending. A teamrig update that brings a new config format changes `revision` with no file moving.
+
 `inbox` adds `session` (`{ "id", "name" }`), `unread` (how many lines the session has not read; `null` when it never
 ran `teamrig inbox read`, and then every line counts as unread), `lines` and `cuts`. `lines` holds every unread line
 and the read ones posted in the last 24 hours (`--since`), in file order, each `{ "key", "at", "from", "text",
@@ -2859,7 +2920,7 @@ teamrig read tasks --json --owner api
 Output:
 
 ```text
-{"interface":"1.8","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
+{"interface":"1.9","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
 ```
 
 ### teamrig events
@@ -2912,8 +2973,8 @@ teamrig events --json --documents tasks,inbox --session api
 Output:
 
 ```text
-{"interface":"1.8","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
-{"interface":"1.8","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
+{"interface":"1.9","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
+{"interface":"1.9","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
 ```
 
 ### teamrig sessions
@@ -3597,6 +3658,11 @@ the uses left of each kind and when the next one expires
 (`Resets in stock: fable 2 left, the next expiring 2027-03-09 09:59 IST (in 116 days).`), so the lead plans the week
 on them and asks the owner for a reset before one lapses; no other session gets it.
 
+The lead's `start` also names each step teamrig needs the person to take
+(`STEP for the person: teamrig needs to update your team settings; they type: /teamrig steps run config-format --yes
+(teamrig steps shows what it changes)`), so the lead passes it on, and removes the step backups kept past
+[steps.backupDays], printing how many and their paths; no other session's start does either.
+
 A lead with sub-teams runs `teamrig check --tree --session lead` too: `start` reads the lead's own team.
 
 ### teamrig meeting start
@@ -3623,6 +3689,8 @@ as an inbox line. So no session is told the meeting started, and none is woken. 
   that session's own meeting at the slot (a team under the lead's books it from that team's lead); no block when none;
 - `INCIDENTS`: the active bugs and critical tasks of the Maintenance class, the lead's team's first, then those of
   each team under it; no block when none;
+- `STEPS`: each step teamrig needs the person to take, in plain words, with what they type (`teamrig steps` shows
+  what each changes); no block when none;
 - `LATER`: the cards the owner put off to a time still to come, each with its time, back in `DECISIONS` once it
   passed; no block when none;
 - `UNGATED`: each wait on the owner's decision whose card names no owner gate or business decision (`gate:`), left
@@ -4764,7 +4832,7 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
 session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
-`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`.
+`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`.
 
 `context-size` weighs, in characters (about 4 per token), the user's CLAUDE.md with the project folder's and each
 parent's (`CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`), the project's memory index (`MEMORY.md`) and the
@@ -4782,9 +4850,10 @@ turn off claude.ai connectors and skills nobody uses in claude.ai settings, and 
 
 `effort-env` and `model-env` name a variable set in doctor's own environment or in the `env` block of the user's
 Claude Code settings (`settings.json` in Claude Code's folder) or the project's (`.claude/settings.json`,
-`.claude/settings.local.json`), with its value and the file: `CLAUDE_CODE_EFFORT_LEVEL` beats every `--effort` (the
-config's `launch` efforts among them), `/effort` and per-call Agent effort; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1
-beats every per-call Agent model. `settings-json` is one of those files that is not a JSON object, so its block went
+`.claude/settings.local.json`), with its value and the file. The host names its own override variables, such as
+`CLAUDE_CODE_EFFORT_LEVEL`, which beats every `--effort` (the config's `launch` efforts among them), `/effort` and per-call
+Agent effort, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1 beats every per-call Agent model. A host with no such
+variable gets neither finding. `settings-json` is one of those files that is not a JSON object, so its block went
 unchecked. `launch-model` is a session whose `launch` model this host does not run: the config takes any model
 name, so a team config loads on every host, and the host's own check runs where the name is used, so `open` refuses
 to start that session and `hire --model` refuses the name. `launch-effort` is a session whose `launch` entry names a
@@ -4858,16 +4927,30 @@ run [teamrig page test](#teamrig-page-test) to see a page arrive.
 WARN page-webhook team shop's alerts.pageWebhookFile gives no page URL (the webhook URL alerts.pageWebhookFile gives is not an https URL), so an expired Claude login pages nobody: fix alerts.pageWebhookFile or what it names, then run teamrig page test
 ```
 
+`cli-path` is the bin folder of the teamrig home missing from the user's PATH where it is kept (on Windows the `Path`
+value of `HKCU\Environment`, elsewhere the shell's startup files), not doctor's own PATH: `teamrig` then runs in no
+terminal you open ([Install and update](requirements.md#install-and-update)). With [cliOnPath.enabled] on, the next
+session start of the team adds it; off, no session start of the team does, so turn it on or add the folder yourself.
+Either way, a terminal opened before that keeps its old PATH.
+
+```text
+WARN cli-path C:\Users\you\.teamrig\bin is not on the user's PATH (HKCU\Environment Path), so `teamrig` is not found in a terminal you open: the next session start of the team adds it (cliOnPath.enabled); start one, then open a new terminal
+```
+
 ### teamrig ui
 
-Starts the dedicated UI in the terminal it is run in, with its input and output on that terminal, and ends when the
-UI does. Run it yourself in a terminal tab: it draws the whole screen, so it shows nothing through `/teamrig` or a
+Starts the dedicated UI where [ui.mode] (default `terminal`) or `--mode` says. In `terminal` it shows in the terminal
+it is run in, with its input and output on that terminal, and ends when the UI does. In `window` it opens a terminal
+window of its own running the same UI, the way `teamrig open` opens a session's tab ([open.terminal],
+[open.teamWindow]), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
+shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
+the UI in this terminal instead. Run it yourself in a terminal tab: it draws the whole screen, so it shows nothing through `/teamrig` or a
 session's shell. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
 Without the key it runs the released UI this teamrig pins: the first start fetches its archive over https into
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
 gets only PATH, HOME, USERPROFILE, SYSTEMROOT, TERM, COLORTERM, LANG, LANGUAGE, TEAMRIG_HOME, TEAMRIG_TEAM,
-TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.80.0's UI. It is refused when
+TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.82.0's UI. It is refused when
 [ui.path] names no file. As it starts a program,
 `/teamrig ui` runs only when you type it in the tab, never from a session's line; and [ui.path] is the owner's key,
 which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
@@ -4877,6 +4960,7 @@ Flags:
 
 - `--session <id|name>`: the session whose view it opens on. Without it: the team's.
 - `--team <team>`: the team to show. Without it: the team of this folder.
+- `--mode <terminal|window|both>`: where to show the UI this once, over [ui.mode]. Any other word is a usage error.
 
 Example:
 
@@ -4888,7 +4972,7 @@ Output: none of its own while the UI runs, and exit 0 when you quit it. The refu
 fetch the released UI:
 
 ```text
-REFUSED the UI 0.80.0 could not be fetched: <why>
+REFUSED the UI 0.82.0 could not be fetched: <why>
 ```
 
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
@@ -5056,7 +5140,8 @@ SET messages.maxLines 12 -> 20; the old config is at /home/you/.teamrig/teams/sh
 ```
 
 It refuses anyone but the lead, a key that is read-only (the roster, an owner gate, a map), a key that holds other
-keys, a value the key does not take, an older config until `config migrate` writes it, and a change that would leave
+keys, a value the key does not take, an older config until it is updated (the refusal names the line to type, `/teamrig steps run config-format
+--yes`, which keeps a backup first), and a change that would leave
 the config with a problem; a set that fixes the config's only problem goes through.
 
 ### teamrig config migrate
@@ -5087,6 +5172,62 @@ NOTE every command reads it as version 4 already; once written, a tab on a teamr
 
 A current config prints `UNCHANGED <path> needs no migration`, and one from a newer teamrig is refused.
 
+### teamrig steps
+
+Lists the one-time steps teamrig needs its person to take, in plain words: what each is, why it is needed, what it
+changes and the line to type. The first is updating the team settings to the current layout, needed before
+`config set` can change a setting. Reading the list changes nothing.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig steps
+```
+
+Output:
+
+```text
+STEP config-format: teamrig needs to update your team settings
+  why: the team settings file is in an older layout, so changing a setting is refused until it is updated; a backup is kept first
+  v3→v4: budget.dailyPct removed: the daily budget is recomputed from what is left of the week
+  take it: /teamrig steps run config-format --yes
+```
+
+With nothing pending it prints `NONE teamrig needs no step from you`.
+
+### teamrig steps run
+
+Takes one step `teamrig steps` lists. Without `--yes` it shows what the step changes and where its backup goes, and
+changes nothing. With `--yes` it first copies what the step changes into `backups/`, takes the step, prints the
+backup's path and removes the backups an earlier run of the same step left: teamrig removes only backups it recorded
+for a step, never a file you made. A backup kept past 7 days [steps.backupDays] goes at the lead's next
+`teamrig start`, which prints how many it removed and their paths. Its `--yes` is for the person alone: it is refused where the agent's host runs it (an
+agent's tool call, a `!` line, a script it runs or a hook), and the
+[exec guard](hooks.md#before-a-shell-command-the-exec-guard) refuses a tool call that runs it. Type
+`/teamrig steps run <id> --yes` in a tab, or run it in your own terminal.
+
+Flags:
+
+- `--yes`: takes the step after the backup. Without it the command shows the step and changes nothing.
+
+Example:
+
+```sh
+teamrig steps run config-format --yes
+```
+
+Output:
+
+```text
+DONE teamrig needs to update your team settings; the backup is at /home/you/.teamrig/teams/shop/backups/config.v3.json
+  v3→v4: budget.dailyPct removed: the daily budget is recomputed from what is left of the week
+REMOVED the earlier backup /home/you/.teamrig/teams/shop/backups/config.v2.json
+```
+
+A step no longer needed prints `UNCHANGED <id> is not needed now`; an unknown id is refused.
+
 ### teamrig automode install
 
 Writes the team's lines into Claude Code's `autoMode.environment` setting on this machine: the facts auto mode's
@@ -5105,8 +5246,18 @@ hooks). A plugin cannot ship these (its settings take only `agent` and `subagent
 own Claude Code settings (`settings.json` in `$CLAUDE_CONFIG_DIR`, else in `~/.claude`). The lines replace the
 team's tagged lines where they were, else go at the end; your own lines and other teams' tagged lines stay as they
 are. With no list yet, the new one starts with `"$defaults"`, so Claude Code's built-in entries stay on; a list you
-already have is left without it if it has none. Run it again after a config change or a teamrig upgrade: it
-rewrites only lines that differ. Without `--yes` it shows the change and writes nothing; with `--yes` it first keeps
+already have is left without it if it has none.
+
+It also adds teamrig's own allow rules to `permissions.allow`, one `Bash(teamrig <command> *)` and one
+`PowerShell(teamrig <command> *)` per command that reads or writes only the team's files whatever its arguments, and
+whose words start no other command (`teamrig list`, `teamrig set`, `teamrig inbox add` and the like; never `add`,
+`budget` or `rules`, whose rule would also approve `add --issue`, `budget lift` or `rules forget`). Those commands then
+run with no prompt and no classifier call. A rule of yours with the same reach counts as there and stays yours. It
+records the rules it wrote in `synced-allow-rules.json` in the kit's home, and takes out only those, once teamrig no
+longer syncs them; it never touches a rule you wrote, `deny` or `ask`. A record that does not parse is refused before
+anything is written. `automode uninstall` leaves these rules, as every team on the machine shares them.
+
+Run it again after a config change or a teamrig upgrade: it rewrites only lines that differ. Without `--yes` it shows the change and writes nothing; with `--yes` it first keeps
 the old settings file in the kit's `backups` folder. It changes your settings, not a team's, so it takes no
 `--session`. Claude Code's auto mode refuses a session that edits its own settings, and teamrig
 refuses `--yes` where Claude Code runs it, a `!` line too, so type `/teamrig automode install --yes` in a tab, or run
@@ -5404,6 +5555,40 @@ WROTE 2 of 2 file(s) from setup backup 20261025T120000Z; 212 unchanged
 UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 ```
 
+### teamrig setup hooks
+
+Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
+`hooks.json` in `$CODEX_HOME` (default `~/.codex`). Your own handlers stay as they are, in their order; teamrig's
+earlier handlers are replaced, so running it again after a teamrig update rewrites them. Each handler points at the
+installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
+dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
+`PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
+`SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
+file already holds the same handlers, one `UNCHANGED` line. It never writes `config.toml` and never trusts a handler
+for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
+every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
+refused where an agent runs it; the preview stays open.
+
+Flags:
+
+- `--host <name>`: required: the host whose hooks file it writes (`codex`).
+- `--yes`: write the file, keeping the old one in the kit's `backups` folder first; without it, only count.
+
+Example:
+
+```sh
+teamrig setup hooks --host codex
+```
+
+Output:
+
+```text
+PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
+  SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
+  NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
+  NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
+```
+
 ### teamrig commits check
 
 Checks the commits in `base..tip` against the small-commits rule: a commit over 400 changed non-test lines or 15
@@ -5556,6 +5741,32 @@ printf '%s\n' "$updates" | teamrig secrets pushed "$1" || exit 1
 printf '%s\n' "$updates" | git lfs pre-push "$@"
 ```
 
+### teamrig stamp commit
+
+For a git commit-msg hook: adds teamrig's stamp to the commit message file, in git's trailer block. `Made-with: teamrig
+<version>` marks every commit made with teamrig; in a session it adds `Made-by: <program> <version>; model <model>;
+effort <effort>`, read from the host and the session's last status line snapshot, `unknown` for a part the host does
+not tell, and an effort the host forces on every session over the one the session picked. A rerun or an amend keeps one
+of each, with the last run's values; a commit made outside a session drops an old `Made-by`. The team's
+`[commits.stamp]` set to false leaves the message as written.
+
+Flags: none.
+
+Example (the hook line; `|| true`, so a failed stamp never blocks the commit):
+
+```sh
+teamrig stamp commit "$1" || true
+```
+
+Output:
+
+```text
+STAMPED Made-with: teamrig <version>, Made-by: <program> 3.1.0; model Opus 5.5; effort high
+```
+
+With `[commits.stamp]` false it prints `SKIPPED commits.stamp is false: the message is left as written`; a message
+file that is not there is `FAILED` (exit 1).
+
 ### teamrig worktree add
 
 Makes a session's new worktree the same way every time, so each session starts from the same ready checkout. It
@@ -5590,6 +5801,17 @@ task has none of, such as `{issue}` for a task with no issue ref. A fetch or `gi
 (exit 1). A setup that fails is FAILED too, and the worktree stays, so you can finish its setup by hand or remove it
 with `teamrig worktree remove <path> --delete-branch`.
 
+Last, it makes [teamrig git-credential](#teamrig-git-credential) git's credential helper in the repository's own
+config, when the repository's `origin` is an https URL of a host a connector serves and a key is saved for the
+repository's owner, so git there pushes on that key and never on the machine's login. It resets the host's helper
+list first, so no helper from the user's or the system's config answers after it, and has git send the repository's
+path. The helper line runs the Node.js program and the teamrig script running now, by absolute path; it is refused
+when either is relative or inside one of the repository's worktrees, where a branch could change it. The config is
+shared by every worktree of the repository, so the first `worktree add` wires them all and the next ones change
+nothing. Any other origin, an owner with no saved key, or a refused program leaves git as it was, said as a `NOTE`
+line, the worktree made; a config write git refuses is FAILED (exit 1). To undo it, run
+`git config --local --remove-section credential.https://<host>` in the repository.
+
 Flags:
 
 - `--task <T id>`: names the new branch from this task by [delivery.branches], in place of a branch name.
@@ -5610,6 +5832,7 @@ added the worktree /home/you/app/.claude/worktrees/t12-parser on the new branch 
 linked node_modules
 ran its setup node tools/link-modules.ts
 OK added /home/you/app/.claude/worktrees/t12-parser
+NOTE git's credential helper left as it was: /home/you/app has no origin remote git could read
 ```
 
 ### teamrig worktree remove
@@ -6754,14 +6977,44 @@ Output:
 {"state":"OPEN","title":"Ship the release"}
 ```
 
+### teamrig git-credential
+
+git's credential helper for https to the code host the saved keys are for: git runs it, not a session. `get` reads
+git's request on standard input and answers with the key teamrig saved for the owner of the repository in git's
+path, read from the credential store only, never a token in the environment or the machine's own login. It answers
+only `https` to that host itself (no other host, no suffix or port), with the repository's path (git's
+`credential.<url>.useHttpPath true`) and no user name in the URL. Anything else, an owner with no saved key, or a
+request git itself never writes (a carriage return, an unknown key, a key given twice) answers `quit=1` with the
+reason on standard error, so git asks no later helper and no prompt. `store` and `erase` keep and change nothing:
+only teamrig saves the keys. Exit 0 for each of them; any other word is a usage error, exit 64.
+
+Flags: none.
+
+Example, with `request.txt` holding the lines `protocol=ssh` and `host=example.com`, as git would write them:
+
+```sh
+teamrig git-credential get < request.txt
+```
+
+Output (the second line on standard error):
+
+```text
+quit=1
+teamrig git-credential: no key given: teamrig answers https only, not ssh
+```
+
 ### teamrig test
 
 Runs a test command in the shell and prints a few lines instead of all it printed, so a long test run costs the
 model little. The whole output goes to a numbered log, `test-<session>-<n>.log` in the team's `state/logs` folder
-(the kit home's `logs` folder outside a team); each session keeps its newest 20. The log starts with the tree the
-command ran on, so a log cited as proof names the head it ran on: `# folder: <folder>`, then `# git: <top level> at
-<commit>, clean` (or `with uncommitted changes`, counting untracked files; `no commit yet` before the first commit),
-or `# git: none, it ran outside a git repository`, where the command still runs; then `$ <command>`. Then one `PASS` or `FAIL` line with
+(the kit home's `logs` folder outside a team), written as the output arrives, so a run that hangs or is killed leaves
+every line it printed; each session keeps its newest 20. The log starts with the tree the command ran on, so a log
+cited as proof names the head it ran on: `# folder: <folder>`, then `# git: <top level> at <commit>, clean` (or `with
+uncommitted changes`, counting untracked files; `no commit yet` before the first commit), or `# git: none, it ran
+outside a git repository`, where the command still runs; then `$ <command>`. When the command ends but a process it
+started still holds its output open 2 s later, the run stops reading, and the log says so on its own line ("a process
+the command started still held its output open after the command ended, so the run stopped reading it") before the
+command's end. Then one `PASS` or `FAIL` line with
 the counts, the time and the log's path, and for a failed run each failing test in full within
 `tests.maxFailureChars` (4,000 characters by default), or the output's last 40 lines when no test runner is
 recognised. It reads the Node.js test runner (spec and TAP), Jest and Vitest. Exit 0 when the command passed,
@@ -6919,7 +7172,8 @@ default: the busiest 7 sessions, then who is past the daily budget. A session pa
 team has no room today: everyone's use today, the outside's included, at or past the in-day pace (today's use in
 quiet hours, plus today's budget times the share of today's active time gone by). The team past its part of the
 account's day holds nobody by itself: the teams on one account share one pool, so no team waits while the account
-has room. While the team has room, they are named apart as not held: `Past their part, not held while the team has
+has room. Past its part with no room, the team is held for the day: named on the held line, its sessions wake and
+stay open for p0 work alone, but for one a leader lifted or a burst holds up. While the team has room, they are named apart as not held: `Past their part, not held while the team has
 room today (3.0% of the week used, below its in-day pace of 4.7%): the team, api.` A session a leader cut ([teamrig
 budget cut](#teamrig-budget-cut)) is held past its part whatever room the team has, named on a line of its own:
 `Past the daily budget, held by a leader's cut whatever room the team has: web.` Under `budget.overAction` warn the
@@ -7485,7 +7739,7 @@ team, or once the reading's week reset, no pace is shown. The team config's `sta
 on by default; with `branch` off, git is never asked). While the owner's meeting is open on a team or a team above
 it (`teamrig meeting start`, until `meeting end` or its lapse), the lead's tab that started it leads its line with
 `Meeting: daily | ` (`Meeting: extra | ` for one started after the day's daily meeting) and every other tab, a
-sub-team's too, adds `meeting.statusLine.heldText` (`meeting on: held`)
+sub-team's too, adds `meeting.statusLine.heldText` (`owner in meeting`) and the meeting's title (`owner in meeting: daily`)
 last; only that mark takes `meeting.statusLine.colour` (`#8b57e3`, teamrig's purple, by default), and
 `meeting.statusLine.enabled: false` turns both off. The tab of a session the owner meets in a booked or on-the-spot
 meeting, any session's, a worker's too, leads its line with `Meeting: <its title> | `, what the meeting is about cut
@@ -7872,8 +8126,9 @@ lead's picker, in a meeting too; nothing for a tab that is no session of the tea
 When Claude Code is about to show a permission prompt (`PermissionRequest`), with `prompts.hookAsks: refuse` (the default) in
 the team config, answers it for its case: nobody may be there to answer, and the prompt holds the session until someone
 does. A Bash line that runs one of the session's own jobs (a sanctioned route: `teamrig merge`, `deploy`, `exec
-request`, `worktree remove`, a register or inbox command, a `git commit` with its hooks, a `git push` of a task branch
-you own) runs; a line that provably only reads runs; a Bash line teamrig's rules give a rerun form (after a leading
+request`, `worktree remove`, a `pr approve` or `pr merge` at the head your leader approved, a teamrig read, a register
+or inbox command, a `git commit` with its hooks, a `git push` of a task branch you own), alone or piped into one
+read-only filter, runs; a line that provably only reads runs; a Bash line teamrig's rules give a rerun form (after a leading
 `cd D &&`, or a plain `git worktree remove`) is refused quoting the line to run instead; anything else is refused with
 the tool's name and the note to record the step as waiting for the owner and take the next task. Each answer is a line
 in `state/prompt-answers.jsonl`, its command masked of every secret value, a route's by its route alone; lines over 7 days old move to the

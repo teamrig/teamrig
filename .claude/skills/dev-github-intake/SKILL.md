@@ -25,7 +25,9 @@ page you point them to.
 ## An issue
 
 1. Read it whole, with its comments, and search for one that covers it already (`gh issue list --state all
-   --search "<words>"`). A duplicate closes with `teamrig issue close <owner/name#n> --duplicate-of
+   --search "<words>"`), and whether main already did it or changed the code it names since it was written (`git
+   log --since=<the issue's date> origin/main -- <paths>`): one done closes with the commit that did it, one overtaken is re-scoped with a
+   comment saying what changed. A duplicate closes with `teamrig issue close <owner/name#n> --duplicate-of
    <owner/name#m>` and a line saying why.
 2. Labels come only from `.github/labels.json`: one type, one priority, an area. A form left half empty gets
    `needs-format` and a comment naming the missing section. Work we take on gets the accept label
@@ -37,9 +39,12 @@ page you point them to.
 
 ## A pull request from outside
 
-1. Best fix first: judge whether its fix is the best one. If a better one exists, propose it on the pull request
+1. Still relevant first: check that main has not changed the code it touches since it was written, no later change
+   already fixed or replaced it, the behaviour it changes is still wanted, and landing it now undoes no newer work.
+   A stale one is closed or re-scoped with a comment saying what changed, never landed as written.
+2. Best fix first: judge whether its fix is the best one. If a better one exists, propose it on the pull request
    (what and why) before taking it; else say in one line why theirs is best.
-2. Read its full diff before any checkout: fetch its head (`git fetch origin pull/<n>/head:pr-<n>`) and read
+3. Read its full diff before any checkout: fetch its head (`git fetch origin pull/<n>/head:pr-<n>`) and read
    `git diff origin/main...pr-<n>`. Its code runs on this host (its specs, `npm run check`, the local gate at push)
    only once you have read that diff and taken it into your branch, as it runs with your GitHub token, your Claude
    Code login and `~/.teamrig`. A pull request that touches `package.json`, a lockfile, `.npmrc`, an install script,
@@ -47,19 +52,20 @@ page you point them to.
    be read as text is never checked out on this host: read its diff from the fetched ref, and run it only in a Linux
    container with no home mount and no tokens, or in GitHub CI, until CI is green and the security reviewer has
    passed it.
-3. A change under a guarded path (CONTRIBUTING.md, Review) gets a security review before it lands.
-4. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
+4. A change under a guarded path (CONTRIBUTING.md, Review) gets a security review before it lands.
+5. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).
-5. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
+6. Land it as it is when its head is ready (CI green, no version or dist commits): set its task waiting on your
    leader's approval with a note naming the full 40-hex head, then `teamrig pr approve <owner/name#n> --head <sha>` and
-   `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a push after the
-   approval needs a new one. Its author keeps the credit as the commits' author.
+   `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a rebase onto a
+   newer base with the same commits keeps the approval (`--head` stays the approved head), any other push needs a new
+   one. Its author keeps the credit as the commits' author.
    Otherwise land it with credit by hand: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its
    version and dist commits, which the release workflow makes, and land the rest with `dev-ship-change` and the plan
    `{ "chunks": [] }`, which lands the picked commits as they are; a chunk naming them would commit them again under
    our name. Comment on the pull request naming the landed commit, and close it.
-6. Reply as yourself, in plain words, with the next step and its date, and keep each promise in a task.
+7. Reply as yourself, in plain words, with the next step and its date, and keep each promise in a task.
 
 ## Replying: the state with the words
 
@@ -72,6 +78,18 @@ state first and posts the words last, or nothing when a step fails:
 - Leaving part for later: `--followup '<title>' --followup-body-file <path>` opens that issue and names it in the
   comment.
 - On a pull request from outside: label it first (`teamrig issue label`), then reply on it.
+
+## Keeping the thread current
+
+The author sees only the thread, never our tasks, so the thread always says where the work stands and whose move
+it is:
+- **Each step on our side gets a comment the same day**: a review or hold, a fix of ours they must take, a check
+  running, the approval, the merge or a revert, each with the next step, who takes it and when. A hold for a
+  security reason names only the hardening.
+- **Their push or comment gets an answer the same day**, even when the answer is "it is with us, next: X by Y". A
+  wait on our side never stays silent.
+- **Every sweep of the board** reads each open thread's last word: an outside author's comment or push with no
+  maintainer reply after it is unanswered, labels or not, and gets its answer in that turn.
 
 ## A design issue
 
@@ -106,4 +124,4 @@ reply` refuses a secret it finds, the rest is on you. A security hole someone po
 discussed there: tell the maintainer at once, so the comment is hidden and the report moves to a private advisory
 ([SECURITY.md](../../../SECURITY.md)), and reply only with a pointer to it.
 
-Last verified: 2026-11-22
+Last verified: 2026-11-23

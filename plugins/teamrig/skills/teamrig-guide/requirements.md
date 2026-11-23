@@ -7,7 +7,7 @@ What teamrig needs on the machine, from its code and its CI.
 | Claude Code | 2.1.139 or later | It loads the plugin, runs its hooks and puts `teamrig` on the PATH. Every hook uses the exec form (`args`), which Claude Code added in 2.1.139. CI does not run Claude Code; hand tests ran on 2.1.299 and 2.1.300. The automatic refresh's `/clear` comes from the plugin's mod (Claude Code's function hooks, tried on 2.1.299); a Claude Code that does not load it gets the restart instead. |
 | Node.js | 22.18 or later (`engines` in `package.json`) | `teamrig` and every hook run `node <plugin>/dist/cli/main.js`, so `node` must be on the PATH. 22.18 is the floor `package.json` sets; no older Node.js is tested. |
 | Operating system | Linux, Windows or macOS | CI runs the tests on ubuntu, windows and macos, each on Node 22; a newer Node.js is not tested. |
-| git | any | The push guard reads git config and aliases; `teamrig commits check` runs git. Not needed for tasks or inboxes. |
+| git | 2.36 or later | The push guard reads git config and aliases; `teamrig commits check` runs git. The secret scan reads what a merge's resolution added with `git log --diff-merges=remerge` (2.36), and every checkout read runs `git rev-parse --path-format` (2.31). Not needed for tasks or inboxes. |
 | A terminal for `teamrig open` | see below | Only `open` uses one; every other command works in any shell. |
 
 ## The requirements check
@@ -19,12 +19,13 @@ teamrig checks git, Claude Code and Node.js itself, and says what is missing in 
 - when `teamrig team create` sets up a team, as `WARN` lines before anything else;
 - in `teamrig doctor`, as `requirement` findings.
 
-It reads `$AI_AGENT` for the running Claude Code (set since Claude Code 2.1.120), the running Node.js, and the PATH
-for git, and starts no program. Below Claude Code 2.1.139 the hooks cannot run, so only `team create` and `doctor`
+It reads `$AI_AGENT` for the running Claude Code (set since version 2.1.120), the running Node.js, and the PATH
+for git; the only program it starts is `git version`, when git is on the PATH. Below Claude Code 2.1.139 the hooks cannot run, so only `team create` and `doctor`
 can say so; below 2.1.120 the version is unknown and nothing is said. Outside a team's projects the hooks say nothing.
 
-No Claude Code setting has to be turned on for teamrig in auto mode. In default mode, the allow rule
-`Bash(teamrig:*)` saves a question before each command: [hooks.md](hooks.md#permissions). The GitHub CLI (`gh`) is needed only for `teamrig issue sync`, which reads GitHub
+No Claude Code setting has to be turned on for teamrig in auto mode. In default mode, the allow rules
+`teamrig automode install` adds save a question before each command that touches only the team's files:
+[hooks.md](hooks.md#permissions). The GitHub CLI (`gh`) is needed only for `teamrig issue sync`, which reads GitHub
 issues: [GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md).
 
 ## Install and update
@@ -37,8 +38,14 @@ claude plugin install teamrig@teamrig
 While the plugin is enabled, its `bin/` folder is on the PATH of Claude Code's Bash and PowerShell tools:
 `bin/teamrig` serves bash, `bin/teamrig.cmd` PowerShell and cmd. An argument that holds a line break, such as a
 multi-line `--description`, reaches teamrig whole from all three, although cmd.exe alone would cut it at the break
-([the refusal when it cannot](errors.md#usage-errors-exit-64)). In your own terminal, outside Claude Code, `teamrig`
-is not on the PATH unless you add that folder. Each change to the plugin raises its version; to take the newest one, follow
+([the refusal when it cannot](errors.md#usage-errors-exit-64)). For your own terminals, outside Claude Code, the first
+session start after an install or update writes `teamrig.mjs`, `teamrig` and on Windows `teamrig.cmd` to `~/.teamrig/bin`,
+which find the installed plugin on each run, and adds that folder at the end of your user PATH, so a program you put
+there first keeps its place: on Windows the `Path` value of
+`HKCU\Environment`, elsewhere a marked block in `~/.profile`, and in `~/.bash_profile`, `~/.bashrc` and `~/.zshrc`
+where they exist (`~/.zshrc` always on macOS). A terminal opened before that keeps its old PATH: open a new one. The
+start that adds the folder says so once, to you and the model; the step is logged in `~/.teamrig/restore/restore.log`. A team that sets [cliOnPath.enabled] false writes neither, so an
+entry you removed stays removed; `teamrig doctor` names the folder when it is not on your PATH (`cli-path`). Each change to the plugin raises its version; to take the newest one, follow
 [Updating the plugin](https://github.com/GeneralA6/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin).
 
 ## Terminals for `teamrig open`

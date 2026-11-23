@@ -7,7 +7,8 @@ import { isRecord, type JsonRecord } from '../lib/guards.ts';
  * - `releaseGate` reads GitHub with the job's read-only token and passes only the one open release pull request
  *   whose head is the head ci just passed, a single commit holding nothing but the version raises and the notes
  *   (`releaseRefusal`), with every check on that head green: a skipped check only when no rule requires it, and the
- *   summary check from GitHub Actions itself. Anything it cannot read, or reads in an unexpected shape, refuses.
+ *   summary check from GitHub Actions itself. Anything it cannot read, or reads in an unexpected shape, refuses. The
+ *   release clock (`clockHold`, tools/release/channels.ts) may hold a release that would pass until its slot (T5133).
  * - `mergeRelease` mints a short-lived token of the teamrig-release App for this repository alone, merges that head
  *   pinned by its sha, comments on the pull request, and revokes the token.
  * Refusals and comments name paths, checks and reasons in code spans and never echo pull request text.
@@ -112,6 +113,8 @@ export type GateOutcome =
   | { readonly kind: 'pass'; readonly pr: number; readonly sha: string; readonly checks: number }
   /** Nothing to merge from this run: the branch moved past its head, or no release pull request is open. */
   | { readonly kind: 'stale'; readonly reason: string }
+  /** A release that may merge, but not yet: the release clock holds it (T5133). */
+  | { readonly kind: 'held'; readonly reason: string }
   | { readonly kind: 'refused'; readonly reason: string };
 
 export interface GateDeps {
@@ -120,6 +123,8 @@ export interface GateDeps {
   readonly token: string;
   /** Why the release head's change may not merge, read from git's tree data (`releaseRefusal`), or null. */
   readonly filesRefusal: (sha: string) => string | null;
+  /** Why the release clock holds a release now, given when the last release pull request merged (null: never), or null. */
+  readonly clockHold: (lastMerge: Date | null) => string | null;
 }
 
 /** One check that a rule requires on main: its name, and the App that must report it when the rule names one. */
@@ -152,8 +157,7 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
   const sha = fieldString(run, 'head_sha', 'run');
   if (!FULL_SHA.test(sha)) return { kind: 'refused', reason: 'the ci run names no full commit sha' };
 
-  const owner = target.repo.split('/')[0] ?? '';
-  const open = listOf(await get(`/pulls?state=open&base=${encodeURIComponent(target.main)}&head=${encodeURIComponent(`${owner}:${target.head}`)}&per_page=${PAGE}`), 'pull list');
+  const open = await releasePulls(get, target, 'open');
   const [listed] = open;
   if (listed === undefined) return { kind: 'stale', reason: 'no release pull request is open' };
   if (open.length > 1) return { kind: 'refused', reason: `${open.length} open pull requests come from the release branch` };
@@ -163,6 +167,8 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
   if (fieldString(pullHead, 'sha', 'pull.head') !== sha) return { kind: 'stale', reason: `the release branch moved past ${codeSpan(sha)}: the ci run on its new head decides` };
   const pullRefusal = releasePullRefusal(pull, target);
   if (pullRefusal !== null) return { kind: 'refused', reason: pullRefusal };
+  const hold = deps.clockHold(lastMergeOf(await releasePulls(get, target, 'closed')));
+  if (hold !== null) return { kind: 'held', reason: hold };
 
   const files = deps.filesRefusal(sha);
   if (files !== null) return { kind: 'refused', reason: `the change is more than a release: ${codeSpan(files)}` };
@@ -176,6 +182,40 @@ async function gate(target: GateTarget, deps: GateDeps): Promise<GateOutcome> {
     return { kind: 'refused', reason: `the head's commit status is ${codeSpan(fieldString(status, 'state', 'combined status'))}` };
   }
   return { kind: 'pass', pr, sha, checks: runs.filter((one) => one.conclusion === 'success').length };
+}
+
+/** Where release-please keeps its pull request: the repository, its main branch and the release branch. */
+export type ReleaseBranch = Pick<GateTarget, 'repo' | 'main' | 'head'>;
+
+/** Reads one GitHub path under the repository, query included. */
+export type RepoGet = (path: string) => Promise<unknown>;
+
+/**
+ * The release branch's pull requests into main: the open ones, or the closed ones newest updated first. Not paged:
+ * release-please keeps one open, and `lastMergeOf` needs only the newest closed.
+ */
+export async function releasePulls(get: RepoGet, branch: ReleaseBranch, state: 'open' | 'closed'): Promise<readonly JsonRecord[]> {
+  const owner = branch.repo.split('/')[0] ?? '';
+  const order = state === 'closed' ? '&sort=updated&direction=desc' : '';
+  const path = `/pulls?state=${state}&base=${encodeURIComponent(branch.main)}&head=${encodeURIComponent(`${owner}:${branch.head}`)}${order}&per_page=${PAGE}`;
+  return listOf(await get(path), state === 'open' ? 'pull list' : 'closed pull list');
+}
+
+/**
+ * When the newest of these closed release pull requests merged, or null when none did. release-please reuses its one
+ * branch for every release, so the newest hundred updated cover the last merge; a closed one never merged has null.
+ */
+export function lastMergeOf(closed: readonly JsonRecord[]): Date | null {
+  let last: Date | null = null;
+  for (const [index, pull] of closed.entries()) {
+    const merged = pull['merged_at'];
+    if (merged === null || merged === undefined) continue;
+    if (typeof merged !== 'string') throw new Error(`GitHub's closed pull list[${index}].merged_at is not a time`);
+    const at = new Date(merged);
+    if (Number.isNaN(at.getTime())) throw new Error(`GitHub's closed pull list[${index}].merged_at is not a time`);
+    if (last === null || at.getTime() > last.getTime()) last = at;
+  }
+  return last;
 }
 
 /** Why the ci run is not a passed run of release.yml's dispatch on the release branch of this repository, or null. */

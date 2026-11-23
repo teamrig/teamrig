@@ -7,7 +7,9 @@ import { createGit } from '../lib/git.ts';
 import { takeRoot } from '../lib/repo-root.ts';
 import { runMain } from '../lib/run-main.ts';
 import {
+  COVERAGE_USAGE,
   coverageFindings,
+  coverageOptions,
   coverageRun,
   coverageTempBase,
   coverageTotals,
@@ -26,6 +28,7 @@ import { hangFinding, runSuite } from './suite-run.ts';
 /**
  * Runs the whole test suite of this repo (or `--root <repo>`) once with coverage, then fails on a failing, skipped or
  * todo test, a source file no test loads, or a file or total below the floors in tools/ci/coverage.json.
+ * `--alone` (CI, where the runner's VM runs this job only) runs a test file a core at once, not half (suiteWorkers).
  * A suite that prints nothing for the policy's suiteIdleSeconds is stopped with its tree and fails as hung.
  * The run keeps its temporary files, Node's coverage folder among them, in one folder under teamrig's home
  * (`<home>/tmp/coverage`) that it removes at the end; a later run removes the folders of runs that were killed before
@@ -33,7 +36,8 @@ import { hangFinding, runSuite } from './suite-run.ts';
  */
 async function main(args: readonly string[]): Promise<number> {
   const { root: given, rest } = takeRoot(args);
-  if (rest.length > 0) throw new Error(`unknown option ${rest.join(' ')} (usage: coverage-cli.ts [--root <repo>])`);
+  const options = coverageOptions(rest);
+  if (options.kind === 'unknown') throw new Error(`unknown option ${options.option} (usage: ${COVERAGE_USAGE})`);
   const root = realpathSync(given);
   const parsed = parsePolicy(JSON.parse(readFileSync(join(root, POLICY_FILE), 'utf8')));
   if (parsed.kind === 'invalid') {
@@ -54,7 +58,7 @@ async function main(args: readonly string[]): Promise<number> {
     const lcovPath = join(out, 'lcov.info');
     const tapPath = join(out, 'tap.txt');
     const idleMs = policy.suiteIdleSeconds * 1000;
-    const end = await runSuite({ program: process.execPath, args: suiteArgs(policy, lcovPath, tapPath, suiteWorkers(availableParallelism())), cwd: root, env: suiteEnv(process.env, temp), idleMs });
+    const end = await runSuite({ program: process.execPath, args: suiteArgs(policy, lcovPath, tapPath, suiteWorkers(availableParallelism(), options.host)), cwd: root, env: suiteEnv(process.env, temp), idleMs });
     if (end.kind === 'idle') {
       console.log(`coverage: ${hangFinding(end.silentMs, process.versions.node)}`);
       return EXIT_FINDINGS;

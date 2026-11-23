@@ -3,7 +3,7 @@ import { KIT_VERSION } from "../../core/version.js";
 import { lowerRecordSteps } from "../../restore/launcher-refresh.js";
 import { LAUNCHER_SCRIPT, launcherPath } from "../../statusline/launcher.js";
 import { noPositionals } from "../args.js";
-import { checked, readClaudeSettings, settingsTargetOf, writeClaudeSettings } from "../claude-settings.js";
+import { checked, readUserSettings, settingsTargetOf, writeUserSettings } from "../user-settings.js";
 import { statusLineOf } from "../host.js";
 import { underRecordLock } from "../launcher-record-lock.js";
 import { EXIT } from "../runtime.js";
@@ -13,7 +13,7 @@ export async function install(args, runtime) {
     const port = statusLineOf(runtime);
     const machine = machineOf(runtime);
     return underRecordLock(args, runtime, machine.kitHome, async () => {
-        const settings = await readClaudeSettings(runtime, machine.settingsPath);
+        const settings = await readUserSettings(runtime, machine.settingsPath);
         const plan = checked(port.install(settings.json, machine.launcher));
         const launcherStale = (await runtime.files.read(machine.launcher)) !== LAUNCHER_SCRIPT;
         const lower = launcherStale ? await lowerRecordSteps(runtime.files, machine.kitHome, KIT_VERSION, runtime.clock.now()) : [];
@@ -27,7 +27,7 @@ export async function uninstall(args, runtime) {
     const port = statusLineOf(runtime);
     const machine = machineOf(runtime);
     return underRecordLock(args, runtime, machine.kitHome, async () => {
-        const settings = await readClaudeSettings(runtime, machine.settingsPath);
+        const settings = await readUserSettings(runtime, machine.settingsPath);
         const plan = checked(port.uninstall(settings.json, machine.launcher));
         const launcherThere = (await runtime.files.read(machine.launcher)) !== undefined;
         const change = { machine, settings, plan, setting: port.setting, lower: [], launcher: launcherThere ? 'remove' : undefined };
@@ -58,7 +58,7 @@ async function apply(args, runtime, change, unchanged) {
     if (change.launcher === 'write') {
         await runtime.files.write(machine.launcher, LAUNCHER_SCRIPT);
     }
-    const backup = next === undefined ? undefined : await writeClaudeSettings(runtime, machine, change.settings, next);
+    const backup = next === undefined ? undefined : await writeUserSettings(runtime, machine, change.settings, next);
     if (change.launcher === 'remove') {
         await runtime.files.remove(machine.launcher);
     }

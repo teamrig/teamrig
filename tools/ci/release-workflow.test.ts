@@ -28,8 +28,15 @@ function readRecord(path: string): JsonRecord {
 }
 
 describe('release.yml', () => {
-  it('runs on each push to main, and by hand', () => {
-    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
+  it('runs on each push to main, hourly and by hand', () => {
+    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}schedule:\n {4}- cron: '1 \* \* \* \*'\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
+  });
+
+  it('moves the release pull request only when the slot gate opens, so a push to main never restarts its ci', () => {
+    const text = job('release-please');
+    assert.match(text, /^ {6}- id: gate\n {8}run: node tools\/release\/pull-update-cli\.ts\n/m);
+    assert.match(text, /^ {10}skip-github-pull-request: \$\{\{ steps\.gate\.outputs\.update != 'true' \}\}$/m);
+    assert.ok(text.indexOf('id: gate') < text.indexOf('id: release'), 'the gate runs before release-please');
   });
 
   it("can publish main as it stands, for the first release, never by default", () => {
@@ -82,14 +89,14 @@ describe('release.yml', () => {
     assert.match(text, /^ {6}version: \$\{\{ steps\.version\.outputs\.version \}\}\n {6}sha: \$\{\{ steps\.version\.outputs\.sha \}\}\n/m);
   });
 
-  it('publishes with a read-only token, running no npm package, the commit and version the build took', () => {
+  it('publishes to the preview branch, started from the release branch, with a read-only token, running no npm package, the commit and version the build took', () => {
     const text = job('publish');
     assert.deepEqual(permissionsOf(text), ['contents: read']);
     assert.match(text, /^ {4}needs: build\n {4}if: \$\{\{ always\(\) && needs\.build\.result == 'success' \}\}$/m);
     assert.match(text, /^ {10}VERSION: \$\{\{ needs\.build\.outputs\.version \}\}\n {10}SOURCE: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
     assert.doesNotMatch(text, /^ {6}- run: .*\bnp[mx]\b/m);
     assert.match(text, /^ {10}ref: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
-    assert.match(text, /^ {6}- run: node tools\/release\/publish-cli\.ts --version "\$VERSION" --source "\$SOURCE"$/m);
+    assert.match(text, /^ {6}- run: node tools\/release\/publish-cli\.ts --version "\$VERSION" --source "\$SOURCE" --branch preview --seed release$/m);
   });
 
   it("pushes with the release environment's deploy key, the one actor the release rulesets let through", () => {

@@ -92,6 +92,14 @@ export class WatchedFiles implements Files {
     return this.inner.size(this.note(path, 'looked'));
   }
 
+  realPath(path: string): Promise<string | undefined> {
+    return this.inner.realPath(this.note(path, 'looked'));
+  }
+
+  isPlainFile(path: string): Promise<boolean> {
+    return this.inner.isPlainFile(this.note(path, 'looked'));
+  }
+
   private pathsOf(kind: CallKind): string[] {
     return this.seen.filter((call) => call.kind === kind).map((call) => call.path);
   }

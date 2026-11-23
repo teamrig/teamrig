@@ -1,0 +1,34 @@
+import { gitKeys } from "../../composition/git-keys.js";
+import { CREDENTIAL_QUIT, credentialOperationOf, parseCredentialRequest } from "../../core/git-credential.js";
+import { UsageError } from "../args.js";
+import { EXIT } from "../runtime.js";
+/**
+ * `teamrig git-credential <get|store|erase>`: git's credential helper for https to github.com. `get` answers with the
+ * key saved for the repository owner git names in the path, read from the credential store alone (no environment
+ * token stands in), or `quit=1` with a stderr line saying why, so git asks no later helper or prompt. `store` and
+ * `erase` keep nothing and change nothing: the keys are only teamrig's to save.
+ */
+export async function gitCredential(args, runtime) {
+    const operation = credentialOperationOf(args.positionals[0]);
+    // git calls it with the operation word alone; a line with any flag, --session and --team too, is not git's call.
+    if (operation === undefined || args.positionals.length !== 1 || args.common.size > 0) {
+        throw new UsageError('usage: teamrig git-credential <get|store|erase> (git runs it as a credential helper)');
+    }
+    const request = await runtime.readStdin();
+    if (operation !== 'get') {
+        return EXIT.ok;
+    }
+    const parsed = parseCredentialRequest(request);
+    const answer = parsed.kind === 'refused'
+        ? { stdout: CREDENTIAL_QUIT, note: `teamrig git-credential: no key given: ${parsed.why}` }
+        : await gitKeys(runtime.credentials).answer(parsed.ask);
+    for (const line of answer.stdout.split('\n')) {
+        if (line !== '') {
+            runtime.out.stdout(line);
+        }
+    }
+    if (answer.note !== undefined) {
+        runtime.out.stderr(answer.note);
+    }
+    return EXIT.ok;
+}

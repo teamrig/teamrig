@@ -4,7 +4,8 @@ import { REGISTER_COMMANDS, REGISTER_POSTING_FLAGS } from '../automode/lines.ts'
 import { ADD_ISSUE_FLAGS } from '../cli/commands/add-issue.ts';
 import { COMMAND_TABLE } from '../cli/run.ts';
 import { ClientInstalls, type ClientSearch, type WordAt } from '../exec/client-launch.ts';
-import { KIT_SHAPES, matchesKit, ownClientOf, type KitContext, type KitShape } from './route-kit.ts';
+import { KIT_SHAPES, kitCallOf, matchesKit, ownClientOf, type KitContext, type KitShape } from './route-kit.ts';
+import { READ_ROUTE_COMMANDS } from './route-read.ts';
 
 const CONTEXT: KitContext = { cli: COMMAND_TABLE, ownClient: async (word) => word === 'teamrig' };
 
@@ -20,17 +21,18 @@ describe('matchesKit', () => {
       [KIT_SHAPES.worktreeRemove, 'teamrig worktree remove C:/w/t1-x --session tr-x --delete-branch --dry-run'],
       [KIT_SHAPES.register, 'teamrig set T1 --session tr-x --status done --note x'],
       [KIT_SHAPES.register, 'teamrig inbox add --session tr-x --to teamrig --text x'],
-      [KIT_SHAPES.register, 'teamrig list'],
+      [KIT_SHAPES.register, 'teamrig inbox read'],
     ];
     for (const [shape, line] of routes) {
       assert.equal(await matches(shape, line), true, line);
     }
   });
 
-  it('takes every register command the CLI has', async () => {
+  it('takes every register command the CLI has but the reads, which the read route takes, so no line matches both', async () => {
     for (const command of REGISTER_COMMANDS) {
-      assert.equal(await matches(KIT_SHAPES.register, `teamrig ${command}`), true, command);
+      assert.equal(await matches(KIT_SHAPES.register, `teamrig ${command}`), !READ_ROUTE_COMMANDS.has(command), command);
     }
+    assert.equal(await matches(KIT_SHAPES.register, 'teamrig list'), false);
   });
 
   it('takes no add that posts its GitHub issue, so it asks as every GitHub write does, but takes an add kept local', async () => {
@@ -100,6 +102,22 @@ describe('matchesKit', () => {
     assert.equal(await matchesKit(KIT_SHAPES.merge, ['teamrig', 'merge', '--force'], context), false);
     assert.equal(await matchesKit(KIT_SHAPES.merge, [], context), false);
     assert.deepEqual(asked, ['./teamrig']);
+  });
+});
+
+describe('kitCallOf', () => {
+  it('gives the program word and the CLI reading of a line it reads', () => {
+    const call = kitCallOf(['teamrig', 'show', 'T1', '--session', 'tr-x'], COMMAND_TABLE);
+    assert.equal(call?.program, 'teamrig');
+    assert.equal(call?.parsed.command, 'show');
+    assert.deepEqual(call?.parsed.positionals, ['T1']);
+    assert.equal(call?.parsed.flags.get('session'), 'tr-x');
+  });
+
+  it('gives none for no words, a line the CLI refuses, a help request or a --', () => {
+    for (const words of [[], ['teamrig', 'list', '--no-such-flag'], ['teamrig', 'list', '--help'], ['teamrig', 'test', '--', 'x']]) {
+      assert.equal(kitCallOf(words, COMMAND_TABLE), undefined, words.join(' '));
+    }
   });
 });
 

@@ -9,20 +9,22 @@ import { RefusedError } from "./runtime.js";
  * read and write them: a missing file reads as empty and one that is not a JSON object is refused before anything is
  * written; a write keeps the old file in the kit's backups folder first.
  */
-/** The backup name of Claude Code's settings before a change. */
+/** The backup name of the host's user settings before a change: a stored file name, kept as it was. */
 const SETTINGS_BACKUP_NAME = 'claude-settings';
 /**
  * Every caller's whole work is that one file, so a host whose folders teamrig does not know refuses here, with its own
  * reason, before anything is read or written.
  */
 export function settingsTargetOf(runtime) {
+    const kitHome = resolveKitHome(runtime.env, runtime.userHome);
     return {
         settingsPath: pathsOf(runtime).userSettings(runtime.userHome),
-        backupsDir: join(resolveKitHome(runtime.env, runtime.userHome), 'backups'),
+        backupsDir: join(kitHome, 'backups'),
+        allowRecordPath: join(kitHome, 'synced-allow-rules.json'),
     };
 }
-/** Claude Code's user settings; a missing file reads as empty, one that is not a JSON object is refused. */
-export async function readClaudeSettings(runtime, path) {
+/** The host's user settings; a missing file reads as empty, one that is not a JSON object is refused. */
+export async function readUserSettings(runtime, path) {
     const text = await runtime.files.read(path);
     if (text === undefined) {
         return { json: {}, exists: false };
@@ -40,7 +42,7 @@ export async function readClaudeSettings(runtime, path) {
     return { json: raw, exists: true };
 }
 /** Writes the settings, keeping the old file first when there was one; returns where it was kept. */
-export async function writeClaudeSettings(runtime, target, settings, next) {
+export async function writeUserSettings(runtime, target, settings, next) {
     if (!settings.exists) {
         await runtime.files.write(target.settingsPath, formatConfig(next));
         return undefined;

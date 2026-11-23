@@ -1,4 +1,4 @@
-import { claudeProjectsDir, lastWriteOf } from "../../budget/discover.js";
+import { lastWriteOf } from "../../budget/discover.js";
 import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
@@ -22,7 +22,7 @@ import { refuseUnlessPerson, runBy, untoldRefusal } from "../agent-run.js";
 import { noPositionals, requiredFlag, UsageError } from "../args.js";
 import { closedByTeamrig, closedTimedWakeLine, closedWakeLine, wakeClosedSession } from "../closed-wake.js";
 import { hookLogOf } from "../hook-logs.js";
-import { identityOf } from "../host.js";
+import { identityOf, transcriptsFolderIfKnown } from "../host.js";
 import { callerOf, instantOf, sessionRef } from "../inputs.js";
 import { findTeam, openKit, openTeamKit, pastOrPresentIdOf, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
@@ -335,7 +335,7 @@ function wakeTargetOf(own, recipient) {
  */
 async function postWakes(runtime, own, recipients, text, now, when) {
     const wPerPct = await readTodayWPerPct(runtime, own.paths, own.config, now);
-    const projects = claudeProjectsDir(runtime.env, runtime.userHome);
+    const projects = transcriptsFolderIfKnown(runtime);
     const marksByTeam = new Map();
     const marksOf = (recipient) => {
         const read = marksByTeam.get(recipient.team) ?? inboxDepsOf(runtime, recipient.paths).marks.read().then((log) => log.marks);

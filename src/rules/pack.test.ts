@@ -388,7 +388,7 @@ describe('renderCorePack', () => {
     assert.match(inIsrael, /starts 00:30-02:00 IST \[/, "on the machine's clock, in winter");
     const summer = { ...RULES_CLOCK, now: new Date('2030-07-08T10:00:00.000Z') };
     assert.match(renderCorePack(testConfig({ ...cutoff, timeZone: 'Asia/Jerusalem' }), COMMAND, 'win32', summer), /starts 01:30-03:00 IDT \[/, "on the team's clock, in summer");
-    assert.match(pack, /Pace the week to 99\.5% of the limit, 0\.5% kept for incidents \[budget\]; waited-on answers are blockers, never budget-held\./);
+    assert.match(pack, /Pace the week to 99\.5% of the limit, 0\.5% kept for incidents \[budget\]; waited-on answers, p0s, blockers: never budget-held\./);
   });
 
   it('has owner questions stand alone, and carry the decision marker line only while tab status shows it', () => {

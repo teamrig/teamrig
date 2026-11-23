@@ -10,6 +10,7 @@ const SUMMARY: NamedTeamWeek = {
   accountUsedPct: 30,
   resetsAt: Date.parse('2030-01-14T01:00:00Z'),
   start: Date.parse('2030-01-07T01:00:00Z'),
+  startPct: 12.5,
   at: Date.parse('2030-01-08T10:00:00Z'),
   limits: [{ start: Date.parse('2030-01-06T08:00:00Z'), end: Date.parse('2030-01-07T01:00:00Z') }],
 };
@@ -21,23 +22,30 @@ describe('the team week summary', () => {
     assert.deepEqual(parseTeamWeek(text), SUMMARY);
   });
 
-  it('writes the pinned fields of its format: a field added to the file raises TEAM_WEEK_FORMAT', () => {
+  it('writes the pinned fields of its format: a field added to the file raises TEAM_WEEK_FORMAT, unless older readers may skip it', () => {
     const written: Readonly<Record<number, readonly string[]>> = {
       1: ['accountUsedPct', 'at', 'plannedPct', 'resetsAt', 'usedPct', 'v'],
       2: ['account', 'accountUsedPct', 'at', 'limits[].end', 'limits[].start', 'plannedPct', 'resetsAt', 'usedPct', 'v'],
-      3: ['account', 'accountUsedPct', 'at', 'limits[].end', 'limits[].start', 'plannedPct', 'resetsAt', 'start', 'usedPct', 'v'],
+      3: ['account', 'accountUsedPct', 'at', 'limits[].end', 'limits[].start', 'plannedPct', 'resetsAt', 'start', 'startPct', 'usedPct', 'v'],
     };
     assert.deepEqual(fieldPaths(JSON.parse(formatTeamWeek(SUMMARY))), written[TEAM_WEEK_FORMAT]);
   });
 
   it('reads a format 1 file, which an idle team keeps until its hooks write again, as naming no account, no stretch and no start (T1777, T2050, T2082)', () => {
-    const { account: _named, limits: _spans, start: _start, ...unnamed } = SUMMARY;
-    assert.deepEqual(parseTeamWeek(JSON.stringify({ v: 1, ...unnamed })), { ...SUMMARY, account: undefined, start: undefined, limits: [] });
+    const { account: _named, limits: _spans, start: _start, startPct: _from, ...unnamed } = SUMMARY;
+    assert.deepEqual(parseTeamWeek(JSON.stringify({ v: 1, ...unnamed })), { ...SUMMARY, account: undefined, start: undefined, startPct: 0, limits: [] });
   });
 
   it('reads a format 2 file, which an idle team keeps until its hooks write again, as naming no start (T2082)', () => {
-    const { start: _start, ...unstarted } = SUMMARY;
-    assert.deepEqual(parseTeamWeek(JSON.stringify({ v: 2, ...unstarted })), { ...SUMMARY, start: undefined });
+    const { start: _start, startPct: _from, ...unstarted } = SUMMARY;
+    assert.deepEqual(parseTeamWeek(JSON.stringify({ v: 2, ...unstarted })), { ...SUMMARY, start: undefined, startPct: 0 });
+  });
+
+  it('reads a format 3 file a teamrig before it wrote, or one whose use at the start is damaged, as starting at 0 (T4885)', () => {
+    const { startPct: _from, ...unfrom } = SUMMARY;
+    const stored = { v: TEAM_WEEK_FORMAT, ...unfrom };
+    assert.deepEqual(parseTeamWeek(JSON.stringify(stored)), { ...SUMMARY, startPct: 0 });
+    assert.deepEqual(parseTeamWeek(JSON.stringify({ ...stored, startPct: '12' })), { ...SUMMARY, startPct: 0 });
   });
 
   it('reads back a week that never sat at its limit as no stretches (T2050)', () => {

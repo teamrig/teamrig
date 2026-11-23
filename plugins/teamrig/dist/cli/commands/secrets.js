@@ -3,6 +3,7 @@ import { secretGuardOf, secretPatternsOf } from "../../hooks/secret-guard.js";
 import { CommitScanner } from "../../secret-guard/commit-scan.js";
 import { messageLines } from "../../secret-guard/git-adds.js";
 import { pushRanges, rangeArgs } from "../../secret-guard/push-range.js";
+import { MIN_GIT, versionText } from "../../requirements/requirements.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { MAX_TAG_DEPTH } from "../../secret-guard/secrets-git.js";
 import { UsageError, noPositionals, onePositional } from "../args.js";
@@ -61,7 +62,7 @@ export async function pushed(args, runtime) {
     for (const range of ranges) {
         const listed = git.commits(runtime.cwd, range);
         if (listed === undefined) {
-            throw new Error(`git cannot list the commits ${rangeArgs(range).join(' ')} in ${runtime.cwd} (the scan needs git 2.36 or later, to read what a merge's resolution added)`);
+            throw new Error(`git cannot list the commits ${rangeArgs(range).join(' ')} in ${runtime.cwd} (the scan needs git ${versionText(MIN_GIT)} or later, to read what a merge's resolution added)`);
         }
         for (const commit of listed) {
             commits.set(commit.sha, commit);

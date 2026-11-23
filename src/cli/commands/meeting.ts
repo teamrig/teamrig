@@ -17,6 +17,7 @@ import { MeetingSchedule } from '../../meeting/schedule.ts';
 import { SPOTLIGHT_LOG, spotlightHolderPath, spotlightLine, startSpotlight, type SpotlightPlace } from '../../meeting/spotlight.ts';
 import { MEETING_LAPSE_MS, MeetingStore, phaseOf, startingKindOf, stoppedAt, type Meeting, type MeetingPhase } from '../../meeting/state.ts';
 import { MergeLog } from '../../merge/merge-log.ts';
+import { pendingSteps } from '../../steps/pending.ts';
 import { goalScores, type BoardTeam, type GoalScore } from '../../register/goal-board.ts';
 import { windowOpensAfter } from '../../register/snapshot.ts';
 import type { Goal } from '../../register/goals.ts';
@@ -232,6 +233,7 @@ async function printAgenda(args: ParsedArgs, runtime: CliRuntime, mk: MeetingKit
   const lines = agendaLines({
     ...decisionAgendaOf(rolled, runtime, mk.now, phase.kind === 'none' ? [] : phase.meeting.carried),
     since,
+    steps: pendingSteps({ config: mk.kit.load }),
     lead: mk.lead,
     command: KIT_NAME,
     board: await goalBoard(runtime, mk, rolled),

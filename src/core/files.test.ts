@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, open, readdir, rm, stat, unlink } from 'node:fs/promises';
+import { mkdtemp, open, readdir, realpath, rm, stat, symlink, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isTemporaryName, nodeFiles } from './files.ts';
@@ -34,6 +34,24 @@ describe('nodeFiles', () => {
   it('reads a missing file as undefined and lists a missing folder as empty', async () => {
     assert.equal(await files.read(join(root, 'nope.txt')), undefined);
     assert.deepEqual(await files.list(join(root, 'nowhere')), []);
+  });
+
+  it('resolves a real path through a folder link and .., and tells a plain file from a folder, a link or nothing', async () => {
+    const folder = join(root, 'real-folder');
+    const file = join(folder, 'kept.json');
+    await files.write(file, '{}');
+    const junction = join(root, 'folder-link');
+    await symlink(folder, junction, 'junction');
+    const real = await realpath(file);
+    assert.equal(await files.realPath(join(junction, 'kept.json')), real);
+    assert.equal(await files.realPath(join(root, 'elsewhere', '..', 'real-folder', 'kept.json')), real);
+    assert.equal(await files.realPath(join(root, 'nope.json')), undefined);
+    assert.equal(await files.realPath(join(file, 'below-a-file')), undefined);
+    assert.equal(await files.isPlainFile(file), true);
+    assert.equal(await files.isPlainFile(folder), false);
+    assert.equal(await files.isPlainFile(junction), false);
+    assert.equal(await files.isPlainFile(join(root, 'nope.json')), false);
+    assert.equal(await files.isPlainFile(join(file, 'below-a-file')), false);
   });
 
   it('appends, creating folders, and reads back', async () => {

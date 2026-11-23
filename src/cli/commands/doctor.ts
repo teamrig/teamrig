@@ -1,12 +1,11 @@
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { launchModelProblem, launchOf, ownLaunchOf, type LaunchHost } from '../../config/launch.ts';
 import { Roster } from '../../config/roster.ts';
 import type { ContextFilesConfig, KitConfig } from '../../config/types.ts';
-import { KIT_NAME } from '../../core/home.ts';
+import { KIT_NAME, resolveKitHome } from '../../core/home.ts';
 import type { PathProbe } from '../../core/path-probe.ts';
 import { readContextFiles } from '../../doctor/context-files.ts';
 import { readSettingsDeny } from '../../doctor/deny-lines.ts';
-import { doctorFindings, formatFinding, type ConfiguredProject, type ContextInput, type PageProblem, type SecretDeny, type SessionLaunch } from '../../doctor/doctor.ts';
+import { doctorFindings, formatFinding, type CliPathState, type ConfiguredProject, type ContextInput, type PageProblem, type SecretDeny, type SessionLaunch } from '../../doctor/doctor.ts';
 import { readSessionLists } from '../../doctor/session-lists.ts';
 import { readSettingsEnv, sessionSettingsFiles } from '../../doctor/settings-env.ts';
 import { readShellHistory } from '../../doctor/shell-history.ts';
@@ -14,9 +13,10 @@ import { HiringLog } from '../../hiring/log.ts';
 import { retiredSessions } from '../../hiring/record.ts';
 import { inboxStatus } from '../../inbox/inbox.ts';
 import { JsonlRenameLog } from '../../names/log.ts';
+import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { launchHostOf, pathsIfKnown, permissionsIfKept } from '../host.ts';
+import { launchHostOf, modelsIfKnown, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
 import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
@@ -33,9 +33,10 @@ import { inboxDepsOf } from './inbox.ts';
  */
 export async function readContextInput(runtime: CliRuntime, project: string, skills: string, budgets: ContextFilesConfig): Promise<ContextInput> {
   const at = { paths: pathsIfKnown(runtime), userHome: runtime.userHome, project, skills };
+  const transcriptsFolder = transcriptsFolderIfKnown(runtime);
   return {
     contextFiles: { read: await readContextFiles(runtime.files, at), budgets },
-    sessionLists: await readSessionLists(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project),
+    sessionLists: transcriptsFolder === undefined ? undefined : await readSessionLists(runtime.transcripts, transcriptsFolder, project),
   };
 }
 
@@ -84,14 +85,15 @@ function pageProblemOf(check: PageCheck): PageProblem | undefined {
  * read from every team config of the kit home), and the text every call of a session in the project re-reads
  * (CLAUDE.md files, the memory index, the skill listing, and the lists of skills, deferred tools, agent types and
  * MCP server instructions the project's newest session transcript announced) against the team's `contextFiles` budgets. Last, what
- * silently overrides the model or effort a session or helper is given: `CLAUDE_CODE_EFFORT_LEVEL` or
- * `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` in doctor's own environment or in the `env` block of the user's or the
+ * silently overrides the model or effort a session or helper is given: the host's override variables
+ * (`HostModels.routingOverrides`) in doctor's own environment or in the `env` block of the user's or the
  * project's Claude Code settings, a session whose `launch` names a model but no effort, and a `team.project` or
  * `launch.<id>.project` that is no folder on this machine; and the local allow rules off `permissions.keepAllow` that
  * approve a whole tool or program or hold a credential (src/cli/allow-scope.ts); the secret deny lines no settings file
  * holds (src/doctor/deny-lines.ts); and the user's PowerShell history file when no PowerShell profile keeps
  * credentials out of it (src/doctor/shell-history.ts; the history is probed, never read); and a page webhook the team's
- * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed). It reads only and exits 0
+ * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed); and the kit home's
+ * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). It reads only and exits 0
  * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
  */
 /** Each session's launch as it starts on this host, with why the host would not run its model. */
@@ -101,6 +103,13 @@ function sessionLaunches(config: KitConfig, ids: readonly string[], host: Launch
     const modelProblem = launchModelProblem(launch, host);
     return { id, launch, ...(modelProblem === undefined ? {} : { modelProblem }) };
   });
+}
+
+/** Whether the kit home's bin folder is on the user's PATH, read where the PATH is kept, never the doctor's own PATH. */
+async function cliPathOf(runtime: CliRuntime, config: KitConfig): Promise<CliPathState> {
+  const { userPath } = runtime.restore;
+  const folder = cliLauncherFolder(resolveKitHome(runtime.env, runtime.userHome));
+  return { folder, where: userPath.where, onPath: await userPath.holds(folder), enabled: config.cliOnPath.enabled };
 }
 
 export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
@@ -126,6 +135,7 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     ...(await readContextInput(runtime, project, paths.skills, config.contextFiles)),
     tree: { problems: tree.problemsOf(paths.team), clashes: tree.nameClashesOf(paths.team) },
     env: runtime.env,
+    routingOverrides: modelsIfKnown(runtime)?.routingOverrides ?? [],
     settingsEnv: await readSettingsEnv(runtime.files, sessionSettingsOf(runtime, project)),
     settingsDeny: await readSecretDeny(runtime, project),
     wideAllow: await readWideAllow(runtime, { paths, config, project }),
@@ -133,6 +143,7 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     projects: await configuredProjects(runtime.probe, config, roster.ids),
     shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
     page: pageProblemOf(await pageCheckOf(runtime, paths.team)),
+    cliPath: await cliPathOf(runtime, config),
     budget: config.budget,
     now: new Date(runtime.clock.now()),
     zone: teamZone(config, runtime),

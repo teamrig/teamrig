@@ -1,5 +1,5 @@
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
-export const CONFIG_VERSION = 9;
+export const CONFIG_VERSION = 10;
 export const VERIFY_GATES = ['refuse', 'warn'];
 export function isVerifyGate(value) {
     return VERIFY_GATES.some((gate) => gate === value);
@@ -87,6 +87,10 @@ export function isDbClientVocabulary(value) {
 export const COMMIT_GATES = ['off', 'warn', 'refuse'];
 export function isCommitGate(value) {
     return COMMIT_GATES.some((gate) => gate === value);
+}
+export const UI_MODES = ['terminal', 'window', 'both'];
+export function isUiMode(value) {
+    return UI_MODES.some((mode) => mode === value);
 }
 /** The kinds of issue a task's issue is typed as (T3406): a design issue, a goal (a task planned after its parts), a bug, else a task. */
 export const ISSUE_KINDS = ['task', 'bug', 'goal', 'design'];

@@ -358,14 +358,16 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       task --task names, the oldest first: its creation, each status set, each change of its fields
       and a move to another team), stats (the register's numbers over --range of the team's days,
       as teamrig stats counts them, with their Health levels, each count's tasks by id; --owner keeps
-      one session's; validUntil says when a number counted in days of age next goes stale), inbox
-      (--session's own lines, marking none read: the unread ones and the read ones of the last --since
-      hours, 24 unless given), sessions (every session of your tree of teams: its place, hire, state
-      and unread count; a hire's and a retirement's words only for your own team and the teams above
-      it), meetings (the team's scheduled and started meetings by time, as meeting list --json prints
-      them), config (the team, its zone, its priorities and every key of the team config as config get
-      --json reads it, a key naming where a secret is kept without its value; with no team here config
-      alone is answered, with the teams of this machine to join).
+      one session's; validUntil says when a number counted in days of age next goes stale), steps
+      (the steps teamrig needs its person to take, as teamrig steps lists them: each one's title, why,
+      what it changes and what the person types), inbox (--session's own lines, marking none read: the
+      unread ones and the read ones of the last --since hours, 24 unless given), sessions (every
+      session of your tree of teams: its place, hire, state and unread count; a hire's and a
+      retirement's words only for your own team and the teams above it), meetings (the team's
+      scheduled and started meetings by time, as meeting list --json prints them), config (the team,
+      its zone, its priorities and every key of the team config as config get --json reads it, a key
+      naming where a secret is kept without its value; with no team here config alone is answered,
+      with the teams of this machine to join).
       --conversation: the host's id of the conversation the program runs in; sessions then names the
       session holding it (self), and inbox serves that session's when no --session is given. --team: a
       team above yours, for tasks, plan, goals, history, stats, meetings and config. --task: the one
@@ -429,11 +431,13 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL
-  ui [--session <id|name>] [--team <team>]   starts the dedicated UI in this terminal, for the team here or the
-      one named, on that session's view; it runs the entry script ui.path names, else the released UI
-      this teamrig pins, fetched once into the kit home's ui folder, held to its sha256 at each start
-      and given only a few variables; refused while neither is there, ui.path names no file or the
-      release speaks an interface version this teamrig does not serve
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI, for the
+      team here or the one named, on that session's view; --mode, else ui.mode (terminal), shows it in
+      this terminal, in a window of its own opened as open.terminal says, or in both; a window that
+      cannot open falls back to this terminal and says so; it runs the entry script ui.path names, else
+      the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
+      at each start and given only a few variables; refused while neither is there, ui.path names no
+      file or the release speaks an interface version this teamrig does not serve
   page test                    posts one page marked TEST through the team's page webhook, as an expired login's
       page goes; prints which team's alerts key paged, or why none went and fails, never the URL
   compact [--dry-run] [--from-history]   archives the task list's log and rewrites its snapshot, so reads
@@ -528,10 +532,17 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       at its head, with the token saved for the owner; refused, writing nothing, unless one task holds it
       (its ref), the caller owns that task, the caller's leader approved it with a note naming the full
       40-hex head (a root team's lead needs no one), and the pull request is open, no draft, on its default
-      branch and at the full head --head names; --check prints what it would do and writes nothing
+      branch and at the full head --head names, or at that head's same commits rebased onto a newer base,
+      patch for patch (a CARRIED line says so); --check prints what it would do and writes nothing
   pr merge <owner/name#n> --head <sha> [--check]   lands that pull request with the same gates, also
       refused while it conflicts, is queued already or its head's checks have not all passed: into its
       merge queue where the repository has one, else merged by rebase, both pinned to the head read
+  ci rerun <owner/name> --run <id>   starts the failed jobs of one CI run of one of the team's
+      repositories again, with the token saved for its owner (which needs Actions Read and write), for a
+      run a glitch on the host's side failed; refused unless the run ended failed, cancelled or timed
+      out, was started by a push, pull_request, merge_group or schedule, and ran fewer than 3 times;
+      the id is the number after /runs/ in the run's address; changes no code, setting or secret, so
+      it needs no task or approval
   issue links [--repo <owner/name>] [--yes]   puts the task tree on the issues of github.repos: each
       task planned after or waiting on another, both mirrored in one repository, is marked blocked by
       it on GitHub, and a part of one whole becomes its sub-issue; without --yes it reads the links
@@ -596,9 +607,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   statusline uninstall [--yes] takes it back out: the status line before it returns
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
-      worktree) into Claude Code's autoMode.environment, the facts auto mode trusts; run it again after a
-      config change or an upgrade; without --yes it shows the change and writes nothing
-  automode uninstall [--yes]   takes the team's lines back out, leaving every other line
+      worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
+      own allow rules for the commands that touch only the team's files, taking out only rules it wrote
+      that are no longer synced; run it again after a config change or an upgrade; without --yes it shows
+      the change and writes nothing
+  automode uninstall [--yes]   takes the team's lines back out, leaving every other line and teamrig's
+      allow rules
   permissions trim [--all] [--yes]   removes the local allow rules off the config's permissions.keepAllow
       that approve a whole tool or program or hold a credential (--all: every rule) from the team's
       Claude Code settings, its worktrees' too; it counts them by class, never printing a rule; without
@@ -610,6 +624,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   setup restore [<stamp>] [--yes] [--remove-new]   lists the backups, or previews putting one back:
       changed and deleted files and files made since; --yes backs the setup up first, then writes and
       prints the restore that undoes it; --remove-new also removes the files made since
+  setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
+      no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
+      earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
+      it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; it never
+      trusts the hooks for you: trust them in the host's own hooks review after each write
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
       skill and agent type listings a session loads, with chars and tokens; files over 6,000 chars, skill
@@ -628,6 +647,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       config is checked before it is written, the old one kept as a backup; REFUSED for a read-only key
   config validate | config migrate [--yes]   migrate shows an older config rewritten in this format and
       the first teamrig that reads it, as a tab on an older one refuses every write after; --yes writes it
+  steps | steps run <id> [--yes]   the one-time steps teamrig needs you to take, such as updating the
+      team settings' layout: what each changes and what to type; run without --yes shows the change and
+      where its backup goes, --yes takes it after the backup, removing the step's earlier backups; --yes
+      is for the person alone, REFUSED where an agent runs it
   commits check --base <ref> [--tip <ref>]   commits in base..tip (default HEAD) over the size rule
       with no reason line; any is REFUSED, for a merge script or CI
   changes --since <version|date> [--until <version|date>] [--file <path>] [--area <area>]   what changed
@@ -637,6 +660,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       pre-push hooks: a secret the staged change, the message or the pushed commits and tags add is REFUSED,
       named by place and shape, never by value; default shapes and paths outside a team, plus the team's own
       inside one
+  stamp commit <file>   for git's commit-msg hook: adds Made-with: teamrig <version> and, in a session,
+      Made-by naming its program, model and effort to the commit message; commits.stamp false leaves it as written
   worktree add <branch> | --task <T id> [--type <branch type>] [--repo <name>]   makes a session's new worktree the same way every time: fetches
       the default branch origin/HEAD names, adds the worktree on the new branch from it, in a folder
       named after the branch (each / as -) in delivery.repos.<name>.worktreeFolder (default
@@ -646,7 +671,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       {type}/{id}-{slug}, such as feat/t12-parse-input: a task's feat, a bug's fix); --type: its
       branch type instead, such as docs or chore. REFUSED before any change for a branch or folder
       already there, a task the register lacks, or a pattern word the task has none of; FAILED when
-      its setup fails, the worktree kept
+      its setup fails, the worktree kept. Then makes teamrig git-credential git's credential helper
+      in the repository's config when origin is an https URL a connector serves and a key is saved
+      for its owner (the host's helper list reset first, teamrig run by absolute path, refused from
+      inside a worktree); otherwise a NOTE, git left as it was. Undo: git config --local
+      --remove-section credential.https://<host>
   worktree remove <path> [--delete-branch [--base <ref>]] [--dry-run] [--session <id|name>]   removes a linked git worktree:
       unlinks each link in it (such as a node_modules junction) and sees it gone, so git cannot follow
       one and empty its target, then runs git worktree remove; a folder git no longer lists, directly in
@@ -798,11 +827,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       reset blackout, the deploy freezes and jobs still open, and what each repository with a deploy block
       has pushed but not deployed (it fetches each main checkout)
   test [--session <id|name>] -- <command ...>   runs a test command in the shell, writes all it printed
-      to a log (each session keeps its newest 20) and prints one PASS or FAIL line, then each failing
-      test within tests.maxFailureChars; in a team through teamrig queue --kind test, one node spec
-      file as --small, anything more as a heavy step; exit 0 when the command passed, 1 otherwise. One
-      quoted word runs as a shell line ("npm run build && npm test"); several run as one command, each
-      word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
+      to a log as it arrives (each session keeps its newest 20) and prints one PASS or FAIL line, then each
+      failing test within tests.maxFailureChars; a process the command left holding its output is let go
+      2 s after the command ends, and the log says so; in a team through teamrig queue --kind test, one
+      node spec file as --small, anything more as a heavy step; exit 0 when the command passed, 1
+      otherwise. One quoted word runs as a shell line ("npm run build && npm test"); several run as one
+      command, each word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
   gh -- <gh args ...>          runs one gh call with the key saved for the owner of the repository it
       reaches (-R, a gh api repos/, orgs/ or users/ path, a gh repo command's repository, else GH_REPO,
       else the folder's git remotes), never the machine's gh login; REFUSED when it reaches more than
@@ -810,6 +840,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  git-credential get | store | erase
+      (run by git as its credential helper for https to github.com: get
+      answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
+      stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by Claude Code, hook JSON on stdin)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

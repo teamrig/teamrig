@@ -31,10 +31,31 @@ describe('release publish CLI', () => {
     assert.equal(repo.git('show', `${commit}:plugins/teamrig/dist/index.js`), 'built one');
   });
 
+  it('publishes to the branch it names, started from its seed', () => {
+    const origin = join(repo.outside, 'origin.git');
+    repo.git('init', '-q', '--bare', origin);
+    repo.git('remote', 'add', 'origin', origin);
+    repo.write('plugins/teamrig/src.ts', 'one');
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', 'change one');
+    const stable = repo.git('rev-parse', 'HEAD').trim();
+    repo.git('push', '-q', origin, `${stable}:refs/heads/release`);
+    repo.write('plugins/teamrig/src.ts', 'two');
+    repo.git('add', '-A');
+    repo.git('commit', '-q', '-m', 'change two');
+    repo.write('plugins/teamrig/dist/index.js', 'built two');
+    const source = repo.git('rev-parse', 'HEAD').trim();
+    const run = repo.run(CLI, ['--version', '0.449.0', '--source', source, '--branch', 'preview', '--seed', 'release']);
+    assert.equal(run.status, 0, run.stderr);
+    const commit = repo.git('ls-remote', origin, 'refs/heads/preview').split('\t')[0] ?? '';
+    assert.equal(repo.git('log', '-1', '--format=%P', commit).trim(), `${stable} ${source}`);
+    assert.equal(repo.git('ls-remote', origin, 'refs/heads/release').split('\t')[0], stable);
+  });
+
   it('exits 2 without a version or a source', () => {
     const run = repo.run(CLI, ['--version', '0.448.0']);
     assert.equal(run.status, 2);
-    assert.equal(run.stdout, 'release: pass --version <MAJOR.MINOR.PATCH> and --source <main commit sha>\n');
+    assert.equal(run.stdout, 'release: pass --version <MAJOR.MINOR.PATCH> and --source <main commit sha> [--branch <name> --seed <branch it starts from>]\n');
   });
 
   it('exits 2 with the reason when the publication is refused', () => {

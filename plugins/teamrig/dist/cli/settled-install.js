@@ -1,9 +1,9 @@
 import { join, posix } from 'node:path';
 import { isRecord, isStringArray } from "../core/guards.js";
-import { claudeConfigDir, KIT_NAME } from "../core/home.js";
+import { KIT_NAME } from "../core/home.js";
 import { appliesTo } from "../plugin-store/installs.js";
 import { newestNear, storeTimesOf } from "../plugin-store/store.js";
-import { pluginIfKept } from "./host.js";
+import { pathsIfKnown, pluginIfKept } from "./host.js";
 /**
  * How long the plugin store must stand still before the idle pass reopens a session (T1100): a tab that loads plugins
  * while an install is copied loads part of one and runs without teamrig's hooks (T561, T1002), and no one watches a
@@ -53,15 +53,15 @@ async function lackOf(files, install) {
  * Whether a session reopened now for `project` would load whole plugins: each teamrig install that applies to it has
  * its hooks file, the mod modules that file names and the CLI they run, and no part of the store an install writes
  * changed within REOPEN_SETTLE_MS (`storeTimesOf`: a copy names the new version before it ends). On a host that keeps
- * no plugin store, or with no plugin list, there is no store to wait for (a plugin run from a folder); a list that
+ * no plugin store or whose folders teamrig does not know, or with no plugin list, there is no store to wait for (a plugin run from a folder); a list that
  * does not read as the host's is a store mid-write.
  */
 export async function installStateOf(runtime, project) {
     const plugin = pluginIfKept(runtime);
-    if (plugin === undefined) {
+    const pluginsFolder = pathsIfKnown(runtime)?.pluginsFolder(runtime.userHome);
+    if (plugin === undefined || pluginsFolder === undefined) {
         return SETTLED;
     }
-    const pluginsFolder = join(claudeConfigDir(runtime.env, runtime.userHome), 'plugins');
     const text = await runtime.files.read(join(pluginsFolder, plugin.listFile));
     if (text === undefined) {
         return SETTLED;

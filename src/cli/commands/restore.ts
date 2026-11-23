@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { DEFAULT_HEADROOM } from '../../config/defaults.ts';
 import { ownLaunchOf } from '../../config/launch.ts';
 import type { TerminalChoice } from '../../config/types.ts';
@@ -24,7 +23,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
-import { cacheBinOf, childEnvOf, launcherOf, transcriptsOf } from '../host.ts';
+import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from '../host.ts';
 import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
 import { claudeExit, claudeSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
@@ -185,7 +184,7 @@ async function endSession(runtime: CliRuntime, entry: RestoreEntry): Promise<End
 /** The restore over this machine: the kit home's sessions folder, every team on it, its processes and terminals. */
 async function restoreDepsOf(runtime: CliRuntime, terminal: TerminalChoice | undefined): Promise<RestoreDeps> {
   const kitHome = resolveKitHome(runtime.env, runtime.userHome);
-  const projectsDir = claudeProjectsDir(runtime.env, runtime.userHome);
+  const projectsDir = transcriptsFolderOf(runtime);
   const finder = new TranscriptFinder(runtime.files, runtime.probe, projectsDir);
   const { teams } = await loadTree(runtime);
   return {
