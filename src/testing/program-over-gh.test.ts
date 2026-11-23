@@ -27,6 +27,14 @@ describe('programOverGh', () => {
     assert.equal(result, RESULT);
   });
 
+  it('hands a run of gh by its path to the runner, a Windows one too', async () => {
+    const { gh, asked } = recordingGh();
+    await programOverGh(gh)({ program: '/usr/bin/gh', args: ['api', 'user'] });
+    await programOverGh(gh)({ program: 'C:\\Tools\\GH.EXE', args: ['api', 'user'] });
+    assert.equal(asked.length, 2);
+    await assert.rejects(programOverGh(gh)({ program: '/usr/bin/ghost', args: [] }), new NotGhError('/usr/bin/ghost'));
+  });
+
   it('runs gh in an empty environment when the request sets none', async () => {
     const { gh, asked } = recordingGh();
     await programOverGh(gh)({ program: GH_PROGRAM, args: ['api', 'user'] });

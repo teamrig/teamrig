@@ -3,8 +3,14 @@ import assert from 'node:assert/strict';
 import { RepoTokens } from '../adapters/connectors/github/tokens.ts';
 import type { ProgramRequest, ProgramResult } from '../core/program-runner.ts';
 import { FakeCredentials, ownerToken, TEST_OWNERS } from '../testing/fake-credentials.ts';
+import { FakePathProbe } from '../testing/fake-processes.ts';
+import { MemoryFiles } from '../testing/memory-files.ts';
 import type { GithubRepos } from '../hooks/gh-write-refusals.ts';
 import { ghPass, type GhPassOutcome, type GhPassPorts } from './gh-pass.ts';
+
+/** Where PATH finds the installed gh and git. */
+const GH = '/bin/gh';
+const GIT = '/bin/git';
 
 /** A program runner that answers `git remote -v` with a listing and `gh` with one result, recording every request. */
 class FakePrograms {
@@ -14,7 +20,7 @@ class FakePrograms {
 
   readonly run = async (request: ProgramRequest): Promise<ProgramResult> => {
     this.requests.push(request);
-    if (request.program === 'git') {
+    if (request.program === GIT) {
       return { end: { kind: 'exited', code: 0 }, stdout: this.remotes, stderr: '' };
     }
     return this.gh;
@@ -22,7 +28,7 @@ class FakePrograms {
 
   /** The gh runs, without the git reads. */
   ghRuns(): ProgramRequest[] {
-    return this.requests.filter((request) => request.program === 'gh');
+    return this.requests.filter((request) => request.program === GH);
   }
 }
 
@@ -47,16 +53,30 @@ interface Setup {
   readonly ports: GhPassPorts;
 }
 
-function setup(options: { readonly env?: Record<string, string>; readonly github?: GithubRepos } = {}): Setup {
+interface SetupOptions {
+  readonly env?: Record<string, string>;
+  readonly github?: GithubRepos;
+  /** The files PATH finds; default the installed gh and git. */
+  readonly programs?: readonly string[];
+  readonly files?: MemoryFiles;
+}
+
+const CHILD_ENV = { PATH: '/bin', GH_CONFIG_DIR: '/kit/gh-config' };
+
+function setup(options: SetupOptions = {}): Setup {
   const programs = new FakePrograms();
   const printed = new Printed();
   const credentials = new FakeCredentials().savesTokensFor(TEST_OWNERS);
   const base = { PATH: '/bin', GITHUB_TOKEN: 'session-held' };
   const ports: GhPassPorts = {
     run: programs.run,
-    keys: new RepoTokens(credentials, { PATH: '/bin' }),
+    keys: new RepoTokens(credentials, CHILD_ENV),
+    childEnv: CHILD_ENV,
+    search: { env: { PATH: '/bin' }, platform: 'linux', probe: new FakePathProbe({ files: options.programs ?? [GH, GIT] }) },
+    configDir: '/kit/gh-config',
+    files: options.files ?? new MemoryFiles(),
     env: { ...base, ...options.env },
-    cwd: 'C:/w',
+    cwd: '/w',
     github: options.github ?? TEAM,
     out: printed,
   };
@@ -75,7 +95,7 @@ describe('ghPass: the key of the owner a gh call reaches (T4897)', () => {
     assert.deepEqual(outcome, { kind: 'ran', ok: true });
     const [run] = programs.ghRuns();
     assert.deepEqual(run?.args, ['pr', 'view', '5', '-R', 'globex/api']);
-    assert.deepEqual(run?.env, { PATH: '/bin', GH_TOKEN: ownerToken('globex') });
+    assert.deepEqual(run?.env, { ...CHILD_ENV, GH_TOKEN: ownerToken('globex') });
     assert.deepEqual(printed.stdoutLines, ['ok']);
   });
 
@@ -101,12 +121,13 @@ describe('ghPass: the key of the owner a gh call reaches (T4897)', () => {
   it('takes the folder’s remote when the words name none, and GH_REPO over it', async () => {
     const fromFolder = setup();
     await ghPass(['issue', 'list'], fromFolder.ports);
-    assert.deepEqual(fromFolder.programs.requests[0]?.args, ['-C', 'C:/w', 'remote', '-v']);
+    assert.deepEqual(fromFolder.programs.requests[0]?.args, ['-C', '/w', 'remote', '-v']);
     assert.equal(fromFolder.programs.ghRuns()[0]?.env?.['GH_TOKEN'], ownerToken('acme'));
+    assert.deepEqual(fromFolder.programs.requests[0]?.env, CHILD_ENV);
 
     const fromVariable = setup({ env: { GH_REPO: 'globex/api' } });
     await ghPass(['issue', 'list'], fromVariable.ports);
-    assert.equal(fromVariable.programs.requests.filter((request) => request.program === 'git').length, 0);
+    assert.equal(fromVariable.programs.requests.filter((request) => request.program === GIT).length, 0);
     assert.equal(fromVariable.programs.ghRuns()[0]?.env?.['GH_TOKEN'], ownerToken('globex'));
   });
 
@@ -165,5 +186,33 @@ describe('ghPass: the key of the owner a gh call reaches (T4897)', () => {
     assert.deepEqual(await ghPass(['pr', 'view', '5', '-R', 'globex/api'], ports), { kind: 'ran', ok: false });
     assert.equal(printed.stderrLines[0], 'HTTP 403: Resource not accessible by personal access token');
     assert.match(printed.stderrLines[1] ?? '', /key saved for globex; it may lack the right or be expired: save a new one with: save /u);
+  });
+
+  it('runs gh and git by the absolute path PATH finds them at, never a bare name (T4961)', async () => {
+    const { programs, ports } = setup();
+    await ghPass(['issue', 'list'], ports);
+    assert.deepEqual(programs.requests.map((request) => request.program), [GIT, GH]);
+  });
+
+  it('refuses a gh or git PATH finds in the folder, or none, before any key is read (T4961)', async () => {
+    for (const [programs, pattern] of [
+      [['/w/gh', GIT], /PATH finds gh as \/w\/gh, inside \/w,/u],
+      [[GH], /git is not on PATH/u],
+    ] as const) {
+      const run = setup({ programs });
+      const search = { ...run.ports.search, env: { PATH: '/w:/bin' } };
+      assert.match(refusalOf(await ghPass(['pr', 'view', '5', '-R', 'globex/api'], { ...run.ports, search })), pattern);
+      assert.equal(run.programs.requests.length, 0);
+      assert.deepEqual(run.credentials.reads, []);
+    }
+  });
+
+  it('refuses a gh config folder holding a login or a setting, before any key is read (T4961)', async () => {
+    for (const [file, text] of [['/kit/gh-config/hosts.yml', 'github.com:\n'], ['/kit/gh-config/config.yml', 'browser: evil\n']] as const) {
+      const run = setup({ files: new MemoryFiles({ [file]: text }) });
+      assert.match(refusalOf(await ghPass(['pr', 'view', '5', '-R', 'globex/api'], run.ports)), /gh's config folder holds/u, file);
+      assert.equal(run.programs.requests.length, 0);
+      assert.deepEqual(run.credentials.reads, []);
+    }
   });
 });
