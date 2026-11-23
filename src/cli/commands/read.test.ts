@@ -423,7 +423,7 @@ describe('teamrig read sessions', () => {
     const resetsAt = Date.parse('2030-01-09T01:00:00.000Z');
     const at = kit.clock.now();
     const start = resetsAt - 6 * 24 * 60 * 60 * 1000;
-    await kit.files.write(join(teamHomeOf('web'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    await kit.files.write(join(teamHomeOf('web'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 4.5, plannedPct: 10, accountUsedPct: 48, resetsAt, start, startPct: 0, at, limits: [] }));
     await kit.files.write(join(teamHomeOf('ops'), 'state', ...TEAM_WEEK_IN_STATE), '{"torn');
     const before = served(await kit.run(READ_SESSIONS));
     const teams = Array.isArray(before['teams']) ? before['teams'] : [];
@@ -437,7 +437,7 @@ describe('teamrig read sessions', () => {
       ],
     );
     assert.equal(JSON.stringify(before).includes('"main"'), false, 'the account is not served');
-    await kit.files.write(join(teamHomeOf('app'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 1, plannedPct: 2, accountUsedPct: 48, resetsAt, start, at, limits: [] }));
+    await kit.files.write(join(teamHomeOf('app'), 'state', ...TEAM_WEEK_IN_STATE), formatTeamWeek({ account: 'main', usedPct: 1, plannedPct: 2, accountUsedPct: 48, resetsAt, start, startPct: 0, at, limits: [] }));
     assert.notEqual(served(await kit.run(READ_SESSIONS))['revision'], before['revision']);
   });
 
