@@ -153,6 +153,8 @@ export interface RunOptions {
   readonly timeZone?: string;
   /** The programs the CLI starts; default none is installed. */
   readonly processes?: Processes;
+  /** Whether stdin and stdout are a terminal a person types in; default true, false as under an AI CLI's shell tool. */
+  readonly interactive?: boolean;
   /** The running session's processes; default the kit's own (`CliHarness.sessionProcesses`). */
   readonly sessionProcesses?: SessionProcesses;
   /** How the CLI waits, such as one that changes the world mid-wait; default the clock's, which only moves time. */
@@ -277,6 +279,7 @@ export class CliHarness {
       ...(options.secretsGit === undefined ? {} : { secretsGit: options.secretsGit }),
       ...(options.platform === undefined ? {} : { platform: options.platform }),
       ...(options.processes === undefined ? {} : { processes: options.processes }),
+      ...(options.interactive === undefined ? {} : { interactive: options.interactive }),
       sessionProcesses: options.sessionProcesses ?? this.sessionProcesses,
       ...(options.shell === undefined ? {} : { shell: options.shell }),
       ...(options.gh === undefined ? {} : { run: programOverGh(options.gh) }),

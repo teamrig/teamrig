@@ -75,6 +75,11 @@ export interface CliRuntime {
   /** The staged change and the pushed commits `teamrig secrets` scans, read as the git hook that runs it sees them. */
   readonly secretsGit: SecretsGit;
   readonly out: Output;
+  /**
+   * Whether this run's stdin and stdout are a terminal a person types in: false under an AI CLI's shell tool or a
+   * pipe, where `teamrig ui` cannot draw and opens a split of the session's terminal instead (T5105).
+   */
+  readonly interactive: boolean;
   readonly platform: NodeJS.Platform;
   /** The ports of the AI CLI this run works in, built for an environment and platform: read them with `hostOf` (host.ts). */
   readonly host: HostSource;

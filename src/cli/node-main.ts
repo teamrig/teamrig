@@ -117,6 +117,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     commitLog: GIT_COMMIT_LOG,
     secretsGit: gitSecrets(process.env),
     out: entry.out,
+    interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
     platform: process.platform,
     host,
     shippedHosts,
