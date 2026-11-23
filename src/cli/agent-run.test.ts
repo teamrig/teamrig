@@ -1,8 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
+import { HOST_ADAPTERS } from '../composition/adapters.ts';
+import { loadShippedHosts, type HostSource, type ShippedHosts } from '../composition/host-ports.ts';
+import { loadHost } from '../composition/loader.ts';
+import { isUnsupported } from '../ports/host/index.ts';
+import { hostDeps } from '../testing/adapter-deps.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { NO_MARK_NAMED, refuseUnlessPerson, runBy, untoldRefusal, type RunBy } from './agent-run.ts';
 import { RefusedError } from './runtime.ts';
@@ -37,7 +41,25 @@ describe('runBy', () => {
     }
     assert.deepEqual(by(OTHER_HOST, { OTHER_AGENT: 'yes' }), { kind: 'agent', mark: 'OTHER_AGENT' });
     assert.deepEqual(by(OTHER_HOST, { OTHER_TOOL: '1' }), { kind: 'agent', mark: 'OTHER_TOOL' });
-    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, { 'claude-code': SHIPPED_HOST, other: OTHER_HOST }), { kind: 'agent', mark: 'OTHER_AGENT' });
+    assert.deepEqual(by(SHIPPED_HOST, { OTHER_AGENT: '1' }, { 'claude-code': shippedHost(SHIPPED_HOST), other: shippedHost(OTHER_HOST) }), { kind: 'agent', mark: 'OTHER_AGENT' });
+  });
+
+  it("counts the marks a shipped host declares while its session launcher is not built yet, so its agent never reads as the person", async () => {
+    const shippedHosts = await loadShippedHosts(hostDeps().run);
+    const unbuilt = await Promise.all(
+      Object.keys(HOST_ADAPTERS).map(async (id) => {
+        const load = await loadHost(id);
+        assert.ok(load.kind !== 'refused', `the shipped host adapter ${id} did not load`);
+        return isUnsupported(load.value.create(hostDeps()).launcher) ? load.value.declaration.sessionVariables.marks : [];
+      }),
+    );
+    const marks = unbuilt.flat();
+    assert.ok(marks.length > 0, 'no shipped host declares marks while its launcher is unbuilt: this spec would prove nothing');
+    for (const mark of marks) {
+      for (const host of [SHIPPED_HOST, bare]) {
+        assert.deepEqual(runBy({ host, shippedHosts, env: { [mark]: '1' }, platform: 'linux' }), { kind: 'agent', mark });
+      }
+    }
   });
 
   it('takes no variable but a mark as one: an identity variable set alone is no mark', () => {

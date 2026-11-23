@@ -1,13 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
-import { NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { UsageError } from './args.ts';
 import { chooseHost, type StartingHosts, type TeamHosts } from './host-choice.ts';
 import { RefusedError } from './runtime.ts';
 
-const ONE: ShippedHosts = { 'claude-code': SHIPPED_HOST };
-const TWO: ShippedHosts = { 'claude-code': SHIPPED_HOST, 'antigravity-cli': NO_PATHS_HOST };
+const ONE: ShippedHosts = { 'claude-code': shippedHost(SHIPPED_HOST) };
+const TWO: ShippedHosts = { 'claude-code': shippedHost(SHIPPED_HOST), 'antigravity-cli': shippedHost(NO_PATHS_HOST) };
 
 /** The process's default host stands apart from every shipped one, so a spec sees which of them was taken. */
 function starting(shippedHosts: ShippedHosts, host: HostSource = NO_SESSION_HOST): StartingHosts {

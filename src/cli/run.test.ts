@@ -14,7 +14,7 @@ import { configChangedMeanwhile, hired } from '../testing/config-race.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import { ASK_REFUSED_NOTE } from '../hooks/permission.ts';
 import { APP, bash, CLAUDE_SESSION, CliHarness, CONFIG_PATH, contextOf, decisionOf, EVENTS_PATH, KIT, POINTER, reasonOf, SKILLS_DIR, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
-import { HOOKS_ONLY_HOST, hostTelling, NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostTelling, NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { cutLineMessage } from './cmd-shim.ts';
 import { FULL_HELP_POINTER } from './help.ts';
 import { SHORT_FORM_CHARS } from './reports.ts';
@@ -1135,7 +1135,7 @@ describe('runCli: which team', () => {
   it('works in the host --host names, and refuses an unknown one or one the team does not list (T4752)', async () => {
     const kit = new CliHarness(CURRENT_TEAM);
     // The default host tells no project folder, so only a run in the named host finds the team from APP's pointer.
-    const shippedHosts = { 'claude-code': hostTelling({ projectDir: APP }), other: SHIPPED_HOST };
+    const shippedHosts = { 'claude-code': shippedHost(hostTelling({ projectDir: APP })), other: shippedHost(SHIPPED_HOST) };
     const options: RunOptions = { cwd: ELSEWHERE, host: NO_SESSION_HOST, shippedHosts };
     assert.deepEqual(await kit.run(['config', 'validate', '--host', 'claude-code'], options), VALID);
     const unknown = await kit.run(['config', 'validate', '--host', 'nope'], options);

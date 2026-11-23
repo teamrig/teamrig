@@ -26,7 +26,7 @@ export async function chooseHost(command: string, named: string | undefined, sta
   const ids = Object.keys(shippedHosts);
   const several = ids.length > 1;
   if (named !== undefined) {
-    const source = shippedHosts[named];
+    const source = shippedHosts[named]?.ports;
     if (source === undefined) {
       throw new UsageError(`--host ${named} names no host ${KIT_NAME} ships; it ships ${ids.join(', ')}`, command);
     }
@@ -40,5 +40,5 @@ export async function chooseHost(command: string, named: string | undefined, sta
     return starting.host;
   }
   const [first] = (await teamHosts()) ?? [];
-  return (first === undefined ? undefined : shippedHosts[first]) ?? starting.host;
+  return (first === undefined ? undefined : shippedHosts[first]?.ports) ?? starting.host;
 }

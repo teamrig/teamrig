@@ -1,4 +1,4 @@
-import { loadHostPorts, type HostSource } from '../composition/host-ports.ts';
+import { loadHostPorts, type HostSource, type ShippedHost } from '../composition/host-ports.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import {
   isUnsupported,
@@ -26,6 +26,15 @@ import { bareHost } from './bare-host.ts';
  * wrote through the code teamrig runs with, so a pin fails when that code changes.
  */
 export const SHIPPED_HOST: HostSource = await loadHostPorts(hostDeps().run);
+
+/**
+ * A shipped-host entry for `ports`, as `loadShippedHosts` gives one: the session variables it declares are its session
+ * launcher's when that launcher is built, else none. For a spec that ships a fake host beside the real ones.
+ */
+export function shippedHost(ports: HostSource): ShippedHost {
+  const { launcher } = ports({ env: {}, platform: 'linux' });
+  return { ports, sessionVariables: isUnsupported(launcher) ? { marks: [], identity: [] } : launcher.variables };
+}
 
 /**
  * A bare host (`bareHost`) whose hooks still run: the shipped host's hook bridge and tool calls, and no other port.
