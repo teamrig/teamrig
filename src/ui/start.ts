@@ -15,8 +15,13 @@ export interface UiStart {
   readonly node: string;
   /** This CLI's entry script. */
   readonly script: string;
-  /** The team the UI shows. */
+  /** The team the UI shows first. */
   readonly team: string;
+  /**
+   * Whether the person named the team: the UI is then pinned to it, given `--team`; else it covers every team on the
+   * host and follows the person across them (T5249), starting from `team`.
+   */
+  readonly pinned: boolean;
   /** The session whose view it opens on; absent: the team's. */
   readonly session?: string;
   readonly cwd: string;
@@ -57,15 +62,16 @@ export function releasedEnv(env: Env): Env {
 }
 
 /**
- * The UI as one program run in this terminal: `node <entry> --team <team> [--session <id>]`, in the caller's folder.
- * Its team goes in `$TEAMRIG_TEAM` too, over the caller's, as the CLI it calls back takes the caller's team from that
- * variable, else the folder: a window opened by Windows Terminal has neither of the session's variables, and its
- * folder may be another team's project, whose reads of this team refuse (T5249).
+ * The UI as one program run in this terminal: `node <entry> [--team <team>] [--session <id>]`, in the caller's
+ * folder, `--team` only when the team is pinned. Its team goes in `$TEAMRIG_TEAM` too, over the caller's, as the UI
+ * starts on that team when none is pinned, and the CLI it calls back takes the caller's team from that variable, else
+ * the folder: a window opened by Windows Terminal has neither of the session's variables, and its folder may be
+ * another team's project, whose reads of this team refuse (T5249).
  */
 export function uiRequest(start: UiStart): RunRequest {
   return {
     command: start.node,
-    args: [start.entry, '--team', start.team, ...(start.session === undefined ? [] : ['--session', start.session])],
+    args: [start.entry, ...(start.pinned ? ['--team', start.team] : []), ...(start.session === undefined ? [] : ['--session', start.session])],
     cwd: start.cwd,
     env: { ...start.env, [ENV.team]: start.team, [UI_ENV.cli]: start.script, [UI_ENV.node]: start.node },
   };

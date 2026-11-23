@@ -25,12 +25,12 @@ function world(): { processes: FakeProcesses; probe: FakePathProbe } {
 }
 
 describe('teamrig ui', () => {
-  it('runs the entry ui.path names under its own node, for the team here, in the caller’s folder', async () => {
+  it('runs the entry ui.path names under its own node, for every team, starting on the team here, in the caller’s folder', async () => {
     const { processes, probe } = world();
     const result = await new CliHarness(WITH_UI).run(['ui'], { processes, probe, env: { PATH: '/bin' } });
     assert.deepEqual(result, { code: 0, stdout: [], stderr: [] });
     assert.deepEqual(processes.ran, [
-      { command: NODE, args: [ENTRY, '--team', 'app'], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/bin', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE } },
+      { command: NODE, args: [ENTRY], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/bin', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE } },
     ]);
   });
 
@@ -126,7 +126,7 @@ describe('teamrig ui', () => {
       assert.equal(http.requests.length, 1);
       assert.deepEqual(
         processes.ran.map((ran) => [ran.command, normalisePath(ran.args[0] ?? ''), ran.args.slice(1), ran.env]),
-        [0, 1].map(() => [NODE, RELEASED_ENTRY, ['--team', 'app'], { TEAMRIG_HOME: KIT, PATH: '/bin', LANG: 'C.UTF-8', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE }]),
+        [0, 1].map(() => [NODE, RELEASED_ENTRY, [], { TEAMRIG_HOME: KIT, PATH: '/bin', LANG: 'C.UTF-8', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE }]),
       );
     });
 
@@ -154,7 +154,28 @@ describe('teamrig ui', () => {
   describe('--mode and ui.mode (T5105)', () => {
     const IN_TMUX = { ...WITH_UI, open: { terminal: 'tmux' } };
     // The window's UI carries this kit home, so it reads the same teams as the command that opened it.
+    // A session named pins its team, so the window's UI is given it; with neither, the window covers every team.
     const WINDOW_ARGV = [NODE, SCRIPT, 'ui', '--mode', 'terminal', '--team', 'app', '--home', resolve(APP, KIT)];
+    const WINDOW_ARGV_ALL = [NODE, SCRIPT, 'ui', '--mode', 'terminal', '--home', resolve(APP, KIT)];
+
+    it('opens Windows Terminal in a window of the UI’s own, never the team’s session window (T5249)', async () => {
+      const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+      const config = { ...WITH_UI, open: { terminal: 'windows-terminal', teamWindow: true } };
+      const result = await new CliHarness(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
+      assert.deepEqual(result.stdout, ['OPENED the UI in a windows-terminal window']);
+      assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
+        ['wt.exe', ['-w', 'teamrig-ui', 'new-tab', '--title', 'teamrig ui', '-d', APP, '--', ...WINDOW_ARGV_ALL]],
+      ]);
+    });
+
+    it('from a folder of no team, starts on the team the person last typed in (T5249)', async () => {
+      const kit = new CliHarness(WITH_UI, null);
+      kit.files.write(join(KIT, 'last-typed.json'), '{"v":1,"team":"app","session":"alpha","tab":"t","at":"2026-11-23T16:00:00.000Z"}\n');
+      const { processes, probe } = world();
+      const result = await kit.run(['ui'], { processes, probe, cwd: resolve('/', 'elsewhere') });
+      assert.equal(result.code, 0);
+      assert.deepEqual([processes.ran[0]?.args, processes.ran[0]?.env['TEAMRIG_TEAM']], [[ENTRY], 'app']);
+    });
 
     function opening(): { processes: FakeProcesses; probe: FakePathProbe } {
       return { processes: new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' }), probe: new FakePathProbe({ files: [ENTRY] }) };
@@ -184,15 +205,15 @@ describe('teamrig ui', () => {
       const { processes, probe } = opening();
       const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe });
       assert.deepEqual([result.code, result.stdout], [0, ['OPENED the UI in a tmux window']]);
-      assert.deepEqual(processes.started[0]?.args.slice(5), WINDOW_ARGV);
-      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+      assert.deepEqual(processes.started[0]?.args.slice(5), WINDOW_ARGV_ALL);
+      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY]]);
     });
 
     it('falls back to this terminal, saying why, when no window can open', async () => {
       const processes = new FakeProcesses();
       const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
       assert.deepEqual([result.code, result.stdout], [0, ['NOTE no terminal window opened (tmux: tmux is not installed); the UI shows in this terminal']]);
-      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+      assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY]]);
     });
 
     it('opens no window on a UI that cannot start', async () => {
@@ -233,7 +254,7 @@ describe('teamrig ui', () => {
           'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
           'NOTE no terminal window opened (tmux: tmux is not installed); the UI shows in this terminal',
         ]);
-        assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+        assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY]]);
       });
 
       it('both opens the window and the split, and runs nothing here', async () => {

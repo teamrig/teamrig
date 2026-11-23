@@ -43,7 +43,7 @@ describe('releasedEnv', () => {
   });
 });
 
-const START = { entry: '/pane/out/ui/main.js', node: '/bin/node', script: '/kit/dist/cli/main.js', team: 'app', cwd: '/work/app', env: { PATH: '/bin' } };
+const START = { entry: '/pane/out/ui/main.js', node: '/bin/node', script: '/kit/dist/cli/main.js', team: 'app', pinned: true, cwd: '/work/app', env: { PATH: '/bin' } };
 
 describe('uiRequest', () => {
   it('runs the entry under this CLI’s node for the team, in the caller’s folder', () => {
@@ -51,6 +51,12 @@ describe('uiRequest', () => {
     assert.equal(request.command, '/bin/node');
     assert.deepEqual(request.args, ['/pane/out/ui/main.js', '--team', 'app']);
     assert.equal(request.cwd, '/work/app');
+  });
+
+  it('names --team only when the team is pinned, and names it in TEAMRIG_TEAM either way (T5249)', () => {
+    const request = uiRequest({ ...START, pinned: false });
+    assert.deepEqual(request.args, ['/pane/out/ui/main.js']);
+    assert.equal(request.env['TEAMRIG_TEAM'], 'app');
   });
 
   it('names the session only when one is given', () => {
