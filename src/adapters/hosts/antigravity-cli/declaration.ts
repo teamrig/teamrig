@@ -22,7 +22,7 @@ export const declaration: HostDeclaration = {
   id: 'antigravity-cli',
   name: 'Antigravity CLI',
   sessionVariables: {
-    marks: ['ANTIGRAVITY_AGENT'],
+    marks: ['ANTIGRAVITY_CONVERSATION_ID'],
     identity: ['ANTIGRAVITY_CONVERSATION_ID'],
   },
   manifest: {

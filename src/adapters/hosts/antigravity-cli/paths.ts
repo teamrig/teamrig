@@ -34,5 +34,8 @@ export function hostPaths(platform: HostDeps['platform']): HostPaths {
     scratchpadOf: () => unsupportedPath('scratchpadOf'),
     planFile: () => unsupportedPath('planFile'),
     shellSnapshots: () => unsupportedPath('shellSnapshots'),
+    transcriptsFolder: () => unsupportedPath('transcriptsFolder'),
+    pluginsFolder: () => unsupportedPath('pluginsFolder'),
+    loginFile: () => undefined,
   };
 }

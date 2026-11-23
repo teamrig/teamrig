@@ -34,11 +34,11 @@ export async function chooseHost(command: string, named: string | undefined, sta
     if (listed !== undefined && !listed.includes(named)) {
       throw new RefusedError(`--host ${named} is not one of the team's hosts (${listed.join(', ')}): add it to hosts in the team config first`);
     }
-    return source;
+    return source.ports;
   }
   if (!several) {
     return starting.host;
   }
   const [first] = (await teamHosts()) ?? [];
-  return (first === undefined ? undefined : shippedHosts[first]) ?? starting.host;
+  return (first === undefined ? undefined : shippedHosts[first]?.ports) ?? starting.host;
 }

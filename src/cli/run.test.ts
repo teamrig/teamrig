@@ -1135,7 +1135,11 @@ describe('runCli: which team', () => {
   it('works in the host --host names, and refuses an unknown one or one the team does not list (T4752)', async () => {
     const kit = new CliHarness(CURRENT_TEAM);
     // The default host tells no project folder, so only a run in the named host finds the team from APP's pointer.
-    const shippedHosts = { 'claude-code': hostTelling({ projectDir: APP }), other: SHIPPED_HOST };
+    const emptyVariables = { marks: [], identity: [] };
+    const shippedHosts = {
+      'claude-code': { ports: hostTelling({ projectDir: APP }), sessionVariables: emptyVariables },
+      other: { ports: SHIPPED_HOST, sessionVariables: emptyVariables },
+    };
     const options: RunOptions = { cwd: ELSEWHERE, host: NO_SESSION_HOST, shippedHosts };
     assert.deepEqual(await kit.run(['config', 'validate', '--host', 'claude-code'], options), VALID);
     const unknown = await kit.run(['config', 'validate', '--host', 'nope'], options);

@@ -26,4 +26,30 @@ describe('the Antigravity CLI adapter', () => {
     assert.equal(ports.statusLine, statusLine);
     assert.equal(isUnsupported(ports.transcripts), true);
   });
+
+  it('sets every declared session mark in both recorded agy 1.5.8 hook and run_command environments', () => {
+    // Names-only env vars added by standalone agy 1.5.8 in clean-env live runs (values omitted).
+    const sessionStartHookVars = [
+      'ANTIGRAVITY_CONVERSATION_ID',
+      'PROMPT',
+    ];
+    const runCommandToolVars = [
+      'ANTIGRAVITY_AGENT',
+      'ANTIGRAVITY_AGENTAPI_EXE',
+      'ANTIGRAVITY_APP_DATA_DIR',
+      'ANTIGRAVITY_CONVERSATION_ID',
+      'ANTIGRAVITY_CSRF_TOKEN',
+      'ANTIGRAVITY_LS_ADDRESS',
+      'ANTIGRAVITY_LS_VERSION',
+      'ANTIGRAVITY_PROJECT_ID',
+      'ANTIGRAVITY_SOURCE_METADATA',
+      'ANTIGRAVITY_TRAJECTORY_ID',
+    ];
+    const marks = declaration.sessionVariables?.marks ?? [];
+    assert.ok(marks.length > 0);
+    for (const mark of marks) {
+      assert.equal(sessionStartHookVars.includes(mark), true, `${mark} missing from recorded SessionStart hook env`);
+      assert.equal(runCommandToolVars.includes(mark), true, `${mark} missing from recorded run_command tool env`);
+    }
+  });
 });
