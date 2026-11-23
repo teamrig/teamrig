@@ -20,7 +20,7 @@ export interface RestoreTeam {
    */
   readonly terminals: ReadonlyMap<string, TerminalChoice>;
   /**
-   * The Claude Code sessions teamrig closed (the idle pass, `teamrig close`) and has not reopened since: their newest
+   * The host sessions teamrig closed (the idle pass, `teamrig close`) and has not reopened since: their newest
    * session-log record is a close (src/sessions/log.ts `closedOf`). The restore leaves their tabs closed (#767).
    */
   readonly closed: ReadonlySet<string>;

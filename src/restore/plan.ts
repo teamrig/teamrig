@@ -86,6 +86,7 @@ export interface JudgeFacts {
 }
 
 export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
+  const session = entry.hostSession;
   const place = facts.placeOf({ startedAs: entry.entrypoint, sessionKind: entry.sessionKind });
   if (place === 'elsewhere') {
     return { verdict: 'discard', reason: entry.entrypoint === undefined ? 'not a terminal session' : `not a terminal session (${entry.entrypoint})` };
@@ -103,21 +104,21 @@ export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
     return { verdict: 'discard', reason: 'stale' };
   }
   // Before `active since logon`: a tab that hung after this logon began is still hung (10-31, T1744).
-  if (facts.running.has(entry.hostSession) && facts.stalled.has(entry.hostSession)) {
+  if (facts.running.has(session) && facts.stalled.has(session)) {
     return { verdict: 'hung', reason: `hung: mid-turn, its transcript unwritten for ${HUNG_AFTER_MS / 3_600_000} h` };
   }
   if (entry.updatedAt >= facts.since) {
     return { verdict: 'keep', reason: 'active since logon' };
   }
-  if (facts.running.has(entry.hostSession)) {
+  if (facts.running.has(session)) {
     return { verdict: 'keep', reason: 'still running' };
   }
   // `claude --resume` needs the transcript; a session that never got a first prompt has none.
-  if (!facts.transcripts.has(entry.hostSession)) {
+  if (!facts.transcripts.has(session)) {
     return { verdict: 'discard', reason: 'no transcript' };
   }
   // A job's hooks may not see its session kind, and a tab sent to a job never records an end: its transcript tells.
-  const kind = facts.kinds.get(entry.hostSession);
+  const kind = facts.kinds.get(session);
   if (kind?.background === true) {
     return { verdict: 'discard', reason: 'background session' };
   }
@@ -126,7 +127,7 @@ export function judgeEntry(entry: RestoreEntry, facts: JudgeFacts): Judgement {
   }
   // Ended on purpose, whatever end its SessionEnd hook recorded after the close: work or an answer reopens it, with a
   // reopen record that takes it off this set (#767).
-  if (facts.closedByTeamrig.has(entry.hostSession)) {
+  if (facts.closedByTeamrig.has(session)) {
     return { verdict: 'discard', reason: 'closed by teamrig' };
   }
   if (entry.endedAt === undefined) {
