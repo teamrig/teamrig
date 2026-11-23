@@ -13,6 +13,7 @@ import { ENV } from '../core/home.ts';
 import { inboxLineOf } from '../inbox/inbox.ts';
 import { lineHash } from '../inbox/line-hash.ts';
 import type { RunRequest } from '../open/processes.ts';
+import { LastTypedStore } from '../sessions/last-typed.ts';
 import { SessionLog } from '../sessions/log.ts';
 import { formatTabNeed } from '../tabs/need.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
@@ -170,6 +171,9 @@ describe('hook wake-check', () => {
     const woke = answerOf(await check(kit));
     assert.ok(isRecord(woke) && woke['kind'] === 'wake', 'it woke');
     assert.deepEqual(await keptPrompt(kit), { tab: ALPHA_TAB, text: woke['text'] });
+    const prompted = await kit.run(['hook', 'inbox-reminder'], { env: { TEAMRIG_SESSION: 'alpha' }, stdin: JSON.stringify({ session_id: ALPHA_TAB, cwd: APP, prompt: woke['text'] }) });
+    assert.equal(prompted.code, EXIT.ok, prompted.stderr.join('\n'));
+    assert.equal(await new LastTypedStore(kit.files, KIT).read(), undefined, "teamrig's wake leaves the last-typed record as it was");
   });
 
   it('never wakes for less urgent work by default, and wakes for p2 when wake.priority is 2, costed cold with no transcript', async () => {
