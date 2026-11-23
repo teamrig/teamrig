@@ -43,7 +43,7 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
 
 /**
  * The session a merge runs for (T2984, security condition C4): the one session of team `team` that the merging Claude
- * Code tab `claudeSession` is bound to (`tabSessionOf`), which must be the one `callerText` (`$TEAMRIG_SESSION`) names,
+ * Code tab `hostSession` is bound to (`tabSessionOf`), which must be the one `callerText` (`$TEAMRIG_SESSION`) names,
  * so a typed name moves no merge to another session's task. Refused when the config does not load or the tab is not
  * bound to that session alone.
  */

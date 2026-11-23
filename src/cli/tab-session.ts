@@ -6,7 +6,7 @@ import type { CliRuntime } from './runtime.ts';
 
 /**
  * The team session a Claude Code tab acts as when it claims one (T2984, security condition C1): the one area every
- * inbox mark of `claudeSession` names, on the roster, and the same session `named` (a `--session` flag or
+ * inbox mark of `hostSession` names, on the roster, and the same session `named` (a `--session` flag or
  * `$TEAMRIG_SESSION`) looks up to. Undefined otherwise, so neither a typed name nor the environment moves a tab to
  * another session, and a tab that ever read another session's inbox acts as nobody.
  */

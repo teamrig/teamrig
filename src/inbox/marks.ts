@@ -95,7 +95,7 @@ export function lastHostSessionOf(marks: readonly InboxMark[], area: string): st
 }
 
 /**
- * The session a read as `area` must not move the tab off (T3081): the area the tab `claudeSession` is
+ * The session a read as `area` must not move the tab off (T3081): the area the tab `hostSession` is
  * bound to, when that is another area still on the roster (`onRoster`). The guards take a tab's session from its
  * newest mark, so a tool call's read binds the tab only once. Undefined when
  * the read binds nothing new: no Claude Code session, a tab bound to no area or to `area`, or to one that left.

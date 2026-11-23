@@ -74,7 +74,7 @@ export interface BindDeps {
 }
 
 /**
- * The mark that binds `claudeSession` to `area`: the area's newest read position (line, last line's
+ * The mark that binds `hostSession` to `area`: the area's newest read position (line, last line's
  * fingerprint and when it was read) under the new Claude Code session, so nothing counts as read that
  * was unread. An area never read gets the position before its first line, dated now.
  */

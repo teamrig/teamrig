@@ -25,7 +25,7 @@ export async function resumeVerdictOf(runtime: CliRuntime, paths: TeamPaths, hir
   }
 }
 
-/** Whether Claude Code session `claudeSession` (undefined: none on record) in `project` is small and recent enough to resume. */
+/** Whether Claude Code session `hostSession` (undefined: none on record) in `project` is small and recent enough to resume. */
 export async function hostSessionVerdict(runtime: CliRuntime, hiring: HiringConfig, hostSession: string | undefined, project: string): Promise<ResumeVerdict> {
   try {
     const last = hostSession === undefined ? undefined : await lastSessionOf(runtime, hostSession, project);
@@ -48,7 +48,7 @@ export interface LastSession {
   readonly tokens: number | undefined;
 }
 
-/** Measures Claude Code session `claudeSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
+/** Measures Claude Code session `hostSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
 export function lastSessionOf(runtime: CliRuntime, hostSession: string, project: string): Promise<LastSession> {
   return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, hostSession));
 }

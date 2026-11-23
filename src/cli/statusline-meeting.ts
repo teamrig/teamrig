@@ -7,7 +7,7 @@ import { teamsAboveOf, type LoadedTeam } from './root-team.ts';
 import type { CliRuntime } from './runtime.ts';
 
 /**
- * The meeting mark of the status line of `claudeSession`, a tab of team `own` (T2513), as the own team's
+ * The meeting mark of the status line of `hostSession`, a tab of team `own` (T2513), as the own team's
  * `meeting.statusLine` shows it: undefined with the marks off or no meeting on its team or a team above, each daily
  * one of which covers its cards (T2985). Only a tab of the own team can be the meeting tab, a booked meeting's too, so
  * the tab's session is looked up there alone, and only while that team's daily meeting is open or a booked one is on,

@@ -33,7 +33,7 @@ function setup(files: Readonly<Record<string, string>> = {}): { files: MemoryFil
   return { files: memory, deps: { inboxes: new InboxDir(memory, DIR), marks: new JsonlMarkLog(new PlainLogFile(memory, MARKS)), shown: new JsonlMarkLog(new PlainLogFile(memory, SHOWN)) } };
 }
 
-/** A line of `inbox-shown.jsonl`: the prompt hook showed `claudeSession` the area's lines through `line`. */
+/** A line of `inbox-shown.jsonl`: the prompt hook showed `hostSession` the area's lines through `line`. */
 function shownLine(area: string, line: string, through: number, hostSession: string): string {
   return `${JSON.stringify({ v: 1, area, line: through, at: NOW.toISOString(), claudeSession: hostSession, lastLineHash: lineHash(line) })}\n`;
 }

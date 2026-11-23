@@ -52,7 +52,7 @@ describe('indexMarks', () => {
   });
 });
 
-describe('lastClaudeSessionOf', () => {
+describe('lastHostSessionOf', () => {
   it('finds the newest Claude Code session still bound to the area', () => {
     const at = '2030-01-07T09:00:00.000Z';
     const other = 'ffffffff-0000-4000-8000-000000000001';

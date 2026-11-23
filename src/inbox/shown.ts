@@ -15,7 +15,7 @@ export interface InjectCaps {
 
 export const INJECT_CAPS: InjectCaps = { maxLines: 5, maxChars: 1500 };
 
-/** The newest mark the hook left for `claudeSession` on `area`; null when it showed it none of the area's lines. */
+/** The newest mark the hook left for `hostSession` on `area`; null when it showed it none of the area's lines. */
 export function newestShownOf(marks: readonly InboxMark[], area: string, hostSession: string | null): InboxMark | null {
   return hostSession === null ? null : (marks.findLast((mark) => mark.area === area && mark.hostSession === hostSession) ?? null);
 }
