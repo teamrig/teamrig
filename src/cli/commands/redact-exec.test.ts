@@ -91,6 +91,11 @@ describe('teamrig redact-exec', () => {
       shell: { run: async () => ({ end: { kind: 'signal', signal: 'SIGTERM' }, output: '' }) },
     });
     assert.equal(signaled.code, 128 + constants.signals.SIGTERM);
+
+    const unknownSignal = await harness.run(['redact-exec', '--', 'sleep', '10'], {
+      shell: { run: async () => ({ end: { kind: 'signal', signal: 'SIGUNKNOWN' }, output: '' }) },
+    });
+    assert.equal(unknownSignal.code, 128 + 15);
   });
 
   it('passes --shell to the shell runner and decodes --encoded-command', async () => {
@@ -116,14 +121,27 @@ describe('teamrig redact-exec', () => {
 
     const badEncoded = await harness.run(['redact-exec', '--encoded-command', '!!!']);
     assert.equal(badEncoded.code, 64);
+
+    const both = await harness.run(['redact-exec', '--encoded-command', encoded, '--', 'echo', 'hi']);
+    assert.equal(both.code, 64);
+
+    const emptyEncoded = await harness.run(['redact-exec', '--encoded-command', encodePrompt('   ')]);
+    assert.equal(emptyEncoded.code, 64);
   });
 
-  it('leaves output unredacted when secretGuard.redact is false', async () => {
-    const harness = new CliHarness({ ...TEAM, secretGuard: { redact: false } });
-    const res = await harness.run(['redact-exec', '--', 'env'], {
+  it('uses TEAMRIG_SESSION when --session is omitted and leaves output unredacted when secretGuard.redact is false', async () => {
+    const envHarness = new CliHarness(REVIEWED);
+    const envRes = await envHarness.run(['redact-exec', '--', 'env'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
       shell: { run: async () => ({ end: { kind: 'exited', code: 0 }, output: `token=${FAKE_TOKEN}\n` }) },
     });
-    assert.equal(res.code, 0);
+    assert.match(envRes.stderr.at(-1) ?? '', /bravo rotates it in T1\./);
+
+    const harness = new CliHarness({ ...TEAM, secretGuard: { redact: false } });
+    const res = await harness.run(['redact-exec', '--', 'env'], {
+      shell: { run: async () => ({ end: { kind: 'exited', code: 3 }, output: `token=${FAKE_TOKEN}\n` }) },
+    });
+    assert.equal(res.code, 3);
     assert.deepEqual(res.stdout, [`token=${FAKE_TOKEN}`]);
     assert.deepEqual(res.stderr, []);
   });
