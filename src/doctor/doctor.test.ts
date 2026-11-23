@@ -43,6 +43,7 @@ function input(overrides: Partial<DoctorInput> & { readonly names?: Record<strin
     sessionLists: undefined,
     tree: { problems: [], clashes: [] },
     env: {},
+    routingOverrides: shippedModels().routingOverrides,
     settingsEnv: [],
     settingsDeny: {
       files: [{ kind: 'deny', path: '/u/.claude/settings.json', deny: SECRET_DENY_LINES }],
@@ -323,6 +324,12 @@ describe('doctorFindings of model and effort overrides', () => {
       FORCE_FROM('the environment doctor runs in'),
       FORCE_FROM(`the env block of ${USER}`),
     ]);
+  });
+
+  it('is quiet on a host with no override variables, even with the variables set and a settings file it could not read', () => {
+    const set = { CLAUDE_CODE_EFFORT_LEVEL: 'high', CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' };
+    const unreadable: SettingsEnv = { kind: 'unreadable', path: USER };
+    assert.deepEqual(lines(input({ routingOverrides: [], env: set, settingsEnv: [unreadable, settings(PROJECT, set)] })), []);
   });
 
   it('flags a settings file whose env block it could not read, and still checks the others', () => {

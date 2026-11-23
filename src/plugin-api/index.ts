@@ -127,6 +127,7 @@ export {
   type ReadCall,
   type ReplyCall,
   type ReplyEntry,
+  type RoutingOverride,
   type RunningProgram,
   type ScheduledCarryEntry,
   type ScheduledJob,

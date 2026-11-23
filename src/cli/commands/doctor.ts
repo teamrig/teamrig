@@ -16,7 +16,7 @@ import { JsonlRenameLog } from '../../names/log.ts';
 import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { launchHostOf, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
+import { launchHostOf, modelsIfKnown, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
 import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
@@ -85,8 +85,8 @@ function pageProblemOf(check: PageCheck): PageProblem | undefined {
  * read from every team config of the kit home), and the text every call of a session in the project re-reads
  * (CLAUDE.md files, the memory index, the skill listing, and the lists of skills, deferred tools, agent types and
  * MCP server instructions the project's newest session transcript announced) against the team's `contextFiles` budgets. Last, what
- * silently overrides the model or effort a session or helper is given: `CLAUDE_CODE_EFFORT_LEVEL` or
- * `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` in doctor's own environment or in the `env` block of the user's or the
+ * silently overrides the model or effort a session or helper is given: the host's override variables
+ * (`HostModels.routingOverrides`) in doctor's own environment or in the `env` block of the user's or the
  * project's Claude Code settings, a session whose `launch` names a model but no effort, and a `team.project` or
  * `launch.<id>.project` that is no folder on this machine; and the local allow rules off `permissions.keepAllow` that
  * approve a whole tool or program or hold a credential (src/cli/allow-scope.ts); the secret deny lines no settings file
@@ -135,6 +135,7 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     ...(await readContextInput(runtime, project, paths.skills, config.contextFiles)),
     tree: { problems: tree.problemsOf(paths.team), clashes: tree.nameClashesOf(paths.team) },
     env: runtime.env,
+    routingOverrides: modelsIfKnown(runtime)?.routingOverrides ?? [],
     settingsEnv: await readSettingsEnv(runtime.files, sessionSettingsOf(runtime, project)),
     settingsDeny: await readSecretDeny(runtime, project),
     wideAllow: await readWideAllow(runtime, { paths, config, project }),

@@ -3,7 +3,7 @@ import { isDefaultModel } from '../config/launch.ts';
 import type { Roster } from '../config/roster.ts';
 import { describeNameClash, describeTreeProblem, type NameClash, type TreeProblem } from '../config/tree.ts';
 import type { BudgetConfig, ContextFilesConfig, KitConfig, LaunchConfig } from '../config/types.ts';
-import { ENV, type Env } from '../core/home.ts';
+import type { Env } from '../core/home.ts';
 import { isReservedName, RESERVED_RULE } from '../core/ids.ts';
 import type { PathKind } from '../core/path-probe.ts';
 import { MS_PER_DAY, MS_PER_MINUTE, utcMinuteOf } from '../core/time.ts';
@@ -11,6 +11,7 @@ import type { TimeZone } from '../core/zone.ts';
 import { unreadSince } from '../inbox/inbox.ts';
 import type { Unread } from '../inbox/unread.ts';
 import type { RenameLogRead } from '../names/rename.ts';
+import type { RoutingOverride } from '../ports/host/index.ts';
 import { wideAllowText } from '../permissions/report.ts';
 import type { WideAllow } from '../permissions/trim.ts';
 import { describeRequirement, type RequirementProblem } from '../requirements/requirements.ts';
@@ -46,8 +47,10 @@ export const UNREAD_INBOX_DAYS = 7;
  * - `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`: a broken link in the
  *   team's tree of teams (see `TreeProblem`);
  * - `name-two-teams`: a session name this team shares with another team, though names are machine-wide;
- * - `effort-env`: `CLAUDE_CODE_EFFORT_LEVEL` set, which beats every `--effort`, `/effort` and per-call Agent effort;
- * - `model-env`: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set, which at 1 beats every per-call Agent model;
+ * - `effort-env`: the host's effort override variable set (Claude Code: `CLAUDE_CODE_EFFORT_LEVEL`), which beats every
+ *   effort a session or helper is given;
+ * - `model-env`: the host's helper model override variable set (Claude Code: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`), which
+ *   beats every per-call helper model;
  * - `settings-json`: a Claude Code settings file that is not a JSON object, so its `env` block went unchecked;
  * - `launch-effort`: a session's `launch` names a model but no effort, so it starts at the model's default effort;
  * - `launch-model`: a session's `launch` names a model this host does not run, so `open` refuses to start it;
@@ -201,6 +204,8 @@ export interface DoctorInput {
   readonly tree: { readonly problems: readonly TreeProblem[]; readonly clashes: readonly NameClash[] };
   /** The environment doctor runs in; only the variables that override a model or effort choice are read. */
   readonly env: Env;
+  /** The host's variables that override a model or effort choice (`HostModels.routingOverrides`); none where the host knows no models. */
+  readonly routingOverrides: readonly RoutingOverride[];
   /** The local allow rules off `permissions.keepAllow` that approve a whole tool or program or hold a credential (`readWideAllow`), as counts. */
   readonly wideAllow: WideAllow;
   /** The `env` blocks of the Claude Code settings files the team's sessions read (`readSettingsEnv`). */
@@ -476,43 +481,28 @@ function treeFindings({ tree, command }: DoctorInput): Finding[] {
   ];
 }
 
-/** A variable that overrides a choice made anywhere else, and what it does to the sessions and helpers that get it. */
-interface RoutingOverride {
-  readonly kind: 'effort-env' | 'model-env';
-  readonly name: string;
-  readonly effect: (value: string) => string;
-}
-
-const ROUTING_OVERRIDES: readonly RoutingOverride[] = [
-  {
-    kind: 'effort-env',
-    name: ENV.effortLevel,
-    effect: (value) => `it beats every --effort (the team config's launch efforts among them), /effort and per-call Agent effort, so a session or helper that gets it runs at ${value} whatever it was given`,
-  },
-  {
-    kind: 'model-env',
-    name: ENV.subagentModelForce,
-    effect: () => 'set to 1 it beats every per-call Agent model, so a helper that gets it never runs on the model its caller gives it',
-  },
-];
+const OVERRIDE_FINDING = { effort: 'effort-env', model: 'model-env' } as const;
 
 /**
- * A variable set in doctor's own environment or in a settings file's `env` block that overrides every effort or
- * helper model a session or its caller picks, and a settings file whose block could not be read. Only the
- * overriding variables' values are printed.
+ * A host variable (`routingOverrides`) set in doctor's own environment or in a settings file's `env` block that
+ * overrides every effort or helper model a session or its caller picks, and a settings file whose block could not be
+ * read. Only the overriding variables' values are printed. A host with no such variable gives no finding.
  */
-function routingEnvFindings({ env, settingsEnv }: DoctorInput): Finding[] {
+function routingEnvFindings({ env, settingsEnv, routingOverrides }: DoctorInput): Finding[] {
+  if (routingOverrides.length === 0) {
+    return [];
+  }
   const sources = [
     { where: 'the environment doctor runs in', env },
     ...settingsEnv.flatMap((settings) => (settings.kind === 'env' ? [{ where: `the env block of ${settings.path}`, env: settings.env }] : [])),
   ];
-  const overrides = ROUTING_OVERRIDES.flatMap(({ kind, name, effect }) =>
+  const overrides = routingOverrides.flatMap(({ kind, variable, effect }) =>
     sources.flatMap(({ where, env: set }): Finding[] => {
-      const value = set[name]?.trim();
-      return value ? [{ kind, detail: `${name}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
+      const value = set[variable]?.trim();
+      return value ? [{ kind: OVERRIDE_FINDING[kind], detail: `${variable}=${value} is set in ${where}: ${effect(value)}; unset it there to let each choose its own` }] : [];
     }),
   );
-  const names = ROUTING_OVERRIDES.map(({ name }) => name).join(' or ');
+  const names = routingOverrides.map(({ variable }) => variable).join(' or ');
   const unreadable = settingsEnv.flatMap((settings): Finding[] =>
     settings.kind === 'unreadable' ? [{ kind: 'settings-json', detail: `${settings.path} is not a JSON object, so doctor could not check its env block for ${names}` }] : [],
   );

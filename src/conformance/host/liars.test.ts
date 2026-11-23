@@ -18,6 +18,7 @@ describe('the models liars', () => {
     assert.equal(port.switchModelStep(world.model), '');
     assert.equal(port.switchEffortStep('high'), '');
     assert.equal(port.switchNoteOf(world.model), undefined);
+    assert.deepEqual(port.routingOverrides, []);
   });
 
   it('yesModels takes every name, calls every running model another and has one fixed step and note', () => {
@@ -27,6 +28,8 @@ describe('the models liars', () => {
     assert.equal(port.switchModelStep(world.model), port.switchModelStep(world.otherModel));
     assert.equal(port.switchEffortStep('low'), port.switchEffortStep('max'));
     assert.equal(port.switchNoteOf(world.model), 'always');
+    assert.deepEqual(port.routingOverrides.map(({ variable }) => variable), ['ANY', 'ANY']);
+    assert.deepEqual(port.routingOverrides.map(({ effect }) => effect('high')), ['always', 'always']);
   });
 });
 

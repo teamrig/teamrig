@@ -4850,9 +4850,10 @@ turn off claude.ai connectors and skills nobody uses in claude.ai settings, and 
 
 `effort-env` and `model-env` name a variable set in doctor's own environment or in the `env` block of the user's
 Claude Code settings (`settings.json` in Claude Code's folder) or the project's (`.claude/settings.json`,
-`.claude/settings.local.json`), with its value and the file: `CLAUDE_CODE_EFFORT_LEVEL` beats every `--effort` (the
-config's `launch` efforts among them), `/effort` and per-call Agent effort; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1
-beats every per-call Agent model. `settings-json` is one of those files that is not a JSON object, so its block went
+`.claude/settings.local.json`), with its value and the file. The host names its own override variables, such as
+`CLAUDE_CODE_EFFORT_LEVEL`, which beats every `--effort` (the config's `launch` efforts among them), `/effort` and per-call
+Agent effort, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` set to 1 beats every per-call Agent model. A host with no such
+variable gets neither finding. `settings-json` is one of those files that is not a JSON object, so its block went
 unchecked. `launch-model` is a session whose `launch` model this host does not run: the config takes any model
 name, so a team config loads on every host, and the host's own check runs where the name is used, so `open` refuses
 to start that session and `hire --model` refuses the name. `launch-effort` is a session whose `launch` entry names a
