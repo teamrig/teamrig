@@ -159,6 +159,28 @@ describe('ghPass: the key of the owner a gh call reaches (T4897)', () => {
     assert.equal(programs.ghRuns().length, 0);
   });
 
+  it('runs a call that reaches one repository on that repository’s own key, and one reaching more on the owner’s', async () => {
+    const one = setup();
+    one.credentials.saves('teamrig-gh-globex.api', 'api-key');
+    await ghPass(['pr', 'view', '5', '-R', 'Globex/API'], one.ports);
+    await ghPass(['api', 'repos/globex/api/pulls'], one.ports);
+    assert.deepEqual(one.programs.ghRuns().map((run) => run.env?.['GH_TOKEN']), ['api-key', 'api-key']);
+
+    const more = setup();
+    more.credentials.saves('teamrig-gh-globex.api', 'api-key');
+    await ghPass(['pr', 'list', '-R', 'globex/api', '-R', 'globex/site'], more.ports);
+    await ghPass(['api', 'orgs/globex/teams'], more.ports);
+    assert.deepEqual(more.programs.ghRuns().map((run) => run.env?.['GH_TOKEN']), [ownerToken('globex'), ownerToken('globex')]);
+    assert.ok(!more.credentials.reads.includes('teamrig-gh-globex.api'));
+  });
+
+  it('refuses a call whose repository key is saved but cannot be read, never running on the owner’s key', async () => {
+    const { programs, credentials, ports } = setup();
+    credentials.failsOn('teamrig-gh-globex.api', 'the keyring is locked');
+    assert.match(refusalOf(await ghPass(['pr', 'view', '5', '-R', 'globex/api'], ports)), /could not read teamrig-gh-globex\.api/u);
+    assert.equal(programs.ghRuns().length, 0);
+  });
+
   it('passes gh’s failure on, naming the key when gh says it lacks a right', async () => {
     const { programs, printed, ports } = setup();
     programs.gh = { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 403: Resource not accessible by personal access token\n' };
