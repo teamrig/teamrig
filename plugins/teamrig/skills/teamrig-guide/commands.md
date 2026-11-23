@@ -7008,6 +7008,74 @@ quit=1
 teamrig git-credential: no key given: teamrig answers https only, not ssh
 ```
 
+### teamrig key list
+
+Lists each GitHub key the team's `github.repos` may use: for each owner, the owner's key, then each repository's own
+key, by its credential name in the operating system's credential store, and whether the store holds it (`saved`,
+`missing`, or `unreadable` with the store's reason). A repository with no key of its own uses its owner's, which the
+line says. It reads a key only to know it is there and never prints one. With no `github.repos`, it says how a key is
+named and how to add one.
+
+Flags: none.
+
+Example, in a team whose `github.repos` is `["acme/api", "acme/web"]`, with the owner's key and one repository's saved:
+
+```sh
+teamrig key list
+```
+
+Output:
+
+```text
+acme  teamrig-gh-acme  saved
+acme/api  teamrig-gh-acme.api  saved
+acme/web  teamrig-gh-acme.web  missing: its owner's key reaches it
+```
+
+### teamrig key add
+
+Saves the GitHub key for an owner (`acme`) or for one repository (`acme/api`), which then wins over the owner's key
+for that repository. It runs only from a person's own terminal, never from a session, a pipe or a script (REFUSED,
+exit 2): the credential store's own save command runs in your terminal and asks for the key with nothing shown, so
+the key never passes teamrig, an argument, the environment or a file. It says when it replaces a key saved before,
+then reads the key back from the store to confirm it. Use a fine-grained key limited to the repositories and rights
+the team needs. The store is your user's keychain, not a sandbox: any program running as you can read it.
+
+Flags: none.
+
+Example, on Windows, with no key saved for the repository before:
+
+```sh
+teamrig key add acme/api
+```
+
+Output (the store's own prompt comes between the two lines):
+
+```text
+saving a key for acme/api as teamrig-gh-acme.api in the Windows Credential Manager; paste it at the prompt, nothing typed shows
+saved: acme/api now uses teamrig-gh-acme.api
+```
+
+### teamrig key remove
+
+Removes the saved key for an owner or one repository, from a person's own terminal only (REFUSED from a session, a
+pipe or a script). Nothing saved is no failure. The key still works at GitHub until you revoke it there, which it
+says with the page to do it on.
+
+Flags: none.
+
+Example, on Windows:
+
+```sh
+teamrig key remove acme/api
+```
+
+Output:
+
+```text
+removed teamrig-gh-acme.api from the Windows Credential Manager; the key works until you revoke it at https://github.com/settings/personal-access-tokens
+```
+
 ### teamrig test
 
 Runs a test command in the shell and prints a few lines instead of all it printed, so a long test run costs the

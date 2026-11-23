@@ -847,6 +847,13 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on
       stderr, so no later helper, prompt or machine login answers; store and erase keep nothing)
+  key list                     lists each key the team's github.repos may use, its owner's and each
+      repository's own, by credential name, and whether the store holds it; never a key
+  key add <owner|owner/name>   (from a person's own terminal only, else REFUSED) saves the key for an
+      owner or one repository: the store's own save command asks for it with nothing shown, so the key
+      never passes teamrig; says when it replaces a saved one, then reads it back
+  key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
+      at GitHub too, as it says
   hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
