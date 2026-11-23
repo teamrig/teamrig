@@ -1,5 +1,5 @@
 import type { CliRuntime } from '../cli/runtime.ts';
-import { SHIPPED_HOST } from './host.ts';
+import { SHIPPED_HOST, shippedHost } from './host.ts';
 import { FakePluginStore } from './fake-plugin-store.ts';
 import { quietRestore } from './fake-restore.ts';
 import { FakeSessionProcesses } from './fake-session-processes.ts';
@@ -34,7 +34,7 @@ export function quietHost(stdin: string): HostWorld {
     readStdin: async () => stdin,
     platform: 'linux',
     host: SHIPPED_HOST,
-    shippedHosts: [SHIPPED_HOST],
+    shippedHosts: [shippedHost(SHIPPED_HOST)],
     processes: {
       start: async () => ({ kind: 'missing' }),
       run: async () => ({ kind: 'missing' }),

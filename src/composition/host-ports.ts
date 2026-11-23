@@ -1,6 +1,6 @@
 import { isRecord } from '../core/guards.ts';
 import type { HostAdapter, HostDeps, HostPorts, ProgramRunner } from '../plugin-api/index.ts';
-import { HOST_PORT_NAMES } from '../ports/host/index.ts';
+import { HOST_PORT_NAMES, type SessionVariables } from '../ports/host/index.ts';
 import { DEFAULT_HOST, HOST_ADAPTERS } from './adapters.ts';
 import { importModule, loadHost, type ModuleImporter } from './loader.ts';
 
@@ -32,14 +32,34 @@ function build(adapter: HostAdapter, id: string, deps: HostDeps): HostPorts {
   return ports;
 }
 
-/** Loads the host adapter `id` and gives the way to build its ports; a refused adapter throws every reason. */
-async function sourceOf(id: string, run: ProgramRunner, importer: ModuleImporter): Promise<HostSource> {
+/** Loads the host adapter `id`; a refused adapter throws every reason. */
+async function adapterOf(id: string, importer: ModuleImporter): Promise<HostAdapter> {
   const load = await loadHost(id, importer);
   if (load.kind === 'refused') {
     throw new Error(`the host adapter ${load.id} did not load: ${load.notices.join('; ')}`);
   }
-  const adapter = load.value;
-  return (seen) => build(adapter, load.id, { ...seen, run });
+  return load.value;
+}
+
+/** The way to build the ports of `adapter`, loaded as `id`. */
+function sourceFrom(adapter: HostAdapter, id: string, run: ProgramRunner): HostSource {
+  return (seen) => build(adapter, id, { ...seen, run });
+}
+
+/** Loads the host adapter `id` and gives the way to build its ports; a refused adapter throws every reason. */
+async function sourceOf(id: string, run: ProgramRunner, importer: ModuleImporter): Promise<HostSource> {
+  return sourceFrom(await adapterOf(id, importer), id, run);
+}
+
+/**
+ * One host adapter teamrig ships with: the way to build its ports, and the session variables its declaration names.
+ * The variables are the declaration's own, not its launcher port's: a host whose launcher is not built yet still
+ * sets its marks in what its agent runs, and a run that counted only built launchers would take that agent's run
+ * for the person's.
+ */
+export interface ShippedHost {
+  readonly ports: HostSource;
+  readonly sessionVariables: SessionVariables;
 }
 
 /**
@@ -53,10 +73,15 @@ export function loadHostPorts(run: ProgramRunner, importer: ModuleImporter = imp
 
 /**
  * Loads every host adapter teamrig ships with (`HOST_ADAPTERS`), the one it runs in among them, and gives the way to
- * build each one's ports. For what holds on a machine whatever host runs the session, such as the files a host keeps
- * a login in. One that does not load throws every reason, as the running one does: an answer drawn from fewer hosts
- * than ship would be a weaker one, told to nobody.
+ * build each one's ports beside the session variables it declares. For what holds on a machine whatever host runs the
+ * session, such as the files a host keeps a login in. One that does not load throws every reason, as the running one
+ * does: an answer drawn from fewer hosts than ship would be a weaker one, told to nobody.
  */
-export function loadShippedHosts(run: ProgramRunner, importer: ModuleImporter = importModule): Promise<readonly HostSource[]> {
-  return Promise.all(Object.keys(HOST_ADAPTERS).map((id) => sourceOf(id, run, importer)));
+export function loadShippedHosts(run: ProgramRunner, importer: ModuleImporter = importModule): Promise<readonly ShippedHost[]> {
+  return Promise.all(
+    Object.keys(HOST_ADAPTERS).map(async (id): Promise<ShippedHost> => {
+      const adapter = await adapterOf(id, importer);
+      return { ports: sourceFrom(adapter, id, run), sessionVariables: adapter.declaration.sessionVariables };
+    }),
+  );
 }

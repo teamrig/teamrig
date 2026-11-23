@@ -18,6 +18,7 @@ import {
   type TranscriptReader,
   type UsageMeter,
 } from '../ports/host/index.ts';
+import type { HostSource } from '../composition/host-ports.ts';
 import type { LaunchHost } from '../config/launch.ts';
 import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
 import type { ContextSource } from '../refresh/usage.ts';
@@ -139,7 +140,7 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
  */
 export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecrets {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const named = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  const named = sourcesOf(runtime).flatMap((source) => {
     const { secrets } = source(seen);
     return isUnsupported(secrets) ? [] : secrets.secretFiles();
   });
@@ -161,13 +162,15 @@ export function identityOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'
 }
 
 /**
- * The session variables teamrig holds in this run: those of every host adapter it ships with, then the running
- * host's, each name once. A machine may run a host other than the one this run works in, and a variable says who a
- * run is whatever host set it: so the running host adds to the shipped hosts' names and takes none away. It never
- * refuses: a host that tells nothing of its sessions adds none.
+ * The session variables teamrig holds in this run: those every host adapter it ships with declares, its session
+ * launcher built or not, then those of the launchers that tell of their sessions, each name once. A machine may run a
+ * host other than the one this run works in, and a variable says who a run is whatever host set it: so the running
+ * host adds to the shipped hosts' names and takes none away. A shipped host's agent sets its marks before teamrig
+ * starts its sessions, so its declared names count even while its launcher is not built. It never refuses: a host
+ * that tells nothing of its sessions adds none.
  */
 export function sessionVariablesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): SessionVariables {
-  const named = launchersOf(runtime).map((launcher) => launcher.variables);
+  const named = [...declaredOf(runtime), ...launchersOf(runtime).map((launcher) => launcher.variables)];
   return {
     marks: [...new Set(named.flatMap((variables) => variables.marks))],
     identity: [...new Set(named.flatMap((variables) => variables.identity))],
@@ -196,10 +199,20 @@ export function launcherIfTold(runtime: Pick<CliRuntime, 'host' | 'env' | 'platf
   return isUnsupported(launcher) ? undefined : launcher;
 }
 
+/** The way to build the ports of every host adapter teamrig ships with, then the running host's. */
+function sourcesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts'>): readonly HostSource[] {
+  return [...runtime.shippedHosts.map((shipped) => shipped.ports), runtime.host];
+}
+
+/** The session variables every host adapter teamrig ships with declares, its session launcher built or not. */
+function declaredOf(runtime: Pick<CliRuntime, 'shippedHosts'>): readonly SessionVariables[] {
+  return runtime.shippedHosts.map((shipped) => shipped.sessionVariables);
+}
+
 /** The session launchers of every host adapter teamrig ships with, then the running host's: those that tell of their sessions. */
 function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly SessionLauncher[] {
   const seen = { env: runtime.env, platform: runtime.platform };
-  return [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  return sourcesOf(runtime).flatMap((source) => {
     const { launcher } = source(seen);
     return isUnsupported(launcher) ? [] : [launcher];
   });
@@ -211,14 +224,19 @@ function launchersOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' |
  * the running host's: its session variables, the marks and identity variables it tells a run by, and what it parks.
  * A machine may run a host other than the one this run works in, and a child inheriting any host's variables would be
  * taken for that host's session. `parked` joins them the same way, with every mark: a step parked by an agent's run
- * keeps the mark of that run whichever host set it, so it never runs as the person's own. `login` is the running
- * host's alone, as the session started is a session of that host and keeps no other host's login. It never refuses:
- * a host that tells nothing of its sessions adds no name.
+ * keeps the mark of that run whichever host set it, so it never runs as the person's own. A shipped host's declared
+ * variables count in both, its session launcher built or not, as `sessionVariablesOf` counts them. `login` is the
+ * running host's alone, as the session started is a session of that host and keeps no other host's login. It never
+ * refuses: a host that tells nothing of its sessions adds no name.
  */
 export function childEnvOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): ChildEnvironment {
   const launchers = launchersOf(runtime);
-  const parked = launchers.flatMap(({ childEnv, variables }) => [...childEnv.parked, ...variables.marks]);
-  const session = launchers.flatMap(({ childEnv, variables }) => [...childEnv.session, ...variables.marks, ...variables.identity, ...childEnv.parked]);
+  const declared = declaredOf(runtime);
+  const parked = [...declared.flatMap(({ marks }) => marks), ...launchers.flatMap(({ childEnv, variables }) => [...childEnv.parked, ...variables.marks])];
+  const session = [
+    ...declared.flatMap(({ marks, identity }) => [...marks, ...identity]),
+    ...launchers.flatMap(({ childEnv, variables }) => [...childEnv.session, ...variables.marks, ...variables.identity, ...childEnv.parked]),
+  ];
   const { launcher: running } = hostOf(runtime);
   return {
     session: [...new Set(session)],
@@ -275,7 +293,7 @@ export function sessionCommandLinesOf(runtime: Pick<CliRuntime, 'host' | 'shippe
  */
 export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostUserHooks {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const offered = [...runtime.shippedHosts, runtime.host].flatMap((source) => {
+  const offered = sourcesOf(runtime).flatMap((source) => {
     const { userHooks } = source(seen);
     return isUnsupported(userHooks) ? [] : [userHooks];
   });

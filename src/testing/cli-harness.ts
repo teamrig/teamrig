@@ -15,7 +15,7 @@ import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
-import type { HostSource } from '../composition/host-ports.ts';
+import type { HostSource, ShippedHost } from '../composition/host-ports.ts';
 import type { RequirementsCheck } from '../requirements/requirements.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
@@ -176,7 +176,7 @@ export interface RunOptions {
   /** The host ports the run is given; default the shipped host's (the quiet world's). */
   readonly host?: HostSource;
   /** The host adapters teamrig ships with, as the run sees them; default the shipped host alone (the quiet world's). */
-  readonly shippedHosts?: readonly HostSource[];
+  readonly shippedHosts?: readonly ShippedHost[];
   /** The worktrees `worktree remove` sees; default none. */
   readonly worktrees?: WorktreePorts;
   /**
