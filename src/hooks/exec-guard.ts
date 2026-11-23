@@ -7,6 +7,7 @@ import { runsOf, type LineRuns, type OpaqueRun, type ProgramRun, type ProgramsCo
 import { programName } from '../push-guard/launchers.ts';
 import type { HookEvent, HookReply, SessionVariables } from '../ports/host/index.ts';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
+import { ghReadRefusals } from './gh-read-refusals.ts';
 import { ghWriteRefusals, type GhWriteEnv } from './gh-write-refusals.ts';
 import { heldBack } from './permission.ts';
 import { changesVariable } from './variable-change.ts';
@@ -599,7 +600,8 @@ export function runsOfReadings(readings: readonly string[], context: ProgramsCon
  * inbox read`, through any client, binds it to another session (`bindRefusalOf`); whenever the line changes
  * a mark of an agent's run (`sessionVariables.marks`), which tells teamrig a command runs under a host; and when a shell on the line takes its commands
  * from a pipe the guard cannot read, or a package runner hands its line to a shell the line names that the guard
- * cannot read; and for each raw `gh` write on the team's GitHub repositories (`ghWriteRefusals`). Else nothing, so the normal permission flow decides. It checks each install a line's `teamrig exec`
+ * cannot read; and for each raw `gh` write on the team's GitHub repositories (`ghWriteRefusals`) and each raw `gh`
+ * read on an owner of them, which runs on the team's saved key through `teamrig gh` (`ghReadRefusals`). Else nothing, so the normal permission flow decides. It checks each install a line's `teamrig exec`
  * calls start once, and reads the tab's session only for a line that holds a review, or a bind that names a session
  * or runs where the line changes one. The line is read in each text its shell may run (the call's `readings`), so a
  * call the line as written escapes is still refused. It reads only the line's own words: a script the line runs is
@@ -646,7 +648,7 @@ export async function execGuardReply(event: HookEvent, env: ExecGuardEnv): Promi
   const cleared = env.sessionVariables.marks.filter((mark) => changesVariable(runs, mark));
   const steered = [ENV.session, ...env.sessionVariables.identity].filter((name) => changesVariable(runs, name));
   const checkedBinds = binds.filter((call) => call.unread || call.sessions.length > 0 || steered.length > 0);
-  const ghRefusals = ghWriteRefusals(runs, env.ghWrites);
+  const ghRefusals = [...ghWriteRefusals(runs, env.ghWrites), ...ghReadRefusals(runs, env.ghWrites)];
   const quiet =
     calls.length === 0 &&
     opaque.length === 0 &&
