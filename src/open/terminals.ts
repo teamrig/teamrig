@@ -40,6 +40,52 @@ function command(command: string, args: readonly string[], folder: string, mode:
   return { kind: 'command', request: { command, args, cwd: folder, mode } };
 }
 
+/** The first argument Windows Terminal would misread, if any. */
+function windowsTerminalUnsafe(tab: TabRequest): string | undefined {
+  const { title, folder, window, argv } = tab;
+  return [title, folder, ...(window === undefined ? [] : [window]), ...argv].find((arg) => WINDOWS_TERMINAL_UNSAFE.test(arg));
+}
+
+function windowsTerminalRefusal(unsafe: string): TabCommand {
+  return { kind: 'unusable', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+}
+
+/** The terminals whose window can split to show a pane beside the one a run works in. */
+export type SplitTerminal = Extract<Terminal, 'tmux' | 'windows-terminal'>;
+
+/**
+ * The terminal this run works in, found by the variables each sets in its panes, when it is one that can split:
+ * tmux first, as it may run inside Windows Terminal and its pane is the nearer one. Other terminals have no split a
+ * launcher can ask for.
+ */
+export function splittableTerminal(env: Env): SplitTerminal | undefined {
+  if ((env['TMUX'] ?? '') !== '') {
+    return 'tmux';
+  }
+  return (env['WT_SESSION'] ?? '') === '' ? undefined : 'windows-terminal';
+}
+
+/**
+ * The launcher call that splits the run's own terminal window and runs `argv` in the new pane, side by side (T5105).
+ * tmux splits the pane the run works in (it names it in `TMUX_PANE`), and `-d` keeps the focus there; Windows
+ * Terminal splits the active pane of its most recent window, the one the person is typing in, and `tab.window` is not
+ * read: a split is of the window the run is in.
+ */
+export function splitCommand(terminal: SplitTerminal, tab: TabRequest): TabCommand {
+  const { title, folder, argv, focus } = tab;
+  switch (terminal) {
+    case 'tmux':
+      return command('tmux', ['split-window', '-h', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, ...argv], folder, 'exit');
+    case 'windows-terminal': {
+      const unsafe = windowsTerminalUnsafe({ ...tab, window: undefined });
+      if (unsafe !== undefined) {
+        return windowsTerminalRefusal(unsafe);
+      }
+      return command('wt.exe', ['-w', '0', 'split-pane', '--vertical', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
+    }
+  }
+}
+
 /**
  * The launcher call that opens the tab, each argument passed as it is, with no shell in between. Only
  * macOS Terminal takes shell text (`do script`), so there every argument is quoted, and the text goes
@@ -52,9 +98,9 @@ export function tabCommand(terminal: Terminal, tab: TabRequest): TabCommand {
       // tmux 3.0 and later run a command given as several arguments without a shell; -d leaves the current window selected.
       return command('tmux', ['new-window', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, '-n', title, ...argv], folder, 'exit');
     case 'windows-terminal': {
-      const unsafe = [title, folder, ...(window === undefined ? [] : [window]), ...argv].find((arg) => WINDOWS_TERMINAL_UNSAFE.test(arg));
+      const unsafe = windowsTerminalUnsafe(tab);
       if (unsafe !== undefined) {
-        return { kind: 'unusable', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+        return windowsTerminalRefusal(unsafe);
       }
       // `-w 0` is the most recent window; a name is the window of that name, made when none is open.
       return command('wt.exe', ['-w', window ?? '0', 'new-tab', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');

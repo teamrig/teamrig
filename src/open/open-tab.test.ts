@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProcesses } from '../testing/fake-processes.ts';
 import { KEEP_FOCUS_PROGRAM_VAR } from './keep-focus.ts';
-import { launchWords, openTab } from './open-tab.ts';
+import { launchWords, openSplit, openTab } from './open-tab.ts';
 import type { TabRequest } from './terminals.ts';
 
 const TAB: TabRequest = { title: 'shop-api', folder: '/w/shop', argv: ['/usr/bin/node', '/kit/main.js', 'launch', 'api'], window: undefined, focus: 'take' };
@@ -61,6 +61,33 @@ describe('openTab', () => {
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
     assert.deepEqual(await openTab({ processes, env: {}, platform: 'win32' }, 'print', TAB), { kind: 'none', reasons: ['the terminal setting is print'] });
     assert.deepEqual(processes.started, []);
+  });
+});
+
+describe('openSplit (T5105)', () => {
+  it('splits the tmux the run works in, whatever terminal the platform has', async () => {
+    const processes = new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' });
+    const outcome = await openSplit({ processes, env: { TMUX: 'x', WT_SESSION: 'guid' }, platform: 'win32' }, { ...TAB, focus: 'keep' });
+    assert.deepEqual(outcome, { kind: 'opened', terminal: 'tmux', end: 'exited' });
+    assert.deepEqual(processes.started.map((request) => request.args.slice(0, 3)), [['split-window', '-h', '-d']]);
+  });
+
+  it('splits Windows Terminal inside it, with no focus script: the split raises no other window', async () => {
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    const outcome = await openSplit({ processes, env: { WT_SESSION: 'guid' }, platform: 'win32' }, { ...TAB, focus: 'keep' });
+    assert.deepEqual(outcome, { kind: 'opened', terminal: 'windows-terminal', end: 'exited' });
+    assert.deepEqual(processes.started.map((request) => request.args.slice(0, 3)), [['-w', '0', 'split-pane']]);
+    assert.deepEqual(processes.ran, []);
+  });
+
+  it('starts nothing in a terminal that cannot split, saying so, and says why a split failed', async () => {
+    const outside = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    assert.deepEqual(await openSplit({ processes: outside, env: {}, platform: 'win32' }, TAB), {
+      kind: 'none',
+      reasons: ['this terminal is neither tmux nor Windows Terminal, the ones that split'],
+    });
+    assert.deepEqual(outside.started, []);
+    assert.deepEqual(await openSplit({ processes: new FakeProcesses(), env: { TMUX: 'x' }, platform: 'linux' }, TAB), { kind: 'none', reasons: ['tmux is not installed'] });
   });
 });
 
