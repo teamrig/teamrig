@@ -202,6 +202,57 @@ describe('teamrig ui', () => {
       assert.deepEqual([processes.started, processes.ran], [[], []]);
     });
 
+    describe('run with no terminal of its own, as from an AI CLI’s shell tool', () => {
+      const TMUX_ENV = { TMUX: '/tmp/tmux-1/default,1,0' };
+
+      it('terminal splits the session’s tmux pane, the focus kept on it, and runs nothing here', async () => {
+        const { processes, probe } = opening();
+        const result = await new CliHarness(WITH_UI).run(['ui', '--session', 'alpha'], { processes, probe, env: TMUX_ENV, interactive: false });
+        assert.deepEqual(result, { code: 0, stdout: ['OPENED the UI in a split of this tmux window'], stderr: [] });
+        assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
+          ['tmux', ['split-window', '-h', '-d', '-c', APP, ...WINDOW_ARGV, '--session', 'alpha']],
+        ]);
+        assert.deepEqual(processes.ran, []);
+      });
+
+      it('terminal opens a window, saying why, when the terminal cannot split', async () => {
+        const { processes, probe } = opening();
+        const result = await new CliHarness(IN_TMUX).run(['ui'], { processes, probe, interactive: false });
+        assert.deepEqual(result.stdout, [
+          'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
+          'OPENED the UI in a tmux window',
+        ]);
+        assert.deepEqual(processes.started.map((started) => started.args[0]), ['new-window']);
+        assert.deepEqual(processes.ran, []);
+      });
+
+      it('runs here, saying so, only when neither a split nor a window opens', async () => {
+        const processes = new FakeProcesses();
+        const result = await new CliHarness(IN_TMUX).run(['ui'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), interactive: false });
+        assert.deepEqual(result.stdout, [
+          'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
+          'NOTE no terminal window opened (tmux is not installed); the UI shows in this terminal',
+        ]);
+        assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY, '--team', 'app']]);
+      });
+
+      it('both opens the window and the split, and runs nothing here', async () => {
+        const { processes, probe } = opening();
+        const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe, env: TMUX_ENV, interactive: false });
+        assert.deepEqual(result.stdout, ['OPENED the UI in a tmux window', 'OPENED the UI in a split of this tmux window']);
+        assert.deepEqual(processes.started.map((started) => started.args[0]), ['new-window', 'split-window']);
+        assert.deepEqual(processes.ran, []);
+      });
+
+      it('window falls back to a split beside the session when no window opens', async () => {
+        const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+        const config = { ...WITH_UI, open: { terminal: 'gnome-terminal' } };
+        const result = await new CliHarness(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), env: { WT_SESSION: 'guid' }, interactive: false });
+        assert.deepEqual(result.stdout, ['NOTE no terminal window opened (gnome-terminal is not installed); the UI shows beside the session', 'OPENED the UI in a split of this windows-terminal window']);
+        assert.deepEqual(processes.ran, []);
+      });
+    });
+
     it('refuses a --mode that is no mode, starting nothing', async () => {
       const { processes, probe } = opening();
       const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'tab'], { processes, probe });
