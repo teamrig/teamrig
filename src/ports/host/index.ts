@@ -43,7 +43,7 @@ export {
 } from './tool-call.ts';
 export { isUnsupported, unsupported, type Unsupported } from './unsupported.ts';
 export type { HostPermissions, PermissionsAnswer, PermissionsReading, TrustedRoutesPlan } from './permissions.ts';
-export type { HostPlugin, InstallReach, MarketplaceSource, PluginInstall } from './plugin.ts';
+export type { ChannelAnswer, ChannelPlan, HostPlugin, InstallReach, MarketplaceRef, MarketplaceSource, PluginInstall } from './plugin.ts';
 export type { HostModels, RoutingOverride } from './models.ts';
 export type { HostSteps } from './steps.ts';
 export type { StatusLine, StatusLineAnswer, StatusLinePlan, StatusReading } from './status-line.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { HostPlugin, InstallReach, MarketplaceSource, PluginInstall } from '../../plugin-api/index.ts';
+import type { ChannelPlan, HostPlugin, InstallReach, JsonRecord, MarketplaceSource, PluginInstall } from '../../plugin-api/index.ts';
 import { defineContract, type ContractCase, type Subject } from '../contract.ts';
 
 /** An install a case has the host's plugin list hold: everything the port reads back but the host's own key. */
@@ -9,6 +9,8 @@ export type WorldInstall = Omit<PluginInstall, 'key'>;
 export interface WorldMarketplace {
   readonly name: string;
   readonly source: MarketplaceSource;
+  /** The branch or tag a clone follows; none for its default branch, and always none for a directory. */
+  readonly ref?: string;
 }
 
 /**
@@ -20,6 +22,8 @@ export interface PluginWorld {
   readonly list: (installs: readonly WorldInstall[]) => string;
   /** The marketplace list holding these marketplaces and nothing else. */
   readonly marketplaces: (entries: readonly WorldMarketplace[]) => string;
+  /** User settings naming each of these marketplaces' sources themselves, as a person who added them there has. */
+  readonly settings: (entries: readonly WorldMarketplace[]) => JsonRecord;
   /** The root of `plugin` at `version`, from `marketplace`, as the host's cache holds it. */
   readonly cacheRoot: (marketplace: string, plugin: string, version: string) => string;
   /** The plugins folder that cache sits in. */
@@ -62,6 +66,17 @@ function reachOf(reach: InstallReach): InstallReach {
 function shownOf(install: PluginInstall | WorldInstall): WorldInstall {
   const { plugin, marketplace, reach, installPath, version, revision } = install;
   return { plugin, marketplace, reach: reachOf(reach), installPath: samePath(installPath) ?? '', version, revision };
+}
+
+function planOf(port: HostPlugin, ...args: Parameters<HostPlugin['channelPlan']>): ChannelPlan {
+  const answer = port.channelPlan(...args);
+  assert.ok(answer.ok, answer.ok ? '' : answer.problem);
+  return answer.value;
+}
+
+/** Whether any word of the plan's steps or its settings names `ref`. */
+function names(plan: ChannelPlan, ref: string): boolean {
+  return plan.steps.flat().some((word) => word.includes(ref)) || JSON.stringify(plan.settings ?? {}).includes(ref);
 }
 
 function installsOf(port: HostPlugin, text: string): readonly PluginInstall[] {
@@ -139,27 +154,68 @@ const CASES: readonly PluginCase[] = [
       }
     },
   },
+  {
+    id: 'plugin.channel-ref',
+    title: 'reads the branch a cloned marketplace follows, its default branch apart from one not listed',
+    features: ['plugin.install-update'],
+    run: ({ port, world }) => {
+      const text = world.marketplaces([{ ...CLONE, ref: 'preview' }, DIRECTORY]);
+      assert.deepEqual(port.marketplaceRef(text, CLONE.name), { ref: 'preview' });
+      assert.deepEqual(port.marketplaceRef(world.marketplaces([CLONE]), CLONE.name), { ref: undefined });
+      assert.equal(port.marketplaceRef(text, DIRECTORY.name), undefined, 'a local folder is read as a clone');
+      assert.equal(port.marketplaceRef(text, 'missing'), undefined);
+    },
+  },
+  {
+    id: 'plugin.channel-plan',
+    title: 'moves a cloned marketplace to a branch and back, its settings entry with it, and refuses one not cloned',
+    features: ['plugin.install-update'],
+    run: ({ port, world }) => {
+      const onDefault = world.marketplaces([CLONE]);
+      const onPreview = world.marketplaces([{ ...CLONE, ref: 'preview' }]);
+      const toPreview = planOf(port, world.settings([CLONE]), onDefault, 'helper', CLONE.name, 'preview');
+      assert.deepEqual([toPreview.before, toPreview.after], [undefined, 'preview']);
+      assert.ok(toPreview.settings !== undefined, 'the settings entry naming the marketplace was left on its default branch');
+      assert.ok(toPreview.steps.length > 0 && names(toPreview, 'preview'), `the plan ${JSON.stringify(toPreview)} never names the branch`);
+      const words = toPreview.steps.flat().join(' ');
+      assert.ok(words.includes('helper') && words.includes(CLONE.name), `the steps ${words} do not name the plugin and its marketplace`);
+      const back = planOf(port, world.settings([{ ...CLONE, ref: 'preview' }]), onPreview, 'helper', CLONE.name, undefined);
+      assert.deepEqual([back.before, back.after], ['preview', undefined]);
+      assert.ok(back.settings !== undefined && back.steps.length > 0 && !names(back, 'preview'), `the way back ${JSON.stringify(back)} still names the branch`);
+      const stay = planOf(port, world.settings([{ ...CLONE, ref: 'preview' }]), onPreview, 'helper', CLONE.name, 'preview');
+      assert.deepEqual(stay, { settings: undefined, before: 'preview', after: 'preview', steps: [] });
+      assert.equal(planOf(port, {}, onDefault, 'helper', CLONE.name, 'preview').settings, undefined, 'settings naming no marketplace were changed');
+      const listed = world.marketplaces([DIRECTORY, CLONE]);
+      for (const name of [DIRECTORY.name, 'missing']) {
+        assert.equal(port.channelPlan({}, listed, 'helper', name, 'preview').ok, false, `${name} was moved to a branch`);
+      }
+    },
+  },
 ];
 
 /** The liars' world: each list its own JSON, the cache under `/plugins/cache`. */
 const WORLD: PluginWorld = {
   list: (installs) => JSON.stringify(installs),
   marketplaces: (entries) => JSON.stringify(entries),
+  settings: (entries) => ({ marketplaces: entries.map((entry) => entry.name) }),
   cacheRoot: (marketplace, plugin, version) => `/plugins/cache/${marketplace}/${plugin}/${version}`,
   pluginsFolder: '/plugins',
 };
 
 const FILES = { listFile: 'plugins.json', marketplacesFile: 'marketplaces.json' } as const;
 
-/** A liar that claims the port and does nothing: no install, no marketplace, no cache and no step. */
+/** A liar that claims the port and does nothing: no install, no marketplace, no cache, no step and no branch. */
 export function nothingPlugin(): PluginSubject {
   return {
     world: WORLD,
-    port: { ...FILES, installs: () => undefined, marketplaceSource: () => undefined, pluginsFolderOf: () => undefined, isCacheBin: () => false, updateSteps: () => [] },
+    port: { ...FILES, installs: () => undefined, marketplaceSource: () => undefined, pluginsFolderOf: () => undefined, isCacheBin: () => false, updateSteps: () => [], marketplaceRef: () => undefined, channelPlan: () => ({ ok: false, problem: 'none' }) },
   };
 }
 
-/** A liar that says yes to all: every list holds one fixed install and marketplace, every folder is in the cache, one fixed step updates all. */
+/**
+ * A liar that says yes to all: every list holds one fixed install and marketplace on its default branch, every folder
+ * is in the cache, one fixed step updates all and moves any marketplace to any branch.
+ */
 export function yesPlugin(): PluginSubject {
   const install: PluginInstall = { key: 'key', plugin: 'plugin', marketplace: 'market', reach: { kind: 'every project' }, installPath: '/', version: '1', revision: '' };
   return {
@@ -171,6 +227,8 @@ export function yesPlugin(): PluginSubject {
       pluginsFolderOf: () => '/',
       isCacheBin: () => true,
       updateSteps: () => [['update']],
+      marketplaceRef: () => ({ ref: undefined }),
+      channelPlan: () => ({ ok: true, value: { settings: {}, before: undefined, after: undefined, steps: [['update']] } }),
     },
   };
 }

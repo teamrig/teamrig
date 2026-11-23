@@ -143,6 +143,11 @@ function scopeOf(reach: WorldInstall['reach']): { scope: string; projectPath?: s
   return reach.kind === 'every project' ? { scope: 'user' } : reach.kind === 'project' ? { scope: 'project', projectPath: reach.path } : { scope: 'managed' };
 }
 
+/** A marketplace on GitHub as Claude Code records it, its `ref` only when it follows a branch of its own. */
+function githubSource(name: string, ref: string | undefined): JsonRecord {
+  return { source: 'github', repo: `acme/${name}`, ...(ref === undefined ? {} : { ref }) };
+}
+
 /** `installed_plugins.json` (version 2): installs grouped under `<plugin>@<marketplace>`; `known_marketplaces.json` by name. */
 const pluginWorld: PluginWorld = {
   list: (installs) => {
@@ -163,14 +168,18 @@ const pluginWorld: PluginWorld = {
   marketplaces: (entries) =>
     JSON.stringify(
       Object.fromEntries(
-        entries.map(({ name, source }) => [
+        entries.map(({ name, source, ref }) => [
           name,
           source.kind === 'directory'
             ? { source: { source: 'directory', path: source.path }, installLocation: source.path, lastUpdated: AT }
-            : { source: { source: 'github', repo: `acme/${name}` }, installLocation: source.installLocation, lastUpdated: AT },
+            : { source: githubSource(name, ref), installLocation: source.installLocation, lastUpdated: AT },
         ]),
       ),
     ),
+  settings: (entries) => ({
+    theme: 'dark',
+    extraKnownMarketplaces: Object.fromEntries(entries.map(({ name, ref }) => [name, { source: githubSource(name, ref) }])),
+  }),
   cacheRoot: (marketplace, plugin, version) => `${PLUGINS_FOLDER}/cache/${marketplace}/${plugin}/${version}`,
   pluginsFolder: PLUGINS_FOLDER,
 };

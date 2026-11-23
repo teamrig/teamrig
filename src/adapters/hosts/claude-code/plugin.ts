@@ -1,4 +1,4 @@
-import type { HostPlugin, InstallReach, MarketplaceSource, PluginInstall } from '../../../plugin-api/index.ts';
+import type { ChannelAnswer, HostPlugin, InstallReach, JsonRecord, MarketplaceRef, MarketplaceSource, PluginInstall } from '../../../plugin-api/index.ts';
 
 /**
  * Claude Code's plugin store: `installed_plugins.json` (version 2) and `known_marketplaces.json` in its `plugins`
@@ -129,6 +129,79 @@ function updateSteps(plugin: string, marketplace: string): readonly (readonly st
   ];
 }
 
+/** A cloned marketplace's `source` record: `github` names its `repo`, `git` its `url`; others are not a git clone. */
+interface CloneSource {
+  readonly fields: Fields;
+  /** What `claude plugin marketplace add` takes for it, before any `#<ref>`. */
+  readonly argument: string;
+  readonly ref: string | undefined;
+}
+
+function cloneSourceOf(source: unknown): CloneSource | undefined {
+  if (!isFields(source)) {
+    return undefined;
+  }
+  const kind = source['source'];
+  const argument = kind === 'github' ? source['repo'] : kind === 'git' ? source['url'] : undefined;
+  const ref = source['ref'];
+  if (typeof argument !== 'string' || argument === '' || !isOptionalText(ref)) {
+    return undefined;
+  }
+  return { fields: source, argument, ref: ref === '' ? undefined : ref };
+}
+
+function knownCloneOf(marketplacesText: string, name: string): CloneSource | undefined {
+  const known = parsed(marketplacesText);
+  const entry = isFields(known) ? known[name] : undefined;
+  return isFields(entry) ? cloneSourceOf(entry['source']) : undefined;
+}
+
+function marketplaceRef(marketplacesText: string, name: string): MarketplaceRef | undefined {
+  const clone = knownCloneOf(marketplacesText, name);
+  return clone === undefined ? undefined : { ref: clone.ref };
+}
+
+/** The source record following `ref`, every other field kept; no `ref` field for the default branch. */
+function withRef(source: Fields, ref: string | undefined): Fields {
+  const kept = Object.entries(source).filter(([key]) => key !== 'ref');
+  return Object.fromEntries(ref === undefined ? kept : [...kept, ['ref', ref]]);
+}
+
+/**
+ * The settings with `extraKnownMarketplaces.<marketplace>.source` following `ref`; undefined when they hold no such
+ * entry or it already does. Claude Code refuses `marketplace add <repo>#<ref>` while that entry names the source
+ * without the ref (probed 11-23 on 2.1.330), so the entry changes first.
+ */
+function settingsFollowing(settings: JsonRecord, marketplace: string, ref: string | undefined): JsonRecord | undefined {
+  const extra = settings['extraKnownMarketplaces'];
+  const entry = isFields(extra) ? extra[marketplace] : undefined;
+  const source = isFields(entry) ? entry['source'] : undefined;
+  if (!isFields(extra) || !isFields(entry) || !isFields(source)) {
+    return undefined;
+  }
+  const current = source['ref'];
+  if (current === ref || (ref === undefined && current === '')) {
+    return undefined;
+  }
+  return { ...settings, extraKnownMarketplaces: { ...extra, [marketplace]: { ...entry, source: withRef(source, ref) } } };
+}
+
+/** The marketplace added again at `ref`, so its clone checks the ref out, then the plugin reinstalled from it. */
+function channelPlan(settings: JsonRecord, marketplacesText: string, plugin: string, marketplace: string, ref: string | undefined): ChannelAnswer {
+  const clone = knownCloneOf(marketplacesText, marketplace);
+  if (clone === undefined) {
+    return { ok: false, problem: `the marketplace ${marketplace} is not a git clone Claude Code knows of, so it follows no branch` };
+  }
+  const moves = clone.ref !== ref;
+  const steps = moves
+    ? [
+        ['plugin', 'marketplace', 'add', ref === undefined ? clone.argument : `${clone.argument}#${ref}`],
+        ['plugin', 'update', `${plugin}@${marketplace}`],
+      ]
+    : [];
+  return { ok: true, value: { settings: settingsFollowing(settings, marketplace, ref), before: clone.ref, after: ref, steps } };
+}
+
 export const hostPlugin: HostPlugin = {
   listFile: LIST_FILE,
   marketplacesFile: MARKETPLACES_FILE,
@@ -137,4 +210,6 @@ export const hostPlugin: HostPlugin = {
   pluginsFolderOf,
   isCacheBin,
   updateSteps,
+  marketplaceRef,
+  channelPlan,
 };
