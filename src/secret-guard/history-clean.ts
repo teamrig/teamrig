@@ -26,7 +26,7 @@ export interface HistoryClean {
 const ATTEMPTS = 3;
 const PASTE_SUFFIX = '.txt';
 
-/** The history places in Claude Code's folder (`claudeConfigDir`). */
+/** The history places in Claude Code's folder (its paths port's `home`). */
 export function historyPlaces(claudeDir: string): HistoryPlaces {
   return { history: join(claudeDir, 'history.jsonl'), pasteCache: join(claudeDir, 'paste-cache') };
 }

@@ -19,8 +19,6 @@ export const ENV = {
    * a `teamrig queue` among them, such as a git hook's checks, runs at once under that lock instead of waiting on its parent.
    */
   hostLock: 'TEAMRIG_HOST_LOCK',
-  /** Moves Claude Code's own folder (settings, plugins, transcripts) away from `~/.claude`. */
-  claudeConfigDir: 'CLAUDE_CONFIG_DIR',
   /** The session `teamrig launch` runs Claude Code for: it starts Claude Code again after an automatic restart. */
   launched: 'TEAMRIG_LAUNCHED',
   /** `off` turns `teamrig issue sync` off on this machine: it reads nothing and writes nothing. */
@@ -41,12 +39,6 @@ export type Env = Readonly<Record<string, string | undefined>>;
 export function resolveKitHome(env: Env, userHome: string): string {
   const fromEnv = env[ENV.home]?.trim();
   return fromEnv ? fromEnv : join(userHome, `.${KIT_NAME}`);
-}
-
-/** Claude Code's own folder: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
-export function claudeConfigDir(env: Env, userHome: string): string {
-  const fromEnv = env[ENV.claudeConfigDir]?.trim();
-  return fromEnv ? fromEnv : join(userHome, '.claude');
 }
 
 /**

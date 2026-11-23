@@ -60,4 +60,13 @@ export interface HostPaths {
   planFile(userHome: string, slug: string): string;
   /** The folder of the snapshots the host takes of that person's shell and sources before each shell call. */
   shellSnapshots(userHome: string): string;
+  /** The folder the host keeps that person's session transcripts in, one folder per project below it. */
+  transcriptsFolder(userHome: string): string;
+  /** The folder the host keeps that person's installed plugins and their marketplaces in. */
+  pluginsFolder(userHome: string): string;
+  /**
+   * The file the host keeps that person's login in, which a new login or token refresh rewrites: a caller only stats
+   * it. Undefined where the host keeps the login in no file of its own.
+   */
+  loginFile(userHome: string): string | undefined;
 }

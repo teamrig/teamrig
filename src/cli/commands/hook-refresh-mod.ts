@@ -1,4 +1,4 @@
-import { claudeProjectsDir, findTranscript } from '../../budget/discover.ts';
+import { findTranscript } from '../../budget/discover.ts';
 import { sessionRefreshOf } from '../../config/refresh.ts';
 import { isNonNegativeInteger, type JsonRecord } from '../../core/guards.ts';
 import { KIT_NAME } from '../../core/home.ts';
@@ -8,7 +8,7 @@ import { decideCompact, decideMidTurn, handoverHashOf, type AskContext, type Com
 import { readRunningWork } from '../../refresh/running.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { readContextEstimate } from '../../refresh/usage.ts';
-import { contextSourceIfTold, identityOf, transcriptsIfKept } from '../host.ts';
+import { contextSourceIfTold, identityOf, transcriptsFolderIfKnown, transcriptsIfKept } from '../host.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { hookScopeOf, readHookInput, readModRequest, writeReply, type HookOrigin, type SessionScope } from './hook-input.ts';
@@ -76,7 +76,7 @@ async function transcriptOf(runtime: CliRuntime, origin: HookOrigin): Promise<st
     return undefined;
   }
   const project = identityOf(runtime).projectDir ?? origin.cwd;
-  return findTranscript(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project, origin.session);
+  return findTranscript(runtime.transcripts, transcriptsFolderIfKnown(runtime), project, origin.session);
 }
 
 function askContextOf(runtime: CliRuntime, scope: SessionScope, store: RefreshStore): AskContext {

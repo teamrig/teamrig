@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import {
-  claudeProjectsDir,
   claudeProjectSlug,
   discoverTranscripts,
   findTranscript,
@@ -24,14 +23,6 @@ const C = '0123abcd-0000-4000-8000-00000000000c';
 const SINCE = Date.parse('2026-10-14T00:00:00Z');
 const TODAY = SINCE + 3_600_000;
 const YESTERDAY = SINCE - 3_600_000;
-
-describe('claudeProjectsDir', () => {
-  it('uses $CLAUDE_CONFIG_DIR, else the home folder', () => {
-    assert.equal(claudeProjectsDir({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }, join('/', 'u')), join('/', 'cfg', 'projects'));
-    assert.equal(claudeProjectsDir({ CLAUDE_CONFIG_DIR: ' ' }, join('/', 'u')), ROOT);
-    assert.equal(claudeProjectsDir({}, join('/', 'u')), ROOT);
-  });
-});
 
 describe('projectTranscriptPath', () => {
   it("is the session's own transcript in the project's folder", () => {
@@ -73,6 +64,12 @@ describe('discoverTranscripts', () => {
 
   it('finds nothing in a missing folder', async () => {
     assert.deepEqual(await discoverTranscripts(new MemoryTranscripts(), ROOT, SINCE), []);
+  });
+
+  it('finds nothing on a host whose transcripts folder teamrig does not know, whatever a Claude Code folder holds', async () => {
+    const transcripts = new MemoryTranscripts();
+    transcripts.set(join(ROOT, 'p1', `${A}.jsonl`), 'a', TODAY);
+    assert.deepEqual(await discoverTranscripts(transcripts, undefined, SINCE), []);
   });
 });
 
@@ -142,6 +139,11 @@ describe('findTranscript', () => {
     assert.equal(await findTranscript(transcripts, ROOT, '/srv/app', C), undefined);
     assert.equal(await findTranscript(new MemoryTranscripts(), ROOT, undefined, A), undefined);
   });
+
+  it('is undefined on a host whose transcripts folder teamrig does not know, whatever a Claude Code folder holds', async () => {
+    assert.equal(await findTranscript(transcripts, undefined, '/srv/app', A), undefined);
+    assert.equal(await findTranscript(transcripts, undefined, undefined, B), undefined);
+  });
 });
 
 describe('newestProjectTranscript', () => {
@@ -181,5 +183,9 @@ describe('lastWriteOf', () => {
     assert.equal(await lastWriteOf(transcripts, ROOT, [C]), undefined);
     assert.equal(await lastWriteOf(transcripts, ROOT, []), undefined);
     assert.equal(await lastWriteOf(new MemoryTranscripts(), ROOT, [A]), undefined);
+  });
+
+  it('is undefined on a host whose transcripts folder teamrig does not know, whatever a Claude Code folder holds', async () => {
+    assert.equal(await lastWriteOf(transcripts, undefined, [A, B]), undefined);
   });
 });

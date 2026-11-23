@@ -1,4 +1,4 @@
-import { claudeProjectsDir, lastWriteOf } from '../../budget/discover.ts';
+import { lastWriteOf } from '../../budget/discover.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
@@ -25,7 +25,7 @@ import { refuseUnlessPerson, runBy, untoldRefusal } from '../agent-run.ts';
 import { noPositionals, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { closedByTeamrig, closedTimedWakeLine, closedWakeLine, wakeClosedSession } from '../closed-wake.ts';
 import { hookLogOf } from '../hook-logs.ts';
-import { identityOf } from '../host.ts';
+import { identityOf, transcriptsFolderIfKnown } from '../host.ts';
 import { callerOf, instantOf, sessionRef } from '../inputs.ts';
 import { findTeam, openKit, openTeamKit, pastOrPresentIdOf, requireConfig, rosterOf, sessionIdOf, teamZone } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -392,7 +392,7 @@ function wakeTargetOf(own: SenderTeam, recipient: Recipient): WakeTarget {
  */
 async function postWakes(runtime: CliRuntime, own: SenderTeam, recipients: readonly Recipient[], text: string, now: number, when: WakeWhen): Promise<string[]> {
   const wPerPct = await readTodayWPerPct(runtime, own.paths, own.config, now);
-  const projects = claudeProjectsDir(runtime.env, runtime.userHome);
+  const projects = transcriptsFolderIfKnown(runtime);
   const marksByTeam = new Map<string, Promise<readonly InboxMark[]>>();
   const marksOf = (recipient: Recipient): Promise<readonly InboxMark[]> => {
     const read = marksByTeam.get(recipient.team) ?? inboxDepsOf(runtime, recipient.paths).marks.read().then((log) => log.marks);

@@ -272,10 +272,12 @@ describe('teamrig budget', () => {
     const { kit, run } = await world({ ...TEAM, budget: { weeklyLimitW: 1_000_000_000, account: 'work' } });
     await kit.files.write(teamConfigOf('web'), formatConfig({ configVersion: 1, sessions: ['lead', 'front', 'back'], roles: { lead: 'lead' } }));
     await recordConfigDir(kit.files, join(teamHomeOf('web'), 'state', 'usage', 'claude-config-dir.json'), join(USER_HOME, '.claude'));
-    assert.deepEqual(ok(await run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team    2.5%   12.4%  25.00M      3']);
+    // Such a host names no transcripts folder either, so the team measures no session of its own (never Claude Code's
+    // folder): only the account's share moves.
+    assert.deepEqual(ok(await run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team  0.0%   12.4%  0      0']);
     const unrecorded = await world({ ...TEAM, budget: { weeklyLimitW: 1_000_000_000, account: 'work' } });
     await unrecorded.kit.files.write(teamConfigOf('web'), formatConfig({ configVersion: 1, sessions: ['lead', 'front', 'back'], roles: { lead: 'lead' } }));
-    assert.deepEqual(ok(await unrecorded.run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team    2.5%    6.2%  25.00M      3'], 'a team with no folder recorded is on its login');
+    assert.deepEqual(ok(await unrecorded.run(['budget'], { host: NO_PATHS_HOST })).slice(3, 4), ['  the team  0.0%    6.2%  0      0'], 'a team with no folder recorded is on its login');
   });
 
   it('reads the week from the newest snapshot of any team on the account, never of a team on another account', async () => {

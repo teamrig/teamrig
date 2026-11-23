@@ -80,5 +80,9 @@ export function hostPaths(env: HostDeps['env'], platform: HostDeps['platform']):
     scratchpadOf: (transcript, systemTemp) => join(temp(systemTemp), basename(dirname(transcript)), basename(transcript, '.jsonl'), 'scratchpad'),
     planFile: (userHome, slug) => join(home(userHome), 'plans', `${slug}.md`),
     shellSnapshots: (userHome) => join(home(userHome), 'shell-snapshots'),
+    transcriptsFolder: (userHome) => join(home(userHome), 'projects'),
+    pluginsFolder: (userHome) => join(home(userHome), 'plugins'),
+    // Where the login is in the system's keychain (macOS) the file is absent, which a stat reads as no new login.
+    loginFile: (userHome) => join(home(userHome), '.credentials.json'),
   };
 }

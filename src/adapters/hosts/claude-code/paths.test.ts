@@ -41,6 +41,17 @@ describe("Claude Code's paths", () => {
     assert.equal(moved.shellSnapshots(USER_HOME), join('/', 'cfg', 'shell-snapshots'));
   });
 
+  it('keeps the transcripts, the plugins and the login file in its own folder, wherever that one is', () => {
+    const moved = pathsIn({ CLAUDE_CONFIG_DIR: join('/', 'cfg') });
+    assert.equal(pathsIn({}).transcriptsFolder(USER_HOME), join(USER_HOME, '.claude', 'projects'));
+    assert.equal(moved.transcriptsFolder(USER_HOME), join('/', 'cfg', 'projects'));
+    assert.equal(pathsIn({ CLAUDE_CONFIG_DIR: ' ' }).transcriptsFolder(USER_HOME), join(USER_HOME, '.claude', 'projects'), 'a blank one moves nothing');
+    assert.equal(pathsIn({}).pluginsFolder(USER_HOME), join(USER_HOME, '.claude', 'plugins'));
+    assert.equal(moved.pluginsFolder(USER_HOME), join('/', 'cfg', 'plugins'));
+    assert.equal(pathsIn({}).loginFile(USER_HOME), join(USER_HOME, '.claude', '.credentials.json'));
+    assert.equal(moved.loginFile(USER_HOME), join('/', 'cfg', '.credentials.json'));
+  });
+
   it("loads a person's skills from the skills folder of its own folder, wherever that one is", () => {
     assert.equal(pathsIn({}).skills(USER_HOME), join(USER_HOME, '.claude', 'skills'));
     assert.equal(pathsIn({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }).skills(USER_HOME), join('/', 'cfg', 'skills'));

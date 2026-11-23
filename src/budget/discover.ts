@@ -1,7 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorCode } from '../core/guards.ts';
-import { claudeConfigDir, type Env } from '../core/home.ts';
 import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { nodeTranscriptBytes, type TranscriptBytes } from './cursor.ts';
 
@@ -68,11 +67,6 @@ export function claudeProjectSlug(project: string): string {
   return project.replace(/[^A-Za-z0-9]/g, '-');
 }
 
-/** Claude Code's folder of project transcripts: `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects`. */
-export function claudeProjectsDir(env: Env, userHome: string): string {
-  return join(claudeConfigDir(env, userHome), 'projects');
-}
-
 /** Where Claude Code keeps a session's own transcript for a project folder: `<projects>/<project slug>/<session>.jsonl`. */
 export function projectTranscriptPath(projectsDir: string, project: string, claudeSession: string): string {
   return join(projectsDir, claudeProjectSlug(project), `${claudeSession}${TRANSCRIPT}`);
@@ -80,9 +74,13 @@ export function projectTranscriptPath(projectsDir: string, project: string, clau
 
 /**
  * A Claude Code session's own transcript: in its project's folder when it has one there, else the newest of that
- * session in any project folder (a session Claude Code filed under another folder); undefined when it has none.
+ * session in any project folder (a session Claude Code filed under another folder); undefined when it has none, or
+ * when `projectsDir` is undefined: a host whose transcripts folder teamrig does not know.
  */
-export async function findTranscript(folders: TranscriptFolders, projectsDir: string, project: string | undefined, claudeSession: string): Promise<string | undefined> {
+export async function findTranscript(folders: TranscriptFolders, projectsDir: string | undefined, project: string | undefined, claudeSession: string): Promise<string | undefined> {
+  if (projectsDir === undefined) {
+    return undefined;
+  }
   if (project !== undefined) {
     const own = projectTranscriptPath(projectsDir, project, claudeSession);
     if ((await folders.changedAt(own)) !== undefined) {
@@ -146,9 +144,13 @@ function jsonlChangedSince(entry: FolderEntry, since: number): boolean {
 /**
  * Every Claude Code session with a transcript written since `since`: `<projects>/<project>/<session>.jsonl`,
  * and its subagents' `<projects>/<project>/<session>/subagents/*.jsonl`, which count as the session's.
- * Sorted by session id, so a run reads them in the same order every time.
+ * Sorted by session id, so a run reads them in the same order every time. None when `projectsDir` is undefined: a host
+ * whose transcripts folder teamrig does not know.
  */
-export async function discoverTranscripts(folders: TranscriptFolders, projectsDir: string, since: number): Promise<ClaudeSessionFiles[]> {
+export async function discoverTranscripts(folders: TranscriptFolders, projectsDir: string | undefined, since: number): Promise<ClaudeSessionFiles[]> {
+  if (projectsDir === undefined) {
+    return [];
+  }
   const found = new Map<string, FoundFiles>();
   const sessionOf = (id: string): FoundFiles => {
     const existing = found.get(id);
@@ -189,10 +191,14 @@ export async function discoverTranscripts(folders: TranscriptFolders, projectsDi
 
 /**
  * When any of these Claude Code sessions last wrote its own transcript, in any project folder (epoch
- * ms); undefined when none has one. It checks one path per session and project folder and never lists
- * every transcript, so a hook can afford it.
+ * ms); undefined when none has one, or when `projectsDir` is undefined (a host whose transcripts folder teamrig does
+ * not know). It checks one path per session and project folder and never lists every transcript, so a hook can
+ * afford it.
  */
-export async function lastWriteOf(folders: TranscriptFolders, projectsDir: string, claudeSessions: readonly string[]): Promise<number | undefined> {
+export async function lastWriteOf(folders: TranscriptFolders, projectsDir: string | undefined, claudeSessions: readonly string[]): Promise<number | undefined> {
+  if (projectsDir === undefined) {
+    return undefined;
+  }
   let last: number | undefined;
   for (const project of await folders.entries(projectsDir)) {
     if (!project.folder) {

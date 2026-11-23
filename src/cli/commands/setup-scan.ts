@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { DEFAULT_PERMISSIONS } from '../../config/defaults.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { expandHome } from '../../core/paths.ts';
@@ -99,7 +98,7 @@ export async function scan(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
     project,
     skills: team?.kit.paths.skills ?? host.skills(runtime.userHome),
     teamRules: team === undefined ? [] : await teamRulesPathsOf(runtime, team.kit),
-    projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+    projectsDir: host.transcriptsFolder(runtime.userHome),
     since: runtime.clock.now() - days * DAY_MS,
     maxBytes: maxMb * BYTES_PER_MB,
     settings: await settingsOf(runtime, team, host, project),

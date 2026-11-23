@@ -1,10 +1,11 @@
 import { join } from 'node:path';
-import { claudeConfigDir, KIT_NAME } from '../../core/home.ts';
+import { KIT_NAME } from '../../core/home.ts';
 import { readManifest, type BackupManifest } from '../../setup/backup-manifest.ts';
 import { SETUP_KINDS, teamSkillsOf } from '../../setup/backup-places.ts';
 import { applyRestore, planRestore, type RestoreOutcome, type RestorePlan } from '../../setup/backup-restore.ts';
 import { backupSetup, listBackups, setupBackupsDir, STAMP, type BackupResult, type ListedBackup, type SetupPorts } from '../../setup/backup.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
+import { hostHomeOf } from '../host.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { projectOf, setupTeamOf } from './setup.ts';
 
@@ -43,7 +44,7 @@ export async function backup(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   const project = await projectOf(runtime, flag);
   // The team setup scan reads for the same --project, so the backup keeps the skills folder a slimming edits.
   const team = await setupTeamOf(runtime, flag === undefined ? undefined : project);
-  const claudeDir = claudeConfigDir(runtime.env, runtime.userHome);
+  const claudeDir = hostHomeOf(runtime);
   const at = { claudeDir, project, teamSkills: teamSkillsOf(team?.kit.paths.skills, claudeDir) };
   const result = await backupSetup(portsOf(runtime), at, rootOf(runtime), runtime.clock.now());
   backedUpLines(result).forEach((line) => runtime.out.stdout(line));

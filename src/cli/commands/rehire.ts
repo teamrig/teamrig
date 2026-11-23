@@ -1,4 +1,4 @@
-import { claudeProjectsDir, projectTranscriptPath } from '../../budget/discover.ts';
+import { projectTranscriptPath } from '../../budget/discover.ts';
 import type { HiringConfig } from '../../config/types.ts';
 import { errorMessage } from '../../core/guards.ts';
 import type { TeamPaths } from '../../core/home.ts';
@@ -8,7 +8,7 @@ import { JsonlMarkLog } from '../../inbox/store.ts';
 import { resumeVerdict, type ResumeVerdict } from '../../hiring/rehire.ts';
 import type { RetireRecord } from '../../hiring/record.ts';
 import { readContextTokens } from '../../refresh/usage.ts';
-import { contextSourceIfTold } from '../host.ts';
+import { contextSourceIfTold, transcriptsFolderOf } from '../host.ts';
 import type { CliRuntime } from '../runtime.ts';
 
 /**
@@ -50,7 +50,7 @@ export interface LastSession {
 
 /** Measures Claude Code session `claudeSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
 export function lastSessionOf(runtime: CliRuntime, claudeSession: string, project: string): Promise<LastSession> {
-  return measureTranscript(runtime, projectTranscriptPath(claudeProjectsDir(runtime.env, runtime.userHome), project, claudeSession));
+  return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, claudeSession));
 }
 
 /** Measures the Claude Code transcript at `transcript`, in whatever folder it sits. It throws when a read fails. */

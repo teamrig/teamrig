@@ -19,7 +19,6 @@ import { BurstLog } from '../../budget/burst-log.ts';
 import { calibrationOf } from '../../budget/calibration.ts';
 import { classRowsOf } from '../../budget/class-spend.ts';
 import { activeCut, CutLog, cutText, decideCut, type Cut } from '../../budget/cut.ts';
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { ExtraLog, lastSpentOf, type ExtraEntry } from '../../budget/extra.ts';
 import { formatPct, formatUsd } from '../../budget/format.ts';
 import { activeGroupLift, activeLift, decideLift, LiftLog, liftText, parentBudgetText, type Lift, type LiftNames } from '../../budget/lift.ts';
@@ -72,7 +71,7 @@ import type { RepoState } from '../../push-guard/push.ts';
 import { TASK_ID } from '../../register/model.ts';
 import { accountWeekOn, kitHomeAccountsOf, otherTeamsOnAccount, peerMarksOf } from '../account-teams.ts';
 import { UsageError, onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
-import { hostOf, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
+import { hostOf, transcriptsFolderIfKnown, transcriptsOf, usageIfMetered, usageOf } from '../host.ts';
 import { isUnsupported } from '../../ports/host/index.ts';
 import { callerOf, type TypedTimes } from '../inputs.ts';
 import { rushLine, rushSegment } from '../../budget/rush.ts';
@@ -140,7 +139,7 @@ async function readBudget(runtime: CliRuntime, kit: Kit, config: KitConfig, rost
       clock,
     },
     {
-      projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+      projectsDir: transcriptsFolderIfKnown(runtime),
       since: options.recountDay ?? dayStartOf(now) - (CURSOR_DAYS_KEPT - 1) * MS_PER_DAY,
       team: kit.paths.team,
       roster,

@@ -1,4 +1,3 @@
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { launchModelProblem, launchOf, ownLaunchOf, type LaunchHost } from '../../config/launch.ts';
 import { Roster } from '../../config/roster.ts';
 import type { ContextFilesConfig, KitConfig } from '../../config/types.ts';
@@ -17,7 +16,7 @@ import { JsonlRenameLog } from '../../names/log.ts';
 import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
-import { launchHostOf, pathsIfKnown, permissionsIfKept } from '../host.ts';
+import { launchHostOf, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
 import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
@@ -34,9 +33,10 @@ import { inboxDepsOf } from './inbox.ts';
  */
 export async function readContextInput(runtime: CliRuntime, project: string, skills: string, budgets: ContextFilesConfig): Promise<ContextInput> {
   const at = { paths: pathsIfKnown(runtime), userHome: runtime.userHome, project, skills };
+  const transcriptsFolder = transcriptsFolderIfKnown(runtime);
   return {
     contextFiles: { read: await readContextFiles(runtime.files, at), budgets },
-    sessionLists: await readSessionLists(runtime.transcripts, claudeProjectsDir(runtime.env, runtime.userHome), project),
+    sessionLists: transcriptsFolder === undefined ? undefined : await readSessionLists(runtime.transcripts, transcriptsFolder, project),
   };
 }
 

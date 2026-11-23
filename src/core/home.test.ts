@@ -6,21 +6,13 @@ import { SESSIONS_WEEK_IN_STATE } from '../budget/session-week-summary.ts';
 import { TASKS_WEEK_IN_STATE } from '../budget/task-week-summary.ts';
 import { TEAM_WEEK_IN_STATE } from '../budget/team-week-summary.ts';
 import { SESSION_LOG_IN_STATE } from '../sessions/log.ts';
-import { claudeConfigDir, resolveKitHome, taskFolder, teamConfigFile, teamHome, teamPaths } from './home.ts';
+import { resolveKitHome, taskFolder, teamConfigFile, teamHome, teamPaths } from './home.ts';
 
 const USER_HOME = join('/', 'u');
 const KIT = join('/', 'kit');
 const TEAM_HOME = join(KIT, 'teams', 'app');
 /** The folder the run's host loads a person's skills from, outside the kit home. */
 const HOST_SKILLS = join('/', 'cfg', 'skills');
-
-describe('claudeConfigDir', () => {
-  it('uses $CLAUDE_CONFIG_DIR, else ~/.claude', () => {
-    assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }, USER_HOME), join('/', 'cfg'));
-    assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: ' ' }, USER_HOME), join(USER_HOME, '.claude'));
-    assert.equal(claudeConfigDir({}, USER_HOME), join(USER_HOME, '.claude'));
-  });
-});
 
 describe('resolveKitHome', () => {
   it('prefers the env override, then a dot folder in the user home', () => {

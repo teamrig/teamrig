@@ -48,7 +48,7 @@ export interface SetupScanInput extends SessionContextLocations {
   readonly paths: SessionContextPaths & RulePlacePaths & Pick<HostPaths, 'userSettings'>;
   /** The host's own folder, which holds its installed plugins (`scanPluginHooks`). */
   readonly claudeDir: string;
-  /** Claude Code's transcripts folder (`claudeProjectsDir`). */
+  /** The host's transcripts folder, one folder per project (`HostPaths.transcriptsFolder`). */
   readonly projectsDir: string;
   /** Skills used in a transcript written since then count as used. */
   readonly since: number;

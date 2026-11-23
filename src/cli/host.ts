@@ -298,6 +298,19 @@ export function hostHomeIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'plat
   return pathsIfKnown(runtime)?.home(runtime.userHome);
 }
 
+/** The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
+export function transcriptsFolderOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
+  return pathsOf(runtime).transcriptsFolder(runtime.userHome);
+}
+
+/**
+ * The folder of the person's session transcripts, or undefined on a host whose folders teamrig does not know: for a
+ * hook or check that must go on, reading such a run as one with no transcript.
+ */
+export function transcriptsFolderIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string | undefined {
+  return pathsIfKnown(runtime)?.transcriptsFolder(runtime.userHome);
+}
+
 /** The run's permission rules. A host that keeps none refuses with its own reason, as `transcriptsOf` does. */
 export function permissionsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): HostPermissions {
   const { permissions } = hostOf(runtime);

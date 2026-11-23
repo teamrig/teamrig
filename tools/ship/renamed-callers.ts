@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseConfigText } from '../../src/config/text.ts';
-import { type Env, claudeConfigDir, resolveKitHome } from '../../src/core/home.ts';
+import { type Env, resolveKitHome } from '../../src/core/home.ts';
 import { teamPlace } from '../../src/delivery/places.ts';
 import { slugOf } from './repos.ts';
 
@@ -88,7 +88,7 @@ export interface RenamedCallersRequest {
   /** The GitHub slug of the repo shipped: its own checkouts are not scanned. */
   repo: string;
   kitHome: string;
-  /** Claude Code's own folder (`claudeConfigDir`): its skills folder and each project's memory folder are read. */
+  /** Claude Code's own folder (`claudeDirOf`): its skills folder and each project's memory folder are read. */
   claudeDir: string;
 }
 
@@ -317,8 +317,17 @@ export interface ConsumerHome {
   userHome: string;
 }
 
+/**
+ * Claude Code's own folder on the machine `ship.ts` runs on: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. A tool may not
+ * reach the host adapters, and this gate reads the folder of the host teamrig's own developers run.
+ */
+export function claudeDirOf(home: ConsumerHome): string {
+  const fromEnv = home.env['CLAUDE_CONFIG_DIR']?.trim();
+  return fromEnv ? fromEnv : join(home.userHome, '.claude');
+}
+
 /** The gate as `ship.ts merge` runs it: the refusal, or null when no consumer calls only a newly renamed command. */
 export function renamedCallersRefusal(change: RenamedChange, home: ConsumerHome, deps: RenamedCallersDeps): string | null {
   const kitHome = resolveKitHome(home.env, home.userHome);
-  return refusalOf(scanRenamedCallers({ ...change, kitHome, claudeDir: claudeConfigDir(home.env, home.userHome) }, deps));
+  return refusalOf(scanRenamedCallers({ ...change, kitHome, claudeDir: claudeDirOf(home) }, deps));
 }

@@ -1,4 +1,3 @@
-import { claudeProjectsDir } from '../../budget/discover.ts';
 import { formatUtcDay, MS_PER_DAY, parseUtcDay } from '../../core/time.ts';
 import { lintSkills } from '../../skills/lint.ts';
 import { skillsToLint } from '../../skills/run-scripts.ts';
@@ -7,7 +6,7 @@ import { SCAN_MAX_BYTES, scanTranscripts } from '../../skills/scorecard-scan.ts'
 import { ScorecardStore } from '../../skills/scorecard-store.ts';
 import { signatureOf } from '../../skills/signature.ts';
 import { noPositionals, UsageError, type Flags, type ParsedArgs } from '../args.ts';
-import { transcriptsOf } from '../host.ts';
+import { transcriptsFolderOf, transcriptsOf } from '../host.ts';
 import { openTeamKit, requireConfig } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { loadTree, skillOwnersElsewhere } from '../tree.ts';
@@ -35,7 +34,7 @@ export async function scorecard(args: ParsedArgs, runtime: CliRuntime): Promise<
   const result = await scanTranscripts(
     { source: runtime.transcripts, reader: transcriptsOf(runtime), store: new ScorecardStore(runtime.files, kit.paths.skillsScorecard), clock: runtime.clock },
     {
-      projectsDir: claudeProjectsDir(runtime.env, runtime.userHome),
+      projectsDir: transcriptsFolderOf(runtime),
       skills: { names: new Set(skills.map((skill) => skill.name)), signatures: signatures.filter((signature) => signature.patterns.length > 0) },
       since: startOf(baseline.from < window.from ? baseline.from : window.from),
       maxBytes: SCAN_MAX_BYTES,

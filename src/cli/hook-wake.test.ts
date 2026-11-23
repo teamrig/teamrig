@@ -23,7 +23,7 @@ import { DAY_PROBE_RECHECK_MS, RESTART_RECHECK_MS } from './commands/hook-wake.t
 import { GIVE_UP_MS } from '../refresh/restart.ts';
 import type { RefreshState, RestartRequest } from '../refresh/state.ts';
 import { RefreshStore } from '../refresh/store.ts';
-import { claudeCredentialsPath, formatLoginMarker, LOGIN_PROBE_STALE_MS, LOGIN_RETRY_GAP_MS, loginMarkerPath, parseLoginMarker, type LoginMarker } from '../restore/login.ts';
+import { formatLoginMarker, LOGIN_PROBE_STALE_MS, LOGIN_RETRY_GAP_MS, loginMarkerPath, parseLoginMarker, type LoginMarker } from '../restore/login.ts';
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../restore/registry.ts';
@@ -34,6 +34,7 @@ import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { steplessHost } from '../testing/shipped-steps.ts';
+import { testPaths } from '../testing/host.ts';
 import { teamConfigOf, teamHomeOf, teamInboxOf } from '../testing/team-tree.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
@@ -1155,7 +1156,7 @@ describe('hook wake-dropped', () => {
 });
 
 const MARKER = loginMarkerPath(KIT);
-const CREDENTIALS = claudeCredentialsPath({}, USER_HOME);
+const CREDENTIALS = testPaths().loginFile(USER_HOME) ?? assert.fail('the shipped host keeps its login in a file');
 const FAIL_AT = Date.parse('2030-01-08T09:30:00.000Z');
 const RECOVERED_AT = Date.parse('2030-01-08T09:55:00.000Z');
 /** What a tab stuck on an expired login watches: the default, then the login marker and the credentials file. */

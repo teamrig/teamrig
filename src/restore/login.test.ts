@@ -6,7 +6,6 @@ import { fieldPaths } from '../testing/field-paths.ts';
 import {
   applyLoginEvent,
   claimPage,
-  claudeCredentialsPath,
   decideLoginRetry,
   formatLoginMarker,
   LOGIN_MARKER_FORMAT,
@@ -169,12 +168,6 @@ describe('login marker', () => {
   it('logs a retry with the sign it acts on', () => {
     assert.equal(loginRetryLine('app/alpha', 'recovered'), 'login: retried app/alpha, the login works again');
     assert.equal(loginRetryLine('app/alpha', 'probe'), 'login: retried app/alpha, which tests the renewed login');
-  });
-
-  it("finds Claude Code's login file in its config folder, which CLAUDE_CONFIG_DIR moves", () => {
-    const home = join('/', 'home', 'me');
-    assert.equal(claudeCredentialsPath({}, home), join(home, '.claude', '.credentials.json'));
-    assert.equal(claudeCredentialsPath({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }, home), join('/', 'cfg', '.credentials.json'));
   });
 });
 
