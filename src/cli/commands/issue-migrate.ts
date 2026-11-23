@@ -3,7 +3,7 @@ import { KIT_NAME } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
 import { issueRef } from '../../sync/map.ts';
 import { countsLine, parseMigrateRows, planMigration, previewMarkdown, replacedRefNote, type MigrateCreate, type MigratePlan, type MigrateRow, type RefJudge } from '../../sync/migrate.ts';
-import { assignableOf, readAssignable } from '../../issues/assignable.ts';
+import { assignableOf, DESIGN_ASSIGNEE_FIX, readAssignable } from '../../issues/assignable.ts';
 import { DESIGN_LABEL } from '../../issues/design-label.ts';
 import { GITHUB_REPOS_HOST, type Assignees, type IssueTarget } from '../../issues/host.ts';
 import { RegisterPolicy } from '../../register/policy.ts';
@@ -157,7 +157,7 @@ async function assignDesign(host: Assignees, target: IssueTarget, designAssignee
   if (read.kind === 'failed') {
     return [`UNASSIGNED ${which}: ${read.reason}; the status push assigns it later`];
   }
-  const lines = read.unassignable.map((login) => `UNASSIGNED ${which}: ${login} may not be assigned there (not a person with access to it); name a login that may under github.designAssignees`);
+  const lines = read.unassignable.map((login) => `UNASSIGNED ${which}: ${login} may not be assigned there (not a person with access to it); ${DESIGN_ASSIGNEE_FIX}`);
   const logins = assignableOf(designAssignees, read);
   if (logins.length === 0) {
     return lines;

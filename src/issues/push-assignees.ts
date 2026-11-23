@@ -1,3 +1,4 @@
+import { DESIGN_ASSIGNEE_FIX } from './assignable.ts';
 import type { Assignees } from './host.ts';
 import { viewerRead, type PushAssignees, type PushPlan } from './status-push.ts';
 
@@ -61,7 +62,7 @@ export async function planAssigned(
 function unassignedLine(repo: string, login: string, left: number, who: PushAssignees): string {
   const head = `UNASSIGNED ${repo}: ${login} may not be assigned there (not a person with access to it); its ${left} issue(s)`;
   if (who.design.some((one) => one.toLowerCase() === login.toLowerCase())) {
-    return `${head} go without it, at no write: name a login that may under github.designAssignees`;
+    return `${head} go without it, at no write: ${DESIGN_ASSIGNEE_FIX}`;
   }
   return `${head} go to the next login in line, the one the sync runs as, or stay unassigned, at no write: map the owning session to a login that may under github.owners`;
 }

@@ -1,5 +1,8 @@
 import type { Assignees } from './host.ts';
 
+/** How to fix a design assignee the repository refused, the end of each UNASSIGNED line about one. */
+export const DESIGN_ASSIGNEE_FIX = 'name a login that may under github.designAssignees';
+
 /** Which of some logins a repository may assign: each that may, as the host spells it, and each that may not. */
 export type AssignableRead =
   | { readonly kind: 'read'; readonly spelled: ReadonlyMap<string, string>; readonly unassignable: readonly string[] }
