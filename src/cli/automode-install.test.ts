@@ -4,13 +4,21 @@ import { join } from 'node:path';
 import { kitLines, kitTag } from '../automode/lines.ts';
 import { formatConfig } from '../config/load.ts';
 import { homeRelative } from '../core/paths.ts';
+import { ALLOW_COMMANDS, allowRulesOf } from '../permissions/allow-sync.ts';
 import { CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME } from '../testing/cli-harness.ts';
 import { NO_PATHS_HOST, SESSIONS_ONLY_HOST } from '../testing/host.ts';
+import { shippedPermissions } from '../testing/shipped-permissions.ts';
 import { EXIT } from './runtime.ts';
 
+const PERMISSIONS = shippedPermissions();
 const SETTINGS = join(USER_HOME, '.claude', 'settings.json');
 const BACKUP = join(KIT, 'backups', 'claude-settings.json');
-const WHERE = `${SETTINGS} autoMode.environment`;
+/** The record of the allow rules install wrote. */
+const RECORD = join(KIT, 'synced-allow-rules.json');
+const WHERE = `${SETTINGS} ${PERMISSIONS.routesSetting}`;
+/** teamrig's own allow rules, which every install syncs after the routes, and the lines that add them. */
+const RULES = allowRulesOf(PERMISSIONS, ALLOW_COMMANDS);
+const ADD_RULES = RULES.map((rule) => `  ADD ${SETTINGS} ${PERMISSIONS.allowSetting}: ${rule}`);
 const TAG = kitTag('app');
 /** The default team's lines: team `app`, lead `lead`, the shipped push guard. */
 const LINES = kitLines({
@@ -35,6 +43,11 @@ function settingsIn(kit: CliHarness): unknown {
   return text === undefined ? undefined : JSON.parse(text);
 }
 
+function recordIn(kit: CliHarness): unknown {
+  const text = kit.files.get(RECORD);
+  return text === undefined ? undefined : JSON.parse(text);
+}
+
 function added(lines: readonly string[]): string[] {
   return lines.map((line) => `  ADD ${WHERE}: ${line}`);
 }
@@ -55,16 +68,16 @@ describe('teamrig automode install', () => {
   it('previews the lines after "$defaults" on a machine with no list, and writes nothing without --yes', async () => {
     const kit = await withSettings(undefined);
     const result = await kit.run(['automode', 'install']);
-    assert.deepEqual([result.code, result.stdout], [EXIT.ok, ['PREVIEW nothing written (add --yes to write)', ...added(['$defaults', ...LINES])]]);
+    assert.deepEqual([result.code, result.stdout], [EXIT.ok, ['PREVIEW nothing written (add --yes to write)', ...added(['$defaults', ...LINES]), ...ADD_RULES]]);
     assert.equal(kit.files.get(SETTINGS), undefined);
   });
 
-  it('with --yes writes the list, and a second run finds nothing to change', async () => {
+  it('with --yes writes the list and the allow rules, and a second run finds nothing to change', async () => {
     const kit = await withSettings(undefined);
     const result = await kit.run(['automode', 'install', '--yes']);
-    assert.deepEqual(result.stdout, ['WROTE the changes below', ...added(['$defaults', ...LINES])]);
-    assert.deepEqual(settingsIn(kit), { autoMode: { environment: ['$defaults', ...LINES] } });
-    assert.deepEqual((await kit.run(['automode', 'install', '--yes'])).stdout, [`UNCHANGED ${SETTINGS}: team app's lines are already there`]);
+    assert.deepEqual(result.stdout, ['WROTE the changes below', ...added(['$defaults', ...LINES]), ...ADD_RULES]);
+    assert.deepEqual(settingsIn(kit), { autoMode: { environment: ['$defaults', ...LINES] }, permissions: { allow: RULES } });
+    assert.deepEqual((await kit.run(['automode', 'install', '--yes'])).stdout, [`UNCHANGED ${SETTINGS}: team app's lines and teamrig's allow rules are already there`]);
   });
 
   it('replaces stale team lines where they were, keeping the old file and every other line and key', async () => {
@@ -75,8 +88,9 @@ describe('teamrig automode install', () => {
       `WROTE the changes below; the old settings file is at ${BACKUP}`,
       ...removed([`${TAG}an old line`]),
       ...added(LINES),
+      ...ADD_RULES,
     ]);
-    assert.deepEqual(settingsIn(kit), { theme: 'dark', autoMode: { allow: ['x'], environment: [OWN, ...LINES, OTHER_TEAM] } });
+    assert.deepEqual(settingsIn(kit), { theme: 'dark', autoMode: { allow: ['x'], environment: [OWN, ...LINES, OTHER_TEAM] }, permissions: { allow: RULES } });
     assert.equal(kit.files.get(BACKUP), original);
   });
 
@@ -102,6 +116,50 @@ describe('teamrig automode install', () => {
     assert.match(result.stdout[0] ?? '', /^REFUSED autoMode\.environment is not a list of strings/);
     assert.equal(kit.files.get(SETTINGS), original);
     assert.equal(kit.files.get(BACKUP), undefined);
+  });
+
+  it('records the rules it wrote, and never takes over or removes one the person wrote', async () => {
+    const own = 'Bash(teamrig list *)';
+    const kit = await withSettings(formatConfig({ permissions: { allow: [own] } }));
+    await kit.run(['automode', 'install', '--yes']);
+    const written = RULES.filter((rule) => rule !== own);
+    assert.deepEqual(recordIn(kit), { [SETTINGS]: written });
+    assert.deepEqual(settingsIn(kit), { permissions: { allow: [own, ...written] }, autoMode: { environment: ['$defaults', ...LINES] } });
+  });
+
+  it('on an update takes out a recorded rule no longer synced, leaving the same rule the person wrote', async () => {
+    const retired = 'Bash(teamrig budget *)';
+    const theirs = 'PowerShell(teamrig budget *)';
+    const kit = await withSettings(formatConfig({ autoMode: { environment: ['$defaults', ...LINES] }, permissions: { allow: [retired, theirs, ...RULES] } }));
+    await kit.files.write(RECORD, formatConfig({ [SETTINGS]: [retired, ...RULES] }));
+    const result = await kit.run(['automode', 'install', '--yes']);
+    assert.deepEqual(result.stdout, [`WROTE the changes below; the old settings file is at ${BACKUP}`, `  REMOVE ${SETTINGS} ${PERMISSIONS.allowSetting}: ${retired}`]);
+    assert.deepEqual(settingsIn(kit), { autoMode: { environment: ['$defaults', ...LINES] }, permissions: { allow: [theirs, ...RULES] } });
+    assert.deepEqual(recordIn(kit), { [SETTINGS]: RULES });
+  });
+
+  it('writes no record without --yes', async () => {
+    const kit = await withSettings(undefined);
+    await kit.run(['automode', 'install']);
+    assert.equal(kit.files.get(RECORD), undefined);
+  });
+
+  it('refuses a record that is not a list of rules per file, writing nothing', async () => {
+    const original = formatConfig({ theme: 'dark' });
+    const kit = await withSettings(original);
+    await kit.files.write(RECORD, formatConfig({ [SETTINGS]: 'Bash(teamrig list *)' }));
+    const result = await kit.run(['automode', 'install', '--yes']);
+    assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED ${RECORD}: ${SETTINGS} is not a list of strings; nothing written`]]);
+    assert.deepEqual([kit.files.get(SETTINGS), kit.files.get(BACKUP)], [original, undefined]);
+  });
+
+  it('refuses an allow setting that is not a list of strings, writing nothing', async () => {
+    const original = formatConfig({ permissions: { allow: ['Read', 3] } });
+    const kit = await withSettings(original);
+    const result = await kit.run(['automode', 'install', '--yes']);
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout[0] ?? '', /^REFUSED permissions\.allow/);
+    assert.deepEqual([kit.files.get(SETTINGS), kit.files.get(BACKUP), kit.files.get(RECORD)], [original, undefined, undefined]);
   });
 
   it('refuses outside a team', async () => {
@@ -136,6 +194,15 @@ describe('teamrig automode uninstall', () => {
     const kit = await withSettings(formatConfig({ autoMode: { environment: [OWN, ...LINES, OTHER_TEAM] } }));
     await kit.run(['automode', 'uninstall', '--yes']);
     assert.deepEqual(settingsIn(kit), { autoMode: { environment: [OWN, OTHER_TEAM] } });
+  });
+
+  it("leaves teamrig's allow rules and their record, which every team on the machine shares", async () => {
+    const kit = await withSettings(formatConfig({ autoMode: { environment: ['$defaults', ...LINES] }, permissions: { allow: RULES } }));
+    const record = formatConfig({ [SETTINGS]: RULES });
+    await kit.files.write(RECORD, record);
+    await kit.run(['automode', 'uninstall', '--yes']);
+    assert.deepEqual(settingsIn(kit), { permissions: { allow: RULES } });
+    assert.equal(kit.files.get(RECORD), record);
   });
 
   it('changes nothing when the team has no lines there', async () => {

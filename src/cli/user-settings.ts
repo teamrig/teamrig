@@ -19,6 +19,8 @@ const SETTINGS_BACKUP_NAME = 'claude-settings';
 export interface SettingsTarget {
   readonly settingsPath: string;
   readonly backupsDir: string;
+  /** The record of the allow rules `automode install` wrote (src/cli/allow-record.ts). */
+  readonly allowRecordPath: string;
 }
 
 export interface UserSettings {
@@ -31,9 +33,11 @@ export interface UserSettings {
  * reason, before anything is read or written.
  */
 export function settingsTargetOf(runtime: CliRuntime): SettingsTarget {
+  const kitHome = resolveKitHome(runtime.env, runtime.userHome);
   return {
     settingsPath: pathsOf(runtime).userSettings(runtime.userHome),
-    backupsDir: join(resolveKitHome(runtime.env, runtime.userHome), 'backups'),
+    backupsDir: join(kitHome, 'backups'),
+    allowRecordPath: join(kitHome, 'synced-allow-rules.json'),
   };
 }
 
