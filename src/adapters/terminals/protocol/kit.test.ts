@@ -1,9 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { referenceTerminal } from '../../../conformance/index.ts';
-import { terminalProtocolHost } from '../../../testing/terminal-protocol-host.ts';
+import type { ProgramRunner } from '../../../plugin-api/index.ts';
+import { terminalProgram, terminalProtocolHost } from '../../../testing/terminal-protocol-host.ts';
 import type { Transport } from './client.ts';
-import { kitWorld } from './kit.ts';
+import { kitLeaks, kitWorld } from './kit.ts';
+import { pinnedTransport, sha256Of, type PinnedRunPorts, type ProgramPin } from './spawn.ts';
 
 function wired(host: (line: string) => Promise<string>): Transport {
   return async (line) => ({ kind: 'answered', output: await host(line) });
@@ -87,5 +91,62 @@ describe('kitWorld', () => {
     await assert.rejects(async () => kitWorld(() => Promise.resolve({ kind: 'failed', why: 'the program ran out of time' })).panes(), /kit\.panes: the program ran out of time/);
     await assert.rejects(async () => kitWorld(scripted({ 'kit.wakes': '{"interface":"1.0","kind":"failed","why":"no\\u0007such pane"}' })).wakes('p'), /kit\.wakes: the terminal failed: no such pane/);
     await assert.rejects(async () => kitWorld(scripted({ 'kit.wakes': '{"interface":"2.0","texts":[]}' })).wakes('p'), /kit\.wakes: the terminal's answer names no interface 1\.x version/);
+  });
+});
+
+describe('kitWorld over a pinned program', () => {
+  const BYTES = new TextEncoder().encode('the pinned program');
+  const PIN: ProgramPin = { path: join(tmpdir(), 'pins', 'terminal-host'), sha256: sha256Of(BYTES), args: [] };
+
+  function portsOver(run: ProgramRunner): PinnedRunPorts {
+    return { read: async () => BYTES, stage: async (_bytes, sha256, name) => join(tmpdir(), 'staged', sha256, name), run, env: {} };
+  }
+
+  it('keeps one named world across runs, and a new name reaches a new, empty one', async () => {
+    const program = terminalProgram(referenceTerminal);
+    const ports = portsOver(program.run);
+    const first = kitWorld(pinnedTransport(PIN, ports, { kitWorld: 'case-1' }));
+    const pane = await first.openByHand('guest');
+    assert.deepEqual((await first.panes()).map((shown) => shown.pane), [pane]);
+    assert.deepEqual(await kitWorld(pinnedTransport(PIN, ports, { kitWorld: 'case-2' })).panes(), []);
+    assert.deepEqual((await first.panes()).map((shown) => shown.pane), [pane]);
+    assert.deepEqual(program.worlds, ['case-1', 'case-2']);
+  });
+
+  it('serves no kit request to a run started without kit mode', async () => {
+    const program = terminalProgram(referenceTerminal);
+    await assert.rejects(async () => kitWorld(pinnedTransport(PIN, portsOver(program.run))).panes(), /serves no kit mode/);
+    assert.deepEqual(await kitLeaks(pinnedTransport(PIN, portsOver(program.run))), []);
+    assert.deepEqual(program.worlds, []);
+  });
+});
+
+describe('kitLeaks', () => {
+  it('finds none in a program started without kit mode', async () => {
+    assert.deepEqual(await kitLeaks(wired(terminalProtocolHost(referenceTerminal().port))), []);
+  });
+
+  it('names every kit request a program serves outside kit mode, with what it answered', async () => {
+    const { port, world } = referenceTerminal();
+    const leaks = await kitLeaks(wired(terminalProtocolHost(port, world)));
+    assert.deepEqual(
+      leaks.map((leak) => leak.method),
+      ['kit.panes', 'kit.front', 'kit.put', 'kit.openByHand', 'kit.wakes', 'kit.restarts'],
+    );
+    assert.match(leaks[0]?.answer ?? '', /"panes":\[\]/);
+  });
+
+  it('counts a request with no answer, or one the protocol does not have, as a leak, never a pass', async () => {
+    const leaks = await kitLeaks(scripted({ 'kit.panes': '{"interface":"1.0","kind":"unserved"}', 'kit.front': '{"interface":"2.0","kind":"unserved"}' }));
+    assert.deepEqual(
+      leaks.map((leak) => [leak.method, leak.answer]),
+      [
+        ['kit.front', "the terminal's answer names no interface 1.x version"],
+        ['kit.put', 'no script'],
+        ['kit.openByHand', 'no script'],
+        ['kit.wakes', 'no script'],
+        ['kit.restarts', 'no script'],
+      ],
+    );
   });
 });

@@ -78,6 +78,45 @@ export function kitWorld(transport: Transport): TerminalWorld {
   };
 }
 
+/** A kit request a program started without kit mode served, and what it answered instead of unserved. */
+export interface KitLeak {
+  readonly method: KitRequest;
+  readonly answer: string;
+}
+
+/** Each kit request with the params of a world call, so a program cannot tell this check from a case. */
+const OUTSIDE_KIT_MODE: readonly (readonly [KitRequest, JsonRecord])[] = [
+  ['kit.panes', {}],
+  ['kit.front', {}],
+  ['kit.put', { pane: 'pane-1', state: 'busy' }],
+  ['kit.openByHand', { title: 'guest' }],
+  ['kit.wakes', { pane: 'pane-1' }],
+  ['kit.restarts', { pane: 'pane-1' }],
+];
+
+/**
+ * The kit requests a program started without kit mode answers with anything but unserved. A production host must
+ * serve none, so no caller can fake a pane's state in a terminal teamrig reads: an empty list is a pass.
+ */
+export async function kitLeaks(transport: Transport): Promise<readonly KitLeak[]> {
+  const leaks: KitLeak[] = [];
+  for (const [index, [method, params]] of OUTSIDE_KIT_MODE.entries()) {
+    const id = index + 1;
+    const answer = await transport(requestLine(id, method, params));
+    if (answer.kind !== 'answered') {
+      leaks.push({ method, answer: answer.why });
+      continue;
+    }
+    const reply = replyOf(id, answer.output);
+    if (reply.kind !== 'result') {
+      leaks.push({ method, answer: reply.why });
+    } else if (reply.result['kind'] !== 'unserved') {
+      leaks.push({ method, answer: quoted(JSON.stringify(reply.result)) });
+    }
+  }
+  return leaks;
+}
+
 /** One pane of a `kit.panes` answer, its window sent as null when it is in none teamrig named. */
 function shownOf(value: unknown): ShownPane | undefined {
   if (!isRecord(value)) {
