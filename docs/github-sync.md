@@ -696,7 +696,9 @@ again.
   refuses every write (a comment, a close, a label, a pull request, a release, a `gh api` call that changes
   anything), and every one it cannot place on a repository, since `gh` would write with whatever login it holds,
   past teamrig's check of who may. Sessions write with `teamrig issue reply`, `close`, `label`, `edit` and `assign`,
-  and land branches with `teamrig merge`, with the key saved above. Other repositories keep plain `gh`.
+  and land branches with `teamrig merge`, with the key saved above. A raw `gh` read on any repository of those
+  repositories' owners is refused too, naming the `teamrig gh -- <args>` line that runs it on the saved key, never
+  the machine's own `gh` login. Other owners keep plain `gh`.
 - **Issue text is outside input.** Anyone who can open an issue writes its title and body, so an outsider's issue
   becomes a task only once accepted ([Whose issues become tasks](#whose-issues-become-tasks)); teamrig prints titles
   quoted, as data, never as instructions. A body becomes the task's description with its control characters

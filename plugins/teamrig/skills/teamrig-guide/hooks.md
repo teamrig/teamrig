@@ -16,7 +16,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 | `PreToolUse` on `Bash`, `PowerShell`, `Read`, `Grep`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook secret-guard` | Refuses a call that would print a secret file, a secret variable, the whole environment, a Kubernetes secret's data or a dump command's output into the conversation, or whose command line or written text holds a secret ([the secret guard](#before-a-shell-command-or-a-read-the-secret-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook db-write-guard` | Refuses a line that writes to a database by hand (a built-in SQL client, a database program or Node client module the team names, a data script the team names run with its apply flag), naming the counts or preview to show the owner first, unless `dbWriteGuard.writes` is `allow` ([the db-write guard](#before-a-shell-command-the-db-write-guard)) |
 | `PostToolUse` on `Bash`, `PowerShell`, `Read` and `Grep` | `hook secret-redact` | Replaces each secret a call's result holds before Claude and the transcript see it, and tells the session which kinds it held and the task it filed to rotate each ([the secret redactor](#after-a-tool-call-the-secret-redactor)) |
-| `PreToolUse` on `Bash` and `PowerShell` | `hook exec-guard` | Refuses a privileged command's review run as another session or the owner, any `exec` call through a client that is no install of the plugin, or one changed after its build, every `owner note` or `owner next`, which act as the owner, a settings writer's `--yes` write, which changes a permission, every `hook` command, which takes its tab from its stdin, a bound tab's `start` or `inbox read` as another session, a line that changes `$CLAUDECODE`, a shell fed its commands from a pipe, and a raw `gh` write on one of the team's GitHub repositories ([the exec guard](#before-a-shell-command-the-exec-guard)) |
+| `PreToolUse` on `Bash` and `PowerShell` | `hook exec-guard` | Refuses a privileged command's review run as another session or the owner, any `exec` call through a client that is no install of the plugin, or one changed after its build, every `owner note` or `owner next`, which act as the owner, a settings writer's `--yes` write, which changes a permission, every `hook` command, which takes its tab from its stdin, a bound tab's `start` or `inbox read` as another session, a line that changes `$CLAUDECODE`, a shell fed its commands from a pipe, a raw `gh` write on one of the team's repositories, and a raw read on one of their owners ([the exec guard](#before-a-shell-command-the-exec-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
@@ -859,6 +859,15 @@ them (`echo "exec approve R1"`). A command word only known when it runs counts o
   read (an SSH host alias, a port); name the repository with `-R`. Every write is refused while the team config does
   not load. A repository outside `github.repos` keeps plain `gh`, so a contributor's own fork works, and a team with
   no `github.repos` is not checked.
+- **a raw read on an owner of the team's repositories**: a read reaching any repository of an owner on that list
+  (`acme/web` makes every `acme/...` count, as keys are saved per owner), placed the way a write is: its `-R`, an
+  `api` path (`orgs/<owner>` and `users/<owner>` too) or a `repo` command's repository, else `GH_REPO` or the
+  folder's git remotes. The raw call reads with this machine's own login, which may be another project's key, so the
+  reason names the line that runs the same words on the key the team saved for that owner: `teamrig gh -- <args>`.
+  A folder's read the guard cannot place is refused too, as a write is; name the repository with `-R`. A call that
+  route refuses itself passes (the tool's own login, settings, aliases and extensions, `--hostname`), as does a
+  folder's read through a program only known when it runs (`$TOOL api user`), since `run`, `status` and `api` are
+  words of other programs too. While the team config does not load, or names no team repository, reads pass.
 
 It always refuses and never asks; no config key turns it off. The guard reads only the call, so it cannot see:
 
@@ -2026,7 +2035,7 @@ allow lets a call skip the prompt, and only a shell line it proves only reads.
 - **The db-write guard** refuses a line that writes to a database by hand on its own, whatever the mode, unless
   `dbWriteGuard.writes` is `allow`.
 - **The exec guard** refuses a privileged command's review run as another session or the owner, any
-  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories, on its own, whatever the mode
+  `exec` call through a client that is no install of the plugin or was changed, every `owner` and `hook` command, a shell fed its commands from a pipe, and a raw `gh` write on the team's repositories or read on their owners, on its own, whatever the mode
   or allow rules.
 - **The read-only allow** (`readonlyShell.enabled`) lets a shell line that only reads run with no prompt in default
   mode too; it never asks or refuses, so in a mode that already allows the line it changes nothing.

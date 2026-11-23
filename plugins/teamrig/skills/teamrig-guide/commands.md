@@ -8123,7 +8123,8 @@ write and the count or dry run to show the owner first, and under `ask` (the def
 
 Before a Bash or PowerShell call, refuses a `teamrig exec approve`, `refuse` or `escalate` run as anyone but the
 tab's own session, any `exec` call while the installed teamrig client differs from what its build
-hashed, and a raw `gh` write on a repository in `github.repos`, or one it cannot place. See [Hooks and permissions](hooks.md#before-a-shell-command-the-exec-guard).
+hashed, a raw `gh` write on a repository in `github.repos`, or one it cannot place, and a raw read on an owner
+of those repositories, naming the line that runs it on the team's saved key. See [Hooks and permissions](hooks.md#before-a-shell-command-the-exec-guard).
 
 Flags: none.
 
