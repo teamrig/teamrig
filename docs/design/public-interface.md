@@ -308,7 +308,14 @@ teamrig ships a conformance kit with the interface:
   without its proof; an act with a forged identity field refused or ignored; an owner proof that is replayed, expired
   or made for another command or commit refused; a read of `inbox` that leaves the unread state as it was; outside
   text never in an event frame; unknown fields ignored.
-- teamrig's own CI runs the kit against its built-in hosts at each change; a host's CI runs it against the host.
+- teamrig's own CI runs the kit against its built-in hosts at each change; a host's CI runs it against the host, with
+  `teamrig conformance terminal`.
+- **A host's kit mode.** A case reads what the terminal really did and scripts what a person at it does, through six
+  `kit.*` requests a host serves only when started with `TEAMRIG_KIT` set, over a fake terminal of its own. The
+  variable's value names that fake: the host runs once per request, so it keeps each named one between runs, and the
+  kit gives each case a new name. Without the variable every `kit.*` request answers unserved, which the kit checks
+  last, so no caller can fake a production host's pane states. The requests are in
+  [the host guide](../guides/build-a-terminal-host.md#kit-mode-a-fake-terminal-of-your-own).
 
 ## Order of work
 

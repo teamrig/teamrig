@@ -6,8 +6,9 @@ kitty, your own pane manager) can take their place with no change to teamrig's c
 program** that speaks the terminal protocol, and the team's owner pins it. This guide is for the author of such a
 host. The full design, with its reasons, is [the public interface](../design/public-interface.md#terminals-as-a-protocol).
 
-*Coming: pinning a host in the team config, the owner's re-pin after a host update, and the kit command that tests a
-host. The protocol below is the one teamrig's client speaks today; a host built to it works once pinning lands.*
+*Coming: pinning a host in the team config and the owner's re-pin after a host update. The protocol below is the one
+teamrig's client speaks today, and [the kit](#testing-your-host) tests a host against it now; a host built to it works
+once pinning lands.*
 
 - [What a host does](#what-a-host-does)
 - [One request per run](#one-request-per-run)
@@ -132,12 +133,45 @@ the release they install.
 
 ## Testing your host
 
-*Coming: a kit command that runs teamrig's terminal contract, the same cases every built-in terminal passes, against
-your program through the protocol.* A host passes only with the negative cases too: `deliver` held in a busy pane, in
-one that shows a question and in one holding a draft, refused with a wrong token or none, and a pane teamrig did not
-open listed but never adopted.
+`teamrig conformance terminal` runs teamrig's terminal contract, the same cases every built-in terminal passes,
+against your program through the protocol, run the way teamrig runs it (a private copy of the pinned bytes, the short
+environment):
 
-Until the kit ships, test the table above by hand: pipe each request line into your program and check its answer.
+```sh
+teamrig conformance terminal --program /opt/myterm/teamrig-host --sha256 <its sha256> --args serve
+```
+
+It prints `PASS` or `FAIL <case>: <why>` per case, `SKIP` for a case your operating system lacks, and exits 0 only
+when every case passed. A host passes only with the negative cases too: `deliver` held in a busy pane, in one that
+shows a question and in one holding a draft, refused with a wrong token, and a pane teamrig did not open listed but
+never adopted.
+
+### Kit mode: a fake terminal of your own
+
+A case never believes an answer alone: after each request it reads what your terminal really did, and it puts panes
+into states (a turn running, a question showing) as a person at them would. Your program serves that through six
+extra requests, over a **fake terminal of its own**, never the real one, and only when started with `TEAMRIG_KIT` set.
+
+- **`TEAMRIG_KIT` names a world.** Your program runs once per request, so keep each named fake terminal's panes
+  between runs (a file in a folder of your own is enough); a name you have not seen is a new, empty terminal. The kit
+  gives every case a new name, so nothing passes from one case to the next.
+- **The normal requests go to that fake too** in kit mode: `open` adds a pane to it, `deliver` records the text,
+  `isIdle` answers the state `kit.put` set.
+- **Without `TEAMRIG_KIT`, answer every `kit.*` request `{"kind":"unserved"}`.** The kit checks this last, and prints
+  `LEAK <request>` for each one served (a JSON-RPC error counts as one too): a host in production that served them
+  would let any caller fake what its panes are.
+
+| Request | `params` | `result` |
+| --- | --- | --- |
+| `kit.panes` | none | `{"panes":[{"pane":"...","title":"...","folder":"...","argv":[...],"window":null}]}`: every pane, oldest first; `window` is the named window, or `null` |
+| `kit.front` | none | `{"pane":"<id>"}` for the pane in front, or `{"pane":null}` |
+| `kit.put` | `pane`, `state` (`idle`, `busy`, `asking`, `draft`, `gone`) | `{"kind":"done"}` |
+| `kit.openByHand` | `title` | `{"pane":"<id>"}`: a pane opened as a person would, which teamrig did not ask for |
+| `kit.wakes` | `pane` | `{"texts":[...]}`: the wake texts delivered to it, oldest first |
+| `kit.restarts` | `pane` | `{"resumes":[...]}`: one boolean per restart, oldest first, whether it was asked to resume |
+
+Each `kit.*` result carries `interface` like any other. Until your fake is done, a case whose reads it cannot serve
+fails with the request's name, so the kit can guide the work.
 
 ## A tool that shows the team instead
 
