@@ -770,7 +770,7 @@ read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, w
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
 `disableAllHooks`, which stops every teamrig hook, the secret guard's included, AUTOMODE-STALE: the team's
-`[teamrig <team>]` lines in Claude Code's `autoMode.environment` differ from what `teamrig automode install` writes now
+`[teamrig <team>]` lines in the host's `autoMode.environment` differ from what `teamrig automode install` writes now
 (a config change such as a repository rename, or an upgrade that adds a line), so auto mode reads the team as it was;
 `teamrig automode install` shows the change, and writing it with `--yes` is the owner's call, as it changes the
 person's permission settings; a machine with none of the team's lines never shows it, FIVE-HOUR: the account's five-hour
@@ -5321,11 +5321,12 @@ worktree, a main checkout, and agent config and gates (`.claude/`, `CLAUDE.md`, 
 line names the whole team, never a list of sessions, so a new hire needs no edit, and takes the repositories from
 the config when it is written (`github.repos`, and the names in `delivery.repos`). It states only what each command
 checks before it writes: `teamrig merge` merges the branch of a worktree of those repositories as `pushGuard` says,
-`teamrig pr approve` and `teamrig pr merge` act only on a pull request whose task the caller owns and whose head the
-caller's leader approved, `teamrig issue migrate` opens issues only for tasks the caller may set, and `teamrig ci
+`teamrig pr approve` and `teamrig pr merge` act only on a change request whose task the caller owns and whose head
+the caller's leader approved, `teamrig issue migrate` opens issues only for tasks the caller may set, and `teamrig ci
 rerun` starts only a failed run again; all write with the key saved for the repository's owner. It covers nothing
-those checks refuse, nor a raw `gh` or `git` write on those repositories. After a repository rename, run install
-again: `teamrig check` raises AUTOMODE-STALE until you do. A plugin cannot ship these (its settings take only `agent` and `subagentStatusLine`), so this writes them into your
+those checks refuse, nor a write by any other tool on those repositories. After a repository rename, run install
+again: `teamrig check` raises AUTOMODE-STALE until you do. A plugin cannot ship these (its settings take only
+`agent` and `subagentStatusLine`), so this writes them into your
 own Claude Code settings (`settings.json` in `$CLAUDE_CONFIG_DIR`, else in `~/.claude`). The lines replace the
 team's tagged lines where they were, else go at the end; your own lines and other teams' tagged lines stay as they
 are. With no list yet, the new one starts with `"$defaults"`, so Claude Code's built-in entries stay on; a list you
