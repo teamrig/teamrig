@@ -2,9 +2,10 @@ name: release
 
 on:
   # A push to main tags and publishes a release pull request that merged. The pull request itself opens or takes main's
-  # new commits only once per preview slot, on the hourly run in the slot's first hour, or on a run by hand
-  # (tools/release/pull-update.ts, T5186): an update rewrites its head and starts its ci over, so on a busy main an
-  # update on every push kept the release from ever finishing a ci run.
+  # new commits only once per preview slot: on the first push or hourly run that finds its head older than the slot's
+  # start, or on a run by hand (tools/release/pull-update.ts, T5186, T5330). An update rewrites its head and starts its
+  # ci over, so on a busy main an update on every push kept the release from ever finishing a ci run; the hourly run
+  # moves it on a quiet main, and a push moves it when GitHub drops or delays that run.
   push:
     branches: [main]
   schedule:
@@ -55,8 +56,11 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
+      # It reads the open release pull request's head with the job's token, and writes nothing to GitHub.
       - id: gate
         run: node tools/release/pull-update-cli.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       # On a run the gate shuts, release-please only tags and publishes a release pull request that merged.
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
