@@ -71,6 +71,7 @@ const richTask: Task = testTask({
   proof: 'the health check answers',
   watch: 'a sighting in the log',
   reparks: 2,
+  inProgressMs: 7_200_000,
   followups: ['T43'],
   review: { cause: 'web.ts:12', how: 'a refactor', prevent: 'a spec', harden: 'a type', missedTest: 'T44', missedMonitor: 'none fits', missedLog: 'T45' },
   sizeBase: { day: '2030-01-08', w: 12.5 },
@@ -142,6 +143,7 @@ describe('task lines', () => {
     assert.equal(parseTaskLine(editedLine(richTask, { id: 'X1' })), 'id "X1" is not a task id');
     assert.equal(parseTaskLine(editedLine(richTask, { status: 'paused' })), 'T42: status "paused" is not a status');
     assert.equal(parseTaskLine(editedLine(richTask, { reparks: -1 })), 'T42: reparks is not a count');
+    assert.equal(parseTaskLine(editedLine(richTask, { inProgressMs: 1.5 })), 'T42: inProgressMs is not a count');
   });
 
   it('refuses a bad answer, decision, audit or verdict', () => {

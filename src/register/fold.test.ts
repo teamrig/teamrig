@@ -1,10 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { MS_PER_HOUR } from '../core/time.ts';
 import { TEST_CARD } from '../testing/card.ts';
 import type { DecisionCard } from './card.ts';
 import { cutOf, cutTask } from './description-cut.ts';
 import { EVENT_VERSION, type ApprovalVerdict, type RegisterEvent, type TaskFields } from './events.ts';
-import { droppedApproval, foldEvents, RegisterFold, type Task } from './fold.ts';
+import { droppedApproval, foldEvents, RegisterFold, timeInProgress, type Task } from './fold.ts';
 import type { TaskStatus } from './model.ts';
 import type { ProblemReview } from './review.ts';
 import type { WaitReason } from './waits.ts';
@@ -123,6 +124,23 @@ describe('foldEvents: when a task took its status and priority', () => {
     assert.equal(taskAfter([create(9), status(10, 'in-progress')]).statusAt, at(10));
     assert.equal(taskAfter([create(9), status(10, 'in-progress'), status(11, 'in-progress')]).statusAt, at(10));
     assert.equal(taskAfter([create(9), status(10, 'waiting'), status(12, 'open')]).statusAt, at(12));
+  });
+
+  it('sums the in-progress stretches a status change ends, and keeps the sum on a repeat of the same status (T5043)', () => {
+    const hours = (task: Task) => task.inProgressMs / MS_PER_HOUR;
+    assert.equal(hours(taskAfter([create(9)])), 0);
+    assert.equal(hours(taskAfter([create(9), status(10, 'in-progress'), status(11, 'in-progress')])), 0, 'the stretch still runs');
+    assert.equal(hours(taskAfter([create(9), status(10, 'in-progress'), status(12, 'waiting')])), 2);
+    assert.equal(hours(taskAfter([create(9), status(10, 'in-progress'), status(12, 'waiting'), status(20, 'in-progress'), status(21, 'verifying')])), 3, 'the wait never counts');
+    assert.equal(hours(taskAfter([create(9), status(10, 'waiting'), status(15, 'open')])), 0);
+  });
+
+  it('counts a task in progress now with its current stretch, and one in another status with its sum alone (T5043)', () => {
+    const running = taskAfter([create(9), status(10, 'in-progress'), status(12, 'waiting'), status(14, 'in-progress')]);
+    assert.equal(timeInProgress(running, Date.parse(at(17))), 5 * MS_PER_HOUR);
+    assert.equal(timeInProgress(running, Date.parse(at(13))), 2 * MS_PER_HOUR, 'a clock before the stretch adds nothing');
+    const parked = taskAfter([create(9), status(10, 'in-progress'), status(12, 'waiting')]);
+    assert.equal(timeInProgress(parked, Date.parse(at(23))), 2 * MS_PER_HOUR);
   });
 
   it('moves priorityAt on a changed priority only, never on other changes or the same priority', () => {
