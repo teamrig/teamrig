@@ -61,6 +61,8 @@ async function factsOf(runtime: CliRuntime): Promise<AutoModeFacts> {
     home: homeRelative(kit.paths.home, runtime.userHome),
     lead: config.roles.lead,
     pushGuard: config.pushGuard,
+    githubRepos: config.github.repos,
+    deliveryRepos: Object.keys(config.delivery.repos),
   };
 }
 

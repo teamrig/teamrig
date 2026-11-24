@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { kitLines, kitTag } from '../automode/lines.ts';
 import { formatConfig } from '../config/load.ts';
+import type { JsonRecord } from '../core/guards.ts';
 import { homeRelative } from '../core/paths.ts';
 import { ALLOW_COMMANDS, allowRulesOf } from '../permissions/allow-sync.ts';
 import { CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME } from '../testing/cli-harness.ts';
@@ -26,6 +27,8 @@ const LINES = kitLines({
   home: homeRelative(TEAM_HOME, USER_HOME),
   lead: 'lead',
   pushGuard: { protectedBranches: ['main', 'master'], pushToProtected: 'ask' },
+  githubRepos: [],
+  deliveryRepos: [],
 });
 const OWN = 'Trusted repo: github.com/me/app';
 const OTHER_TEAM = '[teamrig shop] Protected branches: main.';
@@ -98,6 +101,27 @@ describe('teamrig automode install', () => {
     const kit = await withSettings(undefined, { ...TEAM, roles: { lead: 'alpha' }, pushGuard: { protectedBranches: ['trunk'], pushToProtected: 'lead' } });
     const result = await kit.run(['automode', 'install']);
     assert.match(result.stdout[2] ?? '', /\[teamrig app\] Protected branches: trunk\. A normal push to one goes through only for the lead \(session alpha\)/);
+  });
+
+  it("names the team's repositories in the delivery line, and a re-run after a rename swaps that line for the new names", async () => {
+    const delivery = (text: string): string | undefined => text.split('\n').find((line) => line.includes('Delivery: every session of team app'));
+    const repos = (names: readonly string[]): JsonRecord => ({
+      ...TEAM,
+      github: { repos: names },
+      delivery: { repos: { app: { mainCheckout: 'checkouts/app' } } },
+    });
+    const kit = await withSettings(undefined, repos(['me/app', 'me/docs']));
+    await kit.run(['automode', 'install', '--yes']);
+    const before = delivery(kit.files.get(SETTINGS) ?? '') ?? '';
+    assert.match(before, /a worktree of app into its default branch/);
+    assert.match(before, /a pull request of me\/app, me\/docs only when one task holds it/);
+    await kit.files.write(join(TEAM_HOME, 'config.json'), formatConfig(repos(['org/app', 'org/docs'])));
+    const result = await kit.run(['automode', 'install', '--yes']);
+    const removedLine = result.stdout.find((line) => line.startsWith('  REMOVE') && line.includes('Delivery:')) ?? '';
+    const addedLine = result.stdout.find((line) => line.startsWith('  ADD') && line.includes('Delivery:')) ?? '';
+    assert.match(removedLine, /me\/app, me\/docs/);
+    assert.match(addedLine, /org\/app, org\/docs/);
+    assert.doesNotMatch(kit.files.get(SETTINGS) ?? '', /me\/app/);
   });
 
   it('names a team folder under the user home with ~/', async () => {

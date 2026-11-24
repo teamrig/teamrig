@@ -8,7 +8,14 @@ const FACTS: AutoModeFacts = {
   home: '~/.teamrig/teams/alpha',
   lead: 'boss',
   pushGuard: { protectedBranches: ['main', 'release'], pushToProtected: 'ask' },
+  githubRepos: ['acme/app', 'acme/site'],
+  deliveryRepos: ['app'],
 };
+
+/** The delivery line, the last one. */
+function deliveryOf(facts: AutoModeFacts): string {
+  return kitLines(facts).at(-1) ?? '';
+}
 
 describe('kitTag', () => {
   it("names the team, so one team's lines never match another's", () => {
@@ -40,7 +47,34 @@ describe('kitLines', () => {
         'and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted ' +
         'changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked ' +
         "or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).",
+      "[teamrig alpha] Delivery: every session of team alpha may land its own work with teamrig's delivery commands, each of which checks who may before it writes: " +
+        '`teamrig merge` merges the branch checked out in a worktree of app into its default branch and pushes as the protected-branches line says; ' +
+        '`teamrig pr approve` and `teamrig pr merge` act on a pull request of acme/app, acme/site only when one task holds it, the caller owns that task and ' +
+        "the caller's leader approved it with a note naming the pull request's full head (the lead, session boss, needs one only from the lead of a team above), and pr merge only once its checks passed; " +
+        '`teamrig issue migrate <file> --yes` opens issues in acme/app, acme/site only for tasks whose ref the register lets the caller set; ' +
+        '`teamrig ci rerun` starts again only a failed, cancelled or timed-out push, pull request, merge queue or schedule run of acme/app, acme/site, before its third attempt. ' +
+        "They write with the key saved for the repository's owner, never this machine's gh login. " +
+        'This covers nothing those checks refuse, nor a raw gh or git write on these repositories.',
     ]);
+  });
+
+  it('names the whole team in the delivery line, and no session but the lead', () => {
+    const named = kitLines(FACTS).flatMap((line) => [...line.matchAll(/\bsession ([\w-]+)[),]/g)].map((match) => match[1]));
+    assert.ok(named.length > 0);
+    assert.deepEqual(new Set(named), new Set(['boss']));
+    assert.match(deliveryOf(FACTS), /every session of team alpha/);
+  });
+
+  it('takes the self-merge gates into the delivery line only where a push to a protected branch is gated', () => {
+    const gated = deliveryOf({ ...FACTS, pushGuard: { ...FACTS.pushGuard, pushToProtected: 'gated' } });
+    assert.match(gated, /pushes only a change that holds the self-merge gates \(a live task of its own, .*\), holding one that misses a gate for a leader's approval;/);
+    assert.doesNotMatch(deliveryOf(FACTS), /self-merge gates/);
+  });
+
+  it('says a key with no repository names none, never reading as every repository', () => {
+    const line = deliveryOf({ ...FACTS, githubRepos: [], deliveryRepos: [] });
+    assert.match(line, /a worktree of no repository \(delivery\.repos is empty\)/);
+    assert.match(line, /a pull request of no repository \(github\.repos is empty\) only when/);
   });
 
   it('keeps the clean-files line from clearing what git cannot restore or what guards the session', () => {

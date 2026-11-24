@@ -94,6 +94,16 @@ describe('ALLOW_COMMANDS', () => {
   it('names each command once', () => {
     assert.equal(new Set(ALLOW_COMMANDS).size, ALLOW_COMMANDS.length);
   });
+
+  it('gives every synced command its rule in each shell tool, so no command prompts in PowerShell alone (T5338)', () => {
+    const rules = new Set(allowRulesOf(PERMISSIONS, ALLOW_COMMANDS));
+    for (const command of ALLOW_COMMANDS) {
+      for (const tool of ['Bash', 'PowerShell']) {
+        assert.ok(rules.has(`${tool}(teamrig ${command} *)`), `${command} has no ${tool} rule`);
+      }
+    }
+    assert.equal(rules.size, ALLOW_COMMANDS.length * 2);
+  });
 });
 
 describe('allowRulesProbe', () => {
