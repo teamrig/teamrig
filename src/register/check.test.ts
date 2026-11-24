@@ -529,11 +529,13 @@ describe('checkTasks: PREP-LAPSED (T2453)', () => {
   const seen = { ownerSeenAt: FRESH, updatedAt: FRESH };
 
   it('flags an active task whose prep marker lapsed with what moved, and treats it as any other task: skipping near prep, off goal', () => {
-    const tasks = [testTask({ id: 'T1', status: 'in-progress', statusAt: FRESH, ...seen }), testTask({ id: 'T2', ...seen }), testTask({ id: 'T3', status: 'done', ...seen })];
+    const tasks = [testTask({ id: 'T1', status: 'in-progress', ...seen }), testTask({ id: 'T2', ...seen }), testTask({ id: 'T3', status: 'done', ...seen })];
     const why = 'prepares A1:5, goal A1 is on slice 2';
     const lapsed = { standing: 'lapsed', why } as const;
     const ranking = testRanking({ preps: { T1: lapsed, T2: { standing: 'near' }, T3: lapsed } });
-    const flags = checkTasks(tasks, NOW, TimeZone.UTC, '2030-01-07', CONFIG, NO_TASKS_ELSEWHERE, ranking);
+    // T1 has been in progress since 01-07 09:00, 75 h: past the default STALE limit, which this spec does not test.
+    const lenient = testConfig({ register: { check: { staleAfterHours: 100 } } }).register;
+    const flags = checkTasks(tasks, NOW, TimeZone.UTC, '2030-01-07', lenient, NO_TASKS_ELSEWHERE, ranking);
     assert.deepEqual(
       flags.map((flag) => `${flag.kind} ${flag.task.id}: ${flag.detail}`),
       [
