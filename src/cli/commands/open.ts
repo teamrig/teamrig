@@ -98,6 +98,12 @@ export function homeArgs(runtime: CliRuntime): string[] {
   return customHome === undefined || customHome === '' ? [] : ['--home', resolve(runtime.cwd, customHome)];
 }
 
+/** The runtime on the kit home `--home` names, which a new tab's own environment may not carry: `homeArgs`'s reader. */
+export function homeRuntimeOf(args: ParsedArgs, runtime: CliRuntime): CliRuntime {
+  const home = args.flags.get('home');
+  return home === undefined ? runtime : { ...runtime, env: { ...runtime.env, [ENV.home]: resolve(runtime.cwd, home) } };
+}
+
 /** A new tab for a session: where it opens, in which terminal, and the first prompt. */
 export interface SessionTab {
   readonly team: string;
