@@ -65,6 +65,7 @@ export const HOOK_COMMANDS: ReadonlySet<string> = new Set([
   'hand-trace',
   'helper-gate',
   'inbox-reminder',
+  'install-guard',
   'loop-nudge',
   'meeting-due',
   'meeting-panel',

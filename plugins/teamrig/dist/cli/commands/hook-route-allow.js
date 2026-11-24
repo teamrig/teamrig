@@ -5,7 +5,7 @@ import { noPositionals } from "../args.js";
 import { hookLogOf } from "../hook-logs.js";
 import { EXIT } from "../runtime.js";
 import { guardLoadOf } from "./hook-guard-load.js";
-import { dbWriteGuardReplyOf, execGuardReplyOf, packageGuardReplyOf, pushGuardReplyOf, secretGuardReplyOf, serviceRoleGuardReplyOf } from "./hook-guard-outputs.js";
+import { dbWriteGuardReplyOf, execGuardReplyOf, installGuardReplyOf, packageGuardReplyOf, pushGuardReplyOf, secretGuardReplyOf, serviceRoleGuardReplyOf } from "./hook-guard-outputs.js";
 import { envSession, readHookInput, writeReply } from "./hook-input.js";
 import { roleAllowReplyOf } from "./hook-role-allow.js";
 import { callRouteOf } from "./hook-route-context.js";
@@ -17,6 +17,7 @@ async function everyGuardPassed(runtime, guard, event) {
         execGuardReplyOf(runtime, guard, event),
         dbWriteGuardReplyOf(runtime, guard, event),
         serviceRoleGuardReplyOf(runtime, guard, event),
+        installGuardReplyOf(runtime, event),
     ]);
     return guardsPassed([...answers, secretGuardReplyOf(runtime, guard, event), passRecordGuardReply(event)]);
 }
@@ -50,7 +51,8 @@ async function routeAllowReplyOf(runtime, event, deps) {
 /**
  * PreToolUse on Bash: under `prompts.hookAsks: refuse` with `prompts.routeAllow` on (its default), lets a line that runs
  * a sanctioned route marked for it (permissions/sanctioned.ts: merge, deploy, exec request, worktree remove, git commit)
- * run with no permission check, once the push, package, secret, exec, db-write and pass-record guards all passed it; logs each
+ * run with no permission check, once the push, package, secret, exec, db-write, pass-record, service-role and install
+ * guards all passed it; logs each
  * allow to `state/prompt-answers.jsonl` by its route, never its command. With the switch on, whatever asks say, it also
  * lets a service role's call run for the tab bound to a holder of the role, up to the role's daily cap, then asks
  * (T2984, hook-role-allow.ts). Outside a team, with the switch off or the config missing or broken, for any other line

@@ -1,6 +1,6 @@
 import { ASSIGNMENT_LIKE, NAME, SETS_NAME, setsNamesUnseen, unquotedBindingName } from "./setters.js";
 /** A heredoc's operator, `<<` or `<<-` with any descriptor; its target is the delimiter, never expanded. */
-const HEREDOC_OPERATOR = /^\d*<<-?$/;
+export const HEREDOC_OPERATOR = /^\d*<<-?$/;
 /**
  * bash keywords that can set a variable in a way this module does not follow (`case`, a function, a `[[ =~ ]]`
  * match). One anywhere in a line keeps every variable of that line unresolved, except the keywords of a `for`,
@@ -18,8 +18,12 @@ const SHELL_NAMES = new Set([
     ...['HOSTNAME', 'HOSTTYPE', 'MACHTYPE', 'OSTYPE', 'SHELLOPTS', 'MAPFILE', 'COPROC', 'COLUMNS', 'LINES'],
 ]);
 const SHELL_PREFIXES = /^(?:BASH|COMP_|READLINE_)/;
-/** Unquoted value text bash assigns as written: no blank, glob, tilde, quote, `$`, `=` or shell operator. */
-const UNQUOTED_VALUE = /^[A-Za-z0-9._/:+@-]*$/;
+/**
+ * Unquoted value text bash assigns as written: no blank, tilde, quote, `$`, `=` or shell operator. A glob
+ * (`*`, `?`, `[...]`) stays as written too, as bash never matches file names in an assignment; only an unquoted
+ * expansion of the value later does (see {@link PatternReading}).
+ */
+const UNQUOTED_VALUE = /^[A-Za-z0-9._/:+@*?[\]-]*$/;
 /** Text that makes an unquoted expansion a file name pattern: a glob, an extglob group or a backslash. */
 const PATTERN_TEXT = /[*?[(\\]/;
 /** The blanks bash splits an unquoted expansion at; a line that sets IFS resolves nothing. */
@@ -42,10 +46,11 @@ const OPERATOR_LINKS = new Map([
  * starts, given where the caller knows it: then `$HOME`, and a value's leading `~`, which bash expands to it,
  * resolve too while the line assigns HOME nowhere. Redirection targets resolve the same way, so `cat > $S/x`
  * writes to the same file as `cat > /s/x` once `S=/s` (see {@link LiteralBindings.resolveRedirection}).
+ * `patterns` says what an unquoted expansion of a pattern value becomes (see {@link PatternReading}).
  */
-export function resolveLiteralVariables(parsed, home) {
+export function resolveLiteralVariables(parsed, home, patterns = 'unresolved') {
     return (parsed.readings ?? [parsed]).flatMap((reading) => {
-        const bindings = LiteralBindings.read(reading, home);
+        const bindings = LiteralBindings.read(reading, home, patterns);
         return reading.commands.map((command, index) => ({
             ...command,
             words: bindings.resolveWords(command.words, index),
@@ -76,23 +81,25 @@ class LiteralBindings {
     inherited;
     /** The first command where nothing resolves; see {@link LineBindings.cut}. */
     cut;
-    constructor(commands, bound, inherited, cut) {
+    patterns;
+    constructor(commands, bound, inherited, cut, patterns) {
         this.commands = commands;
         this.bound = bound;
         this.inherited = inherited;
         this.cut = cut;
+        this.patterns = patterns;
     }
-    static read(parsed, home) {
+    static read(parsed, home, patterns) {
         const line = parsed.bindingsUnclear ? undefined : boundNames(parsed.commands);
         if (line === undefined) {
-            return new LiteralBindings(parsed.commands, new Map(), new Map(), 0);
+            return new LiteralBindings(parsed.commands, new Map(), new Map(), 0, patterns);
         }
         // A Windows home goes to bash with forward slashes, which keep an unquoted `$HOME` from reading as a pattern.
         const inherited = home === undefined || line.assigned.has('HOME') ? new Map() : new Map([['HOME', home.replaceAll('\\', '/')]]);
-        const bindings = new LiteralBindings(parsed.commands, line.bound, inherited, line.cut);
+        const bindings = new LiteralBindings(parsed.commands, line.bound, inherited, line.cut, patterns);
         // In line order: each one before the first that sets variables unseen resolves with every binding before it.
         const unseen = line.deferred.find(({ index, words }) => expandedSetsVariablesUnseen(bindings.resolveWords(words, index)));
-        return unseen === undefined ? bindings : new LiteralBindings(parsed.commands, line.bound, inherited, Math.min(line.cut, unseen.cut));
+        return unseen === undefined ? bindings : new LiteralBindings(parsed.commands, line.bound, inherited, Math.min(line.cut, unseen.cut), patterns);
     }
     /** The words of command `index` with their variables replaced by the values that hold there. */
     resolveWords(words, index) {
@@ -116,7 +123,7 @@ class LiteralBindings {
         if (!word.dynamic || word.parts === undefined) {
             return [word];
         }
-        const fields = new Fields();
+        const fields = new Fields(this.patterns);
         for (const part of word.parts) {
             const value = part.kind === 'text' ? undefined : this.valueAt(part.name, index);
             if (part.kind === 'text') {
@@ -225,17 +232,21 @@ function insideAndList(items, at) {
  * splits at blanks, and a word only an unquoted value made, left empty, disappears. A variable only known when
  * it runs stays one dynamic piece of the current word, however bash would split it.
  */
-class Fields {
+export class Fields {
     words = [];
     text = '';
     dynamic = false;
     /** True once the current word surely exists: it holds text, or a quote, which keeps even an empty word. */
     present = false;
+    patterns;
+    constructor(patterns) {
+        this.patterns = patterns;
+    }
     addText(text, quoted) {
         this.text += text;
         this.present ||= quoted || text !== '';
     }
-    /** Adds a variable's value; false when, unquoted, it would be a file name pattern, which this does not follow. */
+    /** Adds a variable's value; false when, unquoted, it would be a file name pattern its reading leaves unresolved. */
     addValue(value, quoted) {
         this.present ||= quoted;
         for (const piece of value) {
@@ -247,7 +258,7 @@ class Fields {
             else if (quoted) {
                 this.addText(piece.text, true);
             }
-            else if (PATTERN_TEXT.test(piece.text)) {
+            else if (this.patterns === 'unresolved' && PATTERN_TEXT.test(piece.text)) {
                 return false;
             }
             else {
@@ -444,7 +455,7 @@ function reservedWord(word) {
     return word !== undefined && RESERVED_WORDS.has(word.text) && reservedWordText(word) ? word.text : undefined;
 }
 /** True when `word` is static text with no quote or escape in it, as a bash reserved word must be. */
-function reservedWordText(word) {
+export function reservedWordText(word) {
     return !word.dynamic && (word.parts ?? []).every((part) => part.kind === 'text' && !part.quoted);
 }
 /** The one value the statements binding a name give it: the only statement's, or the text all of them agree on. */
@@ -515,12 +526,12 @@ function bindingStatement(words, redirected) {
     return bindings;
 }
 /** `NAME=value` as a shell assignment: the name and `=` unquoted at the word's start. */
-function plainBinding(word) {
+export function plainBinding(word) {
     const unquotedName = unquotedBindingName(word);
     return unquotedName === undefined ? undefined : valueBinding(word, unquotedName, false);
 }
 /** `NAME=value` as an `export` argument, where quotes around the name do not matter but variables must be quoted. */
-function exportedBinding(word) {
+export function exportedBinding(word) {
     const name = SETS_NAME.exec(word.text)?.[1];
     return name === undefined ? undefined : valueBinding(word, name, true);
 }

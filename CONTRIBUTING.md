@@ -278,8 +278,9 @@ matrix.
 - The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`, hourly and by hand) keeps one
   release pull request open through release-please (`release-please-config.json`): it raises the version in the
   plugin's `plugin.json` and `src/core/version.ts` and writes the notes. The pull request takes main's new commits
-  only once per preview slot, on the hourly run in the slot's first hour, or on a run by hand
-  (`tools/release/pull-update.ts`); a push to `main` only tags and publishes a release that merged. So between slots
+  only once per preview slot: on the first push or hourly run that finds its head older than the slot's start, or on
+  a run by hand (`tools/release/pull-update.ts`); any later push in the slot only tags and publishes a release that
+  merged, and a dropped or late hourly run never leaves it behind. So between slots
   its head stays still and its ci finishes once, however busy `main` is. Once the `teamrig-release` GitHub App is set up (its id in the
   `RELEASE_APP_ID` variable, its key in the `release-merge` environment), the `release merge` workflow
   (`.github/workflows/release-merge.yml`, `tools/release/release-merge.ts`) merges it on its own when ci passed on its

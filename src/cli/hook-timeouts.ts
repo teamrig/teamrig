@@ -13,6 +13,7 @@ export const HOOK_TIMEOUT_MS: Readonly<Record<string, number>> = {
   'db-write-guard': GUARD_LIMIT_MS,
   'exec-guard': GUARD_LIMIT_MS,
   'pass-record-guard': GUARD_LIMIT_MS,
+  'install-guard': GUARD_LIMIT_MS,
   'service-role-guard': GUARD_LIMIT_MS,
   'cold-send': GUARD_LIMIT_MS,
   'helper-gate': GUARD_LIMIT_MS,

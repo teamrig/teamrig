@@ -180,6 +180,7 @@ const EXPECTED = {
   'hook secret-redact': 'internal',
   'hook exec-guard': 'internal',
   'hook pass-record-guard': 'internal',
+  'hook install-guard': 'internal',
   'hook service-role-guard': 'internal',
   'hook cold-send': 'internal',
   'hook failed-send': 'internal',

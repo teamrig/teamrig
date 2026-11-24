@@ -57,6 +57,7 @@ export const HOOK_COMMANDS = new Set([
     'hand-trace',
     'helper-gate',
     'inbox-reminder',
+    'install-guard',
     'loop-nudge',
     'meeting-due',
     'meeting-panel',

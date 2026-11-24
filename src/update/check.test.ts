@@ -49,6 +49,12 @@ class FakeGit implements UpdateGit {
   readonly branches = new Map<string, Branch>();
   /** Runs inside `ls-remote`, while the check is asking the network. */
   duringAsk: (() => Promise<void>) | undefined;
+  /** The address of Claude Code's clone's `origin`. */
+  cloneUrl = 'https://example.test/owner/kit.git';
+  /** Other repositories by address: each one's branches (`HEAD` for its default one). */
+  readonly others = new Map<string, Map<string, Branch>>();
+  /** The address each bare repository's `origin` was pointed at. */
+  private readonly urls = new Map<string, string>();
   private readonly files: MemoryFiles;
   private fetchedRef = 'HEAD';
 
@@ -61,7 +67,7 @@ class FakeGit implements UpdateGit {
     this.calls.push(`${where}: ${args.join(' ')}`);
     const [command] = args;
     if (command === 'remote') {
-      return where === CLONE ? 'https://example.test/owner/kit.git\n' : undefined;
+      return where === CLONE ? `${this.cloneUrl}\n` : undefined;
     }
     if (command === 'symbolic-ref') {
       return where === CLONE && this.cloneBranch !== undefined ? `${this.cloneBranch}\n` : undefined;
@@ -70,8 +76,16 @@ class FakeGit implements UpdateGit {
       await this.files.write(`${where}/HEAD`, 'ref: refs/heads/main\n');
       return '';
     }
+    if (command === 'config' && args[1] === 'remote.origin.url' && args[2] !== undefined) {
+      this.urls.set(where, args[2]);
+      return '';
+    }
     if (command === 'config' || command === 'gc') {
       return '';
+    }
+    const other = this.others.get(this.urls.get(where) ?? '');
+    if (other !== undefined) {
+      return this.answerElsewhere(other, args);
     }
     if (command === 'ls-remote') {
       await this.duringAsk?.();
@@ -89,6 +103,23 @@ class FakeGit implements UpdateGit {
         return branch === undefined ? this.marketplace : branch.marketplace;
       }
       return path === 'plugins/teamrig/.claude-plugin/plugin.json' ? pluginJson(branch?.version ?? this.version) : undefined;
+    }
+    return undefined;
+  }
+
+  /** Another repository's answer: its branches' commits, and the plugin version on the branch last fetched. */
+  private answerElsewhere(other: ReadonlyMap<string, Branch>, args: readonly string[]): string | undefined {
+    const [command] = args;
+    if (command === 'ls-remote') {
+      return this.online ? [...other].map(([name, branch]) => `${branch.sha}\t${name === 'HEAD' ? 'HEAD' : `refs/heads/${name}`}\n`).join('') : undefined;
+    }
+    if (command === 'fetch') {
+      this.fetchedRef = args.at(-1) ?? '';
+      return this.online ? '' : undefined;
+    }
+    if (command === 'show' && args[1] === 'FETCH_HEAD:plugins/teamrig/.claude-plugin/plugin.json') {
+      const branch = other.get(this.fetchedRef === 'HEAD' ? 'HEAD' : this.fetchedRef.replace(/^refs\/heads\//, ''));
+      return branch === undefined ? undefined : pluginJson(branch.version);
     }
     return undefined;
   }
@@ -128,7 +159,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     ]);
     assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)), {
       checkedAt: START,
-      published: { kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' }, channels: {} } },
+      published: { kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' }, channels: {}, remotes: {} } },
       dismissed: {},
     });
   });
@@ -144,7 +175,7 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
       `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/release`,
     ]);
     assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)).published, {
-      kit: { sha: 'aaa111', refs: { release: 'rel111' }, versions: { teamrig: '0.333.0' }, channels: { teamrig: 'stable' } },
+      kit: { sha: 'aaa111', refs: { release: 'rel111' }, versions: { teamrig: '0.333.0' }, channels: { teamrig: 'stable' }, remotes: {} },
     });
   });
 
@@ -181,15 +212,54 @@ describe('UpdateCheck.notices, a cloned marketplace', () => {
     assert.deepEqual(git.of('fetch'), [`${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/preview`]);
   });
 
-  it("tells nothing for a branch the remote lacks, or another repository's branch", async () => {
+  it('tells nothing for a branch the remote lacks', async () => {
+    const { git, check } = setup();
+    git.marketplace = subdirMarketplace('release');
+    assert.deepEqual(await check().notices(), []);
+  });
+
+  it("reads a plugin of a moved repository where its entry installs it from, not the clone's old name (T5374)", async () => {
+    const { git, files, check } = setup();
+    const moved = 'https://github.com/team/kit.git';
+    const own = `${UPDATES}/kit.teamrig.git`;
+    git.cloneUrl = 'git@github.com:person/kit.git';
+    git.marketplace = subdirMarketplace('release', moved);
+    // The clone's old name still answers (a moved repository redirects), with every branch: only the new name is read.
+    git.branches.set('release', { sha: 'old111', version: '0.332.0', marketplace: subdirMarketplace('release', moved) });
+    git.others.set(moved, new Map([['release', { sha: 'rel111', version: '0.333.0', marketplace: '' }]]));
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, channel: 'stable' }]);
+    assert.ok(git.calls.includes(`${own}: config remote.origin.url ${moved}`));
+    assert.deepEqual(git.of('fetch'), [
+      `${REPO}: fetch -q --depth 1 --filter=blob:none --no-tags origin HEAD`,
+      `${own}: fetch -q --depth 1 --filter=blob:none --no-tags origin refs/heads/release`,
+    ]);
+    assert.deepEqual(parseCheckState(files.get(`${UPDATES}/check.json`)).published, {
+      kit: { sha: 'aaa111', refs: {}, versions: { teamrig: '0.333.0' }, channels: { teamrig: 'stable' }, remotes: { teamrig: 'rel111' } },
+    });
+  });
+
+  it("reads another repository's default branch for an entry naming no branch, and nothing it lacks", async () => {
+    const other = 'https://github.com/other/kit.git';
+    const head = setup();
+    head.git.marketplace = JSON.stringify({ name: 'kit', plugins: [{ name: 'teamrig', source: { source: 'git-subdir', url: other, path: 'plugins/teamrig' } }] });
+    head.git.others.set(other, new Map([['HEAD', { sha: 'hd111', version: '0.333.0', marketplace: '' }]]));
+    assert.deepEqual(await head.check().notices(), [NOTICE]);
     const lacking = setup();
-    lacking.git.marketplace = subdirMarketplace('release');
+    lacking.git.marketplace = subdirMarketplace('release', other);
+    lacking.git.others.set(other, new Map([['preview', { sha: 'pre111', version: '0.335.0', marketplace: '' }]]));
     assert.deepEqual(await lacking.check().notices(), []);
-    const other = setup();
-    other.git.marketplace = subdirMarketplace('release', 'https://github.com/other/kit.git');
-    other.git.branches.set('release', { sha: 'rel111', version: '0.333.0', marketplace: subdirMarketplace('release') });
-    assert.deepEqual(await other.check().notices(), []);
-    assert.equal(other.git.of('fetch').length, 1);
+    assert.equal(lacking.git.of('fetch').length, 1, 'no fetch of a branch the other repository lacks');
+  });
+
+  it('asks the other repository again at each check, though the marketplace did not move', async () => {
+    const { git, clock, check } = setup();
+    const other = 'https://github.com/other/kit.git';
+    git.marketplace = subdirMarketplace('release', other);
+    git.others.set(other, new Map([['release', { sha: 'rel111', version: '0.333.0', marketplace: '' }]]));
+    await check().notices();
+    git.others.set(other, new Map([['release', { sha: 'rel222', version: '0.334.0', marketplace: '' }]]));
+    clock.advance(CHECK_EVERY_MS);
+    assert.deepEqual(await check().notices(), [{ ...NOTICE, newest: '0.334.0', channel: 'stable' }]);
   });
 
   it('reads again a kept answer from before plugins were read on their branches', async () => {
@@ -362,7 +432,7 @@ describe('parseCheckState', () => {
     const text = JSON.stringify({
       checkedAt: 'soon',
       published: {
-        kit: { sha: 'a', refs: { release: 'r', bad: 1 }, versions: { teamrig: '1.0.0', bad: 3 }, channels: { teamrig: 'stable', bad: 4 } },
+        kit: { sha: 'a', refs: { release: 'r', bad: 1 }, versions: { teamrig: '1.0.0', bad: 3 }, channels: { teamrig: 'stable', bad: 4 }, remotes: { teamrig: 'z', bad: 5 } },
         unlabelled: { sha: 'c', refs: {}, versions: { teamrig: '1.0.0' } },
         broken: { versions: {} },
         unbranched: { sha: 'b', versions: { teamrig: '1.0.0' } },
@@ -372,8 +442,8 @@ describe('parseCheckState', () => {
     assert.deepEqual(parseCheckState(text), {
       checkedAt: undefined,
       published: {
-        kit: { sha: 'a', refs: { release: 'r' }, versions: { teamrig: '1.0.0' }, channels: { teamrig: 'stable' } },
-        unlabelled: { sha: 'c', refs: {}, versions: { teamrig: '1.0.0' }, channels: {} },
+        kit: { sha: 'a', refs: { release: 'r' }, versions: { teamrig: '1.0.0' }, channels: { teamrig: 'stable' }, remotes: { teamrig: 'z' } },
+        unlabelled: { sha: 'c', refs: {}, versions: { teamrig: '1.0.0' }, channels: {}, remotes: {} },
       },
       dismissed: { teamrig: '1.0.0' },
     });
@@ -388,13 +458,13 @@ describe('isNewer and noticesOf', () => {
   });
 
   it('leaves out an install whose marketplace published nothing for it', () => {
-    const state = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: {}, channels: {} } }, dismissed: {} };
+    const state = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: {}, channels: {}, remotes: {} } }, dismissed: {} };
     assert.deepEqual(noticesOf([{ plugin: 'teamrig', marketplace: 'kit', version: '0.1.0' }], state), []);
   });
 
   it('names the channel a version was read on, and none when it was read off a channel (T5133)', () => {
     const install = { plugin: 'teamrig', marketplace: 'kit', version: '0.1.0' };
-    const on = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: { teamrig: '0.2.0' }, channels: { teamrig: 'preview' } } }, dismissed: {} };
+    const on = { checkedAt: START, published: { kit: { sha: 'a', refs: {}, versions: { teamrig: '0.2.0' }, channels: { teamrig: 'preview' }, remotes: {} } }, dismissed: {} };
     assert.deepEqual(noticesOf([install], on), [{ plugin: 'teamrig', marketplace: 'kit', installed: '0.1.0', newest: '0.2.0', channel: 'preview' }]);
     const off = { ...on, published: { kit: { ...on.published.kit, channels: {} } } };
     assert.deepEqual(noticesOf([install], off), [{ plugin: 'teamrig', marketplace: 'kit', installed: '0.1.0', newest: '0.2.0' }]);

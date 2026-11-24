@@ -3,12 +3,14 @@ import type { KitConfig } from '../../config/types.ts';
 import { formatAddress } from '../../core/address.ts';
 import { query } from '../../core/git-run.ts';
 import { errorMessage } from '../../core/guards.ts';
+import { KIT_INSTALL_ENTRIES, resolveKitHome } from '../../core/home.ts';
 import { checkClient, clientRootOf } from '../../exec/client-integrity.ts';
 import { ClientInstalls, ShellPathSearch } from '../../exec/client-launch.ts';
 import { dbWriteGuardOf, dbWriteGuardReply } from '../../hooks/db-write-guard.ts';
 import { execGuardReply, type TabIdentity } from '../../hooks/exec-guard.ts';
 import { githubReposOf } from '../../hooks/gh-write-refusals.ts';
 import { remoteReposOf } from '../../hooks/gh-writes.ts';
+import { installGuardReply, type GuardedPlace } from '../../hooks/install-guard.ts';
 import { packageGuardOf, packageGuardReply } from '../../hooks/package-guard.ts';
 import { commitsOf, protectedBranchesOf, pushGuardReply, pushToProtectedOf, skipHooksOf, type PushClearance } from '../../hooks/push-guard.ts';
 import { secretGuardOf, secretGuardReply, secretPatternsOf } from '../../hooks/secret-guard.ts';
@@ -18,7 +20,7 @@ import { approvedTaskOf } from '../../register/approval.ts';
 import { JsonlEventLog } from '../../register/store.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
 import { runBy } from '../agent-run.ts';
-import { secretFilesOf, sessionVariablesOf } from '../host.ts';
+import { hookFilePlacesOf, secretFilesOf, sessionVariablesOf } from '../host.ts';
 import { rosterOf, type Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
 import { leadAboveOf } from '../tree.ts';
@@ -209,6 +211,28 @@ export function serviceRoleGuardReplyOf(runtime: CliRuntime, guard: GuardLoad, e
     platform: runtime.platform,
     configPath: guard.kit?.load.path,
     readConfig: (path) => runtime.files.read(path),
+    canonical: (path) => runtime.worktrees.files.canonical(path),
+  });
+}
+
+/**
+ * The install guard's reply (T5278): a refusal of a session's own write of teamrig's install in the kit home (its
+ * versions, `current`, bin and records) or of a shipped host's hook files; none when it lets the call go. It reads no
+ * team config, so a broken or missing one is no way around it.
+ */
+export function installGuardReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookReply | undefined> {
+  const install: GuardedPlace = {
+    folder: resolveKitHome(runtime.env, runtime.userHome),
+    entries: KIT_INSTALL_ENTRIES,
+    what: 'the teamrig install',
+    writer: 'run `teamrig` from PATH, whose install and upgrade write it',
+  };
+  return installGuardReply(event, {
+    cwd: runtime.cwd,
+    home: runtime.userHome,
+    platform: runtime.platform,
+    variables: runtime.env,
+    places: [install, ...hookFilePlacesOf(runtime)],
     canonical: (path) => runtime.worktrees.files.canonical(path),
   });
 }

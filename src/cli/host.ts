@@ -1,3 +1,5 @@
+import { posix, win32 } from 'node:path';
+import type { GuardedPlace } from '../hooks/install-guard.ts';
 import {
   isUnsupported,
   type ChildEnvironment,
@@ -304,6 +306,36 @@ export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 
   const names = [...new Set(offered.map((port) => port.host))];
   const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
   throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
+}
+
+/**
+ * The hooks files and config files teamrig writes into for the person of this run (`setup hooks`), from every host
+ * adapter teamrig ships with and the run's own host, one place per folder: the install guard keeps a session from
+ * rewriting them, since a host starts every guard from them. A host that keeps no hooks file of the person's adds none.
+ */
+export function hookFilePlacesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform' | 'userHome'>): readonly GuardedPlace[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const paths = runtime.platform === 'win32' ? win32 : posix;
+  const byFolder = new Map<string, { readonly hosts: Set<string>; readonly entries: Set<string> }>();
+  for (const source of sourcesOf(runtime)) {
+    const { userHooks } = source(seen);
+    if (isUnsupported(userHooks)) {
+      continue;
+    }
+    for (const file of [userHooks.file(runtime.userHome), ...userHooks.configLines.map((lines) => lines.file(runtime.userHome))]) {
+      const folder = paths.dirname(file);
+      const place = byFolder.get(folder) ?? { hosts: new Set<string>(), entries: new Set<string>() };
+      place.hosts.add(userHooks.host);
+      place.entries.add(paths.basename(file));
+      byFolder.set(folder, place);
+    }
+  }
+  return [...byFolder].map(([folder, { hosts, entries }]) => ({
+    folder,
+    entries: [...entries],
+    what: `the hook files of ${[...hosts].join(', ')}`,
+    writer: '`teamrig setup hooks` writes them',
+  }));
 }
 
 /** The host's own folder for the person of this run. A host whose folders teamrig does not know refuses, as `pathsOf` does. */

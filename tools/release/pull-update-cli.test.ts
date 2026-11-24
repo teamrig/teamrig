@@ -42,10 +42,11 @@ describe('pull update CLI', () => {
     assert.equal(readFileSync(output, 'utf8'), '');
   });
 
-  it("reads the repo's channels and leaves the release pull request still on a push", () => {
-    const run = repo.run(CLI, [], env());
-    assert.equal(run.status, 0, run.stderr);
-    assert.equal(readFileSync(output, 'utf8'), 'update=false\n');
+  it('needs the repository and its token on a push, which reads the release pull request from GitHub', () => {
+    const run = repo.run(CLI, [], env({ GITHUB_REPOSITORY: 'teamrig/teamrig', GITHUB_TOKEN: undefined }));
+    assert.equal(run.status, 2, run.stderr);
+    assert.match(run.stderr, /GITHUB_TOKEN is not set/);
+    assert.equal(readFileSync(output, 'utf8'), '');
   });
 
   it('updates it on a run by hand', () => {

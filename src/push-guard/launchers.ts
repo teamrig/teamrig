@@ -230,9 +230,13 @@ function assignmentOf(word: ShellWord): Assignment {
   return { name: word.text.slice(0, equals), value: { text: word.text.slice(equals + 1), dynamic: word.dynamic } };
 }
 
-/** Joins words into one command line; for cmd a word with spaces or separators is quoted, as the caller's process start would. */
+/**
+ * Joins words into one command line; for cmd a word with a blank, or an empty one, is quoted, as the caller's process
+ * start would. PowerShell and Git Bash quote nothing else, so cmd reads a `^`, `&` or `|` in a word as its own
+ * escape or separator (T5366 R7).
+ */
 function joinWords(words: readonly ShellWord[], quote: boolean): ShellWord {
-  const text = words.map((word) => (quote && words.length > 1 && /[\s&|<>()^]/.test(word.text) ? `"${word.text}"` : word.text)).join(' ');
+  const text = words.map((word) => (quote && words.length > 1 && /^$|\s/.test(word.text) ? `"${word.text}"` : word.text)).join(' ');
   return { text, dynamic: words.some((word) => word.dynamic) };
 }
 

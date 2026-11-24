@@ -1,6 +1,6 @@
 # Hooks and permissions
 
-The plugin's `hooks/hooks.json` registers twenty-nine Claude Code hooks, one row each below however many events a hook runs on, and one mod ([the /teamrig command](#the-mod-the-teamrig-command), [the refresh's /clear](#the-mod-the-refreshs-clear), [the reload after an install](#the-mod-the-reload-after-an-install), [the wake on urgent work](#the-mod-the-wake-on-urgent-work), [the update notice](#the-mod-the-update-notice)). Each runs
+The plugin's `hooks/hooks.json` registers thirty Claude Code hooks, one row each below however many events a hook runs on, and one mod ([the /teamrig command](#the-mod-the-teamrig-command), [the refresh's /clear](#the-mod-the-refreshs-clear), [the reload after an install](#the-mod-the-reload-after-an-install), [the wake on urgent work](#the-mod-the-wake-on-urgent-work), [the update notice](#the-mod-the-update-notice)). Each runs
 `node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
 they all stay silent, but `hook restore-track` and `hook tool-end` still record the session ([the restore tracker](#every-session-the-restore-tracker)) and `hook missing-cli` still answers a shell that [no longer finds the bare command](#after-a-shell-call-the-cli-by-its-path).
 Each hook line names the host it runs in with `--host <id>` after the hook's name (`hook stop --host claude-code`), so a team mixing hosts loads each session's own ports. A host whose hook JSON does not name its event (Antigravity's) also passes `--host-event <Event>`, as in `hook stop --host antigravity-cli --host-event Stop`. The `Flags: none.` lines below count neither: every command takes `--host`, and `--host-event` is the host's, not the hook's.
@@ -18,6 +18,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 | `PostToolUse` on `Bash`, `PowerShell`, `Read` and `Grep` | `hook secret-redact` | Replaces each secret a call's result holds before Claude and the transcript see it, and tells the session which kinds it held and the task it filed to rotate each ([the secret redactor](#after-a-tool-call-the-secret-redactor)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook exec-guard` | Refuses a privileged command's review run as another session or the owner, any `exec` call through a client that is no install of the plugin, or one changed after its build, every `owner note` or `owner next`, which act as the owner, a settings writer's `--yes` write, which changes a permission, every `hook` command, which takes its tab from its stdin, a bound tab's `start` or `inbox read` as another session, a line that changes `$CLAUDECODE`, a shell fed its commands from a pipe, a raw `gh` write on one of the team's repositories, and a raw read on one of their owners ([the exec guard](#before-a-shell-command-the-exec-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
+| `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook install-guard` | Refuses a session's own write of teamrig's install in the kit home or a host's hook files, which every guard runs from ([the install guard](#before-a-write-or-a-shell-command-the-install-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
 | `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, `pr approve` or `pr merge` at the head your leader approved, a teamrig command that only reads, a `git commit` with its hooks), alone or piped into one read-only filter, run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
@@ -923,6 +924,23 @@ It has no setting, and a missing or broken config keeps it on. It reads only the
 line starts (`node write-record.js`), a path built when the line runs, or a write by a program that is not a Claude
 tool: while sessions and the runner share one account, it stops a slip, not a determined session.
 
+## Before a write or a shell command: the install guard
+
+Every session's guards run from teamrig's own install in the kit home (`versions`, `bin`, `current`, `current.json`
+and `installs.json`), and a host other than Claude Code starts them from its hook files (Codex CLI's `hooks.json` and
+`config.toml`). A session that rewrote either would turn every guard off for the whole team. Before Claude runs a
+Write, Edit, MultiEdit or NotebookEdit call, `hook install-guard` refuses one whose file reaches a guarded place by any
+spelling (an 8.3 short name, trailing dots, a Git Bash drive, a link); before a Bash or PowerShell call, one whose line
+names a guarded place at all, its reads too, since a shell line's writes cannot be told from its reads. The kit's
+`teams/` folder and the Read tool stay open. The reason: "teamrig install guard: this Write writes
+<kit home>/current.json. the teamrig install (<kit home>) is what every session's guards run from, so only teamrig
+writes it: run `teamrig` from PATH, whose install and upgrade write it. Read it with the Read tool; do not retry this
+or route around it: the lead takes the change." For a hook file the writer is `teamrig setup hooks`.
+
+It has no setting and reads no team config, so a missing or broken config keeps it on. Like the pass-record guard it
+reads only the call: a script the session writes and starts still reaches the files, as sessions and the owner share
+one account.
+
 ## Before a write or a shell command: the service-role guard
 
 A service role [serviceRoles] lets its holders run a few teamrig commands for an outside service past every
@@ -1640,7 +1658,10 @@ bare repository teamrig keeps under `~/.teamrig/updates/` (never Claude Code's o
 growing; a directory marketplace is read in place. The version is the `.claude-plugin/plugin.json` one in the folder
 the marketplace's entry names: a relative `./` source in the marketplace's own commit, or the `path` of a `git-subdir`
 source on the branch its `ref` names (`release` for stable, `preview`), since main runs ahead of every release
-channel. A `git-subdir` source in another repository than the marketplace's is not read. The answer is kept in
+channel. A `git-subdir` source in another repository than the marketplace's (such as a marketplace cloned under a
+repository's old name, before it moved to another owner) is read there, the host's install source, through a bare
+repository of its own (`~/.teamrig/updates/<marketplace>.<plugin>.git`), on its `ref` branch or else the default
+branch, and asked again at each network check. The answer is kept in
 `~/.teamrig/updates/check.json`, and every other look reads that file only. A marketplace that cannot be asked
 (offline, no access) keeps what was known, and nothing shows.
 
@@ -1991,7 +2012,7 @@ submitted never moves it, and a failed write leaves the turn log and the prompt 
 
 Claude Code lets a tool call through when a `PreToolUse` command hook ends with any exit code but 0 or 2, or
 outlives its timeout, so a guard that breaks would stop guarding with no sign. The guards that can refuse a call
-(`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `service-role-guard`, `cold-send`,
+(`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `install-guard`, `service-role-guard`, `cold-send`,
 `helper-gate` and
 `picker-guard`) therefore run through `dist/cli/guard-main.js`, a runner that loads the CLI itself on a worker
 thread and blocks the call (exit 2) when the guard:

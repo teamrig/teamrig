@@ -34,7 +34,8 @@ describe('release.yml', () => {
 
   it('moves the release pull request only when the slot gate opens, so a push to main never restarts its ci', () => {
     const text = job('release-please');
-    assert.match(text, /^ {6}- id: gate\n {8}run: node tools\/release\/pull-update-cli\.ts\n/m);
+    // The gate reads the release pull request's head with the job's token (T5330).
+    assert.match(text, /^ {6}- id: gate\n {8}run: node tools\/release\/pull-update-cli\.ts\n {8}env:\n {10}GITHUB_TOKEN: \$\{\{ github\.token \}\}\n/m);
     assert.match(text, /^ {10}skip-github-pull-request: \$\{\{ steps\.gate\.outputs\.update != 'true' \}\}$/m);
     assert.ok(text.indexOf('id: gate') < text.indexOf('id: release'), 'the gate runs before release-please');
   });

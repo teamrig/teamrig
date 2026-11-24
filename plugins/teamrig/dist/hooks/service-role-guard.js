@@ -2,6 +2,7 @@ import { posix, win32 } from 'node:path';
 import { OWNER_GATED_KEYS } from "../config/owner-gated.js";
 import { isRecord } from "../core/guards.js";
 import { opaqueGuardedWords, runsOfReadings, teamrigLaunchOf } from "./exec-guard.js";
+import { aliasFormOf, nativePathOf, openedNameOf, samePathKey } from "./path-spelling.js";
 import { heldBack, refusal } from "./permission.js";
 /**
  * The service-role guard (T2984, security condition C2): a service role lets its holders run a few teamrig commands
@@ -34,43 +35,11 @@ function startsRoleChange(words) {
     const [group, action] = words;
     return group !== undefined && !group.dynamic && group.text === 'roles' && action !== undefined && (action.dynamic || ROLE_CHANGES.has(action.text));
 }
-/**
- * A path as the platform compares it: absolute against the folder, one slash, any case on Windows, where each
- * segment also drops the trailing dots and spaces Windows ignores (`config.json.` opens `config.json`).
- */
-function samePathKey(path, cwd, platform) {
-    if (platform !== 'win32') {
-        return posix.resolve(cwd, path);
-    }
-    const segments = win32.resolve(cwd, path).replaceAll('\\', '/').toLowerCase().split('/');
-    return segments.map((segment, index) => (index === 0 ? segment : segment.replace(/[. ]+$/, ''))).join('/');
-}
-/** A path's last segment, past a leading drive (`C:config.json` names `config.json`). */
-function lastSegmentOf(path) {
-    const undriven = path.replace(/^[a-z]:/i, '');
-    return undriven.slice(Math.max(undriven.lastIndexOf('/'), undriven.lastIndexOf('\\')) + 1);
-}
-/** How a Windows path reaches a file past its plain spelling, or undefined for a plain one. */
-function aliasFormOf(path) {
-    if (/^[\\/]{2}[?.][\\/]/.test(path)) {
-        return 'a device path';
-    }
-    if (/^[\\/]{2}[^\\/]/.test(path)) {
-        return 'a network share path';
-    }
-    return lastSegmentOf(path).includes(':') ? 'an alternate data stream' : undefined;
-}
-/** The file name Windows opens for a path: its last segment with a stream cut and trailing dots and spaces dropped. */
-function openedNameOf(path) {
-    return (lastSegmentOf(path).split(':')[0] ?? '').replace(/[. ]+$/, '');
-}
 /** The kit home a team config sits in: `<home>/teams/<team>/config.json`. */
 function kitHomeOf(configPath, platform) {
     const path = platform === 'win32' ? win32 : posix;
     return path.dirname(path.dirname(path.dirname(configPath)));
 }
-/** A Git Bash drive path's head, `/c/`, which Windows tools read as the drive `c:/`. */
-const MSYS_DRIVE = /^\/([a-z])(?=\/)/i;
 /**
  * A team config by its tail, `teams/<team>/config.json`, on a path in its compare form (one slash kind). Its 8.3 short
  * name (`CONFIG~1.JSO`) counts too: Windows opens the config by it, and the real path gives it back unchanged.
@@ -84,7 +53,7 @@ const TEAM_CONFIG_FILE = /(?:^|\/)teams\/+[^/]+\/+config(?:\.json|~\d+\.jso)$/i;
  * (T2984).
  */
 async function teamConfigOf(path, cwd, env) {
-    const native = env.platform === 'win32' ? path.replace(MSYS_DRIVE, '$1:') : path;
+    const native = nativePathOf(path, env.platform);
     const key = samePathKey(native, cwd, env.platform);
     if (env.configPath !== undefined && key === samePathKey(env.configPath, cwd, env.platform)) {
         return env.configPath;

@@ -85,6 +85,7 @@ export const GUARD_HOOKS = new Set([
     'db-write-guard',
     'exec-guard',
     'pass-record-guard',
+    'install-guard',
     'service-role-guard',
     'cold-send',
     'helper-gate',

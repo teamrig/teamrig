@@ -70,15 +70,15 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
 
   // Found by Yogev Cohen's live agy 1.5.8 e2e on #2142: a Claude Code matcher never fires on agy (T5033).
   const GUARDED: readonly (readonly [string, readonly string[]])[] = [
-    ['run_command', ['push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'readonly-allow', 'route-allow', 'picker-guard']],
+    ['run_command', ['push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'install-guard', 'readonly-allow', 'route-allow', 'picker-guard']],
     ['view_file', ['secret-guard']],
     ['read_file', ['secret-guard']],
     ['grep_search', ['secret-guard']],
-    ['write_to_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
-    ['write_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
-    ['replace_file_content', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
-    ['edit_file', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
-    ['multi_replace_file_content', ['pass-record-guard', 'service-role-guard', 'secret-guard']],
+    ['write_to_file', ['pass-record-guard', 'install-guard', 'service-role-guard', 'secret-guard']],
+    ['write_file', ['pass-record-guard', 'install-guard', 'service-role-guard', 'secret-guard']],
+    ['replace_file_content', ['pass-record-guard', 'install-guard', 'service-role-guard', 'secret-guard']],
+    ['edit_file', ['pass-record-guard', 'install-guard', 'service-role-guard', 'secret-guard']],
+    ['multi_replace_file_content', ['pass-record-guard', 'install-guard', 'service-role-guard', 'secret-guard']],
     ['send_message', ['cold-send']],
     ['invoke_subagent', ['helper-gate']],
     ['swarm', ['helper-gate']],

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.509.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.508.0...teamrig-v0.509.0) (2026-11-24)
+
+
+### Features
+
+* **hooks:** a shell word as the path the shell hands on, with what only the running shell knows marked (T5278) ([75d97a2](https://github.com/teamrig/teamrig/commit/75d97a2c71f115a24d224f7cdc02e3e132b52f82))
+* **hooks:** an install guard refuses a session's write of teamrig's install and a host's hook files (T5278) ([0b98c74](https://github.com/teamrig/teamrig/commit/0b98c74092ca436d328ccbba648fb719db96dd3f))
+* **hooks:** every host runs the install guard on each write and shell call, from teamrig hook install-guard (T5278) ([304cbd4](https://github.com/teamrig/teamrig/commit/304cbd44332a950683e20620660a61c1a6080163))
+
+
+### Bug Fixes
+
+* **hooks:** the install guard follows more of the variables a bash line binds (T5378) ([7283c2b](https://github.com/teamrig/teamrig/commit/7283c2bafff3c2329ae324e4105726e4b49352db))
+* **hooks:** the install guard reads a bash variable bound to a pattern as that pattern (T5369) ([cb03fc8](https://github.com/teamrig/teamrig/commit/cb03fc82fab635e1ee1245f97bcaed7834dc2189))
+* **hooks:** the install guard reads a bash variable the line binds before it reads it (T5278) ([0c5a20b](https://github.com/teamrig/teamrig/commit/0c5a20bc77f64d397eb8ae369bfb775464a2a42b))
+* **hooks:** the install guard reads a WSL /mnt drive path as the Windows drive (T5278) ([4a5b284](https://github.com/teamrig/teamrig/commit/4a5b28422e9b010e93207f09977bd8dbb3098904))
+* **hooks:** the install guard reads the line a nested shell runs with the same word pass (T5278) ([2fd299f](https://github.com/teamrig/teamrig/commit/2fd299ffcf44f642647f1f065e9062c85fa1b7b7))
+* **hooks:** the install guard reads the static text a line pipes or substitutes into a shell (T5278) ([39d93b1](https://github.com/teamrig/teamrig/commit/39d93b114f2601c438982ba93c340a9b014d2a89))
+* **hooks:** the install guard refuses a line that nests shells past what it reads (T5278) ([d75220b](https://github.com/teamrig/teamrig/commit/d75220bf62de8922e2b9383537cc7d8001ccf5bf))
+* **hooks:** the install guard refuses the guarded folder itself, and a glob that can match its name (T5278) ([9ee1a31](https://github.com/teamrig/teamrig/commit/9ee1a3135065cffaa7d7c25f4120c4bc3ffe7b66))
+* **hooks:** the install guard resolves each shell word as a file tool's path, and a glob or substitution that can complete to a guarded entry (T5278) ([4b721bb](https://github.com/teamrig/teamrig/commit/4b721bba31950c8ed597840861083a8f9ec7c6d7))
+* **hooks:** the install guard resolves the words after a cd in the line against that folder (T5278) ([d603f73](https://github.com/teamrig/teamrig/commit/d603f73ea2fa30fffd3da5e67f86ddcb644a6385))
+* **push-guard:** a cmd line joined from words quotes only a word with a blank, as its caller does (T5278) ([d65bc86](https://github.com/teamrig/teamrig/commit/d65bc86d13705075c0ea08899aa59f9f50ad5d96))
+* **update:** read a plugin whose entry names another repository from that repository (T5374) ([6b8743e](https://github.com/teamrig/teamrig/commit/6b8743eebf1b6cdfad847103d654e4098b49e6bf))
+
 ## [0.508.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.507.0...teamrig-v0.508.0) (2026-11-24)
 
 

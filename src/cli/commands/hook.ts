@@ -68,7 +68,15 @@ import { inheritedCrons, restartOrPark, restartTargetOf } from './hook-restart.t
 import { helperContextOf } from './hook-helper-start.ts';
 import { promptSecretBlock } from './hook-prompt-secret.ts';
 import { guardLoadOf, hookTeam } from './hook-guard-load.ts';
-import { dbWriteGuardReplyOf, execGuardReplyOf, packageGuardReplyOf, pushGuardReplyOf, secretGuardReplyOf, serviceRoleGuardReplyOf } from './hook-guard-outputs.ts';
+import {
+  dbWriteGuardReplyOf,
+  execGuardReplyOf,
+  installGuardReplyOf,
+  packageGuardReplyOf,
+  pushGuardReplyOf,
+  secretGuardReplyOf,
+  serviceRoleGuardReplyOf,
+} from './hook-guard-outputs.ts';
 import { checkHooklessTabs } from './hook-hookless.ts';
 import { dueFactsAt, inMeetingNow } from './hook-refresh-mod.ts';
 import { recordSessionStart } from './hook-session-record.ts';
@@ -165,6 +173,20 @@ export async function passRecordGuard(args: ParsedArgs, runtime: CliRuntime): Pr
     return EXIT.ok;
   }
   writeReply(runtime, 'tool-start', passRecordGuardReply(event));
+  return EXIT.ok;
+}
+
+/**
+ * PreToolUse on Bash, PowerShell and the file-writing tools: refuses a session's own write of teamrig's install in the
+ * kit home and of the hook files a host starts every guard from (T5278).
+ */
+export async function installGuard(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  noPositionals(args);
+  const { event } = await readHookInput(runtime);
+  if (event === undefined || (await hookTeam(event.cwd, runtime)).kind === 'none') {
+    return EXIT.ok;
+  }
+  writeReply(runtime, 'tool-start', await installGuardReplyOf(runtime, event));
   return EXIT.ok;
 }
 

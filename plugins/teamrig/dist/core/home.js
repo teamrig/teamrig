@@ -31,6 +31,12 @@ export function resolveKitHome(env, userHome) {
     const fromEnv = env[ENV.home]?.trim();
     return fromEnv ? fromEnv : join(userHome, `.${KIT_NAME}`);
 }
+/**
+ * The kit home's entries that make up teamrig's own install (T5278): the versions it keeps, the pointer to the one in
+ * use, the command it puts on PATH and the record of what it installed. Only teamrig writes them, as every session's
+ * guards run from them (the install guard, src/hooks/install-guard.ts); `teams/` and the rest stay the teams' own.
+ */
+export const KIT_INSTALL_ENTRIES = ['versions', 'bin', 'current', 'current.json', 'installs.json'];
 /** The team's folder. The id is checked here too, since it becomes part of a path. */
 export function teamHome(kitHome, team) {
     if (!ID_PATTERN.test(team)) {

@@ -6,6 +6,7 @@ import type { SecretGuardConfig } from '../config/types.ts';
 import { CREDENTIAL_VARIABLES } from '../core/child-env.ts';
 import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
+import { codexUserHooks } from '../adapters/hosts/codex-cli/user-hooks.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, shippedHost, testPaths } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
@@ -31,6 +32,7 @@ import {
   modelsIfKnown,
   pathsIfKnown,
   pathsOf,
+  hookFilePlacesOf,
   secretFilesOf,
   sessionCommandLinesOf,
   sessionProcessCheckOf,
@@ -324,6 +326,27 @@ describe('secretFilesOf', () => {
         assert.equal(paths.listed(path), true, `${name}: ${path}`);
       }
     }
+  });
+});
+
+describe('hookFilePlacesOf', () => {
+  const codex: HostSource = (given) => ({ ...BARE, userHooks: codexUserHooks(given.env, given.platform) });
+  const shippedHosts = { codex: shippedHost(codex) };
+
+  it("gives one place per folder of a shipped host's hooks and config files, naming the host once", () => {
+    assert.deepEqual(hookFilePlacesOf({ host: codex, shippedHosts, env: {}, platform: 'linux', userHome: '/srv/u' }), [
+      { folder: '/srv/u/.codex', entries: ['hooks.json', 'config.toml'], what: 'the hook files of codex', writer: '`teamrig setup hooks` writes them' },
+    ]);
+  });
+
+  it("follows the folder the run's environment moves the host to, in the platform's own spelling", () => {
+    const [place] = hookFilePlacesOf({ host: bare, shippedHosts, env: { CODEX_HOME: 'D:\\codex' }, platform: 'win32', userHome: 'C:\\u' });
+    assert.equal(place?.folder, 'D:\\codex');
+    assert.equal(hookFilePlacesOf({ host: bare, shippedHosts, env: {}, platform: 'win32', userHome: 'C:\\u' })[0]?.folder, 'C:\\u\\.codex');
+  });
+
+  it('gives none for hosts that keep no hooks file of the person', () => {
+    assert.deepEqual(hookFilePlacesOf({ host: bare, shippedHosts: { bare: shippedHost(bare) }, env: {}, platform: 'linux', userHome: '/srv/u' }), []);
   });
 });
 

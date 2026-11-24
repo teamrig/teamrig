@@ -10,6 +10,14 @@
   {
     "event": "PreToolUse",
     "index": 0,
+    "hook": "hook install-guard --host claude-code",
+    "code": 0,
+    "stdout": [],
+    "stderr": []
+  },
+  {
+    "event": "PreToolUse",
+    "index": 0,
     "hook": "hook service-role-guard --host claude-code",
     "code": 0,
     "stdout": [],
@@ -35,6 +43,14 @@
     "event": "PreToolUse",
     "index": 2,
     "hook": "hook pass-record-guard --host claude-code",
+    "code": 0,
+    "stdout": [],
+    "stderr": []
+  },
+  {
+    "event": "PreToolUse",
+    "index": 2,
+    "hook": "hook install-guard --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -107,6 +123,14 @@
     "event": "PreToolUse",
     "index": 5,
     "hook": "hook pass-record-guard --host claude-code",
+    "code": 0,
+    "stdout": [],
+    "stderr": []
+  },
+  {
+    "event": "PreToolUse",
+    "index": 5,
+    "hook": "hook install-guard --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -194,6 +218,14 @@
   {
     "event": "PreToolUse",
     "index": 6,
+    "hook": "hook install-guard --host claude-code",
+    "code": 0,
+    "stdout": [],
+    "stderr": []
+  },
+  {
+    "event": "PreToolUse",
+    "index": 6,
     "hook": "hook service-role-guard --host claude-code",
     "code": 0,
     "stdout": [],
@@ -251,6 +283,14 @@
     "event": "PreToolUse",
     "index": 7,
     "hook": "hook pass-record-guard --host claude-code",
+    "code": 0,
+    "stdout": [],
+    "stderr": []
+  },
+  {
+    "event": "PreToolUse",
+    "index": 7,
+    "hook": "hook install-guard --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

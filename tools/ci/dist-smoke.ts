@@ -97,7 +97,7 @@ const SMOKE_TOKEN = ['gh', 'p_', 'a1'.repeat(18)].join('');
 /**
  * One payload per hook the plugin runs, by its command (one event can run several), run inside team
  * `smoke`, which has no config: session start and a helper's start say so, the push guard still refuses a force-push of
- * main, the package guard refuses an npx of a tool not installed, the secret guard refuses a read of .env, the db-write guard refuses a hand-run SQL delete (no teamrig guard asks a person, T3356), the exec guard refuses a review it cannot tie to a session, the service-role guard refuses a role grant, the cold-send hook lets a message go, the failed-send hook stays quiet, the missing-cli hook answers a shell that did not find the bare command, the route reminder, the loop nudge and the reminder stay quiet, the secret redactor gives a Bash result back without the token it held, the Stop and
+ * main, the package guard refuses an npx of a tool not installed, the secret guard refuses a read of .env, the db-write guard refuses a hand-run SQL delete (no teamrig guard asks a person, T3356), the exec guard refuses a review it cannot tie to a session, the service-role guard refuses a role grant, the install guard refuses a write of the kit home's install pointer, the cold-send hook lets a message go, the failed-send hook stays quiet, the missing-cli hook answers a shell that did not find the bare command, the route reminder, the loop nudge and the reminder stay quiet, the secret redactor gives a Bash result back without the token it held, the Stop and
  * SubagentStop hooks print nothing (any output there would block the turn), the refresh wake wakes nothing, and the
  * restore tracker prints nothing, and so do tab status, the compaction hold, the read-only allow and the picker guard,
  * all off without a config.
@@ -134,6 +134,11 @@ const SAMPLES: Readonly<Record<string, Sample>> = {
   'hook pass-record-guard': {
     payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'Write', tool_input: { file_path: '.git/local-ci/abc.json', content: '{}' } },
     check: (stdout) => (outputField(stdout, 'permissionDecision') === 'deny' ? undefined : 'expected a deny for a write of a pass record'),
+  },
+  // The smoke runs in its kit home (TEAMRIG_HOME is the cwd), so a relative current.json is the install pointer.
+  'hook install-guard': {
+    payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'Write', tool_input: { file_path: 'current.json', content: '{}' } },
+    check: denies("a write of the kit home's install pointer"),
   },
   'hook cold-send': {
     payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'SendMessage', tool_input: { to: 'lead', message: 'hello' } },

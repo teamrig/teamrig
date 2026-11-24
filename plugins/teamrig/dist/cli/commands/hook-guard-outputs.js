@@ -2,12 +2,14 @@ import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { query } from "../../core/git-run.js";
 import { errorMessage } from "../../core/guards.js";
+import { KIT_INSTALL_ENTRIES, resolveKitHome } from "../../core/home.js";
 import { checkClient, clientRootOf } from "../../exec/client-integrity.js";
 import { ClientInstalls, ShellPathSearch } from "../../exec/client-launch.js";
 import { dbWriteGuardOf, dbWriteGuardReply } from "../../hooks/db-write-guard.js";
 import { execGuardReply } from "../../hooks/exec-guard.js";
 import { githubReposOf } from "../../hooks/gh-write-refusals.js";
 import { remoteReposOf } from "../../hooks/gh-writes.js";
+import { installGuardReply } from "../../hooks/install-guard.js";
 import { packageGuardOf, packageGuardReply } from "../../hooks/package-guard.js";
 import { commitsOf, protectedBranchesOf, pushGuardReply, pushToProtectedOf, skipHooksOf } from "../../hooks/push-guard.js";
 import { secretGuardOf, secretGuardReply, secretPatternsOf } from "../../hooks/secret-guard.js";
@@ -16,7 +18,7 @@ import { approvedTaskOf } from "../../register/approval.js";
 import { JsonlEventLog } from "../../register/store.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { runBy } from "../agent-run.js";
-import { secretFilesOf, sessionVariablesOf } from "../host.js";
+import { hookFilePlacesOf, secretFilesOf, sessionVariablesOf } from "../host.js";
 import { rosterOf } from "../kit.js";
 import { leadAboveOf } from "../tree.js";
 import { teamSessionOf } from "./hook-input.js";
@@ -197,6 +199,27 @@ export function serviceRoleGuardReplyOf(runtime, guard, event) {
         platform: runtime.platform,
         configPath: guard.kit?.load.path,
         readConfig: (path) => runtime.files.read(path),
+        canonical: (path) => runtime.worktrees.files.canonical(path),
+    });
+}
+/**
+ * The install guard's reply (T5278): a refusal of a session's own write of teamrig's install in the kit home (its
+ * versions, `current`, bin and records) or of a shipped host's hook files; none when it lets the call go. It reads no
+ * team config, so a broken or missing one is no way around it.
+ */
+export function installGuardReplyOf(runtime, event) {
+    const install = {
+        folder: resolveKitHome(runtime.env, runtime.userHome),
+        entries: KIT_INSTALL_ENTRIES,
+        what: 'the teamrig install',
+        writer: 'run `teamrig` from PATH, whose install and upgrade write it',
+    };
+    return installGuardReply(event, {
+        cwd: runtime.cwd,
+        home: runtime.userHome,
+        platform: runtime.platform,
+        variables: runtime.env,
+        places: [install, ...hookFilePlacesOf(runtime)],
         canonical: (path) => runtime.worktrees.files.canonical(path),
     });
 }

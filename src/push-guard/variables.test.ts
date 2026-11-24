@@ -231,6 +231,13 @@ describe('resolveLiteralVariables: what resolves', () => {
       assert.deepEqual(written, expected, line);
     }
   });
+
+  it('keeps a pattern bound to a name as that pattern when the caller reads patterns, never a glob of the value', () => {
+    const command = resolveLiteralVariables(parseShell('S=/s/*; echo hi > $S', 'bash'), undefined, 'kept').find((candidate) => candidate.redirections.length > 0);
+    const target = command?.redirections[0]?.target;
+    assert.equal(target?.text, '/s/*');
+    assert.equal(target?.dynamic, false);
+  });
 });
 
 describe('resolveLiteralVariables: the home folder', () => {

@@ -8305,6 +8305,25 @@ teamrig hook pass-record-guard < pre-tool-use.json
 Output: nothing for a call that does not reach the records, outside a team's projects, or for input that is not a
 hook payload; otherwise a JSON permission decision `deny` with the reason naming the file or the line.
 
+### teamrig hook install-guard
+
+Before a Write, Edit, MultiEdit, NotebookEdit, Bash or PowerShell call, refuses one that would write teamrig's own
+install in the kit home (its `versions`, `bin`, `current`, `current.json` and `installs.json`) or the hook files of a
+host teamrig ships with (Codex CLI's `hooks.json` and `config.toml`): a file tool whose path reaches one by any
+spelling, or a shell line naming one at all. The kit's `teams/` and the Read tool stay open. See
+[Hooks and permissions](hooks.md#before-a-write-or-a-shell-command-the-install-guard).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook install-guard < pre-tool-use.json
+```
+
+Output: nothing for a call that does not reach a guarded file, or for input that is not a hook payload; otherwise a
+JSON permission decision `deny` with the reason naming the file or the line.
+
 ### teamrig hook service-role-guard
 
 Before a Bash or PowerShell call, refuses a line that runs `teamrig roles grant` or `revoke`, and one
@@ -8980,8 +8999,9 @@ their marketplaces publish than the ones installed (Claude Code's `plugins/insta
 install first). The network is asked at most every 6 hours across the machine; every other run reads the answer kept in
 `<kit home>/updates/check.json`. A cloned marketplace is asked through a bare repository teamrig keeps beside it
 (`<kit home>/updates/<marketplace>.git`), never Claude Code's own clone: `git ls-remote` names the newest commit, and
-only a commit not seen before is fetched, one commit deep and without file contents but the two files read. A
-directory marketplace is read in place. git never asks for a login; a marketplace that cannot be asked keeps what was
+only a commit not seen before is fetched, one commit deep and without file contents but the two files read. A plugin
+whose entry names another repository is read from that repository through a bare repository of its own
+(`<kit home>/updates/<marketplace>.<plugin>.git`). A directory marketplace is read in place. git never asks for a login; a marketplace that cannot be asked keeps what was
 known. Stdin: ignored.
 
 Flags: none.
