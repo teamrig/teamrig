@@ -133,10 +133,11 @@ describe('coverage-cli', () => {
 
   it('stops a suite that prints nothing for the idle limit and fails it as hung', () => {
     const never = testFile("it('never ends', async () => {\n  setInterval(() => {}, 1000);\n  await new Promise(() => {});\n});");
-    const { status, output } = gate({ 'tools/ci/coverage.json': JSON.stringify({ ...POLICY, suiteIdleSeconds: 2 }), 'src/sign.test.ts': never });
+    // The policy's smallest limit: the suite never prints, so a longer one proves nothing more and costs up to three
+    // times its length, since a busy host gives the run the limit up to three times (suite-run.test.ts holds that).
+    const { status, output } = gate({ 'tools/ci/coverage.json': JSON.stringify({ ...POLICY, suiteIdleSeconds: 1 }), 'src/sign.test.ts': never });
     assert.equal(status, 1, output);
-    // A busy host gives the run the 2 s limit up to three times.
-    assert.match(output, /coverage: the test run printed nothing for [246] s and was stopped with every process it started/);
+    assert.match(output, /coverage: the test run printed nothing for [123] s and was stopped with every process it started/);
   });
 
   it('exits 2 on an invalid or missing policy', () => {
