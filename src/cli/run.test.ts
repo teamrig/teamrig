@@ -14,7 +14,9 @@ import { configChangedMeanwhile, hired } from '../testing/config-race.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import { ASK_REFUSED_NOTE } from '../hooks/permission.ts';
 import { APP, bash, CLAUDE_SESSION, CliHarness, CONFIG_PATH, contextOf, decisionOf, EVENTS_PATH, KIT, POINTER, reasonOf, SKILLS_DIR, TEAM, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
-import { HOOKS_ONLY_HOST, hostTelling, NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostTelling, NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
+import type { HostSource } from '../composition/host-ports.ts';
+import { codexUserHooks } from '../adapters/hosts/codex-cli/user-hooks.ts';
 import { cutLineMessage } from './cmd-shim.ts';
 import { FULL_HELP_POINTER } from './help.ts';
 import { SHORT_FORM_CHARS } from './reports.ts';
@@ -989,6 +991,34 @@ describe('runCli: hook pass-record-guard', () => {
   it("prints nothing outside a team's projects or for input that is not a hook payload", async () => {
     assert.deepEqual(await new CliHarness(null, null).run(['hook', 'pass-record-guard'], { stdin: write(record) }), { code: EXIT.ok, stdout: [], stderr: [] });
     assert.deepEqual(await new CliHarness().run(['hook', 'pass-record-guard'], { stdin: 'not json' }), { code: EXIT.ok, stdout: [], stderr: [] });
+  });
+});
+
+describe('runCli: hook install-guard', () => {
+  const write = (file_path: string): string => JSON.stringify({ tool_name: 'Write', tool_input: { file_path, content: '{}' }, cwd: APP });
+  const codex: HostSource = (given) => ({ ...SHIPPED_HOST(given), userHooks: codexUserHooks(given.env, given.platform) });
+  const userHome = resolve(USER_HOME);
+  const run: RunOptions = { userHome, platform: process.platform, shippedHosts: { codex: shippedHost(codex) } };
+
+  it("refuses a write of the kit's install and of a shipped host's hook files, on a broken config too", async () => {
+    for (const kit of [new CliHarness(), new CliHarness(null), new CliHarness('{ not json')]) {
+      assert.equal(decisionOf(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(KIT, 'current.json')) })), 'deny');
+      assert.equal(decisionOf(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(KIT, 'versions', '1.0.0', 'bin', 'teamrig.cmd')) })), 'deny');
+      assert.equal(decisionOf(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(userHome, '.codex', 'hooks.json')) })), 'deny');
+      assert.equal(decisionOf(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(userHome, '.codex', 'config.toml')) })), 'deny');
+    }
+  });
+
+  it("lets a team's own files in the kit home and a plain file run", async () => {
+    const kit = new CliHarness();
+    assert.deepEqual(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(KIT, 'teams', 'app', 'notes.md')) }), { code: EXIT.ok, stdout: [], stderr: [] });
+    assert.deepEqual(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(APP, 'notes.md')) }), { code: EXIT.ok, stdout: [], stderr: [] });
+    assert.deepEqual(await kit.run(['hook', 'install-guard'], { ...run, stdin: write(join(userHome, '.codex', 'sessions', 'log.jsonl')) }), { code: EXIT.ok, stdout: [], stderr: [] });
+  });
+
+  it("prints nothing outside a team's projects or for input that is not a hook payload", async () => {
+    assert.deepEqual(await new CliHarness(null, null).run(['hook', 'install-guard'], { ...run, stdin: write(join(KIT, 'current.json')) }), { code: EXIT.ok, stdout: [], stderr: [] });
+    assert.deepEqual(await new CliHarness().run(['hook', 'install-guard'], { ...run, stdin: 'not json' }), { code: EXIT.ok, stdout: [], stderr: [] });
   });
 });
 

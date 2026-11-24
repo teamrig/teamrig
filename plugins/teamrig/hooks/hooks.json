@@ -27,6 +27,7 @@
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "db-write-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "exec-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "pass-record-guard", "--host", "claude-code"], "timeout": 15 },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "install-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "service-role-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "readonly-allow", "--host", "claude-code"], "timeout": 15 }
         ]
@@ -47,6 +48,7 @@
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "pass-record-guard", "--host", "claude-code"], "timeout": 15 },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "install-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "service-role-guard", "--host", "claude-code"], "timeout": 15 },
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "secret-guard", "--host", "claude-code"], "timeout": 15 }
         ]

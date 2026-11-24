@@ -38,6 +38,13 @@ export function resolveKitHome(env: Env, userHome: string): string {
 }
 
 /**
+ * The kit home's entries that make up teamrig's own install (T5278): the versions it keeps, the pointer to the one in
+ * use, the command it puts on PATH and the record of what it installed. Only teamrig writes them, as every session's
+ * guards run from them (the install guard, src/hooks/install-guard.ts); `teams/` and the rest stay the teams' own.
+ */
+export const KIT_INSTALL_ENTRIES: readonly string[] = ['versions', 'bin', 'current', 'current.json', 'installs.json'];
+
+/**
  * Folders a team may move in the config: `paths`, and `refresh.handoverDir` for the handover. A
  * relative path is resolved against the team home; unset, state, inbox and handover stay under the
  * team home and skills is the host's skills folder (`teamPaths`).

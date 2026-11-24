@@ -92,6 +92,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
       'db-write-guard',
       'exec-guard',
       'pass-record-guard',
+      'install-guard',
       'service-role-guard',
       'readonly-allow',
     ]);
