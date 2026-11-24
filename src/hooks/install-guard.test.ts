@@ -246,6 +246,19 @@ describe('installGuardReply: shell lines', () => {
     }
   });
 
+  it('resolves a bash variable the line binds before it reads it (T5364 R3)', async () => {
+    const lines = ['X=~/.teamrig; echo 0.0.1 > $X/current', 'K=C:/u/.codex && cp evil.toml "$K/config.toml"', 'export D=~/.teamrig/teams; echo 0.0.1 > ${D}/../current', 'X=~/.teamrig; rm -rf $X'];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+  });
+
+  it('passes a bash variable the line binds outside the guarded entries, or to a value only known when it runs', async () => {
+    for (const command of ['X=~/.teamrig/teams/t; echo hi > $X/notes.md', 'X=$(mktemp -d); echo hi > $X/current']) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });

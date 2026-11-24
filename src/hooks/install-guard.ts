@@ -2,6 +2,7 @@ import { posix, win32 } from 'node:path';
 import type { EditCall, HookEvent, HookReply, ShellCall } from '../ports/host/index.ts';
 import { Location } from '../push-guard/location.ts';
 import { parseShell, type ShellWord } from '../push-guard/tokenizer.ts';
+import { resolveLiteralVariables } from '../push-guard/variables.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
 import { isPattern, REST, segmentRegExp, wordPathOf } from './shell-word-path.ts';
@@ -342,7 +343,10 @@ async function wordsReply(call: ShellCall, cwd: string, env: InstallGuardEnv): P
   const seen = new Set<string>();
   for (const reading of readings) {
     const location = new Location(cwd, env.home, pathsOf(env.platform));
-    for (const command of parseShell(reading, call.dialect).commands) {
+    const parsed = parseShell(reading, call.dialect);
+    // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3).
+    const commands = call.dialect === 'bash' ? resolveLiteralVariables(parsed, env.home) : parsed.commands;
+    for (const command of commands) {
       location.enter(command.subshells);
       const at = location.dir;
       const targets = command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target]));
