@@ -10,7 +10,7 @@ import { execGuardReply, type TabIdentity } from '../../hooks/exec-guard.ts';
 import { githubReposOf } from '../../hooks/gh-write-refusals.ts';
 import { remoteReposOf } from '../../hooks/gh-writes.ts';
 import { packageGuardOf, packageGuardReply } from '../../hooks/package-guard.ts';
-import { commitsOf, protectedBranchesOf, pushGuardReply, pushToProtectedOf, skipHooksOf, type PushClearance } from '../../hooks/push-guard.ts';
+import { commitsOf, protectedBranchesOf, pushGuardReply, pushToProtectedOf, skipHooksOf, trustedScriptsOf, type PushClearance } from '../../hooks/push-guard.ts';
 import { secretGuardOf, secretGuardReply, secretPatternsOf } from '../../hooks/secret-guard.ts';
 import { serviceRoleGuardReply } from '../../hooks/service-role-guard.ts';
 import type { HookEvent, HookReply } from '../../ports/host/index.ts';
@@ -97,6 +97,7 @@ export function pushGuardReplyOf(runtime: CliRuntime, guard: GuardLoad, event: H
     repo: runtime.git,
     protectedBranches: protectedBranchesOf(load),
     pushToProtected: pushToProtectedOf(load),
+    trustedScripts: trustedScriptsOf(load),
     commits: commitsOf(load),
     commitLog: runtime.commitLog,
     skipHooks: skipHooksOf(load),
