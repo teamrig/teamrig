@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION } from '../plugin-api/index.ts';
+import { apiVersionNotice } from '../plugin-api/version.ts';
 import { HOST_PORT_NAMES } from '../ports/host/index.ts';
 import { hostDeps, terminalDeps } from '../testing/adapter-deps.ts';
 import { connectorDeclarationData, hostDeclarationData, terminalDeclarationData } from '../testing/manifests.ts';
@@ -100,8 +101,8 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     ]);
   });
 
-  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, and the rest still loads', async () => {
-    assert.equal(API_VERSION, '0.2.0');
+  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, or on 0.3.0 when it serves issue search, all loading on this teamrig, and the rest still loads', async () => {
+    assert.equal(apiVersionNotice('0.2.0', API_VERSION), undefined);
     const { hosts, connectors, terminals } = await readDeclarations();
     const loads = [...hosts, ...connectors, ...terminals];
     assert.deepEqual(
@@ -111,8 +112,8 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     const newer = loads.flatMap((load) => (load.kind === 'loaded' && (load.value.terms !== undefined || load.value.steps !== undefined) ? [[load.id, load.value.apiVersion]] : []));
     assert.deepEqual(newer, [
       ['claude-code', '0.2.0'],
-      ['github', '0.2.0'],
-      ['jira', '0.2.0'],
+      ['github', '0.3.0'],
+      ['jira', '0.3.0'],
     ]);
   });
 });

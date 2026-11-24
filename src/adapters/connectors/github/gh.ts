@@ -7,9 +7,11 @@ import {
   MENTION_PAGE_SIZE,
   MENTION_PAGES_MAX,
   parseLabelFile,
+  SEARCH_PAGE,
   type CloseReason,
   type Env,
   type IssueDraft,
+  type IssueQuery,
   type LabelSpec,
   type ProgramRunner,
   type ShellEnd,
@@ -306,6 +308,75 @@ export function isIssueClose(args: readonly string[]): boolean {
 export function isIssueRead(args: readonly string[]): boolean {
   const call = issueCall(args);
   return call?.method === 'GET' && call.part === 'issue' && args.length === 4;
+}
+
+/** The search API a search of one repository's issues and pull requests reads. */
+const SEARCH_PATH = 'search/issues';
+
+/** The qualifier that keeps a search to one repository, which the query always starts with. */
+const REPO_QUALIFIER = 'repo:';
+
+/**
+ * A qualifier that would reach past the one repository: another `repo:`, an `org:`, `user:` or `owner:`, anywhere in
+ * the words. A search holding one is refused unsent, by the host and again by isIssueSearch.
+ */
+const SCOPE_QUALIFIER = /(?:^|[^A-Za-z0-9_])(?:repo|org|user|owner):/i;
+
+/** Whether `words` hold a qualifier that would widen a search past its repository (SCOPE_QUALIFIER). */
+export function widensSearch(words: string): boolean {
+  return SCOPE_QUALIFIER.test(words);
+}
+
+/**
+ * The kind one GitHub search reads: GitHub's REST search refuses a query naming neither `is:issue` nor `is:pr` (HTTP
+ * 422), so a query of both kinds is two searches (host.ts search).
+ */
+export type SearchKind = Exclude<IssueQuery['kind'], 'all'>;
+
+/** The qualifiers a search's kind and state add after its words. */
+const KIND_QUALIFIER: Readonly<Record<SearchKind, string>> = { issue: ' is:issue', pull: ' is:pr' };
+const STATE_QUALIFIER: Readonly<Record<IssueQuery['state'], string>> = { open: ' is:open', closed: ' is:closed', all: '' };
+
+/**
+ * The words of a search as GitHub terms, each in double quotes so GitHub matches it as text and never reads it as its
+ * own syntax (`is:`, `label:`, `author:`, `OR`, `NOT`, a leading `-`), as the port promises (IssueQuery.words). GitHub
+ * has no escape inside quotes, so a word's own double quotes are dropped; a word left empty goes. Empty when the words
+ * hold nothing else.
+ */
+export function searchTerms(words: string): string {
+  return words
+    .split(/\s+/u)
+    .map((word) => word.replaceAll('"', ''))
+    .filter((word) => word !== '')
+    .map((word) => `"${word}"`)
+    .join(' ');
+}
+
+/** What follows the repository in a search's query: quoted terms (searchTerms), then its kind and maybe its state. */
+const SEARCH_TAIL = /^"[^"\s]+"(?: "[^"\s]+")* is:(?:issue|pr)(?: is:(?:open|closed))?$/u;
+
+/** The command line of one search of `repo`: its words as quoted terms (searchTerms), sent raw, and one page. */
+export function issueSearchArgs(repo: string, query: Omit<IssueQuery, 'kind'> & { readonly kind: SearchKind }): string[] {
+  const q = `${REPO_QUALIFIER}${repo} ${searchTerms(query.words)}${KIND_QUALIFIER[query.kind]}${STATE_QUALIFIER[query.state]}`;
+  return ['api', SEARCH_PATH, '-X', 'GET', RAW_FIELD, `q=${q}`, RAW_FIELD, `per_page=${SEARCH_PAGE}`];
+}
+
+/**
+ * True for `gh api search/issues -X GET -f q=repo:<owner>/<name> "<term>"... is:issue|is:pr[ is:open|is:closed] -f
+ * per_page=30` and nothing more: one page of one kind of one repository's search, its words quoted terms
+ * (SEARCH_TAIL). A query that does not start with the repository, holds an unquoted word or one naming another
+ * repository, an owner or a user (SCOPE_QUALIFIER), another page size, field, `--paginate` or method is refused, so a
+ * search reads one page of the repository the access was picked for and nothing else.
+ */
+export function isIssueSearch(args: readonly string[]): boolean {
+  const [query, page, ...rest] = rawPairs(args.slice(4)) ?? [];
+  if (args[0] !== 'api' || args[1] !== SEARCH_PATH || args[2] !== '-X' || args[3] !== 'GET' || query?.[0] !== 'q' || page?.[0] !== 'per_page' || page[1] !== String(SEARCH_PAGE) || rest.length > 0) {
+    return false;
+  }
+  const q = query[1];
+  const space = q.indexOf(' ');
+  const tail = q.slice(space + 1);
+  return q.startsWith(REPO_QUALIFIER) && space > 0 && REPO_NAME.test(q.slice(REPO_QUALIFIER.length, space)) && SEARCH_TAIL.test(tail) && !widensSearch(tail);
 }
 
 /**
@@ -946,7 +1017,7 @@ export class GhRefusedError extends Error {
   override readonly name = 'GhRefusedError';
 
   constructor(args: readonly string[]) {
-    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
   }
 }
 
@@ -964,6 +1035,7 @@ export function isAllowedGh(args: readonly string[]): boolean {
     isLabelRead(args) ||
     isLabelFileRead(args) ||
     isIssueRead(args) ||
+    isIssueSearch(args) ||
     isIssueAssign(args) ||
     isIssueUnassign(args) ||
     isAssigneeRead(args) ||

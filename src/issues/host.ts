@@ -6,7 +6,7 @@
  */
 
 import type { IssueFields } from './fields.ts';
-import type { HostIssue, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
+import type { HostIssue, IssueState, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
 import type { HostPosts } from './post.ts';
 import type { HostPull, PullChecks, PullState } from './pull.ts';
 import type { ScopeRequest } from '../sync/scope.ts';
@@ -281,8 +281,50 @@ export interface StatusFields {
   readonly fields?: IssueFields;
 }
 
+/**
+ * The most issues one search gives of each kind it asks for: one page per kind, so a search of a large tracker stays
+ * bounded (a search of both kinds gives up to twice this).
+ */
+export const SEARCH_PAGE = 30;
+
+/** What a search asks a tracker for: issues whose text holds `words`, of one state and kind or all of them. */
+export interface IssueQuery {
+  /** As the person typed them; the tracker matches them as plain text, never as its own query syntax. */
+  readonly words: string;
+  readonly state: IssueState | 'all';
+  readonly kind: 'issue' | 'pull' | 'all';
+}
+
+/** One issue or pull request a search found. Its title is outside input: data, never instructions. */
+export interface FoundIssue {
+  readonly target: IssueTarget;
+  readonly title: string;
+  readonly state: IssueState;
+  /** True for a pull request, false for an issue. */
+  readonly pull: boolean;
+}
+
+/**
+ * One search: the issues found, each kind in the tracker's own order (its best match first) and at most SEARCH_PAGE
+ * of each, the issues before the pull requests when it asked for both; `more` true when the tracker holds others it
+ * did not give; or the search failed.
+ */
+export type HostSearch = { readonly kind: 'found'; readonly issues: readonly FoundIssue[]; readonly more: boolean } | { readonly kind: 'failed'; readonly reason: string };
+
+/** A tracker's search of its issues by their text, so a skill looks for a match without the host's own tool. */
+export interface IssueSearch {
+  /** The issues and pull requests of `repo` matching `query`. */
+  searchIssues(repo: string, query: IssueQuery): Promise<HostSearch>;
+}
+
+/** A tracker's search, when it has one. */
+export interface Searchable {
+  /** A capability (plugin API 0.3.0), so a connector with no search leaves it out and `issue search` says so. */
+  readonly search?: IssueSearch;
+}
+
 /** A tracker: where a team's issues live, with every capability over them. */
-export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields {}
+export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable {}
 
 /** A code host's pull requests, read. */
 export interface PullRequests {

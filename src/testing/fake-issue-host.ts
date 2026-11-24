@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -81,6 +81,21 @@ export class FakeIssueHost implements IssueHost {
   private unassignEnd: HostEnd = { kind: 'done' };
   /** No fields capability until a test gives one, as a tracker without issue fields has none. */
   fields?: IssueFields;
+  /** No search capability until a test gives one, as a connector built before plugin API 0.3.0 has none. */
+  search?: IssueSearch;
+  /** Each search asked, with its repository, in order. */
+  readonly searches: Array<{ readonly repo: string; readonly query: IssueQuery }> = [];
+
+  /** From now on, it has a search: each one is recorded and ends as `end`. */
+  hasSearch(end: HostSearch): this {
+    this.search = {
+      searchIssues: (repo: string, query: IssueQuery) => {
+        this.searches.push({ repo, query });
+        return Promise.resolve(end);
+      },
+    };
+    return this;
+  }
 
   /**
    * From now on, it has issue fields: a read of any repository gives `read`, and each field or type write is recorded

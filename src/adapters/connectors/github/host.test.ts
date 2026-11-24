@@ -17,6 +17,8 @@ import {
   isIssueComment,
   isIssueCreate,
   isIssueQuery,
+  isIssueSearch,
+  issueSearchArgs,
   isIssueRead,
   isIssueUnassign,
   isLabelAdd,
@@ -146,6 +148,63 @@ describe('GitHubIssueHost.list', () => {
       reason: 'gh api graphql for the issues of acme/web exited with code 1: HTTP 403: API rate limit exceeded',
     });
     assert.equal(gh.ran.length, 2);
+  });
+});
+
+describe('GitHubIssueHost.search (T4860)', () => {
+  const QUERY = { words: 'login', state: 'open', kind: 'issue' } as const;
+
+  it('searches one page of the repository through the allowlisted search, and reads what it found', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7, { title: 'Login fails' }), ghIssue('acme/web', 8, { title: 'Docs' })]);
+    assert.deepEqual(await hostWith(gh).search.searchIssues('acme/web', QUERY), {
+      kind: 'found',
+      issues: [{ target: { repo: 'acme/web', number: 7 }, title: 'Login fails', state: 'open', pull: false }],
+      more: false,
+    });
+    assert.deepEqual(gh.ran.map((request) => request.args), [issueSearchArgs('acme/web', QUERY)]);
+    assert.ok(gh.ran.every((request) => isIssueSearch(request.args)));
+  });
+
+  it('searches both kinds as two searches, issues then pull requests, since GitHub refuses a query of neither', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7, { title: 'Login fails' })]);
+    const all = { ...QUERY, kind: 'all' } as const;
+    assert.deepEqual(await hostWith(gh).search.searchIssues('acme/web', all), {
+      kind: 'found',
+      issues: [{ target: { repo: 'acme/web', number: 7 }, title: 'Login fails', state: 'open', pull: false }],
+      more: false,
+    });
+    assert.deepEqual(
+      gh.ran.map((request) => request.args),
+      [issueSearchArgs('acme/web', { ...QUERY, kind: 'issue' }), issueSearchArgs('acme/web', { ...QUERY, kind: 'pull' })],
+    );
+  });
+
+  it('fails both kinds on the first search that fails, reading no further', async () => {
+    const down = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 403: API rate limit exceeded\n' });
+    const found = await hostWith(down).search.searchIssues('acme/web', { ...QUERY, kind: 'all' });
+    assert.equal(found.kind, 'failed');
+    assert.equal(down.ran.length, 1);
+  });
+
+  it('refuses words that would reach past the repository, running no gh', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7)]);
+    const found = await hostWith(gh).search.searchIssues('acme/web', { ...QUERY, words: 'x repo:other/secret' });
+    assert.deepEqual(found, { kind: 'failed', reason: 'a search stays in its repository: its words may not name a repo:, org:, user: or owner: qualifier' });
+    assert.deepEqual(gh.ran, []);
+  });
+
+  it('refuses words that are only double quotes, running no gh', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7)]);
+    const found = await hostWith(gh).search.searchIssues('acme/web', { ...QUERY, words: '"" "' });
+    assert.deepEqual(found, { kind: 'failed', reason: 'the words hold nothing to look for once their double quotes are dropped' });
+    assert.deepEqual(gh.ran, []);
+  });
+
+  it('fails when GitHub shows no repository, or gh prints no search answer', async () => {
+    const missing = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Not Found (HTTP 404)\n' });
+    assert.deepEqual(await hostWith(missing).search.searchIssues('acme/web', QUERY), { kind: 'failed', reason: 'GitHub shows no repository acme/web to search, or the access may not see it' });
+    const odd = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' });
+    assert.deepEqual(await hostWith(odd).search.searchIssues('acme/web', QUERY), { kind: 'failed', reason: 'gh printed no search answer for acme/web' });
   });
 });
 

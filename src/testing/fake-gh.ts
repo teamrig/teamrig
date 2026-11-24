@@ -1,5 +1,6 @@
 import { isRecord, recordField, stringField, type JsonRecord } from '../core/guards.ts';
 import {
+  isIssueSearch,
   isAssigneeRead,
   isIssueAssigneeRead,
   isCommentsRead,
@@ -717,6 +718,9 @@ export class FakeGh implements GhRunner {
     if (isIssueRead(request.args)) {
       return this.issueRead(request.args[1] ?? '');
     }
+    if (isIssueSearch(request.args)) {
+      return this.issueSearch((request.args[5] ?? '').slice('q='.length));
+    }
     if (isMentionRead(request.args)) {
       return this.postRead(request.args[1] ?? '');
     }
@@ -926,6 +930,30 @@ export class FakeGh implements GhRunner {
       .slice(0, COMMENTS_PAGE)
       .map(restCommentOfNode);
     return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(comments), stderr: '' };
+  }
+
+  /**
+   * A search as GitHub's REST search answers it: HTTP 422 for a query naming neither `is:issue` nor `is:pr`, as GitHub
+   * refuses one; none for `is:pr`, since what the fake holds are issues; else the held issues of the query's repository
+   * whose title holds each of its quoted terms (case aside), each naming its repository, the other qualifiers ignored,
+   * so a test of a search needs only the issues it holds.
+   */
+  private issueSearch(q: string): GhResult {
+    const [scope = '', ...rest] = q.split(' ');
+    const repo = scope.slice('repo:'.length);
+    const canned = this.canned.get(repo);
+    if (canned !== undefined) {
+      return canned;
+    }
+    if (!rest.includes('is:issue') && !rest.includes('is:pr')) {
+      return { end: { kind: 'exited', code: 1 }, stdout: '', stderr: "gh: Query must include 'is:issue' or 'is:pull-request' (HTTP 422)\n" };
+    }
+    const terms = rest.filter((word) => !word.startsWith('is:')).map((term) => term.replaceAll('"', '').toLowerCase());
+    const held = rest.includes('is:pr') ? [] : (this.issues.get(repo) ?? []);
+    const items = held
+      .filter((issue) => terms.every((term) => (stringField(issue, 'title') ?? '').toLowerCase().includes(term)))
+      .map((issue) => ({ ...heldIssueRest(issue, Number(issue['number'])), repository_url: `https://api.github.com/repos/${repo}` }));
+    return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ total_count: items.length, incomplete_results: false, items }), stderr: '' };
   }
 
   private issueRead(path: string): GhResult {

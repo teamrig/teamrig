@@ -3,6 +3,7 @@ import {
   isRecord,
   isStringArray,
   recordField,
+  SEARCH_PAGE,
   stampCredit,
   stringField,
   type CloseReason,
@@ -17,12 +18,16 @@ import {
   type HostList,
   type HostOpen,
   type HostReach,
+  type HostSearch,
   type HostThread,
   type HostUse,
   type HostViewer,
   type HostWatch,
   type IssueComment,
+  type FoundIssue,
   type IssueDraft,
+  type IssueQuery,
+  type IssueSearch,
   type IssueTarget,
   type IssueThread,
   type JsonRecord,
@@ -38,7 +43,7 @@ import type { JiraConfig } from './config.ts';
 import { NOT_BUILT } from './declaration.ts';
 import { openableNames, openingType } from './issue-type.ts';
 import { stateReasonOf } from './resolution.ts';
-import { scopeClause } from './scope.ts';
+import { jqlString, scopeClause } from './scope.ts';
 import { browseUrl, credentialName, issueKey, issueNumber, parseProject, projectProblem, type JiraProject } from './site.ts';
 import { closingStep, isDoneStatus } from './transitions.ts';
 
@@ -70,6 +75,12 @@ const LIST_FIELDS = ['summary', 'description', 'status', 'resolution', 'labels',
 
 /** The fields a read of one issue as it is now asks for: what an IssueThread is made of, and nothing else. */
 const THREAD_FIELDS = ['summary', 'description', 'status', 'labels', 'assignee'] as const;
+
+/** The fields a search asks of each issue it finds: what a FoundIssue is made of, and nothing else. */
+const FOUND_FIELDS = ['summary', 'status'] as const;
+
+/** The JQL clause each state of a search adds; `all` adds none. */
+const STATE_CLAUSE: Readonly<Record<IssueQuery['state'], string>> = { open: ' AND statusCategory != Done', closed: ' AND statusCategory = Done', all: '' };
 
 /** The one mark a watch keeps: the issue changed last, and when. */
 const NEWEST = 'newest';
@@ -240,6 +251,19 @@ function issueThread(body: unknown): IssueThread | undefined {
   };
 }
 
+/** One issue a search found, or undefined when it does not read as an issue of `project` with a summary and a status. */
+function foundIssue(repo: string, project: JiraProject, value: unknown): FoundIssue | undefined {
+  const key = isRecord(value) ? stringField(value, 'key') : undefined;
+  const number = key === undefined ? undefined : issueNumber(project, key);
+  const fields = isRecord(value) ? recordField(value, 'fields') : undefined;
+  const status = fields === undefined ? undefined : recordField(fields, 'status');
+  const title = fields === undefined ? undefined : stringField(fields, 'summary');
+  if (number === undefined || status === undefined || title === undefined) {
+    return undefined;
+  }
+  return { target: { repo, number }, title, state: isDoneStatus(status) ? 'closed' : 'open', pull: false };
+}
+
 /** One read comment, or undefined when it does not read as one or was neither posted nor edited at or after `since`. */
 function readComment(value: unknown, since: number): ReadComment | undefined {
   if (!isRecord(value)) {
@@ -312,6 +336,35 @@ export class JiraTracker implements Tracker {
   }
 
   /**
+   * A search of one project: one page of Jira's search for issues whose text holds the words, quoted as one JQL
+   * string (scope.ts jqlString) so no word adds a clause of its own. A Jira issue is never a pull request, so a search
+   * of pull requests alone finds none and sends nothing.
+   */
+  readonly search: IssueSearch = {
+    searchIssues: async (repo: string, query: IssueQuery): Promise<HostSearch> => {
+      const found = this.projectOf(repo);
+      if (found.kind === 'failed') {
+        return found;
+      }
+      if (query.kind === 'pull') {
+        return { kind: 'found', issues: [], more: false };
+      }
+      const { project } = found;
+      const words = jqlString(query.words);
+      if (words === undefined) {
+        return failed('the words of a Jira search cannot hold a control character');
+      }
+      const jql = `project = "${project.key}" AND text ~ ${words}${STATE_CLAUSE[query.state]}`;
+      const page = this.searched(repo, await this.client.post(project.site, '/search/jql', { jql, fields: FOUND_FIELDS, maxResults: SEARCH_PAGE }));
+      if (page.kind === 'failed') {
+        return page;
+      }
+      const issues = page.issues.map((item) => foundIssue(repo, project, item)).filter((issue) => issue !== undefined);
+      return { kind: 'found', issues, more: page.next !== undefined || issues.length < page.issues.length };
+    },
+  };
+
+  /**
    * The project's open issues and those closed on or after `closedSince`, page by page. Jira reads a day of a search
    * in the account's own time zone, so the search asks from a day earlier and the closed ones are cut to the UTC day
    * here. When a page fails nothing of the project is given, so its tasks are not judged on half a read.
@@ -333,7 +386,7 @@ export class JiraTracker implements Tracker {
     const jql = `project = "${project.key}" AND (statusCategory != Done OR statusCategoryChangedDate >= "${from}")`;
     const closedFrom = `${closedSince}T00:00:00.000Z`;
     if (request === undefined || request.scope.all) {
-      const searched = await this.search(repo, project, jql, closedFrom);
+      const searched = await this.searchPages(repo, project, jql, closedFrom);
       return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: searched.notes };
     }
     return await this.scopedList(repo, project, jql, closedFrom, request);
@@ -350,7 +403,7 @@ export class JiraTracker implements Tracker {
     if (clause.kind === 'failed') {
       return clause;
     }
-    const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } as const : await this.search(repo, project, `${jql} AND (${clause.jql})`, closedFrom);
+    const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } as const : await this.searchPages(repo, project, `${jql} AND (${clause.jql})`, closedFrom);
     if (searched.kind === 'failed') {
       return searched;
     }
@@ -363,7 +416,7 @@ export class JiraTracker implements Tracker {
   }
 
   /** The pages of one search of `jql`: the issues read, the closed ones cut to `closedFrom`, and what the list says of its read. */
-  private async search(repo: string, project: JiraProject, jql: string, closedFrom: string): Promise<Searched | Failed> {
+  private async searchPages(repo: string, project: JiraProject, jql: string, closedFrom: string): Promise<Searched | Failed> {
     const issues: HostIssue[] = [];
     let unreadable = 0;
     let token: string | undefined;

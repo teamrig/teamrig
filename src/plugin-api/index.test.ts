@@ -27,6 +27,7 @@ describe('the plugin API surface', () => {
       'PANE_STATES',
       'ProgramOutputCapError',
       'REVIEW_READS_MAX',
+      'SEARCH_PAGE',
       'SHELL_DIALECTS',
       'TERMINAL_FEATURES',
       'TERMINAL_REQUESTS',

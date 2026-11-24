@@ -27,11 +27,13 @@ import {
   type HostLanding,
   type HostPosts,
   type HostPulls,
+  type FoundIssue,
   type HostCommit,
   type HostPullStand,
   type HostPullWork,
   type HostReach,
   type HostRerun,
+  type HostSearch,
   type HostThread,
   type HostUse,
   type HostViewer,
@@ -39,6 +41,8 @@ import {
   type IssueDraft,
   type IssueFields,
   type IssueHost,
+  type IssueQuery,
+  type IssueSearch,
   type IssueState,
   type IssueTarget,
   type IssueThread,
@@ -62,6 +66,10 @@ import {
   issueLabelAddArgs,
   issueLabelRemoveArgs,
   issueReadArgs,
+  issueSearchArgs,
+  type SearchKind,
+  searchTerms,
+  widensSearch,
   issueTypeSetArgs,
   jobLogArgs,
   pullApproveArgs,
@@ -88,6 +96,7 @@ import {
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
 import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
 import { readFields } from './fields.ts';
+import { searchIn } from './search.ts';
 import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
 import { readPosts } from './posts.ts';
@@ -589,6 +598,46 @@ export class GitHubIssueHost implements IssueHost {
       this.write(target, fieldValueSetArgs(target, field.id, value), `set the field ${JSON.stringify(field.name)} of`),
     setType: (target: IssueTarget, type: string): Promise<HostEnd> => this.write(target, issueTypeSetArgs(target, type), 'set the type of'),
   };
+
+  /**
+   * A search of one repository: one page of GitHub's issue search per kind through its allowlisted read (gh.ts
+   * isIssueSearch), with the repository's own access. GitHub searches one kind at a time, so both kinds are the
+   * issues' page then the pull requests', and the first failure fails the whole. The words go as quoted terms
+   * (gh.ts searchTerms), so GitHub reads none as its own syntax; words naming another repository, owner or user, or
+   * holding nothing but double quotes, are refused unsent.
+   */
+  readonly search: IssueSearch = {
+    searchIssues: async (repo: string, query: IssueQuery): Promise<HostSearch> => {
+      if (widensSearch(query.words)) {
+        return { kind: 'failed', reason: 'a search stays in its repository: its words may not name a repo:, org:, user: or owner: qualifier' };
+      }
+      if (searchTerms(query.words) === '') {
+        return { kind: 'failed', reason: 'the words hold nothing to look for once their double quotes are dropped' };
+      }
+      const kinds: readonly SearchKind[] = query.kind === 'all' ? ['issue', 'pull'] : [query.kind];
+      const issues: FoundIssue[] = [];
+      let more = false;
+      for (const kind of kinds) {
+        const page = await this.searchPage(repo, { ...query, kind });
+        if (page.kind === 'failed') {
+          return page;
+        }
+        issues.push(...page.issues);
+        more ||= page.more;
+      }
+      return { kind: 'found', issues, more };
+    },
+  };
+
+  /** One page of one kind's search of `repo` (search). */
+  private async searchPage(repo: string, query: Omit<IssueQuery, 'kind'> & { readonly kind: SearchKind }): Promise<HostSearch> {
+    const read = await this.read(repo, issueSearchArgs(repo, query), `the issues of ${repo}`);
+    if (read.kind !== 'found') {
+      return read.kind === 'missing' ? { kind: 'failed', reason: `GitHub shows no repository ${repo} to search, or the access may not see it` } : read;
+    }
+    const page = searchIn(repo, read.stdout);
+    return page === undefined ? { kind: 'failed', reason: `gh printed no search answer for ${repo}` } : { kind: 'found', ...page };
+  }
 
   async watch(repo: string, marks: WatchMarks): Promise<HostWatch> {
     const access = await this.tokens.accessFor(repo);

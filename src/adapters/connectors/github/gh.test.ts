@@ -48,6 +48,10 @@ import {
   isIssueCreate,
   isIssueQuery,
   isIssueRead,
+  isIssueSearch,
+  issueSearchArgs,
+  searchTerms,
+  widensSearch,
   isIssueUnassign,
   isJobLogRead,
   isLabelAdd,
@@ -394,6 +398,79 @@ describe('the duplicate close and the issue read', () => {
     for (const args of [READ, DUPLICATE, issueCommentArgs(ISSUE, 'b'), labelReadArgs('acme/web', 'p1'), issueCreateArgs(DRAFT)]) {
       assert.equal(isIssueRead(args), false, args[1]);
     }
+  });
+});
+
+describe('the issue search (T4860)', () => {
+  const ALL = { words: 'login fails', state: 'all', kind: 'issue' } as const;
+  const SEARCH = issueSearchArgs('acme/web', ALL);
+
+  it('searches one page of one kind in one repository, each word a quoted term', () => {
+    assert.deepEqual(SEARCH, ['api', 'search/issues', '-X', 'GET', '-f', 'q=repo:acme/web "login" "fails" is:issue', '-f', 'per_page=30']);
+    assert.equal(isIssueSearch(SEARCH), true);
+    assert.equal(isAllowedGh(SEARCH), true);
+  });
+
+  it('adds the qualifiers of a kind and a state after the words', () => {
+    assert.equal(issueSearchArgs('acme/web', { ...ALL, kind: 'issue', state: 'open' })[5], 'q=repo:acme/web "login" "fails" is:issue is:open');
+    assert.equal(issueSearchArgs('acme/web', { ...ALL, kind: 'pull', state: 'closed' })[5], 'q=repo:acme/web "login" "fails" is:pr is:closed');
+    assert.equal(isIssueSearch(issueSearchArgs('acme/web', { ...ALL, kind: 'pull', state: 'closed' })), true);
+  });
+
+  it('quotes every word, so GitHub reads none of them as its own syntax, and drops the words\' own double quotes', () => {
+    assert.equal(searchTerms('is:open author:octo'), '"is:open" "author:octo"');
+    assert.equal(searchTerms('a OR b -label:x NOT c'), '"a" "OR" "b" "-label:x" "NOT" "c"');
+    assert.equal(searchTerms(' say "hi"  there" '), '"say" "hi" "there"');
+    assert.equal(searchTerms('"" "'), '');
+    const args = issueSearchArgs('acme/web', { words: 'is:closed label:"user facing"', state: 'open', kind: 'issue' });
+    assert.equal(args[5], 'q=repo:acme/web "is:closed" "label:user" "facing" is:issue is:open');
+    assert.equal(isIssueSearch(args), true);
+  });
+
+  it('sees a qualifier that would reach past the repository anywhere in the words, and nothing else', () => {
+    for (const words of ['repo:acme/api x', 'x org:acme', 'x OR user:octo', '-owner:acme x', 'x (REPO:other/r)']) {
+      assert.equal(widensSearch(words), true, words);
+    }
+    for (const words of ['login fails', 'is:open author:octo', 'myrepo-org x', 'label:"user facing"']) {
+      assert.equal(widensSearch(words), false, words);
+    }
+  });
+
+  it('refuses another scope, page, field, flag, method or path', () => {
+    const path = 'search/issues';
+    for (const args of [
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web x is:issue', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "x" OR "y" is:issue', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "x" label:bug is:issue', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "x"', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "x" is:open', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "x y" is:issue', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web "repo:other/secret" is:issue', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web x OR repo:other/secret', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web org:other', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web user:octo', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web owner:other', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=login fails', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web ', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/../x y', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web x', '-f', 'per_page=100'],
+      ['api', path, '-X', 'GET', '-f', 'q=repo:acme/web x'],
+      ['api', path, '-X', 'GET', '-F', 'q=repo:acme/web x', '-f', 'per_page=30'],
+      ['api', path, '-X', 'GET', '-f', 'per_page=30', '-f', 'q=repo:acme/web x'],
+      [...SEARCH, '-f', 'page=2'],
+      [...SEARCH, '--paginate'],
+      ['api', path, '-X', 'POST', '-f', 'q=repo:acme/web x', '-f', 'per_page=30'],
+      ['api', 'search/code', '-X', 'GET', '-f', 'q=repo:acme/web x', '-f', 'per_page=30'],
+    ]) {
+      assert.equal(isIssueSearch(args), false, args.slice(4).join(' '));
+      assert.equal(isAllowedGh(args), false, args.slice(4).join(' '));
+    }
+  });
+
+  it('is never taken for an issue read, nor it for a search', () => {
+    assert.ok(!isIssueRead(SEARCH) && !isIssueQuery(SEARCH) && !isCommentsRead(SEARCH));
+    assert.equal(isIssueSearch(issueReadArgs(ISSUE)), false);
   });
 });
 
@@ -1074,7 +1151,7 @@ describe('ghRunnerOver', () => {
     }
     await assert.rejects(
       ghRunnerOver(run).run({ args: ['issue', 'close', '7'], env: {} }),
-      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh issue close with these arguments/,
+      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh issue close with these arguments/,
     );
     assert.deepEqual(asked, []);
   });

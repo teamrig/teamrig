@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { stampCredit, type HostIssue, type JsonRecord } from '../../../plugin-api/index.ts';
+import { SEARCH_PAGE, stampCredit, type HostIssue, type JsonRecord } from '../../../plugin-api/index.ts';
 import { connectorDeps } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
@@ -379,6 +379,71 @@ describe('listing a Jira project in an import scope (T5013)', () => {
       http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([])).answers('POST', BULK, status, body);
       assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [1] }), failed(reason), `${status} ${body}`);
     }
+  });
+});
+
+describe('searching a Jira project (T4860)', () => {
+  const ALL = { words: 'login fails', state: 'all', kind: 'all' } as const;
+
+  it('asks one page of the project for issues whose text holds the words, and reads each one found', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-12', { summary: 'Login fails' }), jiraIssue('ENG-3', { status: CLOSED })]));
+    assert.deepEqual(await tracker.search.searchIssues(REPO, ALL), {
+      kind: 'found',
+      issues: [
+        { target: { repo: REPO, number: 12 }, title: 'Login fails', state: 'open', pull: false },
+        { target: { repo: REPO, number: 3 }, title: 'A title', state: 'closed', pull: false },
+      ],
+      more: false,
+    });
+    assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: 'project = "ENG" AND text ~ "login fails"', fields: ['summary', 'status'], maxResults: SEARCH_PAGE }]]);
+  });
+
+  it('quotes the words as one JQL string, so a quote or a backslash adds no clause', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([]));
+    await tracker.search.searchIssues(REPO, { ...ALL, words: 'a" OR project = "SECRET \\' });
+    assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: 'project = "ENG" AND text ~ "a\\" OR project = \\"SECRET \\\\"', fields: ['summary', 'status'], maxResults: SEARCH_PAGE }]]);
+  });
+
+  it('adds the status category of a state', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([])).answers('POST', SEARCH, 200, page([]));
+    await tracker.search.searchIssues(REPO, { ...ALL, state: 'open', kind: 'issue' });
+    await tracker.search.searchIssues(REPO, { ...ALL, state: 'closed' });
+    assert.deepEqual(
+      sent(http).map((request) => request[2]),
+      [
+        { jql: 'project = "ENG" AND text ~ "login fails" AND statusCategory != Done', fields: ['summary', 'status'], maxResults: SEARCH_PAGE },
+        { jql: 'project = "ENG" AND text ~ "login fails" AND statusCategory = Done', fields: ['summary', 'status'], maxResults: SEARCH_PAGE },
+      ],
+    );
+  });
+
+  it('finds no pull request, since a Jira issue is never one, and sends nothing', async () => {
+    const { tracker, http } = kit();
+    assert.deepEqual(await tracker.search.searchIssues(REPO, { ...ALL, kind: 'pull' }), { kind: 'found', issues: [], more: false });
+    assert.deepEqual(sent(http), []);
+  });
+
+  it('says there is more when a page follows or an item did not read, leaving that item out', async () => {
+    const next = kit();
+    next.http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')], 't1'));
+    assert.deepEqual(await next.tracker.search.searchIssues(REPO, ALL), { kind: 'found', issues: [{ target: { repo: REPO, number: 1 }, title: 'A title', state: 'open', pull: false }], more: true });
+    const odd = kit();
+    odd.http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1'), jiraIssue('OTHER-2'), { key: 'ENG-3' }, 'not an issue']));
+    assert.deepEqual(await odd.tracker.search.searchIssues(REPO, ALL), { kind: 'found', issues: [{ target: { repo: REPO, number: 1 }, title: 'A title', state: 'open', pull: false }], more: true });
+  });
+
+  it('fails on words with a control character, unsent, and on a failed or unreadable answer', async () => {
+    const control = kit();
+    assert.deepEqual(await control.tracker.search.searchIssues(REPO, { ...ALL, words: 'a\nb' }), failed('the words of a Jira search cannot hold a control character'));
+    assert.deepEqual(sent(control.http), []);
+    const broken = kit();
+    broken.http.answers('POST', SEARCH, 500).answers('POST', SEARCH, 200, '{}');
+    assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed('Jira answered 500'));
+    assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed(NOT_A_LIST));
+    assert.deepEqual(await kit().tracker.search.searchIssues('acme', ALL), failed(NOT_A_PROJECT));
   });
 });
 
