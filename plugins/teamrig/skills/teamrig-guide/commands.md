@@ -1315,7 +1315,8 @@ ever lists issues: it never creates, edits, comments on, labels, assigns or clos
 added with `teamrig add` stays in the task list and never goes to GitHub. Only commands run by hand write:
 `teamrig issue migrate` opens issues, `teamrig issue reply`, `teamrig issue edit` and `teamrig issue close`
 comment on, rewrite and close them, and `teamrig issue links` links them as the task tree does;
-`teamrig issue similar` lists likely duplicates from the task list alone.
+`teamrig issue similar` lists likely duplicates from the task list alone, and `teamrig issue search` and
+`teamrig issue show` read the host's issues as they are now.
 Its old name, gh sync, is refused with this one (exit 64). Setup, tokens and every failure's fix:
 [GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md).
 
@@ -1779,6 +1780,71 @@ Output:
 SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.similarThreshold)
 0.71 acme/web#12 T388 Login fails after a password reset
 0.41 acme/web#27 T405 Reset email never arrives
+```
+
+### teamrig issue search
+
+Searches one of the team's repositories for the issues and change requests whose text holds the words, through
+its tracker's own search, so a skill looks for a duplicate on the host without the host's own tool. It reads with
+the same access as `teamrig issue reply`, never writes, and prints at most 30 of each kind, each in the tracker's
+order (its best match first), the issues before the change requests; when the tracker holds more, the `FOUND` line
+says so: narrow the words. The words are plain text, each matched as typed and never as the tracker's own search
+syntax; a qualifier reaching past the repository is refused by the tracker. Titles are outside text and each prints
+on one plain line. REFUSED (exit 2) with no words, a repository not in the team's, or a `--state` or `--kind`
+outside its choices. Exit 1 when the tracker's connector has no search or the host failed, else 0, with or without
+matches.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team.
+- `--repo <owner/name>`: the repository to search, one of the team's; required.
+- `--state <open|closed|all>`: which items, open ones by default.
+- `--kind <issue|pull|all>`: issues, change requests or both, issues by default.
+
+Example:
+
+```sh
+teamrig issue search login fails --repo acme/web
+```
+
+Output:
+
+```text
+ACCESS acme: read with the token saved as teamrig-gh-acme
+FOUND acme/web: 2 of the open issues matching "login fails"
+#12 open issue Login fails after a password reset
+#27 open issue Reset email never arrives
+```
+
+### teamrig issue show
+
+Shows one issue or change request of the team's repositories, named as `owner/name#number`, as its tracker holds it
+now: its state and kind, title, labels, assignees and body, with the same access as `teamrig issue reply`, never
+writing. All of it is outside text: the title, labels and assignees print on one plain line each, and each body
+line indented with its control characters escaped, so the body cannot add a line that reads as one of these.
+`MISSING` when the tracker shows no such item to this access. Exit 1 when it is missing or the read failed, 2 when
+refused, else 0.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team.
+
+Example:
+
+```sh
+teamrig issue show acme/web#12
+```
+
+Output:
+
+```text
+ACCESS acme: read with the token saved as teamrig-gh-acme
+SHOW acme/web#12: open issue
+TITLE Login fails after a password reset
+LABELS "type: bug", "p1"
+ASSIGNEES dana
+BODY
+  After a reset the login page says the password is wrong.
 ```
 
 ### teamrig issue assign

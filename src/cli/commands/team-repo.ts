@@ -45,8 +45,14 @@ export async function checkedRepo(args: ParsedArgs, runtime: CliRuntime, repo: s
   return { team, caller, config: team.config, kind };
 }
 
-/** The hosts of a checked repository once the text to post (if any) may be posted; undefined, after an OFF line, while GitHub is off. */
-export async function hostsAfter(checked: CheckedRepo, runtime: CliRuntime, posted: Posted | undefined): Promise<Hosts | undefined> {
+/** Whether a command reads its host or writes to it, which the OFF line says it did not do. */
+export type HostEffect = 'read' | 'write';
+
+/**
+ * The hosts of a checked repository once the text to post (if any) may be posted; undefined, after an OFF line saying
+ * nothing was read or written (as `effect` says), while GitHub is off.
+ */
+export async function hostsAfter(checked: CheckedRepo, runtime: CliRuntime, posted: Posted | undefined, effect: HostEffect = 'write'): Promise<Hosts | undefined> {
   const { config, kind } = checked;
   const scanner = new SecretScanner(config.register.secretPatterns);
   const refused = posted === undefined ? undefined : postRefusal(posted.flag, posted.text, scanner);
@@ -55,7 +61,7 @@ export async function hostsAfter(checked: CheckedRepo, runtime: CliRuntime, post
   }
   const offBy = githubOffBy(runtime.env);
   if (offBy !== undefined) {
-    runtime.out.stdout(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was written`);
+    runtime.out.stdout(`OFF ${offBy}=${CONNECTOR_OFF} turns GitHub off on this machine; nothing was ${effect === 'read' ? 'read' : 'written'}`);
     return undefined;
   }
   return hostsOf(kind, runtime, scanner, config.github.stamp, config.connectors);

@@ -531,6 +531,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   issue similar <owner/name#n>   the issues the task list mirrors that may be duplicates of this one,
       best first: at most 3 at or above github.similarThreshold by TF-IDF over their titles and bodies,
       with no model and no GitHub call; reads the task list only, so issue sync must have added the issue
+  issue search <words...> --repo <owner/name> [--state open|closed|all] [--kind issue|pull|all]
+      the issues of one of the team's repositories whose text holds the words, best match first, at
+      most 30 of each kind, through its tracker's own search: open issues unless --state, --kind say
+      otherwise; fails when the tracker has no search
+  issue show <owner/name#n>   one issue or pull request of the team's repositories as its tracker
+      holds it now: state, kind, title, labels, assignees and body
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,

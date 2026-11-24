@@ -3,7 +3,8 @@ import { SecretScanner } from '../../core/secrets.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { issueRef } from '../../sync/map.ts';
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from '../../issues/assign.ts';
-import { CLOSE_REASONS, parseIssueTarget, targetText, type CloseReason, type IssueTarget } from '../../issues/host.ts';
+import { CLOSE_REASONS, parseIssueTarget, targetText, type CloseReason, type IssueQuery, type IssueTarget } from '../../issues/host.ts';
+import { searchIssues, showIssue } from '../../issues/read.ts';
 import { bareRef, refOf } from '../../issues/ref.ts';
 import { checkReply, sendReply, type FollowUp, type ReplyWrite } from '../../issues/reply.ts';
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from '../../issues/similar.ts';
@@ -11,7 +12,7 @@ import { holderOf, sessionLogins } from '../../issues/status-push.ts';
 import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue, type IssueWrite } from '../../issues/write.ts';
 import type { Task } from '../../register/fold.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
-import { onePositional, requiredFlag, type Flags, type ParsedArgs } from '../args.ts';
+import { onePositional, requiredFlag, somePositionals, type Flags, type ParsedArgs } from '../args.ts';
 import { withDescriptions } from '../card-texts.ts';
 import { secretFilesOf } from '../host.ts';
 import type { Hosts } from '../issue-hosts.ts';
@@ -363,6 +364,59 @@ export async function issueSimilar(args: ParsedArgs, runtime: CliRuntime): Promi
     runtime.out.stdout(`${match.score.toFixed(2)} ${bareRef(match.ref)} ${ids.get(match.ref) ?? '-'} ${match.title}`);
   }
   return EXIT.ok;
+}
+
+/**
+ * `issue search <words...> --repo <owner/name> [--state open|closed|all] [--kind issue|pull|all]` (T4860): the
+ * issues and pull requests of one of the team's repositories whose text holds the words, each kind best match first
+ * and at most SEARCH_PAGE of it, through its tracker's own search (issues/read.ts), so a skill looks for a duplicate
+ * without the host's tool. Open issues by default. The words are plain text: a qualifier reaching past the repository
+ * is refused by the tracker. Exit 1 when the tracker has no search (a connector before plugin API 0.3.0) or the host
+ * failed, else 0, with or without matches.
+ */
+export async function issueSearch(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  const words = somePositionals(args, 'words').join(' ').trim();
+  if (words === '') {
+    throw new RefusedError('issue search needs the words to look for, such as teamrig issue search login fails --repo acme/web');
+  }
+  const query: IssueQuery = { words, state: choiceOf(args.flags, 'state', SEARCH_STATES, 'open'), kind: choiceOf(args.flags, 'kind', SEARCH_KINDS, 'issue') };
+  const repo = requiredFlag(args.flags, 'repo');
+  const hosts = await hostsAfter(await checkedRepo(args, runtime, repo), runtime, undefined, 'read');
+  if (hosts === undefined) {
+    return EXIT.ok;
+  }
+  return (await searchIssues(hosts.tracker, repo, query, (line) => runtime.out.stdout(line))) === 'failed' ? EXIT.failed : EXIT.ok;
+}
+
+/** The states and kinds `issue search` takes. */
+const SEARCH_STATES = ['open', 'closed', 'all'] as const;
+const SEARCH_KINDS = ['issue', 'pull', 'all'] as const;
+
+/** The value of `--<flag>`, one of `choices`, or `fallback` without it; refused when it is none of them. */
+function choiceOf<T extends string>(flags: Flags, flag: string, choices: readonly T[], fallback: T): T {
+  const given = flags.get(flag);
+  if (given === undefined) {
+    return fallback;
+  }
+  const choice = choices.find((one) => one === given);
+  if (choice === undefined) {
+    throw new RefusedError(`--${flag} takes ${choices.join(', ')}, not ${JSON.stringify(given)}`);
+  }
+  return choice;
+}
+
+/**
+ * `issue show <owner/name#n>` (T4860): one issue or pull request of the team's repositories as its tracker holds it
+ * now: state, kind, title, labels, assignees and body (issues/read.ts), all outside text printed so it cannot add
+ * lines of its own. Exit 1 when the tracker shows no such item or the read failed, else 0.
+ */
+export async function issueShow(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  const target = targetOf(args);
+  const hosts = await hostsAfter(await checkedRepo(args, runtime, target.repo), runtime, undefined, 'read');
+  if (hosts === undefined) {
+    return EXIT.ok;
+  }
+  return (await showIssue(hosts.tracker, target, (line) => runtime.out.stdout(line))) === 'read' ? EXIT.ok : EXIT.failed;
 }
 
 /** The issue or pull request the one positional names; refused when it names none. */
