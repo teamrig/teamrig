@@ -43,6 +43,7 @@ const richTask: Task = testTask({
   type: 'bug',
   critical: true,
   pin: 'top',
+  exempt: 'a launch week',
   workClass: 'Roadmap',
   prepares: { goal: 'G1', slice: 2 },
   status: 'waiting',
@@ -96,6 +97,32 @@ describe('task lines', () => {
 
   it('reads back a task with every optional part set', () => {
     assert.deepEqual(parseTaskLine(onDisk(richTask)), richTask);
+  });
+
+  it('leaves out each task field at the value a create without it gets, and reads the line back to the same task (#1497)', () => {
+    const task = testTask({ id: 'T7' });
+    const written = onDisk(task)['task'];
+    assert.ok(isRecord(written));
+    for (const key of ['description', 'ref', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares']) {
+      assert.equal(Object.hasOwn(written, key), false, `${key} is written at its default`);
+    }
+    assert.equal(written['note'], null, 'a fold field is still written');
+    assert.deepEqual(parseTaskLine(onDisk(task)), task);
+  });
+
+  it('writes every task field that holds a value', () => {
+    const written = onDisk(richTask)['task'];
+    assert.ok(isRecord(written));
+    // noGoal is false whenever a task has goals, as the rich task has.
+    const held = Object.keys(richTask).filter((key) => key !== 'noGoal');
+    assert.deepEqual(Object.keys(written).sort(), held.sort());
+  });
+
+  it('reads a line that writes every field out, as teamrig wrote it before #1497', () => {
+    const task = testTask({ id: 'T8' });
+    const whole: unknown = JSON.parse(JSON.stringify({ v: 5, type: TASK_LINE_TYPE, task }));
+    assert.ok(isRecord(whole));
+    assert.deepEqual(parseTaskLine(whole), task);
   });
 
   it('reads back a card with none of its optional parts', () => {

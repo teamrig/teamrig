@@ -1,7 +1,7 @@
 import { isNonNegativeInteger, isRecord, type JsonRecord } from '../core/guards.ts';
 import { parseCard, type DecisionCard } from './card.ts';
 import { parseDescriptionCut } from './description-cut.ts';
-import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase } from './events.ts';
+import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase, type TaskFieldName } from './events.ts';
 import type { ApprovalAnswer, OwnerDecision, Task } from './fold.ts';
 import { parseAuditPin, type HandStepAudit } from './hand-step.ts';
 import { isTaskStatus, TASK_ID } from './model.ts';
@@ -22,9 +22,41 @@ import { parseWaits } from './waits.ts';
 /** The `type` of a task line. */
 export const TASK_LINE_TYPE = 'task';
 
+/**
+ * The task fields a line leaves out while they hold the value a create without them gets (#1497). Every reader of a
+ * task line already reads a missing task field as that value (parseCompleteTaskFields), so the shorter line reads back
+ * to the same task on every teamrig that reads task lines. On a busy team these fields at that value were 8% of the
+ * snapshot.
+ */
+const TASK_FIELD_DEFAULTS: Readonly<Partial<Record<TaskFieldName, null | false | readonly []>>> = {
+  description: null,
+  ref: null,
+  due: null,
+  goals: [],
+  noGoal: false,
+  week: null,
+  after: [],
+  size: null,
+  type: null,
+  critical: false,
+  pin: null,
+  exempt: null,
+  workClass: null,
+  prepares: null,
+};
+
+function atDefault(key: string, value: unknown): boolean {
+  if (!Object.hasOwn(TASK_FIELD_DEFAULTS, key)) {
+    return false;
+  }
+  const empty = TASK_FIELD_DEFAULTS[key as TaskFieldName];
+  return Array.isArray(empty) ? Array.isArray(value) && value.length === 0 : value === empty;
+}
+
 /** The record a task line holds, under the layout version `v` the snapshot it sits in was written at. */
 export function taskLineRecord(v: number, task: Task): JsonRecord {
-  return { v, type: TASK_LINE_TYPE, task };
+  const kept = Object.entries(task).filter(([key, value]) => !atDefault(key, value));
+  return { v, type: TASK_LINE_TYPE, task: Object.fromEntries(kept) };
 }
 
 /** True for a record a task line holds, whatever it says of its task. */
