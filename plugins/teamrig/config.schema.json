@@ -256,7 +256,7 @@
           "description": "The thresholds of the flags teamrig check raises on tasks.",
           "type": "object",
           "properties": {
-            "staleAfterHours": { "description": "An active task untouched this long is STALE.", "type": "integer", "minimum": 1, "default": 72 },
+            "staleAfterHours": { "description": "An in-progress task past this many hours in progress, summed over its stretches, is STALE; time open, waiting or verifying never counts.", "type": "integer", "minimum": 1, "default": 72 },
             "notPickedUpAfterHours": { "description": "An open task its owner has not touched this long after it was assigned is NOT-PICKED-UP.", "type": "integer", "minimum": 1, "default": 24 },
             "blockerOpenAfterHours": { "description": "A blocker still unfixed (open, in progress or waiting) this long after it became one is BLOCKER-OPEN.", "type": "integer", "minimum": 1, "default": 4 },
             "prioritySkipAfterHours": { "description": "A session's in-progress task outranked this long by its own open task, on band and score, is a PRIORITY-SKIP.", "type": "integer", "minimum": 1, "default": 24 },

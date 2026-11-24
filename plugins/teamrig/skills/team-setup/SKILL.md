@@ -266,7 +266,7 @@ Act on each flag:
   its id again: the hire shows whether its last Claude Code session can be resumed (`teamrig open <id> --resume`).
 - `HIRE REVIEW-DUE`: a hired session's review day passed. While the team still needs it, keep it to a new review
   day (`teamrig hire <id> --review <YYYY-MM-DD> --reason "<why>" --session lead --yes`), else retire it.
-- `OVERDUE` or `STALE`: ask the owning session what blocks it, then re-date it (`--due`) or tell the user.
+- `OVERDUE` or `STALE`: ask the owning session what blocks it, then re-date it (`--due`), have it split a `STALE` task at a proof point, or tell the user.
 - `READY`: a waiting task whose reasons have all cleared (its tasks finished, its time passed). Tell the owning
   session in one inbox line to go on.
 - `VERIFY-OVERDUE`: a shipped change past its date to verify by. Ask the owning session whether the proof came: `done` with it,

@@ -13,6 +13,7 @@ import type { RunFiles } from './hand-step.ts';
 import { NO_TASKS_ELSEWHERE, TaskTree } from './tree.ts';
 import { WATCH_USAGE } from './verify.ts';
 import { TimeZone } from '../core/zone.ts';
+import { MS_PER_HOUR } from '../core/time.ts';
 
 const NOW = new Date('2030-01-10T12:00:00.000Z');
 const FRESH = '2030-01-10T09:00:00.000Z';
@@ -104,22 +105,24 @@ describe('checkTasks', () => {
     assert.deepEqual(checkTasks([parked(5)], NOW, TimeZone.UTC, null, { ...CONFIG, maxReparks: 0 }), []);
   });
 
-  it('lets a verifying task with a due date wait quietly for its proof, and calls one with none stale', () => {
-    const quiet = (due: string | null) => testTask({ status: 'verifying', due, ownerSeenAt: '2030-01-01T08:00:00.000Z', updatedAt: '2030-01-01T08:00:00.000Z' });
-    assert.deepEqual(kinds([quiet('2030-01-12')]), []);
-    assert.deepEqual(kinds([quiet(null)]), ['STALE T1']);
+  it('never calls an open, waiting or verifying task stale, however long since its last event (T5043)', () => {
+    const old = { ownerSeenAt: '2030-01-01T08:00:00.000Z', updatedAt: '2030-01-01T08:00:00.000Z', statusAt: '2030-01-01T08:00:00.000Z', inProgressMs: 10 * MS_PER_HOUR };
+    assert.deepEqual(kinds([testTask({ status: 'open', ...old })]), []);
+    assert.deepEqual(kinds([testTask({ status: 'verifying', due: null, ...old })]), []);
+    assert.deepEqual(kinds([testTask({ status: 'waiting', waits: [{ kind: 'decision', who: 'lead' }], ...old })]), []);
+    assert.deepEqual(kinds([testTask({ status: 'waiting', waits: [{ kind: 'time', at: '2030-01-09 09:00' }], ...old })]), ['READY T1']);
   });
 
-  it('lets a verifying task with no due date stay quiet while its proof waits for a time to come', () => {
-    const parked = testTask({ status: 'verifying', waits: [{ kind: 'time', at: '2030-01-12 09:00' }], ownerSeenAt: '2030-01-01T08:00:00.000Z', updatedAt: '2030-01-01T08:00:00.000Z' });
-    assert.deepEqual(kinds([parked]), []);
+  it('calls a task 100 h old with 2 h in progress and 98 h waiting not stale, as the owner put it (T5043)', () => {
+    const resumed = testTask({ status: 'in-progress', ownerSeenAt: FRESH, updatedAt: '2030-01-10T10:00:00.000Z', statusAt: '2030-01-10T11:00:00.000Z', inProgressMs: MS_PER_HOUR });
+    assert.deepEqual(kinds([resumed]), []);
   });
 
-  it('lets a waiting task parked until a time to come stay quiet, and calls it stale once that time passed', () => {
-    const parked = (at: string) =>
-      testTask({ status: 'waiting', waits: [{ kind: 'time', at }], ownerSeenAt: '2030-01-01T08:00:00.000Z', updatedAt: '2030-01-01T08:00:00.000Z' });
-    assert.deepEqual(kinds([parked('2030-01-12 09:00')]), []);
-    assert.deepEqual(kinds([parked('2030-01-09 09:00')]), ['READY T1', 'STALE T1']);
+  it('calls a task stale past the window of time in progress summed over a back-and-forth of statuses (T5043)', () => {
+    const resumed = testTask({ status: 'in-progress', ownerSeenAt: FRESH, updatedAt: FRESH, statusAt: '2030-01-10T09:00:00.000Z', inProgressMs: 70 * MS_PER_HOUR });
+    const flags = checkTasks([resumed], NOW, TimeZone.UTC, null, CONFIG);
+    assert.deepEqual(flags.map((flag) => `${flag.kind}: ${flag.detail}`), ['STALE: 73 h in progress, this stretch since 01-10 09:00 UTC, past 72 h: split it at a proof point or say what blocks it']);
+    assert.deepEqual(kinds([{ ...resumed, inProgressMs: 68 * MS_PER_HOUR }]), [], '71 h is inside the window');
   });
 
   it('flags a waiting task with no reason, as an older teamrig wrote it', () => {
@@ -136,10 +139,12 @@ describe('checkTasks', () => {
     assert.deepEqual(kinds([testTask({ assignedAt: '2030-01-09T13:00:00.000Z', updatedAt: FRESH })]), []);
   });
 
-  it('flags tasks with no event for the stale window', () => {
-    const old = testTask({ ownerSeenAt: '2030-01-07T08:00:00.000Z', updatedAt: '2030-01-07T11:00:00.000Z', updatedBy: 'bravo' });
-    const flags = checkTasks([old], NOW, TimeZone.UTC, null, CONFIG);
-    assert.deepEqual(flags.map((flag) => formatFlag(flag, undefined, TREE)), ['STALE (last event 01-07 11:00 UTC by bravo) T1 open, p2, owner alpha, from lead | Add a health check']);
+  it('flags a task in progress for the whole stale window, even with fresh events in it', () => {
+    const long = testTask({ status: 'in-progress', ownerSeenAt: FRESH, updatedAt: FRESH, statusAt: '2030-01-07T11:00:00.000Z' });
+    const flags = checkTasks([long], NOW, TimeZone.UTC, null, CONFIG);
+    assert.deepEqual(flags.map((flag) => formatFlag(flag, undefined, TREE)), [
+      'STALE (73 h in progress, this stretch since 01-07 11:00 UTC, past 72 h: split it at a proof point or say what blocks it) T1 in-progress, p2, owner alpha, from lead | Add a health check',
+    ]);
   });
 
   it('flags owner orders and tasks due this week that are outside the week plan', () => {
@@ -157,7 +162,7 @@ describe('checkTasks', () => {
 
   it('reports the most urgent kinds first', () => {
     const tasks = [
-      testTask({ id: 'T1', ownerSeenAt: FRESH, updatedAt: '2030-01-01T00:00:00.000Z' }),
+      testTask({ id: 'T1', status: 'in-progress', ownerSeenAt: FRESH, updatedAt: FRESH, statusAt: '2030-01-01T00:00:00.000Z' }),
       testTask({ id: 'T2', due: '2030-01-08', ownerSeenAt: FRESH, updatedAt: FRESH, priority: 4 }),
     ];
     assert.deepEqual(kinds(tasks), ['OVERDUE T2', 'STALE T1']);
@@ -165,7 +170,8 @@ describe('checkTasks', () => {
 
   it('reads its thresholds from the config', () => {
     const quick = testConfig({ register: { check: { staleAfterHours: 1, notPickedUpAfterHours: 1, weekLengthDays: 7 } } }).register;
-    const flags = checkTasks([testTask({ ownerSeenAt: '2030-01-10T10:00:00.000Z', updatedAt: '2030-01-10T10:00:00.000Z' })], NOW, TimeZone.UTC, null, quick);
+    const started = '2030-01-10T10:00:00.000Z';
+    const flags = checkTasks([testTask({ status: 'in-progress', ownerSeenAt: started, updatedAt: started, statusAt: started })], NOW, TimeZone.UTC, null, quick);
     assert.deepEqual(flags.map((flag) => flag.kind), ['STALE']);
   });
 });
@@ -177,7 +183,7 @@ describe('checkTasks: URGENT', () => {
   const urgentIds = (tasks: Parameters<typeof checkTasks>[0]) => flags(tasks).filter((flag) => flag.kind === 'URGENT').map((flag) => flag.task.id);
 
   it('flags an open p0 free to start before every other kind: its owner starts it now, ahead of the task in hand', () => {
-    const stale = testTask({ id: 'T2', ownerSeenAt: FRESH, updatedAt: '2030-01-01T00:00:00.000Z' });
+    const stale = testTask({ id: 'T2', status: 'in-progress', ownerSeenAt: FRESH, updatedAt: FRESH, statusAt: '2030-01-01T00:00:00.000Z' });
     const raised = flags([stale, urgent]);
     assert.deepEqual(raised.map((flag) => `${flag.kind} ${flag.task.id}`), ['URGENT T1', 'STALE T2']);
     const [first] = raised;
@@ -484,9 +490,9 @@ describe('checkTasks: OFF-GOAL', () => {
 
   it('flags work in progress with no goal outside the week plan', () => {
     const tasks = [
-      testTask({ id: 'T1', status: 'in-progress', ...seen }),
-      testTask({ id: 'T2', status: 'in-progress', goals: ['G1'], ...seen }),
-      testTask({ id: 'T3', status: 'in-progress', week: '2030-01-07', ...seen }),
+      testTask({ id: 'T1', status: 'in-progress', statusAt: FRESH, ...seen }),
+      testTask({ id: 'T2', status: 'in-progress', statusAt: FRESH, goals: ['G1'], ...seen }),
+      testTask({ id: 'T3', status: 'in-progress', statusAt: FRESH, week: '2030-01-07', ...seen }),
       testTask({ id: 'T4', ...seen }),
       testTask({ id: 'T5', status: 'waiting', waits: [{ kind: 'decision', who: 'owner' }], card: TEST_OWNER_CARD, ...seen }),
     ];
@@ -500,17 +506,17 @@ describe('checkTasks: OFF-GOAL', () => {
 
   it('raises the more specific week flag instead on an owner order or a task due this week', () => {
     const tasks = [
-      testTask({ id: 'T1', status: 'in-progress', source: 'owner', ...seen }),
-      testTask({ id: 'T2', status: 'in-progress', due: '2030-01-12', ...seen }),
+      testTask({ id: 'T1', status: 'in-progress', statusAt: FRESH, source: 'owner', ...seen }),
+      testTask({ id: 'T2', status: 'in-progress', statusAt: FRESH, due: '2030-01-12', ...seen }),
     ];
     assert.deepEqual(kinds(tasks), ['OWNER-UNPLANNED T1', 'DUE-UNPLANNED T2']);
   });
 
   it('raises neither OFF-GOAL nor DUE-UNPLANNED on near-term prep, only OWNER-UNPLANNED on an owner order (T2453)', () => {
     const tasks = [
-      testTask({ id: 'T1', status: 'in-progress', ...seen }),
-      testTask({ id: 'T2', status: 'in-progress', due: '2030-01-12', ...seen }),
-      testTask({ id: 'T3', status: 'in-progress', source: 'owner', ...seen }),
+      testTask({ id: 'T1', status: 'in-progress', statusAt: FRESH, ...seen }),
+      testTask({ id: 'T2', status: 'in-progress', statusAt: FRESH, due: '2030-01-12', ...seen }),
+      testTask({ id: 'T3', status: 'in-progress', statusAt: FRESH, source: 'owner', ...seen }),
     ];
     const near = { standing: 'near' } as const;
     const ranking = testRanking({ preps: { T1: near, T2: near, T3: near } });
@@ -523,7 +529,7 @@ describe('checkTasks: PREP-LAPSED (T2453)', () => {
   const seen = { ownerSeenAt: FRESH, updatedAt: FRESH };
 
   it('flags an active task whose prep marker lapsed with what moved, and treats it as any other task: skipping near prep, off goal', () => {
-    const tasks = [testTask({ id: 'T1', status: 'in-progress', ...seen }), testTask({ id: 'T2', ...seen }), testTask({ id: 'T3', status: 'done', ...seen })];
+    const tasks = [testTask({ id: 'T1', status: 'in-progress', statusAt: FRESH, ...seen }), testTask({ id: 'T2', ...seen }), testTask({ id: 'T3', status: 'done', ...seen })];
     const why = 'prepares A1:5, goal A1 is on slice 2';
     const lapsed = { standing: 'lapsed', why } as const;
     const ranking = testRanking({ preps: { T1: lapsed, T2: { standing: 'near' }, T3: lapsed } });
@@ -699,7 +705,7 @@ describe('checkTasks: SELF-MADE', () => {
   });
 
   it('counts finished tasks of the run, raises the flag on the first one past the count still active, and none once all are finished', () => {
-    const run = [made(1, { status: 'done' }), made(2), made(3), made(4, { status: 'done' }), made(5, { status: 'dropped' }), made(6, { status: 'in-progress', goals: ['G1'] })];
+    const run = [made(1, { status: 'done' }), made(2), made(3), made(4, { status: 'done' }), made(5, { status: 'dropped' }), made(6, { status: 'in-progress', statusAt: FRESH, goals: ['G1'] })];
     assert.deepEqual(selfMade(run), ['SELF-MADE T6: alpha added 6 tasks for itself in 24 h, more than 3; this is the first still active past 3']);
     assert.deepEqual(selfMade(run.slice(0, 5)), [], 'the surplus is finished');
   });
