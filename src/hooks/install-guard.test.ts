@@ -261,6 +261,45 @@ describe('installGuardReply: shell lines', () => {
     }
   });
 
+  it('reads every value a bash line gives a variable: declaration builtins, groups, functions, if bodies (T5378)', async () => {
+    const lines = [
+      'declare X=~/.teamrig; rm -rf $X/current',
+      'declare X=~/.t*; rm -rf $X',
+      'declare -x X=~/.t*; rm -rf $X',
+      'typeset X=~/.t*; rm -rf $X',
+      'local X=~/.t*; rm -rf $X',
+      'readonly X=~/.t*; rm -rf $X',
+      'readonly X=~/.teamrig; rm -rf $X/current',
+      'export X=~/.teamrig; rm -rf $X/current',
+      'f() { X=~/.t*; rm -rf $X; }; f',
+      'function f { X=~/.t*; rm -rf $X; }; f',
+      '{ X=~/.t*; rm -rf $X; }',
+      'X=~/.teamrig; f() { rm -rf $X; }; f',
+      'if true; then X=~/.t*; fi; rm -rf $X',
+      'X=/tmp; X=~/.teamrig; rm -rf $X',
+      'X=~/.teamrig; X=/tmp; rm -rf $X',
+    ];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command }, 'C:/u')), 'deny', command);
+    }
+  });
+
+  it('refuses a bash line reading a variable a declaration option may change, or bound in too many ways (T5378)', async () => {
+    const many = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((name) => `${name}=/a; ${name}=/b`).join('; ');
+    const lines = ['X=~/.TEAMRIG; declare -l X; rm -rf $X', 'declare -n X=Y; Y=~/.teamrig; rm -rf $X', 'declare $o X=~/.teamrig; rm -rf $X', `${many}; echo hi > $A$B$C$D$E$F$G`];
+    for (const command of lines) {
+      const decided = await decide(call('Bash', { command }, 'C:/u'));
+      assert.equal(decided?.decision, 'deny', command);
+      assert.match(decided.reason, /binds its variables in more than 64 ways, or reads one/, command);
+    }
+  });
+
+  it('passes a bash line whose declaration options keep values, or that never reads the name they change (T5378)', async () => {
+    for (const command of ['declare -p X; echo hi > notes.md', 'declare -l Y=A; X=/tmp; rm -rf $X', 'declare -rx X=/tmp; rm -rf $X/a']) {
+      assert.equal(await decisionOf(call('Bash', { command }, 'C:/u')), undefined, command);
+    }
+  });
+
   it('passes a bash variable the line binds outside the guarded entries, or to a value only known when it runs', async () => {
     for (const command of ['X=~/.teamrig/teams/t; echo hi > $X/notes.md', 'X=$(mktemp -d); echo hi > $X/current', 'X=~/.teamrig/t*; ls $X', 'X=~/*.md; rm $X']) {
       assert.equal(await decisionOf(call('Bash', { command })), undefined, command);

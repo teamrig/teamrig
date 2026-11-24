@@ -2,7 +2,7 @@ import { ASSIGNMENT_LIKE, NAME, SETS_NAME, setsNamesUnseen, unquotedBindingName 
 import type { Redirection, ShellCommand, ShellParse, ShellWord, WordPart } from './tokenizer.ts';
 
 /** A heredoc's operator, `<<` or `<<-` with any descriptor; its target is the delimiter, never expanded. */
-const HEREDOC_OPERATOR = /^\d*<<-?$/;
+export const HEREDOC_OPERATOR = /^\d*<<-?$/;
 
 /**
  * bash keywords that can set a variable in a way this module does not follow (`case`, a function, a `[[ =~ ]]`
@@ -56,10 +56,10 @@ const OPERATOR_LINKS: ReadonlyMap<string, Link> = new Map<string, Link>([
 ]);
 
 /** A piece of a binding's value: text, or a variable, which gives the value it holds when the statement runs. */
-type ValuePart = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'variable'; readonly name: string };
+export type ValuePart = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'variable'; readonly name: string };
 
 /** A piece of a variable's value where it is used: text, or a variable only known when it runs, as written. */
-type ValuePiece = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'unknown'; readonly written: string };
+export type ValuePiece = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'unknown'; readonly written: string };
 
 /** One name a binding statement sets. */
 interface Binding {
@@ -317,7 +317,7 @@ function insideAndList(items: readonly ListItem[], at: number): boolean {
  * splits at blanks, and a word only an unquoted value made, left empty, disappears. A variable only known when
  * it runs stays one dynamic piece of the current word, however bash would split it.
  */
-class Fields {
+export class Fields {
   private readonly words: ShellWord[] = [];
   private text = '';
   private dynamic = false;
@@ -571,7 +571,7 @@ function reservedWord(word: ShellWord | undefined): string | undefined {
 }
 
 /** True when `word` is static text with no quote or escape in it, as a bash reserved word must be. */
-function reservedWordText(word: ShellWord): boolean {
+export function reservedWordText(word: ShellWord): boolean {
   return !word.dynamic && (word.parts ?? []).every((part) => part.kind === 'text' && !part.quoted);
 }
 
@@ -649,13 +649,13 @@ function bindingStatement(words: readonly ShellWord[], redirected: boolean): rea
 }
 
 /** `NAME=value` as a shell assignment: the name and `=` unquoted at the word's start. */
-function plainBinding(word: ShellWord): Binding | undefined {
+export function plainBinding(word: ShellWord): Binding | undefined {
   const unquotedName = unquotedBindingName(word);
   return unquotedName === undefined ? undefined : valueBinding(word, unquotedName, false);
 }
 
 /** `NAME=value` as an `export` argument, where quotes around the name do not matter but variables must be quoted. */
-function exportedBinding(word: ShellWord): Binding | undefined {
+export function exportedBinding(word: ShellWord): Binding | undefined {
   const name = SETS_NAME.exec(word.text)?.[1];
   return name === undefined ? undefined : valueBinding(word, name, true);
 }

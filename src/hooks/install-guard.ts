@@ -4,7 +4,7 @@ import { launch, programName, type Launch, type ScriptLaunch } from '../push-gua
 import { Location } from '../push-guard/location.ts';
 import { pipesOn, printedText, redirectsInput, stdinUse } from '../push-guard/stdin.ts';
 import { parseShell, type ShellCommand, type ShellDialect, type ShellWord } from '../push-guard/tokenizer.ts';
-import { resolveLiteralVariables } from '../push-guard/variables.ts';
+import { MAX_POSSIBLE_READINGS, resolvePossibleVariables } from '../push-guard/possible-values.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
 import { isPattern, REST, segmentRegExp, wordPathOf } from './shell-word-path.ts';
@@ -332,6 +332,18 @@ function locationWord(word: ShellWord, path: string | undefined): ShellWord {
   return path === undefined ? { text: word.text, dynamic: true } : { text: path, dynamic: false };
 }
 
+/**
+ * Why a bash line whose variables the guard cannot follow is refused (T5378): more ways to bind them than
+ * {@link MAX_POSSIBLE_READINGS}, which no real line needs, or a `declare` option that may change a value it reads.
+ */
+function bindingsReason(tool: string): string {
+  return (
+    `teamrig install guard: this ${tool} line binds its variables in more than ${MAX_POSSIBLE_READINGS} ways, or reads one ` +
+    'a declare, typeset, local or readonly option may change (such as -l, -u, -n), so the guard cannot tell ' +
+    "whether it writes teamrig's install or a host's hook files. Split it into shorter lines, or drop the option."
+  );
+}
+
 /** How deep the word pass follows shells that start shells, as the push guard does; past it the line is refused. */
 const MAX_NESTING = 8;
 
@@ -389,9 +401,12 @@ async function scriptReply(script: string, dialect: ShellDialect, location: Loca
   const { env } = walk;
   const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
   const parsed = parseShell(script, dialect);
-  // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3),
-  // a pattern value too, which the word's path then globs (`X=~/.t*; rm -rf $X`, T5369).
-  const commands = dialect === 'bash' ? resolveLiteralVariables(parsed, env.home, 'kept') : parsed.commands;
+  // A bash variable takes each value the line gives it anywhere (`X=~/.teamrig; rm $X/current`, T5364 R3; inside a
+  // compound, a function or `declare`, T5378), a pattern value too, which the word's path then globs (T5369).
+  const commands = dialect === 'bash' ? resolvePossibleVariables(parsed, env.home) : parsed.commands;
+  if (commands === undefined) {
+    return refusal(bindingsReason(walk.tool));
+  }
   let piped: Feed | undefined;
   let substituted: readonly Feed[] = [];
   for (const command of commands) {
