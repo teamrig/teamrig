@@ -120,8 +120,8 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
-| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity usage meter is not built yet |
+| `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: helper/subagent thread split and disk discovery outside hook transcriptPath), proved on [windows](proofs/antigravity-cli.md#budgettranscripts); unproved on linux, macos |
+| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | partial (missing: published Antigravity token weights), proved on [windows](proofs/antigravity-cli.md#budgetusage); unproved on linux, macos |
 | `budget.model-share` | the share of each model and effort level | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.week-reading` | the week reading and the pace line | supported, proved on [windows](proofs/claude-code.md#budgetweek-reading); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.five-hour` | the five-hour forecast | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
