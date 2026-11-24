@@ -47,9 +47,26 @@ interface Found {
   inline: boolean;
 }
 
-function scan(lines: readonly string[], table: string, key: string): Found {
-  const found: Found = { header: undefined, rootDotted: undefined, firstHeader: undefined, key: undefined, inline: false };
-  const target = `${table}.${key}`;
+/** A `key = value` line as the walk meets it: where it is, how it was written, and its whole dotted path. */
+interface KeyLine {
+  readonly line: number;
+  readonly indent: string;
+  readonly written: string;
+  readonly value: string;
+  /** The table it sits under, `''` at the root. */
+  readonly table: string;
+  /** The table's path and the key's, joined: `[a]` then `b.c = 1` is `a.b.c`. */
+  readonly path: string;
+}
+
+/** The table name an array of tables gives the keys under it, which no `[table]` path can equal. */
+const ARRAY_TABLE = '[[array]]';
+
+/**
+ * Calls `header` for each table header and `key` for each key line, skipping the lines inside a multi-line string,
+ * which may hold text that only looks like a header or a key.
+ */
+function walk(lines: readonly string[], header: (line: number, table: string) => void, key: (found: KeyLine) => void): void {
   let current = '';
   let open: Delimiter | undefined;
   lines.forEach((line, index) => {
@@ -57,24 +74,43 @@ function scan(lines: readonly string[], table: string, key: string): Found {
       open = openAfter(line, open);
       return;
     }
-    const header = ARRAY_HEADER.test(line) ? undefined : HEADER.exec(line);
-    if (ARRAY_HEADER.test(line) || header !== null) {
-      found.firstHeader ??= index;
-      current = header?.[1] === undefined ? '[[array]]' : keyPath(header[1]);
-      if (current === table) found.header ??= index;
+    const named = ARRAY_HEADER.test(line) ? undefined : HEADER.exec(line);
+    if (ARRAY_HEADER.test(line) || named !== null) {
+      current = named?.[1] === undefined ? ARRAY_TABLE : keyPath(named[1]);
+      header(index, current);
       return;
     }
     const pair = KEY_LINE.exec(line);
     if (pair !== null) {
       const [, indent = '', written = '', value = ''] = pair;
       const path = current === '' ? keyPath(written) : `${current}.${keyPath(written)}`;
-      if (path === target) found.key ??= { line: index, indent, written, value };
-      if (current === '' && path === table && value.trimStart().startsWith('{')) found.inline = true;
-      if (current === '' && path.startsWith(`${table}.`)) found.rootDotted ??= index;
+      key({ line: index, indent, written, value, table: current, path });
     }
     open = openAfter(line, undefined);
   });
+}
+
+function scan(lines: readonly string[], table: string, key: string): Found {
+  const found: Found = { header: undefined, rootDotted: undefined, firstHeader: undefined, key: undefined, inline: false };
+  const target = `${table}.${key}`;
+  walk(
+    lines,
+    (index, current) => {
+      found.firstHeader ??= index;
+      if (current === table) found.header ??= index;
+    },
+    ({ line, indent, written, value, table: current, path }) => {
+      if (path === target) found.key ??= { line, indent, written, value };
+      if (current === '' && path === table && value.trimStart().startsWith('{')) found.inline = true;
+      if (current === '' && path.startsWith(`${table}.`)) found.rootDotted ??= line;
+    },
+  );
   return found;
+}
+
+/** Whether `value`, a key line's text after `=`, reads as the boolean `word`. */
+function reads(value: string, word: string): boolean {
+  return new RegExp(`^${word}(?:\\s|#|$)`, 'u').test(value);
 }
 
 /** `text` with `table.key` set to `value`, every other line kept. */
@@ -84,7 +120,7 @@ export function withBooleanKey(text: string, table: string, key: string, value: 
   const found = scan(lines, table, key);
   const word = String(value);
   if (found.key !== undefined) {
-    if (new RegExp(`^${word}(?:\\s|#|$)`, 'u').test(found.key.value)) return { ok: true, text: undefined };
+    if (reads(found.key.value, word)) return { ok: true, text: undefined };
     const edited = [...lines];
     edited[found.key.line] = `${found.key.indent}${found.key.written} = ${word}`;
     return { ok: true, text: edited.join(eol) };
