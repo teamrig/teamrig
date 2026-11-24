@@ -325,6 +325,15 @@ describe('installGuardReply: shell lines', () => {
     assert.equal(await decisionOf(call('PowerShell', { command: "'Get-ChildItem C:\\w\\src' | iex" })), undefined);
   });
 
+  it('reads shells nested 8 deep, and refuses a line nesting them deeper (T5366 R6)', async () => {
+    const nested = (depth: number, inner: string): string => `${'eval '.repeat(depth)}${inner}`;
+    assert.equal(await decisionOf(call('Bash', { command: nested(8, "'rm -rf ~/.t*'") })), 'deny');
+    assert.equal(await decisionOf(call('Bash', { command: nested(8, 'echo hi') })), undefined);
+    const deep = await decide(call('Bash', { command: nested(9, 'echo hi') }));
+    assert.equal(deep?.decision, 'deny');
+    assert.match(deep?.reason ?? '', /more than 8 deep/);
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });

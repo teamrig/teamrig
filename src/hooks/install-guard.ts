@@ -332,8 +332,20 @@ function locationWord(word: ShellWord, path: string | undefined): ShellWord {
   return path === undefined ? { text: word.text, dynamic: true } : { text: path, dynamic: false };
 }
 
-/** How deep the word pass follows shells that start shells, as the push guard does; past it the raw-text pass holds. */
+/** How deep the word pass follows shells that start shells, as the push guard does; past it the line is refused. */
 const MAX_NESTING = 8;
+
+/**
+ * Why a line whose shells nest past {@link MAX_NESTING} is refused (T5366 R6): what the deepest one runs is unread,
+ * and no real line nests that deep, so refusing it costs nothing.
+ */
+function nestingReason(tool: string): string {
+  return (
+    `teamrig install guard: this ${tool} line starts shells more than ${MAX_NESTING} deep, past what the guard reads, ` +
+    "so it cannot tell whether the line writes teamrig's install or a host's hook files. Run the inner command " +
+    'without the extra shells.'
+  );
+}
 
 /** What the word pass of one tool call carries into every line it reads. */
 interface WordWalk {
@@ -372,7 +384,7 @@ async function commandReach(
  */
 async function scriptReply(script: string, dialect: ShellDialect, location: Location, depth: number, walk: WordWalk): Promise<HookReply | undefined> {
   if (depth > MAX_NESTING) {
-    return undefined;
+    return refusal(nestingReason(walk.tool));
   }
   const { env } = walk;
   const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
