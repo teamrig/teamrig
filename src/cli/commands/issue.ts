@@ -4,6 +4,7 @@ import type { KitConfig } from '../../config/types.ts';
 import { issueRef } from '../../sync/map.ts';
 import { assignIssue, loginRefusal, MAX_ASSIGN_LOGINS } from '../../issues/assign.ts';
 import { CLOSE_REASONS, parseIssueTarget, targetText, type CloseReason, type IssueQuery, type IssueTarget } from '../../issues/host.ts';
+import { openIssue } from '../../issues/open.ts';
 import { searchIssues, showIssue } from '../../issues/read.ts';
 import { bareRef, refOf } from '../../issues/ref.ts';
 import { checkReply, sendReply, type FollowUp, type ReplyWrite } from '../../issues/reply.ts';
@@ -11,8 +12,9 @@ import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from '../../iss
 import { holderOf, sessionLogins } from '../../issues/status-push.ts';
 import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue, type IssueWrite } from '../../issues/write.ts';
 import type { Task } from '../../register/fold.ts';
+import { publicIssueText } from '../../sync/migrate.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
-import { onePositional, requiredFlag, somePositionals, type Flags, type ParsedArgs } from '../args.ts';
+import { noPositionals, onePositional, requiredFlag, somePositionals, type Flags, type ParsedArgs } from '../args.ts';
 import { withDescriptions } from '../card-texts.ts';
 import { secretFilesOf } from '../host.ts';
 import type { Hosts } from '../issue-hosts.ts';
@@ -417,6 +419,30 @@ export async function issueShow(args: ParsedArgs, runtime: CliRuntime): Promise<
     return EXIT.ok;
   }
   return (await showIssue(hosts.tracker, target, (line) => runtime.out.stdout(line))) === 'read' ? EXIT.ok : EXIT.failed;
+}
+
+/**
+ * `issue open --repo <owner/name> --title <text> --body-file <path> [--label <label,...>]` (T4860): opens one issue on
+ * one of the team's repositories through its tracker (issues/open.ts), so a skill files an issue without the host's
+ * tool. The title and body pass the checks every issue teamrig opens passes (sync/migrate.ts publicIssueText), the
+ * body also those of any post; each label must already be the repository's. No task is added: `teamrig add --issue`
+ * opens a task's own issue. Exit 1 when the host failed, else 0.
+ */
+export async function issueOpen(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  noPositionals(args);
+  const repo = requiredFlag(args.flags, 'repo');
+  const labels = labelsOf(args.flags.get('label'), '--label');
+  const checked = await checkedRepo(args, runtime, repo);
+  const body = await bodyFileOf(requiredFlag(args.flags, 'body-file'), runtime, checked.config);
+  const text = publicIssueText('the new issue', requiredFlag(args.flags, 'title'), body, new SecretScanner(checked.config.register.secretPatterns));
+  if (!text.ok) {
+    throw new RefusedError(text.error);
+  }
+  const hosts = await hostsAfter(checked, runtime, { flag: '--body-file', text: body });
+  if (hosts === undefined) {
+    return EXIT.ok;
+  }
+  return (await openIssue(hosts.tracker, { repo, title: text.value.title, body: text.value.body, labels }, (line) => runtime.out.stdout(line))) ? EXIT.ok : EXIT.failed;
 }
 
 /** The issue or pull request the one positional names; refused when it names none. */

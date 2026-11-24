@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { withStampFooter } from '../core/stamp.ts';
-import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueRead, isIssueSearch, isIssueUnassign, issueSearchArgs, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
+import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueRead, isIssueSearch, isIssueUnassign, issueSearchArgs, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
 import { areaLabelSpec } from '../issues/managed-labels.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
@@ -572,5 +572,66 @@ describe('teamrig issue search and issue show (T4860)', () => {
       assert.match(result.stdout.join('\n'), /^OFF .*; nothing was read$/u);
       assert.deepEqual(gh.ran, []);
     }
+  });
+});
+
+describe('teamrig issue open (T4860)', () => {
+  const OPEN_LOGIN = LOGIN.replace('writes with', 'opens issues with');
+  const BODY = join(APP, 'issue.md');
+  const OPEN = ['issue', 'open', '--repo', 'acme/web', '--title', 'Login fails after a reset', '--body-file', 'issue.md'];
+
+  async function openKit(): Promise<CliHarness> {
+    const kit = new CliHarness(GITHUB_TEAM);
+    await kit.files.write(BODY, 'Steps: reset, then log in.');
+    return kit;
+  }
+
+  it('opens the issue with its labels once the repository has each, and adds no task', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh().holds('acme/web', []).hasLabels('acme/web', ['type: bug']);
+    const result = await kit.run([...OPEN, '--label', 'type: bug'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [OPEN_LOGIN, 'OPENED acme/web#1: Login fails after a reset']);
+    assert.deepEqual(gh.ran.map((request) => request.args).filter(isIssueCreate), [
+      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Login fails after a reset', '-f', `body=${withStampFooter('Steps: reset, then log in.')}`, '-f', 'labels[]=type: bug'],
+    ]);
+    assert.equal(kit.files.get(EVENTS_PATH) ?? '', '');
+  });
+
+  it('fails with exit 1 and opens nothing for a label the repository lacks', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh().holds('acme/web', []).hasLabels('acme/web', ['type: bug']);
+    const result = await kit.run([...OPEN, '--label', 'type: bgu'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stdout.at(-1) ?? '', /^FAILED acme\/web: it has no label "type: bgu"/u);
+    assert.deepEqual(gh.ran.filter((request) => isIssueCreate(request.args)), []);
+  });
+
+  it('refuses before any call a title or body no issue may carry, a bad label name, a repository not the team\'s or a positional', async () => {
+    const refusals: ReadonlyArray<readonly [readonly string[], string, RegExp]> = [
+      [['issue', 'open', '--repo', 'acme/web', '--title', ' ', '--body-file', 'issue.md'], 'Steps.', /the title is one line of 1 to 256 characters/u],
+      [OPEN, 'Fixed in T12.', /names the task id T12/u],
+      [OPEN, ' ', /the new issue: the body is empty/u],
+      [[...OPEN, '--label', 'bug\u0007'], 'Steps.', /--label: the label "bug\\u0007" holds a control character/u],
+      [['issue', 'open', '--repo', 'other/app', '--title', 'Login', '--body-file', 'issue.md'], 'Steps.', /other\/app is not one of the team's repositories/u],
+    ];
+    for (const [argv, body, error] of refusals) {
+      const kit = new CliHarness(GITHUB_TEAM);
+      await kit.files.write(BODY, body);
+      const gh = new FakeGh();
+      const refused = await kit.run([...argv], { ...AS_LEAD, gh });
+      assert.equal(refused.code, EXIT.refused, argv.join(' '));
+      assert.match([...refused.stdout, ...refused.stderr].join('\n'), error, argv.join(' '));
+      assert.deepEqual(gh.ran, [], argv.join(' '));
+    }
+  });
+
+  it('takes no positional: the issue it opens has no number yet', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh();
+    const result = await kit.run([...OPEN, 'acme/web#7'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.usage);
+    assert.match(result.stderr.join('\n'), /unexpected "acme\/web#7"/u);
+    assert.deepEqual(gh.ran, []);
   });
 });

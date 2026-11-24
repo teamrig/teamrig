@@ -124,6 +124,7 @@ const EXPECTED = {
   'issue similar': 'read',
   'issue search': 'read',
   'issue show': 'read',
+  'issue open': 'write',
   'issue assign': 'write',
   'pr conflicts': 'write',
   'pr approve': 'write',

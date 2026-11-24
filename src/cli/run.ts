@@ -273,6 +273,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'issue similar': { effect: 'read', flags: [], load: async () => (await issueCommands()).issueSimilar },
   'issue search': { effect: 'read', flags: ['session', 'repo', 'state', 'kind'], load: async () => (await issueCommands()).issueSearch },
   'issue show': { effect: 'read', flags: ['session'], load: async () => (await issueCommands()).issueShow },
+  'issue open': { effect: 'write', flags: ['session', 'repo', 'title', 'body-file', 'label'], load: async () => (await issueCommands()).issueOpen },
   'issue assign': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueAssign },
   'pr conflicts': { effect: 'write', flags: ['base'], load: async () => (await prCommands()).prConflicts },
   'pr approve': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prApprove },
@@ -947,6 +948,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       otherwise; fails when the tracker has no search
   issue show <owner/name#n>   one issue or pull request of the team's repositories as its tracker
       holds it now: state, kind, title, labels, assignees and body
+  issue open --repo <owner/name> --title <text> --body-file <path> [--label <label,...>]
+      opens one issue on one of the team's repositories, adding no task: each label must already be
+      the repository's, and the title and body pass the checks of every issue teamrig opens
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,

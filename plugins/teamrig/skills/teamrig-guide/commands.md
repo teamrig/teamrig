@@ -1315,8 +1315,8 @@ ever lists issues: it never creates, edits, comments on, labels, assigns or clos
 added with `teamrig add` stays in the task list and never goes to GitHub. Only commands run by hand write:
 `teamrig issue migrate` opens issues, `teamrig issue reply`, `teamrig issue edit` and `teamrig issue close`
 comment on, rewrite and close them, and `teamrig issue links` links them as the task tree does;
-`teamrig issue similar` lists likely duplicates from the task list alone, and `teamrig issue search` and
-`teamrig issue show` read the host's issues as they are now.
+`teamrig issue similar` lists likely duplicates from the task list alone, `teamrig issue search` and
+`teamrig issue show` read the host's issues as they are now, and `teamrig issue open` opens one.
 Its old name, gh sync, is refused with this one (exit 64). Setup, tokens and every failure's fix:
 [GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md).
 
@@ -1845,6 +1845,36 @@ LABELS "type: bug", "p1"
 ASSIGNEES dana
 BODY
   After a reset the login page says the password is wrong.
+```
+
+### teamrig issue open
+
+Opens one issue on one of the team's repositories through its tracker, so a skill files an issue without the host's
+own tool; it adds no task (`teamrig add --issue` opens a task's own issue). The title is one line of 1 to 256
+characters and the body, read from a file, is not empty; neither may hold a secret shape, private data or a task id,
+the checks of every issue teamrig opens. Each label must already be one of the repository's, read before the open,
+so a typo never makes a new label: make it on the host first. REFUSED (exit 2) on any of these, a repository not in
+the team's, or a positional. Exit 1 when the host failed, else 0.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team.
+- `--repo <owner/name>`: the repository to open it on, one of the team's; required.
+- `--title <text>`: the issue's title; required.
+- `--body-file <path>`: the file holding its body, read as `teamrig issue reply` reads it; required.
+- `--label <label,...>`: the labels it opens with, each already one of the repository's.
+
+Example:
+
+```sh
+teamrig issue open --repo acme/web --title "Login fails after a password reset" --body-file issue.md --label "type: bug"
+```
+
+Output:
+
+```text
+ACCESS acme: opens issues with the token saved as teamrig-gh-acme
+OPENED acme/web#31: Login fails after a password reset
 ```
 
 ### teamrig issue assign
