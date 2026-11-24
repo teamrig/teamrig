@@ -195,7 +195,9 @@ URL, the credentials of an `Authorization` or API key header. A reference (`${DB
 placeholder (`postgres://user:password@localhost`) passes, and the reason says to pass the secret by reference: its
 env var name, a file path, stdin or `teamrig exec request`. A Write, Edit, MultiEdit or NotebookEdit whose text holds a
 secret is refused the same way, unless it writes a secret file (`.env`), so a real one is kept there and a test builds
-a secret-shaped value at run time from parts. `secretGuard.secretReads` (`deny` by default, `ask` or `allow`)
+a secret-shaped value at run time from parts. On Codex CLI, Codex's own logs and session files under its home folder
+still keep a refused write's text, secret included, since Codex records the call before teamrig's hook answers it:
+rotate a secret refused there, or delete those files. `secretGuard.secretReads` (`deny` by default, `ask` or `allow`)
 sets what a call that would print a secret gets, and `secretGuard.writes` (the same) one that holds a secret as text; `secretGuard.paths`, `secretGuard.envNames` and `secretGuard.commands` add the team's own
 files, names and dump commands, and a `!` entry keeps one printable. The read-only allow never lets such a line skip
 the prompt
