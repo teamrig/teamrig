@@ -643,6 +643,8 @@ class LaunchReader {
    * joins them: one word as a command line for the shell `spawn` starts, several as a program and its arguments.
    * What they start is marked `runner`. Any other subcommand is teamrig itself. A subcommand only known when it runs
    * may be a runner, so the command is opaque; it keeps its words for the exec guard, as it may be `exec approve`.
+   * So is a runner whose words before the first literal `--` (all of them when there is none) hold one only known
+   * when it runs: it may expand to a `--` of its own, or to several words, so where the command starts is unknown.
    */
   private teamrig(args: readonly ShellWord[], head: ShellWord): Step {
     const [subcommand] = args;
@@ -650,7 +652,11 @@ class LaunchReader {
       return { kind: 'opaque', reason: 'the teamrig subcommand it runs is only known when it runs', gated: true, command: { program: head, args } };
     }
     const end = args.findIndex((arg) => !arg.dynamic && arg.text === '--');
-    if (subcommand === undefined || !TEAMRIG_RUNNERS.has(subcommand.text) || end === -1) {
+    const runner = subcommand !== undefined && TEAMRIG_RUNNERS.has(subcommand.text);
+    if (runner && (end === -1 ? args : args.slice(0, end)).some((arg) => arg.dynamic)) {
+      return { kind: 'opaque', reason: 'where the command teamrig runs starts is only known when it runs', gated: true, command: { program: head, args } };
+    }
+    if (!runner || end === -1) {
       return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
     }
     const words = args.slice(end + 1);
