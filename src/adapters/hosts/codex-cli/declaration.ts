@@ -8,18 +8,32 @@ import { SESSION_VARIABLES } from './session-variables.ts';
  */
 const NOT_BUILT: Support = { kind: 'unsupported', notice: 'not built for Codex CLI yet' };
 
+/** The live Windows run recorded in docs/proofs/codex-cli.md, on a throwaway Codex home with teamrig 0.507.0. */
+const LIVE_RUN: { readonly toolVersion: string; readonly date: string } = { toolVersion: '0.171.0-alpha.13', date: '2026-11-24' };
+
+/**
+ * A feature proved on Windows, its record under the feature id's heading in docs/proofs/codex-cli.md (a heading's
+ * anchor drops the id's dot).
+ */
+function provedOnWindows(feature: string): Support {
+  return {
+    kind: 'supported',
+    proofs: [{ os: 'windows', toolVersion: LIVE_RUN.toolVersion, date: LIVE_RUN.date, evidence: `proofs/codex-cli.md#${feature.replaceAll('.', '')}` }],
+  };
+}
+
 export const declaration: HostDeclaration = {
   apiVersion: '0.1.0',
   id: 'codex-cli',
   name: 'Codex CLI',
   sessionVariables: SESSION_VARIABLES,
   manifest: {
-    'rules.session-start': NOT_BUILT,
+    'rules.session-start': provedOnWindows('rules.session-start'),
     'rules.instruction-files': NOT_BUILT,
     'rules.rules-folder': NOT_BUILT,
     'rules.memory': NOT_BUILT,
     'rules.start-size': NOT_BUILT,
-    'inbox.prompt-line': NOT_BUILT,
+    'inbox.prompt-line': provedOnWindows('inbox.prompt-line'),
     'context.compact-hold': NOT_BUILT,
     'context.size': NOT_BUILT,
     'context.refresh': NOT_BUILT,

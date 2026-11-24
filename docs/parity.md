@@ -22,7 +22,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | unsupported: Antigravity --host-event hook routing is not built yet |
 | `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.rules-folder` | the rules folder of a project | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.memory` | memory files kept between sessions | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
@@ -32,7 +32,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#inboxprompt-line); unproved on linux, macos | unsupported: Antigravity --host-event hook routing is not built yet |
 
 ### context
 

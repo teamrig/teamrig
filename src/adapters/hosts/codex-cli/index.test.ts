@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { API_VERSION, apiVersionNotice, featuresOf, hostAdapterProblems, hostDeclarationProblems, isUnsupported } from '../../../plugin-api/index.ts';
+import { API_VERSION, apiVersionNotice, featuresOf, hostAdapterProblems, hostDeclarationProblems, isUnsupported, provedOn } from '../../../plugin-api/index.ts';
 import { hostDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import adapter from './index.ts';
@@ -17,11 +17,14 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(declaration.sessionVariables, { marks: ['CODEX_THREAD_ID'], identity: [] });
   });
 
-  it('claims no host feature before a live run proves it', () => {
+  it('claims only the host features a live run proved, the start rules and the prompt inbox line, on Windows', () => {
     const claimed = featuresOf('host')
       .filter((row) => declaration.manifest[row.id].kind !== 'unsupported')
       .map((row) => row.id);
-    assert.deepEqual(claimed, []);
+    assert.deepEqual(claimed, ['rules.session-start', 'inbox.prompt-line']);
+    for (const id of claimed) {
+      assert.deepEqual(provedOn(declaration.manifest[id]), ['windows']);
+    }
   });
 
   it("enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools, secret files, session launcher and the person's hooks file", () => {
