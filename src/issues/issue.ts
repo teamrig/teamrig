@@ -56,6 +56,11 @@ export interface IssueThread {
   readonly pull: boolean;
   /** As the host has it, empty when it has none. */
   readonly body: string;
+  /**
+   * As the host has it; outside input like the body. Optional so a connector built on plugin API 0.2 still reads a
+   * thread; the built-in hosts always give it.
+   */
+  readonly title?: string;
 }
 
 /** An issue as the import reads it. */

@@ -781,7 +781,7 @@ export function loginIn(stdout: string): string | undefined {
 
 /**
  * An issue or pull request as GitHub's REST API prints it (`state` open or closed, `labels` of names, `assignees` of
- * logins, a `pull_request` field on a pull request only, `body` null when empty), else undefined.
+ * logins, a `pull_request` field on a pull request only, `body` null when empty, its `title`), else undefined.
  */
 export function threadIn(stdout: string): IssueThread | undefined {
   let parsed: unknown;
@@ -793,14 +793,14 @@ export function threadIn(stdout: string): IssueThread | undefined {
   if (!isRecord(parsed)) {
     return undefined;
   }
-  const { state, labels, assignees, body } = parsed;
+  const { state, labels, assignees, body, title } = parsed;
   const names = namesIn(labels, 'name');
   const logins = namesIn(assignees, 'login');
   if ((state !== 'open' && state !== 'closed') || names === undefined || logins === undefined || (body !== null && body !== undefined && typeof body !== 'string')) {
     return undefined;
   }
   const pull = parsed['pull_request'];
-  return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '' };
+  return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '', ...(typeof title === 'string' ? { title } : {}) };
 }
 
 /** The string `key` of each record of a REST list, or undefined when it is no list or one item has none. */

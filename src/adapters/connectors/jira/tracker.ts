@@ -69,7 +69,7 @@ export const COMMENT_PAGE = 100;
 const LIST_FIELDS = ['summary', 'description', 'status', 'resolution', 'labels', 'assignee', 'reporter', 'updated', 'created', 'resolutiondate', 'statuscategorychangedate', 'comment'] as const;
 
 /** The fields a read of one issue as it is now asks for: what an IssueThread is made of, and nothing else. */
-const THREAD_FIELDS = ['description', 'status', 'labels', 'assignee'] as const;
+const THREAD_FIELDS = ['summary', 'description', 'status', 'labels', 'assignee'] as const;
 
 /** The one mark a watch keeps: the issue changed last, and when. */
 const NEWEST = 'newest';
@@ -229,12 +229,14 @@ function issueThread(body: unknown): IssueThread | undefined {
     return undefined;
   }
   const assignee = accountId(recordField(fields, 'assignee'));
+  const summary = stringField(fields, 'summary');
   return {
     state: isDoneStatus(status) ? 'closed' : 'open',
     labels,
     assignees: assignee === '' ? [] : [assignee],
     pull: false,
     body: adfText(fields['description']),
+    ...(summary === undefined ? {} : { title: summary }),
   };
 }
 

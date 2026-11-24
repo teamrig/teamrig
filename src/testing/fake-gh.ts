@@ -136,7 +136,7 @@ function heldIssueRest(issue: JsonRecord, number: number): JsonRecord {
     return Array.isArray(nodes) ? nodes : [];
   };
   const body = stringField(issue, 'body') ?? '';
-  return { id: 1000 + number, number, state: (stringField(issue, 'state') ?? 'OPEN').toLowerCase(), labels: nodesOf('labels'), assignees: nodesOf('assignees'), body: body === '' ? null : body };
+  return { id: 1000 + number, number, title: stringField(issue, 'title') ?? '', state: (stringField(issue, 'state') ?? 'OPEN').toLowerCase(), labels: nodesOf('labels'), assignees: nodesOf('assignees'), body: body === '' ? null : body };
 }
 
 /** A timeline item: `actor`, an account of `kind`, put `label` on the issue at `at`. */

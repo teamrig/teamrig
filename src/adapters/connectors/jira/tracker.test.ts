@@ -708,7 +708,7 @@ describe("Jira's own id of an issue (T4754)", () => {
 });
 
 describe('a Jira issue as it is now (T4754)', () => {
-  const READ = `${ISSUE}?fields=description,status,labels,assignee`;
+  const READ = `${ISSUE}?fields=summary,description,status,labels,assignee`;
   const NOT_AN_ISSUE = failed("Jira's answer for ENG-12 did not read as an issue");
 
   it('reads an open issue with its labels, the account holding it and its description as text', async () => {
@@ -717,17 +717,17 @@ describe('a Jira issue as it is now (T4754)', () => {
     http.answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', fields)));
     assert.deepEqual(await tracker.thread(TARGET), {
       kind: 'read',
-      thread: { state: 'open', labels: ['bug', 'status:in-review'], assignees: ['712020:0a1b2c3d'], pull: false, body: 'What is wrong.' },
+      thread: { state: 'open', labels: ['bug', 'status:in-review'], assignees: ['712020:0a1b2c3d'], pull: false, body: 'What is wrong.', title: 'A title' },
     });
-    assert.deepEqual(sent(http), [['GET', '/issue/ENG-12?fields=description,status,labels,assignee']]);
+    assert.deepEqual(sent(http), [['GET', '/issue/ENG-12?fields=summary,description,status,labels,assignee']]);
   });
 
-  it('reads a closed issue by its status, and one nobody holds with no description', async () => {
+  it('reads a closed issue by its status, and one nobody holds with no description, leaving out a summary that is no text', async () => {
     const { tracker, http } = kit();
     http
       .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { status: CLOSED, labels: [], assignee: null, description: null })))
-      .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { labels: ['bug'], assignee: { displayName: 'No id' } })));
-    assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'closed', labels: [], assignees: [], pull: false, body: '' } });
+      .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { labels: ['bug'], assignee: { displayName: 'No id' }, summary: 7 })));
+    assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'closed', labels: [], assignees: [], pull: false, body: '', title: 'A title' } });
     assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'open', labels: ['bug'], assignees: [], pull: false, body: '' } });
   });
 

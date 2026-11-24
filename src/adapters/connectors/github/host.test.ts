@@ -467,17 +467,19 @@ describe('GitHubIssueHost', () => {
   it("reads an issue as it is now through the id's allowlisted read: missing on Not Found, failed when gh prints no issue", async () => {
     const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7, { labels: ['bug', 'status:open'], assignees: ['octo'], body: 'Steps' })]);
     const host = hostWith(gh);
-    assert.deepEqual(await host.thread(TARGET), { kind: 'read', thread: { state: 'open', labels: ['bug', 'status:open'], assignees: ['octo'], pull: false, body: 'Steps' } });
+    assert.deepEqual(await host.thread(TARGET), { kind: 'read', thread: { state: 'open', labels: ['bug', 'status:open'], assignees: ['octo'], pull: false, body: 'Steps', title: 'Issue 7' } });
     assert.deepEqual(await host.thread({ repo: 'acme/web', number: 8 }), { kind: 'missing' });
     assert.ok(gh.ran.every((request) => isIssueRead(request.args)));
     const blank = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{"id":7}', stderr: '' });
     assert.deepEqual(await hostWith(blank).thread(TARGET), { kind: 'failed', reason: 'gh printed no issue for acme/web#7' });
   });
 
-  it('takes a printed issue only in the REST shape, telling a pull request by its pull_request field', () => {
+  it('takes a printed issue only in the REST shape, telling a pull request by its pull_request field, with its title when it is text', () => {
     const rest = { state: 'closed', labels: [{ name: 'p1' }], assignees: [{ login: 'octo' }], body: null, pull_request: { url: 'x' } };
     assert.deepEqual(threadIn(JSON.stringify(rest)), { state: 'closed', labels: ['p1'], assignees: ['octo'], pull: true, body: '' });
     assert.deepEqual(threadIn(JSON.stringify({ ...rest, pull_request: null, body: 'b' })), { state: 'closed', labels: ['p1'], assignees: ['octo'], pull: false, body: 'b' });
+    assert.deepEqual(threadIn(JSON.stringify({ ...rest, title: 'Crash on start' })), { state: 'closed', labels: ['p1'], assignees: ['octo'], pull: true, body: '', title: 'Crash on start' });
+    assert.deepEqual(threadIn(JSON.stringify({ ...rest, title: 4 })), { state: 'closed', labels: ['p1'], assignees: ['octo'], pull: true, body: '' });
     for (const odd of [{ ...rest, state: 'OPEN' }, { ...rest, labels: [{}] }, { ...rest, labels: 'p1' }, { ...rest, assignees: [{ login: 3 }] }, { ...rest, body: 4 }]) {
       assert.equal(threadIn(JSON.stringify(odd)), undefined, JSON.stringify(odd));
     }
