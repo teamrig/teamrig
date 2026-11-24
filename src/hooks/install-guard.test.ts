@@ -259,6 +259,38 @@ describe('installGuardReply: shell lines', () => {
     }
   });
 
+  it('reads the line a nested shell runs with the same word pass (T5365 R4)', async () => {
+    const bash = [
+      'bash -c "rm -rf ~/.teamrig"',
+      'sh -c "rm -rf ~/.teamrig"',
+      'powershell -Command "Remove-Item -Recurse ~\\.teamrig"',
+      "bash -c 'cd ~/.teamrig/teams && echo 0.0.1 > ../current'",
+      'bash -c \'echo 0.0.1 > ~/.teamrig/cu""rrent\'',
+      "bash -c \"sh -c 'rm -rf ~/.codex'\"",
+      "eval 'cd ~/.teamrig' && rm -rf current",
+      'bash <<EOF\nrm -rf ~/.teamrig\nEOF',
+    ];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    const powershell = ['pwsh -Command "Remove-Item -Recurse ~\\.teamrig"', "bash -c 'rm -rf ~/.teamrig'"];
+    for (const command of powershell) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+  });
+
+  it('passes a nested shell line that stays outside the guarded entries, and a nested cd that does not carry out', async () => {
+    const lines = [
+      "bash -c 'cd ~/.teamrig/teams/t && echo hi > notes.md'",
+      'bash -c "echo hi > ~/.teamrig/teams/t/n.md"',
+      "bash -c 'cd ~/.teamrig/teams' && echo hi > ../current",
+      "sh -c 'rm -rf node_modules'",
+    ];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });

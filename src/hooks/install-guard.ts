@@ -1,7 +1,8 @@
 import { posix, win32 } from 'node:path';
 import type { EditCall, HookEvent, HookReply, ShellCall } from '../ports/host/index.ts';
+import { launch } from '../push-guard/launchers.ts';
 import { Location } from '../push-guard/location.ts';
-import { parseShell, type ShellWord } from '../push-guard/tokenizer.ts';
+import { parseShell, type ShellDialect, type ShellWord } from '../push-guard/tokenizer.ts';
 import { resolveLiteralVariables } from '../push-guard/variables.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
@@ -330,42 +331,96 @@ function locationWord(word: ShellWord, path: string | undefined): ShellWord {
   return path === undefined ? { text: word.text, dynamic: true } : { text: path, dynamic: false };
 }
 
+/** How deep the word pass follows shells that start shells, as the push guard does; past it the raw-text pass holds. */
+const MAX_NESTING = 8;
+
+/** What the word pass of one tool call carries into every line it reads. */
+interface WordWalk {
+  /** The tool's name, for the reason. */
+  readonly tool: string;
+  readonly env: InstallGuardEnv;
+  /** The folder and path pairs already held, so a path a line repeats is resolved once. */
+  readonly seen: Set<string>;
+}
+
+/** The guarded place a command's words and redirection targets reach from the folder it runs in, with how. */
+async function commandReach(
+  paths: readonly (string | undefined)[],
+  at: string | undefined,
+  walk: WordWalk,
+): Promise<{ readonly place: GuardedPlace; readonly how: string } | undefined> {
+  for (const path of paths) {
+    const key = `${at ?? ''}\u{0}${path ?? ''}`;
+    if (path === undefined || walk.seen.has(key)) {
+      continue;
+    }
+    walk.seen.add(key);
+    const reach = await wordReach(path, at, walk.env);
+    if (reach !== undefined) {
+      return reach;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The refusal of a script one of whose words reaches a guarded place once its shell has read it; see
+ * {@link wordsReply}. A command that runs a line in a shell (`bash -c`, `pwsh -Command`, `cmd /c`, `eval`, a heredoc
+ * into `bash`), as the push guard's {@link launch} reader finds it, has that line read the same way in its own
+ * dialect (T5365 R4), from a child of the folder it starts in; one run in this same shell (`eval`) moves this one.
+ */
+async function scriptReply(script: string, dialect: ShellDialect, location: Location, depth: number, walk: WordWalk): Promise<HookReply | undefined> {
+  if (depth > MAX_NESTING) {
+    return undefined;
+  }
+  const { env } = walk;
+  const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
+  const parsed = parseShell(script, dialect);
+  // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3).
+  const commands = dialect === 'bash' ? resolveLiteralVariables(parsed, env.home) : parsed.commands;
+  for (const command of commands) {
+    location.enter(command.subshells);
+    const targets = command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target]));
+    const paths = command.words.map((word) => wordPathOf(word, dialect, wordEnv));
+    const reach = await commandReach([...paths, ...targets.map((word) => wordPathOf(word, dialect, wordEnv))], location.dir, walk);
+    if (reach !== undefined) {
+      return refusal(reasonOf(`this ${walk.tool} line names ${reach.how}, and a shell line's writes cannot be told from its reads`, reach.place));
+    }
+    const moved = location.apply(
+      command.words.map((word, index) => locationWord(word, paths[index])),
+      dialect,
+    );
+    const launched = moved ? undefined : launch(command.words, dialect, command.stdin);
+    if (launched?.kind !== 'script') {
+      continue;
+    }
+    const inner = location.child();
+    launched.chdirs.forEach((chdir) => inner.moveTo(chdir, dialect));
+    const nested = await scriptReply(launched.script.text, launched.dialect, inner, depth + 1, walk);
+    if (nested !== undefined) {
+      return nested;
+    }
+    if (launched.sameShell) {
+      location.adopt(inner);
+    }
+  }
+  return undefined;
+}
+
 /**
  * The refusal of a shell line one of whose words reaches a guarded place once the shell has read it (T5355 S1):
  * quotes and escapes removed, `~` and the environment's variables expanded, resolved against the folder the command
  * runs in, which a `cd`, `pushd` or `Set-Location` earlier in the line moves (T5364 R2), as the push guard's
  * {@link Location} follows it. This holds the spellings the line's raw text hides (`..`, a quote inside a name, a
- * glob, a path relative to any cwd).
+ * glob, a path relative to any cwd), in the line and in each line a nested shell runs.
  */
 async function wordsReply(call: ShellCall, cwd: string, env: InstallGuardEnv): Promise<HookReply | undefined> {
   const readings = call.readings.length === 0 && call.command !== undefined ? [call.command] : call.readings;
-  const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
-  const seen = new Set<string>();
+  const walk: WordWalk = { tool: call.name, env, seen: new Set<string>() };
   for (const reading of readings) {
-    const location = new Location(cwd, env.home, pathsOf(env.platform));
-    const parsed = parseShell(reading, call.dialect);
-    // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3).
-    const commands = call.dialect === 'bash' ? resolveLiteralVariables(parsed, env.home) : parsed.commands;
-    for (const command of commands) {
-      location.enter(command.subshells);
-      const at = location.dir;
-      const targets = command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target]));
-      const paths = command.words.map((word) => wordPathOf(word, call.dialect, wordEnv));
-      for (const path of [...paths, ...targets.map((word) => wordPathOf(word, call.dialect, wordEnv))]) {
-        const key = `${at ?? ''}\u{0}${path ?? ''}`;
-        if (path === undefined || seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        const reach = await wordReach(path, at, env);
-        if (reach !== undefined) {
-          return refusal(reasonOf(`this ${call.name} line names ${reach.how}, and a shell line's writes cannot be told from its reads`, reach.place));
-        }
-      }
-      location.apply(
-        command.words.map((word, index) => locationWord(word, paths[index])),
-        call.dialect,
-      );
+    const reply = await scriptReply(reading, call.dialect, new Location(cwd, env.home, pathsOf(env.platform)), 0, walk);
+    if (reply !== undefined) {
+      return reply;
     }
   }
   return undefined;
