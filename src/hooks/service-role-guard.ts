@@ -5,6 +5,7 @@ import type { ProgramsContext } from '../package-guard/programs.ts';
 import type { EditCall, EditedFile, HookEvent, HookReply, TextChange, TextReplacement } from '../ports/host/index.ts';
 import type { ShellWord } from '../push-guard/tokenizer.ts';
 import { opaqueGuardedWords, runsOfReadings, teamrigLaunchOf } from './exec-guard.ts';
+import { aliasFormOf, nativePathOf, openedNameOf, samePathKey } from './path-spelling.ts';
 import { heldBack, refusal } from './permission.ts';
 
 /**
@@ -52,47 +53,10 @@ export interface ServiceRoleGuardEnv {
 /** A team config's file name, or its 8.3 short name (`CONFIG~1.JSO`), as a path's last segment. */
 const CONFIG_NAME = /^config(?:\.json|~\d+\.jso)$/i;
 
-/** A Windows spelling that reaches a file past its plain path, which neither the text nor its real path ties to one file. */
-type AliasForm = 'a device path' | 'a network share path' | 'an alternate data stream';
-
 /** True when the words run `roles grant` or `roles revoke`, or a `roles` command only known when it runs. */
 function startsRoleChange(words: readonly ShellWord[]): boolean {
   const [group, action] = words;
   return group !== undefined && !group.dynamic && group.text === 'roles' && action !== undefined && (action.dynamic || ROLE_CHANGES.has(action.text));
-}
-
-/**
- * A path as the platform compares it: absolute against the folder, one slash, any case on Windows, where each
- * segment also drops the trailing dots and spaces Windows ignores (`config.json.` opens `config.json`).
- */
-function samePathKey(path: string, cwd: string, platform: NodeJS.Platform): string {
-  if (platform !== 'win32') {
-    return posix.resolve(cwd, path);
-  }
-  const segments = win32.resolve(cwd, path).replaceAll('\\', '/').toLowerCase().split('/');
-  return segments.map((segment, index) => (index === 0 ? segment : segment.replace(/[. ]+$/, ''))).join('/');
-}
-
-/** A path's last segment, past a leading drive (`C:config.json` names `config.json`). */
-function lastSegmentOf(path: string): string {
-  const undriven = path.replace(/^[a-z]:/i, '');
-  return undriven.slice(Math.max(undriven.lastIndexOf('/'), undriven.lastIndexOf('\\')) + 1);
-}
-
-/** How a Windows path reaches a file past its plain spelling, or undefined for a plain one. */
-function aliasFormOf(path: string): AliasForm | undefined {
-  if (/^[\\/]{2}[?.][\\/]/.test(path)) {
-    return 'a device path';
-  }
-  if (/^[\\/]{2}[^\\/]/.test(path)) {
-    return 'a network share path';
-  }
-  return lastSegmentOf(path).includes(':') ? 'an alternate data stream' : undefined;
-}
-
-/** The file name Windows opens for a path: its last segment with a stream cut and trailing dots and spaces dropped. */
-function openedNameOf(path: string): string {
-  return (lastSegmentOf(path).split(':')[0] ?? '').replace(/[. ]+$/, '');
 }
 
 /** The kit home a team config sits in: `<home>/teams/<team>/config.json`. */
@@ -100,9 +64,6 @@ function kitHomeOf(configPath: string, platform: NodeJS.Platform): string {
   const path = platform === 'win32' ? win32 : posix;
   return path.dirname(path.dirname(path.dirname(configPath)));
 }
-
-/** A Git Bash drive path's head, `/c/`, which Windows tools read as the drive `c:/`. */
-const MSYS_DRIVE = /^\/([a-z])(?=\/)/i;
 
 /**
  * A team config by its tail, `teams/<team>/config.json`, on a path in its compare form (one slash kind). Its 8.3 short
@@ -118,7 +79,7 @@ const TEAM_CONFIG_FILE = /(?:^|\/)teams\/+[^/]+\/+config(?:\.json|~\d+\.jso)$/i;
  * (T2984).
  */
 async function teamConfigOf(path: string, cwd: string, env: ServiceRoleGuardEnv): Promise<string | undefined> {
-  const native = env.platform === 'win32' ? path.replace(MSYS_DRIVE, '$1:') : path;
+  const native = nativePathOf(path, env.platform);
   const key = samePathKey(native, cwd, env.platform);
   if (env.configPath !== undefined && key === samePathKey(env.configPath, cwd, env.platform)) {
     return env.configPath;
