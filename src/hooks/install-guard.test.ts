@@ -255,8 +255,14 @@ describe('installGuardReply: shell lines', () => {
     }
   });
 
+  it('reads a bash variable bound to a pattern as that pattern, which its unquoted use completes (T5369)', async () => {
+    for (const command of ['X=~/.t*; rm -rf $X', 'X=~/.t*; bash -c "rm -rf $X"', 'X=/c/u/.co?ex; rm -rf $X/hooks.json', 'X=~/.teamrig/cur[r]ent; echo 0.0.1 > $X']) {
+      assert.equal(await decisionOf(call('Bash', { command }, 'C:/u')), 'deny', command);
+    }
+  });
+
   it('passes a bash variable the line binds outside the guarded entries, or to a value only known when it runs', async () => {
-    for (const command of ['X=~/.teamrig/teams/t; echo hi > $X/notes.md', 'X=$(mktemp -d); echo hi > $X/current']) {
+    for (const command of ['X=~/.teamrig/teams/t; echo hi > $X/notes.md', 'X=$(mktemp -d); echo hi > $X/current', 'X=~/.teamrig/t*; ls $X', 'X=~/*.md; rm $X']) {
       assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
     }
   });

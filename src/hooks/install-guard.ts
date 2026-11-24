@@ -389,8 +389,9 @@ async function scriptReply(script: string, dialect: ShellDialect, location: Loca
   const { env } = walk;
   const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
   const parsed = parseShell(script, dialect);
-  // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3).
-  const commands = dialect === 'bash' ? resolveLiteralVariables(parsed, env.home) : parsed.commands;
+  // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3),
+  // a pattern value too, which the word's path then globs (`X=~/.t*; rm -rf $X`, T5369).
+  const commands = dialect === 'bash' ? resolveLiteralVariables(parsed, env.home, 'kept') : parsed.commands;
   let piped: Feed | undefined;
   let substituted: readonly Feed[] = [];
   for (const command of commands) {
