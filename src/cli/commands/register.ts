@@ -50,6 +50,7 @@ import { skillsToLint } from '../../skills/run-scripts.ts';
 import { SKILL_FILE } from '../../skills/store.ts';
 import { weekUseOnAccount } from '../account-teams.ts';
 import { knownSettingsScope, readWideAllow } from '../allow-scope.ts';
+import { autoModeStaleWarnings } from '../automode-stale-check.ts';
 import { noPositionals, onePositional, requiredFlag, somePositionals, UsageError, type Flags, type ParsedArgs } from '../args.ts';
 import { handStepPin, readRunFiles } from '../hand-step-file.ts';
 import { KitTreeGoals } from '../tree-goals.ts';
@@ -1246,8 +1247,9 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const logs = await logSizeWarnings(runtime.files, own.paths);
   const sessionRuns = (pid: number): Promise<boolean> => runsHostSession(runtime, pid);
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
+  const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { kitLines, kitTag, type AutoModeFacts } from '../../automode/lines.ts';
+import { autoModeFactsOf, kitLines, kitTag, type AutoModeFacts } from '../../automode/lines.ts';
 import type { JsonRecord } from '../../core/guards.ts';
 import { homeRelative } from '../../core/paths.ts';
 import { planAllowSync } from '../../permissions/allow-sync.ts';
@@ -56,14 +56,7 @@ export async function uninstall(args: ParsedArgs, runtime: CliRuntime): Promise<
 async function factsOf(runtime: CliRuntime): Promise<AutoModeFacts> {
   const kit = await openTeamKit(runtime);
   const config = requireConfig(kit, runtime, 'read');
-  return {
-    team: kit.paths.team,
-    home: homeRelative(kit.paths.home, runtime.userHome),
-    lead: config.roles.lead,
-    pushGuard: config.pushGuard,
-    githubRepos: config.github.repos,
-    deliveryRepos: Object.keys(config.delivery.repos),
-  };
+  return autoModeFactsOf(kit.paths.team, homeRelative(kit.paths.home, runtime.userHome), config);
 }
 
 /** What a change does to one setting, named as the host names it (`HostPermissions.routesSetting`, `allowSetting`). */

@@ -1,4 +1,4 @@
-import type { PushGuardConfig, PushToProtected } from '../config/types.ts';
+import type { KitConfig, PushGuardConfig, PushToProtected } from '../config/types.ts';
 
 /**
  * The lines teamrig adds to Claude Code's `autoMode.environment` setting: what auto mode's classifier should take as
@@ -21,6 +21,21 @@ export interface AutoModeFacts {
   readonly githubRepos: readonly string[];
   /** The names of the repositories `teamrig merge` merges in (`delivery.repos`). */
   readonly deliveryRepos: readonly string[];
+}
+
+/**
+ * The facts of a team from its config, the one place `automode install` and the check for stale lines both take them
+ * from, so the check compares the installed lines with exactly what an install would write.
+ */
+export function autoModeFactsOf(team: string, home: string, config: Pick<KitConfig, 'roles' | 'pushGuard' | 'github' | 'delivery'>): AutoModeFacts {
+  return {
+    team,
+    home,
+    lead: config.roles.lead,
+    pushGuard: config.pushGuard,
+    githubRepos: config.github.repos,
+    deliveryRepos: Object.keys(config.delivery.repos),
+  };
 }
 
 /**
