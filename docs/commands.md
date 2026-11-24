@@ -871,7 +871,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
-  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
+  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

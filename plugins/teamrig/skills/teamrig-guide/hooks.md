@@ -18,6 +18,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 | `PostToolUse` on `Bash`, `PowerShell`, `Read` and `Grep` | `hook secret-redact` | Replaces each secret a call's result holds before Claude and the transcript see it, and tells the session which kinds it held and the task it filed to rotate each ([the secret redactor](#after-a-tool-call-the-secret-redactor)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook exec-guard` | Refuses a privileged command's review run as another session or the owner, any `exec` call through a client that is no install of the plugin, or one changed after its build, every `owner note` or `owner next`, which act as the owner, a settings writer's `--yes` write, which changes a permission, every `hook` command, which takes its tab from its stdin, a bound tab's `start` or `inbox read` as another session, a line that changes `$CLAUDECODE`, a shell fed its commands from a pipe, a raw `gh` write on one of the team's repositories, and a raw read on one of their owners ([the exec guard](#before-a-shell-command-the-exec-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook pass-record-guard` | Refuses a session's own write of a tree's pass record, the proof that lets a push or a merge skip the checks the tree passed ([the pass-record guard](#before-a-write-or-a-shell-command-the-pass-record-guard)) |
+| `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook install-guard` | Refuses a session's own write of teamrig's install in the kit home or a host's hook files, which every guard runs from ([the install guard](#before-a-write-or-a-shell-command-the-install-guard)) |
 | `PreToolUse` on `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` and `NotebookEdit` | `hook service-role-guard` | Refuses a session's `teamrig roles grant` or `revoke` (the owner runs it from their own terminal), and refuses a session's own write of `serviceRoles` in the team config ([the service-role guard](#before-a-write-or-a-shell-command-the-service-role-guard)) |
 | `PreToolUse` on `Bash` and `PowerShell` | `hook readonly-allow` | With `readonlyShell.enabled`, lets a line whose every command provably only reads run without a permission prompt ([the read-only allow](#before-a-shell-command-the-read-only-allow)) |
 | `PreToolUse` on `Bash` | `hook route-allow` | With `prompts.hookAsks: refuse` (the default) and `prompts.routeAllow` on, lets a line that runs one of the session's own jobs (`teamrig merge`, `deploy`, `exec request`, `worktree remove`, `pr approve` or `pr merge` at the head your leader approved, a teamrig command that only reads, a `git commit` with its hooks), alone or piped into one read-only filter, run with no permission check, once every teamrig guard passed it ([No teamrig hook asks a person](#no-teamrig-hook-asks-a-person)); with `prompts.routeAllow` on, whatever asks say, lets a service role's holder run the role's `teamrig issue close` or `issue migrate --yes` from its own tab, up to a daily cap, or a queued ship or merge of its own task branch with the team's ship tool ([the service-role allow](#before-a-shell-command-the-service-role-allow)) |
@@ -922,6 +923,23 @@ searching code. The reason: "teamrig pass-record guard: this Write writes .git/l
 It has no setting, and a missing or broken config keeps it on. It reads only the call, so it cannot see a script the
 line starts (`node write-record.js`), a path built when the line runs, or a write by a program that is not a Claude
 tool: while sessions and the runner share one account, it stops a slip, not a determined session.
+
+## Before a write or a shell command: the install guard
+
+Every session's guards run from teamrig's own install in the kit home (`versions`, `bin`, `current`, `current.json`
+and `installs.json`), and a host other than Claude Code starts them from its hook files (Codex CLI's `hooks.json` and
+`config.toml`). A session that rewrote either would turn every guard off for the whole team. Before Claude runs a
+Write, Edit, MultiEdit or NotebookEdit call, `hook install-guard` refuses one whose file reaches a guarded place by any
+spelling (an 8.3 short name, trailing dots, a Git Bash drive, a link); before a Bash or PowerShell call, one whose line
+names a guarded place at all, its reads too, since a shell line's writes cannot be told from its reads. The kit's
+`teams/` folder and the Read tool stay open. The reason: "teamrig install guard: this Write writes
+<kit home>/current.json. the teamrig install (<kit home>) is what every session's guards run from, so only teamrig
+writes it: run `teamrig` from PATH, whose install and upgrade write it. Read it with the Read tool; do not retry this
+or route around it: the lead takes the change." For a hook file the writer is `teamrig setup hooks`.
+
+It has no setting and reads no team config, so a missing or broken config keeps it on. Like the pass-record guard it
+reads only the call: a script the session writes and starts still reaches the files, as sessions and the owner share
+one account.
 
 ## Before a write or a shell command: the service-role guard
 
@@ -1991,7 +2009,7 @@ submitted never moves it, and a failed write leaves the turn log and the prompt 
 
 Claude Code lets a tool call through when a `PreToolUse` command hook ends with any exit code but 0 or 2, or
 outlives its timeout, so a guard that breaks would stop guarding with no sign. The guards that can refuse a call
-(`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `service-role-guard`, `cold-send`,
+(`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `install-guard`, `service-role-guard`, `cold-send`,
 `helper-gate` and
 `picker-guard`) therefore run through `dist/cli/guard-main.js`, a runner that loads the CLI itself on a worker
 thread and blocks the call (exit 2) when the guard:

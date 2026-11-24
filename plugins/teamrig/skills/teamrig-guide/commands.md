@@ -8305,6 +8305,25 @@ teamrig hook pass-record-guard < pre-tool-use.json
 Output: nothing for a call that does not reach the records, outside a team's projects, or for input that is not a
 hook payload; otherwise a JSON permission decision `deny` with the reason naming the file or the line.
 
+### teamrig hook install-guard
+
+Before a Write, Edit, MultiEdit, NotebookEdit, Bash or PowerShell call, refuses one that would write teamrig's own
+install in the kit home (its `versions`, `bin`, `current`, `current.json` and `installs.json`) or the hook files of a
+host teamrig ships with (Codex CLI's `hooks.json` and `config.toml`): a file tool whose path reaches one by any
+spelling, or a shell line naming one at all. The kit's `teams/` and the Read tool stay open. See
+[Hooks and permissions](hooks.md#before-a-write-or-a-shell-command-the-install-guard).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook install-guard < pre-tool-use.json
+```
+
+Output: nothing for a call that does not reach a guarded file, or for input that is not a hook payload; otherwise a
+JSON permission decision `deny` with the reason naming the file or the line.
+
 ### teamrig hook service-role-guard
 
 Before a Bash or PowerShell call, refuses a line that runs `teamrig roles grant` or `revoke`, and one
