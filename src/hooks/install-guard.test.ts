@@ -154,6 +154,50 @@ describe('installGuardReply: shell lines', () => {
     assert.equal(await decisionOf(call('Bash', { command: 'echo x > installs.json' }, 'C:/u/.teamrig')), 'deny');
   });
 
+  it('each shell spelling resolves to the guarded path: dot segments, quotes inside a name, escapes and variables', async () => {
+    const bash = ['echo 0.0.1 > ~/.teamrig/teams/../current', `echo 0.0.1 > ~/.teamrig/cu''rrent`, 'echo 0.0.1 > ~/.teamrig/"current"', 'cat C:/u/.codex/./hooks.json'];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    const powershell = [
+      "Set-Content ~\\.teamrig\\`current '0.0.1'",
+      "Set-Content ${env:USERPROFILE}\\.teamrig\\current '0.0.1'",
+      "Set-Content $HOME\\.teamrig\\current '0.0.1'",
+      "Set-Content '~\\.teamrig\\teams\\..\\current' '0.0.1'",
+    ];
+    for (const command of powershell) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+  });
+
+  it('each shell spelling resolves to the guarded path from a cwd inside the kit home', async () => {
+    assert.equal(await decisionOf(call('Bash', { command: 'echo 0.0.1 > ../../current' }, 'C:/u/.teamrig/teams/t')), 'deny');
+    assert.equal(await decisionOf(call('PowerShell', { command: "Set-Content ..\\..\\installs.json '{}'" }, 'C:/u/.teamrig/teams/t')), 'deny');
+  });
+
+  it('refuses a glob or a substitution that can complete to a guarded entry', async () => {
+    for (const command of ['cp evil.toml ~/.codex/conf*.toml', 'rm ~/.teamrig/*', 'rm ~/.tea*/current', 'cp a ~/.teamrig/$(echo current)', 'cp a ~/.codex/hooks.[j]son']) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    assert.equal(await decisionOf(call('PowerShell', { command: "Set-Content ~\\.teamrig\\curr* '0.0.1'" })), 'deny');
+  });
+
+  it('passes a glob, a substitution or a dot segment that stays outside the guarded entries', async () => {
+    const lines = ['ls ~/.teamrig/teams/*', 'ls ~/.teamrig/t*', 'echo ~/$(date)', 'cat ~/.codex/sessions/*.jsonl', 'git status', 'ls ~/*'];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+    assert.equal(await decisionOf(call('Bash', { command: 'echo hi > ../t2/notes.md' }, 'C:/u/.teamrig/teams/t')), undefined);
+    assert.equal(await decisionOf(call('PowerShell', { command: "Set-Content ..\\t2\\notes.md 'hi'" }, 'C:/u/.teamrig/teams/t')), undefined);
+  });
+
+  it('names no path past the place in the reason of a word it resolves', async () => {
+    const reply = await decide(call('Bash', { command: 'echo 0.0.1 > ~/.teamrig/teams/../current' }));
+    assert.ok(reply !== undefined);
+    assert.ok(reply.reason.includes('(C:/u/.teamrig)'));
+    assert.ok(!reply.reason.includes('current'), reply.reason);
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });

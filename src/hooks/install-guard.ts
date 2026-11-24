@@ -1,8 +1,9 @@
 import { posix, win32 } from 'node:path';
 import type { EditCall, HookEvent, HookReply, ShellCall } from '../ports/host/index.ts';
-import { parseShell } from '../push-guard/tokenizer.ts';
+import { parseShell, type ShellWord } from '../push-guard/tokenizer.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
+import { isPattern, REST, segmentRegExp, wordPathOf } from './shell-word-path.ts';
 
 /**
  * The install guard (T5278 C1, security verdict T5292): every session's guards run from teamrig's own install (the
@@ -193,12 +194,121 @@ function folderSpellings(folderKey: string, cwd: string, env: InstallGuardEnv): 
   return spellings;
 }
 
+/** The words of a reading, redirection targets included, as the tokenizer reads them (quotes and escapes gone). */
+function shellWordsOf(reading: string, call: ShellCall): readonly ShellWord[] {
+  return parseShell(reading, call.dialect).commands.flatMap((command) => [
+    ...command.words,
+    ...command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target])),
+  ]);
+}
+
 /** The static words of a reading, redirection targets included, each as the shell would hand it on. */
 function wordsOf(reading: string, call: ShellCall): readonly string[] {
-  return parseShell(reading, call.dialect).commands.flatMap((command) => [
-    ...command.words.map((word) => word.text),
-    ...command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target.text])),
-  ]);
+  return shellWordsOf(reading, call).map((word) => word.text);
+}
+
+/** True when a word's segment can be the target's: a pattern that matches it, or its name, short name or trailing dots. */
+function segmentReaches(segment: string, target: string, flags: string): boolean {
+  return isPattern(segment) ? segmentRegExp(segment, flags).test(target) : new RegExp(`^${segmentPattern(target)}$`, flags).test(segment);
+}
+
+/**
+ * True when a pattern path's segments can reach the target's: each of the target's segments matched in turn. A
+ * segment the running shell ends (a substitution) reaches the target only in the place of its entry, so one right
+ * after a guarded folder reaches its entries, but one after the home does not reach the kit's.
+ */
+function patternReaches(segments: readonly string[], target: readonly string[], flags: string): boolean {
+  for (const [index, wanted] of target.entries()) {
+    const segment = segments[index];
+    if (segment === undefined) {
+      return false;
+    }
+    if (segment.includes(REST)) {
+      return index === target.length - 1 && segmentReaches(segment, wanted, flags);
+    }
+    if (!segmentReaches(segment, wanted, flags)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The guarded place a pattern path can reach, or undefined: its folder part up to the first mark resolved as a file
+ * tool's path is (against the cwd, to its real form), then the rest walked segment by segment, `..` taking the one
+ * before, and held against each guarded entry's segments (T5355 S2).
+ */
+async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): Promise<GuardedPlace | undefined> {
+  const paths = pathsOf(env.platform);
+  const native = nativePathOf(path, env.platform);
+  const mark = native.search(/[\u{E000}-\u{E002}]/u);
+  const cut = Math.max(native.lastIndexOf('/', mark), native.lastIndexOf('\\', mark));
+  const folder = paths.resolve(cwd, native.slice(0, cut + 1));
+  const segments = ((await realKeyOf(folder, env)) ?? keyOf(folder, env)).split('/');
+  for (const segment of native.slice(cut + 1).split(/[\\/]+/)) {
+    if (segment === '' || segment === '.') {
+      continue;
+    }
+    if (segment === '..') {
+      segments.splice(Math.max(1, segments.length - 1));
+      continue;
+    }
+    segments.push(segment);
+    if (segment.includes(REST)) {
+      break;
+    }
+  }
+  const flags = env.platform === 'win32' ? 'i' : '';
+  for (const place of env.places) {
+    for (const folderKey of await folderKeysOf(place, env)) {
+      const head = folderKey.split('/');
+      if (place.entries.some((entry) => patternReaches(segments, [...head, entry], flags))) {
+        return place;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** The guarded place a word's path reaches, with how, or undefined: a static word as a file tool's path, else as a pattern. */
+async function wordReach(path: string, cwd: string, env: InstallGuardEnv): Promise<{ readonly place: GuardedPlace; readonly how: string } | undefined> {
+  if (isPattern(path)) {
+    const place = await placeOfPattern(path, cwd, env);
+    return place === undefined ? undefined : { place, how: 'a word that only the running shell completes, inside it' };
+  }
+  if (env.platform === 'win32' && aliasFormOf(path) !== undefined) {
+    const place = env.places.find((candidate) => namesPlacePart(path, candidate, env.platform));
+    return place === undefined ? undefined : { place, how: 'a path to it in a spelling the guard cannot hold to one file' };
+  }
+  const absolute = pathsOf(env.platform).resolve(cwd, nativePathOf(path, env.platform));
+  const real = await realKeyOf(absolute, env);
+  const place = await placeOfKeys([keyOf(absolute, env), ...(real === undefined ? [] : [real])], env);
+  return place === undefined ? undefined : { place, how: 'a path in it' };
+}
+
+/**
+ * The refusal of a shell line one of whose words reaches a guarded place once the shell has read it (T5355 S1):
+ * quotes and escapes removed, `~` and the environment's variables expanded, resolved against the cwd. This holds the
+ * spellings the line's raw text hides (`..`, a quote inside a name, a glob, a path relative to any cwd).
+ */
+async function wordsReply(call: ShellCall, cwd: string, env: InstallGuardEnv): Promise<HookReply | undefined> {
+  const readings = call.readings.length === 0 && call.command !== undefined ? [call.command] : call.readings;
+  const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
+  const seen = new Set<string>();
+  for (const reading of readings) {
+    for (const word of shellWordsOf(reading, call)) {
+      const path = wordPathOf(word, call.dialect, wordEnv);
+      if (path === undefined || seen.has(path)) {
+        continue;
+      }
+      seen.add(path);
+      const reach = await wordReach(path, cwd, env);
+      if (reach !== undefined) {
+        return refusal(reasonOf(`this ${call.name} line names ${reach.how}, and a shell line's writes cannot be told from its reads`, reach.place));
+      }
+    }
+  }
+  return undefined;
 }
 
 /** Why a shell line reaches a guarded place, or undefined when it names none. */
@@ -240,5 +350,5 @@ export async function installGuardReply(event: HookEvent, env: InstallGuardEnv):
       return refusal(reasonOf(reach, place));
     }
   }
-  return undefined;
+  return wordsReply(call, cwd, env);
 }
