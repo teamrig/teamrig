@@ -334,6 +334,21 @@ describe('installGuardReply: shell lines', () => {
     assert.match(deep?.reason ?? '', /more than 8 deep/);
   });
 
+  it("reads cmd's caret escape in a line the caller hands cmd unquoted (T5366 R7)", async () => {
+    const powershell = [
+      'cmd /c rmdir /s /q %USERPROFILE%\\.team^rig',
+      'cmd /c rmdir /s /q %USERPROFILE%\\.teamri^g',
+      "Start-Process cmd -ArgumentList '/c rmdir /s /q %USERPROFILE%\\.team^rig'",
+      "Start-Process cmd -ArgumentList '/c','rmdir','/s','/q','%USERPROFILE%\\.team^rig'",
+      "Start-Process cmd '/c rmdir /s /q %USERPROFILE%\\.team^rig'",
+    ];
+    for (const command of powershell) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+    assert.equal(await decisionOf(call('Bash', { command: 'cmd //c rmdir //s //q %USERPROFILE%\\\\.team^rig' })), 'deny');
+    assert.equal(await decisionOf(call('PowerShell', { command: 'cmd /c rmdir /s /q %USERPROFILE%\\.team^rig-old' })), undefined);
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });

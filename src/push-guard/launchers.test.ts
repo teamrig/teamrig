@@ -414,6 +414,9 @@ describe('launch: shells handed a command line', () => {
       ['cmd /cgit push', 'script(cmd) git push'],
       ['cmd /k git push', 'script(cmd) git push'],
       ['cmd /q /c git commit -m "a b"', 'script(cmd) git commit -m "a b"'],
+      // The caller quotes only a blank, so cmd reads the caret as its escape: the line runs `rmdir xy`.
+      ['cmd /c rmdir x^y', 'script(cmd) rmdir x^y'],
+      ["cmd /c git commit -m ''", 'script(cmd) git commit -m ""'],
       ['cmd /c', 'nothing'],
       ['cmd', STDIN],
       ['cmd x', STDIN],
