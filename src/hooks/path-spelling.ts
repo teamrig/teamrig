@@ -43,10 +43,16 @@ export function openedNameOf(path: string): string {
   return (lastSegmentOf(path).split(':')[0] ?? '').replace(/[. ]+$/, '');
 }
 
-/** A Git Bash drive path's head, `/c/`, which Windows tools read as the drive `c:/`. */
-const MSYS_DRIVE = /^\/([a-z])(?=\/)/i;
+/**
+ * A drive path's head as a Unix shell on Windows spells it: Git Bash's `/c/` and WSL's `/mnt/c/` (what a `wsl`
+ * launch reads the Windows drive as), each the drive `c:/`, a bare head (`/c`, `/mnt/c`) its root.
+ */
+const UNIX_DRIVE = /^\/(?:mnt\/)?([a-z])(?:\/|$)/i;
 
-/** A path as the platform's own tools read it: on Windows a Git Bash `/c/` drive is the drive `c:/`. */
+/**
+ * A path as the platform's own tools read it: on Windows a Unix shell's drive head is the drive. A `/mnt/c/` read
+ * under Git Bash, where no such folder is made, only makes a guard refuse more, never less.
+ */
 export function nativePathOf(path: string, platform: NodeJS.Platform): string {
-  return platform === 'win32' ? path.replace(MSYS_DRIVE, '$1:') : path;
+  return platform === 'win32' ? path.replace(UNIX_DRIVE, '$1:/') : path;
 }

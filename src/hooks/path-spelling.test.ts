@@ -35,4 +35,12 @@ describe('nativePathOf', () => {
     assert.equal(nativePathOf('/c/kit/x', 'win32'), 'c:/kit/x');
     assert.equal(nativePathOf('/c/kit/x', 'linux'), '/c/kit/x');
   });
+
+  it('reads a WSL /mnt drive as the Windows drive, and a bare drive head as its root', () => {
+    assert.equal(nativePathOf('/mnt/c/kit/x', 'win32'), 'c:/kit/x');
+    assert.equal(nativePathOf('/mnt/c', 'win32'), 'c:/');
+    assert.equal(nativePathOf('/c', 'win32'), 'c:/');
+    assert.equal(nativePathOf('/mnt/cd/x', 'win32'), '/mnt/cd/x');
+    assert.equal(nativePathOf('/mnt/c/kit/x', 'linux'), '/mnt/c/kit/x');
+  });
 });

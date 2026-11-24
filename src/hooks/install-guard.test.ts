@@ -136,6 +136,8 @@ describe('installGuardReply: shell lines', () => {
       'rm -r ~/.teamrig/versions',
       'cat C:/u/TEAMRI~1/CURREN~1.JSO',
       'echo x > /c/u/.teamrig/current',
+      'wsl rm -rf /mnt/c/u/.t*',
+      'wsl -d Ubuntu rm -rf /mnt/c/u/.teamrig',
       'cp a "$TEAMRIG_HOME/installs.json"',
       'cp a ${TEAMRIG_HOME}/bin/teamrig',
       'echo {} > "$USERPROFILE/.codex/hooks.json"',
