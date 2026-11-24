@@ -5319,11 +5319,13 @@ git cannot restore or what guards the session: a file with uncommitted changes, 
 the session has not read, `rm -rf` of a folder, git commands that discard work or history, another session's
 worktree, a main checkout, and agent config and gates (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks). The delivery
 line names the whole team, never a list of sessions, so a new hire needs no edit, and takes the repositories from
-the config when it is written (`github.repos`, and the names in `delivery.repos`). It states only what each command
-checks before it writes: `teamrig merge` merges the branch of a worktree of those repositories as `pushGuard` says,
+the config when it is written (`github.repos`, and the names in `delivery.repos`). It covers a call only under the
+calling session's own id, never one naming another session. It states only what each command checks before it writes: `teamrig merge` merges the branch of a worktree of those repositories as `pushGuard` says,
 `teamrig pr approve` and `teamrig pr merge` act only on a change request whose task the caller owns and whose head
-the caller's leader approved, `teamrig issue migrate` opens issues only for tasks the caller may set, and `teamrig ci
-rerun` starts only a failed run again; all write with the key saved for the repository's owner. It covers nothing
+the caller's leader approved, `teamrig issue migrate` opens public issues only for tasks the caller may set, and only from a
+row file the session read in full with its preview (a private security finding never goes in one), and `teamrig ci
+rerun` starts only a failed run again; all but `teamrig merge`, which pushes with git's own credentials, write with
+the key saved for the repository's owner. It covers nothing
 those checks refuse, nor a write by any other tool on those repositories. After a repository rename, run install
 again: `teamrig check` raises AUTOMODE-STALE until you do. A plugin cannot ship these (its settings take only
 `agent` and `subagentStatusLine`), so this writes them into your

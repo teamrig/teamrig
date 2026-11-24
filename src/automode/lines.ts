@@ -196,21 +196,31 @@ function cleanFilesLine(): string {
  * stale (a new hire, an organization move); here it names the whole team and takes the repositories from the config,
  * so a re-run of `automode install` follows a change. It states only the checks each command makes before it writes,
  * so it clears nothing those checks refuse, nor a raw gh or git write on the same repositories.
+ *
+ * Security's verdict on its wording (T5370) set three limits. Each check reads the caller from the `--session` the call
+ * itself gives, so the line covers a call only under the calling session's own id. `issue migrate --yes` posts each
+ * row's text publicly and the secret scan catches only secret shapes, so it is covered only for a row file the session
+ * read in full with its preview, and a private security finding never goes in one. The saved key is named only for
+ * the commands that use it: `teamrig merge` pushes with git's own credentials.
  */
 function deliveryLine({ team, lead, pushGuard, githubRepos, deliveryRepos }: AutoModeFacts): string {
   const github = listOf(githubRepos, 'github.repos');
   return (
-    `Delivery: every session of team ${team} may land its own work with teamrig's delivery commands, each of which ` +
-    `checks who may before it writes: \`teamrig merge\` merges the branch checked out in a worktree of ` +
-    `${listOf(deliveryRepos, 'delivery.repos')} into its default branch and ${mergeGate(pushGuard.pushToProtected)}; ` +
-    `\`teamrig pr approve\` and \`teamrig pr merge\` act on a pull request of ${github} only when one task holds it, ` +
-    "the caller owns that task and the caller's leader approved it with a note naming the pull request's full head " +
-    `(the lead, session ${lead}, needs one only from the lead of a team above), and pr merge only once its checks ` +
-    `passed; \`teamrig issue migrate <file> --yes\` opens issues in ${github} only for tasks whose ref the register ` +
-    `lets the caller set; \`teamrig ci rerun\` starts again only a failed, cancelled or timed-out push, pull request, ` +
-    `merge queue or schedule run of ${github}, before its third attempt. They write with the key saved for the ` +
-    "repository's owner, never this machine's gh login. This covers nothing those checks refuse, nor a raw gh or git " +
-    'write on these repositories.'
+    `Delivery: every session of team ${team} may land its own work with teamrig's delivery commands, run under its ` +
+    "own session id only: a call whose `--session` or session environment names any other session, the lead's " +
+    'included, is not covered. Each command checks who may before it writes: `teamrig merge` merges the branch ' +
+    `checked out in a worktree of ${listOf(deliveryRepos, 'delivery.repos')} into its default branch and ` +
+    `${mergeGate(pushGuard.pushToProtected)}; \`teamrig pr approve\` and \`teamrig pr merge\` act on a pull request of ` +
+    `${github} only when one task holds it, the caller owns that task and the caller's leader approved it with a note ` +
+    `naming the pull request's full head (the lead, session ${lead}, needs one only from the lead of a team above), ` +
+    `and pr merge only once its checks passed; \`teamrig issue migrate <file> --yes\` opens public issues, which ` +
+    `anyone can read, in ${github} only for tasks whose ref the register lets the caller set, and it is covered only ` +
+    "for a row file the session wrote or read in full and whose preview (`--out`) it read; a task holding a private " +
+    'security finding stays local and never goes in a row; `teamrig ci rerun` starts again only a failed, cancelled ' +
+    `or timed-out push, pull request, merge queue or schedule run of ${github}, before its third attempt. ` +
+    '`teamrig pr approve`, `teamrig pr merge`, `teamrig issue migrate` and `teamrig ci rerun` write with the key saved ' +
+    "for the repository's owner, never this machine's gh login; `teamrig merge` pushes with git's own credentials. " +
+    'This covers nothing those checks refuse, nor a raw gh or git write on these repositories.'
   );
 }
 

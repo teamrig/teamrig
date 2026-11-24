@@ -47,13 +47,17 @@ describe('kitLines', () => {
         'and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted ' +
         'changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked ' +
         "or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).",
-      "[teamrig alpha] Delivery: every session of team alpha may land its own work with teamrig's delivery commands, each of which checks who may before it writes: " +
+      "[teamrig alpha] Delivery: every session of team alpha may land its own work with teamrig's delivery commands, run under its own session id only: " +
+        "a call whose `--session` or session environment names any other session, the lead's included, is not covered. Each command checks who may before it writes: " +
         '`teamrig merge` merges the branch checked out in a worktree of app into its default branch and pushes as the protected-branches line says; ' +
         '`teamrig pr approve` and `teamrig pr merge` act on a pull request of acme/app, acme/site only when one task holds it, the caller owns that task and ' +
         "the caller's leader approved it with a note naming the pull request's full head (the lead, session boss, needs one only from the lead of a team above), and pr merge only once its checks passed; " +
-        '`teamrig issue migrate <file> --yes` opens issues in acme/app, acme/site only for tasks whose ref the register lets the caller set; ' +
+        '`teamrig issue migrate <file> --yes` opens public issues, which anyone can read, in acme/app, acme/site only for tasks whose ref the register lets the caller set, ' +
+        'and it is covered only for a row file the session wrote or read in full and whose preview (`--out`) it read; ' +
+        'a task holding a private security finding stays local and never goes in a row; ' +
         '`teamrig ci rerun` starts again only a failed, cancelled or timed-out push, pull request, merge queue or schedule run of acme/app, acme/site, before its third attempt. ' +
-        "They write with the key saved for the repository's owner, never this machine's gh login. " +
+        "`teamrig pr approve`, `teamrig pr merge`, `teamrig issue migrate` and `teamrig ci rerun` write with the key saved for the repository's owner, never this machine's gh login; " +
+        "`teamrig merge` pushes with git's own credentials. " +
         'This covers nothing those checks refuse, nor a raw gh or git write on these repositories.',
     ]);
   });
@@ -75,6 +79,21 @@ describe('kitLines', () => {
     const line = deliveryOf({ ...FACTS, githubRepos: [], deliveryRepos: [] });
     assert.match(line, /a worktree of no repository \(delivery\.repos is empty\)/);
     assert.match(line, /a pull request of no repository \(github\.repos is empty\) only when/);
+  });
+
+  it("keeps the delivery line to the caller's own session id, public issues from read rows, and the saved key off merge (T5370)", () => {
+    const line = deliveryOf(FACTS);
+    for (const limit of [
+      'run under its own session id only',
+      "names any other session, the lead's included, is not covered",
+      'opens public issues, which anyone can read',
+      'a row file the session wrote or read in full and whose preview (`--out`) it read',
+      'a private security finding stays local and never goes in a row',
+      "`teamrig merge` pushes with git's own credentials",
+    ]) {
+      assert.ok(line.includes(limit), `the delivery line lacks ${limit}`);
+    }
+    assert.doesNotMatch(line, /They write with the key saved/);
   });
 
   it('keeps the clean-files line from clearing what git cannot restore or what guards the session', () => {
