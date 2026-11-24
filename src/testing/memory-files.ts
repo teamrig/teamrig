@@ -105,6 +105,19 @@ export class MemoryFiles implements Files {
     return this.contents.delete(key);
   }
 
+  /** Removes a folder with every file and folder below it, as a recursive removal on disk would; for a fake tree port. */
+  removeAll(path: string): void {
+    const root = normalisePath(path);
+    for (const key of [...this.contents.keys()].filter((file) => isAtOrBelow(file, root))) {
+      this.contents.delete(key);
+      this.changedBy.delete(key);
+      this.changedAt.delete(key);
+    }
+    for (const folder of [...this.folders].filter((made) => isAtOrBelow(made, root))) {
+      this.folders.delete(folder);
+    }
+  }
+
   async move(from: string, to: string): Promise<boolean> {
     const source = normalisePath(from);
     const target = normalisePath(to);
