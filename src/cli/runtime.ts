@@ -25,6 +25,7 @@ import type { HookRunner } from '../deploy/hooks.ts';
 import type { PackageRegistry } from '../package-guard/registry.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
+import type { KitTree } from '../kit/kit-tree.ts';
 import type { Processes } from '../open/processes.ts';
 import type { SessionProcesses } from '../open/session-processes.ts';
 import type { CommitLog } from '../push-guard/commit-size.ts';
@@ -130,6 +131,8 @@ export interface CliRuntime {
   readonly worktrees: WorktreePorts;
   /** The shutdown log and the countdown of the restore after a reboot. */
   readonly restore: RestorePorts;
+  /** The folder copies a session start's self-install into the kit home's `versions/` takes (kit/kit-versions.ts). */
+  readonly kitTree: KitTree;
   /** The working tree `teamrig queue --pre-push` checks: clean or changed, and HEAD's tree. */
   readonly trees: TreeState;
   /** The git steps `teamrig merge` takes. */

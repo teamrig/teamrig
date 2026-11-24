@@ -6,6 +6,7 @@ import type { Env } from '../core/home.ts';
 import { MS_PER_HOUR } from '../core/time.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
+import { installKitVersion, kitCurrentPath, kitVersionFolder, useKitVersion } from '../kit/kit-versions.ts';
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import { cliLauncherFolder, cliLaunchers } from '../restore/cli-launcher.ts';
@@ -22,6 +23,9 @@ import { FakeWebhook } from '../testing/fake-webhook.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import { hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
+import { InlineMutex } from '../testing/inline-mutex.ts';
+import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
+import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import { treeHarness } from '../testing/team-tree.ts';
 import { apiErrorLine, promptLine, transcript } from '../testing/transcript-lines.ts';
 
@@ -555,5 +559,53 @@ describe('hook restore-track: the launcher refresh', () => {
     assert.deepEqual([result.code, result.stdout, result.stderr], [0, [], []]);
     assert.deepEqual([await kit.files.read(CHECK.path), await kit.files.read(RECORD)], [OLDER_TEXT, OLDER_RECORD]);
     assert.equal((await entryOf(kit))?.state, 'ready');
+  });
+});
+
+describe('hook restore-track: the kit self-install (T5278)', () => {
+  const PLUGIN_ROOT = '/plugins/teamrig';
+  const SELF = { node: '/usr/bin/node', script: join(PLUGIN_ROOT, 'dist', 'cli', 'main.js'), execArgv: [] };
+
+  async function startFrom(kit: CliHarness, tree: MemoryKitTree, source = 'startup'): Promise<CliResult> {
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source }), env: LAUNCHED, self: SELF, kitTree: tree });
+    assert.deepEqual([result.code, result.stderr], [0, []]);
+    return result;
+  }
+
+  it('copies the running plugin into versions/<v>, names it current and logs it', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, tree);
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${KIT_VERSION}\n`);
+    assert.equal(await kit.files.read(join(kitVersionFolder(KIT, KIT_VERSION), 'dist', 'cli', 'main.js')), kitReleaseMain(KIT_VERSION));
+    assert.ok(((await kit.files.read(restoreLogPath(KIT))) ?? '').includes(` kit: none -> ${KIT_VERSION}: current\n`));
+    assert.equal((await entryOf(kit))?.state, 'ready', 'the entry is recorded beside the install');
+  });
+
+  it('copies nothing at the start a compaction makes, or from a plugin with no integrity list', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    await kit.files.write(SELF.script, kitReleaseMain(KIT_VERSION));
+    await startFrom(kit, tree);
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, tree, 'compact');
+    assert.deepEqual([tree.copies, await kit.files.read(kitCurrentPath(KIT))], [[], undefined]);
+  });
+
+  it('says at each start, to the person and the model, that a pinned install left a newer version unused', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    const older = '0.1.0';
+    await writeKitRelease(kit.files, '/plugins/older', older);
+    await installKitVersion({ files: kit.files, tree, kitHome: KIT, from: '/plugins/older', version: older, source: { kind: 'claude-code-plugin' }, lock: new InlineMutex() });
+    await useKitVersion({ files: kit.files, tree, kitHome: KIT }, { kind: 'version', version: older });
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    for (let start = 0; start < 2; start += 1) {
+      const { stdout } = await startFrom(kit, tree);
+      assert.equal(stdout.length, 1, stdout.join('\n'));
+      assert.ok((stdout[0] ?? '').includes(`teamrig pinned at ${older}; ${KIT_VERSION} is installed`), stdout[0]);
+    }
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${older}\n`);
   });
 });

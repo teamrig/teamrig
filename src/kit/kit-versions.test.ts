@@ -2,8 +2,9 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { LockBusyError, type Mutex } from '../core/lock.ts';
-import { CLIENT_MANIFEST, clientFileHash, clientManifestText } from '../exec/client-integrity.ts';
+import { CLIENT_MANIFEST, clientFileHash } from '../exec/client-integrity.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
+import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import {
@@ -24,18 +25,6 @@ const KIT = '/home/user/.teamrig';
 const PLUGIN = '/home/user/.claude/plugins/cache/teamrig/teamrig';
 const SOURCE: KitSource = { kind: 'claude-code-plugin' };
 
-/** A built plugin folder of `version` at `root`: its client files, plugin.json and the integrity list over them. */
-async function writeRelease(files: MemoryFiles, root: string, version: string): Promise<void> {
-  const client = { 'bin/teamrig': '#!/bin/sh\n', 'dist/cli/main.js': `export const v = '${version}';\n`,'hooks/hooks.json': '{}\n', 'package.json': '{"type":"module"}\n' };
-  for (const [path, text] of Object.entries(client)) {
-    await files.write(join(root, path), text);
-  }
-  await files.write(join(root, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'teamrig', version }));
-  await files.write(join(root, 'skills', 'guide', 'SKILL.md'), '# guide\n');
-  const list = new Map(Object.entries(client).map(([path, text]) => [path, clientFileHash(text)]));
-  await files.write(join(root, CLIENT_MANIFEST), clientManifestText(list));
-}
-
 class BusyMutex implements Mutex {
   async run<T>(): Promise<T> {
     throw new LockBusyError('install.lock', 0);
@@ -52,7 +41,7 @@ describe('kit versions', () => {
     files = new MemoryFiles();
     tree = new MemoryKitTree(files);
     for (const version of ['0.507.0', '0.508.0', '0.509.0', '0.510.0', '0.511.0']) {
-      await writeRelease(files, join(PLUGIN, version), version);
+      await writeKitRelease(files, join(PLUGIN, version), version);
     }
   });
 
@@ -118,7 +107,7 @@ describe('kit versions', () => {
       await install('0.508.0');
       await files.write(join(kitVersionFolder(KIT, '0.509.0'), 'dist', 'cli', 'main.js'), 'stale\n');
       assert.deepEqual(await install('0.509.0'), { kind: 'installed', version: '0.509.0', previous: '0.508.0' });
-      assert.equal(files.get(join(kitVersionFolder(KIT, '0.509.0'), 'dist', 'cli', 'main.js')), "export const v = '0.509.0';\n");
+      assert.equal(files.get(join(kitVersionFolder(KIT, '0.509.0'), 'dist', 'cli', 'main.js')), kitReleaseMain('0.509.0'));
     });
 
     it('refuses a version that is no release version, a path above all', async () => {
