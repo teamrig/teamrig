@@ -1032,9 +1032,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
       worktree, delivering one's own work through teamrig's merge, pull request, issue and CI commands on
-      the config's repositories) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
-      own allow rules for the commands that touch only the team's files, taking out only rules it wrote
-      that are no longer synced; run it again after a config change or an upgrade; without --yes it shows
+      the config's repositories) into Claude Code's autoMode.environment, the facts auto mode trusts, and
+      adds teamrig's own allow rules for the commands that touch only the team's files, taking out only
+      rules it wrote that are no longer synced; run it again after a config change or an upgrade (check
+      flags AUTOMODE-STALE until then); without --yes it shows
       the change and writes nothing
   automode uninstall [--yes]   takes the team's lines back out, leaving every other line and teamrig's
       allow rules

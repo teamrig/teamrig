@@ -769,7 +769,11 @@ not call `teamrig stamp commit`, with the line to add (`teamrig stamp commit "$1
 read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
-`disableAllHooks`, which stops every teamrig hook, the secret guard's included, FIVE-HOUR: the account's five-hour
+`disableAllHooks`, which stops every teamrig hook, the secret guard's included, AUTOMODE-STALE: the team's
+`[teamrig <team>]` lines in Claude Code's `autoMode.environment` differ from what `teamrig automode install` writes now
+(a config change such as a repository rename, or an upgrade that adds a line), so auto mode reads the team as it was;
+`teamrig automode install` shows the change, and writing it with `--yes` is the owner's call, as it changes the
+person's permission settings; a machine with none of the team's lines never shows it, FIVE-HOUR: the account's five-hour
 window has reached 80% [budget.fiveHourWarnPct] or rises fast enough to fill before it resets, and at 100% every
 session stalls until that reset; it is raised once a window, and a plan with no such window never shows it,
 RESET-EXPIRING: a reset grant in [budget.resets] with uses left expires within 14 days, and one not spent by then is
@@ -5302,18 +5306,26 @@ A step no longer needed prints `UNCHANGED <id> is not needed now`; an unknown id
 ### teamrig automode install
 
 Writes the team's lines into Claude Code's `autoMode.environment` setting on this machine: the facts auto mode's
-classifier takes as true when it decides whether a tool call may run without asking. There are six, each starting
+classifier takes as true when it decides whether a tool call may run without asking. There are seven, each starting
 with the team's tag `[teamrig <team>] `: the protected branches and what a push to one does (from the config's
 `pushGuard` and `roles.lead`), the register commands every session runs (they write only under the team's folder),
 what `teamrig queue` and `teamrig test` wrap (nothing is granted: the command after `--` is judged on its own),
 that every session may run `teamrig worktree remove`, which removes only the worktrees the session may remove,
 that every session may rebase its own branch in its own worktree onto the fresh default branch and push it back to
-that branch with `--force-with-lease` (a protected branch is never rebased), and that in its own worktree editing,
-`git rm` or `git mv` of a clean tracked file (git restores it) is ordinary code editing, not destruction. That last
-line keeps out what git cannot restore or what guards the session: a file with uncommitted changes, an untracked or
-ignored one, a script the session has not read, `rm -rf` of a folder, git commands that discard work or history,
-another session's worktree, a main checkout, and agent config and gates (`.claude/`, `CLAUDE.md`, `.husky/`, git
-hooks). A plugin cannot ship these (its settings take only `agent` and `subagentStatusLine`), so this writes them into your
+that branch with `--force-with-lease` (a protected branch is never rebased), that in its own worktree editing,
+`git rm` or `git mv` of a clean tracked file (git restores it) is ordinary code editing, not destruction, and that
+every session of the team may land its own work with teamrig's delivery commands. The clean-file line keeps out what
+git cannot restore or what guards the session: a file with uncommitted changes, an untracked or ignored one, a script
+the session has not read, `rm -rf` of a folder, git commands that discard work or history, another session's
+worktree, a main checkout, and agent config and gates (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks). The delivery
+line names the whole team, never a list of sessions, so a new hire needs no edit, and takes the repositories from
+the config when it is written (`github.repos`, and the names in `delivery.repos`). It states only what each command
+checks before it writes: `teamrig merge` merges the branch of a worktree of those repositories as `pushGuard` says,
+`teamrig pr approve` and `teamrig pr merge` act only on a pull request whose task the caller owns and whose head the
+caller's leader approved, `teamrig issue migrate` opens issues only for tasks the caller may set, and `teamrig ci
+rerun` starts only a failed run again; all write with the key saved for the repository's owner. It covers nothing
+those checks refuse, nor a raw `gh` or `git` write on those repositories. After a repository rename, run install
+again: `teamrig check` raises AUTOMODE-STALE until you do. A plugin cannot ship these (its settings take only `agent` and `subagentStatusLine`), so this writes them into your
 own Claude Code settings (`settings.json` in `$CLAUDE_CONFIG_DIR`, else in `~/.claude`). The lines replace the
 team's tagged lines where they were, else go at the end; your own lines and other teams' tagged lines stay as they
 are. With no list yet, the new one starts with `"$defaults"`, so Claude Code's built-in entries stay on; a list you

@@ -202,7 +202,8 @@ helper it is. Everything runs on your machine, with no account and no cloud bill
 - **Status line:** `teamrig statusline install` shows the model and its effort level, the folder, the branch, and
   the week's use beside where its pace line stands.
 - **Auto mode knows the team:** `teamrig automode install` adds the team's protected branches, task commands, build
-  wrappers and own-branch rebases to Claude Code's auto-mode facts, so auto mode stops asking about them.
+  wrappers, own-branch rebases and delivery commands to Claude Code's auto-mode facts, so auto mode stops asking
+  about them.
 - **A model per session:** each session starts on its own model and effort, and you're told when one runs on another.
   An `/effort` you type in a session's tab becomes its effort in the config, so a restore or restart keeps it.
 - **GitHub issues in the task list:** `teamrig issue sync` reads your repositories' open issues every 15 minutes, one way
