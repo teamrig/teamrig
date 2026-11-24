@@ -224,6 +224,7 @@ describe('reading the steps each adapter serves', () => {
     assert.deepEqual(served, [
       ['claude-code', ['host.rename', 'host.slim-setup', 'host.denial-sources']],
       ['codex-cli', []],
+      ['antigravity-cli', []],
       ['github', ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change']],
       ['jira', []],
       ['local', []],
