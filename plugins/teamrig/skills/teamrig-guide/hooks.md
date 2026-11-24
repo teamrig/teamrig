@@ -1938,6 +1938,16 @@ starts, and each shortcut of that name that starts something else, for `teamrig 
 RESTORE-STRAY). So on Windows that start reads the logon entry and the shortcuts even where it changes nothing,
 once per version; when that read fails, the record stays as it was and the next start tries again.
 
+A session start also installs the teamrig it runs into the kit home, so every host whose hooks run from there runs
+it next: it copies the plugin into `<home>/versions/<version>`, checks the copy against the plugin's integrity list,
+and names it current. It keeps the two versions before it for `teamrig kit use` to roll back to. A start that runs
+from the kit home already, or an older version, copies nothing, and one that finds another start copying (the
+`versions.lock` held) leaves it to that one. Each change goes to `restore/restore.log` as `kit: <old> -> <new>:
+current`, or `kit: refused: <reason>` when the copy does not match its list. After `teamrig kit use <version>`
+pinned an older one, the start keeps the newer copy but moves nothing, logs `kit: <new> kept; current pinned at
+<old>`, and says so at every start: `teamrig pinned at <old>; <new> is installed; teamrig kit use --latest moves to
+it.`
+
 The first failure of an expiry in a team's tab also pages the owner, once per expiry: one line naming the tab and the
 time on its team's clock, posted to the chat webhook of the tab's team or the first team above it that names one,
 read from the file [alerts.pageWebhookFile] names (it wins: its first non-empty line, or the value of the key
