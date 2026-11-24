@@ -1,40 +1,8 @@
+import { inlineCode, interpreterOf, type Family } from '../package-guard/inline-code.ts';
 import type { ProgramRun } from '../package-guard/programs.ts';
 import type { SecretFinding } from './findings.ts';
 import { wordPath, type WordPlace } from './paths.ts';
 import type { SecretRules } from './rules.ts';
-
-type Family = 'js' | 'python' | 'ruby' | 'perl' | 'php';
-
-interface Interpreter {
-  readonly family: Family;
-  /** Options whose value is the code to run: `node -e`, `python -c`. */
-  readonly code: readonly string[];
-  /** Options that print what the code gives, or each line it reads: `node -p`, `perl -p`. */
-  readonly print: readonly string[];
-  /** For perl and ruby: short options run together, as in `-ne` or `-pi`. */
-  readonly clusters: boolean;
-  /** In a cluster, the options whose value is the rest of the word: `-rpp` requires pp, it prints nothing. */
-  readonly valued: string;
-}
-
-const JS: Interpreter = { family: 'js', code: ['-e', '--eval', '-p', '--print'], print: ['-p', '--print'], clusters: false, valued: '' };
-const PYTHON: Interpreter = { family: 'python', code: ['-c'], print: [], clusters: false, valued: '' };
-
-const INTERPRETERS: ReadonlyMap<string, Interpreter> = new Map([
-  ['node', JS],
-  ['bun', JS],
-  ['tsx', JS],
-  ['ts-node', JS],
-  ['deno', JS],
-  ['python', PYTHON],
-  ['python3', PYTHON],
-  ['python2', PYTHON],
-  ['py', PYTHON],
-  ['pythonw', PYTHON],
-  ['ruby', { family: 'ruby', code: ['-e'], print: ['-p'], clusters: true, valued: 'rICxEFK' }],
-  ['perl', { family: 'perl', code: ['-e', '-E'], print: ['-p'], clusters: true, valued: 'IMmxdCFD' }],
-  ['php', { family: 'php', code: ['-r'], print: [], clusters: false, valued: '' }],
-]);
 
 /** A call that prints, per family: the match ends where its arguments start. */
 const PRINT_CALLS: Readonly<Record<Family, RegExp>> = {
@@ -86,19 +54,12 @@ const FAMILY_EXPANDS: Readonly<Record<Family, RegExp>> = {
 /** A string literal in code. */
 const LITERAL = /(['"`])((?:\\.|(?!\1)[^\\\n])+)\1/g;
 
-/** The code an interpreter call runs inline, whether an option makes it print, and the words it gets as arguments. */
-interface InlineCode {
-  readonly code: string;
-  readonly printOption: boolean;
-  readonly argv: readonly string[];
-}
-
 /**
  * What code run inline prints: an interpreter's `-e`/`-c` code, or the body it reads on stdin, that prints a secret
  * variable, the whole environment, or a file it names (in a string or as an argument). A script file is never read.
  */
 export function inlineFindings(run: ProgramRun, rules: SecretRules): SecretFinding[] {
-  const interpreter = INTERPRETERS.get(run.name);
+  const interpreter = interpreterOf(run.name);
   const inline = interpreter === undefined ? undefined : inlineCode(run, interpreter);
   if (interpreter === undefined || inline === undefined) {
     return [];
@@ -130,52 +91,9 @@ export function inlineFindings(run: ProgramRun, rules: SecretRules): SecretFindi
 
 /** True when the call runs inline code that prints: with a print option, or a print call in the code. */
 export function printsInline(run: ProgramRun): boolean {
-  const interpreter = INTERPRETERS.get(run.name);
+  const interpreter = interpreterOf(run.name);
   const inline = interpreter === undefined ? undefined : inlineCode(run, interpreter);
   return interpreter !== undefined && inline !== undefined && (inline.printOption || inline.code.search(PRINT_CALLS[interpreter.family]) !== -1);
-}
-
-/** The code the call runs inline, or undefined when it runs a script file or nothing. */
-function inlineCode(run: ProgramRun, interpreter: Interpreter): InlineCode | undefined {
-  const texts = run.args.map((arg) => arg.text);
-  let printOption = false;
-  let code: string | undefined;
-  const argv: string[] = [];
-  let index = run.name === 'deno' ? texts.indexOf('eval') + 1 : 0;
-  if (run.name === 'deno' && index === 0) {
-    return undefined;
-  }
-  for (; index < texts.length; index += 1) {
-    const text = texts[index] ?? '';
-    const valued = /^(--eval|--print)=(.*)$/s.exec(text);
-    const cluster = interpreter.clusters && /^-[a-zA-Z]+$/.test(text) ? clusterOptions(text.slice(1), interpreter.valued) : undefined;
-    if (code !== undefined && !text.startsWith('-')) {
-      argv.push(text);
-    } else if (valued !== null) {
-      code = valued[2];
-      printOption ||= interpreter.print.includes(valued[1] ?? '');
-    } else if (interpreter.code.includes(text) || (cluster !== undefined && interpreter.code.some((option) => cluster.endsWith(option.slice(1))))) {
-      printOption ||= interpreter.print.includes(text) || (cluster?.includes('p') ?? false);
-      code = texts[index + 1];
-      index += 1;
-    } else if (interpreter.print.includes(text) || (cluster?.includes('p') ?? false)) {
-      printOption = true;
-    } else if (run.name === 'deno' && code === undefined && !text.startsWith('-')) {
-      code = text;
-    } else if (!text.startsWith('-') || text === '-') {
-      return text === '-' && run.stdin !== undefined ? { code: run.stdin.text, printOption, argv: texts.slice(index + 1) } : undefined;
-    }
-  }
-  if (code === undefined) {
-    return run.stdin === undefined ? undefined : { code: run.stdin.text, printOption, argv };
-  }
-  return { code, printOption, argv };
-}
-
-/** The option letters of a cluster: up to and with the first one whose value is the rest of the word. */
-function clusterOptions(letters: string, valued: string): string {
-  const end = [...letters].findIndex((letter) => valued.includes(letter));
-  return end === -1 ? letters : letters.slice(0, end + 1);
 }
 
 /** The argument text of each print call in the code: a parenthesised list, or the rest of the statement. */

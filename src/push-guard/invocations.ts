@@ -2,6 +2,7 @@ import { packagedStartOf, type PackagedStart } from '../package-guard/packaged.t
 import { isAssignmentWord, LineCommands, rereadingCommands } from './held-reread.ts';
 import { isAssignment, launch, programName, staticWord, type Assignment, type Launch, type ProgramLaunch, type ScriptLaunch } from './launchers.ts';
 import { bashNativeWord, Location, resolveDir } from './location.ts';
+import { PERL_RUNNERS, perlCodeOf } from './perl-code.ts';
 import { splitGitAlias } from './program-split.ts';
 import { redirectsInput, stdinUse } from './stdin.ts';
 import { parseHeldText, parseShell, type ShellCommand, type ShellDialect, type ShellParse, type ShellWord } from './tokenizer.ts';
@@ -102,6 +103,8 @@ const CONFIG_UNSETS: ReadonlySet<string> = new Set(['--unset', '--unset-all']);
 const CONFIG_VALUED: ReadonlySet<string> = new Set(['-f', '--file', '--blob', '--type', '--default', '--comment', '--value']);
 const CONFIG_SUBCOMMANDS: ReadonlySet<string> = new Set(['get', 'list', 'unset', 'edit', 'rename-section', 'remove-section']);
 const FILTER_OPTIONS: ReadonlySet<string> = new Set(['--setup', '--env-filter', '--tree-filter', '--index-filter', '--msg-filter', '--commit-filter', '--parent-filter', '--tag-name-filter']);
+/** The doubt of a perl one-liner whose code may run a command that names a push. */
+const PERL_PUSH = 'its perl code runs a command that names a push, which the guard cannot read';
 
 /** How deep scripts (`bash -c "eval ..."`) and git aliases may nest before the guard stops reading. */
 const MAX_SCRIPT_DEPTH = 8;
@@ -363,7 +366,7 @@ class GitInvocationFinder {
       }
       location.enter(command.subshells);
       const launched = this.visitCommand(command.words, dialect, location, depth, stdin);
-      this.visitHeld(command, launched, rereading[index] ?? true, location, depth);
+      this.visitHeld(command, launched, stdin, rereading[index] ?? true, location, depth);
       if (stdin !== undefined) {
         const use = launched === undefined ? 'read' : stdinUse(command, launched);
         if (use !== 'stored') {
@@ -391,33 +394,58 @@ class GitInvocationFinder {
    * with no stdin, a git command built at run time) count only in an assignment word and where bash may read it again,
    * `rereads` (see {@link rereadingCommands}): a plain argument of another program, such as a perl or sed regex, is
    * data (#1471). Text that only never closes, such as a grep pattern's escaped backtick, still shows every
-   * substitution bash runs there (see {@link parseHeldText}).
+   * substitution bash runs there (see {@link parseHeldText}). A perl one-liner's code is read as perl (see
+   * {@link perlCodeOf}): when it runs no command, a push held in it is data unless bash may read it again (#1426).
    */
-  private visitHeld(command: ShellCommand, launched: Launch | undefined, rereads: boolean, location: Location, depth: number): void {
+  private visitHeld(
+    command: ShellCommand,
+    launched: Launch | undefined,
+    stdin: ShellWord | undefined,
+    rereads: boolean,
+    location: Location,
+    depth: number,
+  ): void {
     const script = launched?.kind === 'script' ? launched : undefined;
+    const perl = launched?.kind === 'program' ? perlCodeOf(launched, stdin) : undefined;
+    const plainText = perl?.reading === 'none' ? perl.words : [];
+    const namesPush = perl !== undefined && perl.reading !== 'none' && saysPush(perl.code) ? perl.code : undefined;
+    const runner = namesPush !== undefined && PERL_RUNNERS.test(namesPush);
+    // A command perl code starts is not read as a git command, so one that names a push asks.
+    if (runner) {
+      this.doubt(PERL_PUSH, false);
+    }
+    let heldPush = false;
     for (const word of command.words) {
       // A shell that runs a word as a script reads its substitutions as commands already; the variables set for it
       // (`PS4='...' bash -xc`) are values it may read again.
       if (word.held === undefined || (script !== undefined && !setsFor(script, word))) {
         continue;
       }
-      this.readHeld(word.held, rereads || isAssignmentWord(word.text), location, depth);
+      heldPush = this.readHeld(word.held, rereads || isAssignmentWord(word.text), !plainText.includes(word), location, depth) || heldPush;
+    }
+    // perl's backticks run a command too, and bash may pair them other than perl does (`$`` is a perl variable): when
+    // bash's reading of them shows no push, a push the code names asks all the same.
+    if (namesPush !== undefined && !runner && !heldPush && namesPush.includes('`')) {
+      this.doubt(PERL_PUSH, false);
     }
   }
 
   /**
    * Reads one word's held text; see {@link visitHeld}. A push in it always asks, ungated, as it may come through an
-   * alias (`'$(git p)'`) where no word of the line says push.
+   * alias (`'$(git p)'`) where no word of the line says push, unless the word is code that runs no command
+   * (`runs` false) and bash never reads it again. True when it found a push there.
    */
-  private readHeld(text: string, rereads: boolean, location: Location, depth: number): void {
+  private readHeld(text: string, rereads: boolean, runs: boolean, location: Location, depth: number): boolean {
     const parsed = parseHeldText(text);
     const unread = parsed.skipped ? 'it holds quoted text the guard cannot read for the commands bash runs if an expansion reads it again' : undefined;
     const held = new GitInvocationFinder(this.context);
     held.visitParsed(parsed, text, unread, 'bash', location.child(), depth + 1);
     this.doubts.push(...held.doubts.filter((doubt) => rereads || !doubt.gated));
-    if (held.invocations.some((invocation) => invocation.subcommand === 'push')) {
+    const pushes = held.invocations.some((invocation) => invocation.subcommand === 'push');
+    if ((runs || rereads) && pushes) {
       this.doubt('it holds a quoted command substitution that pushes, which bash runs if an expansion reads it again', false);
     }
+    return pushes;
   }
 
   /** Visits one simple command, given what it reads on stdin from the line; returns what it starts, or undefined for a `cd`. */

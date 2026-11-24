@@ -330,7 +330,8 @@ the guard cannot read (`--script-shell=node`, or a variable) is refused as a dou
   sessions' commits. Push your own branch, or use --force-with-lease if you truly mean it."
 - **Refuses, in doubt**: when it cannot read part of the line (an unclosed quote, a branch or alias only known when
   the line runs, a push held in quoted text such as `x='$(git push)'`, which bash runs if `${x@P}` or `$((x))`
-  reads it again, in any word, though not quoted backticks that never close, which run nothing; other quoted text
+  reads it again, in any word, though not quoted backticks that never close, which run nothing, nor, where bash never
+  reads it again, backticks in the strings, patterns or comments of a perl one-liner that runs no command; other quoted text
   it cannot read counts only where bash may read it again: an assignment, a builtin's argument, a word a redirection
   other than to `/dev/null`, a pipe into `tee` or an in-place edit (`sed -i`) writes for a later line, never a plain
   argument of another program such as a perl or sed pattern; a bash variable counts as known when the line set it earlier to text and other known variables,
@@ -351,9 +352,9 @@ What to do: push your own branch and merge through a pull request, or write the 
 can read it. Never route around a refusal; report it to the lead. On Windows a Git Bash drive folder (`cd /c/work`,
 `git -C /c/work`) is read as `C:\work`. The guard reads chains, subshells, nested shells,
 wrappers and git aliases (an `env -S` string and an alias value split by env's and git's own rules, a CR a plain
-space in both), but it does not see a push inside a script or program the command runs, `gh pr merge`,
-git extensions, or pushes run outside Claude Code. It is a guard against mistakes, not a sandbox: protect the
-branch on your git host too.
+space in both), but it does not see a push inside a script or program the command runs (a perl one-liner whose
+code runs a command that names a push asks), `gh pr merge`, git extensions, or pushes run outside Claude Code.
+It is a guard against mistakes, not a sandbox: protect the branch on your git host too.
 
 ## Before a shell command: the commit guard
 
