@@ -13,6 +13,13 @@ import { sha256Hex } from './digest.ts';
 /** The plugin folders whose files make the client: its launchers, its compiled code and the hooks that guard it. */
 export const CLIENT_FOLDERS: readonly string[] = ['bin', 'dist', 'hooks'];
 
+/**
+ * The plugin's own files outside those folders that the client holds too: `package.json`'s `type`, `imports` and
+ * `exports` decide how Node loads what `dist/cli/main.js` imports, so an edit there changes the code that runs (T5278,
+ * design D, C2).
+ */
+export const CLIENT_FILES: readonly string[] = ['package.json'];
+
 /** Where the build writes the list, relative to the plugin root; the list never lists itself. */
 export const CLIENT_MANIFEST = 'dist/integrity.json';
 
