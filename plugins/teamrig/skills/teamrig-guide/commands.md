@@ -9652,7 +9652,8 @@ when no meeting waits for its time), or `{"kind":"off","why"}`.
 
 ### teamrig hook needs-you
 
-Run by the plugin's mod in every open tab of the team, every 10 s, with `needsYou.enabled` on. It reads each session's
+Run by the plugin's mod in every open tab of the team with `needsYou.enabled` on: at its first look, once a file its
+last answer named changed, at the time that answer named, and at least every 10 minutes. It reads each session's
 tab file (`<team>/state/tabs/<id>.json`, which the tab-status, tool-end and stop hooks keep) and answers the asks of
 the team's other tabs now, of a kind `needsYou.kinds` names: a permission prompt, a question or plan, an MCP form, a
 `Decision needed:` line or an API error. A file whose Claude Code process no longer runs asks nobody. During the
@@ -9670,7 +9671,10 @@ teamrig hook needs-you < session.json
 
 Output: one JSON line, exit 0: `{"kind":"asks","asks"}` (`asks`: newest first, each as
 `{"session","tab","kind","text","task","since","focus"}`, `tab` the asking tab's title and `focus` whether its band
-offers Focus), or `{"kind":"off","why"}`.
+offers Focus), or `{"kind":"off","why"}`. Each also carries `watch`, the files and folders the answer read that can
+turn no ask into one (the tabs folder, the team config, the renames and the inbox marks; none outside a team
+session), and `recheckAt`, epoch ms: 10 s on while asks show, since a tab's process ending changes no file; else
+null. A mod that finds neither looks every 10 s.
 
 ### teamrig hook needs-you-focus
 

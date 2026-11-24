@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { TOAST_MAX_MS } from './meeting-hand.ts';
 import {
+  NEEDS_YOU_RECHECK_MS,
+  NEEDS_YOU_TICK_MS,
   NeedsYouHand,
   needsYouCliArgv,
   needsYouLine,
@@ -33,6 +35,9 @@ class FakeHost implements NeedsYouHandHost {
   readonly toasts: { readonly text: string; readonly stayMs: number }[] = [];
   redraws = 0;
   failStart = false;
+  /** The tab's clock, epoch ms, and each watched path's change time; a path left out is missing. */
+  time = 1_000_000;
+  readonly mtimes = new Map<string, number>();
 
   async sessionId(): Promise<string> {
     return TAB;
@@ -64,6 +69,28 @@ class FakeHost implements NeedsYouHandHost {
   changed(): void {
     this.redraws += 1;
   }
+
+  now(): number {
+    return this.time;
+  }
+
+  async changedAt(path: string): Promise<number | undefined> {
+    return this.mtimes.get(path);
+  }
+}
+
+const TABS_FOLDER = '/home/me/.teamrig/teams/app/state/tabs';
+/** The off answer of a CLI that names the files it read (#2305). */
+const OFF_WATCHED = { kind: 'off', why: 'needsYou.enabled is false', watch: [TABS_FOLDER], recheckAt: null };
+
+/** Runs a look every tick (NEEDS_YOU_TICK_MS) for `ms`, as the mod's clock does, and counts the CLI runs. */
+async function looksFor(hand: NeedsYouHand, host: FakeHost, ms: number): Promise<number> {
+  const before = host.calls.length;
+  for (let waited = 0; waited < ms; waited += NEEDS_YOU_TICK_MS) {
+    host.time += NEEDS_YOU_TICK_MS;
+    await hand.tick();
+  }
+  return host.calls.length - before;
 }
 
 describe('needsYouCliArgv', () => {
@@ -77,6 +104,19 @@ describe('parseNeedsYouAnswer', () => {
   it('reads the asks and the off answer', () => {
     assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [BRAVO] })), { kind: 'asks', asks: [BRAVO] });
     assert.deepEqual(parseNeedsYouAnswer('{"kind":"off","why":"needsYou.enabled is false"}'), { kind: 'off', why: 'needsYou.enabled is false' });
+  });
+
+  it('reads when to ask again, and an answer without it or with it malformed as none (#2305)', () => {
+    const look = { watch: [TABS_FOLDER], recheckAt: 1_060_000 };
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [BRAVO], ...look })), { kind: 'asks', asks: [BRAVO], look });
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify(OFF_WATCHED)), { kind: 'off', why: 'needsYou.enabled is false', look: { watch: [TABS_FOLDER], recheckAt: null } });
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'off', why: 'x', watch: [7], recheckAt: null })), { kind: 'off', why: 'x' });
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'off', why: 'x', watch: [] })), { kind: 'off', why: 'x' });
+  });
+
+  it('reads an answer with fields it does not know, as a mod older than watch and recheckAt reads them', () => {
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [BRAVO], later: { any: 1 } })), { kind: 'asks', asks: [BRAVO] });
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'off', why: 'x', later: 1 })), { kind: 'off', why: 'x' });
   });
 
   it('refuses a malformed ask, a non-JSON line and an unknown kind', () => {
@@ -163,6 +203,48 @@ describe('NeedsYouHand.tick', () => {
     assert.equal(hand.view()?.session, 'bravo');
     host.failStart = true;
     assert.deepEqual(await hand.tick(), { kind: 'failed', error: 'spawn node ENOENT' });
+  });
+
+  it('runs no CLI for ten minutes while no file the answer named changes, then asks at its recheck (#2305)', async () => {
+    const host = new FakeHost();
+    host.answers['needs-you'] = [run(OFF_WATCHED)];
+    host.mtimes.set(TABS_FOLDER, 5);
+    const hand = new NeedsYouHand(host);
+    // The first look asks; the next takes the named folder's change time with one more ask.
+    assert.equal(await looksFor(hand, host, 2 * NEEDS_YOU_TICK_MS), 2);
+    assert.equal(await looksFor(hand, host, NEEDS_YOU_RECHECK_MS - NEEDS_YOU_TICK_MS), 0);
+    assert.equal(await looksFor(hand, host, NEEDS_YOU_TICK_MS), 1, 'the recheck asks');
+  });
+
+  it('asks again at the next look once a file the answer named changed', async () => {
+    const host = new FakeHost();
+    host.answers['needs-you'] = [run(OFF_WATCHED), run(OFF_WATCHED), run({ kind: 'asks', asks: [BRAVO], watch: [TABS_FOLDER], recheckAt: null })];
+    host.mtimes.set(TABS_FOLDER, 5);
+    const hand = new NeedsYouHand(host);
+    await looksFor(hand, host, 5 * NEEDS_YOU_TICK_MS);
+    assert.equal(host.calls.length, 2);
+    host.mtimes.set(TABS_FOLDER, 6);
+    assert.equal(await looksFor(hand, host, NEEDS_YOU_TICK_MS), 1);
+    assert.equal(hand.view()?.session, 'bravo');
+    assert.equal(await looksFor(hand, host, NEEDS_YOU_TICK_MS), 0);
+  });
+
+  it('waits for the recheckAt an answer names, with no file changed', async () => {
+    const host = new FakeHost();
+    host.answers['needs-you'] = [run({ ...OFF_WATCHED, recheckAt: host.time + 2 * NEEDS_YOU_TICK_MS + 45_000 })];
+    const hand = new NeedsYouHand(host);
+    assert.equal(await looksFor(hand, host, 2 * NEEDS_YOU_TICK_MS), 2);
+    host.answers['needs-you'] = [run(OFF_WATCHED)];
+    assert.equal(await looksFor(hand, host, 4 * NEEDS_YOU_TICK_MS), 0, 'before its recheckAt');
+    assert.equal(await looksFor(hand, host, NEEDS_YOU_TICK_MS), 1, 'at its recheckAt');
+  });
+
+  it('asks every tick when the answer names no files, as with a CLI older than the mod', async () => {
+    const host = new FakeHost();
+    host.answers['needs-you'] = [run(OFF_WATCHED), asks(BRAVO)];
+    const hand = new NeedsYouHand(host);
+    await looksFor(hand, host, 2 * NEEDS_YOU_TICK_MS);
+    assert.equal(await looksFor(hand, host, 6 * NEEDS_YOU_TICK_MS), 6);
   });
 
   it('runs one ask at a time', async () => {

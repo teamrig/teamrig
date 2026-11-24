@@ -9,13 +9,24 @@
  * to p0 work) and Dismiss (hides that ask in this tab). The band goes once no tab asks. Nothing is typed into the
  * terminal.
  *
- * The mod runs inside Claude Code without Node, so this file imports nothing at run time but meeting-hand.ts.
+ * A CLI that names the files its answer read (`watch`) and when to ask again (`recheckAt`) is asked again only when
+ * one of them changed, at that time, or NEEDS_YOU_RECHECK_MS after its last ask, as the wake hand does (#2305). An
+ * answer without them, from a CLI older than this mod, keeps the hand asking every tick.
+ *
+ * The mod runs inside Claude Code without Node, so this file imports nothing at run time but meeting-hand.ts and
+ * look-schedule.ts.
  */
 
+import { LookSchedule } from './look-schedule.ts';
 import { TOAST_MAX_MS } from './meeting-hand.ts';
 
-/** How often the hand asks: an ask shows in the other tabs within this. */
+/** How often the hand looks: an ask shows in the other tabs within this. */
 export const NEEDS_YOU_TICK_MS = 10_000;
+/**
+ * How long a hand whose CLI named its files waits, at most, before it asks again with none of them changed (#2305): a
+ * change the files do not show (a session's process ending) is seen by then.
+ */
+export const NEEDS_YOU_RECHECK_MS = 10 * 60_000;
 /** How long one CLI run may take before it is stopped: a focus runs the terminal's own script. */
 export const NEEDS_YOU_TIMEOUT_MS = 30_000;
 /** The most of an ask's text the band shows; the toast carries it whole. */
@@ -44,8 +55,16 @@ export interface NeedsYouAsk {
   readonly focus: boolean;
 }
 
-/** What `hook needs-you` answers. */
-export type NeedsYouAnswer = { readonly kind: 'asks'; readonly asks: readonly NeedsYouAsk[] } | { readonly kind: 'off'; readonly why: string };
+/** When to ask again: once a file or folder in `watch` changed, or at `recheckAt` (epoch ms; null: no time set). */
+export interface NeedsYouLook {
+  readonly watch: readonly string[];
+  readonly recheckAt: number | null;
+}
+
+/** What `hook needs-you` answers; `look` only from a CLI that names its files. */
+export type NeedsYouAnswer = ({ readonly kind: 'asks'; readonly asks: readonly NeedsYouAsk[] } | { readonly kind: 'off'; readonly why: string }) & {
+  readonly look?: NeedsYouLook;
+};
 
 /** What `hook needs-you-focus` answers: the focus outcome's kind (focused, behind, none) with its line, or why it was not tried. */
 export type NeedsYouFocusAnswer =
@@ -72,6 +91,10 @@ export interface NeedsYouHandHost {
   toast(text: string, stayMs: number): void;
   /** Redraws the band: what view() gives changed. */
   changed(): void;
+  /** Now, epoch ms. */
+  now(): number;
+  /** When the file or folder last changed, epoch ms; undefined when it is missing. */
+  changedAt(path: string): Promise<number | undefined>;
 }
 
 /** What the band shows (types/index.d.ts TeamrigNeedsYou): the newest ask not dismissed, and how many more there are. */
@@ -88,6 +111,8 @@ export interface NeedsYouView {
 export type NeedsYouTick =
   /** The tick before, or a Focus, still runs. */
   | { readonly kind: 'overlap' }
+  /** Nothing the CLI's answer read changed, and its recheck has not come. */
+  | { readonly kind: 'quiet' }
   /** The CLI answered these asks; `fresh` names the sessions whose ask the tab toasted now. */
   | { readonly kind: 'asks'; readonly count: number; readonly fresh: readonly string[] }
   | { readonly kind: 'off'; readonly why: string }
@@ -155,6 +180,16 @@ function jsonOf(stdout: string): unknown {
   }
 }
 
+/** An answer's `watch` and `recheckAt`; undefined when either is missing or not of its kind, so the hand keeps its tick. */
+function lookOf(value: Readonly<Record<string, unknown>>): { readonly look?: NeedsYouLook } {
+  const { watch, recheckAt } = value;
+  const files = Array.isArray(watch) && watch.every((path): path is string => typeof path === 'string') ? watch : undefined;
+  if (files === undefined || !(recheckAt === null || (typeof recheckAt === 'number' && Number.isFinite(recheckAt)))) {
+    return {};
+  }
+  return { look: { watch: files, recheckAt } };
+}
+
 /** The CLI's `hook needs-you` answer; undefined for anything else. */
 export function parseNeedsYouAnswer(stdout: string): NeedsYouAnswer | undefined {
   const value = jsonOf(stdout);
@@ -164,9 +199,9 @@ export function parseNeedsYouAnswer(stdout: string): NeedsYouAnswer | undefined 
   const { kind, why } = value;
   const asks = asksOf(value['asks']);
   if (kind === 'asks' && asks !== undefined) {
-    return { kind, asks };
+    return { kind, asks, ...lookOf(value) };
   }
-  return kind === 'off' && typeof why === 'string' ? { kind, why } : undefined;
+  return kind === 'off' && typeof why === 'string' ? { kind, why, ...lookOf(value) } : undefined;
 }
 
 /** The CLI's `hook needs-you-focus` answer; undefined for anything else. */
@@ -199,9 +234,13 @@ export class NeedsYouHand {
   private dismissed = new Set<string>();
   private checking = false;
   private focusing = false;
+  /** When to ask again, kept only while the CLI's last answer named its files; until then every tick asks. */
+  private readonly looks: LookSchedule;
+  private watched = false;
 
   constructor(host: NeedsYouHandHost) {
     this.host = host;
+    this.looks = new LookSchedule(NEEDS_YOU_RECHECK_MS, (path) => host.changedAt(path));
   }
 
   /** What the band shows: the newest ask not dismissed, or undefined. */
@@ -220,10 +259,19 @@ export class NeedsYouHand {
     }
     this.checking = true;
     try {
+      if (this.watched && !(await this.looks.due(this.host.now()))) {
+        return { kind: 'quiet' };
+      }
       const run = await this.run('needs-you', {});
       const answer = run.exitCode === 0 ? parseNeedsYouAnswer(run.stdout) : undefined;
       if (answer === undefined) {
+        // Ask at the next tick, as a failed ask always has.
+        this.watched = false;
         return { kind: 'failed', error: `hook needs-you exited ${run.exitCode}: ${run.stdout.trim().slice(0, 200)}` };
+      }
+      this.watched = answer.look !== undefined;
+      if (answer.look !== undefined) {
+        this.looks.waitFor(answer.look.watch, answer.look.recheckAt);
       }
       const asks = answer.kind === 'asks' ? answer.asks : [];
       const fresh = asks.filter((ask) => !this.toasted.has(keyOf(ask)));
@@ -235,8 +283,9 @@ export class NeedsYouHand {
       this.dismissed = new Set([...this.dismissed].filter((key) => live.has(key)));
       this.asks = asks;
       this.host.changed();
-      return answer.kind === 'off' ? answer : { kind: 'asks', count: asks.length, fresh: fresh.map((ask) => ask.session) };
+      return answer.kind === 'off' ? { kind: 'off', why: answer.why } : { kind: 'asks', count: asks.length, fresh: fresh.map((ask) => ask.session) };
     } catch (error) {
+      this.watched = false;
       return { kind: 'failed', error: messageOf(error) };
     } finally {
       this.checking = false;

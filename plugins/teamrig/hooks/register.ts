@@ -545,6 +545,11 @@ export const register: Register = (on) => {
         changed: () => {
           void showNeedsYou?.();
         },
+        now: () => Date.now(),
+        changedAt: (path) => $.fs.stat(path).then(
+          (found) => found.mtimeMs,
+          () => undefined,
+        ),
       });
       needsYouHand = active;
       let shown: TeamrigNeedsYou | null | undefined;

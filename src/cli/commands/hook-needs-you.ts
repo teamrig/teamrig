@@ -30,14 +30,36 @@ export interface ShownAsk {
   readonly focus: boolean;
 }
 
+/**
+ * When the mod asks again (#2305): once a file or folder in `watch` changed, or at `recheckAt` (epoch ms; null: no
+ * time set), else at the hand's own recheck. The watch names every file the answer read that can turn no ask into
+ * one: the tabs' asks folder (an ask is written whole and renamed into it, so the folder changes with every ask),
+ * the team config (`needsYou`, the roster), the renames and the inbox marks that bind a tab to its session. What no
+ * file shows, an asking tab's process ending and the meeting's Focus gate, matters only while asks are shown, so
+ * an answer with asks sets `recheckAt` to ASKS_RECHECK_MS on.
+ */
+export interface NeedsYouLook {
+  readonly watch: readonly string[];
+  readonly recheckAt: number | null;
+}
+
 /** What `hook needs-you` answers the plugin's mod, one JSON line: the other tabs' asks now, newest first; or why none. */
-export type NeedsYouAnswer = { readonly kind: 'asks'; readonly asks: readonly ShownAsk[] } | { readonly kind: 'off'; readonly why: string };
+export type NeedsYouAnswer = ({ readonly kind: 'asks'; readonly asks: readonly ShownAsk[] } | { readonly kind: 'off'; readonly why: string }) & NeedsYouLook;
+
+/** How soon a mod showing asks asks again: the hand's tick (src/mod/needs-you-hand.ts NEEDS_YOU_TICK_MS). */
+export const ASKS_RECHECK_MS = 10_000;
 
 /** What `hook needs-you-focus` answers: how bringing the asking tab to the front went, or why it was not tried. */
 export type NeedsYouFocusAnswer =
   | { readonly kind: FocusOutcome['kind']; readonly text: string }
   | { readonly kind: 'refused'; readonly why: string }
   | { readonly kind: 'off'; readonly why: string };
+
+/** The files a found tab's answer read: see NeedsYouLook. */
+function watchOf(scope: Found): readonly string[] {
+  const { paths } = scope.kit;
+  return [paths.tabs, paths.config, paths.renames, paths.inboxMarks];
+}
 
 function answer(runtime: CliRuntime, value: NeedsYouAnswer | NeedsYouFocusAnswer): ExitCode {
   runtime.out.stdout(JSON.stringify(value));
@@ -115,9 +137,14 @@ async function notifyNew(runtime: CliRuntime, scope: Found): Promise<void> {
  */
 export async function needsYou(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
-  const scope = await scopeOf(runtime, (await readHookInput(runtime)).event);
-  if (scope.kind === 'off') {
-    return answer(runtime, scope);
+  const found = await wakeScopeOf(runtime, (await readHookInput(runtime)).event, false);
+  if (found.kind === 'off') {
+    // No team or no session: nothing names a file, so the hand waits for its own recheck.
+    return answer(runtime, { ...found, watch: [], recheckAt: null });
+  }
+  const scope = found;
+  if (!scope.config.needsYou.enabled) {
+    return answer(runtime, { kind: 'off', why: 'needsYou.enabled is false', watch: watchOf(scope), recheckAt: null });
   }
   if (scope.config.needsYou.osToast) {
     await notifyNew(runtime, scope);
@@ -133,7 +160,8 @@ export async function needsYou(args: ParsedArgs, runtime: CliRuntime): Promise<E
     since: need.since,
     focus: focus(need),
   }));
-  return answer(runtime, { kind: 'asks', asks: shown });
+  const recheckAt = shown.length === 0 ? null : runtime.clock.now() + ASKS_RECHECK_MS;
+  return answer(runtime, { kind: 'asks', asks: shown, watch: watchOf(scope), recheckAt });
 }
 
 /** The text of a focus outcome, as `meeting start` words its own. */

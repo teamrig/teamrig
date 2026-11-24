@@ -171,6 +171,12 @@ function askOf(n: number): string {
 }
 
 /**
+ * What `hook needs-you` answers a tab of a team with the band off, naming the folder of tab asks (#2305): the hand
+ * then asks again only when that folder changes or at its recheck, so a spec's minutes run no CLI for it.
+ */
+const NEEDS_YOU_OFF = { kind: 'off', why: 'needsYou.enabled is false', watch: ['/home/me/.teamrig/teams/app/state/tabs'], recheckAt: null };
+
+/**
  * An interactive tab the restart runner asked to /clear, its prompt box empty and no helper live: starts the
  * session, which builds the clear hand, whose CLI holds each ask the hand holds and hands it each one it claims, and
  * answers `hook needs-you` with `asks`, the other tabs' asks.
@@ -198,7 +204,7 @@ async function askedTab($: Engine, on: On, asks: readonly object[] = []): Promis
     const answers: Readonly<Record<string, string>> = {
       'clear-dir': ASK_DIR,
       'clear-claim': flags.length === 0 ? 'taken' : 'held',
-      'needs-you': JSON.stringify({ kind: 'asks', asks }),
+      'needs-you': JSON.stringify(asks.length === 0 ? NEEDS_YOU_OFF : { kind: 'asks', asks, watch: NEEDS_YOU_OFF.watch, recheckAt: null }),
     };
     const answer = command === undefined ? undefined : answers[command];
     return {
@@ -339,10 +345,12 @@ async function updateTab($: Engine, on: On, answers: Readonly<Record<string, unk
       'update-check': { kind: 'notices', notices: [TEAMRIG_UPDATE, PANE_UPDATE] },
       'update-apply': { kind: 'applied', plugin: 'teamrig', version: '0.333.0' },
       'update-dismiss': { kind: 'dismissed' },
+      'needs-you': NEEDS_YOU_OFF,
       ...answers,
     };
     const answer = command === undefined ? undefined : given[command];
-    if (answer !== undefined) {
+    // The update band's runs only: the needs-you hand's answer is stubbed so the ten minutes run no CLI (#2305).
+    if (answer !== undefined && command !== 'needs-you') {
       tab.runs.push({ command, stdin: JSON.parse(stdin ?? 'null') });
     }
     return {
@@ -472,11 +480,12 @@ async function panelTab($: Engine, on: On): Promise<PanelTab> {
     return { value: undefined };
   });
   on('process.run', (_$, e) => {
-    const isPanel = e.argv.at(-1) === 'meeting-panel';
+    const command = e.argv.at(-1);
+    const answer = command === 'meeting-panel' ? tab.answer : command === 'needs-you' ? NEEDS_YOU_OFF : undefined;
     return {
       value: {
-        exitCode: isPanel ? 0 : 1,
-        stdout: isPanel ? `${JSON.stringify(tab.answer)}\n` : '',
+        exitCode: answer === undefined ? 1 : 0,
+        stdout: answer === undefined ? '' : `${JSON.stringify(answer)}\n`,
         stderr: '',
         isStdoutTruncated: false,
         isStderrTruncated: false,
@@ -548,12 +557,12 @@ async function meetingTab($: Engine, on: On): Promise<{ readonly clock: MockCloc
   });
   on('fs.exists', () => ({ value: false }));
   on('process.run', (_$, e) => {
-    const due = e.argv.at(-1) === 'meeting-due';
-    const answer = { kind: 'due', notices: [MISSED_NOTICE], watch: [], recheckAt: null };
+    const command = e.argv.at(-1);
+    const answer = command === 'meeting-due' ? { kind: 'due', notices: [MISSED_NOTICE], watch: [], recheckAt: null } : command === 'needs-you' ? NEEDS_YOU_OFF : undefined;
     return {
       value: {
-        exitCode: due ? 0 : 1,
-        stdout: due ? `${JSON.stringify(answer)}\n` : '',
+        exitCode: answer === undefined ? 1 : 0,
+        stdout: answer === undefined ? '' : `${JSON.stringify(answer)}\n`,
         stderr: '',
         isStdoutTruncated: false,
         isStderrTruncated: false,

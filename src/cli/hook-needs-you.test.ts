@@ -41,10 +41,27 @@ function focus(kit: CliHarness, session: string, processes: FakeProcesses): Prom
   return kit.run(['hook', 'needs-you-focus'], { stdin: JSON.stringify({ session_id: ALPHA_TAB, cwd: APP, session }), processes, platform: 'win32' });
 }
 
-function answerOf(result: CliResult): unknown {
+function parsedOf(result: CliResult): JsonRecord {
   assert.equal(result.code, EXIT.ok, result.stderr.join('\n'));
   assert.equal(result.stdout.length, 1);
-  return JSON.parse(result.stdout[0] ?? '');
+  return JSON.parse(result.stdout[0] ?? '') as JsonRecord;
+}
+
+/** The answer without when to ask again, which 'names the files its answer read' pins. */
+function answerOf(result: CliResult): unknown {
+  const { watch: _watch, recheckAt: _recheckAt, ...rest } = parsedOf(result);
+  return rest;
+}
+
+/** When the answer has the mod ask again: the files it watches and its recheck time. */
+function lookOf(result: CliResult): unknown {
+  const { watch, recheckAt } = parsedOf(result);
+  return { watch, recheckAt };
+}
+
+function isWatch(value: unknown): value is { readonly watch: readonly string[]; readonly recheckAt: unknown } {
+  const watch = typeof value === 'object' && value !== null ? (value as JsonRecord)['watch'] : undefined;
+  return Array.isArray(watch) && watch.every((path) => typeof path === 'string');
 }
 
 function shown(need: TabNeed, focusOffered = true): JsonRecord {
@@ -62,6 +79,23 @@ describe('runCli: hook needs-you', () => {
     assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [] }, 'an error is no default kind, and pid 7999 runs no Claude Code');
     await tabs(kit, { ...ASKING, state: 'working', kind: null, text: null, task: null });
     assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [] });
+  });
+
+  it('names the files its answer read, and has the mod ask again soon only while asks are shown (#2305)', async () => {
+    const kit = await team();
+    const read = [TABS, join(TEAM_HOME, 'state', 'renames.jsonl'), join(TEAM_HOME, 'state', 'inbox-marks.jsonl')];
+    const quiet = lookOf(await look(kit));
+    assert.ok(isWatch(quiet), JSON.stringify(quiet));
+    assert.equal(quiet.recheckAt, null);
+    assert.equal(quiet.watch.length, 4);
+    assert.deepEqual(quiet.watch.filter((path) => read.includes(path)), [TABS, ...read.slice(1)]);
+    const config = quiet.watch.find((path) => !read.includes(path)) ?? '';
+    assert.notEqual(await kit.files.read(config), undefined, `${config} is the team config`);
+    await tabs(kit, ASKING);
+    assert.deepEqual(lookOf(await look(kit)), { watch: quiet.watch, recheckAt: kit.clock.now() + 10_000 });
+    const off = await team({ enabled: false });
+    assert.deepEqual(lookOf(await look(off)), { watch: quiet.watch, recheckAt: null }, 'a config change can turn it on');
+    assert.deepEqual(lookOf(await look(new CliHarness(TEAM))), { watch: [], recheckAt: null }, 'no session: the hand waits for its recheck');
   });
 
   it('is off with needsYou.enabled false, and for a tab that is no team session', async () => {
