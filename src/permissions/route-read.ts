@@ -58,6 +58,7 @@ export const READ_ROUTE_EXCLUDED: ReadonlyMap<string, string> = new Map([
   ['key list', 'it reads the credential store, which holds the keys; a prompt judges each read of it'],
   ['key check', 'it reads a key from the credential store and sends it over the network to the code host'],
   ['channel', 'an allow rule for its words would also approve `channel stable|preview --yes`, which writes user settings and reinstalls the plugin (T5232 C1)'],
+  ['skills step', 'new with T4860: it stays judged by a prompt until the security reviewer reads it as a route'],
 ]);
 
 /** Flags that make a listed command no route: each opens a folder the caller names and prints from it (C4). */
