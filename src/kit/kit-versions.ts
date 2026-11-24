@@ -10,20 +10,20 @@ import type { KitTree } from './kit-tree.ts';
 /**
  * teamrig's own install under the kit home (T5278, design D): one full copy of each release in `versions/<v>/`, and
  * the version in use named twice, by the one-line `current` the launcher reads first and by `current.json`, which adds
- * the sha256 of that version's integrity list, where it came from and whether `teamrig use` pinned it. Every host's
+ * the sha256 of that version's integrity list, where it came from and whether `teamrig kit use` pinned it. Every host's
  * hook line runs the kit home's fixed launcher, which runs the version `current` names, so an upgrade only adds a folder
  * and moves `current`, and the hook text a host trusts never changes.
  *
  * A copy goes to `versions/<v>.partial/` first and is renamed to `<v>/` only once every file matches its integrity
  * list, so a half-copied version is never one `current` names. Both records are written by temp file and rename. A pin
- * keeps `current` where `teamrig use` put it: an install of a newer version adds its folder and moves nothing, or the
+ * keeps `current` where `teamrig kit use` put it: an install of a newer version adds its folder and moves nothing, or the
  * next session start of a newer plugin would undo a rollback.
  */
 
 /** `current.json`'s format; a field added to it raises this. */
 export const KIT_CURRENT_FORMAT = 1;
 
-/** How many versions older than `current` an install keeps, so `teamrig use` can roll back to them. */
+/** How many versions older than `current` an install keeps, so `teamrig kit use` can roll back to them. */
 export const KEPT_OLDER_VERSIONS = 2;
 
 /** The folder of every installed version: `<kit home>/versions`. */
@@ -60,7 +60,7 @@ export interface KitCurrent {
   /** The sha256 of the version's `dist/integrity.json`, CRLF read as LF, which the launcher checks the list against. */
   readonly listHash: string;
   readonly source: KitSource;
-  /** Set by `teamrig use <v>`: an install leaves `current` alone until `teamrig use --latest`. */
+  /** Set by `teamrig kit use <v>`: an install leaves `current` alone until `teamrig kit use --latest`. */
   readonly pinned: boolean;
 }
 
@@ -146,7 +146,7 @@ export type KitInstallOutcome =
   | { readonly kind: 'current'; readonly version: string }
   /** The version was copied in if it was missing, and `current` now names it. */
   | { readonly kind: 'installed'; readonly version: string; readonly previous?: string }
-  /** The version's folder is kept, but `current` stays where `teamrig use` pinned it. */
+  /** The version's folder is kept, but `current` stays where `teamrig kit use` pinned it. */
   | { readonly kind: 'pinned'; readonly version: string; readonly pinned: string }
   /** The version's folder is kept, but `current` names a newer one, which an install never moves down. */
   | { readonly kind: 'older'; readonly version: string; readonly current: string }
@@ -236,16 +236,24 @@ async function movedCurrent(files: Files, kitHome: string, before: KitCurrent | 
   return before === undefined ? { kind: 'installed', version } : { kind: 'installed', version, previous: before.version };
 }
 
-/** Which version `teamrig use` moves to: one named, which pins it, or the newest kept, which clears the pin. */
+/** Which version `teamrig kit use` moves to: one named, which pins it, or the newest kept, which clears the pin. */
 export type KitUseTarget = { readonly kind: 'version'; readonly version: string } | { readonly kind: 'latest' };
 
-/** What `teamrig use` did. */
+/** Where `teamrig kit use` would move `current`, or why it would not. */
+export type KitUsePlan =
+  | { readonly kind: 'move'; readonly next: KitCurrent; readonly previous?: KitCurrent }
+  | { readonly kind: 'refused'; readonly why: string };
+
+/** What `teamrig kit use` did. */
 export type KitUseOutcome =
   | { readonly kind: 'moved'; readonly version: string; readonly previous?: string; readonly pinned: boolean }
   | { readonly kind: 'refused'; readonly why: string };
 
-/** Moves `current` to a kept version whose files match its list: a named one pinned, the newest kept with no pin. */
-export async function useKitVersion(ports: KitPorts, target: KitUseTarget): Promise<KitUseOutcome> {
+/**
+ * Where `teamrig kit use` would move `current`, writing nothing: a named kept version pinned, or the newest kept with no
+ * pin, and only one whose files match its integrity list.
+ */
+export async function planKitUse(ports: Pick<KitPorts, 'files' | 'kitHome'>, target: KitUseTarget): Promise<KitUsePlan> {
   const { files, kitHome } = ports;
   const kept = await listKitVersions(files, kitHome);
   const version = target.kind === 'latest' ? kept[0] : target.version;
@@ -260,10 +268,21 @@ export async function useKitVersion(ports: KitPorts, target: KitUseTarget): Prom
     return { kind: 'refused', why: `${version} is damaged (${verified.why}); install it again` };
   }
   const source = sourceOf(parseObject((await files.read(sourcePath(kitHome, version)))?.trim() ?? '')) ?? { kind: 'claude-code-plugin' };
-  const before = await readKitCurrent(files, kitHome);
-  const pinned = target.kind === 'version';
-  await writeKitCurrent(files, kitHome, { version, listHash: verified.hash, source, pinned });
-  return before === undefined || before.version === version ? { kind: 'moved', version, pinned } : { kind: 'moved', version, previous: before.version, pinned };
+  const next: KitCurrent = { version, listHash: verified.hash, source, pinned: target.kind === 'version' };
+  const previous = await readKitCurrent(files, kitHome);
+  return previous === undefined ? { kind: 'move', next } : { kind: 'move', next, previous };
+}
+
+/** Moves `current` as `planKitUse` plans it. */
+export async function useKitVersion(ports: Pick<KitPorts, 'files' | 'kitHome'>, target: KitUseTarget): Promise<KitUseOutcome> {
+  const plan = await planKitUse(ports, target);
+  if (plan.kind === 'refused') {
+    return plan;
+  }
+  const { next, previous } = plan;
+  await writeKitCurrent(ports.files, ports.kitHome, next);
+  const moved = { kind: 'moved', version: next.version, pinned: next.pinned } as const;
+  return previous === undefined || previous.version === next.version ? moved : { ...moved, previous: previous.version };
 }
 
 /** What a prune removed, and the versions whose removal failed (a running process holds a file), left for the next. */
@@ -273,23 +292,29 @@ export interface KitPruneOutcome {
 }
 
 /**
- * Removes the kept versions past the rollback window: it keeps the version `current` names, every newer one (a pinned
- * install's way back up) and the `KEPT_OLDER_VERSIONS` newest older ones. With no `current`, it removes nothing.
+ * The kept versions past the rollback window, newest first, which a prune removes: all but the version `current` names,
+ * every newer one (a pinned install's way back up) and the `KEPT_OLDER_VERSIONS` newest older ones. None with no
+ * `current`.
  */
-export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome> {
-  const { files, tree, kitHome } = ports;
+export async function prunableKitVersions(files: Pick<Files, 'read' | 'list'>, kitHome: string): Promise<readonly string[]> {
   const current = await readKitCurrent(files, kitHome);
   const inUse = current === undefined ? undefined : parseVersion(current.version);
-  if (current === undefined || inUse === undefined) {
-    return { removed: [], failed: [] };
+  if (inUse === undefined) {
+    return [];
   }
   const older = (await listKitVersions(files, kitHome)).filter((name) => {
     const version = parseVersion(name);
     return version !== undefined && compareVersions(version, inUse) < 0;
   });
+  return older.slice(KEPT_OLDER_VERSIONS);
+}
+
+/** Removes the versions `prunableKitVersions` names. */
+export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome> {
+  const { files, tree, kitHome } = ports;
   const removed: string[] = [];
   const failed: string[] = [];
-  for (const version of older.slice(KEPT_OLDER_VERSIONS)) {
+  for (const version of await prunableKitVersions(files, kitHome)) {
     try {
       await tree.removeFolder(kitVersionFolder(kitHome, version));
       await files.remove(sourcePath(kitHome, version));

@@ -125,7 +125,7 @@ describe('kit versions', () => {
     it('pins a kept older version, so a later install of a newer plugin leaves current there', async () => {
       await install('0.508.0');
       await install('0.509.0');
-      assert.deepEqual(await useKitVersion({ files, tree, kitHome: KIT }, { kind: 'version', version: '0.508.0' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' }), {
         kind: 'moved',
         version: '0.508.0',
         previous: '0.509.0',
@@ -139,9 +139,9 @@ describe('kit versions', () => {
     it('use --latest moves to the newest kept version and clears the pin', async () => {
       await install('0.508.0');
       await install('0.509.0');
-      await useKitVersion({ files, tree, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
       await install('0.510.0');
-      assert.deepEqual(await useKitVersion({ files, tree, kitHome: KIT }, { kind: 'latest' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'latest' }), {
         kind: 'moved',
         version: '0.510.0',
         previous: '0.508.0',
@@ -164,7 +164,7 @@ describe('kit versions', () => {
     });
 
     it('refuses with no version installed', async () => {
-      assert.equal((await useKitVersion({ files, tree, kitHome: KIT }, { kind: 'latest' })).kind, 'refused');
+      assert.equal((await useKitVersion({ files, kitHome: KIT }, { kind: 'latest' })).kind, 'refused');
     });
   });
 
@@ -191,7 +191,7 @@ describe('kit versions', () => {
         await install(version);
       }
       assert.deepEqual(await listKitVersions(files, KIT), ['0.511.0', '0.510.0', '0.509.0']);
-      await useKitVersion({ files, tree, kitHome: KIT }, { kind: 'version', version: '0.509.0' });
+      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.509.0' });
       assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: [], failed: [] });
       assert.equal(files.get(join(KIT, 'versions', '0.507.0.source.json')), undefined);
     });
