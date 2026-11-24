@@ -74,6 +74,10 @@ PowerShell or cmd, each measured on the real shell), so it finds a push wherever
 - chained, piped and multi-line commands (`&&`, `||`, `;`, `|`), subshells, `$( )` and backticks;
 - wrappers and other spellings of git: `env`, `command`, `sudo`, `nohup`, `timeout`, `xargs`, bash's `jobs -x`,
   variable prefixes, `git.exe`, a full path to git, `git-push`, and PowerShell's `& git` or `& 'C:\...\git.exe'`;
+- programs that run a command of theirs: `su -c`, `runuser`, `flock`, `script -c`, `find -exec`, a `trap` handler,
+  `entr`, `nsenter`, `chroot`, `unshare`, `setpriv`, `systemd-run`, `strace`, `ltrace`, `taskset` and `chrt`,
+  their options read as each program's own option table reads them (a long option by its unique prefix), and an
+  option the table lacks asks;
 - nested shells: `bash -c`, `sh -c`, `eval`, `pwsh -Command` (also `-EncodedCommand`), `Invoke-Expression`,
   `Start-Process`, `cmd /c` and `start`, and a heredoc or here-string a shell reads as its script (`bash <<EOF`,
   `cat <<EOF | bash`); one that any other command reads is that command's input, not commands;
