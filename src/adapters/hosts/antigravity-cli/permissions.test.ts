@@ -27,13 +27,13 @@ describe('antigravityPermissions', () => {
     assert.deepEqual(antigravityPermissions.writeAllow({ permissions: 'bad' }, []), { ok: false, problem: 'permissions is not an object' });
   });
 
-  it('produces platform-specific denyLines including Windows shells, command() prefixAllowRules, and refuses routes', () => {
+  it('produces platform-specific denyLines including Windows shells, empty prefixAllowRules, and refuses routes', () => {
     const winLines = antigravityPermissions.denyLines('win32');
     assert.equal(winLines.includes('read_file(~/AppData/Roaming/GitHub CLI/hosts.yml)'), true);
     assert.equal(winLines.includes('command(set)'), true);
     assert.equal(winLines.includes('command(Get-ChildItem env*)'), true);
     assert.equal(antigravityPermissions.denyLines('linux').includes('read_file(~/.config/gh/hosts.yml)'), true);
-    assert.deepEqual(antigravityPermissions.prefixAllowRules('teamrig list'), ['command(teamrig list *)']);
+    assert.deepEqual(antigravityPermissions.prefixAllowRules('teamrig list'), []);
     assert.equal(antigravityPermissions.installRoutes({}, 'tag:', ['a']).ok, false);
     assert.equal(antigravityPermissions.uninstallRoutes({}, 'tag:').ok, false);
   });

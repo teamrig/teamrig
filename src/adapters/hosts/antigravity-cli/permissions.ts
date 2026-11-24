@@ -92,7 +92,8 @@ export const antigravityPermissions: HostPermissions = {
   read,
   denyLines: (platform) => [...SHARED_DENY_LINES, ghHostsDenyLine(platform)],
   writeAllow,
-  prefixAllowRules: (prefix) => [`command(${prefix} *)`],
+  /** `agy 1.5.14` did not match trailing `*` (`command(echo *)`) in `allow` or `deny`, so prefix allow sync is empty. */
+  prefixAllowRules: () => [],
   installRoutes: () => noRoutes(),
   uninstallRoutes: () => noRoutes(),
 };
