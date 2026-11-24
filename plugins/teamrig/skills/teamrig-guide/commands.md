@@ -4814,6 +4814,85 @@ Resuming Claude Code session 7b21d4c8-0d1e-4f2a-9b3c-4d5e6f7a8b9c in /home/you/n
 
 It refuses when `claude` is not on the PATH.
 
+### teamrig kit versions
+
+The teamrig versions kept in the kit home's `versions` folder, newest first. Every host's hooks run the one marked
+`current`, with where it came from; `pinned` means `teamrig kit use` named it, so a session start of a newer plugin
+leaves it in use. Versions a prune would remove are marked `past the rollback window`.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig kit versions
+```
+
+Output:
+
+```text
+0.503.0
+0.502.1  current, pinned  github-release v0.502.1 4f2a9b3c
+0.502.0
+0.501.0
+0.500.2  past the rollback window
+```
+
+`no teamrig version is installed in <kit home>` when there is none yet: a session start of the teamrig plugin
+installs one. A `NOTE no version is current` line means the records naming it are missing or disagree; `teamrig
+kit use --latest` names the newest.
+
+### teamrig kit use
+
+Moves which kept version every host's hooks run. A named version is pinned, so a session start of a newer plugin
+leaves it in use; `--latest` moves to the newest kept version and clears the pin. Without `--yes` it shows the move
+and writes nothing. Only you write it, in your terminal or by typing `/teamrig`: it changes the code behind every
+host's guards, so an agent's tool call is refused.
+
+Flags:
+
+- `--latest`: the newest kept version, in place of a named one.
+- `--yes`: write the move; without it, only show it.
+
+Example:
+
+```sh
+teamrig kit use 0.502.1 --yes
+```
+
+Output:
+
+```text
+WROTE current 0.502.1 (was 0.503.0), pinned: a session start of a newer plugin leaves it in use until teamrig kit use --latest
+```
+
+It is `REFUSED` for a version that is not kept (it names the kept ones), one whose files no longer match its
+integrity list (install it again), or a name that is no release version.
+
+### teamrig kit prune
+
+Removes the kept versions past the rollback window: every version older than the current one but the two before it.
+It never removes the current one nor a newer one. Without `--yes` it names them and removes nothing.
+
+Flags:
+
+- `--yes`: remove them; without it, only name them.
+
+Example:
+
+```sh
+teamrig kit prune --yes
+```
+
+Output:
+
+```text
+REMOVED 1: 0.500.2
+```
+
+A version a running process still holds open stays, named on a `NOTE left for the next prune` line, and the command
+exits with a failure.
+
 ### teamrig restart
 
 The automatic context refresh's restart, when `refresh.autoRestart` is on for the session (`true`, or `"lead"`, the default, for the lead only; otherwise the user types

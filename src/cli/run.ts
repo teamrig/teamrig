@@ -105,6 +105,7 @@ const testCommand = () => import('./commands/test.ts');
 const ghCommand = () => import('./commands/gh.ts');
 const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const keyCommands = () => import('./commands/key.ts');
+const kitCommands = () => import('./commands/kit.ts');
 const queueCommand = () => import('./commands/queue.ts');
 const withdrawCommand = () => import('./commands/withdraw.ts');
 const stepAsideCommands = () => import('./commands/step-aside.ts');
@@ -231,6 +232,9 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'restore install': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await restoreInstallCommands()).restoreInstall },
   'restore uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await restoreInstallCommands()).restoreUninstall },
   'restore resume': { effect: 'internal', flags: ['project', 'home', 'effort', 'encoded-prompt'], load: async () => (await restoreCommands()).restoreResume },
+  'kit versions': { effect: 'read', flags: [], load: async () => (await kitCommands()).kitVersions },
+  'kit use': { effect: 'write', flags: [], switches: ['latest', 'yes'], load: async () => (await kitCommands()).kitUse },
+  'kit prune': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitPrune },
   restart: { effect: 'internal', flags: ['team', 'at', 'project'], load: async () => (await restartCommands()).restart },
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
   'idle-open': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleOpen },
@@ -495,6 +499,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       value naming a launcher in the kit home) and adds the Start-menu shortcut "Restore Claude
       Sessions" that runs restore run by hand; without --yes it shows the change and writes nothing
   restore uninstall [--yes]    stops both: removes the logon entry and the shortcut, then the launchers
+  kit versions                 the teamrig versions kept in the kit home, newest first: the one every
+      host's hooks run (current, and pinned when kit use pinned it) and those past the rollback window
+  kit use <version>|--latest [--yes]   moves which kept version every host's hooks run, refusing one whose
+      files no longer match its integrity list; a named version is pinned, so a newer plugin's session start
+      leaves it in use, and --latest moves to the newest kept one and clears the pin; without --yes it shows
+      the move and writes nothing; only the person writes it, never an agent's tool call
+  kit prune [--yes]            removes the kept versions past the rollback window (all but the current one,
+      newer ones and the two before it); without --yes it names them and removes nothing
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the

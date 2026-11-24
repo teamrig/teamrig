@@ -319,7 +319,7 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
  * after the wake check's last retry logs `api-error: gave up on <tab>` to the restore log. The first session start of a
  * newer plugin version rewrites the launchers, logon entry and shortcuts an install left that are out of date, and
  * logs each change as `launchers: <old> -> <new>: <change>` (src/restore/launcher-refresh.ts). A session start also
- * copies the running plugin into `<kit home>/versions/<v>` and names it current unless `teamrig use` pinned another,
+ * copies the running plugin into `<kit home>/versions/<v>` and names it current unless `teamrig kit use` pinned another,
  * logging `kit: ...` (src/kit/kit-self-install.ts). It prints nothing but the note of the start that put teamrig on the
  * user's PATH or found the install pinned, to the person and the model, and on any error it exits 0
  * having written nothing: a tracker must never hold up a turn.

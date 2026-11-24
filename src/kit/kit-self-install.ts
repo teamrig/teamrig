@@ -53,7 +53,7 @@ export async function installRunningKit(install: KitSelfInstall): Promise<KitSel
 /** The session-start note of a pinned install, which names the pin each time so it is never silent; else undefined. */
 export function kitSelfInstallNote(outcome: KitSelfInstallOutcome): string | undefined {
   return outcome.kind === 'pinned'
-    ? `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig use --latest\` moves to it.`
+    ? `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig kit use --latest\` moves to it.`
     : undefined;
 }
 
