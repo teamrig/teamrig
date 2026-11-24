@@ -7,8 +7,10 @@ export const PROGRAM = 'codex';
  * Turns off Codex's interactive shells on every start. With them on (the default in Codex 0.170.0), `exec_command`
  * opens a shell with `tty: true` and `write_stdin` then sends it lines no PreToolUse hook sees, so teamrig's shell guards
  * would judge only the bare shell. Off, `exec_command` refuses a tty and `write_stdin` into a shell without one fails
- * (T5270 F2). A `-c` override beats the person's config.toml, where `setup hooks --host codex` writes the same key for
- * sessions started outside teamrig.
+ * (T5270 F2). A `-c` override beats the root `[features]` of the person's config.toml, where `setup hooks --host codex`
+ * writes the same key for sessions started outside teamrig. Codex applies a profile's features after the root ones, and
+ * whether `-c` also beats those is not proved, so `setup hooks` turns the key off in each profile that turns it on too
+ * (user-hooks.ts `PROFILES`).
  */
 export const NO_TTY_SHELLS: readonly string[] = ['-c', 'features.unified_exec_tty=false'];
 

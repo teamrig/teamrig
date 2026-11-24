@@ -106,7 +106,7 @@ describe('teamrig setup hooks --host codex', () => {
     const kit = await kitWithPlugin();
     const result = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.equal(result.stdout[1], 'PREVIEW nothing written (add --yes to write) /srv/codex/config.toml: sets [features] unified_exec_tty = false');
+    assert.equal(result.stdout[1], 'PREVIEW nothing written (add --yes to write) /srv/codex/config.toml: sets [features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on');
     assert.equal(kit.files.get(CODEX_CONFIG), undefined);
   });
 
@@ -114,11 +114,11 @@ describe('teamrig setup hooks --host codex', () => {
     const kit = await kitWithPlugin();
     const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.equal(result.stdout[1], 'WROTE /srv/codex/config.toml: sets [features] unified_exec_tty = false');
+    assert.equal(result.stdout[1], 'WROTE /srv/codex/config.toml: sets [features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on');
     assert.match(kit.files.get(CODEX_CONFIG) ?? '', /^\[features\]\nunified_exec_tty = false$/mu);
 
     const again = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
-    assert.equal(again.stdout[1], 'UNCHANGED /srv/codex/config.toml: it already sets [features] unified_exec_tty = false');
+    assert.equal(again.stdout[1], 'UNCHANGED /srv/codex/config.toml: it already sets [features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on');
   });
 
   it("keeps the person's config.toml as a backup before setting the key in it", async () => {
@@ -127,7 +127,7 @@ describe('teamrig setup hooks --host codex', () => {
     const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     const line = result.stdout[1] ?? '';
-    assert.match(line, /^WROTE \/srv\/codex\/config\.toml: sets \[features\] unified_exec_tty = false; the old file is at .*codex-config\.bak$/u);
+    assert.match(line, /^WROTE \/srv\/codex\/config\.toml: sets \[features\] unified_exec_tty = false, and the same in each \[profiles\.<name>\.features\] that turns it on; the old file is at .*codex-config\.bak$/u);
     const backup = line.slice(line.indexOf('the old file is at ') + 'the old file is at '.length);
     assert.equal(kit.files.get(backup), 'model = "o4"\n');
     assert.match(kit.files.get(CODEX_CONFIG) ?? '', /^model = "o4"$/mu);

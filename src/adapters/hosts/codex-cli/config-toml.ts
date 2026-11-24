@@ -113,6 +113,39 @@ function reads(value: string, word: string): boolean {
   return new RegExp(`^${word}(?:\\s|#|$)`, 'u').test(value);
 }
 
+/**
+ * `text` with each `<prefix>.<name>.<rest>` key already written, for any `<name>`, set to `value` where it reads
+ * otherwise; no key is added and every other line is kept. For a setting a named sub-table may set again over the
+ * root one, such as Codex's `[profiles.<name>.features]` over `[features]`. An inline table under `prefix` that holds
+ * the key's last word is refused, as its keys cannot be edited line by line.
+ */
+export function withBooleanKeyInEach(text: string, prefix: string, rest: string, value: boolean): TomlEdit {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/u);
+  const word = String(value);
+  const last = rest.split('.').at(-1) ?? rest;
+  const edited = [...lines];
+  let changed = false;
+  let inline: string | undefined;
+  walk(
+    lines,
+    () => undefined,
+    ({ line, indent, written, value: current, path }) => {
+      const under = path === prefix || path.startsWith(`${prefix}.`);
+      if (under && current.trimStart().startsWith('{') && current.includes(last)) inline ??= path;
+      const name = path.startsWith(`${prefix}.`) && path.endsWith(`.${rest}`) ? path.slice(prefix.length + 1, -(rest.length + 1)) : '';
+      if (name !== '' && !reads(current, word)) {
+        edited[line] = `${indent}${written} = ${word}`;
+        changed = true;
+      }
+    },
+  );
+  if (inline !== undefined) {
+    return { ok: false, problem: `it sets ${inline} as an inline table that may hold ${last}, which teamrig cannot edit line by line: write it as a [${inline}] table, or set ${rest} = ${word} in it by hand` };
+  }
+  return { ok: true, text: changed ? edited.join(eol) : undefined };
+}
+
 /** `text` with `table.key` set to `value`, every other line kept. */
 export function withBooleanKey(text: string, table: string, key: string, value: boolean): TomlEdit {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
