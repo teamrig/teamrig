@@ -677,9 +677,6 @@ class LaunchReader {
       if (encoded === undefined) {
         return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
       }
-      if (encoded.dynamic) {
-        return { kind: 'opaque', reason: 'the encoded command redact-exec runs is only known when it runs', gated: true, command: { program: head, args } };
-      }
       const decoded = decodePrompt(encoded.text);
       if (decoded === undefined) {
         return { kind: 'opaque', reason: 'the encoded command redact-exec runs cannot be decoded', gated: true, command: { program: head, args } };

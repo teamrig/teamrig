@@ -180,6 +180,34 @@ describe('teamrig redact-exec', () => {
     });
     assert.equal(decisionOf(dynShellEq), 'deny');
 
+    const dynFlag = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec "$F" -- echo ok'),
+    });
+    assert.equal(decisionOf(dynFlag), 'deny');
+
+    const dynEncoded = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec --encoded-command "$E"'),
+    });
+    assert.equal(decisionOf(dynEncoded), 'deny');
+
+    const dynSep = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec "$SEP" echo ok'),
+    });
+    assert.equal(decisionOf(dynSep), 'deny');
+
+    const psPush = await harness.run(['hook', 'push-guard'], {
+      stdin: bashHookStdin('teamrig redact-exec --shell powershell -- "echo a; git push --force origin main"'),
+    });
+    assert.equal(decisionOf(psPush), 'deny');
+
+    const bashPush = await harness.run(['hook', 'push-guard'], {
+      stdin: bashHookStdin('teamrig redact-exec --shell bash -- "echo a; git push --force origin main"'),
+    });
+    assert.equal(decisionOf(bashPush), 'deny');
+
     const afterDash = await harness.run(['hook', 'exec-guard'], {
       env: { TEAMRIG_SESSION: 'alpha' },
       stdin: bashHookStdin('teamrig redact-exec -- echo --shell "$S"'),
