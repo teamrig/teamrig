@@ -5018,6 +5018,8 @@ Flags:
 - `--session <id|name>`: the session whose view it stays on, in its team. Without it: the session you last typed in.
 - `--team <team>`: the one team to show. Without it: every team, starting on this folder's, else the last typed in.
 - `--mode <terminal|window|both>`: where to show the UI this once, over [ui.mode]. Any other word is a usage error.
+- `--home <dir>`: the kit home to read, over `$TEAMRIG_HOME`. A window or split `teamrig ui` opens is handed the kit
+  home it runs on this way, as that window's own environment may not carry it.
 
 Example:
 

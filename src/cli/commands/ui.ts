@@ -12,7 +12,7 @@ import { resolveKitHome } from '../../core/home.ts';
 import { LastTypedStore } from '../../sessions/last-typed.ts';
 import { foundTeamOf, lookForTeam, openKit, requireConfig, rosterOf, sessionIdOf, type Kit } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { homeArgs } from './open.ts';
+import { homeArgs, homeRuntimeOf } from './open.ts';
 
 /**
  * The kit of the team `--team` names, else of the team found here, else of the one the person last typed in: the UI
@@ -270,7 +270,7 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
 }
 
 /**
- * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]`: shows the dedicated UI where `--mode`,
+ * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>] [--home <dir>]`: shows the dedicated UI where `--mode`,
  * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
  * one running the same UI and returns; with both, it opens the window and then shows the UI here too. Run with no
  * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
@@ -279,8 +279,10 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec.
  */
 export function uiCommand(pin: UiPin | undefined): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
-  return async (args, runtime) => {
+  return async (args, hostRuntime) => {
     noPositionals(args);
+    // The window or split this command opens hands its kit home on as --home (homeArgs), as its own environment may not carry it.
+    const runtime = homeRuntimeOf(args, hostRuntime);
     const kit = await kitOf(args.flags.get('team'), runtime);
     const config = requireConfig(kit, runtime, 'read');
     const mode = modeOf(args, config);

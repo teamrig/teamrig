@@ -436,8 +436,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL; then INSTALL: each install step, probed live, with the fix for
       one missing (printed even where no team is found)
-  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
-      team, following the session last typed in, or pinned to the team --team or --session names;
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>] [--home <dir>]   starts the dedicated
+      UI for every team, following the session last typed in, or pinned to the team --team or --session names;
+      --home reads that kit home, which a window or split this opens is handed;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
       own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
