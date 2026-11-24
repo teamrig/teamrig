@@ -17,9 +17,10 @@ export const FIRST_LAYOUT_VERSION = 3;
  * The newest layout this code reads. Layout 4 holds the same records as 3: a writer raises it only so that a
  * teamrig that reads 3 at most counts the files as newer and neither writes nor rotates them (a teamrig that
  * old rotated a register and dropped the event fields it did not parse). Readers take it before a writer writes it.
- * Layout 5 is the snapshot of task lines (TASK_LINES_LAYOUT_VERSION).
+ * Layout 5 is the snapshot of task lines (TASK_LINES_LAYOUT_VERSION), 6 the same with shorter task lines
+ * (SHORT_TASK_LINES_LAYOUT_VERSION).
  */
-export const NEWEST_LAYOUT_VERSION = 5;
+export const NEWEST_LAYOUT_VERSION = 6;
 
 /**
  * The layout of a snapshot that holds each kept task's folded state as one task line, then the recent events
@@ -29,6 +30,14 @@ export const NEWEST_LAYOUT_VERSION = 5;
  * does for any newer layout. Every session of a team runs the one installed teamrig, so that window is short.
  */
 export const TASK_LINES_LAYOUT_VERSION = 5;
+
+/**
+ * The layout of a snapshot whose task lines also leave out each fold field at the value a new task starts with
+ * (task-line.ts, #1497). A teamrig that reads layout 5 at most would read such a line as damaged; it meets the header
+ * as a newer snapshot instead and folds the whole history, as layout 5 did for the teamrig before it. Read and written
+ * in the same release, as layout 5 was.
+ */
+export const SHORT_TASK_LINES_LAYOUT_VERSION = 6;
 
 /** True for a layout version this code reads. */
 export function readsLayout(version: number): boolean {

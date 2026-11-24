@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { isRecord } from '../core/guards.ts';
 import { toJsonlLine } from '../core/jsonl.ts';
 import { MS_PER_DAY } from '../core/time.ts';
 import { TEST_CARD } from '../testing/card.ts';
@@ -21,6 +22,7 @@ import { applyRotation, AUTO_ROTATE_CHARS, planRotation, readBack, RotationRefus
 import { readEvents, readRegister } from './snapshot.ts';
 import { rotateRegister } from '../testing/rotation.ts';
 import { JsonlEventLog } from './store.ts';
+import { parseTaskLine, taskLineRecord, TASK_LINE_TYPE } from './task-line.ts';
 
 const LOG = 'state/events.jsonl';
 const PATHS = layoutPaths(LOG);
@@ -74,6 +76,25 @@ async function assertReadsAs(files: MemoryFiles, text: string): Promise<void> {
     assert.ok(holdsDescription(task, told.description), `description of ${id}`);
   }
   assert.equal(working.state.tasks.size + (working.retired?.count ?? 0), whole.state.tasks.size, 'kept and retired');
+}
+
+/** A snapshot as a layout 5 writer wrote it: its header at 5, and every fold field on each task line. */
+function asLayout5(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const record: unknown = line === '' ? undefined : JSON.parse(line);
+      if (!isRecord(record)) {
+        return line;
+      }
+      if (record['type'] !== TASK_LINE_TYPE) {
+        return record['type'] === 'snapshot' ? JSON.stringify({ ...record, v: 5 }) : line;
+      }
+      const task = parseTaskLine(record);
+      assert.ok(typeof task !== 'string', String(task));
+      return JSON.stringify(taskLineRecord(5, task));
+    })
+    .join('\n');
 }
 
 describe('planRotation and applyRotation', () => {
@@ -229,7 +250,8 @@ describe('planRotation and applyRotation', () => {
   it('skip a snapshot whose task lines were written before the mark existed for the whole history, and write one with it (T4781)', async () => {
     const files = new MemoryFiles({ [LOG]: create('T1', 0) + create('T2', 2) });
     await rotate(files, 4);
-    const snapshot = files.get(PATHS.snapshot) ?? '';
+    // A layout 5 line keeps every fold field, so one from before the mark existed lacks it (#1497).
+    const snapshot = asLayout5(files.get(PATHS.snapshot) ?? '');
     assert.ok(snapshot.includes('"descriptionCut":null,'));
     await files.write(PATHS.snapshot, snapshot.replaceAll('"descriptionCut":null,', ''));
     const working = await readWorkingSet(files, PATHS);

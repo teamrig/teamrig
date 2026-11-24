@@ -1,9 +1,10 @@
 import { isNonNegativeInteger, isRecord, type JsonRecord } from '../core/guards.ts';
 import { parseCard, type DecisionCard } from './card.ts';
 import { parseDescriptionCut } from './description-cut.ts';
-import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase, type TaskFieldName } from './events.ts';
+import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase } from './events.ts';
 import type { ApprovalAnswer, OwnerDecision, Task } from './fold.ts';
 import { parseAuditPin, type HandStepAudit } from './hand-step.ts';
+import { SHORT_TASK_LINES_LAYOUT_VERSION } from './marker.ts';
 import { isTaskStatus, TASK_ID } from './model.ts';
 import { parseReview } from './review.ts';
 import { parseSecurityVerdictPin, type SecurityVerdict } from './security-verdict.ts';
@@ -28,7 +29,7 @@ export const TASK_LINE_TYPE = 'task';
  * to the same task on every teamrig that reads task lines. On a busy team these fields at that value were 8% of the
  * snapshot.
  */
-const TASK_FIELD_DEFAULTS: Readonly<Partial<Record<TaskFieldName, null | false | readonly []>>> = {
+const TASK_FIELD_DEFAULTS: JsonRecord = {
   description: null,
   ref: null,
   due: null,
@@ -45,17 +46,57 @@ const TASK_FIELD_DEFAULTS: Readonly<Partial<Record<TaskFieldName, null | false |
   prepares: null,
 };
 
-function atDefault(key: string, value: unknown): boolean {
-  if (!Object.hasOwn(TASK_FIELD_DEFAULTS, key)) {
+/**
+ * The fold fields a line of layout 6 or later leaves out while they hold the value a new task starts with (fold.ts
+ * `created`), and that a reader of such a line puts back. A teamrig that reads layout 5 at most never meets such a
+ * line: it reads the header as a newer snapshot. A fold field added later joins only with a layout of its own, so a
+ * line from before it existed still reads as missing it. On a busy team these fields at that value were 8% of the
+ * snapshot.
+ */
+function foldFieldDefaults(): JsonRecord {
+  return {
+    descriptionCut: null,
+    note: null,
+    evidence: null,
+    skill: null,
+    waits: [],
+    card: null,
+    answer: null,
+    decided: null,
+    proof: null,
+    watch: null,
+    reparks: 0,
+    followups: [],
+    review: {},
+    sizeBase: null,
+    audits: [],
+    securityVerdict: null,
+    startedAt: null,
+    inProgressMs: 0,
+    ownerSeenAt: null,
+  };
+}
+
+/** The fields a line written at layout `v` leaves out at their default, with that default. */
+function defaultsAt(v: unknown): JsonRecord {
+  return typeof v === 'number' && v >= SHORT_TASK_LINES_LAYOUT_VERSION ? { ...TASK_FIELD_DEFAULTS, ...foldFieldDefaults() } : TASK_FIELD_DEFAULTS;
+}
+
+function atDefault(defaults: JsonRecord, key: string, value: unknown): boolean {
+  if (!Object.hasOwn(defaults, key)) {
     return false;
   }
-  const empty = TASK_FIELD_DEFAULTS[key as TaskFieldName];
-  return Array.isArray(empty) ? Array.isArray(value) && value.length === 0 : value === empty;
+  const empty = defaults[key];
+  if (Array.isArray(empty)) {
+    return Array.isArray(value) && value.length === 0;
+  }
+  return isRecord(empty) ? isRecord(value) && Object.keys(value).length === 0 : value === empty;
 }
 
 /** The record a task line holds, under the layout version `v` the snapshot it sits in was written at. */
 export function taskLineRecord(v: number, task: Task): JsonRecord {
-  const kept = Object.entries(task).filter(([key, value]) => !atDefault(key, value));
+  const defaults = defaultsAt(v);
+  const kept = Object.entries(task).filter(([key, value]) => !atDefault(defaults, key, value));
   return { v, type: TASK_LINE_TYPE, task: Object.fromEntries(kept) };
 }
 
@@ -168,10 +209,12 @@ function parseVerdict(value: unknown): SecurityVerdict | null | string {
 
 /** The task a task line's record holds, or why it holds none. Never throws. */
 export function parseTaskLine(record: JsonRecord): Task | string {
-  const task = record['task'];
-  if (!isTaskLine(record) || !isRecord(task)) {
+  const written = record['task'];
+  if (!isTaskLine(record) || !isRecord(written)) {
     return 'not a task line';
   }
+  // Task fields left out read as their default in parseCompleteTaskFields; fold fields are put back here.
+  const task = typeof record['v'] === 'number' && record['v'] >= SHORT_TASK_LINES_LAYOUT_VERSION ? { ...foldFieldDefaults(), ...written } : written;
   const { id, status, reparks, inProgressMs } = task;
   if (typeof id !== 'string' || !TASK_ID.test(id)) {
     return `id ${JSON.stringify(id)} is not a task id`;

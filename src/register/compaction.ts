@@ -5,7 +5,7 @@ import { currentWeekOf } from './week.ts';
 import { cutTask } from './description-cut.ts';
 import { RegisterFold, taskNumber, type Task } from './fold.ts';
 import { snapshotHeaderRecord, type SnapshotHeader } from './layout.ts';
-import { TASK_LINES_LAYOUT_VERSION } from './marker.ts';
+import { SHORT_TASK_LINES_LAYOUT_VERSION } from './marker.ts';
 import type { EventLogRead, RegisterSnapshot } from './snapshot.ts';
 import { taskLineRecord } from './task-line.ts';
 
@@ -138,7 +138,7 @@ export function compactRegister(source: RegisterSnapshot, options: CompactionOpt
     retiredLastWeek: newestWeek([source.retired?.lastWeek ?? null, ...retiring.map((task) => task.week)]),
     at: options.now.toISOString(),
   };
-  const taskLines = lined.map((task) => toJsonlLine(taskLineRecord(TASK_LINES_LAYOUT_VERSION, cutTask(task))));
+  const taskLines = lined.map((task) => toJsonlLine(taskLineRecord(SHORT_TASK_LINES_LAYOUT_VERSION, cutTask(task))));
   const text = [toJsonlLine(snapshotHeaderRecord(header)), ...taskLines, ...eventLines.map((line) => `${line}\n`)].join('');
   const retiredNow = [...retiredIds].sort((a, b) => taskNumber(a) - taskNumber(b));
   return { header, text, eventLines, kept: source.state.tasks.size - retiring.length, retiredNow };

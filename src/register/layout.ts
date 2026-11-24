@@ -2,7 +2,7 @@ import { isNonNegativeInteger, type JsonRecord } from '../core/guards.ts';
 import { parseJsonl, type JsonlRecord } from '../core/jsonl.ts';
 import { foldEvents } from './fold.ts';
 import type { Task } from './fold.ts';
-import { NEWEST_LAYOUT_VERSION, readsLayout, TASK_LINES_LAYOUT_VERSION } from './marker.ts';
+import { NEWEST_LAYOUT_VERSION, readsLayout, SHORT_TASK_LINES_LAYOUT_VERSION, TASK_LINES_LAYOUT_VERSION } from './marker.ts';
 import { TASK_ID } from './model.ts';
 import { readEventRecords, readEvents, type EventLogRead, type EventWindow, type RegisterSnapshot } from './snapshot.ts';
 import { isTaskLine, parseTaskLine } from './task-line.ts';
@@ -81,7 +81,7 @@ export interface SnapshotHeader {
 
 /** The header as a record, the way a compaction writes it. */
 export function snapshotHeaderRecord(header: SnapshotHeader): JsonRecord {
-  return { v: TASK_LINES_LAYOUT_VERSION, type: SNAPSHOT_TYPE, ...header };
+  return { v: SHORT_TASK_LINES_LAYOUT_VERSION, type: SNAPSHOT_TYPE, ...header };
 }
 
 export interface UsableSnapshot {
@@ -116,7 +116,7 @@ function countsOf(record: JsonRecord): HeaderCounts | string {
   return counts;
 }
 
-/** A layout 5 header's task count and window start; before it, none and null. */
+/** The task count and window start of a header from layout 5 on; before it, none and null. */
 function windowOf(line: JsonlRecord): { tasks: number; windowFrom: string | null } | string {
   if (line.version < TASK_LINES_LAYOUT_VERSION) {
     return { tasks: 0, windowFrom: null };
@@ -154,7 +154,7 @@ function headerOf(line: JsonlRecord): SnapshotHeader | string {
   return { ...counts, ...window, nextId, retiredLastWeek, at };
 }
 
-/** The body of a layout 5 snapshot: its task lines by id, and its events. A damaged or repeated task line makes it unusable. */
+/** The body of a snapshot from layout 5 on: its task lines by id, and its events. A damaged or repeated task line makes it unusable. */
 function readTaskLines(text: string): { tasks: Map<string, Task>; read: EventLogRead } | string {
   const parse = parseJsonl(text);
   const tasks = new Map<string, Task>();
