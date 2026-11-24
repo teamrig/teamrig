@@ -1658,7 +1658,10 @@ bare repository teamrig keeps under `~/.teamrig/updates/` (never Claude Code's o
 growing; a directory marketplace is read in place. The version is the `.claude-plugin/plugin.json` one in the folder
 the marketplace's entry names: a relative `./` source in the marketplace's own commit, or the `path` of a `git-subdir`
 source on the branch its `ref` names (`release` for stable, `preview`), since main runs ahead of every release
-channel. A `git-subdir` source in another repository than the marketplace's is not read. The answer is kept in
+channel. A `git-subdir` source in another repository than the marketplace's (such as a marketplace cloned under a
+repository's old name, before it moved to another owner) is read there, the host's install source, through a bare
+repository of its own (`~/.teamrig/updates/<marketplace>.<plugin>.git`), on its `ref` branch or else the default
+branch, and asked again at each network check. The answer is kept in
 `~/.teamrig/updates/check.json`, and every other look reads that file only. A marketplace that cannot be asked
 (offline, no access) keeps what was known, and nothing shows.
 

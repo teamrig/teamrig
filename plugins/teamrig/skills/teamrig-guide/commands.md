@@ -8999,8 +8999,9 @@ their marketplaces publish than the ones installed (Claude Code's `plugins/insta
 install first). The network is asked at most every 6 hours across the machine; every other run reads the answer kept in
 `<kit home>/updates/check.json`. A cloned marketplace is asked through a bare repository teamrig keeps beside it
 (`<kit home>/updates/<marketplace>.git`), never Claude Code's own clone: `git ls-remote` names the newest commit, and
-only a commit not seen before is fetched, one commit deep and without file contents but the two files read. A
-directory marketplace is read in place. git never asks for a login; a marketplace that cannot be asked keeps what was
+only a commit not seen before is fetched, one commit deep and without file contents but the two files read. A plugin
+whose entry names another repository is read from that repository through a bare repository of its own
+(`<kit home>/updates/<marketplace>.<plugin>.git`). A directory marketplace is read in place. git never asks for a login; a marketplace that cannot be asked keeps what was
 known. Stdin: ignored.
 
 Flags: none.
