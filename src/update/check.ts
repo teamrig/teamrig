@@ -11,8 +11,10 @@
  * 2 s), and only a commit not seen before is fetched, one commit deep and without file contents
  * (`--filter=blob:none`), so the two files read are the only contents downloaded (about 4 s and 160 KB on 11-11).
  * A plugin a `git-subdir` entry installs from a branch of the same repository (`release`, `preview`: T5133) is read
- * on that branch the same way, since main runs ahead of every release channel. `git gc --prune=now` then drops the
- * fetched objects, so the repository never grows. A directory marketplace is read in place.
+ * on that branch the same way, since main runs ahead of every release channel. A plugin whose entry names another
+ * repository is read where the host installs it from, that repository, through a bare repository of its own: a
+ * marketplace cloned under a repository's old name (moved to another owner: T5374) names it so too. `git gc
+ * --prune=now` then drops the fetched objects, so the repository never grows. A directory marketplace is read in place.
  */
 import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
@@ -43,6 +45,8 @@ export interface Published {
   readonly refs: Readonly<Record<string, string>>;
   readonly versions: Readonly<Record<string, string>>;
   readonly channels: Readonly<Record<string, string>>;
+  /** The commit each plugin read from another repository than the marketplace's was read at, by plugin. */
+  readonly remotes: Readonly<Record<string, string>>;
 }
 
 /** The kept state: the last network check, what each marketplace published then, and the versions the person dismissed. */
@@ -92,7 +96,7 @@ function publishedRecord(value: unknown): Readonly<Record<string, Published>> {
   for (const [name, entry] of Object.entries(value)) {
     // An entry with no `refs` was kept before plugins were read on their branches (T5133): read it again.
     if (isRecord(entry) && typeof entry['sha'] === 'string' && isRecord(entry['refs'])) {
-      entries.push([name, { sha: entry['sha'], refs: textRecord(entry['refs']), versions: textRecord(entry['versions']), channels: textRecord(entry['channels']) }]);
+      entries.push([name, { sha: entry['sha'], refs: textRecord(entry['refs']), versions: textRecord(entry['versions']), channels: textRecord(entry['channels']), remotes: textRecord(entry['remotes']) }]);
     }
   }
   return Object.fromEntries(entries);
@@ -234,11 +238,12 @@ export class UpdateCheck {
     if (sha === undefined) {
       return undefined;
     }
-    const unchanged = before !== undefined && before.sha === sha && Object.entries(before.refs).every(([ref, seen]) => heads.get(`refs/heads/${ref}`) === seen);
+    // A plugin read from another repository may have moved there while the marketplace did not: read it again.
+    const unchanged = before !== undefined && before.sha === sha && Object.keys(before.remotes).length === 0 && Object.entries(before.refs).every(([ref, seen]) => heads.get(`refs/heads/${ref}`) === seen);
     if (unchanged && plugins.every((plugin) => before.versions[plugin] !== undefined)) {
       return before;
     }
-    const found = await this.versionsOnBranches(repo, url, marketRef, sha, heads, plugins);
+    const found = await this.versionsOnBranches({ marketplace, repo, url, marketRef, sha, heads }, plugins);
     await git.run(repo, ['gc', '--prune=now', '--quiet']);
     return found;
   }
@@ -254,20 +259,26 @@ export class UpdateCheck {
 
   /**
    * The versions at the marketplace's commit `sha` of `marketRef`: a plugin installed from a branch of the same
-   * repository is read on that branch, one fetch per branch; one installed from another repository's branch is not
-   * read, as its version there is unknown.
+   * repository is read on that branch, one fetch per branch; one installed from another repository is read there.
    */
-  private async versionsOnBranches(repo: string, url: string, marketRef: string, sha: string, heads: ReadonlyMap<string, string>, plugins: readonly string[]): Promise<Published | undefined> {
+  private async versionsOnBranches(at: MarketplaceAt, plugins: readonly string[]): Promise<Published | undefined> {
+    const { repo, url, marketRef, sha, heads } = at;
     const read = await this.fetched(repo, marketRef);
     const marketplace = read === undefined ? undefined : await read(MARKETPLACE_FILE);
     if (read === undefined || marketplace === undefined) {
       return undefined;
     }
     const sources = new Map<string, PluginSource>();
+    const elsewhere = new Map<string, RemoteSource>();
     for (const plugin of plugins) {
       const found = pluginSourceOf(marketplace, plugin);
-      if (found !== undefined && (found.url === undefined || sameRepository(found.url, url))) {
+      if (found === undefined) {
+        continue;
+      }
+      if (found.url === undefined || sameRepository(found.url, url)) {
         sources.set(plugin, found);
+      } else {
+        elsewhere.set(plugin, { folder: found.folder, ref: found.ref, url: found.url });
       }
     }
     const onBranch = (ref: string | undefined): boolean => ref !== undefined && `refs/heads/${ref}` !== marketRef;
@@ -291,7 +302,41 @@ export class UpdateCheck {
         channels[plugin] = channel;
       }
     }
-    return { sha, refs, versions, channels };
+    const remotes: Record<string, string> = {};
+    for (const [plugin, each] of elsewhere) {
+      const found = await this.versionElsewhere(at.marketplace, plugin, each);
+      if (found === undefined) {
+        continue;
+      }
+      remotes[plugin] = found.sha;
+      versions[plugin] = found.version;
+      const channel = channelOf(each.ref);
+      if (channel !== undefined) {
+        channels[plugin] = channel;
+      }
+    }
+    return { sha, refs, versions, channels, remotes };
+  }
+
+  /**
+   * `plugin`'s version on the branch of another repository its entry installs (its default branch for none), read
+   * through a bare repository of its own; undefined when that repository or branch cannot be read.
+   */
+  private async versionElsewhere(marketplace: string, plugin: string, source: RemoteSource): Promise<{ readonly sha: string; readonly version: string } | undefined> {
+    const { git } = this.deps;
+    const repo = join(this.deps.paths.updatesFolder, `${folderName(marketplace)}.${folderName(plugin)}.git`);
+    if (!(await this.ensureRepo(repo, source.url))) {
+      return undefined;
+    }
+    const ref = source.ref !== undefined && isBranchName(source.ref) ? `refs/heads/${source.ref}` : 'HEAD';
+    const sha = refsOf(await git.run(repo, ['ls-remote', 'origin', ref])).get(ref);
+    const read = sha === undefined ? undefined : await this.fetched(repo, ref);
+    if (sha === undefined || read === undefined) {
+      return undefined;
+    }
+    const version = (await this.versionsAt(read, [[plugin, source]]))[plugin];
+    await git.run(repo, ['gc', '--prune=now', '--quiet']);
+    return version === undefined ? undefined : { sha, version };
   }
 
   /** Each plugin's version read from its folder through `read`, leaving out one whose plugin.json names none. */
@@ -335,8 +380,23 @@ export class UpdateCheck {
       const found = pluginSourceOf(marketplace, plugin);
       return found === undefined ? [] : [[plugin, found] as const];
     });
-    return { sha: '', refs: {}, versions: await this.versionsAt(read, sources), channels: {} };
+    return { sha: '', refs: {}, versions: await this.versionsAt(read, sources), channels: {}, remotes: {} };
   }
+}
+
+/** Where a cloned marketplace was asked: its name, bare repository, address, the ref read and its commit, and its branches. */
+interface MarketplaceAt {
+  readonly marketplace: string;
+  readonly repo: string;
+  readonly url: string;
+  readonly marketRef: string;
+  readonly sha: string;
+  readonly heads: ReadonlyMap<string, string>;
+}
+
+/** A plugin source that names another repository than its marketplace's. */
+interface RemoteSource extends PluginSource {
+  readonly url: string;
 }
 
 /** The refs `git ls-remote` printed, by name; none for no answer. */

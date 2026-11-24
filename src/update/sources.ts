@@ -121,8 +121,9 @@ export function channelOf(branch: string | undefined): string | undefined {
 
 /**
  * Whether two repository addresses name the same repository: `https://github.com/owner/kit.git`, `owner/kit` and
- * `git@github.com:owner/kit` all read as `owner/kit`, in any letter case. A `git-subdir` branch is fetched through
- * the marketplace's own bare repository, so only a branch of that repository is read.
+ * `git@github.com:owner/kit` all read as `owner/kit`, in any letter case. A `git-subdir` branch of the same
+ * repository is fetched through the marketplace's own bare repository; one of another, through a bare repository
+ * of its own.
  */
 export function sameRepository(a: string, b: string): boolean {
   const key = (address: string): string =>
