@@ -1,8 +1,9 @@
 import { posix, win32 } from 'node:path';
 import type { EditCall, HookEvent, HookReply, ShellCall } from '../ports/host/index.ts';
-import { launch } from '../push-guard/launchers.ts';
+import { launch, programName, type Launch, type ScriptLaunch } from '../push-guard/launchers.ts';
 import { Location } from '../push-guard/location.ts';
-import { parseShell, type ShellDialect, type ShellWord } from '../push-guard/tokenizer.ts';
+import { pipesOn, printedText, redirectsInput, stdinUse } from '../push-guard/stdin.ts';
+import { parseShell, type ShellCommand, type ShellDialect, type ShellWord } from '../push-guard/tokenizer.ts';
 import { resolveLiteralVariables } from '../push-guard/variables.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
@@ -378,7 +379,17 @@ async function scriptReply(script: string, dialect: ShellDialect, location: Loca
   const parsed = parseShell(script, dialect);
   // A bash variable the line binds before it reads it (`X=~/.teamrig; rm $X/current`) holds that value (T5364 R3).
   const commands = dialect === 'bash' ? resolveLiteralVariables(parsed, env.home) : parsed.commands;
+  let piped: Feed | undefined;
+  let substituted: readonly Feed[] = [];
   for (const command of commands) {
+    let stdin = command.stdin;
+    // A substitution's commands, read before the command that holds them, sit between a pipe's two ends.
+    if (piped !== undefined && command.nesting <= piped.nesting) {
+      stdin ??= command.nesting === piped.nesting && !redirectsInput(command) ? piped.body : undefined;
+      piped = undefined;
+    }
+    const held = substituted.filter((feed) => feed.nesting > command.nesting);
+    substituted = substituted.filter((feed) => feed.nesting <= command.nesting);
     location.enter(command.subshells);
     const targets = command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target]));
     const paths = command.words.map((word) => wordPathOf(word, dialect, wordEnv));
@@ -390,19 +401,61 @@ async function scriptReply(script: string, dialect: ShellDialect, location: Loca
       command.words.map((word, index) => locationWord(word, paths[index])),
       dialect,
     );
-    const launched = moved ? undefined : launch(command.words, dialect, command.stdin);
-    if (launched?.kind !== 'script') {
+    const launched = moved ? undefined : launch(command.words, dialect, stdin);
+    if (launched === undefined) {
+      continue;
+    }
+    const printed = stdin !== undefined && stdinUse(command, launched) === 'passed' ? stdin : printedText(command, launched, dialect);
+    if (printed !== undefined && pipesOn(command)) {
+      piped = { body: printed, nesting: command.nesting };
+    } else if (printed !== undefined && command.nesting > 0) {
+      substituted = [...substituted, { body: printed, nesting: command.nesting }];
+    }
+    const run = nestedRun(command, launched, dialect, held);
+    if (run === undefined) {
       continue;
     }
     const inner = location.child();
-    launched.chdirs.forEach((chdir) => inner.moveTo(chdir, dialect));
-    const nested = await scriptReply(launched.script.text, launched.dialect, inner, depth + 1, walk);
+    run.chdirs.forEach((chdir) => inner.moveTo(chdir, dialect));
+    const nested = await scriptReply(run.script.text, run.dialect, inner, depth + 1, walk);
     if (nested !== undefined) {
       return nested;
     }
-    if (launched.sameShell) {
+    if (run.sameShell) {
       location.adopt(inner);
     }
+  }
+  return undefined;
+}
+
+/** Text a command prints from the line itself, and how deep in substitutions it sits. */
+interface Feed {
+  readonly body: ShellWord;
+  readonly nesting: number;
+}
+
+/** The programs that run a file's lines in the calling bash: `source <(echo ...)` runs what the substitution prints. */
+const SOURCES: ReadonlySet<string> = new Set(['source', '.']);
+
+/**
+ * The line a command runs in a shell, or undefined: the script its launch reads, else the text the line's own
+ * substitutions print (`held`) when it is a shell reading its stdin (`bash -s < <(echo ...)`) or `source` (T5366 R5).
+ */
+function nestedRun(command: ShellCommand, launched: Launch, dialect: ShellDialect, held: readonly Feed[]): ScriptLaunch | undefined {
+  if (launched.kind === 'script') {
+    return launched;
+  }
+  const [first] = held;
+  if (first === undefined) {
+    return undefined;
+  }
+  const body: ShellWord = { text: held.map((feed) => feed.body.text).join('\n'), dynamic: held.some((feed) => feed.body.dynamic) };
+  if (launched.kind === 'opaque' && launched.stdinScript === true) {
+    const fed = launch(command.words, dialect, body);
+    return fed.kind === 'script' ? fed : undefined;
+  }
+  if (dialect === 'bash' && launched.kind === 'program' && !launched.program.dynamic && SOURCES.has(programName(launched.program.text))) {
+    return { kind: 'script', script: body, dialect, sameShell: true, env: launched.env, chdirs: [], runner: launched.runner, captured: launched.captured };
   }
   return undefined;
 }

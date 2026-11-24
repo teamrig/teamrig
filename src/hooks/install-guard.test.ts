@@ -291,6 +291,40 @@ describe('installGuardReply: shell lines', () => {
     }
   });
 
+  it('reads the static text a line pipes or substitutes into a shell that runs its stdin (T5366 R5)', async () => {
+    const bash = [
+      "echo 'rm -rf ~/.t*' | bash",
+      "printf 'rm -rf ~/.t*\\n' | bash",
+      "echo 'rm -rf ~/.t*' | sh -s",
+      "cat <<'EOF' | bash\nrm -rf ~/.t*\nEOF",
+      "bash -s < <(echo 'rm -rf ~/.t*')",
+      "source <(echo 'rm -rf ~/.t*')",
+      ". <(printf 'rm -rf ~/.t*')",
+      'X=~/.teamrig; echo "rm -rf $X/current" | bash',
+    ];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    const powershell = ["'Remove-Item -Recurse ~\\*' | iex", "Write-Output 'Remove-Item -Recurse ~\\.t*' | powershell -Command -"];
+    for (const command of powershell) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+  });
+
+  it('passes a piped feed outside the guarded entries, one the line cannot show, and static text piped to a non-shell', async () => {
+    const bash = [
+      "echo 'npm test' | bash",
+      "echo 'rm -rf ~/.t*' > notes.md",
+      "echo 'rm -rf ~/.t*' | grep rm",
+      'cat x.sh | bash',
+      "source <(echo 'export A=1')",
+    ];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+    assert.equal(await decisionOf(call('PowerShell', { command: "'Get-ChildItem C:\\w\\src' | iex" })), undefined);
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });
