@@ -1,5 +1,6 @@
 import { posix, win32 } from 'node:path';
 import type { EditCall, HookEvent, HookReply, ShellCall } from '../ports/host/index.ts';
+import { Location } from '../push-guard/location.ts';
 import { parseShell, type ShellWord } from '../push-guard/tokenizer.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
@@ -235,7 +236,8 @@ function patternReaches(segments: readonly string[], target: readonly string[], 
     if (segment === undefined) {
       return false;
     }
-    if (segment.includes(REST)) {
+    // Only a folder a `cd` named puts one before others (`cd ~/$(x) && rm current`); it stands for one segment there.
+    if (segment.includes(REST) && index === segments.length - 1) {
       return index === target.length - 1 && segmentReaches(segment, wanted, flags);
     }
     if (!segmentReaches(segment, wanted, flags)) {
@@ -261,11 +263,11 @@ function patternIsFolder(segments: readonly string[], target: readonly string[],
 /**
  * The guarded place a pattern path can reach, or undefined: its folder part up to the first mark resolved as a file
  * tool's path is (against the cwd, to its real form), then the rest walked segment by segment, `..` taking the one
- * before, and held against each guarded entry's segments and the folder itself (T5355 S2, T5364 R1).
+ * before, and held against each guarded entry's segments and the folder itself (T5355 S2, T5364 R1). A `..` after
+ * a segment the running shell ends stays inside it, as that may hold more than one.
  */
-async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): Promise<GuardedPlace | undefined> {
+async function placeOfPattern(native: string, cwd: string, env: InstallGuardEnv): Promise<GuardedPlace | undefined> {
   const paths = pathsOf(env.platform);
-  const native = nativePathOf(path, env.platform);
   const mark = native.search(/[\u{E000}-\u{E002}]/u);
   const cut = Math.max(native.lastIndexOf('/', mark), native.lastIndexOf('\\', mark));
   const folder = paths.resolve(cwd, native.slice(0, cut + 1));
@@ -275,13 +277,12 @@ async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): 
       continue;
     }
     if (segment === '..') {
-      segments.splice(Math.max(1, segments.length - 1));
+      if (!(segments[segments.length - 1] ?? '').includes(REST)) {
+        segments.splice(Math.max(1, segments.length - 1));
+      }
       continue;
     }
     segments.push(segment);
-    if (segment.includes(REST)) {
-      break;
-    }
   }
   const flags = env.platform === 'win32' ? 'i' : '';
   for (const place of env.places) {
@@ -295,42 +296,72 @@ async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): 
   return undefined;
 }
 
-/** The guarded place a word's path reaches, with how, or undefined: a static word as a file tool's path, else as a pattern. */
-async function wordReach(path: string, cwd: string, env: InstallGuardEnv): Promise<{ readonly place: GuardedPlace; readonly how: string } | undefined> {
-  if (isPattern(path)) {
-    const place = await placeOfPattern(path, cwd, env);
+/**
+ * The guarded place a word's path reaches from the folder it runs in, with how, or undefined: a static word as a
+ * file tool's path, else as a pattern. The folder is a pattern too after a `cd` to one, and undefined after a `cd`
+ * to one nothing is known of, where only an absolute path still names a place.
+ */
+async function wordReach(path: string, cwd: string | undefined, env: InstallGuardEnv): Promise<{ readonly place: GuardedPlace; readonly how: string } | undefined> {
+  const paths = pathsOf(env.platform);
+  const native = nativePathOf(path, env.platform);
+  if (cwd === undefined && !paths.isAbsolute(native)) {
+    return undefined;
+  }
+  const base = cwd ?? env.cwd;
+  if (isPattern(path) || isPattern(base)) {
+    // Joined as text, not resolved: a `..` must meet the folder's marks in the walk, never cancel them here.
+    const whole = paths.isAbsolute(native) ? native : `${base}${paths.sep}${native}`;
+    const place = await placeOfPattern(whole, base, env);
     return place === undefined ? undefined : { place, how: 'a word that only the running shell completes, inside it' };
   }
   if (env.platform === 'win32' && aliasFormOf(path) !== undefined) {
     const place = env.places.find((candidate) => namesPlacePart(path, candidate, env.platform));
     return place === undefined ? undefined : { place, how: 'a path to it in a spelling the guard cannot hold to one file' };
   }
-  const absolute = pathsOf(env.platform).resolve(cwd, nativePathOf(path, env.platform));
+  const absolute = paths.resolve(base, native);
   const real = await realKeyOf(absolute, env);
   const place = await placeOfKeys([keyOf(absolute, env), ...(real === undefined ? [] : [real])], env);
   return place === undefined ? undefined : { place, how: 'a path in it' };
 }
 
+/** A word as a folder command reads it: its path once the shell has read it, or only known when it runs. */
+function locationWord(word: ShellWord, path: string | undefined): ShellWord {
+  return path === undefined ? { text: word.text, dynamic: true } : { text: path, dynamic: false };
+}
+
 /**
  * The refusal of a shell line one of whose words reaches a guarded place once the shell has read it (T5355 S1):
- * quotes and escapes removed, `~` and the environment's variables expanded, resolved against the cwd. This holds the
- * spellings the line's raw text hides (`..`, a quote inside a name, a glob, a path relative to any cwd).
+ * quotes and escapes removed, `~` and the environment's variables expanded, resolved against the folder the command
+ * runs in, which a `cd`, `pushd` or `Set-Location` earlier in the line moves (T5364 R2), as the push guard's
+ * {@link Location} follows it. This holds the spellings the line's raw text hides (`..`, a quote inside a name, a
+ * glob, a path relative to any cwd).
  */
 async function wordsReply(call: ShellCall, cwd: string, env: InstallGuardEnv): Promise<HookReply | undefined> {
   const readings = call.readings.length === 0 && call.command !== undefined ? [call.command] : call.readings;
   const wordEnv = { home: env.home, platform: env.platform, variables: env.variables };
   const seen = new Set<string>();
   for (const reading of readings) {
-    for (const word of shellWordsOf(reading, call)) {
-      const path = wordPathOf(word, call.dialect, wordEnv);
-      if (path === undefined || seen.has(path)) {
-        continue;
+    const location = new Location(cwd, env.home, pathsOf(env.platform));
+    for (const command of parseShell(reading, call.dialect).commands) {
+      location.enter(command.subshells);
+      const at = location.dir;
+      const targets = command.redirections.flatMap((redirection) => (redirection.target === undefined ? [] : [redirection.target]));
+      const paths = command.words.map((word) => wordPathOf(word, call.dialect, wordEnv));
+      for (const path of [...paths, ...targets.map((word) => wordPathOf(word, call.dialect, wordEnv))]) {
+        const key = `${at ?? ''}\u{0}${path ?? ''}`;
+        if (path === undefined || seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const reach = await wordReach(path, at, env);
+        if (reach !== undefined) {
+          return refusal(reasonOf(`this ${call.name} line names ${reach.how}, and a shell line's writes cannot be told from its reads`, reach.place));
+        }
       }
-      seen.add(path);
-      const reach = await wordReach(path, cwd, env);
-      if (reach !== undefined) {
-        return refusal(reasonOf(`this ${call.name} line names ${reach.how}, and a shell line's writes cannot be told from its reads`, reach.place));
-      }
+      location.apply(
+        command.words.map((word, index) => locationWord(word, paths[index])),
+        call.dialect,
+      );
     }
   }
   return undefined;

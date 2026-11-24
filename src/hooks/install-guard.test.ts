@@ -216,6 +216,36 @@ describe('installGuardReply: shell lines', () => {
     assert.ok(!reply.reason.includes('current'), reply.reason);
   });
 
+  it('resolves the words after a cd, pushd or Set-Location in the line against that folder (T5364 R2)', async () => {
+    const bash = [
+      'cd ~/.teamrig/teams && echo 0.0.1 > ../current',
+      'pushd ~/.teamrig/teams && echo 0.0.1 > ../current',
+      'cd /c/u/.codex; cp evil.toml config.toml',
+      'cd ~/.team* && echo 0.0.1 > current',
+      'cd ~/$(x) && echo 0.0.1 > current',
+    ];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    const powershell = ["Set-Location ~\\.teamrig\\teams; Set-Content ..\\current '0.0.1'", "sl -Path $HOME\\.codex\\sessions; Set-Content ..\\hooks.json '{}'"];
+    for (const command of powershell) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+  });
+
+  it('passes the words after a cd that stays outside the guarded entries, in a subshell, or to an unknown folder', async () => {
+    const lines = [
+      'cd ~/.teamrig/teams/t && echo hi > notes.md',
+      '(cd ~/.teamrig/teams/t) && echo hi > ../../cur?ent',
+      'cd $(git rev-parse --show-toplevel) && echo hi > current',
+      'cd ~/$(x) && npm test',
+      'cd ~/.teamrig/teams && cd t && echo hi > ../t2/notes.md',
+    ];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+  });
+
   it('refuses any line run inside a guarded entry', async () => {
     assert.equal(await decisionOf(call('Bash', { command: 'ls' }, 'C:/u/.teamrig/versions/0.5.0')), 'deny');
   });
