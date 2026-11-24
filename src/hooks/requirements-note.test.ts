@@ -11,18 +11,18 @@ class CountingLog implements HintLog {
   readonly given: string[] = [];
   reads = 0;
 
-  async shown(claudeSession: string, reason: string): Promise<boolean> {
+  async shown(hostSession: string, reason: string): Promise<boolean> {
     this.reads += 1;
-    return this.given.includes(`${claudeSession}:${reason}`);
+    return this.given.includes(`${hostSession}:${reason}`);
   }
 
-  async record(claudeSession: string, reason: string): Promise<void> {
-    this.given.push(`${claudeSession}:${reason}`);
+  async record(hostSession: string, reason: string): Promise<void> {
+    this.given.push(`${hostSession}:${reason}`);
   }
 }
 
 function note(log: HintLog, overrides: Partial<RequirementsNoteInput> = {}): Promise<string | undefined> {
-  return requirementsNoteOnce({ problems: [{ kind: 'git-missing' }], log, claudeSession: SESSION, now: NOW, command: 'teamrig', ...overrides });
+  return requirementsNoteOnce({ problems: [{ kind: 'git-missing' }], log, hostSession: SESSION, now: NOW, command: 'teamrig', ...overrides });
 }
 
 describe('requirementsNoteOnce', () => {
@@ -46,8 +46,8 @@ describe('requirementsNoteOnce', () => {
 
   it('gives the note every time when the payload named no session', async () => {
     const log = new CountingLog();
-    assert.ok((await note(log, { claudeSession: null })) !== undefined);
-    assert.ok((await note(log, { claudeSession: null })) !== undefined);
+    assert.ok((await note(log, { hostSession: null })) !== undefined);
+    assert.ok((await note(log, { hostSession: null })) !== undefined);
     assert.equal(log.reads, 0);
   });
 });

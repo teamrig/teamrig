@@ -19,7 +19,7 @@ export function quietGit(branch: string): GitWorld {
   return {
     git: { branch: () => branch, head: () => undefined, pushTarget: () => undefined, config: () => ({ kind: 'unset' }) },
     pointerGit: { state: () => ({ kind: 'no-git' }) },
-    commitLog: { between: () => [] },
+    commitLog: { between: () => ({ kind: 'listed', commits: [] }) },
     secretsGit: {
       root: () => undefined,
       staged: () => undefined,

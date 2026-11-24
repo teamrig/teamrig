@@ -30,14 +30,15 @@ export function skipHooksReason(skips) {
     return (`teamrig commit guard: this runs git without the repository's hooks: ${named}. The hooks are the repository's ` +
         "own checks: let them run and fix what they report; if a hook itself is broken, tell the lead. [commitGuard.skipHooks]");
 }
-/** The large commits the updates would send, each once. A range git cannot list adds none, so a broken log never blocks a push. */
+/** The large commits the updates would send, each once. A range git cannot list or gave no answer for adds none, so a broken or slow log never blocks a push. */
 function largeCommitsIn(updates, env) {
     if (env.commits.gate === 'off') {
         return [];
     }
     const commits = new Map();
     for (const update of updates) {
-        for (const commit of env.commitLog.between(update.dir, update.base, update.source) ?? []) {
+        const read = env.commitLog.between(update.dir, update.base, update.source);
+        for (const commit of read.kind === 'listed' ? read.commits : []) {
             commits.set(commit.sha, commit);
         }
     }

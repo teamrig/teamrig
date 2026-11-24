@@ -62,7 +62,7 @@ function envId(runtime, name) {
  */
 async function trackEntry(event, facts, runtime, kitHome) {
     const registry = new RestoreRegistry(runtime.files, restoreSessionsDir(kitHome));
-    const change = applyEvent(await registry.read(facts.claudeSession), event, facts);
+    const change = applyEvent(await registry.read(facts.hostSession), event, facts);
     switch (change.kind) {
         case 'write': {
             await registry.write(change.entry);
@@ -73,7 +73,7 @@ async function trackEntry(event, facts, runtime, kitHome) {
             return;
         }
         case 'remove':
-            await registry.remove(facts.claudeSession);
+            await registry.remove(facts.hostSession);
             return;
         case 'none':
             return;
@@ -93,19 +93,19 @@ async function codedEvent(event, facts, runtime) {
 }
 /** The login event a turn end reports: a good one answered, a failed one failed on the login; undefined for any other. */
 function loginEventOf(event, facts) {
-    const { claudeSession, at } = facts;
+    const { hostSession, at } = facts;
     switch (event.kind) {
         case 'ready':
-            return { kind: 'answered', claudeSession, at };
+            return { kind: 'answered', hostSession, at };
         case 'error':
-            return event.code === AUTH_FAILED ? { kind: 'auth-failed', claudeSession, at } : undefined;
+            return event.code === AUTH_FAILED ? { kind: 'auth-failed', hostSession, at } : undefined;
         default:
             return undefined;
     }
 }
 /** How the restore log names a tab: its team and session when `teamrig launch` started it, and its Claude session. */
 function tabLabelOf(facts) {
-    return facts.team === undefined || facts.session === undefined ? facts.claudeSession : `${facts.team}/${facts.session} (${facts.claudeSession})`;
+    return facts.team === undefined || facts.session === undefined ? facts.hostSession : `${facts.team}/${facts.session} (${facts.hostSession})`;
 }
 /**
  * The page a failure of this tab would send: only a tab of a team, whose config or a team's above it names a page
@@ -148,9 +148,9 @@ async function trackLogin(event, facts, runtime, kitHome) {
 /** The reply an event shows the login works by: a good turn end, or a tool end of the tab's own turn; undefined for any other. */
 function dayProbeReplyOf(event, facts) {
     if (event.kind === 'ready') {
-        return { kind: 'answered', tab: facts.claudeSession, at: facts.at };
+        return { kind: 'answered', tab: facts.hostSession, at: facts.at };
     }
-    return event.kind === 'tool' && event.mainThread ? { kind: 'tool', tab: facts.claudeSession, at: facts.at } : undefined;
+    return event.kind === 'tool' && event.mainThread ? { kind: 'tool', tab: facts.hostSession, at: facts.at } : undefined;
 }
 /** Releases the day-start probe (src/restore/day-probe.ts) at a reply that shows the login works, and logs it. */
 async function trackDayProbe(event, facts, runtime, kitHome) {
@@ -225,14 +225,14 @@ async function trackLaunchers(event, facts, runtime, kitHome) {
  * teamrig on the user's PATH (`trackLaunchers`), else undefined.
  */
 export async function trackRestore(hook, runtime) {
-    const claudeSession = hook.session;
+    const hostSession = hook.session;
     const reported = trackEventOf(hook);
-    if (claudeSession === undefined || reported === undefined) {
+    if (hostSession === undefined || reported === undefined) {
         return undefined;
     }
     const told = identityOf(runtime);
     const facts = {
-        claudeSession,
+        hostSession,
         at: runtime.clock.now(),
         // The folder the session started in, which stays put through a `cd` or a worktree: the one to resume from.
         projectDir: told.projectDir ?? present(hook.cwd),

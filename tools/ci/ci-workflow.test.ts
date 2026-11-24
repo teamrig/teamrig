@@ -84,6 +84,8 @@ function legsOf(test: string, systems: readonly string[]): ReadonlyMap<string, r
   const excluded = [...test.matchAll(/^ {10}- \{ os: ([\w-]+), part: ([^}]+) \}$/gm)].map((entry) => `${entry[1]} ${unquote(entry[2] ?? '')}`);
   return new Map(systems.map((os) => [os, parts.filter((part) => !excluded.includes(`${os} ${part}`))]));
 }
+const CODE_WITH_BASE = `\${{ needs.changes.outputs.kind == 'code' && ${NOT_SHARD} && (github.event.pull_request.base.sha || github.event.merge_group.base_sha) }}`;
+const BASE_FLAG = '${BASE_SHA:+--base "$BASE_SHA"}';
 
 describe('ci.yml', () => {
   const jobs = jobsOf(workflow);
@@ -221,10 +223,18 @@ describe('ci.yml', () => {
       { does: 'node tools/docs/images-cli.ts --check', when: NOT_DESIGN_CHECK },
       { does: 'node tools/docs/configuration-cli.ts --check', when: NOT_DESIGN_CHECK },
       { does: 'node tools/docs/parity-cli.ts --check', when: NOT_DESIGN_CHECK },
-      { does: 'node tools/ci/boundaries-cli.ts', when: CODE_CHECK },
-      { does: 'node tools/ci/provider-words-cli.ts', when: CODE_CHECK },
+      { does: 'git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA"', when: CODE_WITH_BASE },
+      { does: `node tools/ci/boundaries-cli.ts ${BASE_FLAG}`, when: CODE_CHECK },
+      { does: `node tools/ci/provider-words-cli.ts ${BASE_FLAG}`, when: CODE_CHECK },
       { does: 'node tools/docs/doc-check-cli.ts', when: `\${{ ${NOT_SHARD} }}` },
     ]);
+  });
+
+  it("holds the count checks to the base commit's baseline, the commit read from env, never interpolated into a run line (T5014)", () => {
+    const test = jobs.get('test') ?? '';
+    const baseEnv = /^ {10}BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}$/gm;
+    assert.equal(test.match(baseEnv)?.length, 3, 'the fetch and both count checks read the base commit from env');
+    assert.doesNotMatch(test, /run: [^\n]*\$\{\{[^\n]*base/, 'a run line never interpolates the base commit');
   });
 
   it('runs the suite once on ubuntu, in the coverage gate on the test leg Node, which fails a failing test (T5027)', () => {

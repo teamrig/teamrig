@@ -59,10 +59,16 @@ export async function gatedVerdict(setup, ports, change) {
     if (tree === undefined) {
         return { kind: 'held', reason: `could not read the tree ${short(head)} makes, so the self-merge gates cannot read its pass record` };
     }
-    const commits = ports.commitsOf(base, head);
-    if (commits === undefined) {
-        return { kind: 'held', reason: `could not read the commits of ${branch} against ${short(base)}, so the self-merge gates cannot weigh them` };
+    const read = ports.commitsOf(base, head);
+    switch (read.kind) {
+        case 'refused':
+            return { kind: 'held', reason: `could not read the commits of ${branch} against ${short(base)}, so the self-merge gates cannot weigh them` };
+        case 'unanswered':
+            return { kind: 'held', reason: `git gave no answer reading the commits of ${branch} against ${short(base)} (${read.reason}), so the self-merge gates cannot weigh them; merge again once git answers` };
+        case 'listed':
+            break;
     }
+    const { commits } = read;
     const taskId = taskOfBranch(branch);
     const task = taskId === undefined ? undefined : await ports.taskOf(taskId);
     const pass = await ports.passOf(tree);

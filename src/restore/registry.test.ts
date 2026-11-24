@@ -9,9 +9,9 @@ const DIR = restoreSessionsDir(join('/', 'kit'));
 const OLDER = '0123abcd-0000-4000-8000-00000000000a';
 const NEWER = '0123abcd-0000-4000-8000-00000000000b';
 
-function entry(claudeSession: string, createdAt: string): RestoreEntry {
+function entry(hostSession: string, createdAt: string): RestoreEntry {
   return {
-    claudeSession,
+    hostSession,
     projectDir: '/work/app',
     transcriptPath: undefined,
     entrypoint: 'cli',
@@ -51,7 +51,7 @@ describe('RestoreRegistry', () => {
     });
     const listed = await new RestoreRegistry(files, DIR).list();
     assert.deepEqual(
-      listed.map((one) => one.claudeSession),
+      listed.map((one) => one.hostSession),
       [OLDER, NEWER],
     );
   });

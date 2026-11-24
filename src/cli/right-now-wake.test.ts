@@ -16,7 +16,7 @@ import { EXIT } from './runtime.ts';
 const LOG = join(TEAM_HOME, 'state', 'session-log.jsonl');
 const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
 /** Alpha, closed by the idle pass in the project folder. */
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', claudeSession: CLAUDE_SESSION, idleMinutes: 63, freedMb: 1600, folder: APP };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', hostSession: CLAUDE_SESSION, idleMinutes: 63, freedMb: 1600, folder: APP };
 const ROOM: CommitCharge = { usedMb: 40_000, limitMb: 100_700 };
 
 interface Run {

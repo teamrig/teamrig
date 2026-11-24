@@ -6,6 +6,7 @@ import { isRecord } from "../core/guards.js";
  */
 export class ConfigReader {
     issues = [];
+    warnings = [];
     /** A nested object; a missing one reads as empty so its fields take their defaults. */
     section(parent, key, path) {
         const value = parent[key];
@@ -131,6 +132,13 @@ export class ConfigReader {
     /** Records a rule that spans several fields, such as "the lead must be one of the sessions". */
     report(path, message) {
         this.issues.push({ path, message });
+    }
+    /**
+     * Records a value this release leaves out but a newer one may read (#1478): unlike an issue, a warning keeps writes
+     * running, so it is only for a value whose leaving out grants nothing.
+     */
+    warn(path, message) {
+        this.warnings.push({ path, message });
     }
     /** A key this config format no longer reads: flagged, so a hand-written one is not silently ignored. */
     dropped(parent, key, path, why) {

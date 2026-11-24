@@ -5,8 +5,13 @@ import { MemoryFiles } from '../testing/memory-files.ts';
 import { closedOf, homeCloseOf, readSessionLog, SESSION_LOG_FORMAT, SessionLog, type CloseRecord, type ReopenRecord } from './log.ts';
 
 const PATH = '/team/state/session-log.jsonl';
-const CLOSE: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T10:00:00.000Z', claudeSession: 'claude-1', idleMinutes: 75, freedMb: 1300 };
+const CLOSE: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T10:00:00.000Z', hostSession: 'claude-1', idleMinutes: 75, freedMb: 1300 };
 const RESUMED: ReopenRecord = { kind: 'reopen', session: 'alpha', at: '2030-01-08T12:00:00.000Z', resumed: 'claude-1' };
+
+/** A close as format 1 stores it: the tab under its old key `claudeSession`, in the same place (T4762). */
+function storedClose(record: CloseRecord, fields: Readonly<Record<string, unknown>> = {}): string {
+  return JSON.stringify({ v: SESSION_LOG_FORMAT, ...record, ...fields }).replace('"hostSession":', '"claudeSession":');
+}
 
 describe('the session log', () => {
   it('keeps closes and reopens in order, and reads back what it wrote', async () => {
@@ -17,14 +22,15 @@ describe('the session log', () => {
       await log.append(record);
     }
     assert.deepEqual(await log.read(), { records: [CLOSE, RESUMED, fresh], skipped: 0 });
-    assert.equal(files.get(PATH)?.split('\n')[0], JSON.stringify({ v: SESSION_LOG_FORMAT, ...CLOSE }));
+    const stored = '{"v":1,"kind":"close","session":"alpha","by":"lead","at":"2030-01-08T10:00:00.000Z","claudeSession":"claude-1","idleMinutes":75,"freedMb":1300}';
+    assert.equal(files.get(PATH)?.split('\n')[0], stored);
   });
 
   it('keeps the folder a close resumes its session in, and reads a close without one or with a damaged one as none (T1408)', async () => {
     const files = new MemoryFiles();
     const inWorktree: CloseRecord = { ...CLOSE, folder: '/work/app/.claude/worktrees/fix' };
     await new SessionLog(files, PATH).append(inWorktree);
-    await files.append(PATH, `${JSON.stringify({ v: SESSION_LOG_FORMAT, ...CLOSE, folder: 7 })}\n`);
+    await files.append(PATH, `${storedClose(CLOSE, { folder: 7 })}\n`);
     assert.deepEqual(await new SessionLog(files, PATH).read(), { records: [inWorktree, CLOSE], skipped: 0 });
   });
 
@@ -55,8 +61,8 @@ describe('the session log', () => {
 
   it('reads the lines a later teamrig wrote, naming the tab hostSession, and writes beside them (T4762)', async () => {
     const files = new MemoryFiles();
-    const { claudeSession, ...close } = CLOSE;
-    const later = [{ v: 2, ...close, hostSession: claudeSession }, { v: 2, ...RESUMED }];
+    const { hostSession, ...close } = CLOSE;
+    const later = [{ v: 2, ...close, hostSession }, { v: 2, ...RESUMED }];
     await files.write(PATH, later.map((line) => `${JSON.stringify(line)}\n`).join(''));
     const log = new SessionLog(files, PATH);
     assert.deepEqual(await log.read(), { records: [CLOSE, RESUMED], skipped: 0 });
@@ -64,12 +70,12 @@ describe('the session log', () => {
     const again: CloseRecord = { ...CLOSE, at: '2030-01-09T10:00:00.000Z' };
     await log.append(again);
     assert.deepEqual(await log.read(), { records: [CLOSE, RESUMED, again], skipped: 0 });
-    assert.equal(files.get(PATH)?.trimEnd().split('\n').at(-1), JSON.stringify({ v: SESSION_LOG_FORMAT, ...again }));
+    assert.equal(files.get(PATH)?.trimEnd().split('\n').at(-1), storedClose(again));
   });
 
   it('skips a damaged or newer line, and refuses to write beside a newer one', async () => {
     const files = new MemoryFiles();
-    const damaged = JSON.stringify({ v: SESSION_LOG_FORMAT, ...CLOSE, freedMb: 'lots' });
+    const damaged = storedClose(CLOSE, { freedMb: 'lots' });
     const newer = JSON.stringify({ v: SESSION_LOG_FORMAT + 2, ...CLOSE });
     await files.write(PATH, `${damaged}\nnot json\n${JSON.stringify({ v: SESSION_LOG_FORMAT, ...RESUMED })}\n${newer}`);
     const log = new SessionLog(files, PATH);

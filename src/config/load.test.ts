@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { formatConfig, loadConfig, migrationBackupName, writeConfigWithBackup } from './load.ts';
+import { formatConfig, loadConfig, migrationBackupName, writeConfigWithBackup, writeTextWithBackup } from './load.ts';
 import type { ConfigMigration } from './migrate.ts';
 import { CONFIG_VERSION } from './types.ts';
 
@@ -90,5 +90,25 @@ describe('writeConfigWithBackup', () => {
 
   it('refuses when the file vanished', async () => {
     await assert.rejects(writeConfigWithBackup(new MemoryFiles(), target, pending.migrated, new FakeClock(0)), /disappeared/);
+  });
+});
+
+describe('writeTextWithBackup', () => {
+  const TOML = '/srv/codex/config.toml';
+  const target = { configPath: TOML, backupsDir: BACKUPS, backupName: 'codex-config' };
+
+  it('keeps the original under the given extension and writes the text as it is', async () => {
+    const files = new MemoryFiles({ [TOML]: 'model = "o4"\n' });
+    const backup = await writeTextWithBackup(files, target, 'model = "o5"\n', new FakeClock(0), '.bak');
+    assert.equal(backup.replaceAll('\\', '/'), `${BACKUPS}/codex-config.bak`);
+    assert.equal(files.get(backup), 'model = "o4"\n');
+    assert.equal(files.get(TOML), 'model = "o5"\n');
+  });
+
+  it('stamps the backup, keeping the extension, when the plain name is taken', async () => {
+    const files = new MemoryFiles({ [TOML]: 'new', [`${BACKUPS}/codex-config.bak`]: 'old' });
+    const backup = await writeTextWithBackup(files, target, 'newer', new FakeClock(Date.UTC(2026, 0, 2, 3, 4)), '.bak');
+    assert.equal(backup.replaceAll('\\', '/'), `${BACKUPS}/codex-config.202601020304.bak`);
+    assert.equal(files.get(`${BACKUPS}/codex-config.bak`), 'old');
   });
 });

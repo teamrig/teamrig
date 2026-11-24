@@ -18,11 +18,13 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.1.0',
+  apiVersion: '0.2.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
   refPrefix: 'gh:',
+  terms: ['GitHub', 'gh', 'pull request'],
+  steps: ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change'],
   // GitHub's keys are still the team config's own `github` section, which the commands read.
   configKeys: {},
   manifest: {

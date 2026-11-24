@@ -21,11 +21,12 @@ function unsupported(notice) {
 /** An assign names an account by its id, and Jira keeps one per issue. */
 const ONE_ASSIGNEE = partial('a second assignee', 'a Jira issue holds one assignee, named by its account id, so an assign replaces who held it');
 export const declaration = {
-    apiVersion: '0.1.0',
+    apiVersion: '0.2.0',
     id: 'jira',
     name: 'Jira',
     kinds: ['tracker'],
     refPrefix: 'jira:',
+    terms: ['Jira', 'JQL'],
     configKeys: CONFIG_KEYS,
     manifest: {
         'tracker.issue-import': partial("a description's formatting, and the reporter's tie to the project", 'a Jira description is read as plain text, and Jira names no tie between a reporter and the project: every issue is read as an outsider\'s'),

@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { GUARD_LIMIT_MS } from './guard-runner.ts';
 import { HOOK_OUTPUT_MARGIN_MS, HOOK_TIMEOUT_MS, hookLockDeadline } from './hook-timeouts.ts';
 import { COMMAND_FLAGS } from './run.ts';
+import { CLEAR_TIMEOUT_MS } from '../mod/clear-hand.ts';
+import { HAND_TRACE_TIMEOUT_MS } from '../mod/hand-watch.ts';
 import { MEETING_PANEL_TIMEOUT_MS } from '../mod/meeting-panel-hand.ts';
 import { MEETING_TIMEOUT_MS } from '../mod/meeting-hand.ts';
 import { NEEDS_YOU_TIMEOUT_MS } from '../mod/needs-you-hand.ts';
@@ -45,7 +47,7 @@ describe('HOOK_TIMEOUT_MS (#737)', () => {
   });
 
   it("holds the limit the plugin's mod gives the hooks its hands run", () => {
-    const hands: Readonly<Record<string, number | null>> = {
+    const hands: Readonly<Record<string, number>> = {
       'wake-check': WAKE_TIMEOUT_MS,
       'wake-dropped': WAKE_TIMEOUT_MS,
       'meeting-due': MEETING_TIMEOUT_MS,
@@ -58,8 +60,9 @@ describe('HOOK_TIMEOUT_MS (#737)', () => {
       'update-dismiss': UPDATE_CHECK_TIMEOUT_MS,
       'update-apply': UPDATE_APPLY_TIMEOUT_MS,
       'slash-command': SLASH_TIMEOUT_MS,
-      'clear-dir': null,
-      'clear-claim': null,
+      'clear-dir': CLEAR_TIMEOUT_MS,
+      'clear-claim': CLEAR_TIMEOUT_MS,
+      'hand-trace': HAND_TRACE_TIMEOUT_MS,
     };
     for (const [name, limit] of Object.entries(hands)) {
       assert.equal(HOOK_TIMEOUT_MS[name], limit, `hook ${name}`);
@@ -80,10 +83,10 @@ describe('hookLockDeadline (#737)', () => {
     assert.equal(hookLockDeadline('hook stop', 1_000), 1_000 + 15_000 - HOOK_OUTPUT_MARGIN_MS);
     assert.equal(hookLockDeadline('hook push-guard', 1_000), 1_000 + GUARD_LIMIT_MS - HOOK_OUTPUT_MARGIN_MS);
     assert.equal(hookLockDeadline('hook tool-end', 0), 5_000 - HOOK_OUTPUT_MARGIN_MS);
+    assert.equal(hookLockDeadline('hook clear-dir', 1_000), 1_000 + CLEAR_TIMEOUT_MS - HOOK_OUTPUT_MARGIN_MS);
   });
 
-  it('sets none for a hook with no limit, an unknown hook or any other command', () => {
-    assert.equal(hookLockDeadline('hook clear-dir', 1_000), undefined);
+  it('sets none for an unknown hook or any other command', () => {
     assert.equal(hookLockDeadline('hook constructor', 1_000), undefined);
     assert.equal(hookLockDeadline('list', 1_000), undefined);
     assert.equal(hookLockDeadline('hookstop', 1_000), undefined);

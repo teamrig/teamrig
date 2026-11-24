@@ -36,6 +36,7 @@ describe('localChecks', () => {
   it('runs every command CI runs', () => {
     for (const command of ciCommands()) {
       if (command.startsWith('npm ci')) continue; // installing is the developer's setup
+      if (command.startsWith('git fetch ')) continue; // CI's shallow checkout fetches the base a local clone holds
       const script = /^node (\S+\.ts)/.exec(command)?.[1];
       const tsc = /^tsc (.+)$/.exec(command)?.[1];
       if (script !== undefined) assert.ok(argvs.some((argv) => argv.startsWith(`node ${script}`)), `no local check runs ${script}`);
@@ -120,6 +121,11 @@ describe('gateChanges (T4080 C2)', () => {
   it('names each changed file of the gate itself, the package and the TypeScript configs, in the order given', () => {
     const gate = ['.githooks/pre-push', '.github/workflows/ci.yml', 'tools/ci/local.ts', 'tools/ship/repos.json', 'src/push-guard/pass-record.ts', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json'];
     assert.deepEqual(gateChanges(['src/a.ts', ...gate, 'docs/a.md']), gate);
+  });
+
+  it('names a changed file of the tools the gate runs or imports: tools/lib, tools/scrub, tools/dco and tools/build (#1822)', () => {
+    const gate = ['tools/lib/guards.ts', 'tools/scrub/cli.ts', 'tools/dco/cli.ts', 'tools/build/integrity.ts'];
+    assert.deepEqual(gateChanges(['src/a.ts', ...gate, 'docs/tools/lib/x.md', 'tools/library/x.ts']), gate);
   });
 
   it('names none for source, specs, docs or a look-alike path', () => {

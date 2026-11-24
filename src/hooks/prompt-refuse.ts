@@ -89,7 +89,7 @@ export function promptAnswerReply(tool: string, answer: PromptAnswer): HookReply
 export interface PromptAnswerFacts {
   readonly at: Date;
   readonly session: string | undefined;
-  readonly claudeSession: string | null;
+  readonly hostSession: string | null;
   readonly call: ToolCall;
   readonly answer: PromptAnswer;
 }
@@ -109,7 +109,7 @@ export function promptAnswerRecord(facts: PromptAnswerFacts, scanner: SecretScan
     v: 1,
     at: facts.at.toISOString(),
     session: facts.session ?? null,
-    claudeSession: facts.claudeSession,
+    claudeSession: facts.hostSession,
     tool: facts.call.name,
     answer: answer.kind,
     ...(answer.kind === 'route' ? { route: answer.route } : {}),

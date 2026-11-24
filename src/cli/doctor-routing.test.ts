@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { claudeProjectSlug } from '../budget/discover.ts';
-import { APP, CliHarness, HELD_DENY, TEAM, USER_HOME, USER_SETTINGS } from '../testing/cli-harness.ts';
+import { APP, CliHarness, findingLines, HELD_DENY, TEAM, USER_HOME, USER_SETTINGS } from '../testing/cli-harness.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
 import { NO_PATHS_HOST } from '../testing/host.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
@@ -14,7 +14,7 @@ const LOCAL_SETTINGS = join(APP, '.claude', 'settings.local.json');
 
 /** Each line's first two words: the header's count, then each finding's kind, in order. */
 function kinds(stdout: readonly string[]): string[] {
-  return stdout.map((line) => line.split(' ').slice(0, 2).join(' '));
+  return findingLines(stdout).map((line) => line.split(' ').slice(0, 2).join(' '));
 }
 
 describe('teamrig doctor: what overrides a model or effort choice', () => {
@@ -47,7 +47,7 @@ describe('teamrig doctor: what overrides a model or effort choice', () => {
   it('stays clean with the variables unset, valid settings and every named model given an effort', async () => {
     const kit = new CliHarness({ ...TEAM, launch: { lead: { model: 'sonnet' }, alpha: { model: 'opus', effort: 'xhigh' } } });
     await kit.files.write(USER_SETTINGS, JSON.stringify({ ...HELD_DENY, env: { DISABLE_TELEMETRY: '1' } }));
-    assert.deepEqual((await kit.run(['doctor'])).stdout, ['DOCTOR clean, team app']);
+    assert.deepEqual(findingLines((await kit.run(['doctor'])).stdout), ['DOCTOR clean, team app']);
   });
 });
 
@@ -71,7 +71,7 @@ describe('teamrig doctor: the project folders the config names', () => {
     const probe = new FakePathProbe({ folders: [shared, web, notes] });
     const kit = new CliHarness(config);
     await kit.holdSecretDeny();
-    assert.deepEqual((await kit.run(['doctor'], { probe })).stdout, ['DOCTOR clean, team app']);
+    assert.deepEqual(findingLines((await kit.run(['doctor'], { probe })).stdout), ['DOCTOR clean, team app']);
   });
 });
 
@@ -93,7 +93,7 @@ describe('teamrig doctor: the lists a session holds in its context', () => {
     const transcripts = new MemoryTranscripts({ [session]: transcript([skillListingLine(skills(2))]) });
     const kit = new CliHarness(TEAM);
     await kit.holdSecretDeny();
-    assert.deepEqual((await kit.run(['doctor'], { transcripts })).stdout, ['DOCTOR clean, team app']);
+    assert.deepEqual(findingLines((await kit.run(['doctor'], { transcripts })).stdout), ['DOCTOR clean, team app']);
   });
 });
 
@@ -118,9 +118,9 @@ describe("teamrig doctor: the user's PowerShell history", () => {
     const kit = new CliHarness(TEAM);
     await kit.holdSecretDeny();
     await kit.files.write(profile, 'try { Set-PSReadLineOption -AddToHistoryHandler { param([string]$line) $true } } catch { }');
-    assert.deepEqual((await kit.run(['doctor'], { platform: 'win32', env, probe })).stdout, ['DOCTOR clean, team app']);
+    assert.deepEqual(findingLines((await kit.run(['doctor'], { platform: 'win32', env, probe })).stdout), ['DOCTOR clean, team app']);
     const bare = new CliHarness(TEAM);
     await bare.holdSecretDeny();
-    assert.deepEqual((await bare.run(['doctor'], { platform: 'win32', env })).stdout, ['DOCTOR clean, team app']);
+    assert.deepEqual(findingLines((await bare.run(['doctor'], { platform: 'win32', env })).stdout), ['DOCTOR clean, team app']);
   });
 });

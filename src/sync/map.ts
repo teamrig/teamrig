@@ -124,6 +124,11 @@ export function issueTask(issue: HostIssue, rules: ImportRules, tracker: ImportT
 export function taskTitle(issue: HostIssue, maxTitle: number, trackerName: string): string {
   const title = plainLine(issue.title);
   const text = title === '' ? `${trackerName} issue ${issue.repo}#${issue.number}` : title;
+  return cutTitle(text, maxTitle);
+}
+
+/** `text` cut to `maxTitle` characters. */
+export function cutTitle(text: string, maxTitle: number): string {
   // A cut between the two halves of a character leaves the first half alone: it goes too.
   return text.length <= maxTitle ? text : text.slice(0, maxTitle).replace(/[\uD800-\uDBFF]$/, '').trimEnd();
 }

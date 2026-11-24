@@ -12,7 +12,7 @@ import { inboxDepsOf } from "./inbox.js";
  * receiver's last write to its own transcript, never its subagents': their work does not keep the
  * receiver's context cached.
  */
-export async function coldSendHold(runtime, kit, config, roster, message, claudeSession) {
+export async function coldSendHold(runtime, kit, config, roster, message, hostSession) {
     const { coldAfterMinutes } = config.messages;
     if (coldAfterMinutes === 0) {
         return undefined;
@@ -23,7 +23,7 @@ export async function coldSendHold(runtime, kit, config, roster, message, claude
     }
     const { marks } = await inboxDepsOf(runtime, kit.paths).marks.read();
     const tabs = tabsOf(marks, receiver.id, RECEIVER_TABS);
-    if (tabs.includes(claudeSession)) {
+    if (tabs.includes(hostSession)) {
         return undefined;
     }
     const last = await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), tabs);
@@ -32,7 +32,7 @@ export async function coldSendHold(runtime, kit, config, roster, message, claude
     }
     const now = runtime.clock.now();
     const verdict = await decideColdSend(new JsonlColdSendLog(runtime.files, kit.paths.coldSends), {
-        claudeSession,
+        hostSession,
         to: receiver.id,
         name: roster.nameOf(receiver.id) ?? receiver.id,
         idleMs: now - last,

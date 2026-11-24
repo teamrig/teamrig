@@ -36,15 +36,15 @@ export class JsonlColdSendLog {
         this.path = path;
     }
     /** Read from the log's tail, so its size never slows a send; a damaged line is skipped. */
-    async heldSince(claudeSession, to, since) {
+    async heldSince(hostSession, to, since) {
         const { records } = parseJsonl((await this.files.readTail(this.path, COLD_SEND_TAIL_BYTES)) ?? '');
         return records.some((line) => {
             const at = Date.parse(stringField(line.record, 'at') ?? '');
-            return hostSessionOf(line.record, 'claudeSession') === claudeSession && stringField(line.record, 'to') === to && at >= since.getTime();
+            return hostSessionOf(line.record, 'claudeSession') === hostSession && stringField(line.record, 'to') === to && at >= since.getTime();
         });
     }
-    async record(claudeSession, to, at) {
-        await this.files.append(this.path, toJsonlLine({ v: COLD_SEND_VERSION, claudeSession, to, at: at.toISOString() }));
+    async record(hostSession, to, at) {
+        await this.files.append(this.path, toJsonlLine({ v: COLD_SEND_VERSION, claudeSession: hostSession, to, at: at.toISOString() }));
     }
 }
 const SEND = { kind: 'send' };
@@ -72,10 +72,10 @@ export async function decideColdSend(log, facts) {
         return SEND;
     }
     try {
-        if (await log.heldSince(facts.claudeSession, facts.to, new Date(facts.now.getTime() - RESEND_WINDOW_MS))) {
+        if (await log.heldSince(facts.hostSession, facts.to, new Date(facts.now.getTime() - RESEND_WINDOW_MS))) {
             return SEND;
         }
-        await log.record(facts.claudeSession, facts.to, facts.now);
+        await log.record(facts.hostSession, facts.to, facts.now);
     }
     catch {
         return SEND;

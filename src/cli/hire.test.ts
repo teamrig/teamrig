@@ -30,7 +30,7 @@ function configOf(kit: CliHarness): JsonRecord {
 async function fullHost(team: JsonRecord): Promise<{ readonly kit: CliHarness; readonly memory: FakeHostMemory }> {
   const kit = new CliHarness(team);
   const records = new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') });
-  await records.write('lead', { claudePid: 6900, claudeSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
+  await records.write('lead', { claudePid: 6900, hostSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
   const lead = { pid: 6900, parent: 1, bytes: 800 * 2 ** 20, committed: 2000 * 2 ** 20 };
   const memory = new FakeHostMemory().lists([lead], { usedMb: 91_000, limitMb: 100_000 });
   memory.free = 20_000;

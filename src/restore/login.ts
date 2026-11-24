@@ -68,7 +68,7 @@ export interface LoginProbe {
 /** A turn end the marker follows: one that failed on the login, or one the model answered. */
 export interface LoginEvent {
   readonly kind: 'auth-failed' | 'answered';
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly at: number;
 }
 
@@ -160,7 +160,7 @@ function answered(existing: LoginMarker | undefined, tab: string, at: number): L
 
 /** How a turn end changes the marker (`existing`, undefined when there is none yet). */
 export function applyLoginEvent(existing: LoginMarker | undefined, event: LoginEvent): LoginChange {
-  return event.kind === 'auth-failed' ? authFailed(existing, event.claudeSession, event.at) : answered(existing, event.claudeSession, event.at);
+  return event.kind === 'auth-failed' ? authFailed(existing, event.hostSession, event.at) : answered(existing, event.hostSession, event.at);
 }
 
 /**

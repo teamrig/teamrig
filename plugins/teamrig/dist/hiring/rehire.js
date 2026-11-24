@@ -1,11 +1,11 @@
 const DAY_MS = 86_400_000;
 /** The verdict with its reason in words, the numbers included, at the clock's `now` (epoch ms). */
 export function resumeVerdict(facts, hiring, now) {
-    const { claudeSession, changedAt, tokens } = facts;
-    if (claudeSession === undefined) {
+    const { hostSession, changedAt, tokens } = facts;
+    if (hostSession === undefined) {
         return { kind: 'fresh', detail: 'no Claude Code session of it is on record' };
     }
-    const last = `its last Claude Code session ${claudeSession}`;
+    const last = `its last Claude Code session ${hostSession}`;
     if (changedAt === undefined) {
         return { kind: 'fresh', detail: `${last} has no transcript in this project folder` };
     }
@@ -21,5 +21,5 @@ export function resumeVerdict(facts, hiring, now) {
     if (idle > hiring.resumeMaxIdleDays * DAY_MS) {
         return { kind: 'fresh', detail: `${last} holds ${size}: over hiring.resumeMaxIdleDays ${hiring.resumeMaxIdleDays}` };
     }
-    return { kind: 'resume', claudeSession, detail: `${last} holds ${size}` };
+    return { kind: 'resume', hostSession, detail: `${last} holds ${size}` };
 }

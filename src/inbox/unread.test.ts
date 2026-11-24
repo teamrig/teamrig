@@ -9,7 +9,7 @@ const LINES = ['- 2030-01-07 09:00 lead: first', '- 2030-01-07 10:00 bravo: seco
 const fakeHash: LineHash = (line) => `hash:${line}`;
 
 function mark(line: number, lastLineHash: string | null): InboxMark {
-  return { v: 1, area: 'alpha', line, at: '2030-01-07T12:00:00.000Z', claudeSession: null, lastLineHash };
+  return { v: 1, area: 'alpha', line, at: '2030-01-07T12:00:00.000Z', hostSession: null, lastLineHash };
 }
 
 describe('unreadOf', () => {

@@ -30,6 +30,7 @@ import { TRANSCRIPT_TAIL_BYTES } from "../../names/title.js";
 import { decideStart, decideStop, reaskGrowth, thousands, } from "../../refresh/decide.js";
 import { ownerTurnsLine, ownerTurnsText } from "../../refresh/owner-turns.js";
 import { carryLines, carryStartOf, readCarry } from "../../refresh/carry.js";
+import { firedBySchedule } from "../../refresh/scheduled-prompt.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { readContextTokens } from "../../refresh/usage.js";
 import { noPositionals } from "../args.js";
@@ -51,7 +52,7 @@ import { droppedEditReasonOf } from "./hook-dropped-edit.js";
 import { handStepReasonOf } from "./hook-hand-step.js";
 import { effortWritebackOf } from "./hook-effort-writeback.js";
 import { meetingHold } from "./hook-meeting.js";
-import { restartOrPark, restartTargetOf } from "./hook-restart.js";
+import { inheritedCrons, restartOrPark, restartTargetOf } from "./hook-restart.js";
 import { helperContextOf } from "./hook-helper-start.js";
 import { promptSecretBlock } from "./hook-prompt-secret.js";
 import { guardLoadOf, hookTeam } from "./hook-guard-load.js";
@@ -185,6 +186,36 @@ async function titleOutcome(runtime, kit, config, hostSession, read) {
     }
 }
 /**
+ * Whether an automatic restart waits on the session's next prompt: armed and pending, or held back until a wake brings
+ * it work (T1383). Read first, so a prompt with nothing to cancel reads no transcript.
+ */
+async function restartWaits(runtime, kit, id) {
+    const store = new RefreshStore(runtime.files, kit.paths);
+    try {
+        return (await store.parked(id)) !== undefined || (await store.restart(id))?.phase === 'pending';
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Whether the prompt a UserPromptSubmit hook sees (`seen`) was fired by one of the session's live scheduled jobs; a
+ * transcript or store that does not read counts as typed, so the prompt still cancels the restart.
+ */
+async function scheduledPrompt(runtime, kit, id, seen) {
+    const reader = transcriptsIfKept(runtime);
+    if (reader === undefined) {
+        return false;
+    }
+    try {
+        const inherited = await inheritedCrons(new RefreshStore(runtime.files, kit.paths), id, seen.transcript);
+        return await firedBySchedule(reader, runtime.files, seen, inherited, runtime.clock.now());
+    }
+    catch {
+        return false;
+    }
+}
+/**
  * A prompt typed while the automatic restart waits for the session to be idle, or is held back until a wake brings it
  * work (T1383), cancels it, so the session keeps its context; one line tells the model, with the context growth
  * (`growth` tokens) that asks again. None when no restart waits, or one is already ending the session.
@@ -262,7 +293,10 @@ export async function inboxReminder(args, runtime) {
         await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
         await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
     }
-    const cancelled = session === undefined ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
+    // A scheduled job's prompt is no one typing: it leaves the restart armed, which waits for the turn it starts to end.
+    const waits = session !== undefined && (await restartWaits(runtime, kit, session));
+    const scheduled = session !== undefined && waits && (await scheduledPrompt(runtime, kit, session, { transcript: event.transcript, prompt: event.prompt }));
+    const cancelled = session === undefined || !waits || scheduled ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
     const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);
     // Like the inbox lines below, reading the digest moves its cursor, so it is read late; only a leader gets one.
     const digest = session === undefined ? undefined : await leaderDigestText(runtime, kit.paths, config, session).catch(() => undefined);
@@ -285,9 +319,9 @@ export async function inboxReminder(args, runtime) {
 export async function coldSend(args, runtime) {
     noPositionals(args);
     const { event } = await readHookInput(runtime);
-    const claudeSession = event?.session;
+    const hostSession = event?.session;
     const message = event === undefined ? undefined : sentMessageOf(event);
-    if (claudeSession === undefined || message === undefined) {
+    if (hostSession === undefined || message === undefined) {
         return EXIT.ok;
     }
     const found = await sessionTeam(event?.cwd, runtime);
@@ -300,9 +334,9 @@ export async function coldSend(args, runtime) {
     }
     const { config } = kit.load;
     const roster = await rosterOf(runtime, kit, config);
-    const hold = (await meetingHold(runtime, kit, config, roster, message, claudeSession)) ??
-        (await closedSendHold(runtime, kit, config, roster, message, claudeSession)) ??
-        (await coldSendHold(runtime, kit, config, roster, message, claudeSession));
+    const hold = (await meetingHold(runtime, kit, config, roster, message, hostSession)) ??
+        (await closedSendHold(runtime, kit, config, roster, message, hostSession)) ??
+        (await coldSendHold(runtime, kit, config, roster, message, hostSession));
     writeReply(runtime, 'tool-start', hold);
     return EXIT.ok;
 }
@@ -484,8 +518,8 @@ async function carryFrom(runtime, store, id, transcript, now) {
     return { carry: await carryOfTranscript(runtime, transcript, now, inherited, store.handoverPath(id)), inherited };
 }
 /**
- * Records the jobs a /clear leaves live in the process for the fresh session's transcript, which never names them,
- * so the next refresh counts them (T657); a new process ends them, so it keeps none.
+ * Records the jobs the old session had, which a /clear may keep, for the fresh session's transcript, which never
+ * names them, so the next refresh still names them (T657); a new process ends them, so it keeps none.
  */
 async function keepCarried(store, id, crons, start, fresh) {
     if (start === 'same-process' && fresh !== undefined && crons.length > 0) {
@@ -496,10 +530,10 @@ async function keepCarried(store, id, crons, start, fresh) {
     }
 }
 /**
- * What the session that wrote the handover leaves for this fresh one: its scheduled jobs (kept by a /clear,
- * lost with a new process), counted from those an earlier /clear left live in its process, and wake-up, and its
- * scratchpad and plan file; a /clear records its jobs for the next refresh. A transcript it cannot read, or a
- * record it cannot write, is said, never thrown: the note itself must still reach the session.
+ * What the session that wrote the handover leaves for this fresh one: its scheduled jobs (which a /clear may keep
+ * and a new process ends), counted with those an earlier /clear recorded, and wake-up, and its scratchpad and plan
+ * file; a /clear records its jobs for the next refresh. A transcript it cannot read, or a record it cannot write, is
+ * said, never thrown: the note itself must still reach the session.
  */
 async function carriedLinesOf(runtime, store, id, transcript, { source, transcript: fresh }, zone) {
     const now = runtime.clock.now();
@@ -851,7 +885,7 @@ export async function sessionStart(args, runtime) {
     const requirementsNote = await requirementsNoteOnce({
         problems: await runtime.requirements.problems(),
         log: new JsonlHintLog(hookLogOf(runtime, kit.paths, 'bind-hints')),
-        claudeSession: event?.session ?? null,
+        hostSession: event?.session ?? null,
         now: new Date(runtime.clock.now()),
         command: KIT_NAME,
     });

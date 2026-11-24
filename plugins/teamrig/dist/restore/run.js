@@ -40,16 +40,16 @@ async function factsOf(deps, entries, since) {
     for (const entry of entries) {
         const live = await deps.stillRunning(entry);
         if (live) {
-            running.add(entry.claudeSession);
+            running.add(entry.hostSession);
         }
         const transcript = await deps.transcriptOf(entry);
         if (transcript !== undefined) {
-            transcripts.set(entry.claudeSession, transcript);
+            transcripts.set(entry.hostSession, transcript);
             const tail = await deps.readTail(transcript, KIND_TAIL_BYTES);
             if (tail !== undefined) {
-                kinds.set(entry.claudeSession, transcriptKindOf(deps.reader, tail));
+                kinds.set(entry.hostSession, transcriptKindOf(deps.reader, tail));
                 if (live && turnRunning(deps.reader, tail) && (await stalledSince(deps, transcript, now))) {
-                    stalled.add(entry.claudeSession);
+                    stalled.add(entry.hostSession);
                 }
             }
         }
@@ -64,11 +64,11 @@ async function stalledSince(deps, transcript, now) {
 /** The label is the team session's name, else the title the person gave the session, else its short id. */
 async function itemOf(deps, facts, judged) {
     const { entry } = judged;
-    const transcript = facts.transcripts.get(entry.claudeSession);
+    const transcript = facts.transcripts.get(entry.hostSession);
     const text = (transcript === undefined ? undefined : await deps.readTail(transcript, CARRY_TAIL_BYTES)) ?? '';
     const lost = lostWorkOf(deps.reader, text, Buffer.byteLength(text, 'utf8') >= CARRY_TAIL_BYTES, diedAt(entry, facts.shutdown?.start));
     const team = teamSessionOf(entry, deps.teams);
-    const label = team?.name ?? customTitleOf(deps.reader, text) ?? `Claude ${entry.claudeSession.slice(0, 8)}`;
+    const label = team?.name ?? customTitleOf(deps.reader, text) ?? `Claude ${entry.hostSession.slice(0, 8)}`;
     const resumeFolder = transcript === undefined ? undefined : resumeFolderOf(transcript, text, entry.projectDir, deps.projectsDir, deps.platform);
     return { ...judged, transcript, resumeFolder, label, team, lost, effort: reopenEffortOf(deps.reader, team, text), ...chooseMode(entry, lost, team?.isLead === true) };
 }
@@ -110,8 +110,8 @@ async function prune(deps, discard) {
     const now = deps.clock.now();
     for (const { entry, reason } of discard) {
         await deps.archive.put({ entry, archivedAt: now, reason });
-        await deps.registry.remove(entry.claudeSession);
-        await deps.log(`archived ${entry.claudeSession} (${reason})`);
+        await deps.registry.remove(entry.hostSession);
+        await deps.log(`archived ${entry.hostSession} (${reason})`);
     }
     const purged = await deps.archive.purge(now);
     if (purged.length > 0) {
@@ -125,12 +125,12 @@ async function planOf(deps, since) {
 }
 function printJudged(deps, verdict, list) {
     for (const { entry, reason } of list) {
-        deps.print(`${verdict.padEnd(8)} ${entry.claudeSession}  ${reason}  ${entry.projectDir}`);
+        deps.print(`${verdict.padEnd(8)} ${entry.hostSession}  ${reason}  ${entry.projectDir}`);
     }
 }
 function printItems(deps, verdict, items) {
     for (const item of items) {
-        deps.print(`${verdict.padEnd(8)} ${item.entry.claudeSession}  ${item.label}  ${item.reason}; ${modeWords(item)}; effort ${effortWords(item.effort)}  ${item.entry.projectDir}`);
+        deps.print(`${verdict.padEnd(8)} ${item.entry.hostSession}  ${item.label}  ${item.reason}; ${modeWords(item)}; effort ${effortWords(item.effort)}  ${item.entry.projectDir}`);
     }
 }
 /** `restore`: what a restore now would do with each recorded session, changing nothing. */
@@ -260,7 +260,7 @@ async function reopenAll(deps, facts, groups, progress) {
     await deps.log(`run: done, ${progressWords(progress)}`);
 }
 async function reopenItem(deps, facts, item, items) {
-    const id = item.entry.claudeSession;
+    const id = item.entry.hostSession;
     const current = await deps.registry.read(id);
     const recheck = current === undefined ? { verdict: 'discard', reason: 'its entry is gone' } : judgeEntry(current, { ...facts, now: deps.clock.now() });
     // A closed or hung tab the person chose to reopen still judges so; any other verdict means it needs no reopen now.
@@ -283,7 +283,7 @@ async function reopenItem(deps, facts, item, items) {
     const others = item.team?.isLead === true ? leadSummaryOf(item, items) : undefined;
     const prompt = item.mode === 'idle' ? undefined : continuePrompt(endFactsOf(current, facts.shutdown), item.lost, others);
     await deps.registry.write({ ...current, transcriptPath: item.transcript ?? current.transcriptPath, restoreAttempts: current.restoreAttempts + 1, restoredAt: deps.clock.now() });
-    const outcome = await reopenWithRoom(deps, item, { claudeSession: id, title: item.label, folder, team: item.team, effort: item.effort?.level, prompt });
+    const outcome = await reopenWithRoom(deps, item, { hostSession: id, title: item.label, folder, team: item.team, effort: item.effort?.level, prompt });
     if (outcome.kind === 'no-room') {
         await deps.registry.write(current);
         deps.print(`HELD ${item.label}: ${outcome.why}. Run "teamrig restore run" to reopen it once the host has room.`);
@@ -325,7 +325,7 @@ async function reopenWithRoom(deps, item, tab) {
         return outcome;
     }
     deps.print(`Waiting up to ${Math.ceil(deps.roomWaitMs / 60_000)} min for room to reopen ${item.label}: ${outcome.why}`);
-    await deps.log(`run: waiting for room for ${item.entry.claudeSession}`);
+    await deps.log(`run: waiting for room for ${item.entry.hostSession}`);
     while (outcome.kind === 'no-room' && deps.clock.now() < deadline) {
         await deps.sleep(ROOM_POLL_MS);
         outcome = await reopenOnce(deps, tab);

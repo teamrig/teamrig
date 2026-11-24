@@ -64,7 +64,7 @@ interface WorldOptions {
 /** The session's entry in the restore registry, as its tracker left it in a turn. */
 function restoreEntry(): RestoreEntry {
   return {
-    claudeSession: SESSION,
+    hostSession: SESSION,
     projectDir: '/project',
     transcriptPath: TRANSCRIPT,
     entrypoint: 'cli',
@@ -168,7 +168,7 @@ class World {
       phase: 'pending',
       at: AT,
       pid: CLAUDE.pid,
-      claudeSession: SESSION,
+      hostSession: SESSION,
       transcript: TRANSCRIPT,
       cwd: '/project/sub',
       supervised: true,
@@ -195,7 +195,7 @@ class TypedWhileLooking extends FakeSessionProcesses {
 }
 
 describe('restartMayAct', () => {
-  const request: RestartRequest = { phase: 'pending', at: AT, pid: CLAUDE.pid, claudeSession: SESSION, transcript: TRANSCRIPT, cwd: null, supervised: false, effort: null };
+  const request: RestartRequest = { phase: 'pending', at: AT, pid: CLAUDE.pid, hostSession: SESSION, transcript: TRANSCRIPT, cwd: null, supervised: false, effort: null };
   const asked = Date.parse(AT);
 
   it('holds for a request through the give-up and its last round, never for none or an older one', () => {
@@ -244,7 +244,7 @@ describe('runRestart', () => {
     world.opening = { kind: 'none', reasons: ['no terminal'] };
     await world.deps.restore.write(restoreEntry());
     assert.equal((await runRestart(world.deps, PLAN)).kind, 'failed');
-    assert.equal((await world.deps.restore.read(SESSION))?.claudeSession, SESSION);
+    assert.equal((await world.deps.restore.read(SESSION))?.hostSession, SESSION);
   });
 
   it('opens the fresh tab first, then closes the old one by ending the shell it runs in (Windows)', async () => {
@@ -288,7 +288,7 @@ describe('runRestart', () => {
     assert.deepEqual(await runRestart(typed.deps, PLAN), { kind: 'cancelled', why: 'the restart was cancelled or replaced' });
     assert.deepEqual(typed.processes.ends, []);
     const replaced = await new World().arm();
-    const later = { phase: 'pending', at: '2030-01-08T10:00:05.000Z', pid: CLAUDE.pid, claudeSession: SESSION, transcript: TRANSCRIPT, cwd: null, supervised: true, effort: null } as const;
+    const later = { phase: 'pending', at: '2030-01-08T10:00:05.000Z', pid: CLAUDE.pid, hostSession: SESSION, transcript: TRANSCRIPT, cwd: null, supervised: true, effort: null } as const;
     replaced.onSleep(2, () => replaced.store.setRestart('alpha', later));
     assert.equal((await runRestart(replaced.deps, PLAN)).kind, 'cancelled');
     assert.deepEqual(replaced.processes.ends, []);
@@ -428,9 +428,9 @@ describe('runRestart', () => {
 
 /** Asks whose claim lands between the runner's last look and its withdraw. */
 class ClaimedAtWithdraw extends ClearAsks {
-  override async withdraw(claudeSession: string): Promise<boolean> {
-    await this.claim(claudeSession);
-    return super.withdraw(claudeSession);
+  override async withdraw(hostSession: string): Promise<boolean> {
+    await this.claim(hostSession);
+    return super.withdraw(hostSession);
   }
 }
 
@@ -492,7 +492,7 @@ ${TURN_END}
   });
 
   it('ends the session with no ask when its session id cannot name a file', async () => {
-    const world = await new World().arm({ claudeSession: '../escape' });
+    const world = await new World().arm({ hostSession: '../escape' });
     assert.equal((await runRestart(world.deps, PLAN)).kind, 'restarted');
     assert.equal(world.clock.now() - START, DELAY_MS, 'no wait for a claim');
   });
@@ -514,14 +514,14 @@ class ClaimedByMod extends ClearAsks {
     this.cleared = cleared;
   }
 
-  override async post(claudeSession: string, ask: PostedClearAsk): Promise<void> {
-    await super.post(claudeSession, ask);
+  override async post(hostSession: string, ask: PostedClearAsk): Promise<void> {
+    await super.post(hostSession, ask);
     this.modes.push(ask.mode);
     if (ask.mode === 'end' && this.withEnd) {
-      assert.equal(await this.claimEnd(claudeSession), true);
+      assert.equal(await this.claimEnd(hostSession), true);
       return;
     }
-    assert.equal(await this.claim(claudeSession), true);
+    assert.equal(await this.claim(hostSession), true);
     await this.cleared();
   }
 }
@@ -609,9 +609,9 @@ class HeldByTab extends ClearAsks {
     this.why = why;
   }
 
-  override async post(claudeSession: string, ask: PostedClearAsk): Promise<void> {
-    await super.post(claudeSession, ask);
-    await this.hold(claudeSession, this.why);
+  override async post(hostSession: string, ask: PostedClearAsk): Promise<void> {
+    await super.post(hostSession, ask);
+    await this.hold(hostSession, this.why);
   }
 }
 
@@ -619,12 +619,12 @@ class HeldByTab extends ClearAsks {
 class HeldAtFirstWithdraw extends ClearAsks {
   withdraws = 0;
 
-  override async withdraw(claudeSession: string): Promise<boolean> {
+  override async withdraw(hostSession: string): Promise<boolean> {
     this.withdraws += 1;
     if (this.withdraws === 1) {
-      await this.hold(claudeSession, LIVE_HELPER);
+      await this.hold(hostSession, LIVE_HELPER);
     }
-    return super.withdraw(claudeSession);
+    return super.withdraw(hostSession);
   }
 }
 

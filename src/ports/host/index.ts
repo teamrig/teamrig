@@ -59,7 +59,7 @@ export type {
   SessionStart,
   SessionVariables,
 } from './session-launcher.ts';
-export type { HostUserHooks, UserHooksAnswer, UserHooksCounts, UserHooksPlan } from './user-hooks.ts';
+export type { ConfigLinesAnswer, HostConfigLines, HostUserHooks, UserHooksAnswer, UserHooksCounts, UserHooksPlan } from './user-hooks.ts';
 
 /** Every host port by its name. Each line is required: an adapter names every port, filled or not. */
 export interface HostPorts {

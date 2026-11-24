@@ -3,7 +3,7 @@ import { sessionsTitled } from '../hooks/bind.ts';
 import { customTitleOf, TRANSCRIPT_TAIL_BYTES } from '../names/title.ts';
 import type { TranscriptReader } from '../ports/host/index.ts';
 import type { TranscriptBytes } from './cursor.ts';
-import type { ClaudeSessionFiles, TranscriptSet } from './discover.ts';
+import type { HostSessionFiles, TranscriptSet } from './discover.ts';
 
 const NO_TRANSCRIPTS: TranscriptSet = { main: [], subagents: [] };
 
@@ -32,7 +32,7 @@ export interface Attribution {
 
 /** An outside Claude Code session: its transcripts and its title. */
 export interface OutsideSession {
-  readonly files: ClaudeSessionFiles;
+  readonly files: HostSessionFiles;
   readonly title: string | undefined;
 }
 
@@ -44,7 +44,7 @@ export interface PeerTeam {
 }
 
 export interface AttributionInput {
-  readonly sessions: readonly ClaudeSessionFiles[];
+  readonly sessions: readonly HostSessionFiles[];
   readonly team: string;
   readonly roster: Roster;
   /** The team session each Claude Code session last read its inbox as (the inbox marks). */
@@ -73,9 +73,9 @@ export async function attribute(input: AttributionInput): Promise<Attribution> {
   const outsideEach: OutsideSession[] = [];
   let outsideSessions = 0;
   for (const session of input.sessions) {
-    const marked = input.areaBySession.get(session.claudeSession);
+    const marked = input.areaBySession.get(session.hostSession);
     let id = marked !== undefined && input.roster.ids.includes(marked) ? marked : undefined;
-    if (id === undefined && input.peers.some((peer) => isMarkedBy(peer, session.claudeSession))) {
+    if (id === undefined && input.peers.some((peer) => isMarkedBy(peer, session.hostSession))) {
       continue;
     }
     let title: string | undefined;
@@ -99,8 +99,8 @@ export async function attribute(input: AttributionInput): Promise<Attribution> {
 }
 
 /** Whether the peer's mark binds the Claude Code session to one of its sessions; a mark of a session it no longer has does not. */
-function isMarkedBy(peer: PeerTeam, claudeSession: string): boolean {
-  const area = peer.areaBySession.get(claudeSession);
+function isMarkedBy(peer: PeerTeam, hostSession: string): boolean {
+  const area = peer.areaBySession.get(hostSession);
   return area !== undefined && peer.ids.includes(area);
 }
 

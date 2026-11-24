@@ -18,6 +18,7 @@ const KIND_WORDS = {
     continued: '"type":"continued-in"',
     'hook-note': '"hook_additional_context"',
     'scheduled-carry': '"session_cron_carry"',
+    'scheduled-fire': '"scheduled_task_fire"',
     environment: '"type":"environment"',
     'queued-prompt': '"type":"queue-operation"',
     'model-switch': '"fallbackModel"',
@@ -269,11 +270,17 @@ function modelSwitchOf(base, entry) {
     const to = stringField(entry, 'fallbackModel');
     return to === undefined ? undefined : { ...base, kind: 'model-switch', from: stringField(entry, 'originalModel'), to, reason: stringField(entry, 'apiRefusalCategory') };
 }
-/** A `system` line teamrig has a kind for: a compaction boundary, a turn's end, or a model switch; undefined for any other. */
+/**
+ * A `system` line teamrig has a kind for: a compaction boundary, a scheduled job's fire, a turn's end, or a model
+ * switch; undefined for any other.
+ */
 function systemOf(base, entry) {
     const subtype = stringField(entry, 'subtype');
     if (subtype === 'compact_boundary') {
         return { ...base, kind: 'compact' };
+    }
+    if (subtype === 'scheduled_task_fire') {
+        return { ...base, kind: 'scheduled-fire' };
     }
     return subtype !== undefined && TURN_END_MARKS.has(subtype) ? { ...base, kind: 'turn-end' } : modelSwitchOf(base, entry);
 }

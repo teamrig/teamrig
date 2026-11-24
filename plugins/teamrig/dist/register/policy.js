@@ -1115,7 +1115,7 @@ export class RegisterPolicy {
         if (!input.ref.startsWith(prefix)) {
             return refuse(`ref ${input.ref} is not a ${source} ref: it starts with ${prefix}`);
         }
-        const fields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
+        const fields = { ...input, source, due: input.due ?? null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
         const holder = [...state.tasks.values()].find((task) => task.ref === input.ref);
         if (holder !== undefined) {
             return refuse(`${holder.id} already has ref ${input.ref}`);

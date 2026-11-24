@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakePathProbe } from '../testing/fake-processes.ts';
 import type { Env } from './home.ts';
-import { envKey, envVariable, findProgram, pathList } from './path-search.ts';
+import { envKey, envVariable, findProgram, pathList, WINDOWS_COMMAND_EXTENSIONS } from './path-search.ts';
 
 function find(name: string, env: Env, platform: NodeJS.Platform, files: readonly string[]): Promise<string | undefined> {
   return findProgram(name, { env, platform, probe: new FakePathProbe({ files }) });
@@ -40,6 +40,12 @@ describe('findProgram', () => {
 
   it('never takes a git.cmd on Windows: Node.js does not start one without a shell', async () => {
     assert.equal(await find('git', { PATH: 'C:\\Git\\cmd' }, 'win32', ['C:\\Git\\cmd\\git.cmd']), undefined);
+  });
+
+  it('finds a .cmd shim on Windows when asked for the extensions a shell runs', async () => {
+    const deps = { env: { PATH: 'C:\\plugin\\bin' }, platform: 'win32' as const, probe: new FakePathProbe({ files: ['C:\\plugin\\bin\\teamrig.cmd'] }) };
+    assert.equal(await findProgram('teamrig', deps, WINDOWS_COMMAND_EXTENSIONS), 'C:\\plugin\\bin\\teamrig.cmd');
+    assert.equal(await findProgram('teamrig', deps), undefined);
   });
 
   it('finds the bare name on a POSIX PATH', async () => {

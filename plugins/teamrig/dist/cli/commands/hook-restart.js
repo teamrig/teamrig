@@ -1,10 +1,11 @@
 import { isEffortLevel } from "../../config/types.js";
 import { ENV } from "../../core/home.js";
+import { CARRY_TAIL_BYTES, carryOf } from "../../refresh/carry.js";
 import { noticeOf } from "../../refresh/decide.js";
 import { restartMayAct } from "../../refresh/restart.js";
 import { parkRulesOf } from "../../register/park.js";
 import { startableTasks } from "../../wake/day-start.js";
-import { identityOf } from "../host.js";
+import { identityOf, transcriptsIfKept } from "../host.js";
 import { teamZone } from "../kit.js";
 import { hostSessionAbove } from "../session-process.js";
 import { teamRegister } from "../team-register.js";
@@ -15,7 +16,7 @@ export function restartTargetOf(runtime, event) {
     if (session === undefined || transcript === undefined || project === undefined) {
         return undefined;
     }
-    return { claudeSession: session, transcript, cwd: cwd ?? null, project, effort: isEffortLevel(effort) ? effort : null };
+    return { hostSession: session, transcript, cwd: cwd ?? null, project, effort: isEffortLevel(effort) ? effort : null };
 }
 /** Starts `restart` hidden for the request recorded at `at`, to wait until the session is idle; whether it started. */
 async function startRunner(runtime, team, id, at, project) {
@@ -29,7 +30,7 @@ async function startRunner(runtime, team, id, at, project) {
 }
 /** What a restart keeps of the Stop hook's tab, the process it runs under aside. */
 function restartTabOf(runtime, id, target) {
-    return { claudeSession: target.claudeSession, transcript: target.transcript, cwd: target.cwd, supervised: runtime.env[ENV.launched] === id, effort: target.effort };
+    return { hostSession: target.hostSession, transcript: target.transcript, cwd: target.cwd, supervised: runtime.env[ENV.launched] === id, effort: target.effort };
 }
 /**
  * Whether the session has work it can start now (`startableTasks`, at any priority): a fresh start carries on with
@@ -65,11 +66,36 @@ export async function parkRestart(runtime, store, scope, notice) {
     return noticeOf(notice.state, context, 'park');
 }
 /**
- * Arms the restart a notice announces when work follows the handover (`workFollows`) in the team at `register`; else
- * parks it for the wake that brings the session work (T1383).
+ * Whether the session's next turn comes whether or not a task wake brings it work: the lead, which the owner, its inbox
+ * and its own checks wake, or a session whose transcript (at `transcript`) still has a live recurring scheduled job
+ * (CronCreate, counting those an earlier /clear left in its process: `refresh/carry.ts`). A restart held back for a
+ * wake (T1383) never comes for such a session: the scheduled turn goes on from the full context, which drops the
+ * held-back restart, and every later fire reads that whole context again. A host whose transcripts teamrig cannot read
+ * counts the lead alone. Read only at a notice, not at every stop.
+ */
+export async function wokenAnyway(runtime, store, config, id, transcript) {
+    if (config.roles.lead === id) {
+        return true;
+    }
+    const reader = transcriptsIfKept(runtime);
+    const text = transcript === undefined || reader === undefined ? undefined : await runtime.files.readTail(transcript, CARRY_TAIL_BYTES);
+    if (reader === undefined || text === undefined) {
+        return false;
+    }
+    return carryOf(reader, text, runtime.clock.now(), await inheritedCrons(store, id, transcript)).crons.some((cron) => cron.recurring);
+}
+/** The jobs a /clear left live in the process of the session whose transcript is `transcript` (`CarriedJobs`). */
+export async function inheritedCrons(store, id, transcript) {
+    const record = await store.carried(id);
+    return record !== undefined && transcript !== undefined && record.transcript === transcript ? record.crons : [];
+}
+/**
+ * Arms the restart a notice announces when work follows the handover (`workFollows`) in the team at `register`, or when
+ * the session is woken anyway (`wokenAnyway`); else parks it for the wake that brings the session work (T1383).
  */
 export async function restartOrPark(runtime, store, scope, notice, register) {
-    return (await workFollows(runtime, register.paths, register.config, scope.id)) ? armRestart(runtime, store, scope, notice) : parkRestart(runtime, store, scope, notice);
+    const arm = (await workFollows(runtime, register.paths, register.config, scope.id)) || (await wokenAnyway(runtime, store, register.config, scope.id, scope.target.transcript));
+    return arm ? armRestart(runtime, store, scope, notice) : parkRestart(runtime, store, scope, notice);
 }
 /**
  * Records a pending restart for `tab` from now, for the Claude Code the check runs under, and starts its `restart`;
@@ -98,7 +124,7 @@ async function armFromTab(runtime, store, scope, tab) {
 export async function parkedHere(store, scope) {
     const { id, tab, refresh } = scope;
     const parked = await store.parked(id);
-    if (parked === undefined || parked.claudeSession !== tab || !refresh.enabled || !refresh.autoRestart) {
+    if (parked === undefined || parked.hostSession !== tab || !refresh.enabled || !refresh.autoRestart) {
         return undefined;
     }
     if ((await store.state(id))?.phase !== 'ready') {
@@ -126,7 +152,7 @@ export async function armParkedRestart(runtime, store, scope, parked) {
  */
 export async function rearmDeadRestart(runtime, store, scope, request) {
     const { id, tab, refresh } = scope;
-    if (request === undefined || restartMayAct(request, runtime.clock.now()) || request.claudeSession !== tab || !refresh.enabled || !refresh.autoRestart) {
+    if (request === undefined || restartMayAct(request, runtime.clock.now()) || request.hostSession !== tab || !refresh.enabled || !refresh.autoRestart) {
         return false;
     }
     if ((await store.state(id))?.phase !== 'ready') {

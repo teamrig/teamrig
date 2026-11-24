@@ -22,13 +22,13 @@ const LINES = Array.from({ length: 8 }, (_, index) => `- 2030-01-07 0${index}:00
 /** LINES as a session on UTC is shown them. */
 const SHOWN_LINES = Array.from({ length: 8 }, (_, index) => `- 2030-01-07 0${index}:00 UTC lead: item ${index + 1}`);
 
-function markAt(lines: readonly string[], through: number, claudeSession: string | null, area = 'alpha'): InboxMark {
+function markAt(lines: readonly string[], through: number, hostSession: string | null, area = 'alpha'): InboxMark {
   const last = lines[through - 1];
-  return { v: 1, area, line: through, at: NOW.toISOString(), claudeSession, lastLineHash: last === undefined ? null : lineHash(last) };
+  return { v: 1, area, line: through, at: NOW.toISOString(), hostSession, lastLineHash: last === undefined ? null : lineHash(last) };
 }
 
 function input(fields: Partial<InjectionInput> = {}): InjectionInput {
-  return { area: 'alpha', path: `${DIR}/alpha.md`, lines: LINES.slice(0, 3), read: null, shown: null, claudeSession: TAB, now: NOW, zone: TimeZone.UTC, command: 'teamrig', ...fields };
+  return { area: 'alpha', path: `${DIR}/alpha.md`, lines: LINES.slice(0, 3), read: null, shown: null, hostSession: TAB, now: NOW, zone: TimeZone.UTC, command: 'teamrig', ...fields };
 }
 
 describe('newestShownOf and unshownOf', () => {
@@ -118,13 +118,13 @@ describe('injectFor', () => {
   function deps(files: MemoryFiles | FaultyFiles): InboxDeps {
     return { inboxes: new InboxDir(files, DIR), marks: new JsonlMarkLog(new PlainLogFile(files, MARKS)), shown: new JsonlMarkLog(new PlainLogFile(files, SHOWN)) };
   }
-  const request = { area: 'alpha', claudeSession: TAB, now: NOW, zone: TimeZone.UTC, command: 'teamrig' };
+  const request = { area: 'alpha', hostSession: TAB, now: NOW, zone: TimeZone.UTC, command: 'teamrig' };
 
   it('shows each line once per Claude Code session, and never marks it read', async () => {
     const files = new MemoryFiles({ [`${DIR}/alpha.md`]: LINES.slice(0, 2).join('\n') });
     assert.match((await injectFor(deps(files), request)) ?? '', /item 1\n.*item 2$/);
     assert.equal(await injectFor(deps(files), request), undefined);
-    assert.match((await injectFor(deps(files), { ...request, claudeSession: OTHER_TAB })) ?? '', /item 1/);
+    assert.match((await injectFor(deps(files), { ...request, hostSession: OTHER_TAB })) ?? '', /item 1/);
     assert.equal(files.get(MARKS), undefined);
     assert.equal(files.get(SHOWN)?.trim().split('\n').length, 2);
     await deps(files).inboxes.append('alpha', LINES[2] ?? '');

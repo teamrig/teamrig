@@ -13,7 +13,7 @@ const DIR = '/kit/restore/sessions';
 /** A tab whose last turn ended at FAIL_AT on `apiError` (server_error, no retry yet, by default). */
 function failed(apiError: Partial<ApiErrorState> = {}, overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession: ID,
+    hostSession: ID,
     projectDir: '/work/app',
     transcriptPath: '/u/.claude/projects/app/x.jsonl',
     entrypoint: 'cli',

@@ -5,12 +5,12 @@ import { TRANSCRIPT_TAIL_BYTES } from '../names/title.ts';
 import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { shippedTranscripts } from '../testing/shipped-transcripts.ts';
 import { attribute, transcriptTitleOf } from './attribute.ts';
-import type { ClaudeSessionFiles } from './discover.ts';
+import type { HostSessionFiles } from './discover.ts';
 
 const ROSTER = new Roster({ sessions: ['lead', 'alpha', 'bravo'], names: { lead: 'captain' }, roles: { lead: 'lead' } }, 'app');
 
-function session(id: string, main: readonly string[], subagents: readonly string[] = []): ClaudeSessionFiles {
-  return { claudeSession: id, main, subagents };
+function session(id: string, main: readonly string[], subagents: readonly string[] = []): HostSessionFiles {
+  return { hostSession: id, main, subagents };
 }
 
 const TITLES: Readonly<Record<string, string>> = {

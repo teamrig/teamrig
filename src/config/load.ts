@@ -63,20 +63,28 @@ export interface ConfigTarget {
  * such as Claude Code's settings.
  */
 export async function writeConfigWithBackup(files: Files, target: ConfigTarget, config: JsonRecord, clock: Clock): Promise<string> {
+  return writeTextWithBackup(files, target, formatConfig(config), clock, '.json');
+}
+
+/**
+ * Replaces a text file, such as a host's TOML config, with `text` as `writeConfigWithBackup` does a JSON one: the
+ * original kept first as `<backupName><extension>`, or with a timestamp when that name is taken. Returns the backup path.
+ */
+export async function writeTextWithBackup(files: Files, target: ConfigTarget, text: string, clock: Clock, extension: string): Promise<string> {
   const original = await files.read(target.configPath);
   if (original === undefined) {
     throw new Error(`${target.configPath} disappeared before the change could be written`);
   }
-  const plain = join(target.backupsDir, `${target.backupName}.json`);
-  const backup = (await files.createExclusive(plain, original)) ? plain : await backupWithStamp(files, target, original, clock);
-  await files.write(target.configPath, formatConfig(config));
+  const plain = join(target.backupsDir, `${target.backupName}${extension}`);
+  const backup = (await files.createExclusive(plain, original)) ? plain : await backupWithStamp(files, target, original, clock, extension);
+  await files.write(target.configPath, text);
   return backup;
 }
 
-async function backupWithStamp(files: Files, target: ConfigTarget, original: string, clock: Clock): Promise<string> {
+async function backupWithStamp(files: Files, target: ConfigTarget, original: string, clock: Clock, extension: string): Promise<string> {
   const stamp = formatUtcMinute(new Date(clock.now())).replace(/[-: ]/g, '');
   for (let attempt = 0; ; attempt += 1) {
-    const path = join(target.backupsDir, `${target.backupName}.${stamp}${attempt === 0 ? '' : `-${attempt}`}.json`);
+    const path = join(target.backupsDir, `${target.backupName}.${stamp}${attempt === 0 ? '' : `-${attempt}`}${extension}`);
     if (await files.createExclusive(path, original)) {
       return path;
     }

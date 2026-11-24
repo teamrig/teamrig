@@ -10,9 +10,9 @@ const FIRST = '0123abcd-0000-4000-8000-00000000000a';
 const SECOND = '0123abcd-0000-4000-8000-00000000000b';
 const NOW = Date.parse('2030-01-08T09:00:00Z');
 
-function entry(claudeSession: string): RestoreEntry {
+function entry(hostSession: string): RestoreEntry {
   return {
-    claudeSession,
+    hostSession,
     projectDir: '/work/app',
     transcriptPath: undefined,
     entrypoint: 'cli',
@@ -30,8 +30,8 @@ function entry(claudeSession: string): RestoreEntry {
   };
 }
 
-function archived(claudeSession: string, archivedAt: number, reason = 'closed by hand'): ArchivedEntry {
-  return { entry: entry(claudeSession), archivedAt, reason };
+function archived(hostSession: string, archivedAt: number, reason = 'closed by hand'): ArchivedEntry {
+  return { entry: entry(hostSession), archivedAt, reason };
 }
 
 function fileText(record: Readonly<Record<string, unknown>>): string {
@@ -66,7 +66,7 @@ describe('RestoreArchive', () => {
     await archive.put(archived(SECOND, NOW - 60_000));
     await archive.put(archived(FIRST, NOW - 120_000));
     assert.deepEqual(
-      (await archive.list()).map(({ entry: one }) => one.claudeSession),
+      (await archive.list()).map(({ entry: one }) => one.hostSession),
       [FIRST, SECOND],
     );
   });

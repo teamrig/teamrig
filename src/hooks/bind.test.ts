@@ -36,12 +36,13 @@ const CONFIG = { sessions: ['lead', 'alpha', 'bravo'], names: { lead: 'captain' 
 const OWN: TeamRoster = { team: 'app', roster: new Roster(CONFIG, 'app', [renameOf('bravo', 'app-bravo', 'scout')]) };
 const WEB: TeamRoster = { team: 'web', roster: new Roster({ sessions: ['lead', 'docs'], names: {}, roles: { lead: 'lead' } }, 'web') };
 
-function markLine(mark: InboxMark): string {
-  return `${JSON.stringify(mark)}\n`;
+/** A mark as format 1 stores it: the tab under its old key `claudeSession`, in the same place (T4762). */
+function markLine({ v, area, line, at, hostSession, lastLineHash }: InboxMark): string {
+  return `${JSON.stringify({ v, area, line, at, claudeSession: hostSession, lastLineHash })}\n`;
 }
 
-function readMark(area: string, line: number, lastLine: string, claudeSession: string | null): InboxMark {
-  return { v: 1, area, line, at: '2030-01-07T09:00:00.000Z', claudeSession, lastLineHash: lineHash(lastLine) };
+function readMark(area: string, line: number, lastLine: string, hostSession: string | null): InboxMark {
+  return { v: 1, area, line, at: '2030-01-07T09:00:00.000Z', hostSession, lastLineHash: lineHash(lastLine) };
 }
 
 /** A mark log in memory, and a tree reader that counts its reads. */
@@ -56,7 +57,7 @@ function setup(marks: readonly InboxMark[] = [], tree: readonly TeamRoster[] = [
 }
 
 function input(title: string | undefined, fields: Partial<BindInput> = {}): BindInput {
-  return { own: OWN, claudeSession: TAB, envSession: false, title, now: NOW, ...fields };
+  return { own: OWN, hostSession: TAB, envSession: false, title, now: NOW, ...fields };
 }
 
 describe('tabTitleFor', () => {
@@ -127,11 +128,11 @@ describe('sessionsTitled', () => {
 describe('bindMarkOf', () => {
   it("repeats the area's newest read position under the new Claude Code session", () => {
     const newest = readMark('alpha', 2, 'second', 'someone');
-    assert.deepEqual(bindMarkOf(newest, 'alpha', TAB, NOW), { ...newest, claudeSession: TAB });
+    assert.deepEqual(bindMarkOf(newest, 'alpha', TAB, NOW), { ...newest, hostSession: TAB });
   });
 
   it('starts an area never read before its first line, dated now', () => {
-    assert.deepEqual(bindMarkOf(undefined, 'alpha', TAB, NOW), { v: 1, area: 'alpha', line: 0, at: NOW.toISOString(), claudeSession: TAB, lastLineHash: null });
+    assert.deepEqual(bindMarkOf(undefined, 'alpha', TAB, NOW), { v: 1, area: 'alpha', line: 0, at: NOW.toISOString(), hostSession: TAB, lastLineHash: null });
   });
 });
 
@@ -204,7 +205,7 @@ describe('bindByTitle', () => {
     const position = readMark('alpha', 2, 'second', OTHER_TAB);
     const { files, deps, treeReads } = setup([position], [WEB]);
     const outcome = await bindByTitle(deps, input(' alpha '));
-    assert.deepEqual(outcome, { kind: 'bound', id: 'alpha', mark: { ...position, claudeSession: TAB } });
+    assert.deepEqual(outcome, { kind: 'bound', id: 'alpha', mark: { ...position, hostSession: TAB } });
     assert.equal(files.get(MARKS)?.trim().split('\n').length, 2);
     assert.equal(treeReads(), 1);
 

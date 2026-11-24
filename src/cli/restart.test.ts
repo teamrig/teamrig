@@ -29,7 +29,7 @@ async function armed(supervised: boolean, config: JsonRecord = AUTO_RESTART_TEAM
   await kit.files.write(TRANSCRIPT, '{"type":"user"}\n{"type":"system","subtype":"turn_duration"}\n');
   const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
   await store.setState(session, { phase: 'ready', task: 'T3', at: AT, tokens: null, noticed: true, transcript: null, claudePid: null });
-  await store.setRestart(session, { phase: 'pending', at: AT, pid: CLAUDE.pid, claudeSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised, effort });
+  await store.setRestart(session, { phase: 'pending', at: AT, pid: CLAUDE.pid, hostSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised, effort });
   return { kit, store, processes: new FakeSessionProcesses().add(SHELL).add(CLAUDE) };
 }
 

@@ -54,11 +54,11 @@ describe('discoverTranscripts', () => {
 
     assert.deepEqual(await discoverTranscripts(transcripts, ROOT, SINCE), [
       {
-        claudeSession: A,
+        hostSession: A,
         main: [join(ROOT, 'p1', `${A}.jsonl`), join(ROOT, 'p2', `${A}.jsonl`)],
         subagents: [join(ROOT, 'p1', A, 'subagents', 'agent-1.jsonl'), join(ROOT, 'p1', A, 'subagents', 'agent-2.jsonl')],
       },
-      { claudeSession: C, main: [], subagents: [join(ROOT, 'p2', C, 'subagents', 'agent-9.jsonl')] },
+      { hostSession: C, main: [], subagents: [join(ROOT, 'p2', C, 'subagents', 'agent-9.jsonl')] },
     ]);
   });
 
@@ -113,7 +113,7 @@ describe('nodeTranscriptFolders', () => {
 
   it('discovers through the real filesystem and reads the bytes', async () => {
     const found = await discoverTranscripts(nodeTranscriptSource, dir, SINCE);
-    assert.deepEqual(found, [{ claudeSession: A, main: [join(dir, 'p1', `${A}.jsonl`)], subagents: [] }]);
+    assert.deepEqual(found, [{ hostSession: A, main: [join(dir, 'p1', `${A}.jsonl`)], subagents: [] }]);
     assert.equal(await nodeTranscriptSource.size(join(dir, 'p1', `${A}.jsonl`)), 3);
   });
 });

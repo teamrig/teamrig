@@ -16,7 +16,7 @@ export function teamSessionOf(entry, teams) {
         return launched;
     }
     for (const team of teams) {
-        const area = team.areaBySession.get(entry.claudeSession);
+        const area = team.areaBySession.get(entry.hostSession);
         const found = area === undefined ? undefined : sessionOf(team, area, false);
         if (found !== undefined) {
             return found;

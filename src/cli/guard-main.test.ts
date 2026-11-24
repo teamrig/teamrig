@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -157,10 +157,17 @@ describe('guard-main, on broken copies of the CLI', () => {
 });
 
 describe('guard-main, on the real CLI', () => {
-  /** A fixed team in an empty kit home keeps the run off any team pointer above the temp folder on the test machine. */
-  async function inTempHome(args: readonly string[], input: string): Promise<Ended> {
+  /**
+   * A fixed team in an empty kit home keeps the run off any team pointer above the temp folder on the test machine;
+   * `config`, when given, is that team's config.json.
+   */
+  async function inTempHome(args: readonly string[], input: string, config?: object): Promise<Ended> {
     const home = mkdtempSync(join(tmpdir(), 'teamrig-guard-main-home-'));
     try {
+      if (config !== undefined) {
+        mkdirSync(join(home, 'teams', 'app'), { recursive: true });
+        writeFileSync(join(home, 'teams', 'app', 'config.json'), JSON.stringify(config));
+      }
       return await run(GUARD_MAIN, args, input, { ...process.env, TEAMRIG_HOME: home, TEAMRIG_TEAM: 'app' });
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -171,6 +178,18 @@ describe('guard-main, on the real CLI', () => {
     const ended = await inTempHome(['hook', 'push-guard'], FORCE_PUSH);
     assert.equal(ended.status, 0, ended.stderr);
     assert.match(ended.stdout, /"permissionDecision":"deny"/);
+  });
+
+  it('blocks the call when the host a guard line names is refused or unknown, so a team config mistake never turns the guards off (T5270 C3)', async () => {
+    const unlisted = await inTempHome(['hook', 'push-guard', '--host', 'codex-cli'], FORCE_PUSH, { sessions: ['lead'], roles: { lead: 'lead' }, hosts: ['claude-code'] });
+    assert.equal(unlisted.status, 2, unlisted.stderr);
+    assert.equal(unlisted.stdout, '');
+    assert.match(unlisted.stderr, /^REFUSED --host codex-cli is not one of the team's hosts \(claude-code\)/);
+    const unknown = await inTempHome(['hook', 'push-guard', '--host', 'no-such-host'], FORCE_PUSH);
+    assert.equal(unknown.status, 2, unknown.stderr);
+    assert.equal(unknown.stdout, '');
+    assert.match(unknown.stderr, /--host no-such-host names no host teamrig ships/);
+    assert.match(unknown.stderr, /teamrig blocked this call: its push-guard guard ended with exit 64/);
   });
 
   it('blocks a hook that is no guard before it loads the CLI, an unknown one or a plain hook (T3069)', async () => {

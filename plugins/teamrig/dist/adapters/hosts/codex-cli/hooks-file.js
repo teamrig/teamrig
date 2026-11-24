@@ -11,15 +11,27 @@
  * full is refused whole with a reason: a key, an event or a handler field it has no rule for, or a word neither shell
  * can carry unchanged. What is left out on purpose is listed in `skipped`, never dropped silently. Matchers are kept
  * as they are: which Codex tool a matcher's name stands for is the host port's rule, not this file's.
+ *
+ * teamrig's file is Claude Code's, whose lines say `--host claude-code`; a Codex line names `--host codex-cli` in its
+ * place, so the hook loads Codex's ports (its tool calls, its reply shape) and runs in a team that lists only Codex.
  */
+import { declaration } from "./declaration.js";
 import { isSharedHookEvent } from "./events.js";
 /** The events of teamrig's file that Codex 0.170.0 does not fire. */
 const EVENTS_CODEX_LACKS = ['PostToolUseFailure', 'Elicitation', 'ElicitationResult', 'StopFailure'];
 /** Codex spills a hook's context past about 2,500 tokens to a file; these events carry the team rules and the inbox. */
 const CONTEXT_EVENTS = ['SessionStart', 'UserPromptSubmit', 'SubagentStart'];
 const NO_CONTEXT_LIMIT = { additionalContextLimit: 0 };
+/**
+ * The most seconds Codex gives a handler of these events: it clamps a longer timeout and warns at every start
+ * ("clamping SessionEnd hook timeout to 3s", seen live on Codex 0.171), so the file asks for no more than it gets.
+ */
+const EVENT_TIMEOUT_CAPS = { SessionEnd: 3 };
 const PLUGIN_ROOT = '${CLAUDE_PLUGIN_ROOT}';
 const DEFAULT_TIMEOUT_SECONDS = 15;
+const HOST_FLAG = '--host';
+/** This adapter's id in teamrig's host table, which each hook line names so the run loads Codex's ports. */
+export const CODEX_CLI_HOST = declaration.id;
 const FILE_KEYS = ['description', 'modules', 'hooks'];
 const GROUP_KEYS = ['matcher', 'hooks'];
 const HANDLER_KEYS = ['type', 'command', 'args', 'timeout', 'asyncRewake'];
@@ -141,8 +153,24 @@ function checkWord(word, what) {
         throw new UnknownSource(`${what} holds a quote, a percent sign or an exclamation mark, which a cmd line cannot carry as text`);
     }
 }
+/** The source's words without the `--host <id>` pair it names. */
+function withoutHost(words, what) {
+    const kept = [];
+    for (let index = 0; index < words.length; index += 1) {
+        const word = words[index] ?? '';
+        if (word !== HOST_FLAG) {
+            kept.push(word);
+            continue;
+        }
+        if (words[index + 1] === undefined) {
+            throw new UnknownSource(`${what} ends with ${HOST_FLAG} and names no host`);
+        }
+        index += 1;
+    }
+    return kept;
+}
 function commandLines(sourceWords, pluginRoot, what) {
-    const words = sourceWords.map((word) => word.replaceAll(PLUGIN_ROOT, pluginRoot));
+    const words = [...withoutHost(sourceWords, what).map((word) => word.replaceAll(PLUGIN_ROOT, pluginRoot)), HOST_FLAG, CODEX_CLI_HOST];
     for (const word of words) {
         checkWord(word, what);
     }
@@ -160,6 +188,7 @@ function rewriteEvent(event, source, pluginRoot) {
     const groups = [];
     const skipped = [];
     const limit = CONTEXT_EVENTS.includes(event) ? NO_CONTEXT_LIMIT : {};
+    const cap = EVENT_TIMEOUT_CAPS[event];
     source.groups.forEach((group, groupIndex) => {
         const hooks = [];
         group.handlers.forEach((handler, handlerIndex) => {
@@ -168,7 +197,8 @@ function rewriteEvent(event, source, pluginRoot) {
                 return;
             }
             const what = `${event} group ${groupIndex + 1}, handler ${handlerIndex + 1}`;
-            hooks.push({ type: 'command', ...commandLines(handler.words, pluginRoot, what), timeout: handler.timeout, ...limit });
+            const timeout = cap === undefined ? handler.timeout : Math.min(handler.timeout, cap);
+            hooks.push({ type: 'command', ...commandLines(handler.words, pluginRoot, what), timeout, ...limit });
         });
         if (hooks.length > 0) {
             groups.push({ ...(group.matcher === undefined ? {} : { matcher: group.matcher }), hooks });

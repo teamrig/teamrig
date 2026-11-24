@@ -10,7 +10,7 @@ import { nodeHostCpu } from "../delivery/cpu.js";
 import { nodeHostMemory } from "../delivery/memory.js";
 import { launchingShellsOf, nodeEvery, starterWatch } from "../delivery/starter-watch.js";
 import { nodeStepRunner } from "../delivery/steps.js";
-import { realSleep, systemClock } from "../core/lock.js";
+import { idleSleep, realSleep, systemClock } from "../core/lock.js";
 import { NODE_PATH_PROBE } from "../core/path-probe.js";
 import { storeWriter } from "../core/store-program.js";
 import { NODE_STORE_FOLDERS } from "../plugin-store/node-folders.js";
@@ -97,6 +97,7 @@ export async function runWithNode(argv, entry) {
         clock: systemClock,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         sleep: realSleep,
+        idleSleep,
         git: GIT_CLI,
         pointerGit: GIT_POINTER,
         commitLog: GIT_COMMIT_LOG,

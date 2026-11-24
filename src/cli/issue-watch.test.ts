@@ -38,7 +38,7 @@ async function leadRuns(kit: CliHarness): Promise<void> {
   kit.sessionProcesses.add({ pid: CLAUDE_PID, parentPid: 1, name: 'claude.exe', commandLine: 'claude' });
   await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('lead', {
     claudePid: CLAUDE_PID,
-    claudeSession: CLAUDE_SESSION,
+    hostSession: CLAUDE_SESSION,
     at: '2030-01-08T07:00:00.000Z',
   });
 }

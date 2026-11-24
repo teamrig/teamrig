@@ -40,8 +40,8 @@ export function isCold(idleMs: number, coldAfterMinutes: number): boolean {
 /** The holds the hook made, by sending tab and receiving session. */
 export interface ColdSendLog {
   /** Whether this tab's send to `to` was held at or after `since`. */
-  heldSince(claudeSession: string, to: string, since: Date): Promise<boolean>;
-  record(claudeSession: string, to: string, at: Date): Promise<void>;
+  heldSince(hostSession: string, to: string, since: Date): Promise<boolean>;
+  record(hostSession: string, to: string, at: Date): Promise<void>;
 }
 
 /**
@@ -58,22 +58,22 @@ export class JsonlColdSendLog implements ColdSendLog {
   }
 
   /** Read from the log's tail, so its size never slows a send; a damaged line is skipped. */
-  async heldSince(claudeSession: string, to: string, since: Date): Promise<boolean> {
+  async heldSince(hostSession: string, to: string, since: Date): Promise<boolean> {
     const { records } = parseJsonl((await this.files.readTail(this.path, COLD_SEND_TAIL_BYTES)) ?? '');
     return records.some((line) => {
       const at = Date.parse(stringField(line.record, 'at') ?? '');
-      return hostSessionOf(line.record, 'claudeSession') === claudeSession && stringField(line.record, 'to') === to && at >= since.getTime();
+      return hostSessionOf(line.record, 'claudeSession') === hostSession && stringField(line.record, 'to') === to && at >= since.getTime();
     });
   }
 
-  async record(claudeSession: string, to: string, at: Date): Promise<void> {
-    await this.files.append(this.path, toJsonlLine({ v: COLD_SEND_VERSION, claudeSession, to, at: at.toISOString() }));
+  async record(hostSession: string, to: string, at: Date): Promise<void> {
+    await this.files.append(this.path, toJsonlLine({ v: COLD_SEND_VERSION, claudeSession: hostSession, to, at: at.toISOString() }));
   }
 }
 
 export interface ColdSendFacts {
   /** The sending tab. */
-  readonly claudeSession: string;
+  readonly hostSession: string;
   /** The receiving session's id and the name it is messaged by. */
   readonly to: string;
   readonly name: string;
@@ -120,10 +120,10 @@ export async function decideColdSend(log: ColdSendLog, facts: ColdSendFacts): Pr
     return SEND;
   }
   try {
-    if (await log.heldSince(facts.claudeSession, facts.to, new Date(facts.now.getTime() - RESEND_WINDOW_MS))) {
+    if (await log.heldSince(facts.hostSession, facts.to, new Date(facts.now.getTime() - RESEND_WINDOW_MS))) {
       return SEND;
     }
-    await log.record(facts.claudeSession, facts.to, facts.now);
+    await log.record(facts.hostSession, facts.to, facts.now);
   } catch {
     return SEND;
   }

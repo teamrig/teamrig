@@ -8,7 +8,7 @@ const OTHER = '99999999-2222-4333-8444-555555555555';
 
 function entry(overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession: SESSION,
+    hostSession: SESSION,
     projectDir: '/work/app',
     transcriptPath: undefined,
     entrypoint: 'cli',
@@ -69,7 +69,7 @@ describe('teamSessionOf', () => {
 
   it('carries the effort its config sets, by either route, for the restore to reopen it on (T2440)', () => {
     assert.equal(teamSessionOf(entry({ team: 'app', session: 'alpha' }), [APP, WEB])?.effort, 'medium');
-    assert.equal(teamSessionOf(entry({ claudeSession: OTHER }), [APP])?.effort, 'medium');
+    assert.equal(teamSessionOf(entry({ hostSession: OTHER }), [APP])?.effort, 'medium');
   });
 
   it('falls back to the inbox it last read when its variables name no current session', () => {
@@ -86,8 +86,8 @@ describe('teamSessionOf', () => {
   });
 
   it('skips an inbox of a session the team no longer has, and is undefined for no team', () => {
-    assert.equal(teamSessionOf(entry({ claudeSession: OTHER }), [WEB, APP])?.session, 'alpha');
-    assert.equal(teamSessionOf(entry({ claudeSession: OTHER }), [WEB]), undefined);
+    assert.equal(teamSessionOf(entry({ hostSession: OTHER }), [WEB, APP])?.session, 'alpha');
+    assert.equal(teamSessionOf(entry({ hostSession: OTHER }), [WEB]), undefined);
     assert.equal(teamSessionOf(entry(), []), undefined);
   });
 });

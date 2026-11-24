@@ -29,6 +29,8 @@
  */
 /** How often the mod's hand looks for an ask. */
 export const TICK_MS = 1_000;
+/** How long one CLI run (`hook clear-claim`, `hook clear-dir`) may take before it is stopped, as long as the other hands' (#920). */
+export const CLEAR_TIMEOUT_MS = 30_000;
 /** How long the hand waits before it asks the CLI for the ask folder again after that failed. */
 export const DIR_RETRY_MS = 60_000;
 /** What `hook clear-claim` prints when this tab took the ask; anything else is a reason it did not. */
@@ -124,23 +126,23 @@ function agentLineOf(agent) {
 }
 /** A Claude Code session id as it may appear in a file name: letters, digits and dashes only. */
 const CLAUDE_SESSION_ID = /^[A-Za-z0-9-]{1,64}$/;
-export function isClaudeSessionId(value) {
+export function isHostSessionId(value) {
     return CLAUDE_SESSION_ID.test(value);
 }
 /** The ask for one Claude Code session in the ask folder; undefined for an id unsafe in a file name. */
-export function askFileOf(dir, claudeSession) {
-    return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.ask` : undefined;
+export function askFileOf(dir, hostSession) {
+    return isHostSessionId(hostSession) ? `${dir}/${hostSession}.ask` : undefined;
 }
 /** How the ask was answered, `taken`, `held` or `withdrawn`, created once: the first writer wins and the other learns it lost. */
-export function outcomeFileOf(dir, claudeSession) {
-    return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.outcome` : undefined;
+export function outcomeFileOf(dir, hostSession) {
+    return isHostSessionId(hostSession) ? `${dir}/${hostSession}.outcome` : undefined;
 }
 /**
  * Why the tab held the ask, written before its `held` outcome: the outcome stays the one word a restart
  * started under an older teamrig reads.
  */
-export function holdWhyFileOf(dir, claudeSession) {
-    return isClaudeSessionId(claudeSession) ? `${dir}/${claudeSession}.held` : undefined;
+export function holdWhyFileOf(dir, hostSession) {
+    return isHostSessionId(hostSession) ? `${dir}/${hostSession}.held` : undefined;
 }
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -327,8 +329,8 @@ export class ClearHand {
         if (dir === undefined) {
             return { kind: 'no folder' };
         }
-        const claudeSession = await this.host.sessionId();
-        const ask = askFileOf(dir, claudeSession);
+        const hostSession = await this.host.sessionId();
+        const ask = askFileOf(dir, hostSession);
         if (ask === undefined || !(await this.host.exists(ask))) {
             return { kind: 'no ask' };
         }
@@ -340,7 +342,7 @@ export class ClearHand {
         if (this.busy) {
             return { kind: 'busy' };
         }
-        const stdin = JSON.stringify({ session_id: claudeSession });
+        const stdin = JSON.stringify({ session_id: hostSession });
         const handAsk = parseHandAsk(text);
         const held = await this.heldBy(handAsk);
         if (held !== undefined) {

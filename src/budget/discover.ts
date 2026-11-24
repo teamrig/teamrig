@@ -68,8 +68,8 @@ export function claudeProjectSlug(project: string): string {
 }
 
 /** Where Claude Code keeps a session's own transcript for a project folder: `<projects>/<project slug>/<session>.jsonl`. */
-export function projectTranscriptPath(projectsDir: string, project: string, claudeSession: string): string {
-  return join(projectsDir, claudeProjectSlug(project), `${claudeSession}${TRANSCRIPT}`);
+export function projectTranscriptPath(projectsDir: string, project: string, hostSession: string): string {
+  return join(projectsDir, claudeProjectSlug(project), `${hostSession}${TRANSCRIPT}`);
 }
 
 /**
@@ -77,12 +77,12 @@ export function projectTranscriptPath(projectsDir: string, project: string, clau
  * session in any project folder (a session Claude Code filed under another folder); undefined when it has none, or
  * when `projectsDir` is undefined: a host whose transcripts folder teamrig does not know.
  */
-export async function findTranscript(folders: TranscriptFolders, projectsDir: string | undefined, project: string | undefined, claudeSession: string): Promise<string | undefined> {
+export async function findTranscript(folders: TranscriptFolders, projectsDir: string | undefined, project: string | undefined, hostSession: string): Promise<string | undefined> {
   if (projectsDir === undefined) {
     return undefined;
   }
   if (project !== undefined) {
-    const own = projectTranscriptPath(projectsDir, project, claudeSession);
+    const own = projectTranscriptPath(projectsDir, project, hostSession);
     if ((await folders.changedAt(own)) !== undefined) {
       return own;
     }
@@ -92,7 +92,7 @@ export async function findTranscript(folders: TranscriptFolders, projectsDir: st
     if (!entry.folder) {
       continue;
     }
-    const path = join(projectsDir, entry.name, `${claudeSession}${TRANSCRIPT}`);
+    const path = join(projectsDir, entry.name, `${hostSession}${TRANSCRIPT}`);
     const changedAt = await folders.changedAt(path);
     if (changedAt !== undefined && (newest === undefined || changedAt > newest.changedAt)) {
       newest = { path, changedAt };
@@ -125,8 +125,8 @@ export interface TranscriptSet {
 }
 
 /** The transcripts of one Claude Code session: its own (none when only its subagents wrote), then its subagents'. */
-export interface ClaudeSessionFiles extends TranscriptSet {
-  readonly claudeSession: string;
+export interface HostSessionFiles extends TranscriptSet {
+  readonly hostSession: string;
 }
 
 interface FoundFiles {
@@ -147,7 +147,7 @@ function jsonlChangedSince(entry: FolderEntry, since: number): boolean {
  * Sorted by session id, so a run reads them in the same order every time. None when `projectsDir` is undefined: a host
  * whose transcripts folder teamrig does not know.
  */
-export async function discoverTranscripts(folders: TranscriptFolders, projectsDir: string | undefined, since: number): Promise<ClaudeSessionFiles[]> {
+export async function discoverTranscripts(folders: TranscriptFolders, projectsDir: string | undefined, since: number): Promise<HostSessionFiles[]> {
   if (projectsDir === undefined) {
     return [];
   }
@@ -186,7 +186,7 @@ export async function discoverTranscripts(folders: TranscriptFolders, projectsDi
   }
   return [...found.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([claudeSession, files]) => ({ claudeSession, main: files.main.sort(), subagents: files.subagents }));
+    .map(([hostSession, files]) => ({ hostSession, main: files.main.sort(), subagents: files.subagents }));
 }
 
 /**
@@ -195,7 +195,7 @@ export async function discoverTranscripts(folders: TranscriptFolders, projectsDi
  * not know). It checks one path per session and project folder and never lists every transcript, so a hook can
  * afford it.
  */
-export async function lastWriteOf(folders: TranscriptFolders, projectsDir: string | undefined, claudeSessions: readonly string[]): Promise<number | undefined> {
+export async function lastWriteOf(folders: TranscriptFolders, projectsDir: string | undefined, hostSessions: readonly string[]): Promise<number | undefined> {
   if (projectsDir === undefined) {
     return undefined;
   }
@@ -204,7 +204,7 @@ export async function lastWriteOf(folders: TranscriptFolders, projectsDir: strin
     if (!project.folder) {
       continue;
     }
-    for (const id of claudeSessions) {
+    for (const id of hostSessions) {
       const changedAt = await folders.changedAt(join(projectsDir, project.name, `${id}${TRANSCRIPT}`));
       if (changedAt !== undefined && (last === undefined || changedAt > last)) {
         last = changedAt;

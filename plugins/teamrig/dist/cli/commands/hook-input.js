@@ -54,25 +54,25 @@ export function envSession(runtime) {
  * The team session a hook runs for: `$TEAMRIG_SESSION` when it is set (an id or any name the
  * session has had), else the area this Claude Code session last read its inbox as.
  */
-export async function teamSessionOf(runtime, kit, roster, claudeSession) {
+export async function teamSessionOf(runtime, kit, roster, hostSession) {
     const session = envSession(runtime);
     if (session !== undefined) {
         const found = roster.lookup(session);
         return found.ok ? found.id : undefined;
     }
-    return markedSessionOf(runtime, kit, roster, claudeSession);
+    return markedSessionOf(runtime, kit, roster, hostSession);
 }
 /**
  * The area this Claude Code session last read its inbox as, or was bound to by its title, when it is
  * on the roster. It is how a tab started without `$TEAMRIG_SESSION`, such as the one that set the team
  * up, stays its session.
  */
-export async function markedSessionOf(runtime, kit, roster, claudeSession) {
-    if (claudeSession === null) {
+export async function markedSessionOf(runtime, kit, roster, hostSession) {
+    if (hostSession === null) {
         return undefined;
     }
     const { marks } = await inboxDepsOf(runtime, kit.paths).marks.read();
-    const area = indexMarks(marks).areaBySession.get(claudeSession);
+    const area = indexMarks(marks).areaBySession.get(hostSession);
     return area !== undefined && roster.ids.includes(area) ? area : undefined;
 }
 /**

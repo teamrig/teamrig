@@ -2,7 +2,7 @@ import { describeRole, granted, revoked } from "../../config/service-role-edits.
 import { isServiceCommand, SERVICE_COMMAND_REACH, SERVICE_COMMANDS } from "../../permissions/service-commands.js";
 import { noPositionals, onePositional, UsageError } from "../args.js";
 import { listOf } from "../inputs.js";
-import { checkedNextConfig, configFileJson, configLockOf, openTeamKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
+import { checkedNextConfig, checkedWholeConfig, configFileJson, configLockOf, openTeamKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
 /**
  * `roles grant`, `roles revoke` and `roles list` (T2984): the team's service roles, each the teamrig commands for an
@@ -36,7 +36,7 @@ async function changeRoles(args, runtime, name, change) {
     const config = requireConfig(kit, runtime, 'write');
     return configLockOf(runtime, kit, config).run(async (writer) => {
         const file = await configFileJson(runtime, kit.load.path);
-        const current = checkedNextConfig(file);
+        const current = checkedWholeConfig(file);
         const planned = change.plan(current.serviceRoles);
         if (!planned.ok) {
             throw new RefusedError(planned.problem);

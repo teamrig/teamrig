@@ -48,7 +48,7 @@ export function displayPaths(line: string, kit: string = DEMO_KIT): string {
 }
 
 /** A fixed, fictional Claude Code session id per team session, as Claude Code would pass it. */
-const claudeSessionOf = (session: string): string => `00000000-0000-4000-8000-${session.padEnd(12, '0').slice(0, 12).replace(/[^0-9a-f]/g, '0')}`;
+const hostSessionOf = (session: string): string => `00000000-0000-4000-8000-${session.padEnd(12, '0').slice(0, 12).replace(/[^0-9a-f]/g, '0')}`;
 
 /** Runs the steps in order against one in-memory team; a step that does not exit 0 throws, naming it. */
 export async function runDemo(steps: readonly DemoStep[], config: JsonRecord = DEMO_CONFIG): Promise<DemoRun[]> {
@@ -61,7 +61,7 @@ export async function runDemo(steps: readonly DemoStep[], config: JsonRecord = D
   for (const step of steps) {
     const out: string[] = [];
     const code = await runCli(step.argv, {
-      env: { TEAMRIG_HOME: DEMO_KIT, TEAMRIG_SESSION: step.session, CLAUDE_CODE_SESSION_ID: claudeSessionOf(step.session) },
+      env: { TEAMRIG_HOME: DEMO_KIT, TEAMRIG_SESSION: step.session, CLAUDE_CODE_SESSION_ID: hostSessionOf(step.session) },
       userHome: resolve('/', 'home', 'demo'),
       cwd: PROJECT,
       pid: 1,

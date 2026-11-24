@@ -42,6 +42,17 @@ export function resultLines(repo: string, plan: SyncPlan, outcomes: readonly Ste
   ];
 }
 
+/** What the watcher's tasks for a repository's new pull requests (pull-news.ts pullTasks) wrote. */
+export function pullTaskLines(repo: string, outcomes: readonly StepOutcome[]): string[] {
+  const done = outcomes.filter((outcome) => outcome.result.ok);
+  const refused = outcomes.length - done.length;
+  return [
+    `PULL TASKS ${repo}: ${done.length} added${refused > 0 ? `, ${refused} refused` : ''}`,
+    ...shown(done.map((outcome) => stepLine(outcome.step, outcome.result.ok ? outcome.result.value : ''))),
+    ...outcomes.flatMap((outcome) => (outcome.result.ok ? [] : [`SKIPPED ${outcome.step.ref}: ${outcome.result.error}`])),
+  ];
+}
+
 /**
  * The line naming the open issues the trust rule (trust.ts) left out of a repository, and the label that lets
  * one in: their numbers only, as their text is an outsider's, at most SHOWN_LEFT_OUT and then how many more;
@@ -68,7 +79,7 @@ export function shown(lines: readonly string[]): string[] {
 export function stepLine(step: SyncStep, id: string): string {
   switch (step.kind) {
     case 'add':
-      return `ADD ${id} ${step.ref} ${priorityText(step.input.priority)} ${step.input.owner}: ${JSON.stringify(step.input.title)}`;
+      return `ADD ${id} ${step.ref} ${priorityText(step.input.priority)} ${step.input.owner}: ${JSON.stringify(step.input.title)}${step.input.due === undefined ? '' : `, due ${step.input.due} UTC`}`;
     case 'update': {
       const { title, description, priority } = step.changes;
       const fields = [

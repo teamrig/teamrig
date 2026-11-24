@@ -13,12 +13,12 @@ const TAB_A = '0123abcd-0000-4000-8000-00000000000a';
 const TAB_B = '0123abcd-0000-4000-8000-00000000000b';
 const AT = Date.parse('2030-01-08T00:02:00Z');
 
-function failed(claudeSession: string, at: number = AT): LoginEvent {
-  return { kind: 'auth-failed', claudeSession, at };
+function failed(hostSession: string, at: number = AT): LoginEvent {
+  return { kind: 'auth-failed', hostSession, at };
 }
 
-function answered(claudeSession: string, at: number): LoginEvent {
-  return { kind: 'answered', claudeSession, at };
+function answered(hostSession: string, at: number): LoginEvent {
+  return { kind: 'answered', hostSession, at };
 }
 
 /** What a change says for the log; `none` for no change. */

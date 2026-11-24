@@ -1,3 +1,12 @@
+/** Why a range git did not list could not be read: git's no answer apart from git's own refusal. */
+export function unreadRange(range, what) {
+    switch (range.kind) {
+        case 'refused':
+            return `git cannot list ${what}`;
+        case 'unanswered':
+            return `git gave no answer listing ${what} (${range.reason}); run it again once git answers`;
+    }
+}
 /** The `git log` format `parseCommitLog` reads: a record separator, then sha, subject and body split by unit separators. */
 export const COMMIT_LOG_FORMAT = '%x1e%H%x1f%s%x1f%b%x1f';
 /** At most this many large commits are named in one message; the rest are counted. */

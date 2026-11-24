@@ -37,7 +37,7 @@ export interface InjectionInput {
   readonly lines: readonly string[];
   readonly read: InboxMark | null;
   readonly shown: InboxMark | null;
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly now: Date;
   /** The team's clock, which the lines' times are shown on. */
   readonly zone: TimeZone;
@@ -68,7 +68,7 @@ export function injectionOf(input: InjectionInput, caps: InjectCaps = INJECT_CAP
     area: input.area,
     line: through,
     at: input.now.toISOString(),
-    claudeSession: input.claudeSession,
+    hostSession: input.hostSession,
     lastLineHash: last === undefined ? null : lineHash(last),
   };
   return { text: text.join('\n'), shown };
@@ -81,14 +81,14 @@ export function injectionOf(input: InjectionInput, caps: InjectCaps = INJECT_CAP
  */
 export async function injectFor(
   deps: InboxDeps,
-  input: { readonly area: string; readonly claudeSession: string; readonly now: Date; readonly zone: TimeZone; readonly command: string },
+  input: { readonly area: string; readonly hostSession: string; readonly now: Date; readonly zone: TimeZone; readonly command: string },
 ): Promise<string | undefined> {
   const lines = await deps.inboxes.lines(input.area);
   if (lines === undefined) {
     return undefined;
   }
   const { byArea } = indexMarks((await deps.marks.read()).marks);
-  const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.claudeSession);
+  const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.hostSession);
   const injection = injectionOf({ ...input, path: deps.inboxes.pathOf(input.area), lines, read: byArea.get(input.area) ?? null, shown });
   if (injection === undefined) {
     return undefined;

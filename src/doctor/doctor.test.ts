@@ -66,7 +66,7 @@ function input(overrides: Partial<DoctorInput> & { readonly names?: Record<strin
 
 function markAt(area: string, lines: readonly string[], at: string): InboxMark {
   const last = lines.at(-1);
-  return { v: 1, area, line: lines.length, at, claudeSession: null, lastLineHash: last === undefined ? null : lineHash(last) };
+  return { v: 1, area, line: lines.length, at, hostSession: null, lastLineHash: last === undefined ? null : lineHash(last) };
 }
 
 function lines(input: DoctorInput): string[] {

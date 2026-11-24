@@ -47,7 +47,7 @@ export interface HooklessState {
 
 /** A team session's tab that runs turns while its hooks do not. */
 export interface HooklessTab {
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly session: string;
   /** The folder its tab started in, where a restart resumes it. */
   readonly projectDir: string;
@@ -106,7 +106,7 @@ export interface StaleEntry {
  * open: neither is the team's to tell (T1055).
  */
 export function entrySession(entry: RestoreEntry, team: HooklessTeam): string | undefined {
-  const session = entry.team === undefined ? team.areaBySession.get(entry.claudeSession) : entry.team === team.team ? entry.session : undefined;
+  const session = entry.team === undefined ? team.areaBySession.get(entry.hostSession) : entry.team === team.team ? entry.session : undefined;
   return session !== undefined && team.sessions.includes(session) ? session : undefined;
 }
 
@@ -159,23 +159,23 @@ export function lastReplyAt(reader: TranscriptReader, lines: readonly string[]):
  */
 export function hooklessTabs(stale: readonly StaleEntry[], replies: ReadonlyMap<string, number>, now: number): HooklessTab[] {
   return stale.flatMap(({ entry, session }) => {
-    const turnAt = replies.get(entry.claudeSession);
+    const turnAt = replies.get(entry.hostSession);
     if (turnAt === undefined || !workedPastHook(entry.updatedAt, turnAt, now)) {
       return [];
     }
-    return [{ claudeSession: entry.claudeSession, session, projectDir: entry.projectDir, hookAt: entry.updatedAt, turnAt }];
+    return [{ hostSession: entry.hostSession, session, projectDir: entry.projectDir, hookAt: entry.updatedAt, turnAt }];
   });
 }
 
 /** The tabs a check names: hookless now and not named at the last check. */
 export function hooklessNews(state: HooklessState | undefined, tabs: readonly HooklessTab[]): HooklessTab[] {
   const told = new Set(state?.told ?? []);
-  return tabs.filter((tab) => !told.has(tab.claudeSession));
+  return tabs.filter((tab) => !told.has(tab.hostSession));
 }
 
 /** What a check writes: its time and the tabs hookless now, so a tab that had its hooks back is named again later. */
 export function checkedState(now: number, tabs: readonly HooklessTab[]): HooklessState {
-  return { checkedAt: now, told: tabs.map((tab) => tab.claudeSession) };
+  return { checkedAt: now, told: tabs.map((tab) => tab.hostSession) };
 }
 
 /**
@@ -204,8 +204,8 @@ export function hooklessLine(tab: HooklessTab, session: string, steps: HostSteps
   };
   const minutes = Math.round((tab.turnAt - tab.hookAt) / MS_PER_MINUTE);
   return (
-    `HOOKLESS ${session}: its tab (host session ${tab.claudeSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
+    `HOOKLESS ${session}: its tab (host session ${tab.hostSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
     `(hook ${time(tab.hookAt)}, last reply ${time(tab.turnAt)}), so it gets no inbox, guards or tab status: ` +
-    `${steps.exit} that tab and run ${steps.resume(tab.claudeSession)} in ${tab.projectDir}`
+    `${steps.exit} that tab and run ${steps.resume(tab.hostSession)} in ${tab.projectDir}`
   );
 }

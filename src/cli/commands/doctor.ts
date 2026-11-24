@@ -17,10 +17,12 @@ import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { launchHostOf, modelsIfKnown, pathsIfKnown, permissionsIfKept, transcriptsFolderIfKnown } from '../host.ts';
-import { openTeamKit, projectFolder, requireConfig, teamZone } from '../kit.ts';
+import { CORE_STEPS, type CoreStepDeps, type TeamLook } from '../../install/core-steps.ts';
+import { checkInstall, installLines, PROBE_TIMEOUT_MS } from '../../install/steps.ts';
+import { findTeam, openKit, projectFolder, requireConfig, teamZone, type Kit } from '../kit.ts';
 import { readLeadStart } from '../lead-start.ts';
 import { pageCheckOf, type PageCheck } from '../login-page.ts';
-import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readTeamRules } from '../team-rules.ts';
 import { loadTree } from '../tree.ts';
 import { inboxDepsOf } from './inbox.ts';
@@ -79,23 +81,6 @@ function pageProblemOf(check: PageCheck): PageProblem | undefined {
   return check.status === 'problem' ? { team: check.source.team, key: check.source.key, problem: check.problem } : undefined;
 }
 
-/**
- * `doctor`: what teamrig lacks on this machine (git, Claude Code, Node.js), then the team's health checks
- * (names, the rename log, inboxes, its rules.md beside those of the teams above it, the lead's real start (lead-start.ts), its tree of teams and session names shared with other teams,
- * read from every team config of the kit home), and the text every call of a session in the project re-reads
- * (CLAUDE.md files, the memory index, the skill listing, and the lists of skills, deferred tools, agent types and
- * MCP server instructions the project's newest session transcript announced) against the team's `contextFiles` budgets. Last, what
- * silently overrides the model or effort a session or helper is given: the host's override variables
- * (`HostModels.routingOverrides`) in doctor's own environment or in the `env` block of the user's or the
- * project's Claude Code settings, a session whose `launch` names a model but no effort, and a `team.project` or
- * `launch.<id>.project` that is no folder on this machine; and the local allow rules off `permissions.keepAllow` that
- * approve a whole tool or program or hold a credential (src/cli/allow-scope.ts); the secret deny lines no settings file
- * holds (src/doctor/deny-lines.ts); and the user's PowerShell history file when no PowerShell profile keeps
- * credentials out of it (src/doctor/shell-history.ts; the history is probed, never read); and a page webhook the team's
- * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed); and the kit home's
- * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). It reads only and exits 0
- * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
- */
 /** Each session's launch as it starts on this host, with why the host would not run its model. */
 function sessionLaunches(config: KitConfig, ids: readonly string[], host: LaunchHost): SessionLaunch[] {
   return ids.map((id) => {
@@ -112,9 +97,60 @@ async function cliPathOf(runtime: CliRuntime, config: KitConfig): Promise<CliPat
   return { folder, where: userPath.where, onPath: await userPath.holds(folder), enabled: config.cliOnPath.enabled };
 }
 
+/** What doctor found for a team: its kit, or the refusal a team command gives where there is none. */
+type KitLook = { readonly kind: 'found'; readonly team: string; readonly kit: Kit } | { readonly kind: 'none'; readonly refusal: RefusedError };
+
+async function lookForKit(runtime: CliRuntime): Promise<KitLook> {
+  try {
+    const { team } = await findTeam(runtime);
+    return { kind: 'found', team, kit: await openKit(runtime, team) };
+  } catch (error) {
+    if (error instanceof RefusedError) {
+      return { kind: 'none', refusal: error };
+    }
+    throw error;
+  }
+}
+
+function teamLookOf(look: KitLook): TeamLook {
+  return look.kind === 'none' ? { kind: 'none', why: look.refusal.message } : { kind: 'found', team: look.team, load: look.kit.load };
+}
+
+/** The install steps every host shares (install/core-steps.ts), each probed under `PROBE_TIMEOUT_MS`, as lines. */
+async function installCheckLines(runtime: CliRuntime, team: TeamLook): Promise<string[]> {
+  const kitBin = cliLauncherFolder(resolveKitHome(runtime.env, runtime.userHome));
+  const deps: CoreStepDeps = { env: runtime.env, platform: runtime.platform, probe: runtime.probe, requirements: runtime.requirements, script: runtime.self.script, kitBin, team };
+  return installLines(await checkInstall(CORE_STEPS, deps, { timeoutMs: PROBE_TIMEOUT_MS, sleep: runtime.idleSleep }));
+}
+
+/**
+ * `doctor`: what teamrig lacks on this machine (git, Claude Code, Node.js), then the team's health checks
+ * (names, the rename log, inboxes, its rules.md beside those of the teams above it, the lead's real start (lead-start.ts), its tree of teams and session names shared with other teams,
+ * read from every team config of the kit home), and the text every call of a session in the project re-reads
+ * (CLAUDE.md files, the memory index, the skill listing, and the lists of skills, deferred tools, agent types and
+ * MCP server instructions the project's newest session transcript announced) against the team's `contextFiles` budgets. Last, what
+ * silently overrides the model or effort a session or helper is given: the host's override variables
+ * (`HostModels.routingOverrides`) in doctor's own environment or in the `env` block of the user's or the
+ * project's Claude Code settings, a session whose `launch` names a model but no effort, and a `team.project` or
+ * `launch.<id>.project` that is no folder on this machine; and the local allow rules off `permissions.keepAllow` that
+ * approve a whole tool or program or hold a credential (src/cli/allow-scope.ts); the secret deny lines no settings file
+ * holds (src/doctor/deny-lines.ts); and the user's PowerShell history file when no PowerShell profile keeps
+ * credentials out of it (src/doctor/shell-history.ts; the history is probed, never read); and a page webhook the team's
+ * alerts name that resolves to no https URL (src/cli/login-page.ts; resolved, never posted or printed); and the kit home's
+ * bin folder missing from the user's PATH (src/restore/user-path.ts; read, never written). After the findings, an
+ * INSTALL section: each install step every host shares, probed live, with the fix for one missing
+ * (src/install/core-steps.ts); with no team found it prints that section, then refuses as a team command does. It reads only and exits 0
+ * like `check`: a finding is advice, and each line says the fix. `check` prints the context, allow and deny findings too.
+ */
 export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
-  const kit = await openTeamKit(runtime);
+  const look = await lookForKit(runtime);
+  const install = await installCheckLines(runtime, teamLookOf(look));
+  if (look.kind === 'none') {
+    install.forEach((line) => runtime.out.stdout(line));
+    throw look.refusal;
+  }
+  const { kit } = look;
   const config = requireConfig(kit, runtime, 'read');
   const { paths } = kit;
   const renameLog = await new JsonlRenameLog(runtime.files, paths.renames).read();
@@ -151,5 +187,6 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   });
   runtime.out.stdout(findings.length === 0 ? `DOCTOR clean, team ${paths.team}` : `DOCTOR ${findings.length} finding(s), team ${paths.team}`);
   findings.forEach((finding) => runtime.out.stdout(formatFinding(finding)));
+  install.forEach((line) => runtime.out.stdout(line));
   return EXIT.ok;
 }

@@ -306,17 +306,17 @@ export function carryStartOf(source: string | undefined): CarryStart {
 }
 
 /**
- * The lines that tell a fresh session what to take over: its jobs (still scheduled after a /clear, proven
- * on Claude Code 2.1.301 (T398), so made again only in a new process, and then only those CronList does not
- * show, as a durable job comes back by itself), the wake-up to schedule again (its time on the team's clock),
- * and where the old scratchpad and plan are. Empty when there is nothing. What the owner typed goes to its own file.
+ * The lines that tell a fresh session what to take over: its jobs, to make again only those CronList does not
+ * show (a /clear kept them on Claude Code 2.1.301, but later versions end them at a /clear, and a durable job comes
+ * back by itself, so CronList is the one test right on every version), the wake-up to schedule again (its time on
+ * the team's clock), and where the old scratchpad and plan are. Empty when there is nothing. What the owner typed
+ * goes to its own file.
  */
 export function carryLines(carry: Carry, now: number, start: CarryStart, zone: TimeZone): readonly string[] {
   const lines: string[] = [];
-  if (carry.crons.length > 0 && start === 'same-process') {
-    lines.push(`Your old session's ${carry.crons.length} scheduled job(s) are still scheduled, since a /clear keeps the process (CronList shows them): do not make them again.`);
-  } else if (carry.crons.length > 0) {
-    lines.push(`Your old session had ${carry.crons.length} scheduled job(s), which end with its process: run CronList and make each one it does not show again with CronCreate:`);
+  if (carry.crons.length > 0) {
+    const fate = start === 'same-process' ? 'which a /clear may have ended' : 'which end with its process';
+    lines.push(`Your old session had ${carry.crons.length} scheduled job(s), ${fate}: run CronList and make each one it does not show again with CronCreate:`);
     for (const cron of carry.crons) {
       lines.push(`- cron ${JSON.stringify(cron.cron)}, recurring ${String(cron.recurring)}, prompt ${JSON.stringify(cron.prompt)}`);
     }

@@ -12,6 +12,14 @@ export const HOST_SESSION_FIELD = 'hostSession';
 export function hostSessionValue(record, legacy) {
     return Object.hasOwn(record, HOST_SESSION_FIELD) ? record[HOST_SESSION_FIELD] : record[legacy];
 }
+/**
+ * The record as its store writes it today: a `HOST_SESSION_FIELD` key renamed to the store's old field in the same
+ * place, so the code's name moves no stored byte and an older tab still reads the line. A store's next format drops
+ * this call.
+ */
+export function legacyHostSessionRecord(record, legacy) {
+    return Object.fromEntries(Object.entries(record).map(([key, value]) => [key === HOST_SESSION_FIELD ? legacy : key, value]));
+}
 /** The record's host session; undefined when it names none, or names it by anything but text. */
 export function hostSessionOf(record, legacy) {
     const value = hostSessionValue(record, legacy);

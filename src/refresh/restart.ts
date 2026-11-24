@@ -2,7 +2,7 @@ import type { EffortLevel, RefreshConfig } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
 import type { Env } from '../core/home.ts';
 import { typedEffortsOf } from '../effort/typed-effort.ts';
-import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isClaudeSessionId, type ClaimOutcome, type ClearMode, type PersonHold } from '../mod/clear-hand.ts';
+import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isHostSessionId, type ClaimOutcome, type ClearMode, type PersonHold } from '../mod/clear-hand.ts';
 import { endAndWait, tabProcessOf, workCutOffBy, type TabEnder } from '../open/end-tab.ts';
 import type { FeedOutcome, ProcessInfo, SessionProcessCheck, SessionProcesses } from '../open/session-processes.ts';
 import type { TranscriptReader } from '../ports/host/index.ts';
@@ -107,7 +107,7 @@ async function runEndCommand(deps: RestartDeps, plan: RestartPlan, request: Rest
     return undefined;
   }
   const input = JSON.stringify({
-    session_id: request.claudeSession,
+    session_id: request.hostSession,
     transcript_path: request.transcript,
     cwd: request.cwd,
     hook_event_name: 'SessionEnd',
@@ -123,7 +123,7 @@ async function runEndCommand(deps: RestartDeps, plan: RestartPlan, request: Rest
  */
 async function endHooks(deps: RestartDeps, plan: RestartPlan, request: RestartRequest): Promise<FeedOutcome | undefined> {
   // A registry it cannot write leaves a stale entry, which is no reason to fail a restart that happened.
-  await deps.restore.remove(request.claudeSession).catch(() => undefined);
+  await deps.restore.remove(request.hostSession).catch(() => undefined);
   return runEndCommand(deps, plan, request);
 }
 
@@ -203,10 +203,10 @@ type TabAnswer =
  * How the tab's mod answered the ask: `held`, with its reason, while something holds the /clear; `end` when it
  * claimed an `end` ask; else it claimed it for its /clear (`cleared`).
  */
-async function tabAnswerOf(deps: RestartDeps, claudeSession: string, outcome: ClaimOutcome | undefined): Promise<TabAnswer> {
+async function tabAnswerOf(deps: RestartDeps, hostSession: string, outcome: ClaimOutcome | undefined): Promise<TabAnswer> {
   switch (outcome) {
     case CLAIM_HELD:
-      return { kind: 'held', why: (await deps.asks.heldWhy(claudeSession)) ?? NO_HOLD_REASON };
+      return { kind: 'held', why: (await deps.asks.heldWhy(hostSession)) ?? NO_HOLD_REASON };
     case CLAIM_END:
       return { kind: 'end' };
     default:
@@ -220,7 +220,7 @@ async function tabAnswerOf(deps: RestartDeps, claudeSession: string, outcome: Cl
  */
 function runningEffortOf(reader: TranscriptReader, request: RestartRequest, tail: string): EffortLevel | null {
   const asked = Date.parse(request.at);
-  return typedEffortsOf(reader, tail, request.claudeSession).findLast((typed) => typed.at > asked)?.level ?? request.effort;
+  return typedEffortsOf(reader, tail, request.hostSession).findLast((typed) => typed.at > asked)?.level ?? request.effort;
 }
 
 /**
@@ -250,27 +250,27 @@ async function modeOf(deps: RestartDeps, request: RestartRequest, claude: Proces
  * its outcome and the hold's reason are gone when this returns, so the next round asks afresh; an earlier run's
  * are removed with the new ask's posting.
  */
-async function handToTab(deps: RestartDeps, plan: RestartPlan, claudeSession: string, mode: ClearMode): Promise<TabAnswer> {
-  await deps.asks.post(claudeSession, { team: plan.team, id: plan.id, at: plan.at, askedAt: new Date(deps.clock.now()).toISOString(), hold: plan.hold, askEveryMs: plan.delayMs, mode });
+async function handToTab(deps: RestartDeps, plan: RestartPlan, hostSession: string, mode: ClearMode): Promise<TabAnswer> {
+  await deps.asks.post(hostSession, { team: plan.team, id: plan.id, at: plan.at, askedAt: new Date(deps.clock.now()).toISOString(), hold: plan.hold, askEveryMs: plan.delayMs, mode });
   try {
     const deadline = deps.clock.now() + CLAIM_WAIT_MS;
     for (;;) {
       await deps.sleep(POLL_MS);
-      const outcome = await deps.asks.outcome(claudeSession);
+      const outcome = await deps.asks.outcome(hostSession);
       if (outcome === CLAIM_TAKEN || outcome === CLAIM_HELD || outcome === CLAIM_END) {
-        return await tabAnswerOf(deps, claudeSession, outcome);
+        return await tabAnswerOf(deps, hostSession, outcome);
       }
       const pending = (await pendingOf(deps, plan)) !== undefined;
       if (!pending || deps.clock.now() >= deadline) {
         // The tab's answer may land between the look and here: whoever creates the outcome first wins.
-        if (!(await deps.asks.withdraw(claudeSession))) {
-          return await tabAnswerOf(deps, claudeSession, await deps.asks.outcome(claudeSession));
+        if (!(await deps.asks.withdraw(hostSession))) {
+          return await tabAnswerOf(deps, hostSession, await deps.asks.outcome(hostSession));
         }
         return { kind: pending ? 'unclaimed' : 'cancelled' };
       }
     }
   } finally {
-    await deps.asks.close(claudeSession);
+    await deps.asks.close(hostSession);
   }
 }
 
@@ -375,10 +375,10 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
     if ((await pendingOf(deps, plan)) === undefined) {
       return CANCELLED;
     }
-    if (!isClaudeSessionId(request.claudeSession)) {
+    if (!isHostSessionId(request.hostSession)) {
       return endSession(deps, plan, request, claude);
     }
-    const answer = await handToTab(deps, plan, request.claudeSession, await modeOf(deps, request, claude, transcript));
+    const answer = await handToTab(deps, plan, request.hostSession, await modeOf(deps, request, claude, transcript));
     switch (answer.kind) {
       case 'cleared':
         // The claim clears the request; this clears it only when the claim stopped before that.

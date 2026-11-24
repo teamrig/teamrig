@@ -1,11 +1,12 @@
 import { join } from 'node:path';
 import { hookEndText, succeeded } from "../deploy/hooks.js";
-import { branchNameProblem } from "./branch-name.js";
+import { branchNameProblem, branchPatternRefusal } from "./branch-name.js";
 /**
  * `teamrig worktree add`: a session's new worktree, made the same way every time. The new branch starts from the
  * remote's newest default branch, fetched first, in a folder named after the branch, and the repository's setup
  * (such as a link to the main checkout's node_modules) runs in it. Every check runs before anything changes: a name
- * that is no branch name, a folder already there, no default branch to start from, a branch that already exists. A
+ * that is no branch name or matches none of the team's branch patterns, a folder already there, no default branch to
+ * start from, a branch that already exists. A
  * setup that fails leaves the worktree in place, as its owner may finish it by hand.
  */
 /** The variable a setup reads the main checkout's folder from, as it runs without a shell to expand one. */
@@ -18,6 +19,10 @@ export async function createWorktree(request, ports, say) {
     const problem = branchNameProblem(branch);
     if (problem !== undefined) {
         return refused(`"${branch}": ${problem}`);
+    }
+    const offPattern = request.branches === undefined ? undefined : branchPatternRefusal(branch, request.branches);
+    if (offPattern !== undefined) {
+        return refused(`${offPattern}: give a name that does, or --task <T id> to name it from its task`);
     }
     const path = join(request.folder, branch.replaceAll('/', '-'));
     if ((await ports.files.kindOf(path)) !== 'missing') {

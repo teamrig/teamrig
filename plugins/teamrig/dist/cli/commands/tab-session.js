@@ -30,8 +30,8 @@ export async function tabSessionOf(args, runtime, kit, roster, own) {
  */
 export async function refuseAnotherTabSession(args, runtime) {
     const named = args.flags.get('session') ?? envSession(runtime);
-    const claudeSession = identityOf(runtime).sessionId;
-    if (named === undefined || claudeSession === undefined) {
+    const hostSession = identityOf(runtime).sessionId;
+    if (named === undefined || hostSession === undefined) {
         return;
     }
     const found = await resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [runtime.cwd]));
@@ -43,7 +43,7 @@ export async function refuseAnotherTabSession(args, runtime) {
         return;
     }
     const roster = await rosterOf(runtime, kit, kit.load.config);
-    const bound = await markedSessionOf(runtime, kit, roster, claudeSession);
+    const bound = await markedSessionOf(runtime, kit, roster, hostSession);
     if (bound === undefined) {
         return;
     }

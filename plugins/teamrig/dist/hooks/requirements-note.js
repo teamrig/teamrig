@@ -11,7 +11,7 @@ export async function requirementsNoteOnce(input) {
     if (input.problems.length === 0) {
         return undefined;
     }
-    if (input.claudeSession !== null && !(await firstHint(input.log, input.claudeSession, REQUIREMENTS_HINT, input.now))) {
+    if (input.hostSession !== null && !(await firstHint(input.log, input.hostSession, REQUIREMENTS_HINT, input.now))) {
         return undefined;
     }
     return input.problems.map((problem) => describeRequirement(problem, input.command)).join('\n');

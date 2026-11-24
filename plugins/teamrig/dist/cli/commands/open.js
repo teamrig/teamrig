@@ -29,7 +29,7 @@ import { launchListing } from "../skill-listing.js";
 import { tabFocusOf } from "../tab-focus.js";
 import { loadTree } from "../tree.js";
 import { noteResumedTab } from "../wake-opened.js";
-import { claudeSessionVerdict, freshOpenOf, resumeVerdictOf } from "./rehire.js";
+import { hostSessionVerdict, freshOpenOf, resumeVerdictOf } from "./rehire.js";
 import { sessionProjectOf } from "./setup.js";
 /** The terminal names a person reads, for the OPENED line. */
 export const TERMINAL_LABELS = {
@@ -165,7 +165,7 @@ export async function openSession(runtime, kit, config, roster, request) {
     // A closed session whose refresh is ready starts from its handover: a resume keeps the old context, and a start
     // takes a ready handover only when fresh, so a resume would lose it (T2354).
     const handover = closed === undefined || fresh ? undefined : await new RefreshStore(runtime.files, kit.paths).readyHandover(id);
-    const closedIn = closed?.claudeSession === undefined || fresh ? undefined : handover === undefined ? await reopenOf(runtime, config, closed, project, request.projectGiven === true) : { verdict: READY_FRESH, folder: project };
+    const closedIn = closed?.hostSession === undefined || fresh ? undefined : handover === undefined ? await reopenOf(runtime, config, closed, project, request.projectGiven === true) : { verdict: READY_FRESH, folder: project };
     const reopen = closedIn?.verdict;
     // A closed session opened fresh still logs its reopen below, so the idle pass knows it runs again.
     const resume = fresh ? undefined : await resumeOf(runtime, kit.paths, config, { id, project, from, reopen, asked, projectGiven: request.projectGiven === true });
@@ -215,7 +215,7 @@ async function reopenOf(runtime, config, closed, project, given) {
     if (!samePath(folder, project, runtime.platform) && (await runtime.probe.kind(folder)) !== 'folder') {
         return { verdict: { kind: 'fresh', detail: `${folder}, the folder it ran in, is gone` }, folder: project };
     }
-    return { verdict: await claudeSessionVerdict(runtime, config.hiring, closed.claudeSession, folder), folder };
+    return { verdict: await hostSessionVerdict(runtime, config.hiring, closed.hostSession, folder), folder };
 }
 /** Refuses a second Claude Code of session `id`, named `name`, while it runs in one (src/cli/live-run.ts). */
 async function refuseLiveRun(runtime, kit, roster, id, name) {
@@ -234,7 +234,7 @@ async function resumeOf(runtime, paths, config, facts) {
     const { id, project, from, reopen, asked, projectGiven } = facts;
     if (reopen !== undefined) {
         if (reopen.kind === 'resume') {
-            return reopen.claudeSession;
+            return reopen.hostSession;
         }
         if (asked) {
             // A bare `open` would resume in the folder it ran in, so the fresh open named keeps a given --project (GeneralA6/teamrig#819).
@@ -250,7 +250,7 @@ async function resumeOf(runtime, paths, config, facts) {
     if (verdict.kind === 'fresh') {
         throw new RefusedError(`not resumed: ${verdict.detail}; ${freshOpenOf(from)}: ${KIT_NAME} open ${id}`);
     }
-    return verdict.claudeSession;
+    return verdict.hostSession;
 }
 /** What the OPENED line adds: the Claude Code session the tab resumes, or why a closed session opens fresh. */
 function startNoteOf(resume, reopen) {
@@ -299,10 +299,10 @@ export function encodedPromptFlag(encoded) {
 }
 /** The Claude Code session id `launch --resume` names, checked so nothing but an id reaches Claude Code. */
 function resumeFlag(value) {
-    return value === undefined ? undefined : claudeSessionArg('--resume', value);
+    return value === undefined ? undefined : hostSessionArg('--resume', value);
 }
 /** A Claude Code session id an argument names, checked so nothing but an id reaches Claude Code. */
-export function claudeSessionArg(name, value) {
+export function hostSessionArg(name, value) {
     if (!CLAUDE_SESSION_ID.test(value)) {
         throw new UsageError(`${name} "${value}" is not a Claude Code session id`);
     }

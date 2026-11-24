@@ -59,6 +59,7 @@ const missingCliCommand = () => import('./commands/hook-missing-cli.ts');
 const helperStartCommand = () => import('./commands/hook-helper-start.ts');
 const clearCommands = () => import('./commands/hook-clear.ts');
 const wakeCommands = () => import('./commands/hook-wake.ts');
+const handTraceCommand = () => import('./commands/hook-hand-trace.ts');
 const meetingDueCommand = () => import('./commands/hook-meeting-due.ts');
 const needsYouCommands = () => import('./commands/hook-needs-you.ts');
 const meetingPanelCommand = () => import('./commands/hook-meeting-panel.ts');
@@ -83,6 +84,7 @@ const compactCommands = () => import('./commands/compact.ts');
 const rulesCommands = () => import('./commands/rules.ts');
 const ruleConflictCommands = () => import('./commands/rule-conflicts.ts');
 const skillsCommands = () => import('./commands/skills.ts');
+const skillStepCommand = () => import('./commands/skill-step.ts');
 const openCommands = () => import('./commands/open.ts');
 const meetCommands = () => import('./commands/meet.ts');
 const ownerCommands = () => import('./commands/owner.ts');
@@ -202,6 +204,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
     flags: ['from', 'to', 'baseline-from', 'baseline-to'],
     load: async () => (await skillsCommands()).scorecard,
   },
+  'skills step': { effect: 'read', flags: ['for'], load: async () => (await skillStepCommand()).skillStep },
   start: { effect: 'write', flags: ['session'], switches: ['all'], load: async () => (await startCommands()).start },
   'meeting start': { effect: 'write', flags: ['session', 'about', 'meets', 'minutes', 'with', 'tasks', 'brief'], load: async () => (await meetingCommands()).meetingStart },
   'meeting agenda': { effect: 'write', flags: ['session'], load: async () => (await meetingCommands()).meetingAgenda },
@@ -385,6 +388,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'hook clear-claim': { effect: 'internal', flags: ['why'], switches: ['hold', 'end'], load: async () => (await clearCommands()).clearClaim },
   'hook wake-check': { effect: 'internal', flags: [], load: async () => (await wakeCommands()).wakeCheck },
   'hook wake-dropped': { effect: 'internal', flags: [], load: async () => (await wakeCommands()).wakeDropped },
+  'hook hand-trace': { effect: 'internal', flags: [], load: async () => (await handTraceCommand()).handTrace },
   'hook meeting-due': { effect: 'internal', flags: [], load: async () => (await meetingDueCommand()).meetingDue },
   'hook needs-you': { effect: 'internal', flags: [], load: async () => (await needsYouCommands()).needsYou },
   'hook needs-you-focus': { effect: 'internal', flags: [], load: async () => (await needsYouCommands()).needsYouFocus },
@@ -501,6 +505,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       loads, missed uses (a call matching its "Signature: \`<regex>\`" line with no load before it), calls
       and errors per run, against a baseline (default: the last 7 UTC days, and the 7 before); each run
       reads only what the transcripts gained since the last one
+  skills step <step id> [--for <ref>]   prints how the tool in use does one step a skill names (such as
+      tracker.link-child): a host step's text is the running host's; a connector step's is the connector
+      whose prefix starts --for's ref (gh:owner/name#12), else each one the team config uses; with none
+      serving it, the step's neutral line and the adapters that would serve it
   start [--session <id|name>] [--all]   the start of a work block in one call: the team's time, how far
       the checkout is behind origin's main as last fetched (only when it is), today's scheduled meetings
       it is in (the lead: all), the unread inbox lines (marked read), the session's tasks, the other
@@ -833,14 +841,15 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   refresh --ready              the handover the turn end asked to fix is complete as it is (the turn end takes one with both sections itself)
   doctor                       names, rename log, inboxes, rules.md, context size and the tree of teams that need a fix;
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
-      and a page webhook that gives no https URL
+      and a page webhook that gives no https URL; then INSTALL: each install step, probed live, with the fix for
+      one missing (printed even where no team is found)
   ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
       team, following the session last typed in, or pinned to the team --team or --session names;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
       own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
-      Terminal window, else in a window; one that cannot open falls back and says so; it runs the
-      entry script ui.path names, else
+      Terminal window, else in a window; one that cannot open falls back and says so; OPENED only once
+      the UI in it starts, else FAILED after 20 s; it runs the entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
       file or the release speaks an interface version this teamrig does not serve
@@ -1038,7 +1047,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
       earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
-      it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; it never
+      it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
+      the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
@@ -1081,7 +1091,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       with the main checkout's folder in TEAMRIG_MAIN_CHECKOUT; the repository is --repo's, else the
       one it runs in. --task: names the branch from the task by delivery.branches (default
       {type}/{id}-{slug}, such as feat/t12-parse-input: a task's feat, a bug's fix); --type: its
-      branch type instead, such as docs or chore. REFUSED before any change for a branch or folder
+      branch type instead, such as docs or chore. REFUSED before any change for a branch name that
+      matches none of the team's patterns (delivery.branches.enforce, default on), a branch or folder
       already there, a task the register lacks, or a pattern word the task has none of; FAILED when
       its setup fails, the worktree kept. Then makes teamrig git-credential git's credential helper
       in the repository's config when origin is an https URL a connector serves and a key is saved
@@ -1273,6 +1284,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       (run by the plugin's mod: the automatic restart's /clear in the tab)
   hook wake-check | hook wake-dropped
       (run by the plugin's mod: wakes an idle tab when unblocked urgent work is handed to its session)
+  hook hand-trace
+      (run by the plugin's mod: logs a hand whose tick threw or stayed unsettled, in state/hand-trace.jsonl)
   hook meeting-due
       (run by the plugin's mod: a scheduled meeting's notices, before, at and past its time)
   hook needs-you | hook needs-you-focus

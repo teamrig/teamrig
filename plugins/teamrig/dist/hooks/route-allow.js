@@ -33,7 +33,7 @@ export function routeAllowRecord(facts) {
         v: 1,
         at: facts.at.toISOString(),
         session: facts.session ?? null,
-        claudeSession: facts.claudeSession,
+        claudeSession: facts.hostSession,
         tool: 'Bash',
         event: 'PreToolUse',
         answer: 'route',

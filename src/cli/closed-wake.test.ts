@@ -20,7 +20,7 @@ import { EXIT } from './runtime.ts';
 const LOG = join(TEAM_HOME, 'state', 'session-log.jsonl');
 const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
 /** Alpha, closed by the idle pass in the project folder. */
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', claudeSession: CLAUDE_SESSION, idleMinutes: 63, freedMb: 1600, folder: APP };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T08:00:00.000Z', hostSession: CLAUDE_SESSION, idleMinutes: 63, freedMb: 1600, folder: APP };
 const ROOM: CommitCharge = { usedMb: 40_000, limitMb: 100_700 };
 const FULL: CommitCharge = { usedMb: 99_000, limitMb: 100_000 };
 
@@ -93,7 +93,7 @@ describe('inbox add --wake now to a session teamrig closed (#1581)', () => {
 
   it('a tab started by hand since the close (busy or not) counts as open: WAKES as before, nothing started', async () => {
     const kit = await teamWithClosedAlpha();
-    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { claudeSession: CLAUDE_SESSION, claudePid: 4100, at: '2030-01-08T08:30:00.000Z' });
+    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', { hostSession: CLAUDE_SESSION, claudePid: 4100, at: '2030-01-08T08:30:00.000Z' });
     const { result, processes } = await run(kit, WAKE_NOW);
     assert.match(result.stdout.join('\n'), /^WAKES alpha if its tab is idle/m);
     assert.deepEqual(reopensStarted(processes), []);

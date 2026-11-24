@@ -24,12 +24,14 @@ export type HostWorld = Pick<
   | 'transcripts'
   | 'requirements'
   | 'restore'
+  | 'idleSleep'
 >;
 
 /**
  * The machine when a run does not care about it: `stdin` on stdin, a terminal a person types in, and a Linux host with no programs or folders and an
  * empty plugin store, so nothing starts and no session process runs, a shell command prints nothing and exits 0, its
- * requirements check finds nothing missing, and there are no transcripts.
+ * requirements check finds nothing missing, there are no transcripts, and a time limit's wait never ends (and holds
+ * no timer), so no limit is reached.
  */
 export function quietHost(stdin: string): HostWorld {
   return {
@@ -51,5 +53,6 @@ export function quietHost(stdin: string): HostWorld {
     transcripts: new MemoryTranscripts(),
     requirements: { problems: async () => [] },
     restore: quietRestore(),
+    idleSleep: () => new Promise<void>(() => undefined),
   };
 }

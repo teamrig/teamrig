@@ -43,13 +43,13 @@ describe('the SessionStart hook records where the session started', () => {
     const store = new SessionRecordStore(kit.files, { sessions: SESSIONS });
     const started = start('startup', CLAUDE_SESSION, worktreeTranscript(CLAUDE_SESSION));
     contextOf(await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: started, sessionProcesses: UNDER_CLAUDE() }));
-    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, claudeSession: CLAUDE_SESSION, at: '2030-01-08T10:00:00.000Z', transcript: worktreeTranscript(CLAUDE_SESSION) });
+    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLAUDE_SESSION, at: '2030-01-08T10:00:00.000Z', transcript: worktreeTranscript(CLAUDE_SESSION) });
     kit.clock.advance(60_000);
     contextOf(await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('clear', CLEARED, worktreeTranscript(CLEARED)), sessionProcesses: UNDER_CLAUDE() }));
-    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, claudeSession: CLEARED, at: '2030-01-08T10:01:00.000Z', transcript: worktreeTranscript(CLEARED) });
+    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLEARED, at: '2030-01-08T10:01:00.000Z', transcript: worktreeTranscript(CLEARED) });
     kit.clock.advance(60_000);
     contextOf(await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('compact', CLEARED), sessionProcesses: UNDER_CLAUDE() }));
-    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, claudeSession: CLEARED, at: '2030-01-08T10:02:00.000Z' }, 'a payload naming no transcript records none');
+    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLEARED, at: '2030-01-08T10:02:00.000Z' }, 'a payload naming no transcript records none');
   });
 
   it('records nothing for a tab that is no session', async () => {
@@ -70,7 +70,7 @@ describe('the SessionStart hook records where the session started', () => {
     const kit = new CliHarness(TEAM);
     const env = { ...AS_ALPHA, CLAUDE_CONFIG_DIR: join('/', 'claude-work') };
     contextOf(await kit.run(['hook', 'session-start'], { env, stdin: start('startup'), sessionProcesses: UNDER_CLAUDE(), host: NO_PATHS_HOST }));
-    assert.equal((await new SessionRecordStore(kit.files, { sessions: SESSIONS }).read('alpha'))?.claudeSession, CLAUDE_SESSION);
+    assert.equal((await new SessionRecordStore(kit.files, { sessions: SESSIONS }).read('alpha'))?.hostSession, CLAUDE_SESSION);
     assert.equal(await readConfigDir(kit.files, CONFIG_DIR_RECORD), undefined);
   });
 
@@ -85,7 +85,7 @@ describe('the SessionStart hook records where the session started', () => {
 
 describe('the SessionStart hook of a session that runs in another Claude Code', () => {
   /** Alpha's record: Claude Code 6800, started an hour before the harness clock. */
-  const LIVE = { claudePid: 6800, claudeSession: 'c0', at: '2030-01-08T09:00:00.000Z' };
+  const LIVE = { claudePid: 6800, hostSession: 'c0', at: '2030-01-08T09:00:00.000Z' };
   const STOP =
     'STOP: session alpha already runs in Claude Code process 6800, so this Claude Code (process 6900) is a second one, which would work beside it on the same tasks; ' +
     "teamrig kept the session's record on the first. Do no work here: tell the user to use that tab and close this one.";
@@ -231,6 +231,6 @@ describe('the SessionStart hook of a session that runs in another Claude Code', 
     await store.write('alpha', LIVE);
     const result = await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('startup'), ...host(false) });
     assert.equal(noticeOf(result), undefined);
-    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, claudeSession: CLAUDE_SESSION, at: '2030-01-08T10:00:00.000Z' });
+    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLAUDE_SESSION, at: '2030-01-08T10:00:00.000Z' });
   });
 });

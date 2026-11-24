@@ -13,6 +13,7 @@ const PLUGIN_HOOKS_TEXT = readFileSync(new URL('../../../plugins/teamrig/hooks/h
 const PLUGIN_HOOKS = '/opt/teamrig/hooks/hooks.json';
 const CODEX_HOME = '/srv/codex';
 const CODEX_HOOKS = '/srv/codex/hooks.json';
+const CODEX_CONFIG = '/srv/codex/config.toml';
 const PERSONS: unknown = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo done', timeout: 5 }] }] } };
 
 const shipped = Object.values(await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
@@ -99,6 +100,47 @@ describe('teamrig setup hooks --host codex', () => {
     const result = await kit.run(['setup', 'hooks', '--host', 'codex'], options({ self: { node: '/usr/bin/node', script: '/work/teamrig/src/cli/main.ts', execArgv: [] } }));
     assert.equal(result.code, EXIT.refused);
     assert.match(result.stdout[0] ?? '', /runs from the installed plugin's dist\/cli\/main\.js, not \/work\/teamrig\/src\/cli\/main\.ts/u);
+  });
+
+  it("previews the config.toml setting without --yes and writes no config", async () => {
+    const kit = await kitWithPlugin();
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.equal(result.stdout[1], 'PREVIEW nothing written (add --yes to write) /srv/codex/config.toml: sets [features] unified_exec_tty = false');
+    assert.equal(kit.files.get(CODEX_CONFIG), undefined);
+  });
+
+  it("writes a new config.toml with --yes, and finds it unchanged on a second run", async () => {
+    const kit = await kitWithPlugin();
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.equal(result.stdout[1], 'WROTE /srv/codex/config.toml: sets [features] unified_exec_tty = false');
+    assert.match(kit.files.get(CODEX_CONFIG) ?? '', /^\[features\]\nunified_exec_tty = false$/mu);
+
+    const again = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
+    assert.equal(again.stdout[1], 'UNCHANGED /srv/codex/config.toml: it already sets [features] unified_exec_tty = false');
+  });
+
+  it("keeps the person's config.toml as a backup before setting the key in it", async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(CODEX_CONFIG, 'model = "o4"\n');
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    const line = result.stdout[1] ?? '';
+    assert.match(line, /^WROTE \/srv\/codex\/config\.toml: sets \[features\] unified_exec_tty = false; the old file is at .*codex-config\.bak$/u);
+    const backup = line.slice(line.indexOf('the old file is at ') + 'the old file is at '.length);
+    assert.equal(kit.files.get(backup), 'model = "o4"\n');
+    assert.match(kit.files.get(CODEX_CONFIG) ?? '', /^model = "o4"$/mu);
+  });
+
+  it('refuses a config.toml it cannot edit before writing the hooks file or the config', async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(CODEX_CONFIG, 'features = { other = true }\n');
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout[0] ?? '', /^REFUSED \/srv\/codex\/config\.toml: the Codex config is not one teamrig can set unified_exec_tty in: .*; nothing written$/u);
+    assert.equal(kit.files.get(CODEX_HOOKS), undefined);
+    assert.equal(kit.files.get(CODEX_CONFIG), 'features = { other = true }\n');
   });
 
   it('needs --host', async () => {

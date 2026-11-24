@@ -27,7 +27,7 @@ const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
 const TRANSCRIPT = projectTranscriptPath(join(USER_HOME, '.claude', 'projects'), APP, CLAUDE_SESSION);
 const CHARGE: CommitCharge = { usedMb: 40_000, limitMb: 100_700 };
 /** Alpha, closed by the lead in Claude Code session CLAUDE_SESSION, small and recent enough that `open` resumes it. */
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
 /** Alpha's Claude Code, as its start recorded it and the host lists it. */
 const CLAUDE_PID = 8100;
 /** What bringing alpha's running tab to the front prints. */
@@ -58,7 +58,7 @@ function hostOf(rows: readonly { pid: number; parent: number; bytes: number }[])
 
 /** Alpha's start record, naming the Claude Code process `hostOf` lists when it runs. */
 async function runningAlpha(kit: CliHarness): Promise<void> {
-  await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: CLAUDE_PID, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
+  await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: CLAUDE_PID, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' });
 }
 
 /** The first prompt a tab's launch line carries. */

@@ -280,6 +280,12 @@ describe("Claude Code's transcript lines as entries", () => {
     assert.deepEqual(transcriptReader.entry(compactLine(AT)), { ...BARE, at: AT_MS, kind: 'compact' });
   });
 
+  it("reads a scheduled job's fire, and an attachment of that name as none", () => {
+    const fire = JSON.stringify({ type: 'system', subtype: 'scheduled_task_fire', timestamp: AT, content: 'Running scheduled task', prompt: 'check the inbox' });
+    assert.deepEqual(transcriptReader.entry(fire), { ...BARE, at: AT_MS, kind: 'scheduled-fire' });
+    assert.equal(transcriptReader.entry(JSON.stringify({ type: 'attachment', subtype: 'scheduled_task_fire' }))?.kind, 'other');
+  });
+
   it("reads each of the three marks of a turn's end, and no other system line, as the end of a turn", () => {
     for (const subtype of ['stop_hook_summary', 'turn_duration', 'local_command']) {
       assert.deepEqual(transcriptReader.entry(JSON.stringify({ type: 'system', subtype })), { ...BARE, kind: 'turn-end' }, subtype);
@@ -430,13 +436,14 @@ describe('reading only some kinds of entry', () => {
     continued: JSON.stringify({ type: 'continued-in', timestamp: AT, continuedInSessionId: 's-2' }),
     'hook-note': sessionStartNoteLine(AT, ['note']),
     'scheduled-carry': JSON.stringify({ type: 'attachment', timestamp: AT, attachment: { type: 'session_cron_carry', tasks: [] } }),
+    'scheduled-fire': JSON.stringify({ type: 'system', subtype: 'scheduled_task_fire', timestamp: AT, prompt: 'go' }),
     environment: JSON.stringify({ type: 'attachment', timestamp: AT, attachment: { type: 'environment', snapshot: {} } }),
     'queued-prompt': JSON.stringify({ type: 'queue-operation', operation: 'enqueue', timestamp: AT, content: 'go' }),
     'model-switch': JSON.stringify({ type: 'system', timestamp: AT, originalModel: 'model-a', fallbackModel: 'model-b' }),
     title: JSON.stringify({ type: 'custom-title', timestamp: AT, customTitle: 'Host ports' }),
     other: JSON.stringify({ type: 'system', subtype: 'api_error', timestamp: AT }),
   } as const;
-  const kinds = ['input', 'reply', 'compact', 'turn-end', 'continued', 'hook-note', 'scheduled-carry', 'environment', 'queued-prompt', 'model-switch', 'title', 'other'] as const;
+  const kinds = ['input', 'reply', 'compact', 'turn-end', 'continued', 'hook-note', 'scheduled-carry', 'scheduled-fire', 'environment', 'queued-prompt', 'model-switch', 'title', 'other'] as const;
 
   it('gives a line of a named kind as it reads without the filter', () => {
     for (const kind of kinds) {

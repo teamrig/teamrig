@@ -9,9 +9,9 @@ import { rollupLineOf, RollupFold } from "./rollup.js";
  * log of the team that wrote them, so a session moved to another team leaves its old days marked in the team it left;
  * such a mark goes to the one tree team holding the id now, and claims nothing when none or several do.
  */
-function markClaimOf(tree, claudeSession) {
+function markClaimOf(tree, hostSession) {
     const marks = tree.flatMap(({ team, roster, areaBySession }) => {
-        const id = areaBySession.get(claudeSession);
+        const id = areaBySession.get(hostSession);
         return id === undefined ? [] : [{ team, roster, id }];
     });
     const held = marks.find(({ roster, id }) => roster.ids.includes(id));
@@ -39,15 +39,15 @@ export async function attributeInTree(input) {
     if (member === undefined) {
         return new Map();
     }
-    const claims = new Map(input.sessions.map(({ claudeSession }) => [claudeSession, markClaimOf(input.tree, claudeSession)]));
+    const claims = new Map(input.sessions.map(({ hostSession }) => [hostSession, markClaimOf(input.tree, hostSession)]));
     const areaBySession = new Map();
-    for (const [claudeSession, claim] of claims) {
+    for (const [hostSession, claim] of claims) {
         if (claim?.team === input.own) {
-            areaBySession.set(claudeSession, claim.id);
+            areaBySession.set(hostSession, claim.id);
         }
     }
     const attribution = await attribute({
-        sessions: input.sessions.filter(({ claudeSession }) => [undefined, input.own].includes(claims.get(claudeSession)?.team)),
+        sessions: input.sessions.filter(({ hostSession }) => [undefined, input.own].includes(claims.get(hostSession)?.team)),
         team: member.team,
         roster: member.roster,
         areaBySession,

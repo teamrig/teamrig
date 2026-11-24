@@ -9,6 +9,7 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
 import { errorMessage, isRecord } from "../core/guards.js";
 import { API_VERSION, apiVersionNotice, connectorAdapterProblems, connectorDeclarationProblems, hostAdapterProblems, hostDeclarationProblems, isConnectorAdapter, isConnectorDeclaration, isHostAdapter, isHostDeclaration, isTerminalAdapter, isTerminalDeclaration, terminalAdapterProblems, terminalDeclarationProblems, } from "../plugin-api/index.js";
 import { CONNECTOR_ADAPTERS, HOST_ADAPTERS, TERMINAL_ADAPTERS } from "./adapters.js";
+import { stepTextsProblems } from "../features/steps.js";
 /**
  * The importer teamrig runs with. It lives in this file because a relative specifier resolves against the file
  * whose `import()` takes it, and the table's folders are relative to this folder.
@@ -120,4 +121,49 @@ export async function readDeclarations(importer = importModule) {
         loadAll(TERMINAL_DECLARATION, importer),
     ]);
     return { hosts, connectors, terminals };
+}
+const STEP_TEXTS_FILE = 'step-texts.ts';
+/**
+ * Reads an adapter's declaration and, when it lists steps, its `step-texts.ts`. A listed step with no text, or a text
+ * for a step it does not list, refuses it, as a manifest that misses a feature does. One listing no step needs no file.
+ */
+async function readServed(part, id, importer) {
+    const declared = await load(part, id, importer);
+    if (declared.kind === 'refused') {
+        return refused(id, declared.notices);
+    }
+    const declaration = declared.value;
+    const listed = declaration.steps ?? [];
+    if (listed.length === 0) {
+        return { kind: 'loaded', id, value: { declaration, texts: new Map() } };
+    }
+    const folder = part.table[id];
+    if (folder === undefined) {
+        return refused(id, [`no ${part.side} adapter is named ${id}`]);
+    }
+    let module;
+    try {
+        module = await importer(`${folder}/${STEP_TEXTS_FILE}`);
+    }
+    catch (error) {
+        return refused(id, [`its ${STEP_TEXTS_FILE} did not load: ${errorMessage(error)}`]);
+    }
+    const texts = isRecord(module) ? module['stepTexts'] : undefined;
+    const problems = stepTextsProblems(listed, texts);
+    if (problems.length > 0 || !isRecord(texts)) {
+        return refused(id, problems);
+    }
+    const served = listed.flatMap((step) => {
+        const text = texts[step];
+        return typeof text === 'string' ? [[step, text]] : [];
+    });
+    return { kind: 'loaded', id, value: { declaration, texts: new Map(served) } };
+}
+/** The steps each host adapter serves, in table order: the declaration and the step texts alone, no adapter code. */
+export function readHostSteps(importer = importModule) {
+    return Promise.all(Object.keys(HOST_ADAPTERS).map((id) => readServed(HOST_DECLARATION, id, importer)));
+}
+/** The steps each connector adapter serves, in table order: the declaration and the step texts alone, no adapter code. */
+export function readConnectorSteps(importer = importModule) {
+    return Promise.all(Object.keys(CONNECTOR_ADAPTERS).map((id) => readServed(CONNECTOR_DECLARATION, id, importer)));
 }

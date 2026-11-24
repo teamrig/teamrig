@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
 import { isNonNegativeInteger, stringField } from '../core/guards.ts';
 import type { TeamPaths } from '../core/home.ts';
-import { hostSessionOf } from '../core/host-session.ts';
+import { hostSessionOf, legacyHostSessionRecord } from '../core/host-session.ts';
 import { parseObject, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
 
 /** The format of the session record files this code writes; a file in a format it does not read reads as absent. */
@@ -21,7 +21,7 @@ export const SESSION_RECORD_NEXT_FORMAT = 2;
  */
 export interface SessionRecord {
   readonly claudePid: number;
-  readonly claudeSession: string;
+  readonly hostSession: string;
   /** When the hook recorded it, an ISO time (a record whose time does not parse is damaged). */
   readonly at: string;
   /**
@@ -43,20 +43,20 @@ export function parseSessionRecord(text: string): SessionRecord | undefined {
     return undefined;
   }
   const claudePid = record['claudePid'];
-  const claudeSession = hostSessionOf(record, 'claudeSession');
+  const hostSession = hostSessionOf(record, 'claudeSession');
   const at = stringField(record, 'at');
-  if (!isNonNegativeInteger(claudePid) || claudePid === 0 || claudeSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
+  if (!isNonNegativeInteger(claudePid) || claudePid === 0 || hostSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
     return undefined;
   }
   if (!('transcript' in record)) {
-    return { claudePid, claudeSession, at };
+    return { claudePid, hostSession, at };
   }
   const transcript = stringField(record, 'transcript');
-  return transcript === undefined || transcript === '' ? undefined : { claudePid, claudeSession, at, transcript };
+  return transcript === undefined || transcript === '' ? undefined : { claudePid, hostSession, at, transcript };
 }
 
 export function formatSessionRecord(record: SessionRecord): string {
-  return toJsonlLine({ [VERSION_FIELD]: SESSION_RECORD_FORMAT, ...record });
+  return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: SESSION_RECORD_FORMAT, ...record }, 'claudeSession'));
 }
 
 /** Each session's record. Ids are session ids, checked by the roster, so they are safe in a path. */

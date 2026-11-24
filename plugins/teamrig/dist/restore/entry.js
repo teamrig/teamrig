@@ -41,7 +41,7 @@ export function applyEvent(existing, event, facts) {
         return { kind: 'none' };
     }
     const base = {
-        claudeSession: facts.claudeSession,
+        hostSession: facts.hostSession,
         projectDir,
         transcriptPath: facts.transcriptPath ?? existing?.transcriptPath,
         entrypoint: facts.entrypoint ?? existing?.entrypoint,
@@ -82,7 +82,7 @@ function isoOf(ms) {
 export function entryRecord(entry) {
     const { apiError } = entry;
     return {
-        claudeSession: entry.claudeSession,
+        claudeSession: entry.hostSession,
         projectDir: entry.projectDir,
         transcriptPath: entry.transcriptPath,
         entrypoint: entry.entrypoint,
@@ -151,7 +151,7 @@ export function parseEntry(text) {
  * later teamrig's entry, naming the session `hostSession` (T4762), is told by that field alone.
  */
 export function entryOfRecord(record) {
-    const claudeSession = hostSessionOf(record, 'claudeSession');
+    const hostSession = hostSessionOf(record, 'claudeSession');
     const projectDir = stringField(record, 'projectDir');
     const state = activityOf(stringField(record, 'state'));
     const createdAt = instantField(record, 'createdAt');
@@ -163,8 +163,8 @@ export function entryOfRecord(record) {
     const rawPid = record['pid'];
     const pid = rawPid === undefined ? undefined : isNonNegativeInteger(rawPid) ? rawPid : null;
     const restoreAttempts = record['restoreAttempts'];
-    if (claudeSession === undefined ||
-        !CLAUDE_SESSION_ID.test(claudeSession) ||
+    if (hostSession === undefined ||
+        !CLAUDE_SESSION_ID.test(hostSession) ||
         projectDir === undefined ||
         state === undefined ||
         createdAt === undefined ||
@@ -180,7 +180,7 @@ export function entryOfRecord(record) {
         return undefined;
     }
     const entry = {
-        claudeSession,
+        hostSession,
         projectDir,
         transcriptPath: stringField(record, 'transcriptPath'),
         entrypoint: stringField(record, 'entrypoint'),

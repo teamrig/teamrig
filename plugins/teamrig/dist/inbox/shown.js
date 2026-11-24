@@ -1,8 +1,8 @@
 import { unreadOf } from "./unread.js";
 export const INJECT_CAPS = { maxLines: 5, maxChars: 1500 };
-/** The newest mark the hook left for `claudeSession` on `area`; null when it showed it none of the area's lines. */
-export function newestShownOf(marks, area, claudeSession) {
-    return claudeSession === null ? null : (marks.findLast((mark) => mark.area === area && mark.claudeSession === claudeSession) ?? null);
+/** The newest mark the hook left for `hostSession` on `area`; null when it showed it none of the area's lines. */
+export function newestShownOf(marks, area, hostSession) {
+    return hostSession === null ? null : (marks.findLast((mark) => mark.area === area && mark.hostSession === hostSession) ?? null);
 }
 /**
  * The newest mark the hook left on `area` for any Claude Code session: how far the area's session saw its inbox at a

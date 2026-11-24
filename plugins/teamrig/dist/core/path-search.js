@@ -1,6 +1,8 @@
 import { posix, win32 } from 'node:path';
 /** The extensions Node.js appends to a bare program name on Windows, in order: `.com`, then `.exe`. */
-const WINDOWS_PROGRAM_EXTENSIONS = ['.com', '.exe'];
+export const WINDOWS_PROGRAM_EXTENSIONS = ['.com', '.exe'];
+/** The extensions a command typed in cmd or PowerShell may have on Windows, a `.cmd` shim among them (`teamrig.cmd`). */
+export const WINDOWS_COMMAND_EXTENSIONS = ['.com', '.exe', '.cmd', '.bat'];
 /** The name a variable has in `env`, given in upper case; Windows names ignore case (`Path` for `PATH`). Undefined when it is not set. */
 export function envKey(env, name, platform) {
     if (platform !== 'win32') {
@@ -22,13 +24,13 @@ export function pathList(value, delimiter) {
 }
 /**
  * The file Node.js starts for `execFile(name)`, found as it searches PATH: on Windows `<name>.com`, then
- * `<name>.exe`, in each folder; elsewhere `<name>` in each folder. It only looks, starting nothing;
- * undefined when no folder has it.
+ * `<name>.exe`, in each folder (or `windowsExtensions` in that order, as `WINDOWS_COMMAND_EXTENSIONS` for what a shell
+ * runs); elsewhere `<name>` in each folder. It only looks, starting nothing; undefined when no folder has it.
  */
-export async function findProgram(name, deps) {
+export async function findProgram(name, deps, windowsExtensions = WINDOWS_PROGRAM_EXTENSIONS) {
     const windows = deps.platform === 'win32';
     const folders = pathList(envVariable(deps.env, 'PATH', deps.platform), windows ? ';' : ':');
-    const candidates = folders.flatMap((folder) => windows ? WINDOWS_PROGRAM_EXTENSIONS.map((extension) => win32.join(folder, `${name}${extension}`)) : [posix.join(folder, name)]);
+    const candidates = folders.flatMap((folder) => windows ? windowsExtensions.map((extension) => win32.join(folder, `${name}${extension}`)) : [posix.join(folder, name)]);
     for (const path of candidates) {
         if ((await deps.probe.kind(path)) === 'file') {
             return path;

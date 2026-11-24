@@ -68,6 +68,8 @@ export interface CliRuntime {
   /** The machine's IANA time zone, which the team config's `timeZone` overrides. */
   readonly timeZone: string;
   readonly sleep: Sleep;
+  /** A wait that never holds the process open (`idleSleep`, core/lock.ts): the limit `doctor` races each install probe against. */
+  readonly idleSleep: Sleep;
   readonly git: RepoState;
   /** Whether git tracks or ignores a team pointer, for `team create`. */
   readonly pointerGit: PointerGit;

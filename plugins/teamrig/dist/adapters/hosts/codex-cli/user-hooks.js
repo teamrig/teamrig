@@ -13,11 +13,13 @@
  */
 import { posix, win32 } from 'node:path';
 import { isRecord } from "../../../plugin-api/index.js";
+import { withBooleanKey } from "./config-toml.js";
 import { codexHooksFile } from "./hooks-file.js";
 /** Moves Codex's own folder (config, hooks, login) away from `~/.codex`. */
 const HOME_VAR = 'CODEX_HOME';
 const DEFAULT_HOME = '.codex';
 const HOOKS_FILE = 'hooks.json';
+const CONFIG_FILE = 'config.toml';
 /** The top-level keys Codex reads in a hooks file; it refuses a file holding any other. */
 const FILE_KEYS = ['description', 'hooks'];
 /** The scripts of teamrig's hook commands, as the plugin's hooks file names them below the plugin root. */
@@ -169,15 +171,31 @@ function merged(current, source, pluginRoot) {
     const same = counts.inserted + counts.changed + counts.removed === 0;
     return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped: built.skipped.map(skippedLine) } };
 }
+/**
+ * Interactive shells off in the person's config.toml, for the sessions they start outside teamrig's launcher, which
+ * passes the same key (launch-args.ts `NO_TTY_SHELLS`): a line sent into a tty shell runs no PreToolUse hook (T5270 F2).
+ */
+const NO_TTY = { table: 'features', key: 'unified_exec_tty' };
 /** The Codex CLI port of the person's hooks file. */
 export function codexUserHooks(env, platform) {
     const path = platform === 'win32' ? win32 : posix;
+    const codexHome = (userHome) => {
+        const moved = env[HOME_VAR]?.trim();
+        return moved ? moved : path.join(userHome, DEFAULT_HOME);
+    };
     return {
         host: 'codex',
-        file: (userHome) => {
-            const moved = env[HOME_VAR]?.trim();
-            return path.join(moved ? moved : path.join(userHome, DEFAULT_HOME), HOOKS_FILE);
-        },
+        file: (userHome) => path.join(codexHome(userHome), HOOKS_FILE),
+        configLines: [
+            {
+                file: (userHome) => path.join(codexHome(userHome), CONFIG_FILE),
+                setting: `[${NO_TTY.table}] ${NO_TTY.key} = false`,
+                merge: (current) => {
+                    const edit = withBooleanKey(current, NO_TTY.table, NO_TTY.key, false);
+                    return edit.ok ? edit : { ok: false, problem: `the Codex config is not one teamrig can set ${NO_TTY.key} in: ${edit.problem}` };
+                },
+            },
+        ],
         merge: (current, source, pluginRoot) => {
             try {
                 return merged(current, source, pluginRoot);

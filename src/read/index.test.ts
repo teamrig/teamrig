@@ -176,9 +176,9 @@ describe('the read entry', () => {
   });
 
   it("reads each session's closes and reopens from the session log, and none from a newer teamrig (T1725)", () => {
-    const close: read.CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T09:00:00.000Z', claudeSession: 'claude-1', idleMinutes: 75, freedMb: 900 };
+    const close: read.CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T09:00:00.000Z', hostSession: 'claude-1', idleMinutes: 75, freedMb: 900 };
     const reopen: read.ReopenRecord = { kind: 'reopen', session: 'alpha', at: '2030-01-08T10:00:00.000Z', resumed: 'claude-1' };
-    const bravo: read.CloseRecord = { kind: 'close', session: 'bravo', by: 'lead', at: '2030-01-08T09:30:00.000Z', claudeSession: 'claude-2', idleMinutes: 40, freedMb: 600 };
+    const bravo: read.CloseRecord = { kind: 'close', session: 'bravo', by: 'lead', at: '2030-01-08T09:30:00.000Z', hostSession: 'claude-2', idleMinutes: 40, freedMb: 600 };
     const line = (record: read.SessionLogRecord, version: number): string => JSON.stringify({ v: version, ...record });
     const text = [line(close, read.SESSION_LOG_FORMAT), line(bravo, read.SESSION_LOG_FORMAT), line(reopen, read.SESSION_LOG_FORMAT), line(close, read.SESSION_LOG_FORMAT + 2)].join('\n');
     const log = read.readSessionLog(text);

@@ -40,7 +40,7 @@ function openAlpha(processes: FakeProcesses, options: RunOptions = {}, extra: re
 
 /** Records that session `id` started in Claude Code `pid` at `at`, by default an hour before the harness clock. */
 function recordStart(kit: CliHarness, pid: number, id: string = 'alpha', at: string = '2030-01-08T09:00:00.000Z'): Promise<void> {
-  return new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write(id, { claudePid: pid, claudeSession: 'c0', at });
+  return new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write(id, { claudePid: pid, hostSession: 'c0', at });
 }
 
 /** A host where Claude Code runs as `pid` since `started`, by default a minute before alpha's recorded start. */
@@ -216,7 +216,7 @@ describe('teamrig open', () => {
     const kit = new CliHarness(TEAM);
     await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('lead', {
       claudePid: 6900,
-      claudeSession: 'claude-lead',
+      hostSession: 'claude-lead',
       at: '2030-01-08T09:00:00.000Z',
     });
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
@@ -398,7 +398,7 @@ describe('teamrig launch', () => {
   const LAUNCH = ['launch', 'alpha', '--team', 'app', '--project', APP];
   const ON_PATH = new FakePathProbe({ folders: [APP], files: [CLAUDE] });
   const SESSION_ENV = { TEAMRIG_HOME: KIT, PATH: '/usr/local/bin', TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app', TEAMRIG_LAUNCHED: 'alpha' };
-  const ENDING: RestartRequest = { phase: 'ending', at: '2030-01-08T10:00:00.000Z', pid: 4100, claudeSession: 'c1', transcript: null, cwd: null, supervised: true, effort: null };
+  const ENDING: RestartRequest = { phase: 'ending', at: '2030-01-08T10:00:00.000Z', pid: 4100, hostSession: 'c1', transcript: null, cwd: null, supervised: true, effort: null };
 
   /** Claude Code whose first run the automatic restart ends, leaving `request` as `restart` does, after `during` ran. */
   class RestartedOnce extends FakeProcesses {
@@ -648,7 +648,7 @@ describe('teamrig launch', () => {
   describe('a Claude Code that teamrig closed', () => {
     const SESSION_LOG = join(TEAM_HOME, 'state', 'session-log.jsonl');
     const KILLED: RunOutcome = { kind: 'exited', code: 1 };
-    const CLOSE: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T10:00:01.000Z', claudeSession: 'c1', idleMinutes: 95, freedMb: 812 };
+    const CLOSE: CloseRecord = { kind: 'close', session: 'alpha', by: 'idle-pass', at: '2030-01-08T10:00:01.000Z', hostSession: 'c1', idleMinutes: 95, freedMb: 812 };
     const CLOSED_LINE = 'Claude Code was closed by idle-pass after 95 min idle (812 MB freed): `teamrig open alpha` resumes it';
 
     /** Claude Code that teamrig ends while it runs: the closer logs `close`, and Claude Code exits 1. */

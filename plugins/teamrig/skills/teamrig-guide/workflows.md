@@ -66,7 +66,7 @@ removed route answering 404 proves the removal, not that its callers still work.
 From the first edit to a change that runs, in this order (rules 2, 7, 14 and 16):
 
 ```sh
-teamrig worktree add t4-parser
+teamrig worktree add --task T4
 teamrig test --session api -- npm test
 ```
 
@@ -303,7 +303,7 @@ so it never loses work to a compaction.
    cannot start, the title reads `[shop] web: type /clear`: ask the user to type `/clear`.
 5. After the fresh start, the session-start context says `You were refreshed after T2; read your handover first:
    <path>`, and that a file needs a Read-tool read before an Edit or Write (Claude Code keeps no read from before
-   the refresh, and a read by `cat` does not count), then the scheduled jobs (still scheduled after a `/clear`, to make again after a new process), the
+   the refresh, and a read by `cat` does not count), then the scheduled jobs (to make again when CronList does not show them), the
    wake-up to make again, the old scratchpad and the plan file, then your active tasks as the register holds them
    (`LIVE TASKS of web, ...`, at most 6 rows and `+N more`, then the other sessions' tasks waiting on you,
    `WAITING ON YOU`, at most 3; where the handover says otherwise, the register wins).

@@ -9,7 +9,7 @@ const MAIN_TOOL: TrackEvent = { kind: 'tool', mainThread: true };
 
 function facts(overrides: Partial<TrackFacts> = {}): TrackFacts {
   return {
-    claudeSession: ID,
+    hostSession: ID,
     at: T1,
     projectDir: '/work/app',
     transcriptPath: '/u/.claude/projects/app/x.jsonl',
@@ -23,7 +23,7 @@ function facts(overrides: Partial<TrackFacts> = {}): TrackFacts {
 }
 
 const ENTRY: RestoreEntry = {
-  claudeSession: ID,
+  hostSession: ID,
   projectDir: '/work/first',
   transcriptPath: '/u/.claude/projects/app/x.jsonl',
   entrypoint: 'cli',

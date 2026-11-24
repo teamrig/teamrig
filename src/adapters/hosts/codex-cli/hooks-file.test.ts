@@ -99,13 +99,16 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 
   it("runs each hook by the plugin's real path, with no variable left for a shell to fill", () => {
     for (const handler of handlers) {
-      assert.match(handler.command, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host claude-code$/u);
+      assert.match(handler.command, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host codex-cli$/u);
       assert.equal(handler.commandWindows, handler.command);
     }
   });
 
-  it("keeps each handler's own timeout", () => {
-    const timeouts = new Set(handlers.map((handler) => handler.timeout));
+  it("keeps each handler's own timeout, but the 3 seconds Codex gives a SessionEnd handler", () => {
+    const sessionEnd = (file.hooks.SessionEnd ?? []).flatMap((group) => group.hooks);
+    assert.ok(sessionEnd.length > 0);
+    assert.ok(sessionEnd.every((handler) => handler.timeout === 3));
+    const timeouts = new Set(handlers.filter((handler) => !sessionEnd.includes(handler)).map((handler) => handler.timeout));
     assert.deepEqual([...timeouts].sort((a, b) => a - b), [5, 15]);
     assert.equal(file.hooks.PostToolUse?.at(-1)?.hooks[0]?.timeout, 5);
   });
@@ -123,36 +126,42 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 describe('a Codex hook command line', () => {
   it('quotes a path with a space for each shell', () => {
     const handler = onlyHandler(fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'stop'] }), WINDOWS_ROOT);
-    assert.equal(handler.command, "node 'C:\\Program Files\\teamrig plugin/dist/cli/main.js' hook stop");
-    assert.equal(handler.commandWindows, 'node "C:\\Program Files\\teamrig plugin/dist/cli/main.js" hook stop');
+    assert.equal(handler.command, "node 'C:\\Program Files\\teamrig plugin/dist/cli/main.js' hook stop --host codex-cli");
+    assert.equal(handler.commandWindows, 'node "C:\\Program Files\\teamrig plugin/dist/cli/main.js" hook stop --host codex-cli');
   });
 
   it('doubles the backslashes before a closing cmd quote, so the quote still closes', () => {
     const handler = onlyHandler(fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}\\'] }), 'C:\\team rig\\');
-    assert.equal(handler.commandWindows, 'node "C:\\team rig\\\\\\\\"');
-    assert.equal(handler.command, "node 'C:\\team rig\\\\'");
+    assert.equal(handler.commandWindows, 'node "C:\\team rig\\\\\\\\" --host codex-cli');
+    assert.equal(handler.command, "node 'C:\\team rig\\\\' --host codex-cli");
   });
 
   it('carries a single quote through both shells', () => {
     const handler = onlyHandler(fileWith({ args: ["it's"] }));
-    assert.equal(handler.command, "node 'it'\\''s'");
-    assert.equal(handler.commandWindows, 'node "it\'s"');
+    assert.equal(handler.command, "node 'it'\\''s' --host codex-cli");
+    assert.equal(handler.commandWindows, 'node "it\'s" --host codex-cli');
   });
 
   it('quotes a word cmd would split or run, which a POSIX shell takes plain', () => {
     const handler = onlyHandler(fileWith({ args: ['a=b,c', 'x&y'] }));
-    assert.equal(handler.command, "node a=b,c 'x&y'");
-    assert.equal(handler.commandWindows, 'node "a=b,c" "x&y"');
+    assert.equal(handler.command, "node a=b,c 'x&y' --host codex-cli");
+    assert.equal(handler.commandWindows, 'node "a=b,c" "x&y" --host codex-cli');
   });
 
   it('fills the plugin root wherever a word names it', () => {
     const handler = onlyHandler(fileWith({ args: ['--root=${CLAUDE_PLUGIN_ROOT}', '${CLAUDE_PLUGIN_ROOT}/a:${CLAUDE_PLUGIN_ROOT}/b'] }));
-    assert.equal(handler.command, 'node --root=/opt/teamrig/plugin /opt/teamrig/plugin/a:/opt/teamrig/plugin/b');
+    assert.equal(handler.command, 'node --root=/opt/teamrig/plugin /opt/teamrig/plugin/a:/opt/teamrig/plugin/b --host codex-cli');
   });
 
-  it('runs a handler with no args as its command alone', () => {
+  it('names the Codex host in place of the host the source line names, wherever the pair sits', () => {
+    const handler = onlyHandler(fileWith({ args: ['main.js', 'hook', '--host', 'claude-code', 'stop'] }));
+    assert.equal(handler.command, 'node main.js hook stop --host codex-cli');
+    assert.equal(onlyHandler(fileWith({ args: ['--host', 'antigravity-cli'] })).command, 'node --host codex-cli');
+  });
+
+  it('runs a handler with no args as its command and the Codex host alone', () => {
     const handler = onlyHandler(fileWith({}));
-    assert.deepEqual(handler, { type: 'command', command: 'node', commandWindows: 'node', timeout: 15 });
+    assert.deepEqual(handler, { type: 'command', command: 'node --host codex-cli', commandWindows: 'node --host codex-cli', timeout: 15 });
   });
 });
 
@@ -166,6 +175,12 @@ describe('a Codex hooks file', () => {
   it('gives a handler with no timeout 15 seconds, far under the 600 of Codex', () => {
     assert.equal(onlyHandler(fileWith({ timeout: 30 })).timeout, 30);
     assert.equal(onlyHandler(fileWith({})).timeout, 15);
+  });
+
+  it('writes a SessionEnd timeout of at most the 3 seconds Codex clamps it to, keeping a shorter one', () => {
+    assert.equal(onlyHandler(fileWith({ timeout: 15 }, 'SessionEnd')).timeout, 3);
+    assert.equal(onlyHandler(fileWith({}, 'SessionEnd')).timeout, 3);
+    assert.equal(onlyHandler(fileWith({ timeout: 2 }, 'SessionEnd')).timeout, 2);
   });
 
   it('keeps a matcher as it is', () => {
@@ -190,7 +205,7 @@ describe('a Codex hooks file', () => {
   });
 
   it('keeps a handler whose asyncRewake is false', () => {
-    assert.equal(onlyHandler(fileWith({ asyncRewake: false })).command, 'node');
+    assert.equal(onlyHandler(fileWith({ asyncRewake: false })).command, 'node --host codex-cli');
   });
 
   it('does not check the words of a handler it skips', () => {
@@ -227,6 +242,7 @@ describe('a hooks file the rewrite does not know in full is refused whole', () =
     ['a double quote in a word', fileWith({ args: ['say "hi"'] }), /a cmd line cannot carry as text/u],
     ['an exclamation mark in a word', fileWith({ args: ['now!'] }), /a cmd line cannot carry as text/u],
     ['a program name that needs quotes', fileWith({ command: 'my node' }), /starts with a program name that needs quotes on cmd/u],
+    ['a --host flag naming no host', fileWith({ args: ['hook', 'stop', '--host'] }), /ends with --host and names no host/u],
   ];
 
   for (const [name, source, reason] of cases) {

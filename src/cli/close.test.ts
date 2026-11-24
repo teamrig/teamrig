@@ -75,7 +75,7 @@ interface Alpha {
  */
 async function runningAlpha(idleMinutes = 75, transcript = reply(40_000), recorded?: string, config: JsonRecord = TEAM, project = APP): Promise<Alpha> {
   const kit = new CliHarness(project === APP ? config : { ...config, launch: { alpha: { project } } });
-  const record = { claudePid: CLAUDE.pid, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' };
+  const record = { claudePid: CLAUDE.pid, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' };
   await new SessionRecordStore(kit.files, { sessions: SESSIONS }).write('alpha', recorded === undefined ? record : { ...record, transcript: recorded });
   const path = recorded ?? projectTranscriptPath(join(USER_HOME, '.claude', 'projects'), project, CLAUDE_SESSION);
   await kit.files.write(path, transcript);
@@ -99,9 +99,9 @@ const OTHER_SESSION = '0123abcd-0000-4000-8000-0000000000e5';
 /** The kit home's restore registry, holding an entry for alpha's Claude Code session and one for another session. */
 async function recordedForRestore(alpha: Alpha): Promise<RestoreRegistry> {
   const registry = new RestoreRegistry(alpha.kit.files, restoreSessionsDir(KIT));
-  for (const claudeSession of [CLAUDE_SESSION, OTHER_SESSION]) {
+  for (const hostSession of [CLAUDE_SESSION, OTHER_SESSION]) {
     const entry: RestoreEntry = {
-      claudeSession,
+      hostSession,
       projectDir: APP,
       transcriptPath: undefined,
       entrypoint: 'cli',
@@ -145,7 +145,7 @@ describe('teamrig close', () => {
     assert.deepEqual(alpha.processes.ends, [{ pid: TAB.pid, how: 'ask' }], 'it ends the tab, which ends its Claude Code');
     assert.equal(alpha.processes.alive(CLAUDE.pid), false);
     assert.deepEqual((await new SessionLog(alpha.kit.files, LOG).read()).records, [
-      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: APP },
+      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: APP },
     ]);
   });
 
@@ -157,7 +157,7 @@ describe('teamrig close', () => {
     assert.equal(closed.code, 0, [...closed.stdout, ...closed.stderr].join('\n'));
     assert.deepEqual(alpha.processes.ends, [{ pid: TAB.pid, how: 'ask' }]);
     assert.deepEqual((await new SessionLog(alpha.kit.files, LOG).read()).records, [
-      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: fix },
+      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: fix },
     ]);
   });
 
@@ -201,12 +201,12 @@ describe('teamrig close', () => {
     const moved = join(APP, '.claude', 'worktrees', 'moved');
     const alpha = await runningAlpha(75, reply(40_000, undefined, moved), projectTranscriptPath(projects, moved, CLAUDE_SESSION));
     const started = projectTranscriptPath(projects, join(APP, '.claude', 'worktrees', 'started'), CLAUDE_SESSION);
-    await new SessionRecordStore(alpha.kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: CLAUDE.pid, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z', transcript: started });
+    await new SessionRecordStore(alpha.kit.files, { sessions: SESSIONS }).write('alpha', { claudePid: CLAUDE.pid, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z', transcript: started });
     const closed = await close(alpha, ['alpha', '--yes', '--session', 'lead']);
     assert.equal(closed.code, 0, [...closed.stdout, ...closed.stderr].join('\n'));
     assert.deepEqual(alpha.processes.ends, [{ pid: TAB.pid, how: 'ask' }]);
     assert.deepEqual((await new SessionLog(alpha.kit.files, LOG).read()).records, [
-      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: moved },
+      { kind: 'close', session: 'alpha', by: 'lead', at: new Date(alpha.kit.clock.now()).toISOString(), hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: moved },
     ]);
   });
 
@@ -343,7 +343,7 @@ describe('teamrig close', () => {
     const closed = await close(alpha, ['alpha', '--yes', '--session', 'lead']);
     assert.equal(closed.code, 0, closed.stderr.join('\n'));
     assert.equal(await registry.read(CLAUDE_SESSION), undefined);
-    assert.equal((await registry.read(OTHER_SESSION))?.claudeSession, OTHER_SESSION);
+    assert.equal((await registry.read(OTHER_SESSION))?.hostSession, OTHER_SESSION);
   });
 
   it('still closes, and warns, when the restore entry cannot be dropped (T1425)', async () => {
@@ -362,7 +362,7 @@ describe('teamrig close', () => {
     alpha.processes.failEnd(TAB.pid, 'access denied');
     assertRefused(await close(alpha, ['alpha', '--yes', '--session', 'lead']), /alpha \(session alpha\) was not closed: could not end process 8000: access denied/);
     assert.equal(alpha.kit.files.get(LOG), undefined);
-    assert.equal((await registry.read(CLAUDE_SESSION))?.claudeSession, CLAUDE_SESSION);
+    assert.equal((await registry.read(CLAUDE_SESSION))?.hostSession, CLAUDE_SESSION);
   });
 });
 
@@ -407,7 +407,7 @@ describe('teamrig idle-close', () => {
     assert.deepEqual(closed.stdout, [line]);
     assert.deepEqual(alpha.processes.ends, [{ pid: TAB.pid, how: 'ask' }]);
     assert.deepEqual((await new SessionLog(alpha.kit.files, LOG).read()).records, [
-      { kind: 'close', session: 'alpha', by: 'idle-pass', at: new Date(alpha.kit.clock.now()).toISOString(), claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: APP },
+      { kind: 'close', session: 'alpha', by: 'idle-pass', at: new Date(alpha.kit.clock.now()).toISOString(), hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300, folder: APP },
     ]);
     assert.deepEqual(actsOf(alpha), [{ v: 1, kind: 'act', mode: 'on', act: 'close', id: 'alpha', outcome: 'done', line, before: CHARGE, after: CHARGE }]);
   });
@@ -418,7 +418,7 @@ describe('teamrig idle-close', () => {
     const closed = await idleClose(alpha);
     assert.equal(closed.code, 0, closed.stderr.join('\n'));
     assert.equal(await registry.read(CLAUDE_SESSION), undefined);
-    assert.equal((await registry.read(OTHER_SESSION))?.claudeSession, OTHER_SESSION);
+    assert.equal((await registry.read(OTHER_SESSION))?.hostSession, OTHER_SESSION);
   });
 
   it('tells the lead nothing of a close: no inbox line, no wake ask; the session log holds it (T1890)', async () => {

@@ -107,7 +107,7 @@ describe('team split', () => {
 
   it("refuses while a moved session's Claude Code runs, which the dry run names", async () => {
     const kit = await withTask();
-    const record = { claudePid: 8100, claudeSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' };
+    const record = { claudePid: 8100, hostSession: CLAUDE_SESSION, at: '2030-01-08T08:00:00.000Z' };
     await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('bravo', record);
     const sessionProcesses = new FakeSessionProcesses().add({ pid: 8100, parentPid: 8000, name: 'claude.exe', commandLine: 'claude' });
     const blocked = "bravo's Claude Code runs (pid 8100): close its tab, then split";

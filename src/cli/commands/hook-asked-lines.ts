@@ -48,7 +48,7 @@ export async function askedLinesOf(runtime: CliRuntime, event: HookEvent): Promi
         await asks.remove(id, found.spent);
         return undefined;
       }
-      const lines = await injectFor(inboxDepsOf(runtime, kit.paths), { area: id, claudeSession: tab, now: new Date(clock.now()), zone: teamZone(config, runtime), command: KIT_NAME });
+      const lines = await injectFor(inboxDepsOf(runtime, kit.paths), { area: id, hostSession: tab, now: new Date(clock.now()), zone: teamZone(config, runtime), command: KIT_NAME });
       await asks.remove(id, found.taken);
       return lines;
     });

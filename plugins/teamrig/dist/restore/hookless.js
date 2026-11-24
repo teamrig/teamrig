@@ -58,7 +58,7 @@ export function isCheckDue(state, now) {
  * open: neither is the team's to tell (T1055).
  */
 export function entrySession(entry, team) {
-    const session = entry.team === undefined ? team.areaBySession.get(entry.claudeSession) : entry.team === team.team ? entry.session : undefined;
+    const session = entry.team === undefined ? team.areaBySession.get(entry.hostSession) : entry.team === team.team ? entry.session : undefined;
     return session !== undefined && team.sessions.includes(session) ? session : undefined;
 }
 /**
@@ -106,21 +106,21 @@ export function lastReplyAt(reader, lines) {
  */
 export function hooklessTabs(stale, replies, now) {
     return stale.flatMap(({ entry, session }) => {
-        const turnAt = replies.get(entry.claudeSession);
+        const turnAt = replies.get(entry.hostSession);
         if (turnAt === undefined || !workedPastHook(entry.updatedAt, turnAt, now)) {
             return [];
         }
-        return [{ claudeSession: entry.claudeSession, session, projectDir: entry.projectDir, hookAt: entry.updatedAt, turnAt }];
+        return [{ hostSession: entry.hostSession, session, projectDir: entry.projectDir, hookAt: entry.updatedAt, turnAt }];
     });
 }
 /** The tabs a check names: hookless now and not named at the last check. */
 export function hooklessNews(state, tabs) {
     const told = new Set(state?.told ?? []);
-    return tabs.filter((tab) => !told.has(tab.claudeSession));
+    return tabs.filter((tab) => !told.has(tab.hostSession));
 }
 /** What a check writes: its time and the tabs hookless now, so a tab that had its hooks back is named again later. */
 export function checkedState(now, tabs) {
-    return { checkedAt: now, told: tabs.map((tab) => tab.claudeSession) };
+    return { checkedAt: now, told: tabs.map((tab) => tab.hostSession) };
 }
 /**
  * Who of team `team` hears of a hookless tab: its lead, or the delivery owner when the lead's own tab is
@@ -146,7 +146,7 @@ export function hooklessLine(tab, session, steps, zone, now) {
         return zone.day(date) === today ? zone.clock(date) : zone.shortMinute(date);
     };
     const minutes = Math.round((tab.turnAt - tab.hookAt) / MS_PER_MINUTE);
-    return (`HOOKLESS ${session}: its tab (host session ${tab.claudeSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
+    return (`HOOKLESS ${session}: its tab (host session ${tab.hostSession.slice(0, 8)}) worked ${minutes} min past its last teamrig hook ` +
         `(hook ${time(tab.hookAt)}, last reply ${time(tab.turnAt)}), so it gets no inbox, guards or tab status: ` +
-        `${steps.exit} that tab and run ${steps.resume(tab.claudeSession)} in ${tab.projectDir}`);
+        `${steps.exit} that tab and run ${steps.resume(tab.hostSession)} in ${tab.projectDir}`);
 }

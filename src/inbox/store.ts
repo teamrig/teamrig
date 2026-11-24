@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
+import { legacyHostSessionRecord } from '../core/host-session.ts';
 import { toJsonlLine } from '../core/jsonl.ts';
 import type { LogFile } from '../core/log-file.ts';
 import { SESSION_NAME } from '../register/model.ts';
@@ -63,6 +64,6 @@ export class JsonlMarkLog implements MarkLog {
   }
 
   async append(mark: InboxMark): Promise<void> {
-    await this.log.append(toJsonlLine({ ...mark }));
+    await this.log.append(toJsonlLine(legacyHostSessionRecord({ ...mark }, 'claudeSession')));
   }
 }

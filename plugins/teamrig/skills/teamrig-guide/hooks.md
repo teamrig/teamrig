@@ -30,6 +30,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 | `PostToolUse` on reads, edits and shell calls | `hook loop-nudge` | Asks the model once to batch when a turn makes [single-step calls in a row](#after-a-tool-call-the-loop-nudge) |
 | `PreToolUse` on `Agent` and `Task` | `hook helper-gate` | Restates rule 8's helper default at each helper launch; refuses one while its budget holds it or in quiet hours, [as the team set](#the-daily-budget-warnings-and-the-helper-gate) |
 | The mod, while a tab is idle | `hook wake-check`, `hook wake-dropped` | Wakes the tab's session when unblocked urgent work is handed to it, [batched, with its cost shown](#the-mod-the-wake-on-urgent-work), and runs the team's [idle pass](#the-idle-pass), at most once a minute |
+| The mod, when one of its hands' ticks throws or stays unsettled past its limit | `hook hand-trace` | Logs that hand to `<team>/state/hand-trace.jsonl`, each hand and kind at most once per 10 minutes, so a hand that stopped answering shows in teamrig's own logs (#920) |
 | The mod, every 30 s in each tab | `hook meeting-due` | Sends a scheduled meeting's notices before, at and past its time (OS notification, tab toast, a missed one to the lead), from one tab of the team ([a scheduled meeting's notification](#the-mod-a-scheduled-meetings-notification)) |
 | The mod, every 10 s in each tab | `hook needs-you`, `hook needs-you-focus` | Names another tab of the team that asks the user something (a permission prompt, a question, a decision line) in a toast and a band above the prompt, whose Focus brings that tab to the front ([the needs-you band](#the-mod-the-needs-you-band)) |
 | The mod, every 15 s in each tab | `hook meeting-panel` | While the owner's daily meeting is open, shows its cards in a pane beside the chat of the team's lead that started it, and while a booked `M<n>` is started, its cards beside the chat of the session it meets, in sections (on the table, up next, decided), each with a one-line summary and a decided one with its decision ([the meeting's agenda panel](#the-mod-the-meetings-agenda-panel)) |
@@ -96,8 +97,8 @@ The injected context holds:
    first, tagged `(team <id>)`. `teamrig rules scan` lists the lines to settle.
 6. **After a refresh**: `You were refreshed after T2; read your handover first: <path>`, once, at the first
    fresh start (the automatic restart, a `/clear` or a new start) after the handover was written. A compact or resume keeps the old context, so the
-   note waits. It then lists what the old session leaves: its scheduled jobs (`CronCreate`; after a `/clear`
-   they are still scheduled and the note says so, after a new process it lists them to make again), a pending
+   note waits. It then lists what the old session leaves: its scheduled jobs (`CronCreate`, listed to make
+   again when CronList does not show them, since a new process ends them and a `/clear` may too), a pending
    wake-up to make again (`ScheduleWakeup`), its scratchpad and its plan file, and, when the owner typed in it, a pointer to
    `<handover dir>/<id>.owner.md`: the owner's own prompts from the old transcript, oldest first (the newest 40 prompts
    within 16,000 characters), those typed after the handover was last written marked, so a decision the handover
@@ -1297,7 +1298,8 @@ work you can start then (no task you may start now, at any priority), the restar
 ends `it has no work it can start now, so teamrig starts it fresh once a wake brings it some (type anything to keep
 this context)`, the title reads `[shop] web: waits for work`, and the wake check that finds work for you (a task
 handed, an urgent line, the day start) starts the restart rather than waking this context, so the work wakes the fresh
-session. A prompt the user sends first cancels it, and you keep this
+session. The lead, and a session with a live recurring scheduled job (`CronCreate`), never waits for work: its next
+turn comes anyway. A prompt the user sends first cancels the restart, a scheduled job's prompt does not, and you keep this
 context until your next task end asks again, or your context grew a fifth of `refresh.contextTokens` more; text typed but not sent holds the mod's `/clear` ([below](#the-mod-the-refreshs-clear)), and is lost only where the restart ends this Claude Code. When the restart cannot start, the message
 and the title are the `/clear` ones above. On Windows an ended Claude Code runs no SessionEnd hooks: `refresh.endCommand` names a
 program run in their place, given their input. While background work you started (subagents, background

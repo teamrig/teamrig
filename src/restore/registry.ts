@@ -22,11 +22,11 @@ export function restoreLogPath(kitHome: string): string {
  * The file named for a session in a folder of the restore (`<session id>.json`). Only a real session id names a
  * file; any other is refused, so no id from a payload reaches a path.
  */
-export function sessionFileIn(dir: string, claudeSession: string): string {
-  if (!CLAUDE_SESSION_ID.test(claudeSession)) {
-    throw new Error(`${JSON.stringify(claudeSession)} is not a Claude Code session id`);
+export function sessionFileIn(dir: string, hostSession: string): string {
+  if (!CLAUDE_SESSION_ID.test(hostSession)) {
+    throw new Error(`${JSON.stringify(hostSession)} is not a Claude Code session id`);
   }
-  return join(dir, `${claudeSession}${SUFFIX}`);
+  return join(dir, `${hostSession}${SUFFIX}`);
 }
 
 /** The session id a file of a restore folder is named for; undefined for a file of another name. */
@@ -50,22 +50,22 @@ export class RestoreRegistry {
   }
 
   /** The file a session's entry is kept in. */
-  pathOf(claudeSession: string): string {
-    return sessionFileIn(this.dir, claudeSession);
+  pathOf(hostSession: string): string {
+    return sessionFileIn(this.dir, hostSession);
   }
 
   /** A session's entry; undefined when there is none or it is damaged. */
-  async read(claudeSession: string): Promise<RestoreEntry | undefined> {
-    const text = await this.files.read(this.pathOf(claudeSession));
+  async read(hostSession: string): Promise<RestoreEntry | undefined> {
+    const text = await this.files.read(this.pathOf(hostSession));
     return text === undefined ? undefined : parseEntry(text);
   }
 
   async write(entry: RestoreEntry): Promise<void> {
-    await this.files.write(this.pathOf(entry.claudeSession), formatEntry(entry));
+    await this.files.write(this.pathOf(entry.hostSession), formatEntry(entry));
   }
 
-  async remove(claudeSession: string): Promise<void> {
-    await this.files.remove(this.pathOf(claudeSession));
+  async remove(hostSession: string): Promise<void> {
+    await this.files.remove(this.pathOf(hostSession));
   }
 
   /** Every readable entry, oldest first; a damaged file or one of another name is skipped. */
@@ -75,7 +75,7 @@ export class RestoreRegistry {
     for (const name of names) {
       const id = sessionOfFile(name);
       const entry = id === undefined ? undefined : await this.read(id);
-      if (entry !== undefined && entry.claudeSession === id) {
+      if (entry !== undefined && entry.hostSession === id) {
         entries.push(entry);
       }
     }

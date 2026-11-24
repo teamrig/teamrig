@@ -28,7 +28,7 @@ export function roleAllowRecord(facts) {
         v: 1,
         at: facts.at.toISOString(),
         session: facts.session,
-        claudeSession: facts.claudeSession,
+        claudeSession: facts.hostSession,
         tool: 'Bash',
         event: 'PreToolUse',
         answer: 'role',

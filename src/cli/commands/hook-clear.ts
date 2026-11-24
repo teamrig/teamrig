@@ -1,5 +1,5 @@
 import { resolveKitHome } from '../../core/home.ts';
-import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, END_SWITCH, HOLD_SWITCH, isClaudeSessionId, WHY_FLAG } from '../../mod/clear-hand.ts';
+import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, END_SWITCH, HOLD_SWITCH, isHostSessionId, WHY_FLAG } from '../../mod/clear-hand.ts';
 import { ClearAsks, clearAskDir, type ClearAsk } from '../../refresh/clear-asks.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -19,8 +19,8 @@ export async function clearDir(args: ParsedArgs, runtime: CliRuntime): Promise<E
 }
 
 /** Why the ask was answered before this claim or hold: the restart took it back, or the tab answered it already. */
-async function answeredProblem(asks: ClearAsks, claudeSession: string): Promise<string> {
-  const outcome = await asks.outcome(claudeSession);
+async function answeredProblem(asks: ClearAsks, hostSession: string): Promise<string> {
+  const outcome = await asks.outcome(hostSession);
   if (outcome === CLAIM_END) {
     return 'the ask was already claimed to end the session';
   }
@@ -41,20 +41,20 @@ type Claimed = typeof CLAIM_TAKEN | typeof CLAIM_END | typeof CLAIM_HELD;
  * ask comes from an older mod, which runs /clear on `taken` whatever the ask says: it takes the ask as a
  * /clear, so the restart never ends a tab that is clearing.
  */
-async function won(asks: ClearAsks, claudeSession: string, ask: ClearAsk, answer: TabAnswer): Promise<Claimed | undefined> {
+async function won(asks: ClearAsks, hostSession: string, ask: ClearAsk, answer: TabAnswer): Promise<Claimed | undefined> {
   switch (answer.kind) {
     case 'hold':
-      return (await asks.hold(claudeSession, answer.why)) ? CLAIM_HELD : undefined;
+      return (await asks.hold(hostSession, answer.why)) ? CLAIM_HELD : undefined;
     case 'end':
-      return ask.mode === 'end' && (await asks.claimEnd(claudeSession)) ? CLAIM_END : undefined;
+      return ask.mode === 'end' && (await asks.claimEnd(hostSession)) ? CLAIM_END : undefined;
     case 'claim':
-      return (await asks.claim(claudeSession)) ? CLAIM_TAKEN : undefined;
+      return (await asks.claim(hostSession)) ? CLAIM_TAKEN : undefined;
   }
 }
 
 /** Why the tab may not claim (or hold) its ask, or what it won once it has. */
-async function claimOf(runtime: CliRuntime, asks: ClearAsks, claudeSession: string, answer: TabAnswer): Promise<{ readonly problem: string } | { readonly claimed: Claimed }> {
-  const ask = await asks.ask(claudeSession);
+async function claimOf(runtime: CliRuntime, asks: ClearAsks, hostSession: string, answer: TabAnswer): Promise<{ readonly problem: string } | { readonly claimed: Claimed }> {
+  const ask = await asks.ask(hostSession);
   if (ask === undefined) {
     return { problem: 'no ask for this session' };
   }
@@ -64,12 +64,12 @@ async function claimOf(runtime: CliRuntime, asks: ClearAsks, claudeSession: stri
   const kit = await openKit(runtime, ask.team);
   const store = new RefreshStore(runtime.files, kit.paths);
   const request = await store.restart(ask.id);
-  if (request?.phase !== 'pending' || request.at !== ask.at || request.claudeSession !== claudeSession) {
+  if (request?.phase !== 'pending' || request.at !== ask.at || request.hostSession !== hostSession) {
     return { problem: 'the restart is no longer pending' };
   }
-  const claimed = await won(asks, claudeSession, ask, answer);
+  const claimed = await won(asks, hostSession, ask, answer);
   if (claimed === undefined) {
-    return { problem: await answeredProblem(asks, claudeSession) };
+    return { problem: await answeredProblem(asks, hostSession) };
   }
   // Held or ending: the request stays pending, so the restart waits for quiet and asks again, or ends the session.
   if (claimed === CLAIM_TAKEN) {
@@ -100,11 +100,11 @@ function tabAnswerOf(args: ParsedArgs): TabAnswer {
 export async function clearClaim(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
   const answer = tabAnswerOf(args);
-  const claudeSession = (await readHookInput(runtime)).event?.session;
+  const hostSession = (await readHookInput(runtime)).event?.session;
   const result =
-    claudeSession === undefined || !isClaudeSessionId(claudeSession)
+    hostSession === undefined || !isHostSessionId(hostSession)
       ? { problem: 'no Claude Code session id on stdin' }
-      : await claimOf(runtime, asksOf(runtime), claudeSession, answer);
+      : await claimOf(runtime, asksOf(runtime), hostSession, answer);
   runtime.out.stdout('problem' in result ? `declined: ${result.problem}` : result.claimed);
   return EXIT.ok;
 }

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { legacyHostSessionRecord } from "../core/host-session.js";
 import { toJsonlLine } from "../core/jsonl.js";
 import { SESSION_NAME } from "../register/model.js";
 import { readMarks } from "./marks.js";
@@ -49,6 +50,6 @@ export class JsonlMarkLog {
         return readMarks((await this.log.read()) ?? '');
     }
     async append(mark) {
-        await this.log.append(toJsonlLine({ ...mark }));
+        await this.log.append(toJsonlLine(legacyHostSessionRecord({ ...mark }, 'claudeSession')));
     }
 }

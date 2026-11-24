@@ -8,8 +8,10 @@ import { isRecord, recordField } from '../lib/guards.ts';
  * from, so the branch only moves forward and each build names its source. A tag never moves, and a run again for a
  * release already published changes nothing, so a re-run workflow is safe. The release workflow publishes to
  * `preview` (T5133), whose first commit descends from `release`, and stable moves `release` along that chain. Each
- * commit's marketplace catalog installs from the branch it is published to (T5224), so a marketplace added at
- * `preview` installs preview builds; stable installs stay on the default branch, whose catalog names `release`.
+ * release commit's marketplace catalog installs the plugin from the marketplace's own checkout, a relative source with
+ * no ref (T5224): a marketplace following `preview` installs preview builds, and the same commit fast-forwarded onto
+ * `release` installs from `release`, so the channel is only the branch the marketplace follows. Stable installs
+ * follow the default branch, whose catalog keeps naming `release`.
  */
 
 export interface Publication {
@@ -29,8 +31,8 @@ export interface Publication {
   /** The remote both the branch and the tag are pushed to. */
   readonly remote: string;
   /**
-   * The marketplace catalog, its entries' refs set to `branch` in the commit, or undefined to leave it. Main's says
-   * `release`, so without this a marketplace added at `preview` would install the stable build (T5224).
+   * The marketplace catalog, its entries made relative sources in the commit, or undefined to leave it. Main's names
+   * ref `release`, so without this a marketplace added at `preview` would install the stable build (T5224).
    */
   readonly marketplace: string | undefined;
 }
@@ -42,16 +44,23 @@ export interface Files {
 }
 
 /**
- * The catalog with each plugin entry whose source names a ref installing from `branch` instead, so the build a branch
- * holds installs itself. Entries with no ref, which install the default branch, stay as they are.
+ * The catalog with each plugin entry installed from a folder of this repository (a `git-subdir` source) installing
+ * from that folder of the marketplace's own checkout instead: a relative source, which names no branch, so the build a
+ * commit holds installs itself on whichever branch the commit sits (T5224). The catalog lists only this repository's
+ * plugins. Entries already relative stay as they are.
  */
-export function marketplaceOnBranch(text: string, branch: string): string {
+export function marketplaceFromCheckout(text: string): string {
   const catalog: unknown = JSON.parse(text);
   if (!isRecord(catalog) || !Array.isArray(catalog['plugins'])) throw new Error('the marketplace catalog has no "plugins" list');
   const entries: readonly unknown[] = catalog['plugins'];
   const plugins = entries.map((entry) => {
     const source = isRecord(entry) ? recordField(entry, 'source') : undefined;
-    return isRecord(entry) && source !== undefined && typeof source['ref'] === 'string' ? { ...entry, source: { ...source, ref: branch } } : entry;
+    if (!isRecord(entry) || source === undefined || source['source'] !== 'git-subdir') return entry;
+    const path = source['path'];
+    if (typeof path !== 'string' || path === '' || path.startsWith('/') || path.split('/').includes('..')) {
+      throw new Error(`the catalog entry ${String(entry['name'])} names no folder of this repository as its path`);
+    }
+    return { ...entry, source: `./${path.replace(/^\.\//, '')}` };
   });
   return `${JSON.stringify({ ...catalog, plugins }, null, 2)}\n`;
 }
@@ -108,7 +117,7 @@ export async function publishRelease(git: Git, files: Files, publication: Public
   if ((await git.text(['ls-files', '--cached', '--others', '--', dist])).trim() === '') throw new Error(`no ${dist} was built to publish`);
   await git.text(['add', '--force', '--', dist]);
   if (marketplace !== undefined) {
-    files.write(marketplace, marketplaceOnBranch(files.read(marketplace), branch));
+    files.write(marketplace, marketplaceFromCheckout(files.read(marketplace)));
     await git.text(['add', '--', marketplace]);
   }
   const tree = (await git.text(['write-tree'])).trim();

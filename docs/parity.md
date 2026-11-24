@@ -14,7 +14,7 @@ A cell reads:
 
 The AI CLIs a session runs in.
 
-- Claude Code (`claude-code`), built on plugin API 0.1.0
+- Claude Code (`claude-code`), built on plugin API 0.2.0
 - Codex CLI (`codex-cli`), built on plugin API 0.1.0
 - Antigravity CLI (`antigravity-cli`), built on plugin API 0.1.0
 
@@ -149,8 +149,8 @@ The AI CLIs a session runs in.
 
 The outside tools holding a team's issues (the `tracker` rows) or its code and pull requests (the `codehost` rows).
 
-- GitHub (`github`), built on plugin API 0.1.0
-- Jira (`jira`), built on plugin API 0.1.0
+- GitHub (`github`), built on plugin API 0.2.0
+- Jira (`jira`), built on plugin API 0.2.0
 - Local (`local`), built on plugin API 0.1.0
 
 ### tracker

@@ -53,3 +53,24 @@ describe('an adapter entry', () => {
     assert.equal(adapterEntry(undefined, 'create'), undefined);
   });
 });
+
+describe("an adapter declaration's steps and terms", () => {
+  it('may leave both out, or list registry steps of its own side and its product words', () => {
+    assert.deepEqual(declarationProblems('host', hostDeclarationData({ steps: ['host.rename', 'host.slim-setup'], terms: ['Some CLI', '/reset'] })), []);
+  });
+
+  it('refuses a step of another side, an unknown step and a step listed twice', () => {
+    assert.deepEqual(declarationProblems('host', hostDeclarationData({ steps: ['tracker.link-child', 'host.nap'] })), [
+      'its steps name tracker.link-child, which is no host step of the step registry',
+      'its steps name host.nap, which is no host step of the step registry',
+    ]);
+    assert.deepEqual(declarationProblems('host', hostDeclarationData({ steps: ['host.rename', 'host.rename'] })), ['its steps must list host steps of the step registry, each once']);
+    assert.deepEqual(declarationProblems('host', hostDeclarationData({ steps: 'host.rename' })), ['its steps must list host steps of the step registry, each once']);
+  });
+
+  it('refuses an empty term, a term over two lines and one word twice in two spellings', () => {
+    for (const terms of [[''], ['a\nb'], ['Tool', 'tool'], 'Tool']) {
+      assert.deepEqual(declarationProblems('host', hostDeclarationData({ terms })), ['its terms must be words of its product, one line each, each once'], JSON.stringify(terms));
+    }
+  });
+});

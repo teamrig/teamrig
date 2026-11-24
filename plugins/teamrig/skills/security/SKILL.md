@@ -52,7 +52,9 @@ a secret written where it should not be) is reported only in private until its f
 - The fix's branch name, commit messages, pull request text, code comments and test names describe the hardening,
   what the code now refuses or checks, never how to get past the old code, and never quote the private report or
   review by its id. A pushed branch is public too: `teamrig worktree add --task` names it from the task's title, so
-  when that title tells the hole, name the branch yourself (`teamrig worktree add <branch>`).
+  when that title tells the hole, name the branch yourself (`teamrig worktree add <branch>`). While
+  [delivery.branches.enforce] is on (the default), that name must fit the team's branch pattern too, such as
+  `fix/t12-input-checks` for the default `{type}/{id}-{slug}`.
 - Once the fixed version is out, the advisory tells the details.
 
 ## Containers and pods

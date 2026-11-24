@@ -81,7 +81,7 @@ export function promptAnswerRecord(facts, scanner) {
         v: 1,
         at: facts.at.toISOString(),
         session: facts.session ?? null,
-        claudeSession: facts.claudeSession,
+        claudeSession: facts.hostSession,
         tool: facts.call.name,
         answer: answer.kind,
         ...(answer.kind === 'route' ? { route: answer.route } : {}),

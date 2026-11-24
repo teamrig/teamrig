@@ -3,11 +3,10 @@ import { GUARD_LIMIT_MS } from './guard-runner.ts';
 /**
  * Each `hook <name>` command's time limit, in ms: what Claude Code gives it in plugins/teamrig/hooks/hooks.json (for a
  * guard that runs through guard-main.js, the runner's own shorter GUARD_LIMIT_MS, which blocks the call at its end), or
- * what the plugin's mod gives the hooks its hands run (src/mod/*-hand.ts); null for one run with no limit (the clear
- * hand's). The one place that knows them (#737): hook-timeouts.test.ts holds hooks.json and the hands to it, and
- * that every `hook` command has one.
+ * what the plugin's mod gives the hooks its hands run (src/mod/*-hand.ts). The one place that knows them (#737):
+ * hook-timeouts.test.ts holds hooks.json and the hands to it, and that every `hook` command has one.
  */
-export const HOOK_TIMEOUT_MS: Readonly<Record<string, number | null>> = {
+export const HOOK_TIMEOUT_MS: Readonly<Record<string, number>> = {
   'push-guard': GUARD_LIMIT_MS,
   'package-guard': GUARD_LIMIT_MS,
   'secret-guard': GUARD_LIMIT_MS,
@@ -37,8 +36,8 @@ export const HOOK_TIMEOUT_MS: Readonly<Record<string, number | null>> = {
   'prompt-refuse': 15_000,
   'route-allow': 15_000,
   'pre-compact': 15_000,
-  'clear-dir': null,
-  'clear-claim': null,
+  'clear-dir': 30_000,
+  'clear-claim': 30_000,
   'wake-check': 30_000,
   'wake-dropped': 30_000,
   'meeting-due': 30_000,
@@ -51,10 +50,12 @@ export const HOOK_TIMEOUT_MS: Readonly<Record<string, number | null>> = {
   'refresh-mid': 15_000,
   'compact-check': 15_000,
   'slash-command': 180_000,
+  // The mod's hand watch runs it with HAND_TRACE_TIMEOUT_MS (src/mod/hand-watch.ts).
+  'hand-trace': 10_000,
 };
 
 // A map, so a name such as `constructor` reads as no hook rather than the object's own fields.
-const LIMITS: ReadonlyMap<string, number | null> = new Map(Object.entries(HOOK_TIMEOUT_MS));
+const LIMITS: ReadonlyMap<string, number> = new Map(Object.entries(HOOK_TIMEOUT_MS));
 
 /** The time a hook keeps after its last lock wait to print its output and exit, Node's start included. */
 export const HOOK_OUTPUT_MARGIN_MS = 3_000;
@@ -62,10 +63,10 @@ export const HOOK_OUTPUT_MARGIN_MS = 3_000;
 /**
  * The time by which every lock wait of `hook <name>` (the command's name, `hook <name>`) started at `startedAt` gives
  * up, so a busy lock never outlasts the hook's time limit and the hook still prints its output (#737); undefined for
- * any other command, or a hook with no limit.
+ * any other command.
  */
 export function hookLockDeadline(command: string, startedAt: number): number | undefined {
   const name = command.startsWith('hook ') ? command.slice('hook '.length) : undefined;
   const limit = name === undefined ? undefined : LIMITS.get(name);
-  return limit === undefined || limit === null ? undefined : startedAt + Math.max(0, limit - HOOK_OUTPUT_MARGIN_MS);
+  return limit === undefined ? undefined : startedAt + Math.max(0, limit - HOOK_OUTPUT_MARGIN_MS);
 }

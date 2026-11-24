@@ -17,7 +17,7 @@ const PATHS = { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEA
 const TRANSCRIPT = '/claude/projects/app/bravo.jsonl';
 const ON = { ...TEAM, refresh: { autoRestart: true } };
 const READY: RefreshState = { phase: 'ready', task: 'T4', at: '2030-01-08T09:30:00.000Z', tokens: 150_000, noticed: true, transcript: TRANSCRIPT, claudePid: 4242 };
-const TAB: RestartTab = { claudeSession: 'c-bravo', transcript: TRANSCRIPT, cwd: '/work', supervised: false, effort: null };
+const TAB: RestartTab = { hostSession: 'c-bravo', transcript: TRANSCRIPT, cwd: '/work', supervised: false, effort: null };
 
 /** A transcript whose last own entry is a reply that ended its turn at `at`. */
 function endedTurnAt(at: string): string {

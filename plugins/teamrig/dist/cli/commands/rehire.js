@@ -1,7 +1,7 @@
 import { projectTranscriptPath } from "../../budget/discover.js";
 import { errorMessage } from "../../core/guards.js";
 import { PlainLogFile } from "../../core/log-file.js";
-import { lastClaudeSessionOf } from "../../inbox/marks.js";
+import { lastHostSessionOf } from "../../inbox/marks.js";
 import { JsonlMarkLog } from "../../inbox/store.js";
 import { resumeVerdict } from "../../hiring/rehire.js";
 import { readContextTokens } from "../../refresh/usage.js";
@@ -14,17 +14,17 @@ import { contextSourceIfTold, transcriptsFolderOf } from "../host.js";
 export async function resumeVerdictOf(runtime, paths, hiring, id, project) {
     try {
         const { marks } = await new JsonlMarkLog(new PlainLogFile(runtime.files, paths.inboxMarks)).read();
-        return await claudeSessionVerdict(runtime, hiring, lastClaudeSessionOf(marks, id), project);
+        return await hostSessionVerdict(runtime, hiring, lastHostSessionOf(marks, id), project);
     }
     catch (error) {
         return unmeasured(error);
     }
 }
-/** Whether Claude Code session `claudeSession` (undefined: none on record) in `project` is small and recent enough to resume. */
-export async function claudeSessionVerdict(runtime, hiring, claudeSession, project) {
+/** Whether Claude Code session `hostSession` (undefined: none on record) in `project` is small and recent enough to resume. */
+export async function hostSessionVerdict(runtime, hiring, hostSession, project) {
     try {
-        const last = claudeSession === undefined ? undefined : await lastSessionOf(runtime, claudeSession, project);
-        return resumeVerdict({ claudeSession, changedAt: last?.changedAt, tokens: last?.tokens }, hiring, runtime.clock.now());
+        const last = hostSession === undefined ? undefined : await lastSessionOf(runtime, hostSession, project);
+        return resumeVerdict({ hostSession, changedAt: last?.changedAt, tokens: last?.tokens }, hiring, runtime.clock.now());
     }
     catch (error) {
         return unmeasured(error);
@@ -33,9 +33,9 @@ export async function claudeSessionVerdict(runtime, hiring, claudeSession, proje
 function unmeasured(error) {
     return { kind: 'fresh', detail: `its last Claude Code session could not be measured: ${errorMessage(error)}` };
 }
-/** Measures Claude Code session `claudeSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
-export function lastSessionOf(runtime, claudeSession, project) {
-    return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, claudeSession));
+/** Measures Claude Code session `hostSession` in `project`: `<projects>/<project slug>/<session>.jsonl`. It throws when a read fails. */
+export function lastSessionOf(runtime, hostSession, project) {
+    return measureTranscript(runtime, projectTranscriptPath(transcriptsFolderOf(runtime), project, hostSession));
 }
 /** Measures the Claude Code transcript at `transcript`, in whatever folder it sits. It throws when a read fails. */
 export async function measureTranscript(runtime, transcript) {

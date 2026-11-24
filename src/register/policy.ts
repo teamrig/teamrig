@@ -83,7 +83,10 @@ export interface AddInput {
   readonly workClass?: string;
 }
 
-/** A task for a GitHub issue: its source is GITHUB_SOURCE and its ref the issue's (sync/map.ts). */
+/**
+ * A task of source GITHUB_SOURCE for a GitHub issue, or for an outside pull request the watcher answers
+ * (sync/pull-news.ts): its ref is the issue's or the pull request's (sync/map.ts).
+ */
 export interface ImportInput {
   readonly title: string;
   /** The issue's body, cleaned and cut to MAX_DESCRIPTION; null for an empty body. */
@@ -91,9 +94,11 @@ export interface ImportInput {
   readonly owner: string;
   readonly ref: string;
   readonly priority: number;
+  /** When it is due, `YYYY-MM-DD HH:MM` UTC: a pull request's answer target; absent for an issue, which has none. */
+  readonly due?: string;
 }
 
-/** The fields the import keeps in step with GitHub; the rest of a task is the team's. */
+/** The fields the import keeps in step with the issue; the rest of a task is the team's. */
 export type ImportChanges = Partial<Pick<TaskFields, 'title' | 'description' | 'priority'>>;
 
 export interface StatusInput {
@@ -1392,7 +1397,7 @@ export class RegisterPolicy {
     if (!input.ref.startsWith(prefix)) {
       return refuse(`ref ${input.ref} is not a ${source} ref: it starts with ${prefix}`);
     }
-    const fields: TaskFields = { ...input, source, due: null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
+    const fields: TaskFields = { ...input, source, due: input.due ?? null, goals: [], noGoal: false, week: null, after: [], size: null, type: null, critical: false, pin: null, exempt: null, workClass: null, prepares: null };
     const holder = [...state.tasks.values()].find((task) => task.ref === input.ref);
     if (holder !== undefined) {
       return refuse(`${holder.id} already has ref ${input.ref}`);

@@ -695,9 +695,8 @@ describe('parseConfig', () => {
 
   it('fails the load on an unknown command, a holder off the roster or a misspelt key, and leaves the role out (T2984 C3)', () => {
     const cases: readonly [unknown, readonly string[]][] = [
-      [{ holders: ['bravo'], commands: ['issue delete'] }, ['serviceRoles.github.commands[0]']],
-      [{ holders: ['bravo'], commands: ['issue close', 'issue comment'] }, ['serviceRoles.github.commands[1]']],
       [{ holders: ['bravo'], commands: ['issue *'] }, ['serviceRoles.github.commands[0]']],
+      [{ holders: ['bravo'], commands: [7] }, ['serviceRoles.github.commands[0]']],
       [{ holders: ['bravo'], commands: ['issue close', 'issue close'] }, ['serviceRoles.github.commands[1]']],
       [{ holders: ['bravo'], commands: [] }, ['serviceRoles.github.commands']],
       [{ holders: ['bravo'] }, ['serviceRoles.github.commands']],
@@ -714,6 +713,21 @@ describe('parseConfig', () => {
       assert.deepEqual(paths(parsed.issues), expected, JSON.stringify(role));
       assert.deepEqual(parsed.config.serviceRoles, {}, JSON.stringify(role));
     }
+  });
+
+  it('drops a command name only a newer teamrig knows with a warning, grants the rest and keeps the load valid (#1478)', () => {
+    const { config, issues, warnings } = parseConfig({ ...ROSTER, serviceRoles: { github: { holders: ['bravo'], commands: ['issue close', 'issue delete'] } } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(paths(warnings), ['serviceRoles.github.commands[1]']);
+    assert.match(warnings[0]?.message ?? '', /"issue delete" is no command this teamrig knows: a newer teamrig wrote it or it is misspelt, so this tab does not grant it; reload, or fix the name/);
+    assert.deepEqual(config.serviceRoles, { github: { holders: ['bravo'], commands: ['issue close'] } });
+  });
+
+  it('leaves out a role whose every command is unknown, with a warning and no issue, so it grants nothing (#1478)', () => {
+    const { config, issues, warnings } = parseConfig({ ...ROSTER, serviceRoles: { ship: { holders: 'team', commands: ['queue land'] } } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(paths(warnings), ['serviceRoles.ship.commands[0]']);
+    assert.deepEqual(config.serviceRoles, {});
   });
 
   it('reads "team" holders for the queued runs of the ship tool, which hold each caller to its own work (T2984 C4)', () => {
@@ -941,7 +955,7 @@ describe('parseConfig', () => {
 
   it('names new branches by Conventional Branch when delivery.branches is absent (T2690)', () => {
     const { config } = parseConfig(ROSTER);
-    assert.deepEqual(config.delivery.branches, { pattern: '{type}/{id}-{slug}', typePatterns: {}, itemTypes: { task: 'feat', bug: 'fix' }, classes: {}, slugMax: 40 });
+    assert.deepEqual(config.delivery.branches, { pattern: '{type}/{id}-{slug}', typePatterns: {}, itemTypes: { task: 'feat', bug: 'fix' }, classes: {}, slugMax: 40, enforce: true });
   });
 
   it("keeps the team's branch pattern, per-type patterns, type maps and slug cap, item types over the defaults", () => {
@@ -951,6 +965,7 @@ describe('parseConfig', () => {
       itemTypes: { bug: 'bugfix' },
       classes: { Improvements: 'chore', 'Tech debt': 'refactor' },
       slugMax: 24,
+      enforce: false,
     };
     const { config, issues } = parseConfig({ ...ROSTER, delivery: { branches } });
     assert.deepEqual(issues, []);

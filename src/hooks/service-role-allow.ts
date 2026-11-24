@@ -42,7 +42,7 @@ function weightOf(count: unknown): number {
 export interface RoleAllowFacts {
   readonly at: Date;
   readonly session: string;
-  readonly claudeSession: string;
+  readonly hostSession: string;
   readonly role: string;
   /** The command, and what it acts on: the issue, or the branch a ship or merge runs on. */
   readonly call: RoleTarget;
@@ -59,7 +59,7 @@ export function roleAllowRecord(facts: RoleAllowFacts): JsonRecord {
     v: 1,
     at: facts.at.toISOString(),
     session: facts.session,
-    claudeSession: facts.claudeSession,
+    claudeSession: facts.hostSession,
     tool: 'Bash',
     event: 'PreToolUse',
     answer: 'role',

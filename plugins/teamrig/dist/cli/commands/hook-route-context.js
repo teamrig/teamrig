@@ -30,12 +30,12 @@ export function kitContextOf(runtime, event, cli) {
  */
 function landingApproversOf(runtime, kit, config, event) {
     return async (named) => {
-        const claudeSession = event.session;
-        if (claudeSession === undefined) {
+        const hostSession = event.session;
+        if (hostSession === undefined) {
             return [];
         }
         const roster = await rosterOf(runtime, kit, config);
-        const bound = await tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, claudeSession, named ?? runtime.env['TEAMRIG_SESSION']);
+        const bound = await tabSessionOf(runtime.files, kit.paths.inboxMarks, roster, hostSession, named ?? runtime.env['TEAMRIG_SESSION']);
         return bound === undefined ? [] : approversOf(runtime, kit.paths.team, config, bound).catch(() => []);
     };
 }

@@ -213,13 +213,25 @@ export interface TitleEntry extends EntryBase {
   readonly text: string;
 }
 
+/**
+ * A scheduled job's fire: the host writes it as the job's prompt starts a turn, before the UserPromptSubmit hook runs
+ * and before that prompt's own entry, so a transcript that ends with one is read while the fired prompt is under way.
+ * Seen so on Claude Code 2.1.325 to 2.1.330 (150 fires, each followed by its hook's output, then the prompt). A host
+ * that wrote the prompt first would make every scheduled prompt read as typed, so it would cancel the restart again.
+ * The host also writes one when it folds fires that ran nothing (`firedBySchedule` guards that case); none of those
+ * 150 fires was one.
+ */
+export interface ScheduledFireEntry extends EntryBase {
+  readonly kind: 'scheduled-fire';
+}
+
 /** A line of a type no reader uses yet; `type` is the host's name for it, so a check can count unknown ones. */
 export interface OtherEntry extends EntryBase {
   readonly kind: 'other';
   readonly type: string | undefined;
 }
 
-export type TranscriptEntry = InputEntry | ReplyEntry | CompactEntry | TurnEndEntry | ContinuedEntry | HookNoteEntry | ScheduledCarryEntry | EnvironmentEntry | QueuedPromptEntry | ModelSwitchEntry | TitleEntry | OtherEntry;
+export type TranscriptEntry = InputEntry | ReplyEntry | CompactEntry | TurnEndEntry | ContinuedEntry | HookNoteEntry | ScheduledCarryEntry | ScheduledFireEntry | EnvironmentEntry | QueuedPromptEntry | ModelSwitchEntry | TitleEntry | OtherEntry;
 export type EntryKind = TranscriptEntry['kind'];
 
 /** A line that is no entry: damaged or torn text, or JSON that is not an object. It is said, never skipped. */

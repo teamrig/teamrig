@@ -1,8 +1,10 @@
 /**
  * The version of the surface an adapter is built against, as semver. Its major rises when a change breaks an
- * adapter, and the loader refuses one built for another major, so an old adapter never half-runs.
+ * adapter, and the loader refuses one built for another major, so an old adapter never half-runs. Its minor rises
+ * with an optional field a declaration may use (0.2.0: `steps` and `terms`), which a teamrig of the same major but an
+ * older minor leaves unread.
  */
-export const API_VERSION = '0.1.0';
+export const API_VERSION = '0.2.0';
 
 const SEMVER = /^(\d+)\.\d+\.\d+$/;
 

@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FaultyFiles } from '../testing/faulty-files.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import type { Files } from './files.ts';
-import { FileLock, LockBusyError, type LockTimings, realSleep, type Sleep, systemClock } from './lock.ts';
+import { FileLock, idleSleep, LockBusyError, type LockTimings, realSleep, type Sleep, systemClock } from './lock.ts';
 
 const TIMINGS: LockTimings = { ttlMs: 30_000, pollMs: 50, waitMs: 1_000 };
 const PATH = '/state/events.lock';
@@ -256,5 +258,35 @@ describe('systemClock and realSleep', () => {
     t.mock.timers.tick(1);
     await slept;
     assert.equal(woke, true);
+  });
+});
+
+describe('idleSleep', () => {
+  it('waits its time', async () => {
+    // A real timer, not t.mock.timers: Node 22's mock does not reach node:timers/promises, so a mocked run there
+    // waits on the real unref'd timer with nothing holding the loop and the test is cancelled. The interval below
+    // holds the loop open, as the CLI's own work does while a probe runs.
+    const holdOpen = setInterval(() => undefined, 1_000);
+    try {
+      const started = performance.now();
+      await idleSleep(40);
+      // Windows timers may fire a tick early, so the floor allows a few milliseconds.
+      assert.ok(performance.now() - started >= 30, 'woke before its time');
+    } finally {
+      clearInterval(holdOpen);
+    }
+  });
+
+  it('holds no process open: one waiting only on it ends before the wait does', () => {
+    const lock = pathToFileURL(fileURLToPath(new URL('./lock.ts', import.meta.url))).href;
+    // A .then, not a top-level await: Node ends a module whose top-level await never settles with exit 13.
+    const script = `import { idleSleep } from ${JSON.stringify(lock)}; void idleSleep(60_000).then(() => console.log('woke'));`;
+    const started = Date.now();
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
+    // A run killed at the spawn's timeout ends with a signal and no status: that reads as its own failure here.
+    assert.equal(run.signal, null, 'the process was killed at the spawn timeout');
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, '');
+    assert.ok(Date.now() - started < 30_000, 'the process waited out the timer');
   });
 });

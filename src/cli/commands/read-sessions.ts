@@ -46,7 +46,7 @@ export async function selfOf(runtime: CliRuntime, loaded: KitTree, own: string, 
   for (const { kit, config } of treeTeamsOf(loaded, own)) {
     const records = await new SessionRecordStore(runtime.files, kit.paths).readEach(config.sessions);
     for (const [session, record] of records) {
-      const at = record?.claudeSession === conversation ? Date.parse(record.at) : undefined;
+      const at = record?.hostSession === conversation ? Date.parse(record.at) : undefined;
       if (at !== undefined && (newest === undefined || at > newest.at)) {
         newest = { place: { team: kit.paths.team, session }, at };
       }
@@ -143,7 +143,7 @@ async function teamInputOf(runtime: CliRuntime, tree: TeamTree, own: string, { k
       unread: mark === undefined ? null : unreadOf(id, (await inboxes.lines(id)) ?? [], mark, lineHash).lines.length,
       tab: (await tabs.read(id)) ?? null,
       host: HOST,
-      conversation: records.get(id)?.claudeSession ?? null,
+      conversation: records.get(id)?.hostSession ?? null,
     });
   }
   const input: TeamInput = {

@@ -76,7 +76,7 @@ export async function isLiveRunOwn(runtime: HandOffRuntime, live: LiveRun, pid: 
   if (live.tree.has(pid)) {
     return true;
   }
-  if (sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.claudeSession)) {
+  if (sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.hostSession)) {
     return true;
   }
   return isHandedOffJob(runtime, live, pid);

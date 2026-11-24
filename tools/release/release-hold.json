@@ -1,1 +1,3 @@
-{}
+{
+  "v0.506.0": "its preview commit's catalog installs from ref preview, so promoted it would move stable installs onto preview builds; the next release's catalog names no branch (T5224)"
+}

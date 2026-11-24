@@ -1,6 +1,6 @@
 import { isEffortLevel } from "../config/types.js";
 import { isNonNegativeInteger, isRecord, stringField } from "../core/guards.js";
-import { hostSessionOf } from "../core/host-session.js";
+import { hostSessionOf, legacyHostSessionRecord } from "../core/host-session.js";
 import { parseObject, recordVersion, toJsonlLine, VERSION_FIELD } from "../core/jsonl.js";
 /** The format of the refresh files this code reads and writes; a file in another format reads as absent. */
 export const REFRESH_FORMAT = 1;
@@ -193,7 +193,7 @@ export function parseRestartRequest(text) {
     return { phase, at, pid, ...tab };
 }
 export function formatRestartRequest(request) {
-    return toJsonlLine({ [VERSION_FIELD]: REFRESH_FORMAT, ...request });
+    return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: REFRESH_FORMAT, ...request }, 'claudeSession'));
 }
 /** A parked restart file's content; undefined when it is damaged or from a format this code does not read. */
 export function parseParkedRestart(text) {
@@ -206,19 +206,19 @@ export function parseParkedRestart(text) {
     return at === undefined || tab === undefined ? undefined : { at, ...tab };
 }
 export function formatParkedRestart(parked) {
-    return toJsonlLine({ [VERSION_FIELD]: REFRESH_FORMAT, ...parked });
+    return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: REFRESH_FORMAT, ...parked }, 'claudeSession'));
 }
 /** The tab fields of a restart file; undefined when one is missing or of the wrong type. */
 function restartTabOf(record) {
-    const claudeSession = hostSessionOf(record, 'claudeSession');
+    const hostSession = hostSessionOf(record, 'claudeSession');
     const transcript = nullableString(record, 'transcript');
     const cwd = nullableString(record, 'cwd');
     const supervised = record['supervised'];
     const effort = effortOf(record['effort']);
-    if (claudeSession === undefined || transcript === undefined || cwd === undefined || typeof supervised !== 'boolean' || effort === undefined) {
+    if (hostSession === undefined || transcript === undefined || cwd === undefined || typeof supervised !== 'boolean' || effort === undefined) {
         return undefined;
     }
-    return { claudeSession, transcript, cwd, supervised, effort };
+    return { hostSession, transcript, cwd, supervised, effort };
 }
 /** A recorded effort level, null when absent (a file from before it) or null, undefined when damaged. */
 function effortOf(value) {

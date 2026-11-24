@@ -13,7 +13,7 @@ describe('JsonlMarkLog', () => {
   it('writes a mark as the very line every installed teamrig reads, and reads it back (T4762)', async () => {
     const files = new MemoryFiles();
     const log = new JsonlMarkLog(new PlainLogFile(files, MARKS));
-    const mark: InboxMark = { v: MARK_VERSION, area: 'alpha', line: 3, at: '2030-01-07T09:00:00.000Z', claudeSession: SESSION, lastLineHash: 'abcd' };
+    const mark: InboxMark = { v: MARK_VERSION, area: 'alpha', line: 3, at: '2030-01-07T09:00:00.000Z', hostSession: SESSION, lastLineHash: 'abcd' };
     await log.append(mark);
     // The store writes the mark's own keys, so a renamed property renames the key on disk: this line may change
     // only in the commit that raises the written format.
@@ -27,6 +27,6 @@ describe('JsonlMarkLog', () => {
     const later = { v: 2, area: 'alpha', line: 4, at: '2030-01-07T10:00:00.000Z', hostSession: SESSION, lastLineHash: 'ef01' };
     await files.write(MARKS, `${JSON.stringify(later)}\n${JSON.stringify({ ...later, v: 3 })}\n`);
     const { hostSession, ...rest } = later;
-    assert.deepEqual(await log.read(), { marks: [{ ...rest, claudeSession: hostSession }], unreadable: 0, newer: 1 });
+    assert.deepEqual(await log.read(), { marks: [{ ...rest, hostSession }], unreadable: 0, newer: 1 });
   });
 });

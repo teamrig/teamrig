@@ -75,6 +75,8 @@ export {
   type TerminalFeatureId,
   type Toggle,
 } from '../features/registry.ts';
+// The steps an adapter may serve as text, and the record of its texts a declaration's `steps` need.
+export type { StepId, StepIdOf, StepTexts } from '../features/steps.ts';
 export {
   HOOK_EVENTS,
   INPUT_ORIGINS,
@@ -169,6 +171,8 @@ export {
   type UserHooksCounts,
   type UserHooksPlan,
   type WebCall,
+  type ConfigLinesAnswer,
+  type HostConfigLines,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a

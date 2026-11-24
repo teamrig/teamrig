@@ -53,14 +53,14 @@ export class RestoreArchive {
 
   /** Keeps the entry; a session archived again replaces its older copy. */
   async put(archived: ArchivedEntry): Promise<void> {
-    await this.files.write(sessionFileIn(this.dir, archived.entry.claudeSession), formatArchived(archived));
+    await this.files.write(sessionFileIn(this.dir, archived.entry.hostSession), formatArchived(archived));
   }
 
   /** A session's archived entry; undefined when there is none or it is damaged. */
-  async read(claudeSession: string): Promise<ArchivedEntry | undefined> {
-    const text = await this.files.read(sessionFileIn(this.dir, claudeSession));
+  async read(hostSession: string): Promise<ArchivedEntry | undefined> {
+    const text = await this.files.read(sessionFileIn(this.dir, hostSession));
     const archived = text === undefined ? undefined : parseArchived(text);
-    return archived?.entry.claudeSession === claudeSession ? archived : undefined;
+    return archived?.entry.hostSession === hostSession ? archived : undefined;
   }
 
   /** Every readable archived entry, the earliest archived first; a damaged file or one of another name is skipped. */
@@ -80,7 +80,7 @@ export class RestoreArchive {
   async purge(now: number): Promise<readonly ArchivedEntry[]> {
     const expired = (await this.list()).filter(({ archivedAt }) => now - archivedAt >= ARCHIVE_KEEP_MS);
     for (const { entry } of expired) {
-      await this.files.remove(sessionFileIn(this.dir, entry.claudeSession));
+      await this.files.remove(sessionFileIn(this.dir, entry.hostSession));
     }
     return expired;
   }

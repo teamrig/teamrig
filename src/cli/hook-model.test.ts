@@ -67,8 +67,8 @@ const ALPHA_SWITCHED =
   'MODEL app-alpha now runs model claude-opus-4-8, not claude-fable-5-1: the host switched after its safeguards stopped a reply (cyber) and keeps it for this session; type /model claude-fable-5-1 to switch back';
 
 /** A Stop payload; `effort` is the level Claude Code reports, if any. */
-function stopPayload(effort?: string, claudeSession: string = CLAUDE_SESSION): string {
-  return JSON.stringify({ session_id: claudeSession, cwd: APP, transcript_path: TRANSCRIPT, stop_hook_active: false, ...(effort === undefined ? {} : { effort: { level: effort } }) });
+function stopPayload(effort?: string, hostSession: string = CLAUDE_SESSION): string {
+  return JSON.stringify({ session_id: hostSession, cwd: APP, transcript_path: TRANSCRIPT, stop_hook_active: false, ...(effort === undefined ? {} : { effort: { level: effort } }) });
 }
 
 /** A transcript in which Claude Code switched the session from Fable to Opus 4.8 after a safeguard stop. */

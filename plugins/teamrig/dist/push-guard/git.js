@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { runGit as runKitGit } from "../core/git-run.js";
 import { COMMIT_LOG_FORMAT, parseCommitLog } from "./commit-size.js";
 /** One git run's stdout; any failure (no repository, an unknown ref, no git on PATH) reads as undefined. */
 function runGit(dir, args) {
@@ -33,14 +34,29 @@ export const GIT_CLI = {
     pushTarget: (dir, branch) => (branch?.startsWith('-') === true ? undefined : readGit(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch ?? ''}@{push}`])),
     config: readConfig,
 };
+/**
+ * The limit on one commit-log query. The push guard runs it, once per update a Bash line pushes, inside its own 12 s
+ * limit (guard-runner.ts), so it gets less than the kit's query limit.
+ */
+export const COMMIT_LOG_TIMEOUT_MS = 5_000;
 /** The newest commits of a range the size rule reads; older ones in a longer range go unchecked. */
 export const COMMIT_LOG_MAX = 200;
-/** Commits from the git CLI, with renames detected so a moved file weighs its edits, not its length. */
-export const GIT_COMMIT_LOG = {
-    between: (dir, base, tip) => {
-        const range = `${base}..${tip}`;
-        const args = ['-c', 'core.quotePath=false', 'log', '-M', '--numstat', `--format=${COMMIT_LOG_FORMAT}`, `--max-count=${COMMIT_LOG_MAX}`, '--end-of-options', range, '--'];
-        const output = runGit(dir, args);
-        return output === undefined ? undefined : parseCommitLog(output);
-    },
-};
+/**
+ * Commits from git through `run`, with renames detected so a moved file weighs its edits, not its length. A run that
+ * gave no answer reads as `unanswered` (#1523), so a slow host is never reported as git refusing the range.
+ */
+export function commitLogWith(run) {
+    return {
+        between: (dir, base, tip) => {
+            const range = `${base}..${tip}`;
+            const args = ['-c', 'core.quotePath=false', 'log', '-M', '--numstat', `--format=${COMMIT_LOG_FORMAT}`, `--max-count=${COMMIT_LOG_MAX}`, '--end-of-options', range, '--'];
+            const done = run(dir, args, COMMIT_LOG_TIMEOUT_MS);
+            if (done.unanswered !== undefined) {
+                return { kind: 'unanswered', reason: done.unanswered };
+            }
+            return done.status === 0 ? { kind: 'listed', commits: parseCommitLog(done.stdout) } : { kind: 'refused' };
+        },
+    };
+}
+/** Commits from the git CLI. */
+export const GIT_COMMIT_LOG = commitLogWith(runKitGit);

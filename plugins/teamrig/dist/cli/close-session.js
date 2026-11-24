@@ -22,18 +22,18 @@ export async function closeSession(runtime, paths, closing) {
         session: id,
         by,
         at: new Date(runtime.clock.now()).toISOString(),
-        claudeSession: closable.record.claudeSession,
+        hostSession: closable.record.hostSession,
         idleMinutes: closable.idleMinutes,
         freedMb: closable.heldMb,
         folder: closable.folder,
     });
-    await dropRestoreEntry(runtime, id, closable.record.claudeSession);
+    await dropRestoreEntry(runtime, id, closable.record.hostSession);
     return undefined;
 }
 /** Takes a closed session off the restore registry; a failure only warns, as the session is closed and logged by then. */
-async function dropRestoreEntry(runtime, id, claudeSession) {
+async function dropRestoreEntry(runtime, id, hostSession) {
     try {
-        await new RestoreRegistry(runtime.files, restoreSessionsDir(resolveKitHome(runtime.env, runtime.userHome))).remove(claudeSession);
+        await new RestoreRegistry(runtime.files, restoreSessionsDir(resolveKitHome(runtime.env, runtime.userHome))).remove(hostSession);
     }
     catch (error) {
         runtime.out.stderr(`WARN the restore entry of ${id} was not dropped, so a reboot's restore may reopen it: ${errorMessage(error)}`);

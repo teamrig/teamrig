@@ -225,15 +225,27 @@ while it lasts; the first run on a repository only notes what is there.
   `github.watcher` in the team config; unset, the session holding a service role with `issue close`, the one that
   answers on GitHub; else the lead. Who watches is staffing, not a permission: the lead sets it with
   `teamrig config set github.watcher <session>`, which refuses a name that is not one of the sessions.
+- Such a pull request that just opened also becomes a task of the watcher's, so it stays on a list until someone
+  answers it: source `github`, ref `gh:<owner>/<name>#<number>`, priority `p2`, due 24 hours after it opened (a
+  contributor's pull request's answer target, UTC). Its title is `Pull request: <title>` for an author inside the
+  repository (its owner, a member or a collaborator) whose title holds no secret shape, else
+  `Pull request <owner>/<name>#<number> by <author>`: an outsider's title stays on GitHub. Its description names the
+  pull request, its author and when to answer it by. A ref a task already holds gets no second task. A run with
+  `--yes` or `--auto` writes it (`PULL TASKS <repo>: 1 added`); the dry run prints the `ADD` line it would write. The
+  status push names such a task `PULL`, not `UNLISTED`, while its pull request is open; set it done once you answered.
 - With `github.activity` on, the same news also goes to the owner of the task holding the pull request or an issue
   of the same repository it closes (a `Fixes #12` link GitHub knows), whatever its branch or author, and to each
   session following it (`teamrig follow`). Such a copy never wakes.
 - Each session gets one inbox line, for example
-  `github: GitHub pull requests: gh:acme/web#20 "Fix the login redirect": conflicts with its base`. A conflict,
-  failing checks or changes requested on the session's own pull request (a `t<id>-` branch of one of the team's
-  authors, not a fork) also wake the session (when `wake.enabled`); a merge, a close, an approval, green checks, an
-  outsider's conflict, red checks or changes requested, and an outsider's new pull request, which is the watcher's
-  intake work, wait for its next turn.
+  `github: GitHub pull requests: gh:acme/web#20 "Fix the login redirect": conflicts with its base (rebase it onto the
+  newest base and push it back to the same branch with --force-with-lease)`. A conflict, failing checks or changes
+  requested on the session's own pull request (a `t<id>-` branch of one of the team's authors, not a fork) also wake
+  the session (when `wake.enabled`); a merge, a close, an approval, green checks, an outsider's conflict, red checks
+  or changes requested, and an outsider's new pull request, which is the watcher's intake work, wait for its next turn.
+- A conflict says the way out: on one of the team's own pull requests, a rebase onto the newest base pushed back to
+  the same branch with a lease, so it stays one branch and one pull request; on an outsider's, the
+  `teamrig pr conflicts` line that names its files, to comment the rebase it needs or take the change over
+  ([A pull request in conflict](#a-pull-request-in-conflict)).
 - When the checks of a session's own pull request start failing, the run reads the end of each failed job's log
   (`gh run view --job <id> --log-failed`, at most 5 jobs a run) and writes it to
   `~/.teamrig/teams/<team>/state/github-ci/<owner>-<name>-<number>.md`, one file per pull request, the newest

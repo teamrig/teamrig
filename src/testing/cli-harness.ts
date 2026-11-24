@@ -119,6 +119,12 @@ export interface CliResult {
   readonly stderr: readonly string[];
 }
 
+/** What `doctor` printed before its install check (the `INSTALL ` header on), for specs of its findings alone. */
+export function findingLines(stdout: readonly string[]): readonly string[] {
+  const install = stdout.findIndex((line) => line.startsWith('INSTALL '));
+  return install === -1 ? stdout : stdout.slice(0, install);
+}
+
 export interface RunOptions {
   readonly env?: Env;
   readonly stdin?: string;
@@ -160,6 +166,8 @@ export interface RunOptions {
   readonly sessionProcesses?: SessionProcesses;
   /** How the CLI waits, such as one that changes the world mid-wait; default the clock's, which only moves time. */
   readonly sleep?: Sleep;
+  /** The wait a time limit races against (`CliRuntime.idleSleep`); default the quiet host's, which never ends. */
+  readonly idleSleep?: Sleep;
   /** The shell `teamrig test` runs in; default one that prints nothing and exits 0. */
   readonly shell?: ShellRunner;
   /** The GitHub CLI `issue sync` reads through; default one that sees no repository. */
@@ -275,6 +283,7 @@ export class CliHarness {
       timeZone: options.timeZone ?? 'UTC',
       sleep: options.sleep ?? this.clock.sleep,
       ...quietWorld(options.branch, options.stdin),
+      ...(options.idleSleep === undefined ? {} : { idleSleep: options.idleSleep }),
       ...(options.git === undefined ? {} : { git: options.git }),
       ...(options.pointerGit === undefined ? {} : { pointerGit: options.pointerGit }),
       ...(options.commitLog === undefined ? {} : { commitLog: options.commitLog }),

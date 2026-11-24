@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { isNonNegativeInteger, stringField } from "../core/guards.js";
-import { hostSessionOf } from "../core/host-session.js";
+import { hostSessionOf, legacyHostSessionRecord } from "../core/host-session.js";
 import { parseObject, toJsonlLine, VERSION_FIELD } from "../core/jsonl.js";
 /** The format of the session record files this code writes; a file in a format it does not read reads as absent. */
 export const SESSION_RECORD_FORMAT = 1;
@@ -20,19 +20,19 @@ export function parseSessionRecord(text) {
         return undefined;
     }
     const claudePid = record['claudePid'];
-    const claudeSession = hostSessionOf(record, 'claudeSession');
+    const hostSession = hostSessionOf(record, 'claudeSession');
     const at = stringField(record, 'at');
-    if (!isNonNegativeInteger(claudePid) || claudePid === 0 || claudeSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
+    if (!isNonNegativeInteger(claudePid) || claudePid === 0 || hostSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
         return undefined;
     }
     if (!('transcript' in record)) {
-        return { claudePid, claudeSession, at };
+        return { claudePid, hostSession, at };
     }
     const transcript = stringField(record, 'transcript');
-    return transcript === undefined || transcript === '' ? undefined : { claudePid, claudeSession, at, transcript };
+    return transcript === undefined || transcript === '' ? undefined : { claudePid, hostSession, at, transcript };
 }
 export function formatSessionRecord(record) {
-    return toJsonlLine({ [VERSION_FIELD]: SESSION_RECORD_FORMAT, ...record });
+    return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: SESSION_RECORD_FORMAT, ...record }, 'claudeSession'));
 }
 /** Each session's record. Ids are session ids, checked by the roster, so they are safe in a path. */
 export class SessionRecordStore {

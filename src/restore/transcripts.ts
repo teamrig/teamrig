@@ -26,7 +26,7 @@ export class TranscriptFinder {
     }
     this.folders ??= this.files.list(this.projectsDir);
     for (const folder of await this.folders) {
-      const path = join(this.projectsDir, folder, `${entry.claudeSession}.jsonl`);
+      const path = join(this.projectsDir, folder, `${entry.hostSession}.jsonl`);
       if ((await this.probe.kind(path)) === 'file') {
         return path;
       }

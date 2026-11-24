@@ -12,7 +12,7 @@ const RECORDED = { failure: undefined, duplicate: undefined };
  * nothing, and any other is told to stop. It never
  * throws: a failure is the note the start shows, and the next start records again.
  */
-export async function recordSessionStart(runtime, kit, ids, id, claudeSession, transcript) {
+export async function recordSessionStart(runtime, kit, ids, id, hostSession, transcript) {
     try {
         const claudePid = runtime.sessionProcesses.parentPid;
         const live = await liveRunOf(runtime, kit.paths, ids, id, claudePid);
@@ -20,7 +20,7 @@ export async function recordSessionStart(runtime, kit, ids, id, claudeSession, t
             // Its own tree, a fork of its conversation or the background job it handed it to is no second one.
             return { failure: undefined, duplicate: (await isLiveRunOwn(runtime, live, claudePid)) ? undefined : duplicateText(id, claudePid, live) };
         }
-        const started = { claudePid, claudeSession, at: new Date(runtime.clock.now()).toISOString() };
+        const started = { claudePid, hostSession, at: new Date(runtime.clock.now()).toISOString() };
         const record = transcript === undefined ? started : { ...started, transcript };
         await new SessionRecordStore(runtime.files, kit.paths).write(id, record);
         return RECORDED;

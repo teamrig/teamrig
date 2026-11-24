@@ -44,7 +44,7 @@ export function injectionOf(input, caps = INJECT_CAPS) {
         area: input.area,
         line: through,
         at: input.now.toISOString(),
-        claudeSession: input.claudeSession,
+        hostSession: input.hostSession,
         lastLineHash: last === undefined ? null : lineHash(last),
     };
     return { text: text.join('\n'), shown };
@@ -60,7 +60,7 @@ export async function injectFor(deps, input) {
         return undefined;
     }
     const { byArea } = indexMarks((await deps.marks.read()).marks);
-    const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.claudeSession);
+    const shown = newestShownOf((await deps.shown.read()).marks, input.area, input.hostSession);
     const injection = injectionOf({ ...input, path: deps.inboxes.pathOf(input.area), lines, read: byArea.get(input.area) ?? null, shown });
     if (injection === undefined) {
         return undefined;

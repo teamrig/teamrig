@@ -38,7 +38,7 @@ export function inboxDepsOf(runtime, paths) {
     };
 }
 /** The host's session running the command, as its host tells it, so the reminder hook can follow it; null outside one. */
-function claudeSessionOf(runtime) {
+function hostSessionOf(runtime) {
     const id = identityOf(runtime).sessionId;
     return id !== undefined && CLAUDE_SESSION_ID.test(id) ? id : null;
 }
@@ -60,20 +60,20 @@ export async function read(args, runtime) {
     const config = requireConfig(kit, runtime, 'read');
     const roster = await rosterOf(runtime, kit, config);
     const area = sessionIdOf(roster, caller);
-    const claudeSession = claudeSessionOf(runtime);
+    const hostSession = hostSessionOf(runtime);
     const deps = inboxDepsOf(runtime, kit.paths);
     // Bind once (T3081): the person may move a tab, by /teamrig or in a terminal; a tool call, a script or a hook may not.
     // On a host that tells no agent's run from the person's, the tab stays where it is bound too.
     const by = runBy(runtime);
     if (by.kind !== 'person') {
-        const bound = boundElsewhereOf((await deps.marks.read()).marks, claudeSession, area, (id) => roster.ids.includes(id));
+        const bound = boundElsewhereOf((await deps.marks.read()).marks, hostSession, area, (id) => roster.ids.includes(id));
         if (bound !== undefined) {
             const moving = `${KIT_NAME} inbox read --session ${area} in this tab, the ${bound} session, which it would make the ${area} session,`;
             throw new RefusedError(by.kind === 'agent' ? rebindRefusal(bound, area, by.mark) : untoldRefusal(moving, by.notice));
         }
     }
     const now = new Date(runtime.clock.now());
-    const result = await readInbox(deps, { area, claudeSession, now });
+    const result = await readInbox(deps, { area, hostSession, now });
     const zone = teamZone(config, runtime);
     result.lines.forEach((line) => runtime.out.stdout(lineOnClock(line, zone)));
     runtime.out.stdout(formatRead(result));

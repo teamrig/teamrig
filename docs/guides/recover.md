@@ -133,7 +133,8 @@ sequenceDiagram
 - A hook cannot run `/clear`, but a plugin mod can (`refresh.autoRestart`, on for the lead by default: the user types `/clear` for any other session once done with the screen). A hidden
   `teamrig restart` waits until the session has been idle `refresh.restartDelaySeconds` (15) with nothing running,
   then leaves an ask for its tab. A session with no work it can start waits for work first (its tab title reads
-  `waits for work`): the wake that brings it some starts the restart instead of waking the old context. teamrig's mod (`hooks/register.ts`) looks for it each second, claims it while
+  `waits for work`): the wake that brings it some starts the restart instead of waking the old context. The lead, and a session with a live recurring scheduled job
+  (`CronCreate`), never waits: its next turn comes anyway, and a scheduled job's prompt does not cancel the restart. teamrig's mod (`hooks/register.ts`) looks for it each second, claims it while
   the restart is still pending and runs `/clear` in the tab, so the tab and its process stay and Claude Code runs
   its own SessionEnd and SessionStart hooks. It holds the `/clear` for you first: while the prompt box holds a draft,
   for `refresh.holdAfterActivityMinutes` (30) after your last key or prompt, and 10 minutes after you press Hold; then
@@ -161,9 +162,9 @@ sequenceDiagram
   Claude Code process it refreshed in (for 24 hours).
 - The session-start note lists what the old session leaves, read from the last 64 MB of its transcript: its
   scheduled jobs (CronCreate), a pending wake-up (ScheduleWakeup) to make again, its scratchpad and its plan
-  file. A `/clear` keeps the process and so its jobs: the note says they are still scheduled, and lists them to
-  make again only after a new process. A job made before the last compaction is missed, and a wake-up can fire
-  twice after a `/clear`.
+  file. It lists the jobs to check with CronList and make again only when CronList does not show them: a new
+  process ends them, and a `/clear` may too, depending on the Claude Code version. A job made before the last
+  compaction is missed, and a wake-up can fire twice after a `/clear`.
 - `refresh.enabled: false` turns it off, `refresh.tabTitle: false` leaves the tab title alone and
   `refresh.handoverDir` moves the handovers. With `tabStatus.enabled`, the tab's state circle goes before that
   title ([tab status](../../plugins/teamrig/skills/teamrig-guide/hooks.md#every-event-tab-status)).

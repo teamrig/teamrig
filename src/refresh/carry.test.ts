@@ -259,13 +259,15 @@ describe('carryLines', () => {
     ]);
   });
 
-  it('after a /clear, says the jobs are still scheduled and lists none to make again', () => {
+  it('after a /clear, lists the jobs to check with CronList and make again only when it does not show them', () => {
     const crons = [
       { id: 'old1', cron: '3 13 * * *', prompt: 'budget check', recurring: true, createdAt: NOW },
       { id: 'old2', cron: '30 9 * * 1', prompt: 'weekly', recurring: true, createdAt: NOW },
     ];
     assert.deepEqual(carryLines({ ...EMPTY, crons, plan: '/cfg/plans/p.md' }, NOW, 'same-process', TimeZone.UTC), [
-      "Your old session's 2 scheduled job(s) are still scheduled, since a /clear keeps the process (CronList shows them): do not make them again.",
+      'Your old session had 2 scheduled job(s), which a /clear may have ended: run CronList and make each one it does not show again with CronCreate:',
+      '- cron "3 13 * * *", recurring true, prompt "budget check"',
+      '- cron "30 9 * * 1", recurring true, prompt "weekly"',
       'Its plan file: /cfg/plans/p.md.',
     ]);
     assert.deepEqual(carryLines(EMPTY, NOW, 'same-process', TimeZone.UTC), []);

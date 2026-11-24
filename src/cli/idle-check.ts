@@ -133,7 +133,7 @@ async function measuredTranscriptOf(runtime: CliRuntime, record: SessionRecord, 
       return recorded;
     }
   }
-  const found = await findTranscript(runtime.transcripts, projectsDir, project, record.claudeSession);
+  const found = await findTranscript(runtime.transcripts, projectsDir, project, record.hostSession);
   return found === undefined ? undefined : measuredOf(await measureTranscript(runtime, found));
 }
 
@@ -244,7 +244,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   const projectsDir = transcriptsFolderIfKnown(runtime);
   const last = await measuredTranscriptOf(runtime, record, projectsDir, options.project);
   if (last === undefined) {
-    return keep(`has no transcript of Claude Code session ${record.claudeSession} in any project folder, so its idle time is unknown`);
+    return keep(`has no transcript of Claude Code session ${record.hostSession} in any project folder, so its idle time is unknown`);
   }
   // Unread, a transcript shows no work running: a close then could cut some off.
   const reader = transcriptsIfKept(runtime);
@@ -273,7 +273,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   if ((await readRunningWork(reader, runtime.files, last.transcript, now)) > 0) {
     return keep('still runs background work its transcript shows');
   }
-  const resume = resumeVerdict({ claudeSession: record.claudeSession, changedAt: last.changedAt, tokens: last.tokens }, config.hiring, now);
+  const resume = resumeVerdict({ hostSession: record.hostSession, changedAt: last.changedAt, tokens: last.tokens }, config.hiring, now);
   // A ready refresh reopens fresh on its handover (open.ts, T2354), so the size of the old context no longer matters.
   if (resume.kind === 'fresh' && !facts.readyHandovers.has(id)) {
     return keep(`could not be resumed once closed (${resume.detail}); retire it with its handover instead`);

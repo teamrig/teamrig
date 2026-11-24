@@ -9,7 +9,8 @@ import { ARCHIVE_FORMAT, sha256Hex } from '../../ui/archive.ts';
 import type { UiPin } from '../../ui/released.ts';
 import type { ParsedArgs } from '../args.ts';
 import { RefusedError } from '../runtime.ts';
-import { uiCommand } from './ui.ts';
+import type { Sleep } from '../../core/lock.ts';
+import { UI_START_WAIT_MS, uiCommand, uiStartedPath } from './ui.ts';
 
 const ENTRY = resolve('/', 'pane', 'out', 'ui', 'main.js');
 const NODE = '/usr/bin/node';
@@ -158,10 +159,44 @@ describe('teamrig ui', () => {
     const WINDOW_ARGV = [NODE, SCRIPT, 'ui', '--mode', 'terminal', '--team', 'app', '--home', resolve(APP, KIT)];
     const WINDOW_ARGV_ALL = [NODE, SCRIPT, 'ui', '--mode', 'terminal', '--home', resolve(APP, KIT)];
 
+    /** A kit whose opened window or split starts its UI while the command waits: the UI there writes the started mark. */
+    function starting(config: ConstructorParameters<typeof CliHarness>[0]): { run: CliHarness['run'] } {
+      const kit = new CliHarness(config);
+      const sleep: Sleep = async (ms) => {
+        await kit.clock.sleep(ms);
+        await kit.files.write(uiStartedPath(KIT), `${JSON.stringify({ v: 1, at: new Date(kit.clock.now()).toISOString() })}\n`);
+      };
+      return { run: (args, options = {}) => kit.run(args, { ...options, sleep }) };
+    }
+
+    it('fails, saying so, when the window opens but no UI starts in it (T5261)', async () => {
+      const { processes, probe } = opening();
+      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe });
+      assert.deepEqual([result.code, result.stdout, result.stderr], [
+        1,
+        [],
+        [`FAILED a tmux window opened, but no UI started in it within ${UI_START_WAIT_MS / 1000} s; run teamrig ui --mode terminal in a terminal to see why`],
+      ]);
+      assert.deepEqual(processes.ran, []);
+    });
+
+    it('takes no started mark older than the window it opened (T5261)', async () => {
+      const kit = new CliHarness(IN_TMUX);
+      await kit.files.write(uiStartedPath(KIT), '{"v":1,"at":"2030-01-08T09:00:00.000Z"}\n');
+      const result = await kit.run(['ui', '--mode', 'window'], opening());
+      assert.deepEqual([result.code, result.stdout], [1, []]);
+    });
+
+    it('a UI run here marks itself started, for the run that opened its window (T5261)', async () => {
+      const kit = new CliHarness(WITH_UI);
+      assert.equal((await kit.run(['ui'], world())).code, 0);
+      assert.deepEqual(JSON.parse((await kit.files.read(uiStartedPath(KIT))) ?? ''), { v: 1, at: new Date(kit.clock.now()).toISOString() });
+    });
+
     it('opens Windows Terminal in a window of the UI’s own, never the team’s session window (T5249)', async () => {
       const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
       const config = { ...WITH_UI, open: { terminal: 'windows-terminal', teamWindow: true } };
-      const result = await new CliHarness(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
+      const result = await starting(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }) });
       assert.deepEqual(result.stdout, ['OPENED the UI in a windows-terminal window']);
       assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
         ['wt.exe', ['-w', 'teamrig-ui', 'new-tab', '--title', 'teamrig ui', '-d', APP, '--', ...WINDOW_ARGV_ALL]],
@@ -183,7 +218,7 @@ describe('teamrig ui', () => {
 
     it('window opens a terminal window running the UI in terminal mode, on the session named, and runs nothing here', async () => {
       const { processes, probe } = opening();
-      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window', '--session', 'alpha'], { processes, probe });
+      const result = await starting(IN_TMUX).run(['ui', '--mode', 'window', '--session', 'alpha'], { processes, probe });
       assert.deepEqual(result, { code: 0, stdout: ['OPENED the UI in a tmux window'], stderr: [] });
       assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
         ['tmux', ['new-window', '-c', APP, '-n', 'teamrig ui app', ...WINDOW_ARGV, '--session', 'alpha']],
@@ -194,7 +229,7 @@ describe('teamrig ui', () => {
     it('takes the mode from ui.mode when --mode is absent, and --mode wins over it', async () => {
       const windowed = { ...IN_TMUX, ui: { path: ENTRY, mode: 'window' } };
       const fromConfig = opening();
-      assert.equal((await new CliHarness(windowed).run(['ui'], fromConfig)).code, 0);
+      assert.equal((await starting(windowed).run(['ui'], fromConfig)).code, 0);
       assert.deepEqual([fromConfig.processes.started.length, fromConfig.processes.ran.length], [1, 0]);
       const overridden = opening();
       assert.equal((await new CliHarness(windowed).run(['ui', '--mode', 'terminal'], overridden)).code, 0);
@@ -203,7 +238,7 @@ describe('teamrig ui', () => {
 
     it('both opens the window and then shows the UI here too', async () => {
       const { processes, probe } = opening();
-      const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe });
+      const result = await starting(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe });
       assert.deepEqual([result.code, result.stdout], [0, ['OPENED the UI in a tmux window']]);
       assert.deepEqual(processes.started[0]?.args.slice(5), WINDOW_ARGV_ALL);
       assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY]]);
@@ -228,7 +263,7 @@ describe('teamrig ui', () => {
 
       it('terminal splits the session’s tmux pane, the focus kept on it, and runs nothing here', async () => {
         const { processes, probe } = opening();
-        const result = await new CliHarness(WITH_UI).run(['ui', '--session', 'alpha'], { processes, probe, env: TMUX_ENV, interactive: false });
+        const result = await starting(WITH_UI).run(['ui', '--session', 'alpha'], { processes, probe, env: TMUX_ENV, interactive: false });
         assert.deepEqual(result, { code: 0, stdout: ['OPENED the UI in a split of this tmux window'], stderr: [] });
         assert.deepEqual(processes.started.map((started) => [started.command, started.args]), [
           ['tmux', ['split-window', '-h', '-d', '-c', APP, ...WINDOW_ARGV, '--session', 'alpha']],
@@ -238,7 +273,7 @@ describe('teamrig ui', () => {
 
       it('terminal opens a window, saying why, when the terminal cannot split', async () => {
         const { processes, probe } = opening();
-        const result = await new CliHarness(IN_TMUX).run(['ui'], { processes, probe, interactive: false });
+        const result = await starting(IN_TMUX).run(['ui'], { processes, probe, interactive: false });
         assert.deepEqual(result.stdout, [
           'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
           'OPENED the UI in a tmux window',
@@ -259,7 +294,7 @@ describe('teamrig ui', () => {
 
       it('both opens the window and the split, and runs nothing here', async () => {
         const { processes, probe } = opening();
-        const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe, env: TMUX_ENV, interactive: false });
+        const result = await starting(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe, env: TMUX_ENV, interactive: false });
         assert.deepEqual(result.stdout, ['OPENED the UI in a tmux window', 'OPENED the UI in a split of this tmux window']);
         assert.deepEqual(processes.started.map((started) => started.args[0]), ['new-window', 'split-window']);
         assert.deepEqual(processes.ran, []);
@@ -268,7 +303,7 @@ describe('teamrig ui', () => {
       it('window falls back to a split beside the session when no window opens', async () => {
         const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
         const config = { ...WITH_UI, open: { terminal: 'gnome-terminal' } };
-        const result = await new CliHarness(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), env: { WT_SESSION: 'guid' }, interactive: false });
+        const result = await starting(config).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), env: { WT_SESSION: 'guid' }, interactive: false });
         assert.deepEqual(result.stdout, ['NOTE no terminal window opened (gnome-terminal: gnome-terminal is not installed); the UI shows beside the session', 'OPENED the UI in a split of this windows-terminal window']);
         assert.deepEqual(processes.ran, []);
       });

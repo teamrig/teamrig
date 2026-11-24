@@ -49,20 +49,20 @@ export function claudeProjectSlug(project) {
     return project.replace(/[^A-Za-z0-9]/g, '-');
 }
 /** Where Claude Code keeps a session's own transcript for a project folder: `<projects>/<project slug>/<session>.jsonl`. */
-export function projectTranscriptPath(projectsDir, project, claudeSession) {
-    return join(projectsDir, claudeProjectSlug(project), `${claudeSession}${TRANSCRIPT}`);
+export function projectTranscriptPath(projectsDir, project, hostSession) {
+    return join(projectsDir, claudeProjectSlug(project), `${hostSession}${TRANSCRIPT}`);
 }
 /**
  * A Claude Code session's own transcript: in its project's folder when it has one there, else the newest of that
  * session in any project folder (a session Claude Code filed under another folder); undefined when it has none, or
  * when `projectsDir` is undefined: a host whose transcripts folder teamrig does not know.
  */
-export async function findTranscript(folders, projectsDir, project, claudeSession) {
+export async function findTranscript(folders, projectsDir, project, hostSession) {
     if (projectsDir === undefined) {
         return undefined;
     }
     if (project !== undefined) {
-        const own = projectTranscriptPath(projectsDir, project, claudeSession);
+        const own = projectTranscriptPath(projectsDir, project, hostSession);
         if ((await folders.changedAt(own)) !== undefined) {
             return own;
         }
@@ -72,7 +72,7 @@ export async function findTranscript(folders, projectsDir, project, claudeSessio
         if (!entry.folder) {
             continue;
         }
-        const path = join(projectsDir, entry.name, `${claudeSession}${TRANSCRIPT}`);
+        const path = join(projectsDir, entry.name, `${hostSession}${TRANSCRIPT}`);
         const changedAt = await folders.changedAt(path);
         if (changedAt !== undefined && (newest === undefined || changedAt > newest.changedAt)) {
             newest = { path, changedAt };
@@ -145,7 +145,7 @@ export async function discoverTranscripts(folders, projectsDir, since) {
     }
     return [...found.entries()]
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([claudeSession, files]) => ({ claudeSession, main: files.main.sort(), subagents: files.subagents }));
+        .map(([hostSession, files]) => ({ hostSession, main: files.main.sort(), subagents: files.subagents }));
 }
 /**
  * When any of these Claude Code sessions last wrote its own transcript, in any project folder (epoch
@@ -153,7 +153,7 @@ export async function discoverTranscripts(folders, projectsDir, since) {
  * not know). It checks one path per session and project folder and never lists every transcript, so a hook can
  * afford it.
  */
-export async function lastWriteOf(folders, projectsDir, claudeSessions) {
+export async function lastWriteOf(folders, projectsDir, hostSessions) {
     if (projectsDir === undefined) {
         return undefined;
     }
@@ -162,7 +162,7 @@ export async function lastWriteOf(folders, projectsDir, claudeSessions) {
         if (!project.folder) {
             continue;
         }
-        for (const id of claudeSessions) {
+        for (const id of hostSessions) {
             const changedAt = await folders.changedAt(join(projectsDir, project.name, `${id}${TRANSCRIPT}`));
             if (changedAt !== undefined && (last === undefined || changedAt > last)) {
                 last = changedAt;

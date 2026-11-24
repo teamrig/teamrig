@@ -1329,6 +1329,11 @@ the `gh` login in its place.
   Its description is the issue's body: control characters become spaces, blank lines close up, and past 2,000
   characters it is cut, ending with `…`. An empty body gives none; a body that looks like it holds a secret
   gives a line saying it was left out, to be read on GitHub.
+- A change opened for review since the last automatic read that goes to the watcher (a fork's, an outsider's, or one
+  on a branch naming no task with an owner) becomes a task of the watcher (unset: the first holder of a service role
+  holding `issue close`, else the lead) with its ref, due 24 hours after it opened. Its title carries the change's
+  own title for an inside author, else only its number and author; its description names it, its author and the
+  answer time. The dry run prints it under `PULL TASKS <repo>`, and a ref a task holds gets no second one.
 - Only the issues of the repository's people, or ones they accepted, become tasks. An author
   GitHub ties to the repository as its owner, an organization member or a collaborator counts at once. Any other
   author's issue (one with a merged pull request too) waits until someone other than the author adds the
@@ -1408,7 +1413,9 @@ Flags:
   repository's owner or a login in `github.owners`, when `wake.enabled`; an outsider's new pull request wakes no one, as
   it is the watcher's intake work). When its own pull request's checks start failing, it reads the
   end of each failed job's log (at most 5 a run) into `state/github-ci/<owner>-<name>-<number>.md` and the line names
-  the job, its failed step and that file. An open issue labelled `security` wakes the session it routes to and pages
+  the job, its failed step and that file. A conflict names the way out: the team's own change is rebased onto the
+  newest base and goes back to the same branch; an outsider's gets the `teamrig pr conflicts`
+  line that names its files, for a comment on the rebase it needs, or is taken over. An open issue labelled `security` wakes the session it routes to and pages
   the owner through the `alerts` page webhook, once per issue ever and for at most 3 issues a run (the rest go to the
   lead in one line and one page); the lead is woken when no page goes. It also reads each repository's posts changed
   since its last `--auto` read (the first read only starts the scan) and sends each new `@` mention of a login in
@@ -3605,6 +3612,34 @@ missed: a call matching the skill's Signature line with no load in the 30 calls 
 Read 14 files, 38.2 MB this run.
 ```
 
+### teamrig skills step
+
+Prints how the tool your team uses does one step a skill names, when no teamrig command does that step: how the
+tracker files a child issue under its parent, where the code host takes a private security report. A skill says
+"run `teamrig skills step <id>` and follow it", so it stays the same whichever host and tools a team runs. The steps
+are `tracker.link-child`, `codehost.private-report`, `codehost.fetch-outside-change`, `host.rename`,
+`host.slim-setup` and `host.denial-sources`. A host step prints the running host's text; a connector step prints
+the text of each connector the team config uses, or only the one `--for` names. When none in use serves the step it
+prints the step's neutral line and the tools that would serve it. Only the tools teamrig ships print a text.
+Refused (exit 64): an id that is no step, `--for` on a host step, or a ref no connector's prefix starts.
+
+Flags:
+
+- `--for <ref>`: a ref such as an issue's, whose prefix picks the connector, whatever the team config uses.
+
+Example:
+
+```sh
+teamrig skills step tracker.link-child
+```
+
+Output:
+
+```text
+<the connector's name>:
+<its text of the step: where to click, or the line to run>
+```
+
 ### teamrig start
 
 Prints what you read at the start of a work block, in one call: the time on the team's clock, today's scheduled
@@ -4823,9 +4858,21 @@ Output:
 
 ```text
 DOCTOR clean, team shop
+INSTALL 4 step(s): 4 ok, 0 missing, 0 unknown
+  OK node (Node.js 22.18.0 or later): Node.js 22.18.0 or later runs teamrig
+  OK git (git on PATH): git is on PATH
+  OK cli (the teamrig command on PATH): /opt/teamrig/bin/teamrig
+  OK team (a team whose config loads): team shop, config /home/you/.teamrig/teams/shop/config.json
 ```
 
-Otherwise `DOCTOR N finding(s)` and one `WARN <kind> <detail and fix>` line each. Kinds: `requirement` (git,
+After the findings comes the `INSTALL` section: each install step every host shares, in install order, probed live as
+`OK`, `MISSING` (with `fix:` and what to do) or `UNKNOWN` (the probe failed or ran past 2 seconds; the other steps
+still run). `cli` is ok for the kit's own launcher in `<kit home>/bin` or the running plugin's shim; it is missing when
+no `teamrig` is on PATH, or when the one on PATH belongs to another install than the one running, as after an update
+in a session that started before it: start a new session. With no team found, doctor
+prints the section, its `team` step naming the create line, and then refuses as any team command does.
+
+With findings, the header is `DOCTOR N finding(s)`, then one `WARN <kind> <detail and fix>` line each. Kinds: `requirement` (git,
 Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `name-gone`,
 `name-shared`, `name-config`, `name-reserved` (a name Claude Code keeps for itself: `main`, `team-lead`, `user`,
 `system`), `rename-log`, `inbox-orphan`, `inbox-unread`, `rules-long`, `lead-start`, `context-size`,
@@ -4949,12 +4996,16 @@ shows the UI here too. When no window can open (say [open.terminal] is `print`) 
 the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
 or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
 the session works in, the focus left on the session's pane (`OPENED the UI in a split of this <terminal> window`);
-in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
+in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. An `OPENED`
+line comes only once the UI in that window or split has started (it marks `ui/started.json` under the kit home): a
+terminal can take the window and run nothing in it, so with no UI started there within 20 s the run prints `FAILED
+<where> opened, but no UI started in it within 20 s; run teamrig ui --mode terminal in a terminal to see why` and
+exits 1, starting no second UI here. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
 Without the key it runs the released UI this teamrig pins: the first start fetches its archive over https into
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
 gets only PATH, HOME, USERPROFILE, SYSTEMROOT, TERM, COLORTERM, LANG, LANGUAGE, TEAMRIG_HOME, TEAMRIG_TEAM,
-TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.82.0's UI. It is refused when
+TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.83.1's UI. It is refused when
 [ui.path] names no file. As it starts a program,
 `/teamrig ui` runs only when you type it in the tab, never from a session's line; and [ui.path] is the owner's key,
 which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
@@ -4976,7 +5027,7 @@ Output: none of its own while the UI runs, and exit 0 when you quit it. The refu
 fetch the released UI:
 
 ```text
-REFUSED the UI 0.82.0 could not be fetched: <why>
+REFUSED the UI 0.83.1 could not be fetched: <why>
 ```
 
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
@@ -5283,14 +5334,14 @@ teamrig automode install --yes
 Output:
 
 ```text
-WROTE the changes below; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
-  ADD /home/me/.claude/settings.json autoMode.environment: $defaults
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] Protected branches: main, master. A normal push to one asks the person. A force-push, a --mirror push or deleting one is refused, and a --force-with-lease push asks. Every session edits on its own branch in its own git worktree, never in a repo's main checkout.
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] The task register: every session may run teamrig start, teamrig add, teamrig set, teamrig update, teamrig verify, teamrig list, teamrig show, teamrig check, teamrig plan, teamrig budget, teamrig rules, teamrig refresh, teamrig inbox read, teamrig inbox status, teamrig inbox add, teamrig who, teamrig rename for team shop, but not teamrig add with --issue, --issue-body, --issue-repo, which also posts a public GitHub issue; they write only under ~/.teamrig/teams/shop/.
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig queue ... -- <cmd>` and `teamrig test ... -- <cmd>` run the session's own build, test or script on this host (queue waits for the host lock, test records the result); neither grants anything, so judge the command after `--` as if it ran alone.
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig worktree remove <path> [--delete-branch]` is how a session removes its finished worktree, and every session may run it: teamrig itself removes only a worktree whose t<id>- branch names a task the session owns or one of a session it leads (any for the lead, session lead), and refuses the main checkout, uncommitted work and a branch with a commit not on its base.
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] Every session may rebase its own branch in its own git worktree onto the fresh default branch (`git fetch`, then `git rebase origin/<branch>` or `git pull --rebase`, and `git rebase --continue` or `--abort` to settle a stopped one): it rewrites only that session's own commits not yet merged. A branch it pushed before goes back with `git push --force-with-lease` to that same branch. A protected branch (main, master) is never rebased, nor a repo's main checkout.
-  ADD /home/me/.claude/settings.json autoMode.environment: [teamrig shop] In a session's own git worktree on its own branch, a file git tracks with no uncommitted change (clean in `git status`) comes back with `git restore`, so editing it with Edit or Write, deleting or moving it with `git rm` (without `-f`) or `git mv`, or running a script the session wrote or read in full whose writes stay in that worktree, is ordinary code editing, not destruction. It does not cover `rm -rf` of a folder (it also deletes untracked and ignored files, and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).
+WROTE the changes below; the old settings file is at /home/you/.teamrig/backups/claude-settings.json
+  ADD /home/you/.claude/settings.json autoMode.environment: $defaults
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] Protected branches: main, master. A normal push to one asks the person. A force-push, a --mirror push or deleting one is refused, and a --force-with-lease push asks. Every session edits on its own branch in its own git worktree, never in a repo's main checkout.
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] The task register: every session may run teamrig start, teamrig add, teamrig set, teamrig update, teamrig verify, teamrig list, teamrig show, teamrig check, teamrig plan, teamrig budget, teamrig rules, teamrig refresh, teamrig inbox read, teamrig inbox status, teamrig inbox add, teamrig who, teamrig rename for team shop, but not teamrig add with --issue, --issue-body, --issue-repo, which also posts a public GitHub issue; they write only under ~/.teamrig/teams/shop/.
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig queue ... -- <cmd>` and `teamrig test ... -- <cmd>` run the session's own build, test or script on this host (queue waits for the host lock, test records the result); neither grants anything, so judge the command after `--` as if it ran alone.
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig worktree remove <path> [--delete-branch]` is how a session removes its finished worktree, and every session may run it: teamrig itself removes only a worktree whose t<id>- branch names a task the session owns or one of a session it leads (any for the lead, session lead), and refuses the main checkout, uncommitted work and a branch with a commit not on its base.
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] Every session may rebase its own branch in its own git worktree onto the fresh default branch (`git fetch`, then `git rebase origin/<branch>` or `git pull --rebase`, and `git rebase --continue` or `--abort` to settle a stopped one): it rewrites only that session's own commits not yet merged. A branch it pushed before goes back with `git push --force-with-lease` to that same branch. A protected branch (main, master) is never rebased, nor a repo's main checkout.
+  ADD /home/you/.claude/settings.json autoMode.environment: [teamrig shop] In a session's own git worktree on its own branch, a file git tracks with no uncommitted change (clean in `git status`) comes back with `git restore`, so editing it with Edit or Write, deleting or moving it with `git rm` (without `-f`) or `git mv`, or running a script the session wrote or read in full whose writes stay in that worktree, is ordinary code editing, not destruction. It does not cover `rm -rf` of a folder (it also deletes untracked and ignored files, and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).
 ```
 
 A line that changed shows as `REMOVE` (the old text) and `ADD` (the new). `UNCHANGED <settings>: team <team>'s lines
@@ -5318,12 +5369,12 @@ Output:
 
 ```text
 PREVIEW nothing written (add --yes to write)
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] Protected branches: main, master. A normal push to one asks the person. A force-push, a --mirror push or deleting one is refused, and a --force-with-lease push asks. Every session edits on its own branch in its own git worktree, never in a repo's main checkout.
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] The task register: every session may run teamrig start, teamrig add, teamrig set, teamrig update, teamrig verify, teamrig list, teamrig show, teamrig check, teamrig plan, teamrig budget, teamrig rules, teamrig refresh, teamrig inbox read, teamrig inbox status, teamrig inbox add, teamrig who, teamrig rename for team shop, but not teamrig add with --issue, --issue-body, --issue-repo, which also posts a public GitHub issue; they write only under ~/.teamrig/teams/shop/.
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig queue ... -- <cmd>` and `teamrig test ... -- <cmd>` run the session's own build, test or script on this host (queue waits for the host lock, test records the result); neither grants anything, so judge the command after `--` as if it ran alone.
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig worktree remove <path> [--delete-branch]` is how a session removes its finished worktree, and every session may run it: teamrig itself removes only a worktree whose t<id>- branch names a task the session owns or one of a session it leads (any for the lead, session lead), and refuses the main checkout, uncommitted work and a branch with a commit not on its base.
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] Every session may rebase its own branch in its own git worktree onto the fresh default branch (`git fetch`, then `git rebase origin/<branch>` or `git pull --rebase`, and `git rebase --continue` or `--abort` to settle a stopped one): it rewrites only that session's own commits not yet merged. A branch it pushed before goes back with `git push --force-with-lease` to that same branch. A protected branch (main, master) is never rebased, nor a repo's main checkout.
-  REMOVE /home/me/.claude/settings.json autoMode.environment: [teamrig shop] In a session's own git worktree on its own branch, a file git tracks with no uncommitted change (clean in `git status`) comes back with `git restore`, so editing it with Edit or Write, deleting or moving it with `git rm` (without `-f`) or `git mv`, or running a script the session wrote or read in full whose writes stay in that worktree, is ordinary code editing, not destruction. It does not cover `rm -rf` of a folder (it also deletes untracked and ignored files, and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] Protected branches: main, master. A normal push to one asks the person. A force-push, a --mirror push or deleting one is refused, and a --force-with-lease push asks. Every session edits on its own branch in its own git worktree, never in a repo's main checkout.
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] The task register: every session may run teamrig start, teamrig add, teamrig set, teamrig update, teamrig verify, teamrig list, teamrig show, teamrig check, teamrig plan, teamrig budget, teamrig rules, teamrig refresh, teamrig inbox read, teamrig inbox status, teamrig inbox add, teamrig who, teamrig rename for team shop, but not teamrig add with --issue, --issue-body, --issue-repo, which also posts a public GitHub issue; they write only under ~/.teamrig/teams/shop/.
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig queue ... -- <cmd>` and `teamrig test ... -- <cmd>` run the session's own build, test or script on this host (queue waits for the host lock, test records the result); neither grants anything, so judge the command after `--` as if it ran alone.
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] `teamrig worktree remove <path> [--delete-branch]` is how a session removes its finished worktree, and every session may run it: teamrig itself removes only a worktree whose t<id>- branch names a task the session owns or one of a session it leads (any for the lead, session lead), and refuses the main checkout, uncommitted work and a branch with a commit not on its base.
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] Every session may rebase its own branch in its own git worktree onto the fresh default branch (`git fetch`, then `git rebase origin/<branch>` or `git pull --rebase`, and `git rebase --continue` or `--abort` to settle a stopped one): it rewrites only that session's own commits not yet merged. A branch it pushed before goes back with `git push --force-with-lease` to that same branch. A protected branch (main, master) is never rebased, nor a repo's main checkout.
+  REMOVE /home/you/.claude/settings.json autoMode.environment: [teamrig shop] In a session's own git worktree on its own branch, a file git tracks with no uncommitted change (clean in `git status`) comes back with `git restore`, so editing it with Edit or Write, deleting or moving it with `git rm` (without `-f`) or `git mv`, or running a script the session wrote or read in full whose writes stay in that worktree, is ordinary code editing, not destruction. It does not cover `rm -rf` of a folder (it also deletes untracked and ignored files, and can follow a junction into the main checkout), git commands that discard work or history (`reset --hard`, `checkout --` or `restore` over uncommitted changes, `clean`, `stash drop` or `clear`, `branch -D`, `git worktree remove`, `gc --prune`, `reflog expire`), a file with uncommitted changes, an untracked or ignored file, another session's worktree, a repo's main checkout, or agent config and gates even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).
 ```
 
 `UNCHANGED <settings>: team <team> has no lines there` when it has none.
@@ -5370,7 +5421,7 @@ Output:
 
 ```text
 PREVIEW nothing written (add --yes to write): removes every allow rule off permissions.keepAllow
-  /home/me/.claude/settings.json: 12 allow rules -> 3, remove 9 (Bash wide 5, Bash exact 3, Read wide 1); keeps 3 on the keep-list
+  /home/you/.claude/settings.json: 12 allow rules -> 3, remove 9 (Bash wide 5, Bash exact 3, Read wide 1); keeps 3 on the keep-list
   /work/shop/.claude/settings.json: 4 allow rules, 2 to remove (Bash exact 2); it is committed with its repo, so change it by a commit
   /work/shop/.claude/settings.local.json: 40 allow rules -> 2, remove 38 (Bash exact 30, Bash wide 6, WebFetch exact 2); keeps 2 on the keep-list
 TOTAL 2 file(s) to rewrite: 52 allow rules -> 5 (remove 47: Bash exact 33, Bash wide 11, WebFetch exact 2, Read wide 1)
@@ -5502,13 +5553,13 @@ Flags:
 Example:
 
 ```sh
-teamrig setup backup --project /home/me/shop
+teamrig setup backup --project /home/you/shop
 ```
 
 Output:
 
 ```text
-BACKED UP 214 file(s), 1873402 bytes to /home/me/.local/state/teamrig/setup-backups/20261025T120000Z
+BACKED UP 214 file(s), 1873402 bytes to /home/you/.local/state/teamrig/setup-backups/20261025T120000Z
   user: 168 file(s)
   project: 31 file(s)
   parents: 0 file(s)
@@ -5545,10 +5596,10 @@ teamrig setup restore 20261025T120000Z
 Output:
 
 ```text
-PREVIEW nothing written (add --yes to write): setup backup 20261025T120000Z (214 file(s), made 2026-10-25T12:00:00.000Z) of /home/me/shop
-  RESTORE /home/me/.claude/settings.json: changed since the backup
-  RECREATE /home/me/.claude/skills/deploy/SKILL.md: deleted since the backup
-  NEW /home/me/.claude/skills/scratch/SKILL.md: not in the backup; kept (--remove-new removes it)
+PREVIEW nothing written (add --yes to write): setup backup 20261025T120000Z (214 file(s), made 2026-10-25T12:00:00.000Z) of /home/you/shop
+  RESTORE /home/you/.claude/settings.json: changed since the backup
+  RECREATE /home/you/.claude/skills/deploy/SKILL.md: deleted since the backup
+  NEW /home/you/.claude/skills/scratch/SKILL.md: not in the backup; kept (--remove-new removes it)
   UNCHANGED 212 file(s)
 ```
 
@@ -5556,9 +5607,9 @@ With `--yes`, after the `BACKED UP` lines of the backup it makes first:
 
 ```text
 WROTE 2 of 2 file(s) from setup backup 20261025T120000Z; 212 unchanged
-  RESTORED /home/me/.claude/settings.json
-  RECREATED /home/me/.claude/skills/deploy/SKILL.md
-  NEW /home/me/.claude/skills/scratch/SKILL.md: not in the backup; kept (--remove-new removes it)
+  RESTORED /home/you/.claude/settings.json
+  RECREATED /home/you/.claude/skills/deploy/SKILL.md
+  NEW /home/you/.claude/skills/scratch/SKILL.md: not in the backup; kept (--remove-new removes it)
 UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 ```
 
@@ -5571,7 +5622,11 @@ installed plugin, so it is refused from a source checkout (`setup hooks runs fro
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
 `SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
-file already holds the same handlers, one `UNCHANGED` line. It never writes `config.toml` and never trusts a handler
+file already holds the same handlers, one `UNCHANGED` line. A second line does the same for the one setting the hooks
+need in Codex's `config.toml` beside it, `[features] unified_exec_tty = false`: Codex runs no hook on a line typed
+into an interactive shell, so teamrig turns those shells off (its own launcher passes the same setting). Every other
+line of `config.toml` stays, the old file is kept as `codex-config.bak` in `backups`, and a `features = { ... }`
+inline table is refused with nothing written: set `unified_exec_tty = false` in it by hand. It never trusts a handler
 for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
 every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
 refused where an agent runs it; the preview stays open.
@@ -5591,6 +5646,7 @@ Output:
 
 ```text
 PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
+PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [features] unified_exec_tty = false
   SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
   NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
   NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
@@ -5879,10 +5935,13 @@ start a part of the name: it tells whose branch it is), `{issue}` (the number of
 [delivery.branches.slugMax], default 40) and `{session}` (the task's owner). The branch type is `--type` when
 given, else the one [delivery.branches.classes] maps the task's work class to, else the one
 [delivery.branches.itemTypes] maps its item type to (default: a task `feat`, a bug `fix`);
-[delivery.branches.typePatterns] gives a branch type its own pattern. Branches named before keep their names. A
-rebase or conflict fix goes back to the same branch with `--force-with-lease`, never under a new name.
+[delivery.branches.typePatterns] gives a branch type its own pattern. A branch name you give must match the pattern
+or a `typePatterns` entry too, so a project never mixes styles ([delivery.branches.enforce], default on; `false` lets
+any name through). Branches named before keep their names. A rebase or conflict fix goes back to the same branch
+with `--force-with-lease`, never under a new name.
 
-It refuses (exit 2) before any change for: a name that is no branch name; a folder already there; an `origin/HEAD`
+It refuses (exit 2) before any change for: a name that is no branch name; a name that matches none of the team's
+branch patterns while enforce is on (naming them, with an example); a folder already there; an `origin/HEAD`
 that names no default branch (`git remote set-head origin --auto` sets it); a branch that already exists; `--repo`
 outside a team or naming a repository the team does not list; and a folder in no git repository without `--repo`.
 With `--task` it also refuses a task the register lacks, `--task` outside a team, and a pattern naming a word the
@@ -5910,17 +5969,17 @@ Flags:
 Example:
 
 ```sh
-teamrig worktree add t12-parser
+teamrig worktree add feat/t12-parser
 teamrig worktree add --task T12 --type docs
 ```
 
 Output:
 
 ```text
-added the worktree /home/you/app/.claude/worktrees/t12-parser on the new branch t12-parser, from origin/main as just fetched
+added the worktree /home/you/app/.claude/worktrees/feat-t12-parser on the new branch feat/t12-parser, from origin/main as just fetched
 linked node_modules
 ran its setup node tools/link-modules.ts
-OK added /home/you/app/.claude/worktrees/t12-parser
+OK added /home/you/app/.claude/worktrees/feat-t12-parser
 NOTE git's credential helper left as it was: /home/you/app has no origin remote git could read
 ```
 
@@ -8010,9 +8069,9 @@ teamrig statusline install --yes
 Output:
 
 ```text
-WROTE the changes below; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
-  WRITE /home/me/.teamrig/bin/statusline.mjs
-  CHANGE /home/me/.claude/settings.json statusLine.command: node "/home/me/.claude/status.js" -> node "/home/me/.teamrig/bin/statusline.mjs" --pass | node "/home/me/.claude/status.js"
+WROTE the changes below; the old settings file is at /home/you/.teamrig/backups/claude-settings.json
+  WRITE /home/you/.teamrig/bin/statusline.mjs
+  CHANGE /home/you/.claude/settings.json statusLine.command: node "/home/you/.claude/status.js" -> node "/home/you/.teamrig/bin/statusline.mjs" --pass | node "/home/you/.claude/status.js"
 ```
 
 `UNCHANGED <settings>: teamrig is already the status line` when nothing would change; a launcher that differs from
@@ -8040,9 +8099,9 @@ teamrig statusline uninstall --yes
 Output:
 
 ```text
-WROTE the changes below; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
-  CHANGE /home/me/.claude/settings.json statusLine.command: node "/home/me/.teamrig/bin/statusline.mjs" -> (none)
-  REMOVE /home/me/.teamrig/bin/statusline.mjs
+WROTE the changes below; the old settings file is at /home/you/.teamrig/backups/claude-settings.json
+  CHANGE /home/you/.claude/settings.json statusLine.command: node "/home/you/.teamrig/bin/statusline.mjs" -> (none)
+  REMOVE /home/you/.teamrig/bin/statusline.mjs
 ```
 
 `UNCHANGED <settings>: teamrig is not the status line` when it is not.
@@ -8792,6 +8851,25 @@ Example:
 
 ```sh
 teamrig hook wake-dropped < dropped.json
+```
+
+Output: nothing, exit 0.
+
+### teamrig hook hand-trace
+
+Run by the plugin's mod when one of its hands' ticks (the context clear, reload, wake, meeting, meeting panel, update and
+needs-you hands) threw, or was still unsettled at the hand's next tick past its limit (60 s; an update's past its
+install timeout). Appends one line to `<team>/state/hand-trace.jsonl`: `{"v", "at", "session", "tab", "hand", "kind"}`
+with `"error"` (its first 300 characters) for `threw` or `"ms"` for `stalled`. The mod traces each hand and kind at
+most once per 10 minutes. A tab that is no team session, or a payload naming no hand or kind, logs nothing. Stdin:
+`{"session_id", "cwd", "hand", "kind", "error" | "ms"}`.
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook hand-trace < trace.json
 ```
 
 Output: nothing, exit 0.

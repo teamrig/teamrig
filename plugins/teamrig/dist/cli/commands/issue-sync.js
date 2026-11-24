@@ -9,7 +9,7 @@ import { importedTasks, linkedRefs, planSync, refHolders } from "../../sync/plan
 import { withCiExcerpts } from "../../sync/ci-excerpt.js";
 import { firstMentionWatch, mentionItems, mentionReadSince, mentionStep, mentionTime, } from "../../sync/mention-route.js";
 import { securityIssues } from "../../sync/security-alert.js";
-import { eventsByRecipient, pullEvents, pullListeners, pullNewsText, pullRecipient } from "../../sync/pull-news.js";
+import { eventsByRecipient, pullEvents, pullListeners, pullNewsText, pullRecipient, pullTasks } from "../../sync/pull-news.js";
 import { ourLogins } from "../../sync/trust.js";
 import { applySteps, closedSince } from "../../sync/sync.js";
 import { GITHUB_REPOS_HOST } from "../../issues/host.js";
@@ -28,7 +28,7 @@ import { reserveHour, settleHour } from "./issue-push-hour.js";
 import { issuePush, pushEndLine, pushRepos } from "./issue-push.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
 import { githubOffBy, readSyncState, reportAutoSync } from "./issue-sync-auto.js";
-import { leftOutLines, previewLines, refusedReason, resultLines, syncExit } from "./issue-sync-lines.js";
+import { leftOutLines, previewLines, pullTaskLines, refusedReason, resultLines, shown, stepLine, syncExit } from "./issue-sync-lines.js";
 import { fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from "./tracker-sync.js";
 import { githubWatcher } from "../../sync/watcher.js";
 /**
@@ -43,7 +43,9 @@ import { githubWatcher } from "../../sync/watcher.js";
  * `--yes` does and tells each owner's inbox its new tasks, and the lead's when the failing repositories change or
  * an issue is newly left out. Each repository's pull requests are read too and compared with what the last
  * `--auto` read of them (pull-news.ts): a PULL NEWS line per session names what happened since, but only `--auto`
- * keeps what it read and tells each session's inbox, so a run by hand changes nothing there. `--auto` also reads each
+ * keeps what it read and tells each session's inbox, so a run by hand changes nothing there. A new pull request that
+ * news goes to the watcher for also gets a task of the watcher's, due at its answer target (pull-news.ts pullTasks),
+ * written as the import's tasks are and shown by the dry run. `--auto` also reads each
  * repository's posts changed since its last read and routes each new mention of one of ours to a session
  * (mention-route.ts); a run by hand reads none. First, unless `--repo` is given, it imports the issues of every other
  * tracker the team's `connectors` map names (tracker-sync.ts, Jira), each written as its own source, even when GitHub's
@@ -65,6 +67,8 @@ export async function issueSync(args, runtime) {
     const config = requireConfig(kit, runtime, write ? 'write' : 'read');
     const say = (line) => runtime.out.stdout(line);
     const register = teamRegister(runtime, kit.paths, config);
+    // The issues' tasks and the pull requests' tasks are written as one source.
+    const writeSteps = (steps) => applySteps(register, GITHUB_SOURCE, steps);
     const rules = importRules(config);
     const started = runtime.clock.now();
     const since = closedSince(new Date(started), config.github.closedDays);
@@ -154,7 +158,7 @@ export async function issueSync(args, runtime) {
         let end = 'ok';
         let issueThreads = [];
         if (write) {
-            const outcomes = await applySteps(register, GITHUB_SOURCE, plan.steps);
+            const outcomes = await writeSteps(plan.steps);
             // Against the tasks as written, so an issue the import just took is held by its new task.
             issueThreads = repoThreads(read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
             claimRead.set(repo, read.issues);
@@ -181,11 +185,28 @@ export async function issueSync(args, runtime) {
         }
         pulls.set(repo, watch.after);
         pullNews.push(...watch.events);
+        // One owner lookup, so the answer clocks and the pull request tasks route to the same people.
+        const taskOwners = new Map(tasks.map((task) => [task.id, task.owner]));
+        const ownerOf = (id) => taskOwners.get(id);
         if (write) {
             // Only once both reads are in: a repository whose pull requests could not be read keeps every clock it had.
-            const ownerOf = (id) => tasks.find((held) => held.id === id)?.owner;
             threads.push(...issueThreads, ...pullThreads(watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), ours));
             clocked.add(repo);
+        }
+        const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules });
+        if (pullSteps.length > 0 && write) {
+            const outcomes = await writeSteps(pullSteps);
+            pullTaskLines(repo, outcomes).forEach(say);
+            written += outcomes.filter((outcome) => outcome.result.ok).length;
+            added.push(...addedTasks(outcomes));
+            const refused = refusedReason(outcomes);
+            if (refused !== undefined && end === 'ok') {
+                failures.push({ repo, reason: refused });
+                end = 'refused';
+            }
+        }
+        else if (pullSteps.length > 0) {
+            [`PULL TASKS ${repo}: ${pullSteps.length} to add`, ...shown(pullSteps.map((step) => stepLine(step, 'new')))].forEach(say);
         }
         if (auto) {
             const items = mentionItems(repo, { issues: read.issues, pulls: watch.pulls }, { ofRef: (ref) => holders.get(ref)?.owner, ofTask: (id) => tasks.find((held) => held.id === id)?.owner }, ours);

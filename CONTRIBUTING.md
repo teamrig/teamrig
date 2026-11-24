@@ -24,7 +24,9 @@ adapter may import, who may import an adapter or a fake of `src/testing`, where 
 `node tools/ci/boundaries-cli.ts` against `tools/ci/boundaries.json`: a rule's count may fall, never rise, `--list`
 prints each finding and `--write` records a fall. The host and tool words in
 each skill (a step a skill tells, which an adapter says how to do) are counted by `node tools/ci/provider-words-cli.ts`
-against `tools/ci/provider-words.json`: a count may fall, never rise, and `--write` records a fall. The sections below
+against `tools/ci/provider-words.json`: a count may fall, never rise, and `--write` records a fall. On a pull request
+CI runs both with `--base <commit>`, which holds each count to the lower of the baseline file and the base branch's
+copy, so a count is raised only by a baseline change of its own. The sections below
 give the test and sign-off rules.
 
 ## How we work
@@ -226,7 +228,8 @@ dependency review, which reads GitHub's dependency graph ([Security checks](#sec
   the scrub, the DCO sign-off, the size rule, the commit subjects, the typecheck and the specs beside the changed
   files (`foo.ts` brings `foo.test.ts`, a changed spec runs itself), only those under `src/` and `tools/` that
   `npm test` runs: the plugin's mod specs run in `claude plugin test`, part of the full checks. A change to the gate
-  itself (`.githooks/`, `.github/`, `tools/ci/`, `tools/ship/`, `src/push-guard/`, `package.json`, the lockfile or a
+  itself (`.githooks/`, `.github/`, `tools/ci/`, `tools/ship/`, the tools its checks run or import: `tools/lib/`,
+  `tools/scrub/`, `tools/dco/` and `tools/build/`, `src/push-guard/`, `package.json`, the lockfile or a
   `tsconfig*.json`) runs every check instead. `tools/ship/ship.ts --merge` proves the tree the same way in place of the typecheck,
   coverage gate and full run, then pushes and merges once the required CI checks pass, so the merge holds the ship
   slot only for those steps. A short pass is recorded apart (`local-ci/short/<tree>.json`), never taken for a full

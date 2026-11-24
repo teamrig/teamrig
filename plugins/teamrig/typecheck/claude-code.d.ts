@@ -31,6 +31,14 @@ declare module 'claude-code' {
   export type StateRead<T> = { readonly value: T | undefined; readonly version: number }
   /** What `$.state.set` answers: whether the write landed, and the version it stands at. */
   export type StateSetResult = { readonly isSet: boolean; readonly version: number }
+  /** The input of a `$.state.set` call as its event's hooks see it: the key, the value and what stood there. */
+  export type StateWrite = {
+    readonly plugin: string
+    readonly key: string
+    readonly value: unknown
+    readonly previous?: unknown
+    readonly ifVersion?: number
+  }
 
   /** The surfaces a session draws on; every one has the Box, Text and Button the mod draws with. */
   export type RenderSurface = 'terminal' | 'desktop' | 'vscode' | 'mobile'
@@ -349,6 +357,7 @@ declare module 'claude-code' {
     'ui.toast': { e: { readonly text: string; readonly timeoutMs?: number }; result: ValueOrDeny<void> }
     'fs.exists': { e: { readonly path: string }; result: ValueOrDeny<boolean> }
     'fs.read': { e: { readonly path: string }; result: ValueOrDeny<string> }
+    'state.set': { e: StateWrite; result: ValueOrDeny<StateSetResult> }
     'process.run': { e: { readonly argv: readonly string[]; readonly init?: ProcessRunInit }; result: ValueOrDeny<ProcessRunResult> }
   }
   export type EventName = keyof Events

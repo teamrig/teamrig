@@ -92,7 +92,7 @@ function answered(existing, tab, at) {
 }
 /** How a turn end changes the marker (`existing`, undefined when there is none yet). */
 export function applyLoginEvent(existing, event) {
-    return event.kind === 'auth-failed' ? authFailed(existing, event.claudeSession, event.at) : answered(existing, event.claudeSession, event.at);
+    return event.kind === 'auth-failed' ? authFailed(existing, event.hostSession, event.at) : answered(existing, event.hostSession, event.at);
 }
 /**
  * The marker with the owner's page claimed at `at`: only while the login is still expired and no tab has claimed the

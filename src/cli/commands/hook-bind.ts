@@ -54,11 +54,11 @@ async function treeTeamsOf(runtime: CliRuntime, team: string): Promise<TeamRoste
  * already names it. It never throws, so the hook always answers: a failure is an outcome, and the
  * next prompt tries again.
  */
-export async function bindTab(runtime: CliRuntime, kit: Kit, own: TeamRoster, claudeSession: string, title: TitleRead): Promise<TabBinding> {
+export async function bindTab(runtime: CliRuntime, kit: Kit, own: TeamRoster, hostSession: string, title: TitleRead): Promise<TabBinding> {
   try {
     const outcome = await bindByTitle(
       { marks: inboxDepsOf(runtime, kit.paths).marks, treeTeams: () => treeTeamsOf(runtime, own.team) },
-      { own, claudeSession, envSession: (runtime.env[ENV.session]?.trim() ?? '') !== '', title: title.kind === 'read' ? title.title : undefined, now: new Date(runtime.clock.now()) },
+      { own, hostSession, envSession: (runtime.env[ENV.session]?.trim() ?? '') !== '', title: title.kind === 'read' ? title.title : undefined, now: new Date(runtime.clock.now()) },
     );
     // A title that could not be read matters only to a tab nothing else binds.
     return { own, outcome: title.kind === 'failed' && outcome.kind === 'untitled' ? { kind: 'failed', error: title.error } : outcome };
@@ -71,7 +71,7 @@ export async function bindTab(runtime: CliRuntime, kit: Kit, own: TeamRoster, cl
  * After a /clear its title could not bind: binds the tab to the session that refreshed in this hook's Claude
  * Code process (hooks/bind.ts), and gives the SessionStart note for it. It never throws: a failure is the note.
  */
-export async function bindAfterClear(runtime: CliRuntime, kit: Kit, roster: Roster, claudeSession: string): Promise<string | undefined> {
+export async function bindAfterClear(runtime: CliRuntime, kit: Kit, roster: Roster, hostSession: string): Promise<string | undefined> {
   try {
     const pid = await hostSessionAbove(runtime);
     if (pid === undefined) {
@@ -86,7 +86,7 @@ export async function bindAfterClear(runtime: CliRuntime, kit: Kit, roster: Rost
       }
       return refreshedIn(states, pid, now);
     };
-    const bound = await bindByProcess({ marks: inboxDepsOf(runtime, kit.paths).marks, refreshedHere }, claudeSession, now);
+    const bound = await bindByProcess({ marks: inboxDepsOf(runtime, kit.paths).marks, refreshedHere }, hostSession, now);
     return bound === undefined ? undefined : processBoundNote(bound.id);
   } catch (error) {
     return `${KIT_NAME} could not bind this tab by its Claude Code process (${errorMessage(error)}).`;
@@ -97,9 +97,9 @@ export async function bindAfterClear(runtime: CliRuntime, kit: Kit, roster: Rost
  * Binds the tab `$TEAMRIG_SESSION` names to session `id` (hooks/bind.ts). It never throws, so the start always
  * loads: a failure is the SessionStart note, and the tab's first `inbox read` writes the mark.
  */
-export async function bindNamedTab(runtime: CliRuntime, kit: Kit, id: string, claudeSession: string): Promise<string | undefined> {
+export async function bindNamedTab(runtime: CliRuntime, kit: Kit, id: string, hostSession: string): Promise<string | undefined> {
   try {
-    await bindByEnv(inboxDepsOf(runtime, kit.paths).marks, id, claudeSession, new Date(runtime.clock.now()));
+    await bindByEnv(inboxDepsOf(runtime, kit.paths).marks, id, hostSession, new Date(runtime.clock.now()));
     return undefined;
   } catch (error) {
     return `${KIT_NAME} could not bind this tab to the \`${id}\` session (${errorMessage(error)}); its first \`inbox read\` does.`;
@@ -107,17 +107,17 @@ export async function bindNamedTab(runtime: CliRuntime, kit: Kit, id: string, cl
 }
 
 /** The prompt hook's line for a tab it could not bind, once per Claude Code session and reason; undefined otherwise. */
-export async function bindHintOnce(runtime: CliRuntime, kit: Kit, binding: TabBinding, claudeSession: string): Promise<string | undefined> {
+export async function bindHintOnce(runtime: CliRuntime, kit: Kit, binding: TabBinding, hostSession: string): Promise<string | undefined> {
   const hint = bindHint(binding.outcome, binding.own, KIT_NAME);
   const reason = hintReason(binding.outcome);
   if (hint === undefined || reason === undefined) {
     return undefined;
   }
   const log = new JsonlHintLog(hookLogOf(runtime, kit.paths, 'bind-hints'));
-  return (await firstHint(log, claudeSession, reason, new Date(runtime.clock.now()))) ? hint : undefined;
+  return (await firstHint(log, hostSession, reason, new Date(runtime.clock.now()))) ? hint : undefined;
 }
 
 /** The session's new inbox lines for this prompt (inbox/inject.ts) on the team's clock, recorded as shown; undefined when none wait. */
-export function inboxLinesFor(runtime: CliRuntime, kit: Kit, session: string, claudeSession: string, zone: TimeZone): Promise<string | undefined> {
-  return injectFor(inboxDepsOf(runtime, kit.paths), { area: session, claudeSession, now: new Date(runtime.clock.now()), zone, command: KIT_NAME });
+export function inboxLinesFor(runtime: CliRuntime, kit: Kit, session: string, hostSession: string, zone: TimeZone): Promise<string | undefined> {
+  return injectFor(inboxDepsOf(runtime, kit.paths), { area: session, hostSession, now: new Date(runtime.clock.now()), zone, command: KIT_NAME });
 }

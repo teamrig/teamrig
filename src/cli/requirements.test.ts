@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { isRecord } from '../core/guards.ts';
 import type { RequirementProblem, RequirementsCheck } from '../requirements/requirements.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
-import { APP, CLAUDE_SESSION, CliHarness, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
+import { APP, CLAUDE_SESSION, CliHarness, findingLines, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { EXIT } from './runtime.ts';
 
 const GIT_MISSING = 'git is not installed or not on PATH, and teamrig needs it: install it from git-scm.com, then restart Claude Code.';
@@ -94,6 +94,6 @@ describe('team create and doctor tell the user what teamrig lacks', () => {
     const kit = new CliHarness(TEAM);
     await kit.holdSecretDeny();
     const result = await kit.run(['doctor'], { requirements: lacking({ kind: 'git-missing' }) });
-    assert.deepEqual(result.stdout, ['DOCTOR 1 finding(s), team app', `WARN requirement ${GIT_MISSING}`]);
+    assert.deepEqual(findingLines(result.stdout), ['DOCTOR 1 finding(s), team app', `WARN requirement ${GIT_MISSING}`]);
   });
 });

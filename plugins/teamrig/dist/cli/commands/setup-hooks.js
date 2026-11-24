@@ -1,5 +1,5 @@
 import { join, posix, win32 } from 'node:path';
-import { formatConfig, writeConfigWithBackup } from "../../config/load.js";
+import { formatConfig, writeConfigWithBackup, writeTextWithBackup } from "../../config/load.js";
 import { errorMessage } from "../../core/guards.js";
 import { resolveKitHome } from "../../core/home.js";
 import { noPositionals, requiredFlag } from "../args.js";
@@ -11,13 +11,17 @@ import { EXIT, RefusedError } from "../runtime.js";
  * plugin's hooks (its adapter names the file), beside the person's own handlers, which stay. teamrig's earlier
  * handlers are replaced, so the same command after an update rewrites them. Without --yes it only counts what would be
  * inserted, unchanged, changed and removed; with it, the old file is kept in the kit's backups folder first. It never
- * writes the host's trust in a handler: the person gives that in the host, after every write.
+ * writes the host's trust in a handler: the person gives that in the host, after every write. A setting the hooks need
+ * in the host's own config file (the adapter's `configLines`, such as a host's interactive shells off) is set the
+ * same way, every other line kept, the old file backed up; any file it cannot edit refuses the run before a write.
  */
 /** The plugin's entry script, below its root: `<root>/dist/cli/main.js`. */
 const ENTRY_FOLDERS = ['dist', 'cli'];
 const ENTRY_SCRIPT = 'main.js';
 /** The plugin's own hooks file, below its root. */
 const PLUGIN_HOOKS = ['hooks', 'hooks.json'];
+/** A host config file's backup keeps its original's text whatever its format, so it takes no format's extension. */
+const CONFIG_BACKUP_EXTENSION = '.bak';
 /** `setup hooks --host <name> [--yes]`. */
 export async function hooks(args, runtime) {
     noPositionals(args);
@@ -31,6 +35,8 @@ export async function hooks(args, runtime) {
     if (!answer.ok) {
         throw new RefusedError(`${answer.problem}; nothing written`);
     }
+    // Every file is checked before any is written, so a refusal leaves the hooks and the config as they were.
+    const configs = await configPlans(runtime, port.configLines);
     const { file, counts, skipped } = answer.value;
     const counted = `inserted ${counts.inserted}, unchanged ${counts.unchanged}, changed ${counts.changed}, removed ${counts.removed}`;
     const write = args.switches.has('yes');
@@ -43,6 +49,9 @@ export async function hooks(args, runtime) {
     else {
         const backup = await written(runtime, target, current.exists, port.host, file);
         runtime.out.stdout(`WROTE ${target}: ${counted}${backup === undefined ? '' : `; the old file is at ${backup}`}`);
+    }
+    for (const config of configs) {
+        runtime.out.stdout(await configWritten(runtime, config, port.host, write));
     }
     skipped.forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
     if (file !== undefined) {
@@ -74,6 +83,35 @@ async function pluginHooks(runtime, file) {
     catch (error) {
         throw new RefusedError(`the plugin's hooks file ${file} is not valid JSON (${errorMessage(error)}); nothing written`);
     }
+}
+async function configPlans(runtime, lines) {
+    const plans = [];
+    for (const config of lines) {
+        const file = config.file(runtime.userHome);
+        const current = await runtime.files.read(file);
+        const answer = config.merge(current ?? '');
+        if (!answer.ok) {
+            throw new RefusedError(`${file}: ${answer.problem}; nothing written`);
+        }
+        plans.push({ file, setting: config.setting, existed: current !== undefined, text: answer.text });
+    }
+    return plans;
+}
+/** Writes one config file's setting with --yes (keeping the old file first), and says what it found or did. */
+async function configWritten(runtime, plan, host, write) {
+    if (plan.text === undefined) {
+        return `UNCHANGED ${plan.file}: it already sets ${plan.setting}`;
+    }
+    if (!write) {
+        return `PREVIEW nothing written (add --yes to write) ${plan.file}: sets ${plan.setting}`;
+    }
+    if (!plan.existed) {
+        await runtime.files.write(plan.file, plan.text);
+        return `WROTE ${plan.file}: sets ${plan.setting}`;
+    }
+    const backupsDir = join(resolveKitHome(runtime.env, runtime.userHome), 'backups');
+    const backup = await writeTextWithBackup(runtime.files, { configPath: plan.file, backupsDir, backupName: `${host}-config` }, plan.text, runtime.clock, CONFIG_BACKUP_EXTENSION);
+    return `WROTE ${plan.file}: sets ${plan.setting}; the old file is at ${backup}`;
 }
 /** Writes the merged file, keeping the old one first when there was one; returns where it was kept. */
 async function written(runtime, target, existed, host, file) {

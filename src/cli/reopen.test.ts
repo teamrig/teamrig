@@ -28,7 +28,7 @@ const LEAD_TAB = '0123abcd-0000-4000-8000-0000000000d4';
 const LOG = join(TEAM_HOME, 'state', 'session-log.jsonl');
 const TRANSCRIPT = projectTranscriptPath(join(USER_HOME, '.claude', 'projects'), APP, CLAUDE_SESSION);
 /** Alpha, closed by the lead after 75 quiet minutes in Claude Code session CLAUDE_SESSION. */
-const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', claudeSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
+const CLOSED: CloseRecord = { kind: 'close', session: 'alpha', by: 'lead', at: '2030-01-08T08:00:00.000Z', hostSession: CLAUDE_SESSION, idleMinutes: 75, freedMb: 1300 };
 
 /** A transcript line the way Claude Code writes an assistant reply, with `tokens` of context. */
 function reply(tokens: number): string {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { HOST_SESSION_FIELD, hostSessionOf, hostSessionValue } from './host-session.ts';
+import { HOST_SESSION_FIELD, hostSessionOf, hostSessionValue, legacyHostSessionRecord } from './host-session.ts';
 
 const TAB = '0a1b2c3d-1111-2222-3333-444455556666';
 const OTHER_TAB = '9f8e7d6c-1111-2222-3333-444455556666';
@@ -36,5 +36,19 @@ describe('hostSessionValue', () => {
     assert.equal(hostSessionValue({ claudeSession: null }, 'claudeSession'), null);
     assert.equal(hostSessionValue({ hostSession: 7 }, 'claudeSession'), 7);
     assert.equal(hostSessionValue({}, 'claudeSession'), undefined);
+  });
+});
+
+describe('legacyHostSessionRecord', () => {
+  it('writes the session under the old field in the same place, so the stored line keeps its bytes', () => {
+    const record = { v: 1, area: 'alpha', hostSession: TAB, lastLineHash: null };
+    const stored = legacyHostSessionRecord(record, 'claudeSession');
+    assert.equal(JSON.stringify(stored), `{"v":1,"area":"alpha","claudeSession":"${TAB}","lastLineHash":null}`);
+    assert.deepEqual(record, { v: 1, area: 'alpha', hostSession: TAB, lastLineHash: null }, 'the input stays as it was');
+  });
+
+  it('keeps a null session, and leaves a record without one as it is', () => {
+    assert.deepEqual(legacyHostSessionRecord({ hostSession: null, at: 'x' }, 'claudeSession'), { claudeSession: null, at: 'x' });
+    assert.deepEqual(legacyHostSessionRecord({ at: 'x', other: OTHER_TAB }, 'claudeSession'), { at: 'x', other: OTHER_TAB });
   });
 });

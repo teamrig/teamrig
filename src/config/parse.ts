@@ -229,6 +229,8 @@ export interface ConfigParse {
   /** Always filled: invalid fields take their defaults so read-only commands keep working. */
   readonly config: KitConfig;
   readonly issues: readonly ConfigIssue[];
+  /** Values left out that a newer teamrig may read; they keep writes running (#1478). */
+  readonly warnings: readonly ConfigIssue[];
 }
 
 const isSessionName: Check<string> = (name) =>
@@ -684,7 +686,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     launch,
     paths: parsePaths(read, read.section(raw, 'paths', '')),
   };
-  return { config, issues: read.issues };
+  return { config, issues: read.issues, warnings: read.warnings };
 }
 
 /**
@@ -1033,7 +1035,14 @@ function parseConnectors(read: ConfigReader, raw: JsonRecord): Record<string, Js
   return connectors;
 }
 
-/** A role's commands: a non-empty list of names from the table, each once; undefined when any is wrong. */
+/** The shape of a command name in the table (`issue close`): a name of this shape the table lacks may be a newer one. */
+const COMMAND_NAME_SHAPE = /^[a-z][a-z-]*(?: [a-z][a-z-]*){1,3}$/;
+
+/**
+ * A role's commands: a non-empty list of names from the table, each once; undefined when any is wrong or none is
+ * known. A name of the table's shape that the table lacks is a warning, not an issue (#1478): a newer teamrig may
+ * have written it, and leaving it out of a list that only grants fails closed while writes keep running.
+ */
 function readServiceCommands(read: ConfigReader, entry: JsonRecord, path: string): ServiceCommand[] | undefined {
   const at = `${path}.commands`;
   const value = entry['commands'];
@@ -1042,9 +1051,12 @@ function readServiceCommands(read: ConfigReader, entry: JsonRecord, path: string
     return undefined;
   }
   const commands: ServiceCommand[] = [];
+  const issues = read.issues.length;
   value.forEach((item: unknown, index) => {
     const itemAt = `${at}[${index}]`;
-    if (typeof item !== 'string' || !isServiceCommand(item)) {
+    if (typeof item === 'string' && !isServiceCommand(item) && COMMAND_NAME_SHAPE.test(item)) {
+      read.warn(itemAt, `${describe(item)} is no command this teamrig knows: a newer teamrig wrote it or it is misspelt, so this tab does not grant it; reload, or fix the name`);
+    } else if (typeof item !== 'string' || !isServiceCommand(item)) {
       read.report(itemAt, `${describe(item)} is no command a service role may hold; one of: ${SERVICE_COMMANDS.join(', ')}`);
     } else if (commands.includes(item)) {
       read.report(itemAt, `${describe(item)} is listed twice`);
@@ -1052,7 +1064,7 @@ function readServiceCommands(read: ConfigReader, entry: JsonRecord, path: string
       commands.push(item);
     }
   });
-  return commands.length === value.length ? commands : undefined;
+  return read.issues.length === issues && commands.length > 0 ? commands : undefined;
 }
 
 /**
@@ -1229,6 +1241,7 @@ function parseBranches(read: ConfigReader, raw: JsonRecord): BranchesConfig {
     itemTypes,
     classes: parseBranchMap(read, read.section(raw, 'classes', path), `${path}.classes`, isWorkClassName, isBranchTypeText),
     slugMax: read.integer(raw, 'slugMax', path, DEFAULT_BRANCHES.slugMax, CONFIG_LIMITS.branchSlugMax),
+    enforce: read.boolean(raw, 'enforce', path, DEFAULT_BRANCHES.enforce),
   };
 }
 

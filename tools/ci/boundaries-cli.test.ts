@@ -129,7 +129,7 @@ describe('boundaries-cli', () => {
   it('exits 2 on an unknown option, a --root with no folder or a broken baseline', () => {
     const unknown = check(['--fix']);
     assert.equal(unknown.status, 2);
-    assert.equal(unknown.stderr, 'boundaries: unknown option --fix (usage: boundaries-cli.ts [--list] [--write] [--root <repo>])\n');
+    assert.equal(unknown.stderr, 'boundaries: unknown option --fix (usage: boundaries-cli.ts [--list] [--write] [--base <commit>] [--root <repo>])\n');
     const bare = repo.runOutside(CLI, ['--root']);
     assert.equal(bare.status, 2);
     assert.equal(bare.stderr, 'boundaries: --root needs a folder\n');
@@ -137,5 +137,66 @@ describe('boundaries-cli', () => {
     const broken = check();
     assert.equal(broken.status, 2);
     assert.equal(broken.stderr, 'boundaries: the baseline count of tool-names is not a whole number\n');
+  });
+
+  describe('--base', () => {
+    /** Commits the crossed repo at its own counts, as the base branch holds it. */
+    const based = (): void => {
+      crossed();
+      baseline(CROSSED);
+      repo.init();
+      repo.git('add', '-A');
+      repo.git('commit', '-q', '-m', 'base');
+    };
+    /** The crossed counts with tool-names at `count`. */
+    const withToolNames = (count: number): readonly (readonly [string, number])[] => CROSSED.map(([key, was]) => [key, key === 'tool-names' ? count : was]);
+
+    it("fails a rise the change records in its own baseline, which the base commit's copy does not hold", () => {
+      based();
+      repo.write('src/cli/d.ts', 'export const jiraBoard = 1;\n');
+      baseline(withToolNames(3));
+      assert.equal(check().status, 0, 'without --base the raised baseline passes');
+      const held = check(['--base', 'HEAD']);
+      assert.equal(held.status, 1, held.stderr);
+      assert.equal(
+        held.stdout,
+        `${counted(1, 2, 1, 1, 3)}boundaries: each count held to the lower of ${BASELINE} and its copy at HEAD\nboundaries: tool-names rose to 3 from 2: run --list to see each finding\n${HELD}`,
+      );
+    });
+
+    it("holds a count to the change's own baseline where it is the lower", () => {
+      based();
+      repo.write('src/cli/b.ts', "import host from '../adapters/hosts/first/index.ts';\nexport const jiraKey = host;\n");
+      baseline(withToolNames(1));
+      assert.equal(check(['--base', 'HEAD']).status, 0);
+      repo.write('src/cli/d.ts', 'export const jiraBoard = 1;\n');
+      const rose = check(['--base', 'HEAD']);
+      assert.equal(rose.status, 1, rose.stderr);
+      assert.match(rose.stdout, /boundaries: tool-names rose to 2 from 1: run --list/);
+    });
+
+    it('holds the counts to the change alone when the base commit has no baseline file', () => {
+      repo.init();
+      repo.write('README.md', 'base\n');
+      repo.git('add', '-A');
+      repo.git('commit', '-q', '-m', 'base');
+      crossed();
+      baseline(CROSSED);
+      const result = check(['--base', 'HEAD']);
+      assert.equal(result.status, 0, result.stdout);
+    });
+
+    it('exits 2 on a --base with no commit, one naming no commit, or one beside --write', () => {
+      based();
+      const bare = check(['--base']);
+      assert.equal(bare.status, 2);
+      assert.equal(bare.stderr, 'boundaries: --base needs a commit\n');
+      const missing = check(['--base', 'no-such-branch']);
+      assert.equal(missing.status, 2);
+      assert.equal(missing.stderr, 'boundaries: --base no-such-branch names no commit in this repo\n');
+      const writing = check(['--base', 'HEAD', '--write']);
+      assert.equal(writing.status, 2);
+      assert.match(writing.stderr, /^boundaries: --base holds a check, --write records counts: give one/);
+    });
   });
 });

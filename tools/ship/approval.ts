@@ -73,14 +73,14 @@ export function mergeClearance(standing: MergeStanding, taskId: string, head: st
 export interface MergeCaller {
   readonly session: string | undefined;
   readonly team: string | undefined;
-  readonly claudeSession: string | undefined;
+  readonly hostSession: string | undefined;
 }
 
 /** Reads a merge's standing from the register (`mergeStandingOf`); rejects with `RefusedError` when it cannot. */
 export type StandingOf = (team: string, caller: string, taskId: string) => Promise<MergeStanding>;
 
 /** The session the merging tab is bound to, which must be the one the caller names (`tabCallerOf`); rejects with `RefusedError` otherwise. */
-export type TabCallerOf = (team: string, claudeSession: string, caller: string) => Promise<string>;
+export type TabCallerOf = (team: string, hostSession: string, caller: string) => Promise<string>;
 
 /** What a merge's clearance reads: the tab's session, then that session's standing. */
 export interface MergeReads {
@@ -111,12 +111,12 @@ export async function clearTaskMerge(caller: MergeCaller, reads: MergeReads, tas
   if (caller.session === undefined || caller.session === '' || caller.team === undefined || caller.team === '') {
     return refused('TEAMRIG_SESSION and TEAMRIG_TEAM must name the merging session and its team');
   }
-  if (caller.claudeSession === undefined || caller.claudeSession === '') {
+  if (caller.hostSession === undefined || caller.hostSession === '') {
     return refused(`${TAB_VARIABLE} must name the merging Claude Code tab: a merge runs from the merging session's own tab`);
   }
   let standing: MergeStanding;
   try {
-    const session = await reads.tabCallerOf(caller.team, caller.claudeSession, caller.session);
+    const session = await reads.tabCallerOf(caller.team, caller.hostSession, caller.session);
     standing = await reads.standingOf(caller.team, session, taskId);
   } catch (error) {
     if (error instanceof RefusedError) {
@@ -152,9 +152,9 @@ export function clearTaskMergeFrom(env: Env, reader: KitReader): ClearTaskMerge 
 
 function mergeContextOf(env: Env, reader: KitReader): { readonly caller: MergeCaller; readonly reads: MergeReads } {
   return {
-    caller: { session: env[ENV.session]?.trim(), team: env[ENV.team]?.trim(), claudeSession: env[TAB_VARIABLE]?.trim() },
+    caller: { session: env[ENV.session]?.trim(), team: env[ENV.team]?.trim(), hostSession: env[TAB_VARIABLE]?.trim() },
     reads: {
-      tabCallerOf: (team, claudeSession, session) => tabCallerOf(reader, team, claudeSession, session),
+      tabCallerOf: (team, hostSession, session) => tabCallerOf(reader, team, hostSession, session),
       standingOf: (team, session, taskId) => mergeStandingOf(reader, team, session, taskId),
     },
   };
@@ -185,11 +185,14 @@ export interface ShipWrites {
  * the release manifest too, with teamrig's release stamps. The ship and `ship.ts merge` both read work through it,
  * so a path repos.json adds is known to each (a merge given the shorter list refused every approved head, T4298).
  * Another repo's plugin manifest is known by its shape (`shipVersionFileOf`): teamrig-pane's release merges through
- * the same tool (T4821), which threw on its plugin.json before.
+ * the same tool (T4821), which threw on its plugin.json before. A release stamp is kept only when the profile names
+ * the version file it ships in: a repo without teamrig's src/core/version.ts (teamrig-pane) has none, where every
+ * Markdown diff read that file and threw (T5320).
  */
 export function teamrigShipWritesOf(regenerated: readonly string[]): ShipWrites {
   const known = regenerated.flatMap((path) => shipVersionFileOf(path) ?? []);
-  return shipWritesOf(regenerated, known, TEAMRIG_RELEASE_STAMPS);
+  const stamps = TEAMRIG_RELEASE_STAMPS.filter((stamp) => known.some((file) => file.path === stamp.shipsIn.path));
+  return shipWritesOf(regenerated, known, stamps);
 }
 
 /**

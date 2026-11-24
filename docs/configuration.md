@@ -46,7 +46,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `steps` | [object](#steps) |  | The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run. |
 | `github` | [object](#github) |  | The team's GitHub repositories. teamrig issue sync reads their issues into the register as tasks of source github, and never writes to GitHub; local tasks stay local. teamrig issue migrate, teamrig issue reply, teamrig issue assign, teamrig issue label, teamrig issue edit and teamrig issue close, run by hand, write only to these repositories. Each owner's repositories are reached with the token saved as teamrig-gh-\<owner> in the system's credential store, never the gh login; no saved token, or one that cannot be read, stops the read or write for that owner (docs/github-sync.md). |
 | `sync` | [object](#sync) |  | What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand. |
-| `serviceRoles` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9-]{0,31}$`) to [object](#serviceroles) | `{}` | Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused. |
+| `serviceRoles` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9-]{0,31}$`) to [object](#serviceroles) | `{}` | Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; a holder not on the team, a misspelt key or a command that is not a name fails the load. A command name this teamrig's table lacks, which a newer teamrig may have written, is a config warning instead: it is not granted in that tab (a role left with no known command is left out), and writes keep running until the tab reloads. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused. |
 | `connectors` | map (at most 16 keys) from string (matching `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`) to object | `{}` | Each connector's own settings, by the connector's id: a connector is the adapter that reaches an outside tool holding issues or code. The keys under an id are that connector's, so it reads and checks them itself, and a key it does not take is refused by the command that reaches the connector, naming the keys it takes. Only the owner changes it, since it says what outside tool a connector reaches and how. |
 | `alerts` | [object](#alerts) |  | The alerting rule the core rules state, and where a page to the owner goes. |
 | `decisions` | [object](#decisions) |  | When the lead asks the owner the decisions waiting on them (tasks waiting on the owner's decision or approval), together in one batch instead of one at a time. A batch holds the waits not yet asked and the asked ones now past their due date; `teamrig decisions` prints it and `teamrig decisions asked` records it asked, as a meeting's start does. The lead's check says when one is due. |
@@ -353,7 +353,7 @@ The delivery flow: teamrig queue runs one queued step on the host at a time, und
 | `passEnv` | array (at most 32 items) of string (matching `^[A-Za-z_][A-Za-z0-9_]{0,63}$`) | `[]` | Credential variables the programs teamrig starts still get. teamrig leaves a fixed list (GH\_TOKEN, GITHUB\_TOKEN, NPM\_TOKEN, NODE\_AUTH\_TOKEN, cloud and AI provider keys) out of the environment of queued and tested commands, merge, deploy and worktree hooks, refresh.endCommand and the team's sessions; a name here passes that one on, as a private registry's npm ci needs NPM\_TOKEN. Only the owner sets it. |
 | `freezes` | [object](#deliveryfreezes) |  | Deploy freezes (teamrig freeze), which hold deploys of their targets while a session measures them. |
 | `stablePeriods` | [object](#deliverystableperiods) |  | teamrig stable-periods: when a measurement of a deploy target is clean, between the deploys and queued steps that disturb it. |
-| `branches` | [object](#deliverybranches) |  | How teamrig worktree add --task names a new branch, and so its worktree folder: a pattern of {type}, {id}, {issue}, {slug} and {session}, with {id} (t12) starting the pattern or following a /, so the branch tells whose it is. Branches made before, or named by hand, keep their names. |
+| `branches` | [object](#deliverybranches) |  | How teamrig worktree add --task names a new branch, and so its worktree folder: a pattern of {type}, {id}, {issue}, {slug} and {session}, with {id} (t12) starting the pattern or following a /, so the branch tells whose it is. A new branch named by hand must match a pattern too while enforce is on; branches already there keep their names. |
 | `wait` | [object](#deliverywait) |  | How a delivery step waits. |
 | `schedule` | [object](#deliveryschedule) |  | When queued steps and deploys may start on the host. |
 
@@ -452,7 +452,7 @@ teamrig stable-periods: when a measurement of a deploy target is clean, between 
 
 ## `delivery.branches`
 
-How teamrig worktree add --task names a new branch, and so its worktree folder: a pattern of {type}, {id}, {issue}, {slug} and {session}, with {id} (t12) starting the pattern or following a /, so the branch tells whose it is. Branches made before, or named by hand, keep their names.
+How teamrig worktree add --task names a new branch, and so its worktree folder: a pattern of {type}, {id}, {issue}, {slug} and {session}, with {id} (t12) starting the pattern or following a /, so the branch tells whose it is. A new branch named by hand must match a pattern too while enforce is on; branches already there keep their names.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
@@ -461,6 +461,7 @@ How teamrig worktree add --task names a new branch, and so its worktree folder: 
 | `itemTypes` | [object](#deliverybranchesitemtypes) |  | Per item type, the branch type its branch takes; an item type left out keeps its default (task: feat, bug: fix). |
 | `classes` | map from string to string |  | Per work class (focus.classes), the branch type its tasks' branches take, in place of their item type's, such as chore for Improvements. |
 | `slugMax` | integer (8 to 100) | `40` | The slug, made from the task's title (lowercase words joined by -, task ids left out), is cut at a word to at most this many characters. |
+| `enforce` | boolean | `true` | teamrig worktree add refuses a new branch whose name matches neither pattern nor a typePatterns entry, naming them, so a project never mixes branch styles; false lets any branch name through. |
 
 ## `delivery.branches.itemTypes`
 
@@ -694,7 +695,7 @@ Which issues of each place are read. With no setup: those assigned to one of the
 
 ## `serviceRoles.*`
 
-Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; an unknown name, a holder not on the team or a misspelt key fails the load. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused.
+Service roles, by name: each lets the sessions that hold it run a few teamrig commands for an outside service past every permission check, Claude Code's auto mode included, from their own tab only. Commands are names from teamrig's fixed table, never free text; a holder not on the team, a misspelt key or a command that is not a name fails the load. A command name this teamrig's table lacks, which a newer teamrig may have written, is a config warning instead: it is not granted in that tab (a role left with no known command is left out), and writes keep running until the tab reloads. Written by teamrig roles grant and teamrig roles revoke, which the owner runs; a session's own edit of it is refused.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |

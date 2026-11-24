@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.507.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.506.0...teamrig-v0.507.0) (2026-11-24)
+
+
+### Features
+
+* **adapters:** the GitHub, Claude Code and Jira declarations name their product's own words (T4860) ([a43c923](https://github.com/teamrig/teamrig/commit/a43c9230b06a22f15ceff8b7bca068fe97cc163c))
+* **ci:** the count checks hold each count to the base commit's baseline too, with --base (T5014) ([17dddfd](https://github.com/teamrig/teamrig/commit/17dddfda6083c875848bff26ed25c3b3edf74e41)), closes [#2236](https://github.com/teamrig/teamrig/issues/2236)
+* **cli:** doctor prints the shared install steps after its findings, each probed live with its fix (T5075) ([c005f29](https://github.com/teamrig/teamrig/commit/c005f29627cc9be29bf09001b61ce9db88ba362b))
+* **cli:** hook hand-trace logs a mod hand's trace in state/hand-trace.jsonl ([#920](https://github.com/teamrig/teamrig/issues/920)) ([efe58ab](https://github.com/teamrig/teamrig/commit/efe58ab94ff885a6f9bd30f7d9a204d779fe0145))
+* **cli:** teamrig skills step prints a step's text from the team's host and connectors (T4860) ([903531c](https://github.com/teamrig/teamrig/commit/903531cac8e47fb44a6804bf2ba8d161e12499cf))
+* **codex:** a line editor sets one boolean key in Codex's config.toml, keeping every other line (T5270 C2) ([0d19b98](https://github.com/teamrig/teamrig/commit/0d19b98882a99d713ae71adea91c6f33d059edb2))
+* **codex:** setup hooks turns interactive shells off in the person's config.toml (T5270 C2) ([67fa3bb](https://github.com/teamrig/teamrig/commit/67fa3bbde318990108fe3d7aacea0e34908d4a91))
+* **core:** a wait on an unref'd timer, as a runtime port, for a limit that must not hold the CLI open (T5075) ([c7c32b0](https://github.com/teamrig/teamrig/commit/c7c32b0ed6ab10cdde70a1d14be08b695e2f6405))
+* **core:** a writer for the stored host session field under a store's old name (T4762) ([c473082](https://github.com/teamrig/teamrig/commit/c4730824cd4868f14592135a67a46364d6612e29))
+* **core:** findProgram can look for the extensions a shell runs on Windows, a .cmd shim among them (T5075) ([8866ac2](https://github.com/teamrig/teamrig/commit/8866ac264c2632a3522a445c8012dd0878c43249))
+* **github:** a conflict's news line says the way out (T2693) ([620b57a](https://github.com/teamrig/teamrig/commit/620b57acecf74b29a76f511b7a313abb0bcbf7aa))
+* **github:** a new outside pull request gets a task for the watcher, due by its answer target ([#1350](https://github.com/teamrig/teamrig/issues/1350)) ([391d4aa](https://github.com/teamrig/teamrig/commit/391d4aa14e43b54e75d385ac5651272e99968056))
+* **install:** an ordered install check, each step a live probe with its fix, and the steps every host shares (T5075) ([667a486](https://github.com/teamrig/teamrig/commit/667a486fb4097629a12eb86abd75d0a91a6f8825))
+* **install:** each install step names the release that first needed it, so an update can name the steps new to it (T5075) ([d2b49dc](https://github.com/teamrig/teamrig/commit/d2b49dc01760f0b8ba5c8521b7f5483de3cb7fc5))
+* **mod:** a watch that traces a hand's tick that throws or stays unsettled ([#920](https://github.com/teamrig/teamrig/issues/920)) ([6659355](https://github.com/teamrig/teamrig/commit/6659355aa51e8bd16678d225aad5a10cd259d6e4))
+* **plugin-api:** a closed registry of the steps an adapter may serve as text, each with a neutral fallback (T4860) ([0320628](https://github.com/teamrig/teamrig/commit/03206285993b00e91ca3ed92c2f6d51ce6387b02))
+* **plugin-api:** a declaration may list the registry steps it serves and its product's own words (T4860) ([1372e26](https://github.com/teamrig/teamrig/commit/1372e2642dfe0e2782aa8ed0ffbf337813d06e7e))
+* **plugin-api:** hosts and connectors ship their own step texts, read by the loader (T4860) ([22d947f](https://github.com/teamrig/teamrig/commit/22d947fbef3d89553db1df2be5298414810e25dc))
+* **plugin-api:** plugin API 0.2.0 brings a declaration's optional steps and terms (T4860) ([0ee86e9](https://github.com/teamrig/teamrig/commit/0ee86e9b42cdfdbf36014d4f525222d1ea2ae1e2))
+* **ui:** teamrig ui runs teamrig-pane 0.83.1's released UI, pinned by its sha256 (T5279) ([b3e6dbf](https://github.com/teamrig/teamrig/commit/b3e6dbf417e8d0030dcef2723093ba709d1951f6))
+* **worktree:** refuse a new branch off the team's branch pattern, delivery.branches.enforce turns it off ([#1433](https://github.com/teamrig/teamrig/issues/1433)) ([dad5fe1](https://github.com/teamrig/teamrig/commit/dad5fe18201f70863629ce345fad870957a13493))
+
+
+### Bug Fixes
+
+* **ci:** a change to tools/lib, tools/scrub, tools/dco or tools/build runs every check ([#1822](https://github.com/teamrig/teamrig/issues/1822)) ([ea4f6ad](https://github.com/teamrig/teamrig/commit/ea4f6ad9f7acf699a5716a3afd54801e7c9e194d))
+* **codex:** a SessionEnd hook asks for no more than the 3 seconds Codex gives it (T5263) ([07246f2](https://github.com/teamrig/teamrig/commit/07246f2d3e975f40005aacf6113eb6f73e10f53a))
+* **codex:** Codex hook lines name the Codex host, never the Claude Code one (T5058) ([f5a6974](https://github.com/teamrig/teamrig/commit/f5a6974e779f989213927abd4494cd7cdc7ea091))
+* **codex:** every Codex session teamrig starts runs with interactive shells off (T5270 C2) ([a30fe2f](https://github.com/teamrig/teamrig/commit/a30fe2f857e46465a92f9d7dca43df5adf72f20b))
+* **config:** a service role command only a newer teamrig knows is a warning, not a lock-out ([#1478](https://github.com/teamrig/teamrig/issues/1478)) ([07ee240](https://github.com/teamrig/teamrig/commit/07ee2409641f3a344eee87ae373bac4af718ac5d))
+* **config:** main's newer tests take the load's warnings and a command the role table still has ([#1478](https://github.com/teamrig/teamrig/issues/1478)) ([3941780](https://github.com/teamrig/teamrig/commit/3941780fa547248786e1ce8b16a97758a547d11b))
+* **config:** the unknown command warning names a typo too ([#1478](https://github.com/teamrig/teamrig/issues/1478)) ([48a868e](https://github.com/teamrig/teamrig/commit/48a868e2a1e0e42bd23fa883f1514906311121c5))
+* **git:** a failed git names the last lines it printed on stdout (T4130) ([438fd6a](https://github.com/teamrig/teamrig/commit/438fd6a23f5d79cf3267244bc08cf3f65a4dc0a4)), closes [#1563](https://github.com/teamrig/teamrig/issues/1563)
+* **hooks:** the clear hooks' lock waits end before the clear hand's 30 s limit ([#920](https://github.com/teamrig/teamrig/issues/920)) ([5ed14f2](https://github.com/teamrig/teamrig/commit/5ed14f2afeababdc0e9b338e3a23450091d67b76))
+* **hooks:** the exec guard and the effects table know hook hand-trace ([#920](https://github.com/teamrig/teamrig/issues/920)) ([80a53b0](https://github.com/teamrig/teamrig/commit/80a53b067dd308585a21bb34e474495dc883e737))
+* **install:** doctor's cli step reads the kit launcher as this install and fixes with a new session (T5075) ([59b2743](https://github.com/teamrig/teamrig/commit/59b274396cb8771fabef2259fe5b4d949d9d2ab0))
+* **install:** the cli step reads the launcher folder from cliLauncherFolder and names doctor's cli-path finding when cliOnPath is off (T5075) ([2e02a07](https://github.com/teamrig/teamrig/commit/2e02a0776de7aab7efba981fc15806c655f97030))
+* **mod:** every hand's tick runs through the watch; a failed band clear no longer stops the hands ([#920](https://github.com/teamrig/teamrig/issues/920)) ([ac35e4d](https://github.com/teamrig/teamrig/commit/ac35e4d93f70bfb666e550bff68f8851af2cd437))
+* **permissions:** skills step stays off the read route until the security reviewer reads it (T4860) ([60780c8](https://github.com/teamrig/teamrig/commit/60780c813e070ce12c932c0d28cfd0bb28c0d1e3))
+* **plugin-api:** adapters read the step-text types through the plugin API's one file (T4860) ([fe93c08](https://github.com/teamrig/teamrig/commit/fe93c08a92c923b5f175d1090e7fe4514dbc2c79))
+* **refresh:** a scheduled job's prompt does not cancel a pending restart ([4b876d9](https://github.com/teamrig/teamrig/commit/4b876d9f22471eff77ca87797bf122db5fdd49df))
+* **refresh:** a scheduled prompt is a live job's prompt, not any prompt after a fire ([14dec6c](https://github.com/teamrig/teamrig/commit/14dec6c17e9bf5a6f2450f2060b112b9255d1f6b))
+* **refresh:** arm the restart of a session that is woken anyway instead of parking it ([e9336ed](https://github.com/teamrig/teamrig/commit/e9336edd172f25d6e282a5e96c266af2a4712bf5))
+* **refresh:** the carry note after a /clear lists the old jobs to check with CronList ([#2198](https://github.com/teamrig/teamrig/issues/2198)) ([895ac5a](https://github.com/teamrig/teamrig/commit/895ac5a23d7bf9b439424c8e1a24ecd7f7ee654e))
+* **release:** a release commit's catalog installs from the marketplace's own checkout, naming no branch (T5224) ([4fe9545](https://github.com/teamrig/teamrig/commit/4fe9545eff7bdcea8327cbab92acf985569727d7)), closes [#2378](https://github.com/teamrig/teamrig/issues/2378)
+* **release:** hold v0.506.0 from the stable promote, as its catalog installs from preview (T5224) ([43eaf42](https://github.com/teamrig/teamrig/commit/43eaf42d65c2ed14db456480937f392f2b2897f2)), closes [#2378](https://github.com/teamrig/teamrig/issues/2378)
+* **roles:** refuse a grant or revoke while the config has a warning ([#1478](https://github.com/teamrig/teamrig/issues/1478)) ([9f7e773](https://github.com/teamrig/teamrig/commit/9f7e7736d3ef03bd9f5288c50f628f6b1245c2f2))
+* **ship:** teamrig-pane's merge takes its Node 22 or Node 24 test jobs, conditional on the summary (T5286) ([6aeb1c6](https://github.com/teamrig/teamrig/commit/6aeb1c66e2ee783a15f3a944b685ce85794ef8e0))
+* **ui:** teamrig ui prints OPENED only once the UI in its window or split starts (T5261) ([8dd9ba0](https://github.com/teamrig/teamrig/commit/8dd9ba05242b25b7c616ac3dee9fcdc89287588a))
+* **worktree:** a new branch name is at most 255 characters, the most its worktree folder name holds ([#1433](https://github.com/teamrig/teamrig/issues/1433)) ([08314a7](https://github.com/teamrig/teamrig/commit/08314a7e943e8b4bb35f21935587ead5c43429b5))
+* **worktree:** the branch pattern check reads each pattern part in one pass over the name ([#1433](https://github.com/teamrig/teamrig/issues/1433)) ([0fe2c41](https://github.com/teamrig/teamrig/commit/0fe2c41e9451e848d15cf5e50755e7383bb386e1))
+* **worktree:** the branch pattern check splits neighbouring placeholders in linear passes, not by regex backtracking ([#1433](https://github.com/teamrig/teamrig/issues/1433)) ([a101a2a](https://github.com/teamrig/teamrig/commit/a101a2a021c800f9304a09b06e40af39a4ce117b))
+
+
+### Performance Improvements
+
+* **cli:** a prompt reads the transcript for a scheduled fire only while a restart waits ([502af90](https://github.com/teamrig/teamrig/commit/502af909c5eb61aef287c02937f3b87006a98b84))
+
 ## [0.506.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.505.0...teamrig-v0.506.0) (2026-11-23)
 
 

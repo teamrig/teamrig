@@ -21,9 +21,9 @@ export async function attribute(input) {
     const outsideEach = [];
     let outsideSessions = 0;
     for (const session of input.sessions) {
-        const marked = input.areaBySession.get(session.claudeSession);
+        const marked = input.areaBySession.get(session.hostSession);
         let id = marked !== undefined && input.roster.ids.includes(marked) ? marked : undefined;
-        if (id === undefined && input.peers.some((peer) => isMarkedBy(peer, session.claudeSession))) {
+        if (id === undefined && input.peers.some((peer) => isMarkedBy(peer, session.hostSession))) {
             continue;
         }
         let title;
@@ -46,8 +46,8 @@ export async function attribute(input) {
     return { byTeamSession, outside, outsideSessions, outsideTitles, outsideEach };
 }
 /** Whether the peer's mark binds the Claude Code session to one of its sessions; a mark of a session it no longer has does not. */
-function isMarkedBy(peer, claudeSession) {
-    const area = peer.areaBySession.get(claudeSession);
+function isMarkedBy(peer, hostSession) {
+    const area = peer.areaBySession.get(hostSession);
     return area !== undefined && peer.ids.includes(area);
 }
 /** Both sets' transcripts, each kind in order. */

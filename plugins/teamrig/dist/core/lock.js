@@ -1,6 +1,14 @@
+import { setTimeout as wait } from 'node:timers/promises';
 import { isRecord } from "./guards.js";
 export const systemClock = { now: () => Date.now() };
 export const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * A wait on an unref'd timer, which never holds the process open: for a time limit raced against work that ends on
+ * its own, such as an install probe (install/steps.ts), where a finished command would otherwise wait out the limit.
+ */
+export const idleSleep = async (ms) => {
+    await wait(ms, undefined, { ref: false });
+};
 export class LockBusyError extends Error {
     constructor(path, waitMs, cutByDeadline = false) {
         super(`${path} is held by another process (waited ${waitMs} ms${cutByDeadline ? ", all the hook's time limit leaves" : ''}); retry`);

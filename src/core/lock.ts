@@ -1,3 +1,4 @@
+import { setTimeout as wait } from 'node:timers/promises';
 import type { Files } from './files.ts';
 import { isRecord } from './guards.ts';
 
@@ -11,6 +12,14 @@ export const systemClock: Clock = { now: () => Date.now() };
 export type Sleep = (ms: number) => Promise<void>;
 
 export const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A wait on an unref'd timer, which never holds the process open: for a time limit raced against work that ends on
+ * its own, such as an install probe (install/steps.ts), where a finished command would otherwise wait out the limit.
+ */
+export const idleSleep: Sleep = async (ms) => {
+  await wait(ms, undefined, { ref: false });
+};
 
 export interface LockTimings {
   /**

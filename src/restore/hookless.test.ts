@@ -33,7 +33,7 @@ const BRAVO = '0123abcd-0000-4000-8000-00000000000b';
 
 function entry(overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   return {
-    claudeSession: ALPHA,
+    hostSession: ALPHA,
     projectDir: '/work/app',
     transcriptPath: '/u/.claude/projects/app/a.jsonl',
     entrypoint: 'cli',
@@ -52,7 +52,7 @@ function entry(overrides: Partial<RestoreEntry> = {}): RestoreEntry {
   };
 }
 
-const TAB: HooklessTab = { claudeSession: ALPHA, session: 'alpha', projectDir: '/work/app', hookAt: NOW - 2 * HOOKLESS_MS, turnAt: NOW - MS_PER_MINUTE };
+const TAB: HooklessTab = { hostSession: ALPHA, session: 'alpha', projectDir: '/work/app', hookAt: NOW - 2 * HOOKLESS_MS, turnAt: NOW - MS_PER_MINUTE };
 const RELOAD = '<command-name>/reload-plugins</command-name>\n<command-message>reload-plugins</command-message>\n<command-args></command-args>';
 
 function iso(at: number): string {
@@ -98,7 +98,7 @@ describe('entrySession and staleEntries', () => {
       [RETIRED, 'retired'],
     ]),
   };
-  const byHand = (claudeSession: string): RestoreEntry => entry({ claudeSession, team: undefined, session: undefined });
+  const byHand = (hostSession: string): RestoreEntry => entry({ hostSession, team: undefined, session: undefined });
 
   it("takes a launched tab's session from its variables, and a tab started by hand's from the inbox it last read (T1002)", () => {
     assert.equal(entrySession(entry(), APP_TEAM), 'alpha', "the variables win over the marks' lead");
@@ -106,7 +106,7 @@ describe('entrySession and staleEntries', () => {
   });
 
   it("leaves out another team's tab, a session the team no longer has, and a tab started by hand that read no inbox", () => {
-    assert.equal(entrySession(entry({ claudeSession: HAND, team: 'other' }), APP_TEAM), undefined, 'variables naming another team');
+    assert.equal(entrySession(entry({ hostSession: HAND, team: 'other' }), APP_TEAM), undefined, 'variables naming another team');
     assert.equal(entrySession(entry({ session: 'retired' }), APP_TEAM), undefined);
     assert.equal(entrySession(entry({ session: undefined }), APP_TEAM), undefined, 'variables naming the team and no session');
     assert.equal(entrySession(byHand(RETIRED), APP_TEAM), undefined);
@@ -196,7 +196,7 @@ describe('hooklessNews and checkedState', () => {
     assert.deepEqual(hooklessNews(told, [TAB]), []);
     const recovered = checkedState(NOW + HOOKLESS_CHECK_MS, []);
     assert.deepEqual(hooklessNews(recovered, [TAB]), [TAB]);
-    const bravo: HooklessTab = { ...TAB, claudeSession: BRAVO, session: 'bravo' };
+    const bravo: HooklessTab = { ...TAB, hostSession: BRAVO, session: 'bravo' };
     assert.deepEqual(hooklessNews(told, [TAB, bravo]), [bravo]);
   });
 });
