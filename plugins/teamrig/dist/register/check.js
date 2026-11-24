@@ -2,7 +2,7 @@ import { MS_PER_DAY, MS_PER_HOUR, parseDayStart, showStored } from "../core/time
 import { isRightNow, topPriority } from "../config/priorities.js";
 import { approvalCleared, waitAnswerersOf } from "./approval.js";
 import { AFFECTS_USAGE, CARD_FLAGS, GATE_FLAG, proofWordOf, RUN_FLAG, whyAskUsage } from "./card.js";
-import { taskNumber } from "./fold.js";
+import { taskNumber, timeInProgress } from "./fold.js";
 import { auditOf, runFileDrift } from "./hand-step.js";
 import { leaderHolds, waitedMinutes } from "./leader-wait.js";
 import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID, hasIssueOrReason, priorityText } from "./model.js";
@@ -120,9 +120,9 @@ const IN_HAND = 1;
  *   any pace, on the first held task past that pace:
  *   it holds more top work than it gets through, so the top priority no longer says what comes first. Not before
  *   the owner has held tasks for PACE_DAYS, so a new session has a pace to read;
- * - STALE: no event for `staleAfterHours` (not raised on top of NOT-PICKED-UP, nor for a verifying task with an
- *   effective due date: it waits quietly for its proof, and the date raises the alarm, nor for a waiting task with a
- *   time still to come: it is parked until then);
+ * - STALE: an in-progress task past `staleAfterHours` of time in progress, summed over its stretches (T5043; not
+ *   raised on top of NOT-PICKED-UP). Time open, waiting or verifying never counts and never raises it: the wait
+ *   checks watch those, so a long wait on an answer is not the worker's overrun;
  * - PREP-LAPSED: a prep marker that no longer stands near (focus.ts prepRead): its goal moved past the slice, opened
  *   none or lost its rank, so the task is treated as any other; its owner re-marks it or drops the marker;
  * - OWNER-UNPLANNED: an owner order outside the current week plan;
@@ -362,10 +362,6 @@ function readyFlags(task, context, ownerSource) {
     }
     return [];
 }
-/** A task with a time reason still to come (waiting, or a verifying task's proof): parked on purpose until then, so not stale. */
-function waitsForTime(task, context) {
-    return task.waits.some((reason) => reason.kind === 'time' && !isReady(reason, context));
-}
 /** URGENT, with the lead's deadline burst on the effective due, typed on the team's clock, when the task has one. */
 function urgentFlags(task, tree) {
     if (!isRightNow(task.priority) || task.status !== 'open' || unfinishedAfter(task.after, tree.context).length > 0) {
@@ -398,8 +394,10 @@ function timeFlags(task, at, check, tree) {
     if (task.ownerSeenAt === null && at - Date.parse(task.assignedAt) > check.notPickedUpAfterHours * MS_PER_HOUR) {
         flags.push({ kind: 'NOT-PICKED-UP', task, detail: `assigned ${minute(task.assignedAt, tree.zone)}, no event from ${task.owner} since` });
     }
-    else if (!(verifying && due !== undefined) && !waitsForTime(task, tree.context) && at - Date.parse(task.updatedAt) > check.staleAfterHours * MS_PER_HOUR) {
-        flags.push({ kind: 'STALE', task, detail: `last event ${minute(task.updatedAt, tree.zone)} by ${task.updatedBy}` });
+    else if (task.status === 'in-progress' && timeInProgress(task, at) > check.staleAfterHours * MS_PER_HOUR) {
+        const hours = Math.floor(timeInProgress(task, at) / MS_PER_HOUR);
+        const detail = `${hours} h in progress, this stretch since ${minute(task.statusAt, tree.zone)}, past ${check.staleAfterHours} h: split it at a proof point or say what blocks it`;
+        flags.push({ kind: 'STALE', task, detail });
     }
     return flags;
 }

@@ -5,7 +5,7 @@ import type { Task } from '../register/fold.ts';
 import { DESIGN_LABEL } from './design-label.ts';
 import type { FieldKind, FieldValue, HostField, HostFieldRead } from './fields.ts';
 import type { IssueTarget } from './host.ts';
-import { heldIssue, isGoal } from './status-push.ts';
+import { heldIssue, isGoal, issueSpeakers } from './status-push.ts';
 
 /** A fields read that found fields or types. */
 export type FieldsRead = Extract<HostFieldRead, { readonly kind: 'read' }>;
@@ -48,6 +48,7 @@ interface FieldRule {
 /**
  * Plans the field push of one repository (T3406): for each open issue a task holds, its priority, start day, due day
  * and score into the fields the config names, and its type, each only where it differs from what the issue holds.
+ * Each issue is written from the one task speaking for it (issueSpeakers), never from every task holding it.
  * One way: the register is the truth, so a value set by hand on the issue is set back, and nothing is cleared. A
  * field the repository lacks, of another kind, or with no option for a priority, is skipped and noted once. Past
  * `writes`, the rest is counted as deferred for the next run.
@@ -66,10 +67,16 @@ export function planFieldPush(input: FieldPushInput): FieldPlan {
     return field === undefined ? [] : [{ rule, field }];
   });
   const issues = new Map(read.issues.map((issue) => [issue.number, issue]));
+  const held = issueSpeakers(repo.toLowerCase(), input.tasks);
+  for (const [number, ids] of held.shared) {
+    if (issues.has(number)) {
+      notes.add(`${repo}#${number} is held by ${ids.join(', ')}, active at once, so none of them writes its fields or type`);
+    }
+  }
   const planned: FieldWrite[] = [];
-  for (const task of input.tasks) {
+  for (const task of held.speakers.values()) {
     const target = heldIssue(task);
-    const issue = target === undefined || target.repo.toLowerCase() !== repo.toLowerCase() ? undefined : issues.get(target.number);
+    const issue = target === undefined ? undefined : issues.get(target.number);
     if (target === undefined || issue === undefined) {
       continue;
     }

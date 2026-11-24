@@ -48,7 +48,7 @@ export interface RegisterReviewConfig {
 }
 
 export interface RegisterCheckConfig {
-  /** An active task untouched this long is STALE. */
+  /** An in-progress task past this many hours in progress, summed over its stretches, is STALE; time open, waiting or verifying never counts. */
   readonly staleAfterHours: number;
   /** An open task its owner has not touched this long after assignment is NOT-PICKED-UP. */
   readonly notPickedUpAfterHours: number;

@@ -94,6 +94,19 @@ describe('nodeLaunchRefusal: why an exec command refuses this node (T1036)', () 
     );
   });
 
+  it('refuses a node with a compile cache, as node loads the client from it, not from the pinned files', () => {
+    const fix = 'unset NODE_COMPILE_CACHE, then run it again.';
+    assert.equal(nodeLaunchRefusal([], { NODE_COMPILE_CACHE: '/c' }, 'linux'), `${HEAD} a compile cache (NODE_COMPILE_CACHE); ${fix}`);
+    assert.equal(nodeLaunchRefusal([], { NODE_COMPILE_CACHE: '/c', NODE_DISABLE_COMPILE_CACHE: '1' }, 'linux'), `${HEAD} a compile cache (NODE_COMPILE_CACHE); ${fix}`, 'the off switch does not lift it');
+    assert.equal(
+      nodeLaunchRefusal(['--inspect'], { NODE_COMPILE_CACHE: '/c' }, 'linux'),
+      `${HEAD} --inspect (on node's command line), a compile cache (NODE_COMPILE_CACHE); drop them from node's command line and ${fix}`,
+    );
+    assert.equal(nodeLaunchRefusal([], { NODE_COMPILE_CACHE: '' }, 'linux'), undefined, 'an empty one turns no cache on');
+    assert.match(nodeLaunchRefusal([], { node_compile_cache: '/c' }, 'win32') ?? '', /a compile cache \(NODE_COMPILE_CACHE\)/);
+    assert.equal(nodeLaunchRefusal([], { node_compile_cache: '/c' }, 'linux'), undefined);
+  });
+
   it("reads NODE_OPTIONS under any case of its name on Windows, and only under its own name elsewhere, as node does", () => {
     assert.match(nodeLaunchRefusal([], { node_options: '--require=x.js' }, 'win32') ?? '', /--require=x\.js \(in NODE_OPTIONS\)/);
     assert.equal(nodeLaunchRefusal([], { node_options: '--require=x.js' }, 'linux'), undefined);

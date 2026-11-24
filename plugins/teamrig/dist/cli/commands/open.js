@@ -87,6 +87,11 @@ export function homeArgs(runtime) {
     const customHome = runtime.env[ENV.home]?.trim();
     return customHome === undefined || customHome === '' ? [] : ['--home', resolve(runtime.cwd, customHome)];
 }
+/** The runtime on the kit home `--home` names, which a new tab's own environment may not carry: `homeArgs`'s reader. */
+export function homeRuntimeOf(args, runtime) {
+    const home = args.flags.get('home');
+    return home === undefined ? runtime : { ...runtime, env: { ...runtime.env, [ENV.home]: resolve(runtime.cwd, home) } };
+}
 /**
  * Opens a terminal tab titled with the session's name that runs `launch` for it, by absolute paths,
  * since the plugin's bin folder is on PATH only inside Claude Code: `open` and the automatic restart.

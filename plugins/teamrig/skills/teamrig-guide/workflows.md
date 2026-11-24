@@ -423,7 +423,7 @@ each flag (full table: [tasks.md](tasks.md#check-flags)):
   `hire` skill.
 - `HIRE REVIEW-DUE`: a hired session's review day passed: while the team still needs it, keep it to a new review day
   (`teamrig hire <id> --review <YYYY-MM-DD> --reason "<why>" --session lead --yes`), else retire it.
-- `OVERDUE` or `STALE`: ask the owner what blocks it, then re-date it (`--due`) or tell the human.
+- `OVERDUE` or `STALE`: ask the owner what blocks it, then re-date it (`--due`), have it split a `STALE` task at a proof point, or tell the human.
 - `READY`: a waiting task can go on: one inbox line to its owner, if it has not set the next status.
 - `ROADMAP-WAITS-ON-LEAD`: Roadmap work has waited on a leader past `focus.leaderWaitMinutes`: answer it before
   anything else (`teamrig approve <id>`, or the decision it asks for); it leads that leader's `WAITING ON YOU`. One

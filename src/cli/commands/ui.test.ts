@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
-import { APP, CliHarness, KIT, TEAM } from '../../testing/cli-harness.ts';
+import { APP, CliHarness, CONFIG_PATH, KIT, TEAM } from '../../testing/cli-harness.ts';
 import { FakeHttp } from '../../testing/fake-http.ts';
 import { FakePathProbe, FakeProcesses } from '../../testing/fake-processes.ts';
 import { normalisePath } from '../../testing/memory-files.ts';
@@ -185,6 +185,20 @@ describe('teamrig ui', () => {
       await kit.files.write(uiStartedPath(KIT), '{"v":1,"at":"2030-01-08T09:00:00.000Z"}\n');
       const result = await kit.run(['ui', '--mode', 'window'], opening());
       assert.deepEqual([result.code, result.stdout], [1, []]);
+    });
+
+    it('the UI command a window or split runs parses and reads the kit home its --home names (T5353)', async () => {
+      const kit = new CliHarness(WITH_UI);
+      const openerHome = resolve('/', 'opener-kit');
+      await kit.files.write(join(openerHome, 'teams', 'app', 'config.json'), (await kit.files.read(CONFIG_PATH)) ?? '');
+      const { processes, probe } = world();
+      // The new window's own environment names another kit home (KIT): only --home carries the one that opened it.
+      const argv = [...WINDOW_ARGV.slice(2, WINDOW_ARGV.indexOf('--home')), '--home', openerHome];
+      const result = await kit.run(argv, { processes, probe });
+      assert.deepEqual(result, { code: 0, stdout: [], stderr: [] });
+      assert.deepEqual(processes.ran.map((ran) => [ran.args, ran.env['TEAMRIG_HOME'], ran.env['TEAMRIG_TEAM']]), [[[ENTRY, '--team', 'app'], openerHome, 'app']]);
+      assert.notEqual(await kit.files.read(uiStartedPath(openerHome)), undefined);
+      assert.equal(await kit.files.read(uiStartedPath(KIT)), undefined);
     });
 
     it('a UI run here marks itself started, for the run that opened its window (T5261)', async () => {

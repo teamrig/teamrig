@@ -351,7 +351,9 @@ What to do: push your own branch and merge through a pull request, or write the 
 can read it. Never route around a refusal; report it to the lead. On Windows a Git Bash drive folder (`cd /c/work`,
 `git -C /c/work`) is read as `C:\work`. The guard reads chains, subshells, nested shells,
 wrappers and git aliases (an `env -S` string and an alias value split by env's and git's own rules, a CR a plain
-space in both), but it does not see a push inside a script or program the command runs, `gh pr merge`,
+space in both) and the command `teamrig queue` or `teamrig test` runs after its `--` (a word only known when it runs
+before that `--` leaves where the command starts unread, so the guard asks), but it does not see a push inside a
+script or program the command runs, `gh pr merge`,
 git extensions, or pushes run outside Claude Code. It is a guard against mistakes, not a sandbox: protect the
 branch on your git host too.
 
@@ -891,8 +893,8 @@ It always refuses and never asks; no config key turns it off. The guard reads on
 - the PATH a tab really has: it searches the hook's own, with `~/bin` before it for Bash, not the other folders Git
   Bash puts first (`/mingw64/bin`, `/usr/bin`, inside the Git install), and takes a bare `teamrig` it finds
   nowhere as the plugin bin;
-- code node runs before the client: a preload option (`-r`, `--import`) or `NODE_OPTIONS`, which the `exec`
-  commands themselves refuse (below);
+- code node runs before the client: a preload option (`-r`, `--import`), `NODE_OPTIONS` or a compile cache
+  (`NODE_COMPILE_CACHE`), which the `exec` commands themselves refuse (below);
 - a change made to the list too: the list sits beside the code, so the check stops a slip that edits the installed
   files, not a session set on rewriting both.
 
@@ -900,9 +902,11 @@ Every `exec` command also checks the node it runs on, however it was started, an
 anything when node's command line or `NODE_OPTIONS` holds an option outside `--no-warnings`, `--no-deprecation`,
 `--enable-source-maps`, `--disable-warning <code>` and `--max-old-space-size <MB>`: a preload (`-r`, `--require`,
 `--import`, `--loader`) runs code the SHA-256 list never covered inside the client an approved command runs in, and
-`--inspect` opens that client to a debugger. The reason names each option and where it sits; take it off node's
-command line, or unset `NODE_OPTIONS` (or take the option out of it), and run the command again. Like the list, this
-stops a slip, not a preload written to hide itself, as that runs before the check.
+`--inspect` opens that client to a debugger. It refuses a node with a compile cache too (`NODE_COMPILE_CACHE` set,
+whatever `NODE_DISABLE_COMPILE_CACHE` says): node then loads the client from the cache, not the files the list covers.
+The reason names each option and where it sits; take it off node's command line, or unset `NODE_OPTIONS` (or take the
+option out of it) or `NODE_COMPILE_CACHE`, and run the command again. Like the list, this stops a slip, not a preload
+written to hide itself, as that runs before the check.
 
 ## Before a write or a shell command: the pass-record guard
 

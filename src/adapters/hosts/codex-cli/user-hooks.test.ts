@@ -166,7 +166,22 @@ describe('codexUserHooks.configLines', () => {
   });
 
   it('names the setting as the person reads it in the file', () => {
-    assert.equal(onlyLine().setting, '[features] unified_exec_tty = false');
+    assert.equal(onlyLine().setting, '[features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on');
+  });
+
+  it('turns interactive shells off in a profile that turns them on, beside the root key, and adds none to a profile', () => {
+    const answer = onlyLine().merge('[profiles.fast.features]\nunified_exec_tty = true\n[profiles.slow]\nmodel = "m"\n');
+    assert.ok(answer.ok && answer.text !== undefined);
+    assert.equal(answer.text, '[profiles.fast.features]\nunified_exec_tty = false\n[profiles.slow]\nmodel = "m"\n\n[features]\nunified_exec_tty = false\n');
+    assert.deepEqual(onlyLine().merge(answer.text), { ok: true, text: undefined });
+    const profileOnly = onlyLine().merge('[features]\nunified_exec_tty = false\n[profiles.fast.features]\nunified_exec_tty = true\n');
+    assert.deepEqual(profileOnly, { ok: true, text: '[features]\nunified_exec_tty = false\n[profiles.fast.features]\nunified_exec_tty = false\n' });
+  });
+
+  it('refuses a profile inline table that may hold the key, naming the Codex config', () => {
+    const answer = onlyLine().merge('[features]\nunified_exec_tty = false\n[profiles.a]\nfeatures = { unified_exec_tty = true }\n');
+    assert.equal(answer.ok, false);
+    assert.match(answer.ok ? '' : answer.problem, /^the Codex config is not one teamrig can set unified_exec_tty in: it sets profiles\.a\.features as an inline table/u);
   });
 
   it("turns interactive shells off, keeping the person's other lines, and finds nothing to change on a second run", () => {

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.508.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.507.0...teamrig-v0.508.0) (2026-11-24)
+
+
+### Features
+
+* **register:** a task counts the time it spent in progress over its stretches (T5043) ([5aaca47](https://github.com/teamrig/teamrig/commit/5aaca477e069554f21c86de50e13a94be6b705c9))
+
+
+### Bug Fixes
+
+* **check:** STALE counts time in progress only, never time waiting (T5043) ([41319ac](https://github.com/teamrig/teamrig/commit/41319ac6d1d58f7cccc5ee501c40928bb7f0b379))
+* **codex:** setup hooks keeps interactive shells off in each profile that sets them (T5296) ([5fbf5c3](https://github.com/teamrig/teamrig/commit/5fbf5c371c13a6324ad73df5e560d1063f0c3d0f))
+* **exec:** refuse a node with a compile cache, as a foreign NODE_OPTIONS is refused ([4a1b9fa](https://github.com/teamrig/teamrig/commit/4a1b9fa732c9d4cba0d9a41c258024f5f72fbca9))
+* **issues:** the field push writes an issue from the one task speaking for it (T5289) ([39c59cc](https://github.com/teamrig/teamrig/commit/39c59cc457ad5494ad51c83bf75e956db67e2d50))
+* **push-guard:** read a teamrig runner as opaque when a word before its -- is only known at run time (T5346) ([ba07591](https://github.com/teamrig/teamrig/commit/ba0759128f1a97af2c3ec08aefc0fb5046ab02cf))
+* **ui:** teamrig ui takes the --home its own window or split hands on (T5353) ([b77e39e](https://github.com/teamrig/teamrig/commit/b77e39e68069d7b58469be1449e530d01cc3583b))
+
 ## [0.507.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.506.0...teamrig-v0.507.0) (2026-11-24)
 
 

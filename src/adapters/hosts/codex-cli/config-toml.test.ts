@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { withBooleanKey, type TomlEdit } from './config-toml.ts';
+import { withBooleanKey, withBooleanKeyInEach, type TomlEdit } from './config-toml.ts';
 
 function off(text: string): TomlEdit {
   return withBooleanKey(text, 'features', 'unified_exec_tty', false);
@@ -65,5 +65,70 @@ describe("Codex CLI's config.toml: one boolean key set by lines", () => {
     const answer = off('features = { web_search = true }\n');
     assert.equal(answer.ok, false);
     assert.match(answer.ok ? '' : answer.problem, /inline table.*set features\.unified_exec_tty = false in it by hand/);
+  });
+});
+
+function profilesOff(text: string): TomlEdit {
+  return withBooleanKeyInEach(text, 'profiles', 'features.unified_exec_tty', false);
+}
+
+function profilesEdited(text: string): string {
+  const answer = profilesOff(text);
+  assert.ok(answer.ok, JSON.stringify(answer));
+  assert.notEqual(answer.text, undefined, 'the text changes');
+  return answer.text ?? '';
+}
+
+describe("Codex CLI's config.toml: a boolean key set in each named profile", () => {
+  it('turns the key off in every profile that turns it on, however the key is written', () => {
+    const text = [
+      '[features]',
+      'unified_exec_tty = false',
+      '[profiles.fast.features]',
+      'unified_exec_tty = true # mine',
+      '[profiles."deep work"]',
+      'model = "m"',
+      '  features.unified_exec_tty = true',
+      'profiles.root.features.unified_exec_tty = true',
+      TRUST,
+    ].join('\n');
+    assert.equal(
+      profilesEdited(text),
+      [
+        '[features]',
+        'unified_exec_tty = false',
+        '[profiles.fast.features]',
+        'unified_exec_tty = false',
+        '[profiles."deep work"]',
+        'model = "m"',
+        '  features.unified_exec_tty = false',
+        'profiles.root.features.unified_exec_tty = false',
+        TRUST,
+      ].join('\n'),
+    );
+  });
+
+  it('adds nothing and changes nothing when no profile turns the key on', () => {
+    for (const text of ['', '[profiles.fast]\nmodel = "m"\n', '[profiles.fast.features]\nunified_exec_tty = false\n', '[features]\nunified_exec_tty = true\n']) {
+      assert.deepEqual(profilesOff(text), { ok: true, text: undefined }, text);
+    }
+  });
+
+  it("leaves another table's same-named key, a key inside a multi-line string and an array of tables as they are", () => {
+    const text = ['[other.fast.features]', 'unified_exec_tty = true', 'note = """', '[profiles.x.features]', 'unified_exec_tty = true', '"""', '[[profiles]]', 'features.unified_exec_tty = true', ''].join('\n');
+    assert.deepEqual(profilesOff(text), { ok: true, text: undefined });
+  });
+
+  it('keeps the CRLF line ends', () => {
+    assert.equal(profilesEdited('[profiles.a.features]\r\nunified_exec_tty = true\r\n'), '[profiles.a.features]\r\nunified_exec_tty = false\r\n');
+  });
+
+  it('refuses an inline table under the profiles that may hold the key, and passes one that cannot', () => {
+    for (const text of ['[profiles.a]\nfeatures = { unified_exec_tty = true }\n', 'profiles = { a = { features = { unified_exec_tty = true } } }\n']) {
+      const answer = profilesOff(text);
+      assert.equal(answer.ok, false, text);
+      assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
+    }
+    assert.deepEqual(profilesOff('[profiles.a]\nmodel_providers = { x = 1 }\n'), { ok: true, text: undefined });
   });
 });

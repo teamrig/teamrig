@@ -107,6 +107,12 @@ export interface Task extends TaskFields {
   /** When the task took its current status: its creation, or the latest status event that changed it. */
   readonly statusAt: string;
   /**
+   * The milliseconds the task spent in progress before its current status took over (T5043): each in-progress stretch
+   * adds its length when a status change ends it, so time spent waiting or verifying never counts, and a status set
+   * back and forth keeps what came before. A task in progress now adds its current stretch: {@link timeInProgress}.
+   */
+  readonly inProgressMs: number;
+  /**
    * When the task last asked for something new: its creation, or the latest event naming a wait it did not hold, or
    * naming its waits again after an answer, since that status clears the answer and asks anew (T2089). `statusAt` cannot
    * say this: a task waiting days on another task that adds a leader's approval keeps its status, and an update replaces
@@ -231,6 +237,7 @@ function created(id: string, fields: TaskFields, at: string, by: string): Task {
     updatedBy: by,
     assignedAt: at,
     statusAt: at,
+    inProgressMs: 0,
     waitsAt: at,
     priorityAt: at,
     ownerSeenAt: by === fields.owner ? at : null,
@@ -283,6 +290,7 @@ function withStatus(task: Task, event: Extract<RegisterEvent, { type: 'status' }
     ...task,
     status: event.status,
     statusAt: event.status === task.status ? task.statusAt : event.at,
+    inProgressMs: event.status === task.status ? task.inProgressMs : timeInProgress(task, Date.parse(event.at)),
     waitsAt: namesNewWait(task.answer === null || answer !== null ? task.waits : [], waits) ? event.at : task.waitsAt,
     note: event.note,
     evidence: event.evidence ?? task.evidence,
@@ -301,6 +309,14 @@ function withStatus(task: Task, event: Extract<RegisterEvent, { type: 'status' }
     updatedBy: event.by,
     ownerSeenAt: event.by === task.owner ? event.at : task.ownerSeenAt,
   };
+}
+
+/**
+ * The milliseconds the task has spent in progress up to `at` (T5043): the stretches before its current status, plus the
+ * current one while it is in progress. A clock that went back before the status change counts the current stretch as 0.
+ */
+export function timeInProgress(task: Pick<Task, 'status' | 'statusAt' | 'inProgressMs'>, at: number): number {
+  return task.status === 'in-progress' ? task.inProgressMs + Math.max(0, at - Date.parse(task.statusAt)) : task.inProgressMs;
 }
 
 /** True when setting `status` with `waits` re-parks the task's proof, as {@link Task.reparks} counts it. */

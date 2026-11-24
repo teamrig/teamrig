@@ -140,7 +140,7 @@ export function parseTaskLine(record: JsonRecord): Task | string {
   if (!isTaskLine(record) || !isRecord(task)) {
     return 'not a task line';
   }
-  const { id, status, reparks } = task;
+  const { id, status, reparks, inProgressMs } = task;
   if (typeof id !== 'string' || !TASK_ID.test(id)) {
     return `id ${JSON.stringify(id)} is not a task id`;
   }
@@ -150,6 +150,9 @@ export function parseTaskLine(record: JsonRecord): Task | string {
   }
   if (!isNonNegativeInteger(reparks)) {
     return problem('reparks is not a count');
+  }
+  if (!isNonNegativeInteger(inProgressMs)) {
+    return problem('inProgressMs is not a count');
   }
   const fields = parseCompleteTaskFields(task);
   if (typeof fields === 'string') {
@@ -206,5 +209,5 @@ export function parseTaskLine(record: JsonRecord): Task | string {
   if (descriptionCut !== null && fields.description !== null) {
     return problem('holds a description and the mark of a cut one');
   }
-  return { ...fields, id, status, descriptionCut, ...nullable, waits, card, answer, decided, reparks, followups, review, sizeBase, audits, securityVerdict, ...texts };
+  return { ...fields, id, status, descriptionCut, ...nullable, waits, card, answer, decided, reparks, inProgressMs, followups, review, sizeBase, audits, securityVerdict, ...texts };
 }

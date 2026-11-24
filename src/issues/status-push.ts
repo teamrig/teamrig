@@ -468,6 +468,15 @@ export function holderOf(target: IssueTarget, tasks: Iterable<Task>): IssueHolde
 }
 
 /**
+ * The tasks of `repo` (`owner/name`, lowercase) speaking for their issues, with the ids holding each issue no task
+ * speaks for (holders): a push writes an issue from its speaker only, so two tasks holding one issue never write it
+ * in turn, each undoing the other (T5289).
+ */
+export function issueSpeakers(repo: string, tasks: Iterable<Task>): { readonly speakers: ReadonlyMap<number, Task>; readonly shared: ReadonlyMap<number, readonly string[]> } {
+  return holders(repo, tasks);
+}
+
+/**
  * The tasks holding each issue number of `repo`: in `speakers`, the one task speaking for it, else the first one the
  * import added; in `shared`, the ids of an issue two or more active team tasks hold, which none speaks for.
  * A team task speaks when it is the only active one holding the issue: a finished task often keeps its ref, so a done

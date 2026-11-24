@@ -1,8 +1,7 @@
-import { resolve } from 'node:path';
 import { DEFAULT_HEADROOM } from "../../config/defaults.js";
 import { ownLaunchOf } from "../../config/launch.js";
 import { errorMessage } from "../../core/guards.js";
-import { ENV, resolveKitHome } from "../../core/home.js";
+import { resolveKitHome } from "../../core/home.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { indexMarks } from "../../inbox/marks.js";
 import { JsonlMarkLog } from "../../inbox/store.js";
@@ -22,7 +21,7 @@ import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
 import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from "../host.js";
 import { runsHostSession } from "../session-process.js";
 import { loadTree } from "../tree.js";
-import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
+import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
 /** How long the restore's own tab stays once it reopened every session: the last one starts meanwhile. */
@@ -40,11 +39,6 @@ function restoreLogOf(runtime) {
             runtime.out.stderr(`WARN could not write the restore log ${logPath}: ${errorMessage(error)}`);
         }
     };
-}
-/** The runtime on the kit home `--home` names, which a new tab's own environment may not carry. */
-function homeRuntimeOf(args, runtime) {
-    const home = args.flags.get('home');
-    return home === undefined ? runtime : { ...runtime, env: { ...runtime.env, [ENV.home]: resolve(runtime.cwd, home) } };
 }
 /** Every team of the kit home as the restore sees it; a team whose config does not load is left out. */
 async function restoreTeamsOf(runtime, teams) {

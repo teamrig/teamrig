@@ -170,6 +170,13 @@ describe('runCli: exec refuses a node started with an option that can run code b
     await assertEveryCommandRefused(new ExecTeam(EXEC_TEAM, { env: { node_options: '--inspect' } }), /this one has --inspect \(in NODE_OPTIONS\)/);
   });
 
+  it('refuses every exec command on a node with a compile cache, so no exec runs from one', async () => {
+    await assertEveryCommandRefused(
+      new ExecTeam(EXEC_TEAM, { env: { NODE_COMPILE_CACHE: '/var/cache/node-compile' } }),
+      /this one has a compile cache \(NODE_COMPILE_CACHE\); unset NODE_COMPILE_CACHE, then run it again/,
+    );
+  });
+
   it('runs on a node with options that load nothing', async () => {
     const team = new ExecTeam(EXEC_TEAM, { execArgv: ['--disable-warning=ExperimentalWarning'], env: { NODE_OPTIONS: '--max-old-space-size=4096' } });
     assertOk(await team.request());

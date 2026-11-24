@@ -13,7 +13,7 @@
  */
 import { posix, win32 } from 'node:path';
 import { isRecord } from "../../../plugin-api/index.js";
-import { withBooleanKey } from "./config-toml.js";
+import { withBooleanKey, withBooleanKeyInEach } from "./config-toml.js";
 import { codexHooksFile } from "./hooks-file.js";
 /** Moves Codex's own folder (config, hooks, login) away from `~/.codex`. */
 const HOME_VAR = 'CODEX_HOME';
@@ -176,6 +176,11 @@ function merged(current, source, pluginRoot) {
  * passes the same key (launch-args.ts `NO_TTY_SHELLS`): a line sent into a tty shell runs no PreToolUse hook (T5270 F2).
  */
 const NO_TTY = { table: 'features', key: 'unified_exec_tty' };
+/**
+ * Codex's named profiles: it applies a profile's `features` after the root ones (`features/src/lib.rs`), so the key
+ * is kept off in each profile that sets it as well as at the root; none is added where a profile sets nothing.
+ */
+const PROFILES = 'profiles';
 /** The Codex CLI port of the person's hooks file. */
 export function codexUserHooks(env, platform) {
     const path = platform === 'win32' ? win32 : posix;
@@ -189,10 +194,13 @@ export function codexUserHooks(env, platform) {
         configLines: [
             {
                 file: (userHome) => path.join(codexHome(userHome), CONFIG_FILE),
-                setting: `[${NO_TTY.table}] ${NO_TTY.key} = false`,
+                setting: `[${NO_TTY.table}] ${NO_TTY.key} = false, and the same in each [${PROFILES}.<name>.${NO_TTY.table}] that turns it on`,
                 merge: (current) => {
-                    const edit = withBooleanKey(current, NO_TTY.table, NO_TTY.key, false);
-                    return edit.ok ? edit : { ok: false, problem: `the Codex config is not one teamrig can set ${NO_TTY.key} in: ${edit.problem}` };
+                    const root = withBooleanKey(current, NO_TTY.table, NO_TTY.key, false);
+                    const edit = root.ok ? withBooleanKeyInEach(root.text ?? current, PROFILES, `${NO_TTY.table}.${NO_TTY.key}`, false) : root;
+                    if (!edit.ok)
+                        return { ok: false, problem: `the Codex config is not one teamrig can set ${NO_TTY.key} in: ${edit.problem}` };
+                    return { ok: true, text: edit.text ?? (root.ok ? root.text : undefined) };
                 },
             },
         ],

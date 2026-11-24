@@ -376,6 +376,16 @@ describe('evaluatePushes: where a push hides', () => {
     ]);
   });
 
+  it('asks when a word before the runner command is only known when it runs, as it may start the command (T5346)', () => {
+    expectRows([
+      ['teamrig queue --what x $D git push origin main', 'ask', 'doubt'],
+      ['teamrig test --session po "$D" git push origin main', 'ask', 'doubt'],
+      ['teamrig heavy --what $W -- git push origin feature', 'ask', 'doubt'],
+      ['teamrig queue --what x -- git push origin $B', 'ask', 'doubt'],
+      ['teamrig add --title $T git push origin main', 'allow'],
+    ]);
+  });
+
   it('still reads the command under teamrig heavy, the old name of queue, which an older teamrig runs', () => {
     expectRows([
       ['teamrig heavy --session po --what "ship it" -- git push origin main', 'ask'],

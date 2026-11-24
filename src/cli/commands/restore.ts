@@ -1,9 +1,8 @@
-import { resolve } from 'node:path';
 import { DEFAULT_HEADROOM } from '../../config/defaults.ts';
 import { ownLaunchOf } from '../../config/launch.ts';
 import type { TerminalChoice } from '../../config/types.ts';
 import { errorMessage } from '../../core/guards.ts';
-import { ENV, resolveKitHome } from '../../core/home.ts';
+import { resolveKitHome } from '../../core/home.ts';
 import { PlainLogFile } from '../../core/log-file.ts';
 import { indexMarks } from '../../inbox/marks.ts';
 import { JsonlMarkLog } from '../../inbox/store.ts';
@@ -26,7 +25,7 @@ import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from '../host.ts';
 import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
-import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
+import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
 
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
@@ -45,12 +44,6 @@ function restoreLogOf(runtime: CliRuntime): (line: string) => Promise<void> {
       runtime.out.stderr(`WARN could not write the restore log ${logPath}: ${errorMessage(error)}`);
     }
   };
-}
-
-/** The runtime on the kit home `--home` names, which a new tab's own environment may not carry. */
-function homeRuntimeOf(args: ParsedArgs, runtime: CliRuntime): CliRuntime {
-  const home = args.flags.get('home');
-  return home === undefined ? runtime : { ...runtime, env: { ...runtime.env, [ENV.home]: resolve(runtime.cwd, home) } };
 }
 
 /** Every team of the kit home as the restore sees it; a team whose config does not load is left out. */

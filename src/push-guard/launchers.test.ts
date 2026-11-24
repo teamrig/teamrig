@@ -180,6 +180,32 @@ describe('launch: programs and wrappers', () => {
       assert.deepEqual(launched.command.args.map(show), ['~$G', 'approve', 'R1'], line);
     }
   });
+
+  it('keeps a teamrig runner opaque when a word before its first literal -- is only known when it runs (T5346)', () => {
+    const unknownStart = 'opaque: where the command teamrig runs starts is only known when it runs';
+    const rows = [
+      ['teamrig queue --what x $D git push origin main', 'bash'],
+      ['teamrig test --what x "$D" git push origin main', 'bash'],
+      ['teamrig heavy $OPTS -- git push origin feature', 'bash'],
+      ['teamrig queue --what $W -- git push origin feature', 'bash'],
+      ['teamrig queue --what x @a git push origin main', 'powershell'],
+      ['teamrig test $D git push origin main', 'powershell'],
+    ] as const;
+    for (const [line, dialect] of rows) {
+      const launched = launch(parseShell(line, dialect).commands[0]?.words ?? [], dialect);
+      assert.equal(summary(launched), unknownStart, line);
+      assert.ok(launched.kind === 'opaque' && launched.command !== undefined, line);
+      assert.equal(show(launched.command.program), 'teamrig', line);
+    }
+  });
+
+  it('still reads a teamrig runner whose run-time words come only after its first literal --, and any other subcommand', () => {
+    expectLaunches([
+      ['teamrig queue --what x -- git push origin $B', 'program git push origin ~$B'],
+      ['teamrig queue --what x -- git push origin main', 'program git push origin main'],
+      ['teamrig add --title $T git push origin main', 'program teamrig add --title ~$T git push origin main'],
+    ]);
+  });
 });
 
 describe('launch: keywords', () => {

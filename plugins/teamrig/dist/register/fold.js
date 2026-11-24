@@ -97,6 +97,7 @@ function created(id, fields, at, by) {
         updatedBy: by,
         assignedAt: at,
         statusAt: at,
+        inProgressMs: 0,
         waitsAt: at,
         priorityAt: at,
         ownerSeenAt: by === fields.owner ? at : null,
@@ -145,6 +146,7 @@ function withStatus(task, event) {
         ...task,
         status: event.status,
         statusAt: event.status === task.status ? task.statusAt : event.at,
+        inProgressMs: event.status === task.status ? task.inProgressMs : timeInProgress(task, Date.parse(event.at)),
         waitsAt: namesNewWait(task.answer === null || answer !== null ? task.waits : [], waits) ? event.at : task.waitsAt,
         note: event.note,
         evidence: event.evidence ?? task.evidence,
@@ -163,6 +165,13 @@ function withStatus(task, event) {
         updatedBy: event.by,
         ownerSeenAt: event.by === task.owner ? event.at : task.ownerSeenAt,
     };
+}
+/**
+ * The milliseconds the task has spent in progress up to `at` (T5043): the stretches before its current status, plus the
+ * current one while it is in progress. A clock that went back before the status change counts the current stretch as 0.
+ */
+export function timeInProgress(task, at) {
+    return task.status === 'in-progress' ? task.inProgressMs + Math.max(0, at - Date.parse(task.statusAt)) : task.inProgressMs;
 }
 /** True when setting `status` with `waits` re-parks the task's proof, as {@link Task.reparks} counts it. */
 export function isRepark(task, status, waits) {

@@ -23,6 +23,7 @@ describe('golden register logs', () => {
     assert.equal(state.nextId, 'T10', 'ids on orphans and unreadable lines stay reserved');
     assert.deepEqual([...state.tasks.keys()], ['T1', 'T2']);
     assert.deepEqual(state.tasks.get('T1'), {
+      inProgressMs: 30 * 3_600_000,
       id: 'T1',
       title: 'Add a health check to the web service',
       description: null,

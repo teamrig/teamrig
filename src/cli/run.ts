@@ -256,7 +256,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'roles list': { effect: 'read', flags: [], load: async () => (await rolesCommands()).list },
   refresh: { effect: 'write', flags: ['session'], switches: ['ready'], load: async () => (await refreshCommands()).refresh },
   doctor: { effect: 'read', flags: [], load: async () => (await doctorCommands()).doctor },
-  ui: { effect: 'write', flags: ['session', 'team', 'mode'], load: async () => (await uiCommands()).ui },
+  ui: { effect: 'write', flags: ['session', 'team', 'mode', 'home'], load: async () => (await uiCommands()).ui },
   'page test': { effect: 'write', flags: [], load: async () => (await pageCommands()).pageTest },
   compact: { effect: 'write', flags: [], switches: ['dry-run', 'from-history'], load: async () => (await compactCommands()).compact },
   'issue sync': { effect: 'write', flags: ['repo'], switches: ['yes', 'auto', 'push'], load: async () => (await issueSyncCommands()).issueSync },
@@ -843,8 +843,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       also a variable that overrides every model or effort choice, and a launch with a model but no effort,
       and a page webhook that gives no https URL; then INSTALL: each install step, probed live, with the fix for
       one missing (printed even where no team is found)
-  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>]   starts the dedicated UI for every
-      team, following the session last typed in, or pinned to the team --team or --session names;
+  ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>] [--home <dir>]   starts the dedicated
+      UI for every team, following the session last typed in, or pinned to the team --team or --session names;
+      --home reads that kit home, which a window or split this opens is handed;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
       own (a session's shell), the terminal half shows in a split of the session's tmux or Windows

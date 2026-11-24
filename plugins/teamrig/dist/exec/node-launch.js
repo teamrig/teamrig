@@ -93,13 +93,19 @@ function placeOf(source) {
  */
 export function nodeLaunchRefusal(execArgv, env, platform) {
     const foreign = foreignNodeOptions(execArgv, envVariable(env, 'NODE_OPTIONS', platform));
-    if (foreign.length === 0) {
+    // An empty NODE_COMPILE_CACHE turns no cache on; read under any case of its name on Windows, as node reads it.
+    const cached = (envVariable(env, 'NODE_COMPILE_CACHE', platform) ?? '') !== '';
+    if (foreign.length === 0 && !cached) {
         return undefined;
     }
-    const named = foreign.map(({ option, source }) => `${option} (${placeOf(source)})`).join(', ');
+    const named = [
+        ...foreign.map(({ option, source }) => `${option} (${placeOf(source)})`),
+        ...(cached ? ['a compile cache (NODE_COMPILE_CACHE)'] : []),
+    ].join(', ');
     const fixes = [
         ...(foreign.some(({ source }) => source === 'command line') ? ["drop them from node's command line"] : []),
         ...(foreign.some(({ source }) => source === 'NODE_OPTIONS') ? ['unset NODE_OPTIONS or take them out of it'] : []),
+        ...(cached ? ['unset NODE_COMPILE_CACHE'] : []),
     ];
     return `teamrig exec runs only on a node with no option that can run code beside the client, and this one has ${named}; ${fixes.join(' and ')}, then run it again.`;
 }

@@ -9,8 +9,14 @@ import { envVariable } from '../core/path-search.ts';
  * outside a short list of ones that load nothing. A list of allowed options, not of refused ones, as node keeps adding
  * options that load code (`--experimental-loader`, `--env-file`, `--snapshot-blob`, `-C` conditions, ...).
  *
+ * NODE_COMPILE_CACHE is the same kind of channel: node then loads the client's modules from the code cache in that
+ * folder, not from the files the pin hashed. So an exec command refuses a node with one too, whatever
+ * NODE_DISABLE_COMPILE_CACHE says (node's reading of that switch is not the same in every release; unsetting
+ * NODE_COMPILE_CACHE is the fix that holds in all of them).
+ *
  * Like the pin, it stops a slip, not a session set on getting around it: a preload runs before this check and could
- * hide itself from it. Phase 2 makes the install read-only to agent accounts (spec §2.2).
+ * hide itself from it, and so could cached code. Phase 2 makes the install read-only to agent accounts (spec §2.2); a
+ * compile cache folder stays writable by its owner, so that does not cover it, and this refusal does.
  */
 
 /** Where node took an option from. */
@@ -124,13 +130,19 @@ function placeOf(source: NodeOptionSource): string {
  */
 export function nodeLaunchRefusal(execArgv: readonly string[], env: Env, platform: NodeJS.Platform): string | undefined {
   const foreign = foreignNodeOptions(execArgv, envVariable(env, 'NODE_OPTIONS', platform));
-  if (foreign.length === 0) {
+  // An empty NODE_COMPILE_CACHE turns no cache on; read under any case of its name on Windows, as node reads it.
+  const cached = (envVariable(env, 'NODE_COMPILE_CACHE', platform) ?? '') !== '';
+  if (foreign.length === 0 && !cached) {
     return undefined;
   }
-  const named = foreign.map(({ option, source }) => `${option} (${placeOf(source)})`).join(', ');
+  const named = [
+    ...foreign.map(({ option, source }) => `${option} (${placeOf(source)})`),
+    ...(cached ? ['a compile cache (NODE_COMPILE_CACHE)'] : []),
+  ].join(', ');
   const fixes = [
     ...(foreign.some(({ source }) => source === 'command line') ? ["drop them from node's command line"] : []),
     ...(foreign.some(({ source }) => source === 'NODE_OPTIONS') ? ['unset NODE_OPTIONS or take them out of it'] : []),
+    ...(cached ? ['unset NODE_COMPILE_CACHE'] : []),
   ];
   return `teamrig exec runs only on a node with no option that can run code beside the client, and this one has ${named}; ${fixes.join(' and ')}, then run it again.`;
 }

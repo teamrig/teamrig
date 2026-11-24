@@ -154,7 +154,7 @@ The thresholds of the flags teamrig check raises on tasks.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `staleAfterHours` | integer (at least 1) | `72` | An active task untouched this long is STALE. |
+| `staleAfterHours` | integer (at least 1) | `72` | An in-progress task past this many hours in progress, summed over its stretches, is STALE; time open, waiting or verifying never counts. |
 | `notPickedUpAfterHours` | integer (at least 1) | `24` | An open task its owner has not touched this long after it was assigned is NOT-PICKED-UP. |
 | `blockerOpenAfterHours` | integer (at least 1) | `4` | A blocker still unfixed (open, in progress or waiting) this long after it became one is BLOCKER-OPEN. |
 | `prioritySkipAfterHours` | integer (at least 1) | `24` | A session's in-progress task outranked this long by its own open task, on band and score, is a PRIORITY-SKIP. |
