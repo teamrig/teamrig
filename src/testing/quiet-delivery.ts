@@ -4,6 +4,7 @@ import { FakeExecSpawner } from './fake-exec-spawner.ts';
 import { FakeHooks } from './fake-hooks.ts';
 import { FakeHostCpu } from './fake-host-cpu.ts';
 import { FakeHostMemory } from './fake-host-memory.ts';
+import { FakeRuntimeProbe } from './fake-runtime-probe.ts';
 import { FakeStarterWatch } from './fake-starter-watch.ts';
 import { FakeSteps } from './fake-steps.ts';
 
@@ -20,7 +21,7 @@ export const ROOMY_FREE_MB = 16_000;
  * Delivery when a run does not care about it: a queued step and each program a deploy runs exit 0 at once while the
  * shell that started it runs on, the host has room in memory for any queued step (`ROOMY_FREE_MB` free) and an idle
  * CPU, and a privileged command `teamrig exec` runs exits 0 in a clean checkout of the fixture request's repository
- * (testing/fake-checkout.ts).
+ * (testing/fake-checkout.ts) under the runtime FakeRuntimeProbe names.
  */
 export function quietDelivery(): DeliveryWorld {
   return {
@@ -29,6 +30,6 @@ export function quietDelivery(): DeliveryWorld {
     cpu: new FakeHostCpu(),
     starters: new FakeStarterWatch(),
     hooks: new FakeHooks(),
-    exec: { spawner: new FakeExecSpawner(), checkout: new FakeCheckout() },
+    exec: { spawner: new FakeExecSpawner(), checkout: new FakeCheckout(), runtime: new FakeRuntimeProbe() },
   };
 }

@@ -304,6 +304,23 @@ the routine route and an instruction slipped into what a session reads, not a se
 script can clear that variable, and a session can write the register's files directly. A task line written as the owner is no proof
 that you acted until your own actions run under an account the sessions cannot use.
 
+The runtime is pinned too. The plugin's launchers start the first `node` the PATH finds, so `teamrig exec node-pin`
+files the Node.js runtime the client runs under (its real path, the SHA-256 of its binary and its version) in the exec
+audit log, and the security reviewer approves it like a request, after checking the hash against the release's
+`SHASUMS256.txt` on nodejs.org or a distro package manager's own verify. `exec dry-run` and `exec run` then start
+only under the pin approved last: the file at the runtime's real path is hashed on each call (on Linux it must also
+hash the same as the image actually running), and a runtime at another path, or another binary at the pinned path,
+is refused with the path, hash prefix and version found and expected. A bare `node` in a request starts that same
+real path, the file checked, never a PATH lookup. You or any session on the team files a pin, and after a Node.js
+upgrade files it again; the security reviewer or you approve it. A check a runtime
+runs on itself cannot hold against a hostile runtime, which can answer any check it runs: like the client pin and
+the option list, the runtime pin catches a wrong `node` (a PATH order, a version-manager switch, an unofficial
+build), and phase 2's read-only install is what holds against a deliberate swap. The pin lives in the hash-chained
+exec log, never in the plugin folder or a repository, and the service-role guard refuses a session's own write of
+that log. Updating to the release that brings the pin is a breaking change for a team that already uses
+`teamrig exec`: every `exec dry-run` and `exec run` is refused until a pin is approved, so run `teamrig exec node-pin`
+once, then the security reviewer (or you) runs `teamrig exec approve P<n>` on it.
+
 ## Hand steps you run yourself
 
 Some steps only you can take: a line pasted into a settings or guard file, a grant, a key. Code a session types into

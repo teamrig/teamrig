@@ -19,6 +19,10 @@ import { heldBack, refusal } from './permission.ts';
  * the pass-record guard it reads only the call: a script the session writes and starts still reaches the file, as
  * sessions and the owner share one account (stopgap T791). A teamrig call whose subcommand is only known when it runs,
  * and a shell fed by a pipe, are the exec guard's to refuse.
+ *
+ * It holds a team's exec audit log the same way (#870): the log carries every privileged command's approval and the
+ * runtime pin's, so a session's file tool writing it, by any spelling that reaches it, and a shell line naming it are
+ * refused; only `teamrig exec` appends to it, and `teamrig exec status` and the Read tool read it.
  */
 
 /** The `teamrig roles` commands that change who holds a role. */
@@ -54,6 +58,24 @@ const CONFIG_NAME = /^config(?:\.json|~\d+\.jso)$/i;
 
 /** A Windows spelling that reaches a file past its plain path, which neither the text nor its real path ties to one file. */
 type AliasForm = 'a device path' | 'a network share path' | 'an alternate data stream';
+
+/** A team's exec audit log by its tail, on a path in its compare form: `teams/<team>/exec/audit.jsonl`, its 8.3 short name too. */
+const EXEC_LOG_FILE = /(?:^|\/)teams\/+[^/]+\/+exec\/+audit(?:\.jsonl|~\d+\.jso)$/i;
+
+/** The exec audit log's file name, or its 8.3 short name, as a path's last segment. */
+const EXEC_LOG_NAME = /^audit(?:\.jsonl|~\d+\.jso)$/i;
+
+/** The exec audit log in a shell line: `exec/audit.jsonl`, either slash, its short name too. */
+const EXEC_LOG_WORD = /(?<![\w-])exec[\\/]+audit(?:\.jsonl|~\d+\.jso)(?![\w-]|\.+[\w-])/i;
+
+/** `audit.jsonl` as a file name of its own, which names the log from inside a team's exec folder. */
+const EXEC_LOG_BARE = /(?<![\w.-])audit(?:\.jsonl|~\d+\.jso)(?![\w-]|\.+[\w-])/i;
+
+/** A team's exec folder, on a path in its compare form. */
+const EXEC_FOLDER = /(?:^|\/)teams\/+[^/]+\/+exec$/i;
+
+/** A team's exec folder named in a shell line, either slash, a trailing one too, but no folder inside it. */
+const EXEC_FOLDER_WORD = /(?<![\w.-])teams[\\/]+[^\\/\s'"`;&|]+[\\/]+exec(?![\w.-]|[\\/]+[\w.-])/i;
 
 /** True when the words run `roles grant` or `roles revoke`, or a `roles` command only known when it runs. */
 function startsRoleChange(words: readonly ShellWord[]): boolean {
@@ -129,6 +151,40 @@ async function teamConfigOf(path: string, cwd: string, env: ServiceRoleGuardEnv)
   }
   const real = await env.canonical(absolute);
   return real !== undefined && TEAM_CONFIG_FILE.test(samePathKey(real, cwd, env.platform)) ? real : undefined;
+}
+
+/**
+ * True when a file tool's path is a team's exec audit log: by its tail in any spelling, by its real path, so a link
+ * to it is it too, or by its file name through a Windows alias form, which no path ties to one file.
+ */
+async function isExecLog(path: string, cwd: string, env: ServiceRoleGuardEnv): Promise<boolean> {
+  if (env.platform === 'win32' && aliasFormOf(path) !== undefined && EXEC_LOG_NAME.test(openedNameOf(path))) {
+    return true;
+  }
+  const native = env.platform === 'win32' ? path.replace(MSYS_DRIVE, '$1:') : path;
+  if (EXEC_LOG_FILE.test(samePathKey(native, cwd, env.platform))) {
+    return true;
+  }
+  const real = await env.canonical((env.platform === 'win32' ? win32 : posix).resolve(cwd, native));
+  return real !== undefined && EXEC_LOG_FILE.test(samePathKey(real, cwd, env.platform));
+}
+
+/**
+ * True when a shell line names a team's exec audit log: `exec/audit.jsonl`, or `audit.jsonl` run from a team's exec
+ * folder or on a line that names one, as a line that changes into it first does.
+ */
+function namesExecLog(command: string, cwd: string, env: ServiceRoleGuardEnv): boolean {
+  const inExecFolder = EXEC_FOLDER.test(samePathKey(cwd, env.cwd, env.platform)) || EXEC_FOLDER_WORD.test(command);
+  return EXEC_LOG_WORD.test(command) || (inExecFolder && EXEC_LOG_BARE.test(command));
+}
+
+function execLogRefusalOf(reach: string): string {
+  return (
+    `teamrig exec log guard: ${reach}. The exec audit log is hash-chained and only teamrig exec appends to it; its ` +
+    "approvals, a runtime pin's (teamrig exec node-pin) too, are the security reviewer's, so a line a session writes by " +
+    'hand has none and breaks or fails the chain. Read it with teamrig exec status or the Read tool, and do not retry ' +
+    'this or route around it: a log that looks wrong goes to the lead.'
+  );
 }
 
 /** The config text as JSON, or undefined when there is none or it is no JSON object. */
@@ -241,6 +297,9 @@ async function editedFileReach(call: EditCall, file: EditedFile, cwd: string, en
 /** The reply to a file tool's call: a refusal when any file it touches is refused, else none. */
 async function editReply(call: EditCall, cwd: string, env: ServiceRoleGuardEnv): Promise<HookReply | undefined> {
   for (const file of call.files) {
+    if (file.path !== undefined && (await isExecLog(file.path, cwd, env))) {
+      return refusal(execLogRefusalOf(`this ${call.name} writes ${file.path}, a team's exec audit log`));
+    }
     const reach = await editedFileReach(call, file, cwd, env);
     if (reach !== undefined) {
       return refusal(editRefusalOf(reach));
@@ -262,6 +321,9 @@ export async function serviceRoleGuardReply(event: HookEvent, env: ServiceRoleGu
   }
   if (call?.kind !== 'shell' || call.command === undefined) {
     return undefined;
+  }
+  if (namesExecLog(call.command, cwd, env)) {
+    return refusal(execLogRefusalOf(`this ${call.name} line names a team's exec audit log, and a shell line's writes cannot be told from its reads`));
   }
   if (env.configPath !== undefined && namesTeamConfig(call.command, cwd, env, env.configPath)) {
     return refusal(editRefusalOf(`this ${call.name} line names the team config file, and a shell line's writes cannot be told from its reads`));

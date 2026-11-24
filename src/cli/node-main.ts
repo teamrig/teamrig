@@ -22,6 +22,7 @@ import { nodeProgramRunner } from '../core/program-runner.ts';
 import { nodeTerminal } from '../core/terminal.ts';
 import { GIT_CHECKOUT } from '../exec/binding.ts';
 import { nodeExecSpawner } from '../exec/runner.ts';
+import { processRuntimeProbe } from '../exec/runtime-pin.ts';
 import { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS } from '../plugin-api/index.ts';
 import { GIT_PULLS } from '../sync/pull-conflicts.ts';
 import { GIT_MERGE } from '../merge/git.ts';
@@ -161,7 +162,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     trees: GIT_TREES,
     hooks: nodeHookRunner(process.platform),
     packageRegistry: httpPackageRegistry(),
-    exec: { spawner: nodeExecSpawner(process.platform), checkout: GIT_CHECKOUT },
+    exec: { spawner: nodeExecSpawner(process.platform), checkout: GIT_CHECKOUT, runtime: processRuntimeProbe(process.platform, process.execPath, process.version) },
     webhook: chatWebhook(),
     cmdShimLine,
     readStdin: entry.readStdin,
