@@ -4832,7 +4832,7 @@ Output:
 
 ```text
 0.503.0
-0.502.1  current, pinned  github-release v0.502.1 4f2a9b3c
+0.502.1  current, pinned  claude-code-plugin
 0.502.0
 0.501.0
 0.500.2  past the rollback window
