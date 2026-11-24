@@ -236,6 +236,42 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
     assert.throws(() => teamrigShipWritesOf(['plugins/teamrig-pane/hooks/hooks.json']), /regenerated path plugins\/teamrig-pane\/hooks\/hooks\.json is no folder/);
     assert.throws(() => teamrigShipWritesOf(['plugins/teamrig-pane/nested/.claude-plugin/plugin.json']), /is no folder the build rebuilds/);
   });
+
+  it("keeps only the release stamps whose version file the profile names, so a repo with no src/core/version.ts has none (T5320)", () => {
+    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    assert.deepEqual(teamrigShipWritesOf(regenerated).releaseStamps, TEAMRIG_RELEASE_STAMPS);
+    assert.deepEqual(teamrigShipWritesOf(['dist/', 'plugins/teamrig-pane/.claude-plugin/plugin.json', TEAMRIG_RELEASE_MANIFEST.path]).releaseStamps, []);
+  });
+});
+
+describe('changePatch on a repo with no src/core/version.ts, as teamrig-pane is (T5320)', () => {
+  const PANE_MANIFEST = 'plugins/teamrig-pane/.claude-plugin/plugin.json';
+  const README = 'README.md';
+  let repo: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('approval-pane').init();
+    repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
+    repo.write(PANE_MANIFEST, manifest('0.83.1'));
+    repo.write(README, '# Pane\n\nRuns on Node 22.\n');
+    repo.git('add', '--', PANE_MANIFEST, README);
+    repo.git('commit', '-q', '-m', 'base');
+    repo.git('checkout', '-q', '-b', 't4033-node-24');
+    repo.write(README, '# Pane\n\nRuns on Node 24 (since 0.84.0).\n');
+    repo.git('commit', '-q', '-am', 'build: node 24');
+  });
+
+  after(() => repo.remove());
+
+  it('fingerprints a head whose diff changes a Markdown file, which read teamrig\'s version file and threw before', () => {
+    const writes = teamrigShipWritesOf(['dist/', PANE_MANIFEST, TEAMRIG_RELEASE_MANIFEST.path]);
+    const git = (args: readonly string[]): string => repo.git(...args);
+    const approved = changePatch(git, 'HEAD', 'main', writes);
+    assert.match(approved, /^[0-9a-f]{64}$/);
+    repo.write(README, '# Pane\n\nRuns on Node 24 (since 0.85.0).\n');
+    repo.git('commit', '-q', '-am', 'docs: another stamp');
+    assert.notEqual(changePatch(git, 'HEAD', 'main', writes), approved, 'with no stamp of its own, a since line is work');
+  });
 });
 
 describe('changePatch: the fingerprint of what a branch changes over main', () => {

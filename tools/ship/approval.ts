@@ -185,11 +185,14 @@ export interface ShipWrites {
  * the release manifest too, with teamrig's release stamps. The ship and `ship.ts merge` both read work through it,
  * so a path repos.json adds is known to each (a merge given the shorter list refused every approved head, T4298).
  * Another repo's plugin manifest is known by its shape (`shipVersionFileOf`): teamrig-pane's release merges through
- * the same tool (T4821), which threw on its plugin.json before.
+ * the same tool (T4821), which threw on its plugin.json before. A release stamp is kept only when the profile names
+ * the version file it ships in: a repo without teamrig's src/core/version.ts (teamrig-pane) has none, where every
+ * Markdown diff read that file and threw (T5320).
  */
 export function teamrigShipWritesOf(regenerated: readonly string[]): ShipWrites {
   const known = regenerated.flatMap((path) => shipVersionFileOf(path) ?? []);
-  return shipWritesOf(regenerated, known, TEAMRIG_RELEASE_STAMPS);
+  const stamps = TEAMRIG_RELEASE_STAMPS.filter((stamp) => known.some((file) => file.path === stamp.shipsIn.path));
+  return shipWritesOf(regenerated, known, stamps);
 }
 
 /**
