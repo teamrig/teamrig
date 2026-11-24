@@ -61,6 +61,7 @@ export const READ_ROUTE_EXCLUDED: ReadonlyMap<string, string> = new Map([
   ['skills step', 'new with T4860: it stays judged by a prompt until the security reviewer reads it as a route'],
   ['issue search', 'new with T4860: it reads the tracker with the key saved for the repository and prints outside text; a prompt judges it until the security reviewer reads it as a route'],
   ['issue show', 'new with T4860: it reads the tracker with the key saved for the repository and prints outside text; a prompt judges it until the security reviewer reads it as a route'],
+  ['kit versions', 'new with T5278: it stays judged by a prompt until the security reviewer reads it as a route'],
 ]);
 
 /** Flags that make a listed command no route: each opens a folder the caller names and prints from it (C4). */
