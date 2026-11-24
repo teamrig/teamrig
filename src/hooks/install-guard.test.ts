@@ -182,8 +182,26 @@ describe('installGuardReply: shell lines', () => {
     assert.equal(await decisionOf(call('PowerShell', { command: "Set-Content ~\\.teamrig\\curr* '0.0.1'" })), 'deny');
   });
 
+  it('refuses the guarded folder itself, or a glob that can match its name, for any command (T5364 R1)', async () => {
+    const bash = ['rm -rf ~/.teamrig', 'mv ~/.teamrig ~/old', 'rm -rf ~/.codex', 'rm -rf ~/.teamrig/', 'rm -rf ~/.t*', 'ls ~/*', 'rm -rf C:/u/TEAMRI~1'];
+    for (const command of bash) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    for (const command of ['Remove-Item -Recurse ~\\.teamrig', 'Remove-Item -Recurse ~\\*', 'Move-Item $env:USERPROFILE\\.codex C:\\old']) {
+      assert.equal(await decisionOf(call('PowerShell', { command })), 'deny', command);
+    }
+    assert.equal(await decisionOf(call('Write', { file_path: 'C:/u/.teamrig', content: 'x' })), 'deny');
+  });
+
+  it('passes an ancestor of a guarded folder, and a glob at home that cannot match its name', async () => {
+    for (const command of ['ls ~', 'ls ~/*.md', 'rm -rf ~/old', 'echo hi > ~/$(x)']) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+    assert.equal(await decisionOf(call('PowerShell', { command: 'Get-ChildItem ~\\*.log' })), undefined);
+  });
+
   it('passes a glob, a substitution or a dot segment that stays outside the guarded entries', async () => {
-    const lines = ['ls ~/.teamrig/teams/*', 'ls ~/.teamrig/t*', 'echo ~/$(date)', 'cat ~/.codex/sessions/*.jsonl', 'git status', 'ls ~/*'];
+    const lines = ['ls ~/.teamrig/teams/*', 'ls ~/.teamrig/t*', 'echo ~/$(date)', 'cat ~/.codex/sessions/*.jsonl', 'git status'];
     for (const command of lines) {
       assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
     }

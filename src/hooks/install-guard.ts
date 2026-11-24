@@ -80,11 +80,23 @@ function entriesPattern(place: GuardedPlace): string {
 /** A segment ends at a separator, a character a name cannot hold, or the end. */
 const SEGMENT_END = '(?=[\\\\/]|[^\\w.~-]|$)';
 
+/** A folder's compare key as a pattern, each segment by its name or short name: `c:/+u/+(?:\.teamrig|te…~1)`. */
+function folderKeySource(folderKey: string): string {
+  const [head = '', ...rest] = folderKey.split('/');
+  return [escaped(head), ...rest.map(segmentPattern)].join('/+');
+}
+
 /** A place's entry on a compare key, anchored to the folder's key: `c:/u/.teamrig/current`. */
 function entryKeyPattern(folderKey: string, place: GuardedPlace): RegExp {
-  const [head = '', ...rest] = folderKey.split('/');
-  const folder = [escaped(head), ...rest.map(segmentPattern)].join('/+');
-  return new RegExp(`^${folder}/+${entriesPattern(place)}(?:/|$)`, 'i');
+  return new RegExp(`^${folderKeySource(folderKey)}/+${entriesPattern(place)}(?:/|$)`, 'i');
+}
+
+/**
+ * The guarded folder itself on a compare key (T5364 R1): one line that removes or moves it takes every entry at
+ * once, the hook files the hosts start their guards from among them.
+ */
+function folderKeyPattern(folderKey: string): RegExp {
+  return new RegExp(`^${folderKeySource(folderKey)}/*$`, 'i');
 }
 
 /** The folder spellings a place is reached by, as given and as its real path. */
@@ -113,10 +125,10 @@ async function realKeyOf(absolute: string, env: InstallGuardEnv): Promise<string
   }
 }
 
-/** The guarded place a compare key is in, or undefined. */
+/** The guarded place a compare key is in, or is the folder of, or undefined. */
 async function placeOfKeys(keys: readonly string[], env: InstallGuardEnv): Promise<GuardedPlace | undefined> {
   for (const place of env.places) {
-    const patterns = (await folderKeysOf(place, env)).map((folder) => entryKeyPattern(folder, place));
+    const patterns = (await folderKeysOf(place, env)).flatMap((folder) => [entryKeyPattern(folder, place), folderKeyPattern(folder)]);
     if (keys.some((key) => patterns.some((pattern) => pattern.test(key)))) {
       return place;
     }
@@ -234,9 +246,22 @@ function patternReaches(segments: readonly string[], target: readonly string[], 
 }
 
 /**
+ * True when a pattern path can be the target folder itself (T5364 R1): as many segments, each able to match. A
+ * glob may match the folder's name (`~/.t*`, `~\*`), but a substitution may not, so `~/$(x)` stays open: what it
+ * holds is the computed-path class, which Phase 2's read-only install closes.
+ */
+function patternIsFolder(segments: readonly string[], target: readonly string[], flags: string): boolean {
+  return (
+    segments.length === target.length &&
+    !segments.some((segment) => segment.includes(REST)) &&
+    target.every((wanted, index) => segmentReaches(segments[index] ?? '', wanted, flags))
+  );
+}
+
+/**
  * The guarded place a pattern path can reach, or undefined: its folder part up to the first mark resolved as a file
  * tool's path is (against the cwd, to its real form), then the rest walked segment by segment, `..` taking the one
- * before, and held against each guarded entry's segments (T5355 S2).
+ * before, and held against each guarded entry's segments and the folder itself (T5355 S2, T5364 R1).
  */
 async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): Promise<GuardedPlace | undefined> {
   const paths = pathsOf(env.platform);
@@ -262,7 +287,7 @@ async function placeOfPattern(path: string, cwd: string, env: InstallGuardEnv): 
   for (const place of env.places) {
     for (const folderKey of await folderKeysOf(place, env)) {
       const head = folderKey.split('/');
-      if (place.entries.some((entry) => patternReaches(segments, [...head, entry], flags))) {
+      if (patternIsFolder(segments, head, flags) || place.entries.some((entry) => patternReaches(segments, [...head, entry], flags))) {
         return place;
       }
     }
