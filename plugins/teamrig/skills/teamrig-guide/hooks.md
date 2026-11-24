@@ -351,7 +351,9 @@ What to do: push your own branch and merge through a pull request, or write the 
 can read it. Never route around a refusal; report it to the lead. On Windows a Git Bash drive folder (`cd /c/work`,
 `git -C /c/work`) is read as `C:\work`. The guard reads chains, subshells, nested shells,
 wrappers and git aliases (an `env -S` string and an alias value split by env's and git's own rules, a CR a plain
-space in both), but it does not see a push inside a script or program the command runs, `gh pr merge`,
+space in both) and the command `teamrig queue` or `teamrig test` runs after its `--` (a word only known when it runs
+before that `--` leaves where the command starts unread, so the guard asks), but it does not see a push inside a
+script or program the command runs, `gh pr merge`,
 git extensions, or pushes run outside Claude Code. It is a guard against mistakes, not a sandbox: protect the
 branch on your git host too.
 
