@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { accountLimits, tokenCountOf, type TokenCount } from './token-count.ts';
+import { accountLimits, newestLimits, tokenCountOf, tokenCountsOf, type TokenCount } from './token-count.ts';
 
 const AT = '2030-01-08T09:00:00.000Z';
 const RESETS_S = 1_894_000_000;
@@ -79,5 +79,16 @@ describe('accountLimits', () => {
     const silent = read(line({ rate_limits: null }, '2030-01-08T11:00:00.000Z'));
     assert.equal(accountLimits([newer, older, silent])?.sevenDay?.usedPct, 43);
     assert.equal(accountLimits([silent]), undefined);
+  });
+});
+
+describe('newestLimits and tokenCountsOf', () => {
+  it("keeps the newest reading with the time Codex wrote it, from a text's token_count lines alone (T5060)", () => {
+    const older = line({ rate_limits: { secondary: { ...WEEK, used_percent: 40 } } }, '2030-01-08T08:00:00.000Z');
+    const newer = line({ rate_limits: { secondary: { ...WEEK, used_percent: 43 } } }, '2030-01-08T10:00:00.000Z');
+    const counts = tokenCountsOf([newer, '{"type":"response_item"}', line({ info: 'x' }), older, ''].join('\n'));
+    assert.equal(counts.length, 2, 'the other line and the refused one are left out');
+    assert.deepEqual(newestLimits(counts), { limits: { fiveHour: null, sevenDay: { usedPct: 43, resetsAt: RESETS_S * 1000 } }, at: Date.parse('2030-01-08T10:00:00.000Z') });
+    assert.equal(newestLimits([]), undefined);
   });
 });

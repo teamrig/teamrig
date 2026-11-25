@@ -47,7 +47,7 @@ export type { ChannelAnswer, ChannelPlan, HostPlugin, InstallReach, MarketplaceR
 export type { HostModels, RoutingOverride } from './models.ts';
 export type { HostSteps } from './steps.ts';
 export type { StatusLine, StatusLineAnswer, StatusLinePlan, StatusReading } from './status-line.ts';
-export type { RateLimits, RateWindow, TokenWeights, UsageMeter } from './usage-meter.ts';
+export type { DatedRateLimits, RateLimits, RateWindow, TokenWeights, UsageMeter } from './usage-meter.ts';
 export type { FolderSettings, HostPaths } from './paths.ts';
 export type { HostSecrets } from './secrets.ts';
 export type {

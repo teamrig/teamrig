@@ -52,4 +52,16 @@ describe("Codex CLI's usage meter", () => {
     assert.equal(usageMeter.weekReading(TOKEN_COUNT), undefined);
     assert.equal(usageMeter.weekReading(''), undefined);
   });
+
+  it("reads the week from a rollout tail's newest token_count, dated by its own timestamp, past a cut first line (T5060)", () => {
+    const newer = TOKEN_COUNT.replace('2030-01-08T09:00:00.000Z', '2030-01-08T10:00:00.000Z').replace('"used_percent":41', '"used_percent":43');
+    const tail = [TOKEN_COUNT.slice(20), newer, TOKEN_COUNT, '{"type":"response_item"}', ''].join('\n');
+    const reading = usageMeter.transcriptWeekReading?.(tail);
+    assert.deepEqual(reading, { limits: { fiveHour: null, sevenDay: { usedPct: 43, resetsAt: 1_894_000_000_000 } }, at: Date.parse('2030-01-08T10:00:00.000Z') });
+  });
+
+  it('reads no week from a tail with no token_count naming one (T5060)', () => {
+    assert.equal(usageMeter.transcriptWeekReading?.('{"type":"response_item"}\n'), undefined);
+    assert.equal(usageMeter.transcriptWeekReading?.(TOKEN_COUNT.replace(/"rate_limits":\{.*\}\}\}$/, '"rate_limits":null}}')), undefined);
+  });
 });

@@ -14,7 +14,7 @@
  * a renamed field would otherwise read as a week with nothing spent. The live proof of the names is the study's 7th.
  */
 
-import { isRecord, type CallUsage, type RateLimits, type RateWindow } from '../../../plugin-api/index.ts';
+import { isRecord, type CallUsage, type DatedRateLimits, type RateLimits, type RateWindow } from '../../../plugin-api/index.ts';
 
 /** The window Codex names the week by, in minutes. */
 export const WEEK_MINUTES = 10_080;
@@ -175,11 +175,28 @@ export function tokenCountOf(line: string): TokenCount | RefusedTokenCount | und
  * the time Codex wrote it. Every chat repeats the same account-wide snapshot, so the readings are never added.
  */
 export function accountLimits(counts: Iterable<TokenCount>): RateLimits | undefined {
-  let newest: TokenCount | undefined;
+  return newestLimits(counts)?.limits;
+}
+
+/** The newest reading of the account's limits among `counts`, with the time Codex wrote it; undefined when none names any. */
+export function newestLimits(counts: Iterable<TokenCount>): DatedRateLimits | undefined {
+  let newest: DatedRateLimits | undefined;
   for (const reading of counts) {
-    if (reading.limits !== undefined && reading.at !== undefined && (newest?.at === undefined || reading.at > newest.at)) {
-      newest = reading;
+    if (reading.limits !== undefined && reading.at !== undefined && (newest === undefined || reading.at > newest.at)) {
+      newest = { limits: reading.limits, at: reading.at };
     }
   }
-  return newest?.limits;
+  return newest;
+}
+
+/** The `token_count`s of a rollout's text, one a line; a refused one or any other line is left out. */
+export function tokenCountsOf(text: string): TokenCount[] {
+  const counts: TokenCount[] = [];
+  for (const line of text.split('\n')) {
+    const count = tokenCountOf(line);
+    if (count?.kind === 'token-count') {
+      counts.push(count);
+    }
+  }
+  return counts;
 }

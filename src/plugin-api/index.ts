@@ -154,6 +154,7 @@ export {
   type TextReplacement,
   type TitleEntry,
   type TitleSwitch,
+  type DatedRateLimits,
   type RateLimits,
   type RateWindow,
   type TokenWeights,

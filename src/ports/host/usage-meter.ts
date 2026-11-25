@@ -26,6 +26,12 @@ export interface RateLimits {
   readonly sevenDay: RateWindow | null;
 }
 
+/** The plan's reading of its limits with the time the host wrote it down, in epoch milliseconds. */
+export interface DatedRateLimits {
+  readonly limits: RateLimits;
+  readonly at: number;
+}
+
 /**
  * The host's usage meter: what a call the transcript reader gave cost, in weighted tokens (W), one number whatever
  * mix of input, cache and output the call used, and what the plan itself says of its limits. The core adds, splits
@@ -46,4 +52,11 @@ export interface UsageMeter {
    * no limit, before a session's first reply, or on a host that tells no reading a program can take.
    */
   weekReading(status: string): RateLimits | undefined;
+  /**
+   * The plan's newest reading of its windows in the tail of a session's transcript, with when the host wrote it,
+   * for a host that writes its reading there rather than in a status input (Codex CLI's `token_count` events).
+   * Undefined is an answer: the tail tells none, as before the session's first reply. A host that never writes one
+   * there leaves the method out, and its turn ends read no transcript for it.
+   */
+  readonly transcriptWeekReading?: (tail: string) => DatedRateLimits | undefined;
 }
