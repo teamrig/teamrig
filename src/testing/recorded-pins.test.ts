@@ -5,7 +5,7 @@ import { errorMessage, isRecord, recordField, stringField } from '../core/guards
 import { APP, USER_HOME } from './cli-harness.ts';
 import { FolderNames, PLACEHOLDERS } from './folder-names.ts';
 import { hookMatches, pluginHooks } from './plugin-hooks.ts';
-import { expectedFolder, pinsIn, recordedPins, TRANSCRIPT_LINES_FILE } from './recorded-pins.ts';
+import { expectedFolder, GUARD_DENIES, GUARD_DENIES_FILE, pinsIn, recordedPins, TRANSCRIPT_LINES_FILE } from './recorded-pins.ts';
 import { hookFile, inputsOf, loadRecording } from './recorded.ts';
 
 /** What brings the committed pins up to the code, after a change that is meant to alter them. */
@@ -37,8 +37,33 @@ describe('recordedPins', () => {
     pins = await replayed();
   });
 
-  it('pins one file for each recorded event, and one for what is read from the transcripts', () => {
-    assert.deepEqual(Object.keys(pins).sort(), [...Object.keys(RECORDING.recorded).map(hookFile), TRANSCRIPT_LINES_FILE].sort());
+  it('pins one file for each recorded event, one for what is read from the transcripts and one for the guards’ refusals', () => {
+    assert.deepEqual(Object.keys(pins).sort(), [...Object.keys(RECORDING.recorded).map(hookFile), TRANSCRIPT_LINES_FILE, GUARD_DENIES_FILE].sort());
+  });
+
+  it('pins a refusal by each guard the plugin wires to PreToolUse, run from a recorded call through its wiring (T4849)', () => {
+    const wired = new Set(pluginHooks().flatMap((hook) => (hook.event === 'PreToolUse' && hook.argv[1]?.endsWith('-guard') === true ? [hook.argv[1]] : [])));
+    assert.deepEqual(GUARD_DENIES.map(({ guard }) => guard).sort(), [...wired].sort(), 'a guard wired to PreToolUse has no pinned refusal, or one pinned is wired no more');
+    const denies: unknown = JSON.parse(pins[GUARD_DENIES_FILE] ?? 'null');
+    assert.ok(Array.isArray(denies));
+    assert.deepEqual(
+      denies.map((deny: unknown) => (isRecord(deny) ? deny['guard'] : undefined)),
+      GUARD_DENIES.map(({ guard }) => guard),
+    );
+    for (const deny of denies) {
+      assert.ok(isRecord(deny) && Array.isArray(deny['runs']));
+      const guard = String(deny['guard']);
+      const [run, ...more] = deny['runs'].map((item: unknown) => item);
+      assert.deepEqual(more, [], `${guard} ran more than once`);
+      assert.ok(isRecord(run), `${guard} is not wired to the recorded ${String(deny['tool'])} call`);
+      assert.equal(run['code'], 0, guard);
+      assert.deepEqual(run['stderr'], [], guard);
+      const [answer, ...rest] = Array.isArray(run['stdout']) ? run['stdout'].map((line: unknown) => line) : [];
+      assert.deepEqual(rest, [], guard);
+      const output = isRecord(answer) ? recordField(answer, 'hookSpecificOutput') : undefined;
+      assert.equal(stringField(output ?? {}, 'hookEventName'), 'PreToolUse', guard);
+      assert.equal(stringField(output ?? {}, 'permissionDecision'), 'deny', `${guard} no longer refuses its pinned call`);
+    }
   });
 
   it("pins each wired hook an input reaches in the manifest's order, with its exit code and its JSON answer parsed", () => {

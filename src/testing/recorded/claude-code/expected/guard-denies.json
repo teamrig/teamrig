@@ -1,0 +1,209 @@
+[
+  {
+    "guard": "push-guard",
+    "tool": "Bash",
+    "index": 5,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 5,
+        "hook": "hook push-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "Force-pushing, mirroring or deleting a protected branch (main, master) is refused: it can overwrite other sessions' commits. Push your own branch, or use --force-with-lease if you truly mean it."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "package-guard",
+    "tool": "Bash",
+    "index": 5,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 5,
+        "hook": "hook package-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig package guard: `npx eslint` fetches and runs a package outside the project's lockfile, unvetted. Vet the exact version first (publish date, advisories), add it as a pinned devDependency, then run its local bin (npx --no -- <bin>). [packageGuard.adHocRunners]"
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "secret-guard",
+    "tool": "Read",
+    "index": 1,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 1,
+        "hook": "hook secret-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig secret guard: this call would print the content of {{cwd}}/.env into the conversation. Hand a secret to the tool that needs it (stdin, an env file option, a pipe), check it without printing it (grep -q, wc -c, a hash), or ask the owner to look in their own terminal. A false match: add its !glob to secretGuard.paths or its !pattern to secretGuard.envNames or secretGuard.commands. [secretGuard.secretReads]"
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "db-write-guard",
+    "tool": "PowerShell",
+    "index": 6,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 6,
+        "hook": "hook db-write-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig db-write guard: this line writes to a database by hand: psql runs DELETE. First run a count or find of what it would change, show the owner the counts or a preview, and run the write only with the owner's OK. [dbWriteGuard.writes] teamrig guards never ask a person, so this is refused; do not retry it or route around it. Take the route the reason names; if the step still needs a person's yes, record it as waiting for the owner (`teamrig set <task> --status waiting --waits approval:owner --note \"<the command>\"`) and take your next task. If you think the rule is wrong, ask for a change as a task: `teamrig add --owner <your lead> --title \"Rule change: <guard>: <why>\"`, or to the security reviewer for a security rule."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "exec-guard",
+    "tool": "Bash",
+    "index": 5,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 5,
+        "hook": "hook exec-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig exec guard: `teamrig exec approve` names the owner (--session owner); the owner reviews in their own terminal, or types `/teamrig exec approve R<n> --session owner` in a tab, never through a tool call."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "pass-record-guard",
+    "tool": "Write",
+    "index": 0,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 0,
+        "hook": "hook pass-record-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig pass-record guard: this Write writes {{cwd}}/.git/local-ci/abc.json, in the folder of the trees' pass records. Only the repo's local runner writes a record, after every check passed on the tree (its pre-push hook, `ship.ts check`); one a session writes, moves or deletes would let a push or a merge skip the tree's tests. Run the repo's local checks instead; read a record with the Read tool and search code with the Grep tool. Do not retry this or route around it: a record that looks wrong goes to the lead."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "install-guard",
+    "tool": "Edit",
+    "index": 2,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 2,
+        "hook": "hook install-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig install guard: this Edit writes {{kit}}/current.json. the teamrig install ({{kit}}) is what every session's guards run from, so only teamrig writes it: run `teamrig` from PATH, whose install and upgrade write it. Read it with the Read tool; do not retry this or route around it: the lead takes the change."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "service-role-guard",
+    "tool": "Bash",
+    "index": 5,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 5,
+        "hook": "hook service-role-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig service-role guard: `teamrig roles grant` and `revoke` change who may run a service role's commands past every permission check, a permission only the owner gives, so teamrig refuses it at every session's call, whatever --yes says. The owner runs it from their own terminal, where a grant first shows what its commands reach, pull requests and outside authors included; a session puts the change to its lead. teamrig guards never ask a person, so this is refused; do not retry it or route around it. Take the route the reason names; if the step still needs a person's yes, record it as waiting for the owner (`teamrig set <task> --status waiting --waits approval:owner --note \"<the command>\"`) and take your next task. If you think the rule is wrong, ask for a change as a task: `teamrig add --owner <your lead> --title \"Rule change: <guard>: <why>\"`, or to the security reviewer for a security rule."
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  },
+  {
+    "guard": "picker-guard",
+    "tool": "Bash",
+    "index": 5,
+    "runs": [
+      {
+        "event": "PreToolUse",
+        "index": 5,
+        "hook": "hook picker-guard --host claude-code",
+        "code": 0,
+        "stdout": [
+          {
+            "hookSpecificOutput": {
+              "hookEventName": "PreToolUse",
+              "permissionDecision": "deny",
+              "permissionDecisionReason": "teamrig picker guard: Claude Code asks a person before a `cd` compound that runs git or leaves the session's folder, and that prompt holds this session until someone answers. Do not retry this line; rerun it as: git -C sub status"
+            }
+          }
+        ],
+        "stderr": []
+      }
+    ]
+  }
+]
