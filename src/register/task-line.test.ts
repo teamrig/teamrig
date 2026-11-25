@@ -5,14 +5,15 @@ import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { testTask } from '../testing/task.ts';
 import { cutTask, textHash } from './description-cut.ts';
 import { foldEvents, type Task } from './fold.ts';
+import { SHORT_TASK_LINES_LAYOUT_VERSION } from './marker.ts';
 import { readEvents } from './snapshot.ts';
 import { isTaskLine, parseTaskLine, taskLineRecord, TASK_LINE_TYPE } from './task-line.ts';
 
 const GOLDEN_LOGS = ['events-v0.jsonl', 'events-v1.jsonl', 'events-v2.jsonl', 'events-v3.jsonl', 'events-one-commit.jsonl'];
 
 /** The record a task line holds once written to disk and read back: JSON text, parsed. */
-function onDisk(task: Task): JsonRecord {
-  const parsed: unknown = JSON.parse(JSON.stringify(taskLineRecord(5, task)));
+function onDisk(task: Task, v = 5): JsonRecord {
+  const parsed: unknown = JSON.parse(JSON.stringify(taskLineRecord(v, task)));
   if (!isRecord(parsed)) {
     throw new Error('a task line is not a record');
   }
@@ -43,6 +44,7 @@ const richTask: Task = testTask({
   type: 'bug',
   critical: true,
   pin: 'top',
+  exempt: 'a launch week',
   workClass: 'Roadmap',
   prepares: { goal: 'G1', slice: 2 },
   status: 'waiting',
@@ -96,6 +98,57 @@ describe('task lines', () => {
 
   it('reads back a task with every optional part set', () => {
     assert.deepEqual(parseTaskLine(onDisk(richTask)), richTask);
+  });
+
+  it('leaves out each task field at the value a create without it gets, and reads the line back to the same task (#1497)', () => {
+    const task = testTask({ id: 'T7' });
+    const written = onDisk(task)['task'];
+    assert.ok(isRecord(written));
+    for (const key of ['description', 'ref', 'due', 'goals', 'noGoal', 'week', 'after', 'size', 'type', 'critical', 'pin', 'exempt', 'workClass', 'prepares']) {
+      assert.equal(Object.hasOwn(written, key), false, `${key} is written at its default`);
+    }
+    assert.equal(written['note'], null, 'a fold field is still written');
+    assert.deepEqual(parseTaskLine(onDisk(task)), task);
+  });
+
+  it('writes every task field that holds a value', () => {
+    const written = onDisk(richTask)['task'];
+    assert.ok(isRecord(written));
+    // noGoal is false whenever a task has goals, as the rich task has.
+    const held = Object.keys(richTask).filter((key) => key !== 'noGoal');
+    assert.deepEqual(Object.keys(written).sort(), held.sort());
+  });
+
+  it('reads a line that writes every field out, as teamrig wrote it before #1497', () => {
+    const task = testTask({ id: 'T8' });
+    const whole: unknown = JSON.parse(JSON.stringify({ v: 5, type: TASK_LINE_TYPE, task }));
+    assert.ok(isRecord(whole));
+    assert.deepEqual(parseTaskLine(whole), task);
+  });
+
+  it('leaves out each fold field at a new task\'s value from layout 6 on, and reads the line back to the same task (#1497)', async () => {
+    const task = testTask({ id: 'T9' });
+    const written = onDisk(task, SHORT_TASK_LINES_LAYOUT_VERSION)['task'];
+    assert.ok(isRecord(written));
+    assert.deepEqual(Object.keys(written).sort(), ['assignedAt', 'createdAt', 'createdBy', 'id', 'owner', 'priority', 'priorityAt', 'source', 'status', 'statusAt', 'title', 'updatedAt', 'updatedBy', 'waitsAt']);
+    assert.deepEqual(parseTaskLine(onDisk(task, SHORT_TASK_LINES_LAYOUT_VERSION)), task);
+    assert.deepEqual(parseTaskLine(onDisk(richTask, SHORT_TASK_LINES_LAYOUT_VERSION)), richTask);
+    for (const name of GOLDEN_LOGS) {
+      const read = readEvents(await readFile(new URL(`./testdata/${name}`, import.meta.url), 'utf8'));
+      for (const folded of foldEvents(read.events, read.seenIds).tasks.values()) {
+        assert.deepEqual(parseTaskLine(onDisk(folded, SHORT_TASK_LINES_LAYOUT_VERSION)), folded, `${name} ${folded.id}`);
+      }
+    }
+  });
+
+  it('keeps every fold field on a layout 5 line, and reads one missing there as damaged', () => {
+    const written = onDisk(testTask({ id: 'T10' }))['task'];
+    assert.ok(isRecord(written));
+    assert.equal(written['ownerSeenAt'], null);
+    assert.deepEqual(written['review'], {});
+    assert.equal(parseTaskLine(editedLine(richTask, { ownerSeenAt: undefined })), 'T42: ownerSeenAt is neither text nor null');
+    const short = { ...editedLine(richTask, { ownerSeenAt: undefined }), v: SHORT_TASK_LINES_LAYOUT_VERSION };
+    assert.deepEqual(parseTaskLine(short), { ...richTask, ownerSeenAt: null });
   });
 
   it('reads back a card with none of its optional parts', () => {
