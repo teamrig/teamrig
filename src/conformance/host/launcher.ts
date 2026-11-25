@@ -123,12 +123,15 @@ const CASES: readonly LauncherCase[] = [
   },
   {
     id: 'launcher.launch-args',
-    title: 'starts a session on the model, at the effort, resumed and prompted as asked, and passes nothing it was not asked',
+    title: 'starts a session on the model, at the effort, resumed, on the settings file and prompted as asked, and passes nothing it was not asked',
     features: ['sessions.open', 'sessions.resume'],
     run: ({ port }) => {
       const { launchArgs } = port({});
       const full = launchArgs(FULL);
-      for (const part of ['model', 'effort', 'resume'] as const) {
+      // The settings file carries the session's skill listing ([skills.otherAreas]): a host that dropped it would
+      // start every session seeing every area's skills, so the kit holds each host to it rather than trusting its
+      // launchArgs (T4980).
+      for (const part of ['model', 'effort', 'resume', 'settingsFile'] as const) {
         assert.ok(full.includes(FULL[part] ?? ''), `the ${part} ${FULL[part]} is not one argument of ${JSON.stringify(full)}`);
       }
       assert.ok(full.includes(FULL.prompt ?? ''), 'the prompt is not handed whole, as one argument');
