@@ -1219,11 +1219,14 @@ fence with no language or in the text), and nowhere a sha256 (a whole one, or `s
 as the card's run line `(sha256 7a0d9294, audited by security)` shows it), `hook stop` sends the session back once:
 
 ```text
-teamrig: your reply handed the human a shell block with no pinned sha256. Core rule 11: a step the human runs by hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat, and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line; write read-only on the line before such a block next time.
+teamrig: your reply handed the human a shell block with no pinned sha256. Core rule 11: a step the human runs by hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat, and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line; write read-only, or what a quoted block is the result of ("call 2 returned:"), on the line before such a block next time.
 ```
 
-A block or call line whose line before, or own line, says `read-only` is let by. A backticked short hex alone pins
-nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
+A block or call line whose line before, or own line, says `read-only` is let by, and so is one those lines name as
+what a call gave back (`returned`, `printed`, `output`, `result`, `came back`, `answered`, `replied`, `responded`)
+while they hand nothing over (no `run`, `paste`, `add`, `set`, `write`, `copy` and the like). That is a quote of a
+tool's result, which a reply on a host whose transcript teamrig does not read (Codex CLI) shows the human when asked
+what a call returned. A backticked short hex alone pins nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
 dropped skill edit and before the rest of the turn's end. Outside a team, and in a tab that is no session of it, it
 says nothing.
 

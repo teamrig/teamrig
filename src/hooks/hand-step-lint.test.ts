@@ -34,6 +34,19 @@ describe('handStepsOf', () => {
     assert.deepEqual(handStepsOf(`${CALL}   # read-only`), []);
     assert.deepEqual(handStepsOf(`Read-only check:\n${block('bash', 'git status')}\nNow the fix:\n${block('bash', 'git push')}`), ['shell']);
   });
+
+  it("lets by a quote of what a call returned, as a Codex CLI reply shows a tool's JSON, unless its lead-in hands it over (T5359)", () => {
+    const result = '{ "exit_code": 0, "output": "hi", "session_id": null }';
+    assert.deepEqual(handStepsOf(`Call 1 (\`cmd /c echo hi\`) returned:\n${block('json', result)}`), []);
+    assert.deepEqual(handStepsOf(`**Call 2** printed nothing; the tool's result:\n\n${block('json', result)}`), []);
+    for (const lead of ['It came back with:', 'The output:', 'write_stdin answered:', 'Results:']) {
+      assert.deepEqual(handStepsOf(`${lead}\n${block('console', 'StdinClosed')}`), [], lead);
+    }
+    assert.deepEqual(handStepsOf(`Paste the result into settings.json:\n${block('json', '{ "a": 1 }')}`), ['json']);
+    assert.deepEqual(handStepsOf(`Run this and send me its output:\n${block('powershell', 'Remove-Item x')}`), ['shell']);
+    assert.deepEqual(handStepsOf(`Call 1 returned:\n${block('json', result)}\nNow add this:\n${block('json', '{ "a": 1 }')}`), ['json']);
+    assert.deepEqual(handStepsOf(`Run it; the output follows:\n  ${CALL}`), ['call']);
+  });
 });
 
 describe('handStepLintReason', () => {
@@ -45,7 +58,8 @@ describe('handStepLintReason', () => {
         ' hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by' +
         ' one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat,' +
         ' and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line;' +
-        ' write read-only on the line before such a block next time.',
+        ' write read-only, or what a quoted block is the result of ("call 2 returned:"), on the line before such a block' +
+        ' next time.',
     );
   });
 

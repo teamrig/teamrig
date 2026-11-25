@@ -25,6 +25,15 @@ const CALL_LINE = /^[ \t]*&[ \t]+['"]/gmu;
 const PINNED = /\b[0-9a-f]{64}\b|sha256[^\n]{0,20}\b[0-9a-f]{8,}\b/iu;
 /** The word a reply writes before a block that only reads (changes nothing, touches no secret), which the lint lets by. */
 const READ_ONLY = /\bread-only\b/iu;
+/**
+ * The words a lead-in line uses for what a tool call or command gave back ("call 2 returned:", "it printed:"), which
+ * make the block after it a quote of that result, not a step to run (T5359). A Codex CLI turn has no transcript
+ * teamrig reads, so the reply's own words are all the lint sees, and a reply asked to report what a call returned
+ * quotes its JSON in a fence.
+ */
+const QUOTED_RESULT = /\b(?:returned|printed|outputs?|results?|came back|answered|replied|responded)\b/iu;
+/** The words a lead-in line uses to hand a block to the human, which no quoting word overrules. */
+const HANDS_OVER = /\b(?:run|paste|add|put|set|write|copy|type|replace|save|insert|append|edit|enter|execute)\b/iu;
 
 /** The last line of `text` before `index` that holds more than blanks, and the line `index` starts on. */
 function linesAround(text: string, index: number): string {
@@ -35,9 +44,13 @@ function linesAround(text: string, index: number): string {
   return `${before}\n${own}`;
 }
 
-/** Whether the reply marked the block or line at `index` read-only, on the line before it or its own line. */
-function markedReadOnly(text: string, index: number): boolean {
-  return READ_ONLY.test(linesAround(text, index));
+/**
+ * Whether the reply marked the block or line at `index` as no step to run, on the line before it or its own line:
+ * read-only, or a quote of what a call returned that hands nothing over.
+ */
+function markedNotToRun(text: string, index: number): boolean {
+  const lines = linesAround(text, index);
+  return READ_ONLY.test(lines) || (QUOTED_RESULT.test(lines) && !HANDS_OVER.test(lines));
 }
 
 /** The shape of a fenced block of language `lang`, or undefined for code the human does not run (TypeScript, a log). */
@@ -52,21 +65,21 @@ function fenceShapeOf(lang: string, body: string): HandStepShape | undefined {
 }
 
 /**
- * The hand step shapes a reply holds that are not marked read-only, each once, in the order they first appear:
+ * The hand step shapes a reply holds that are not marked as no step to run, each once, in the order they first appear:
  * shell and JSON fences, a fence with no language holding a call line, and a call line outside any fence.
  */
 export function handStepsOf(text: string): readonly HandStepShape[] {
   const found: { readonly shape: HandStepShape; readonly at: number }[] = [];
   for (const match of text.matchAll(FENCE)) {
     const shape = fenceShapeOf((match[1] ?? '').toLowerCase(), match[2] ?? '');
-    if (shape !== undefined && !markedReadOnly(text, match.index)) {
+    if (shape !== undefined && !markedNotToRun(text, match.index)) {
       found.push({ shape, at: match.index });
     }
   }
   // The fences blanked out, newlines kept, so a call line is found only outside them, at its place in the reply.
   const outside = text.replace(FENCE, (fence) => fence.replace(/[^\n]/gu, ' '));
   for (const match of outside.matchAll(CALL_LINE)) {
-    if (!markedReadOnly(text, match.index)) {
+    if (!markedNotToRun(text, match.index)) {
       found.push({ shape: 'call', at: match.index });
     }
   }
@@ -95,6 +108,7 @@ export function handStepLintReason(text: string, command: string): string | unde
     ' hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by' +
     ' one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat,' +
     ' and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line;' +
-    ' write read-only on the line before such a block next time.'
+    ' write read-only, or what a quoted block is the result of ("call 2 returned:"), on the line before such a block' +
+    ' next time.'
   );
 }
