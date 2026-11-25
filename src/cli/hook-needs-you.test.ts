@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import type { JsonRecord } from '../core/guards.ts';
+import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { FOCUS_TITLE_VAR } from '../adapters/terminals/windows-terminal/scripts.ts';
 import { TabNeedStore, type TabNeed } from '../tabs/need.ts';
 import { APP, CliHarness, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
@@ -44,7 +44,9 @@ function focus(kit: CliHarness, session: string, processes: FakeProcesses): Prom
 function parsedOf(result: CliResult): JsonRecord {
   assert.equal(result.code, EXIT.ok, result.stderr.join('\n'));
   assert.equal(result.stdout.length, 1);
-  return JSON.parse(result.stdout[0] ?? '') as JsonRecord;
+  const parsed: unknown = JSON.parse(result.stdout[0] ?? '');
+  assert.ok(isRecord(parsed), 'the answer is an object');
+  return parsed;
 }
 
 /** The answer without when to ask again, which 'names the files its answer read' pins. */
@@ -60,8 +62,7 @@ function lookOf(result: CliResult): unknown {
 }
 
 function isWatch(value: unknown): value is { readonly watch: readonly string[]; readonly recheckAt: unknown } {
-  const watch = typeof value === 'object' && value !== null ? (value as JsonRecord)['watch'] : undefined;
-  return Array.isArray(watch) && watch.every((path) => typeof path === 'string');
+  return isRecord(value) && Array.isArray(value['watch']) && value['watch'].every((path) => typeof path === 'string');
 }
 
 function shown(need: TabNeed, focusOffered = true): JsonRecord {

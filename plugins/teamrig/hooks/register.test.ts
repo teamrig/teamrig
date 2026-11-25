@@ -313,10 +313,11 @@ const FIRST_CHECK = 60_000;
 const TEAMRIG_UPDATE = { plugin: 'teamrig', marketplace: 'teamrig', installed: '0.332.0', newest: '0.333.0' };
 const PANE_UPDATE = { plugin: 'teamrig-pane', marketplace: 'teamrig-pane', installed: '0.40.0', newest: '0.41.0' };
 
-/** A tab with no refresh asked: the clock, each `hook update-*` run with its stdin, and the toasts shown. */
+/** A tab with no refresh asked: the clock, each `hook update-*` run with its stdin, how often `hook needs-you` ran, and the toasts shown. */
 interface UpdateTab {
   readonly clock: MockClock;
   readonly runs: CliRun[];
+  needsYouRuns: number;
   readonly toasts: string[];
 }
 
@@ -328,7 +329,7 @@ const UPDATED_SHOW = 30_000;
  * `answers` gives a command another answer.
  */
 async function updateTab($: Engine, on: On, answers: Readonly<Record<string, unknown>> = {}): Promise<UpdateTab> {
-  const tab: UpdateTab = { clock: mock.clock(on, { now: 1_000_000 }), runs: [], toasts: [] };
+  const tab: UpdateTab = { clock: mock.clock(on, { now: 1_000_000 }), runs: [], needsYouRuns: 0, toasts: [] };
   on('session.id', () => ({ value: TAB }));
   on('session.cwd', () => ({ value: '/work/app' }));
   on('session.root', () => ({ value: '/work/app' }));
@@ -349,8 +350,10 @@ async function updateTab($: Engine, on: On, answers: Readonly<Record<string, unk
       ...answers,
     };
     const answer = command === undefined ? undefined : given[command];
-    // The update band's runs only: the needs-you hand's answer is stubbed so the ten minutes run no CLI (#2305).
-    if (answer !== undefined && command !== 'needs-you') {
+    // `runs` holds the update band's runs only; the needs-you hand's are counted apart (#2305).
+    if (command === 'needs-you') {
+      tab.needsYouRuns += 1;
+    } else if (answer !== undefined) {
       tab.runs.push({ command, stdin: JSON.parse(stdin ?? 'null') });
     }
     return {
@@ -429,6 +432,15 @@ describe('the band telling of a newer plugin', () => {
     expect((await band.find({ type: 'Text' }))?.text).toBe('teamrig: teamrig-pane 0.41.0 is out (you run 0.40.0)');
     await tab.clock.advance(10 * 60_000);
     expect(tab.runs.filter((each) => each.command === 'update-check').length).toBe(2);
+  });
+
+  test('the needs-you hand runs no CLI in the quiet minutes to its recheck (#2305)', async ($, on) => {
+    const tab = await updateTab($, on);
+    await tab.clock.advance(FIRST_CHECK);
+    expect(tab.needsYouRuns > 0).toBe(true);
+    const before = tab.needsYouRuns;
+    await tab.clock.advance(8 * 60_000);
+    expect(tab.needsYouRuns).toBe(before);
   });
 });
 
