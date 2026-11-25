@@ -33,6 +33,7 @@ import {
   pathsIfKnown,
   pathsOf,
   hookFilePlacesOf,
+  repoGlobsOf,
   secretFilesOf,
   sessionCommandLinesOf,
   sessionProcessCheckOf,
@@ -277,6 +278,28 @@ const RUNNING_HOSTS: readonly (readonly [string, HostSource])[] = [
   ['a host with hooks only', HOOKS_ONLY_HOST],
   ['a host naming its own files', OWN_FILES_HOST],
 ];
+
+/** The shipped host's repository globs (T3448). */
+const SHIPPED_REPO_GLOBS = ['CLAUDE.md', 'CLAUDE.local.md', '**/.claude/**', '**/.claude-plugin/**'];
+
+/** A host that names repository globs of its own, one of them a shipped host's too. */
+const OWN_GLOBS_HOST: HostSource = () => ({ ...BARE, paths: { ...testPaths(), repoGlobs: () => ['AGENT.md', '**/.claude/**'] } });
+
+describe('repoGlobsOf', () => {
+  it("gives every shipped host's repository globs, whatever host the run works in, even one whose folders are not known", () => {
+    const { shippedHosts, platform } = quietWorld();
+    for (const [name, host] of [['the shipped host', SHIPPED_HOST], ['a host with no port filled', bare], ['a host with no paths', NO_PATHS_HOST]] as const) {
+      assert.deepEqual(repoGlobsOf({ host, shippedHosts, env: {}, platform }), SHIPPED_REPO_GLOBS, name);
+    }
+  });
+
+  it("adds the running host's globs after the shipped ones, each glob once, and none from a shipped host whose folders are not known", () => {
+    const { shippedHosts, platform } = quietWorld();
+    assert.deepEqual(repoGlobsOf({ host: OWN_GLOBS_HOST, shippedHosts, env: {}, platform }), [...SHIPPED_REPO_GLOBS, 'AGENT.md']);
+    assert.deepEqual(repoGlobsOf({ host: OWN_GLOBS_HOST, shippedHosts: {}, env: {}, platform }), ['AGENT.md', '**/.claude/**']);
+    assert.deepEqual(repoGlobsOf({ host: bare, shippedHosts: { bare: shippedHost(bare), 'no-paths': shippedHost(NO_PATHS_HOST) }, env: {}, platform }), []);
+  });
+});
 
 describe('secretFilesOf', () => {
   it('gives the secret guard the files of every shipped host, whatever host the run works in', () => {

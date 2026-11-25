@@ -137,6 +137,21 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
 }
 
 /**
+ * The repository paths through which a host changes what its sessions do (`HostPaths.repoGlobs`), from every host
+ * adapter teamrig ships with, then the run's own host, each glob once (T3448): a change from outside may add another
+ * host's instruction or settings files than the one the merging session runs on, and those still steer whoever later
+ * works in the repository with that host. A host whose folders teamrig does not know adds none; it never refuses.
+ */
+export function repoGlobsOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly string[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const named = sourcesOf(runtime).flatMap((source) => {
+    const { paths } = source(seen);
+    return isUnsupported(paths) ? [] : paths.repoGlobs();
+  });
+  return [...new Set(named)];
+}
+
+/**
  * Who tells the secret guard the hosts' own secret files in this run: every host adapter teamrig ships with, then
  * the host the run works in, each glob once, its `namedFiles` too. A file is a secret for what it holds, whatever host runs the session,
  * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
