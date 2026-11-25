@@ -1,7 +1,7 @@
 import { isNonNegativeInteger, isRecord, type JsonRecord } from '../core/guards.ts';
 import { parseCard, type DecisionCard } from './card.ts';
 import { parseDescriptionCut } from './description-cut.ts';
-import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase } from './events.ts';
+import { diskPriority, isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase } from './events.ts';
 import type { ApprovalAnswer, OwnerDecision, Task } from './fold.ts';
 import { parseAuditPin, type HandStepAudit } from './hand-step.ts';
 import { isTaskStatus, TASK_ID } from './model.ts';
@@ -22,9 +22,13 @@ import { parseWaits } from './waits.ts';
 /** The `type` of a task line. */
 export const TASK_LINE_TYPE = 'task';
 
-/** The record a task line holds, under the layout version `v` the snapshot it sits in was written at. */
+/**
+ * The record a task line holds, under the layout version `v` the snapshot it sits in was written at. Its priority is
+ * written as an event line writes it (a blocker as p0 with its mark), since parseTaskLine reads it with the same
+ * field parser (T5541).
+ */
 export function taskLineRecord(v: number, task: Task): JsonRecord {
-  return { v, type: TASK_LINE_TYPE, task };
+  return { v, type: TASK_LINE_TYPE, task: diskPriority(task) };
 }
 
 /** True for a record a task line holds, whatever it says of its task. */
