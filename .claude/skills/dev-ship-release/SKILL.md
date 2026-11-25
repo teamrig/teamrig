@@ -15,7 +15,9 @@ release check reads any `plugins/<name>/.claude-plugin/plugin.json` as a version
 Once the `teamrig-release` App is set up (variable `RELEASE_APP_ID`, its key in environment `release-merge`), the
 `release merge` workflow (`release-merge.yml`) merges the release itself when ci passed on its head, and comments the head, paths
 and checks it passed. The steps below are for a head its gate refused (its run's summary says why) or a repository
-without the App: read that summary first, and fix the cause before approving.
+without the App: read that summary first, and fix the cause before approving. The gate passes only a release the App
+opened: one the job token opened is closed once, so the next release run opens it again with the App's token
+(T5390).
 
 1. Add a release task for the session that ships releases, saying which version it ships, and read the pull
    request's head: `git fetch origin` and `git rev-parse origin/<release head>`, the head `repos.json` names.
