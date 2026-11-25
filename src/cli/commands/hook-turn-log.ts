@@ -47,23 +47,28 @@ function logOf(runtime: CliRuntime, scope: TurnLogScope): TurnLog {
   return new TurnLog(runtime.files, scope.paths.turnLog);
 }
 
-/** A prompt sent in a team session's tab: its text, and whether teamrig submitted it to wake the tab. */
+/**
+ * A prompt sent in a team session's tab: its text, whether teamrig submitted it (a wake, or the first prompt it passed),
+ * and whether the host did (a background task's notice, another session's message).
+ */
 export interface SentPrompt {
   readonly tab: string;
   readonly text: string;
   readonly woke: boolean;
+  readonly byHost: boolean;
 }
 
 /**
  * The prompt of a UserPromptSubmit, told the person's from teamrig's: the wake teamrig answered that tab with is taken
  * once, so the same text typed again is the person's. Undefined for no tab or an empty prompt.
  */
-export async function sentPromptOf(runtime: CliRuntime, wake: string, id: string, { session, prompt }: Pick<HookEvent, 'session' | 'prompt'>): Promise<SentPrompt | undefined> {
+export async function sentPromptOf(runtime: CliRuntime, wake: string, id: string, { session, prompt, hostPrompt }: Pick<HookEvent, 'session' | 'prompt' | 'hostPrompt'>): Promise<SentPrompt | undefined> {
   if (session === undefined || prompt === undefined || prompt.trim() === '') {
     return undefined;
   }
-  const woke = await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt });
-  return { tab: session, text: prompt, woke };
+  // The host's own prompt is never teamrig's wake, so it leaves the kept wake for the prompt that is.
+  const woke = !hostPrompt && (await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt }));
+  return { tab: session, text: prompt, woke, byHost: hostPrompt };
 }
 
 /** UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`; nothing with the log off. */
@@ -75,9 +80,12 @@ export async function logPrompt(runtime: CliRuntime, scope: TurnLogScope, sent: 
   await logOf(runtime, scope).append(scope.id, entryOf(runtime, scope, said));
 }
 
-/** UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101). */
+/**
+ * UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101);
+ * one teamrig or the host submitted does not (T5388).
+ */
 export async function noteLastTyped(runtime: CliRuntime, paths: Pick<TeamPaths, 'kitHome' | 'team'>, id: string, sent: SentPrompt): Promise<void> {
-  if (sent.woke) {
+  if (sent.woke || sent.byHost) {
     return;
   }
   const at = new Date(runtime.clock.now()).toISOString();

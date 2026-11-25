@@ -77,6 +77,8 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape, hostName: string | u
     helper: undefined,
     call: callOf(payload, shape),
     prompt: stringField(payload, 'lastUserInput'),
+    // No prompt antigravity-cli submits of its own is known to reach the prompt hook.
+    hostPrompt: false,
     lastReply: undefined,
     // `continuationActive` comes from Antigravity 2.0's hooks docs; antigravity-cli may omit it or send `fullyIdle`.
     stopActive: payload['continuationActive'] === true,

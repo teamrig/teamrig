@@ -56,8 +56,13 @@ export interface HookEvent {
   readonly helper: HookHelper | undefined;
   /** The tool call the event is about. */
   readonly call: ToolCall | undefined;
-  /** What the human typed, on `prompt`. */
+  /** What the human typed, on `prompt`, or what the host itself submitted there (see `hostPrompt`). */
   readonly prompt: string | undefined;
+  /**
+   * Whether the host itself submitted the prompt, no one typing it: a background task's notice, another session's
+   * message. Such a prompt must not mark the session the one the person last typed in (T5388).
+   */
+  readonly hostPrompt: boolean;
   /** The model's last reply, on a stop. */
   readonly lastReply: string | undefined;
   /** Whether this stop follows one a hook already blocked: a second block could loop for ever. */
