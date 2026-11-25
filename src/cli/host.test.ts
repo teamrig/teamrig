@@ -507,6 +507,17 @@ describe('childEnvOf', () => {
       assert.ok(parked.every((name) => !CREDENTIAL_VARIABLES.includes(name)), parked.join(' '));
     }
   });
+
+  // A parked step writes these names to disk, and the core keeps out only the credentials it knows by name (T4889 N1):
+  // a host parking a socket or login token under a new name would write it out, so CI refuses the name first.
+  it('ships no host that parks a name that reads as a secret', () => {
+    const { shippedHosts, platform } = quietWorld();
+    const secretLooking = /TOKEN|SECRET|KEY|PASSWORD|AUTH|CREDENTIAL/i;
+    for (const [name, { ports: host }] of Object.entries(shippedHosts)) {
+      const { parked } = childEnvOf({ host, shippedHosts: {}, env: {}, platform });
+      assert.deepEqual(parked.filter((variable) => secretLooking.test(variable)), [], name);
+    }
+  });
 });
 
 describe('sessionProcessCheckOf', () => {
