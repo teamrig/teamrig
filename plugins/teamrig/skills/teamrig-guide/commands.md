@@ -4615,7 +4615,7 @@ another Claude Code, as `open` does.
 What a restore after a reboot would do now. The `hook restore-track` hook records every Claude Code session on the
 machine, in a team or not, in `<home>/restore/sessions/`; after a shutdown or reboot killed them, `restore run`
 reopens each one the shutdown interrupted, in its folder (the worktree it went into, where Claude Code files its
-transcript), at the effort its team config sets (`launch.<id>.effort`), else at the one its last turn ran at. A
+transcript) and in the AI CLI it ran in (a Codex CLI session in Codex CLI, its line naming `--host`), at the effort its team config sets (`launch.<id>.effort`), else at the one its last turn ran at. A
 session that ended on purpose (`/exit`, `/clear`, `teamrig close` or the idle
 pass), still runs, was active since logon, was not a terminal session (`claude -p`, a background job
 Claude Code resumes itself), was continued in another session, has no transcript left, is too old or failed to resume

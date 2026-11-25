@@ -1532,7 +1532,8 @@ the time if the line is still unseen.
 ### The idle pass
 
 With `open.idle.mode` not `off` (`on`, the default, or `dry-run`), `hook wake-check` also runs the team's
-idle pass, right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
+idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by (Codex CLI's
+`codex queue`), `hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
 the team's and not this tab's wake; it needs `wake.enabled`. It runs at most once a minute across the team: the
 check that claims `state/idle-pass.lock` runs it, and no check waits for that lock. With nothing changed, an idle
 tab's mod asks every 10 minutes, so a quiet team's pass runs that often and its close comes up to 10 minutes past

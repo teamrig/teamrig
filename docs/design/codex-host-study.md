@@ -126,9 +126,9 @@ named.
 | teamrig feature | Claude Code | Codex 0.170.0 | On Codex |
 | --- | --- | --- | --- |
 | Open a tab on its model and effort | `claude --model --effort --name` | `codex --model M -c model_reasoning_effort=E`, `--profile` | with change: a launch line per host |
-| Resume, restore after a reboot | `claude --resume <id>`, Claude transcripts | `codex resume <id>`, rollouts under `$CODEX_HOME/sessions/` | with change |
+| Resume, restore after a reboot | `claude --resume <id>`, Claude transcripts | `codex resume <id>`, rollouts under `$CODEX_HOME/sessions/` | with change: a restore entry keeps the host, so `restore run` reopens a Codex session with `--host codex-cli` |
 | The session's own id in the CLI | `CLAUDE_CODE_SESSION_ID` | `CODEX_THREAD_ID` in every shell, `session_id` in hook input | with change: the thread id mapped to the session's name; `TEAMRIG_SESSION` until then |
-| Waking an idle session | the mod submits a prompt | `codex queue --thread <id> --message <text>` to the local app-server (`cli/src/queue_cmd.rs`) | with change, unproven live |
+| Waking an idle session | the mod submits a prompt | `codex queue --thread <id> --message <text>` to the local app-server (`cli/src/queue_cmd.rs`) | with change, unproven live: with no mod to run the wake check, a turn's Stop hook runs the idle pass |
 | Turn end | Stop hook | Stop hook, and `notify` | works |
 | One-shot runs | interactive only | `codex exec`, `--json` events, `codex exec resume` | works, not used by teamrig yet |
 | In-tab `/clear`, `/reload-plugins`, mid-turn refresh, `/teamrig`, bands, toasts | the mod | no mod API | cannot; refresh restarts the session with its first prompt |
