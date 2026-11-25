@@ -110,6 +110,24 @@ describe('kit versions', () => {
       assert.equal(files.get(join(kitVersionFolder(KIT, '0.509.0'), 'dist', 'cli', 'main.js')), kitReleaseMain('0.509.0'));
     });
 
+    it('copies the version in use again when its kept list changed, never trusting the record alone', async () => {
+      await install('0.508.0');
+      await files.write(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST), '{}\n');
+      assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
+      assert.equal(tree.copies.length, 2);
+      assert.equal(files.get(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST)), files.get(join(PLUGIN, '0.508.0', CLIENT_MANIFEST)));
+    });
+
+    it('settles a pinned or older start without the lock, so another start copying never makes it busy', async () => {
+      await install('0.508.0');
+      await install('0.509.0');
+      assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'older', version: '0.508.0', current: '0.509.0' });
+      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      assert.deepEqual(await install('0.509.0', { lock: new BusyMutex() }), { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' });
+      assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'current', version: '0.508.0' });
+      assert.equal(tree.copies.length, 2);
+    });
+
     it('refuses a version that is no release version, a path above all', async () => {
       assert.deepEqual(await install('../x'), { kind: 'refused', why: '../x is no release version' });
       assert.equal(tree.copies.length, 0);

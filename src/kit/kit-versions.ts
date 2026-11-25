@@ -228,6 +228,10 @@ export async function installKitVersion(install: KitInstall): Promise<KitInstall
   if (wanted === undefined) {
     return { kind: 'refused', why: `${version} is no release version` };
   }
+  const settled = await settledWithoutLock(install, wanted);
+  if (settled !== undefined) {
+    return settled;
+  }
   try {
     return await install.lock.run(() => installUnderLock(install, wanted));
   } catch (error) {
@@ -236,6 +240,35 @@ export async function installKitVersion(install: KitInstall): Promise<KitInstall
     }
     throw error;
   }
+}
+
+/**
+ * What an install that changes nothing returns, read without the lock and without hashing the kept files: the kept
+ * copy's integrity list and its source record match the running client's list, and `current` names this version
+ * with that list hash, or a pin or a newer version holds it. Undefined when anything differs, so the install goes
+ * under the lock, which verifies every file. A session start of a pinned or older plugin so never waits on another
+ * start's copy, nor re-hashes about 6 MB inside the hook's time limit.
+ */
+async function settledWithoutLock(install: KitInstall, wanted: Version): Promise<KitInstallOutcome | undefined> {
+  const { files, kitHome, version } = install;
+  const state = await readKitCurrentState(files, kitHome);
+  const running = await listHashOf(files, install.from);
+  if (state.kind !== 'current' || running === undefined) {
+    return undefined;
+  }
+  const kept = await listHashOf(files, kitVersionFolder(kitHome, version));
+  if (kept !== running || (await readKeptSource(files, kitHome, version))?.listHash !== running) {
+    return undefined;
+  }
+  const { current } = state;
+  if (current.version === version) {
+    return current.listHash === running ? { kind: 'current', version } : undefined;
+  }
+  if (current.pinned) {
+    return { kind: 'pinned', version, pinned: current.version };
+  }
+  const was = parseVersion(current.version);
+  return was !== undefined && compareVersions(was, wanted) > 0 ? { kind: 'older', version, current: current.version } : undefined;
 }
 
 async function installUnderLock(install: KitInstall, wanted: Version): Promise<KitInstallOutcome> {
