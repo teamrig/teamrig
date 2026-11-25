@@ -5878,9 +5878,12 @@ file already holds the same handlers, one `UNCHANGED` line. A second line does t
 need in Codex's `config.toml` beside it, `[features] unified_exec_tty = false`: Codex runs no hook on a line typed
 into an interactive shell, so teamrig turns those shells off (its own launcher passes the same setting). Codex applies
 a profile's features after the root ones, so the same key is turned off in each `[profiles.<name>.features]` that
-turns it on; a profile that sets nothing gets nothing. Every other line of `config.toml` stays, the old file is kept as
-`codex-config.bak` in `backups`, and a `features = { ... }` inline table, at the root or in a profile, that may hold the
-key is refused with nothing written: set `unified_exec_tty = false` in it by hand. It never trusts a handler
+turns it on; a profile that sets nothing gets nothing. A profile file beside it, `<name>.config.toml` (chosen with
+`codex -p <name>`), is layered over `config.toml` the same way, so each one that turns the key on gets its own line
+and its own backup, `codex-<name>.config.toml.bak`; a profile entry that is no plain file is reported `SKIPPED` and
+left as it is. Every other line stays, the old `config.toml` is kept as `codex-config.bak` in `backups`, and a
+`features = { ... }` inline table, at the root or in a profile, that may hold the key is refused with nothing written:
+set `unified_exec_tty = false` in it by hand. It never trusts a handler
 for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
 every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
 refused where an agent runs it; the preview stays open.
@@ -5905,6 +5908,7 @@ Output:
 ```text
 PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
 PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on
+PREVIEW nothing written (add --yes to write) /home/me/.codex/fast.config.toml: sets [features] unified_exec_tty = false where the profile sets it
   SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
   NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
   NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
