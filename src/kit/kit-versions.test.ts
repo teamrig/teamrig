@@ -270,9 +270,38 @@ describe('kit versions', () => {
       await files.write(join(kitVersionFolder(KIT, '0.508.0'), 'package.json'), '{"type":"commonjs"}\n');
       assert.deepEqual(await useKitVersion(ports, { kind: 'version', version: '0.508.0' }), {
         kind: 'refused',
-        why: `0.508.0 is damaged (files do not match ${CLIENT_MANIFEST}: package.json); a session start of the teamrig plugin at that version copies it again`,
+        why: `0.508.0 is damaged (files do not match ${CLIENT_MANIFEST}: package.json); its source record is dropped, so the next session start of the teamrig plugin at that version copies it again`,
       });
       assert.equal((await readKitCurrent(files, KIT))?.version, '0.509.0');
+    });
+
+    it('gets a damaged version in use whose list is intact copied again by the next start, once kit use drops its record (T5522)', async () => {
+      await install('0.508.0');
+      const main = join(kitVersionFolder(KIT, '0.508.0'), 'dist', 'cli', 'main.js');
+      await files.write(main, 'stale\n');
+      assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
+      assert.equal(tree.copies.length, 1);
+      assert.equal((await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' })).kind, 'refused');
+      assert.equal(files.get(join(KIT, 'versions', '0.508.0.source.json')), undefined);
+      assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
+      assert.deepEqual([tree.copies.length, files.get(main)], [2, kitReleaseMain('0.508.0')]);
+    });
+
+    it('gets a damaged older or newer-than-pinned version copied again by its next start, once kit use drops its record (T5522)', async () => {
+      const use = (version: string) => useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version });
+      await install('0.508.0');
+      await install('0.509.0');
+      const older = join(kitVersionFolder(KIT, '0.508.0'), 'dist', 'cli', 'main.js');
+      await files.write(older, 'stale\n');
+      assert.equal((await use('0.508.0')).kind, 'refused');
+      assert.deepEqual(await install('0.508.0'), { kind: 'older', version: '0.508.0', current: '0.509.0' });
+      assert.deepEqual([tree.copies.length, files.get(older)], [3, kitReleaseMain('0.508.0')]);
+      assert.equal((await use('0.508.0')).kind, 'moved');
+      const newer = join(kitVersionFolder(KIT, '0.509.0'), 'dist', 'cli', 'main.js');
+      await files.write(newer, 'stale\n');
+      assert.equal((await use('0.509.0')).kind, 'refused');
+      assert.deepEqual(await install('0.509.0'), { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' });
+      assert.deepEqual([tree.copies.length, files.get(newer)], [4, kitReleaseMain('0.509.0')]);
     });
 
     it('refuses a kept version with no source record, or one that names another build, and moves nothing', async () => {
@@ -283,7 +312,7 @@ describe('kit versions', () => {
       await files.remove(source);
       assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' }), {
         kind: 'refused',
-        why: '0.508.0 has no record of where it came from (0.508.0.source.json); a session start of the teamrig plugin at that version copies it again',
+        why: '0.508.0 has no record of where it came from (0.508.0.source.json); the next session start of the teamrig plugin at that version copies it again',
       });
       await files.write(source, record.replace(/"listHash":"[0-9a-f]+"/, `"listHash":"${'0'.repeat(64)}"`));
       assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' }), {

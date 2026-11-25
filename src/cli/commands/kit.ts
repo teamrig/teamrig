@@ -3,6 +3,7 @@ import { WRITE_SWITCH } from '../../core/settings-writers.ts';
 import type { Mutex } from '../../core/lock.ts';
 import { KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import {
+  damagedPreviewWhy,
   KIT_LOCK_BUSY,
   kitLeftovers,
   listKitVersions,
@@ -92,6 +93,9 @@ export async function kitUse(args: ParsedArgs, runtime: KitRuntime): Promise<Exi
     const plan = await planKitUse(ports, target);
     if (plan.kind === 'refused') {
       throw new RefusedError(`teamrig kit use: ${plan.why}`);
+    }
+    if (plan.kind === 'damaged') {
+      throw new RefusedError(`teamrig kit use: ${damagedPreviewWhy(plan)}`);
     }
     const from = plan.previous === undefined ? 'no version' : plan.previous.version;
     const pin = plan.next.pinned ? ', pinned' : ', no pin';

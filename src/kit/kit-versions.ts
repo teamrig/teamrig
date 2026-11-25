@@ -394,16 +394,28 @@ async function movedCurrent(files: Files, kitHome: string, before: KitCurrent | 
   return before === undefined ? { kind: 'installed', version } : { kind: 'installed', version, previous: before.version };
 }
 
-/** How a refusal of `teamrig kit use` names the way to a whole copy: an install copies a damaged version again. */
-const RECOPY = 'a session start of the teamrig plugin at that version copies it again';
+/**
+ * How a refusal of `teamrig kit use` names the way to a whole copy: an install copies a version again once its source
+ * record is gone, since it verifies every file only then (settledWithoutLock never hashes the kept files).
+ */
+const RECOPY = 'the next session start of the teamrig plugin at that version copies it again';
 
 /** Which version `teamrig kit use` moves to: one named, which pins it, or the newest kept, which clears the pin. */
 export type KitUseTarget = { readonly kind: 'version'; readonly version: string } | { readonly kind: 'latest' };
 
-/** Where `teamrig kit use` would move `current`, or why it would not. */
+/**
+ * Where `teamrig kit use` would move `current`, or why it would not. A damaged version is its own refusal: `kit use
+ * --yes` drops its source record, which a preview only names.
+ */
 export type KitUsePlan =
   | { readonly kind: 'move'; readonly next: KitCurrent; readonly previous?: KitCurrent }
+  | { readonly kind: 'damaged'; readonly version: string; readonly why: string }
   | { readonly kind: 'refused'; readonly why: string };
+
+/** Why a preview of `teamrig kit use` refuses a damaged version, naming the write that gets it copied again. */
+export function damagedPreviewWhy(plan: { readonly version: string; readonly why: string }): string {
+  return `${plan.version} is damaged (${plan.why}); with --yes, teamrig kit use drops its source record, so ${RECOPY}`;
+}
 
 /** What `teamrig kit use` did. */
 export type KitUseOutcome =
@@ -426,7 +438,7 @@ export async function planKitUse(ports: Pick<KitPorts, 'files' | 'kitHome'>, tar
   }
   const verified = await verifiedListHash(files, kitVersionFolder(kitHome, version), version);
   if ('why' in verified) {
-    return { kind: 'refused', why: `${version} is damaged (${verified.why}); ${RECOPY}` };
+    return { kind: 'damaged', version, why: verified.why };
   }
   const record = await readKeptSource(files, kitHome, version);
   if (record === undefined) {
@@ -454,6 +466,12 @@ async function usedUnderLock(ports: KitUsePorts, target: KitUseTarget): Promise<
   const plan = await planKitUse(ports, target);
   if (plan.kind === 'refused') {
     return plan;
+  }
+  if (plan.kind === 'damaged') {
+    // A start of this version settles on its intact list and record without hashing the files, so it would never
+    // copy the damaged files again; with the record gone it goes under the lock, which verifies them and recopies.
+    await ports.files.remove(sourcePath(ports.kitHome, plan.version));
+    return { kind: 'refused', why: `${plan.version} is damaged (${plan.why}); its source record is dropped, so ${RECOPY}` };
   }
   const { next, previous } = plan;
   await writeKitCurrent(ports.files, ports.kitHome, next);

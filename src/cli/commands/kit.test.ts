@@ -92,6 +92,21 @@ describe('teamrig kit', () => {
       assert.equal((await readKitCurrent(kit.files, KIT))?.version, '0.509.0');
     });
 
+    it('names the write that gets a damaged version copied again, which only --yes does (T5522)', async () => {
+      await keptWith('0.509.0');
+      const record = join(KIT, 'versions', '0.507.0.source.json');
+      await kit.files.write(join(kitVersionFolder(KIT, '0.507.0'), 'dist', 'cli', 'main.js'), 'patched\n');
+      const preview = await kit.run(['kit', 'use', '0.507.0'], options);
+      assert.equal(preview.code, EXIT.refused);
+      assert.match(preview.stdout[0] ?? '', /with --yes, teamrig kit use drops its source record, so the next session start/u);
+      assert.notEqual(await kit.files.read(record), undefined);
+      const written = await kit.run(['kit', 'use', '0.507.0', '--yes'], options);
+      assert.equal(written.code, EXIT.refused);
+      assert.match(written.stdout[0] ?? '', /its source record is dropped, so the next session start/u);
+      assert.equal(await kit.files.read(record), undefined);
+      assert.equal((await readKitCurrent(kit.files, KIT))?.version, '0.509.0');
+    });
+
     it('takes one version or --latest, never both nor neither', async () => {
       for (const argv of [['kit', 'use'], ['kit', 'use', '0.507.0', '--latest'], ['kit', 'use', '0.507.0', '0.508.0']]) {
         assert.equal((await kit.run(argv, options)).code, EXIT.usage, argv.join(' '));
