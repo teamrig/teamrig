@@ -2026,8 +2026,11 @@ turn as it was.
 
 The same prompt hook also keeps where the person last typed, for the dedicated UI to follow: each prompt the person
 sends in a team session's tab, with `turnLog` on or off, replaces `~/.teamrig/last-typed.json`, one file for every
-team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A wake teamrig
-submitted never moves it, and a failed write leaves the turn log and the prompt as they were.
+team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A prompt teamrig
+submitted never moves it: a wake, or the first prompt `teamrig launch` passed to a Claude Code it started (a reopen,
+refresh, rehire or restore), and the turn log marks either `from: teamrig`. Nor does one the AI CLI submitted itself,
+such as Claude Code's notice that a background task ended or another session's message. A failed write leaves the
+turn log and the prompt as they were.
 
 ## A guard that cannot answer
 
