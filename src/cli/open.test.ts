@@ -885,7 +885,7 @@ describe('teamrig launch', () => {
       [['launch', 'alpha', '--team', 'app'], '--project is required'],
       [[...LAUNCH, '--encoded-prompt', 'a+b'], '--encoded-prompt is not a prompt that teamrig open wrote'],
       [[...LAUNCH, '--encoded-prompt', encodePrompt('-p')], '--prompt: the prompt cannot start with -'],
-      [[...LAUNCH, '--resume', 'c1'], '--resume "c1" is not a Claude Code session id'],
+      [[...LAUNCH, '--resume', 'c.1'], '--resume "c.1" is not a host session id'],
       [[...LAUNCH, '--effort', 'turbo'], '--effort "turbo" is not an effort level'],
       [[...LAUNCH, '--no-prompt', '--encoded-prompt', encodePrompt('Go on')], '--no-prompt and --encoded-prompt cannot go together'],
     ] as const) {

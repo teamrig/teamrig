@@ -4,12 +4,12 @@ import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
 import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
+import { isHostSessionId } from '../../core/host-session.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
 import { samePath } from '../../core/paths.ts';
 import { HiringLog } from '../../hiring/log.ts';
 import { rehiredFrom, type RetireRecord } from '../../hiring/record.ts';
 import type { ResumeVerdict } from '../../hiring/rehire.ts';
-import { CLAUDE_SESSION_ID } from '../../inbox/marks.ts';
 import { findProgram, type HostProgram } from '../../open/host-program.ts';
 import type { FocusOutcome } from '../../open/focus.ts';
 import { sessionStartOf } from '../../open/session-start.ts';
@@ -398,15 +398,15 @@ export function encodedPromptFlag(encoded: string): string {
   return checkedPrompt(prompt);
 }
 
-/** The Claude Code session id `launch --resume` names, checked so nothing but an id reaches Claude Code. */
+/** The host session id `launch --resume` names, checked so nothing but an id reaches the host. */
 function resumeFlag(value: string | undefined): string | undefined {
   return value === undefined ? undefined : hostSessionArg('--resume', value);
 }
 
-/** A Claude Code session id an argument names, checked so nothing but an id reaches Claude Code. */
+/** A host session id an argument names, checked so nothing but an id reaches the host. */
 export function hostSessionArg(name: string, value: string): string {
-  if (!CLAUDE_SESSION_ID.test(value)) {
-    throw new UsageError(`${name} "${value}" is not a Claude Code session id`);
+  if (!isHostSessionId(value)) {
+    throw new UsageError(`${name} "${value}" is not a host session id`);
   }
   return value;
 }

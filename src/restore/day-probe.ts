@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { instantField, stringField } from '../core/guards.ts';
+import { isHostSessionId } from '../core/host-session.ts';
 import { parseObject, recordVersion, VERSION_FIELD } from '../core/jsonl.ts';
 import { MS_PER_MINUTE } from '../core/time.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { LOGIN_PROBE_STALE_MS } from './login.ts';
 
 /**
@@ -135,7 +135,7 @@ export function parseDayProbe(text: string): DayProbe | undefined {
   const tab = stringField(record, 'tab');
   const at = instantField(record, 'at');
   const releasedAt = instantField(record, 'releasedAt');
-  if (moment === undefined || tab === undefined || !CLAUDE_SESSION_ID.test(tab) || at === undefined || (record['releasedAt'] !== undefined && releasedAt === undefined)) {
+  if (moment === undefined || tab === undefined || !isHostSessionId(tab) || at === undefined || (record['releasedAt'] !== undefined && releasedAt === undefined)) {
     return undefined;
   }
   return { moment, tab, at, releasedAt };

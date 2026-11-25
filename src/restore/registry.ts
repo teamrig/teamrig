@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
+import { isHostSessionId } from '../core/host-session.ts';
 import { formatEntry, parseEntry, type RestoreEntry } from './entry.ts';
 
 const SUFFIX = '.json';
@@ -23,8 +23,8 @@ export function restoreLogPath(kitHome: string): string {
  * file; any other is refused, so no id from a payload reaches a path.
  */
 export function sessionFileIn(dir: string, hostSession: string): string {
-  if (!CLAUDE_SESSION_ID.test(hostSession)) {
-    throw new Error(`${JSON.stringify(hostSession)} is not a Claude Code session id`);
+  if (!isHostSessionId(hostSession)) {
+    throw new Error(`${JSON.stringify(hostSession)} is not a host session id`);
   }
   return join(dir, `${hostSession}${SUFFIX}`);
 }
@@ -32,7 +32,7 @@ export function sessionFileIn(dir: string, hostSession: string): string {
 /** The session id a file of a restore folder is named for; undefined for a file of another name. */
 export function sessionOfFile(name: string): string | undefined {
   const id = name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : '';
-  return CLAUDE_SESSION_ID.test(id) ? id : undefined;
+  return isHostSessionId(id) ? id : undefined;
 }
 
 /**

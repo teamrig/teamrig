@@ -5,6 +5,7 @@ import type { KitConfig } from '../../config/types.ts';
 import { formatAddress, type SessionAddress } from '../../core/address.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { KIT_NAME, type TeamPaths } from '../../core/home.ts';
+import { isHostSessionId } from '../../core/host-session.ts';
 import { NAME_RULE } from '../../core/ids.ts';
 import { PlainLogFile } from '../../core/log-file.ts';
 import { SecretScanner } from '../../core/secrets.ts';
@@ -13,7 +14,7 @@ import type { TimeZone } from '../../core/zone.ts';
 import { groupIds, parseTo, taskGroupOf, treeLeadsOf, type ToItem } from '../../inbox/groups.ts';
 import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLines, readInbox, type InboxDeps } from '../../inbox/inbox.ts';
 import { lineHash } from '../../inbox/line-hash.ts';
-import { boundElsewhereOf, CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf, type InboxMark } from '../../inbox/marks.ts';
+import { boundElsewhereOf, RECEIVER_TABS, tabsOf, type InboxMark } from '../../inbox/marks.ts';
 import { reachOf } from '../../inbox/reach.ts';
 import { actorsOf, blockerNamedIn } from '../../inbox/blocker-named.ts';
 import { routeReminderOf } from '../../inbox/route.ts';
@@ -46,7 +47,7 @@ export function inboxDepsOf(runtime: CliRuntime, paths: TeamPaths): InboxDeps {
 /** The host's session running the command, as its host tells it, so the reminder hook can follow it; null outside one. */
 function hostSessionOf(runtime: CliRuntime): string | null {
   const id = identityOf(runtime).sessionId;
-  return id !== undefined && CLAUDE_SESSION_ID.test(id) ? id : null;
+  return id !== undefined && isHostSessionId(id) ? id : null;
 }
 
 /** Why a tool call's `inbox read` may not make its tab, the `bound` session, the `area` session: `mark` is the variable that says an agent runs it. */

@@ -196,6 +196,13 @@ describe('snapshotOfStatus and formatSnapshot', () => {
       assert.equal(snapshotOfStatus(reading('../../etc/passwd'), STATUS, NOW), undefined);
       assert.equal(effortOfStatus({ parse: () => undefined }, STATUS), undefined);
     });
+
+    it('keeps a session id that is no UUID, as Antigravity gives, and reads its file back', () => {
+      const antigravity: StatusSource = { ...told, statusLine: { parse: () => ({ ...read, sessionId: 'session-1' }) } };
+      const taken = snapshotOfStatus(antigravity, STATUS, NOW);
+      assert.equal(taken?.sessionId, 'session-1');
+      assert.equal(taken === undefined ? undefined : parseSnapshot(formatSnapshot(taken))?.sessionId, 'session-1');
+    });
   });
 });
 
@@ -247,7 +254,7 @@ describe('parseSnapshot', () => {
     assert.equal(parseSnapshot('{"ts":'), undefined);
     assert.equal(parseSnapshot(JSON.stringify({ session_id: SID })), undefined);
     assert.equal(parseSnapshot(JSON.stringify({ ts: 'yesterday', session_id: SID })), undefined);
-    assert.equal(parseSnapshot(JSON.stringify({ ts: '2026-10-15T00:00:00Z', session_id: 'x' })), undefined);
+    assert.equal(parseSnapshot(JSON.stringify({ ts: '2026-10-15T00:00:00Z', session_id: '../x' })), undefined);
   });
 });
 

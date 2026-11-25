@@ -146,7 +146,7 @@ describe('ClearAsks', () => {
 
   it('refuses a session id unsafe in a file name', async () => {
     const asks = new ClearAsks(new MemoryFiles(), DIR);
-    await assert.rejects(asks.post('../x', POSTED), /"\.\.\/x" is not a Claude Code session id/);
-    await assert.rejects(asks.claim('a b'), /not a Claude Code session id/);
+    await assert.rejects(asks.post('../x', POSTED), /"\.\.\/x" is not a host session id/);
+    await assert.rejects(asks.claim('a b'), /not a host session id/);
   });
 });

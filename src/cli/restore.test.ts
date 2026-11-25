@@ -372,9 +372,9 @@ describe('teamrig restore resume', () => {
     assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
   });
 
-  it('refuses a folder that is gone and anything but a Claude Code session id', async () => {
+  it('refuses a folder that is gone and anything but a host session id', async () => {
     const kit = new CliHarness(TEAM);
     assert.equal((await kit.run(['restore', 'resume', NOTES, '--project', '/gone'], { probe: ON_PATH })).code, EXIT.refused);
-    assert.equal((await kit.run(['restore', 'resume', 'not-an-id', '--project', APP], { probe: ON_PATH })).code, EXIT.usage);
+    assert.equal((await kit.run(['restore', 'resume', 'not.an.id', '--project', APP], { probe: ON_PATH })).code, EXIT.usage);
   });
 });

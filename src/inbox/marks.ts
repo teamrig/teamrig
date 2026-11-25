@@ -1,5 +1,5 @@
 import { isNonNegativeInteger, stringField } from '../core/guards.ts';
-import { hostSessionValue } from '../core/host-session.ts';
+import { hostSessionValue, isHostSessionId } from '../core/host-session.ts';
 import { parseJsonl, type JsonlRecord } from '../core/jsonl.ts';
 import { SESSION_NAME } from '../register/model.ts';
 
@@ -10,12 +10,9 @@ export const MARK_VERSION = 1;
  */
 export const MARK_NEXT_VERSION = 2;
 
-/** A Claude Code session id, as hook stdin and `$CLAUDE_CODE_SESSION_ID` carry it. */
-export const CLAUDE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 /**
  * Records that `area` has read its inbox through its first `line` non-empty lines, and which
- * Claude Code session did: the reminder hook finds a session's area by its newest mark.
+ * host session did: the reminder hook finds a session's area by its newest mark.
  * `lastLineHash` (v1) fingerprints the last line read, so a reader can tell a trimmed or edited
  * inbox from one that only grew; v0 marks have none.
  */
@@ -49,7 +46,7 @@ export function parseMark(line: JsonlRecord): MarkParse {
     isNonNegativeInteger(count) &&
     at !== undefined &&
     !Number.isNaN(Date.parse(at)) &&
-    (hostSession === null || (typeof hostSession === 'string' && CLAUDE_SESSION_ID.test(hostSession))) &&
+    (hostSession === null || (typeof hostSession === 'string' && isHostSessionId(hostSession))) &&
     (lastLineHash === null || typeof lastLineHash === 'string');
   return valid ? { kind: 'mark', mark: { v: line.version, area, line: count, at, hostSession, lastLineHash } } : { kind: 'unreadable' };
 }

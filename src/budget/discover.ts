@@ -1,8 +1,13 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorCode } from '../core/guards.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { nodeTranscriptBytes, type TranscriptBytes } from './cursor.ts';
+
+/**
+ * A Claude Code session id, the UUID its transcript files are named by: the folder layout read here is Claude
+ * Code's, so this is its own shape, not the shared stores' neutral check (src/core/host-session.ts).
+ */
+const CLAUDE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** One entry of a folder: its name, whether it is a folder, and when it last changed (epoch ms). */
 export interface FolderEntry {

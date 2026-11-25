@@ -24,7 +24,7 @@ describe('parseMark', () => {
     const read = { kind: 'mark', mark: { ...base, hostSession: SESSION } };
     assert.deepEqual(parse({ ...base, hostSession: SESSION }), read);
     assert.deepEqual(parse({ ...base, hostSession: null }), { kind: 'mark', mark: { ...base, hostSession: null } });
-    assert.deepEqual(parse({ ...base, hostSession: 'nope' }), { kind: 'unreadable' });
+    assert.deepEqual(parse({ ...base, hostSession: '../nope' }), { kind: 'unreadable' });
     // A mark of this format written with the old name still reads: the reader takes both names on every format.
     assert.deepEqual(parse({ ...base, claudeSession: SESSION }), read);
   });
@@ -32,9 +32,14 @@ describe('parseMark', () => {
   it('skips newer marks and rejects malformed ones', () => {
     assert.deepEqual(parse({ v: 3 }), { kind: 'newer' });
     const base = { area: 'alpha', line: 3, at: '2030-01-07T09:00:00.000Z', hostSession: null };
-    for (const bad of [{ area: '../x' }, { line: -1 }, { at: 'soon' }, { hostSession: 'nope' }, { lastLineHash: 7 }]) {
+    for (const bad of [{ area: '../x' }, { line: -1 }, { at: 'soon' }, { hostSession: '../nope' }, { hostSession: 'nul' }, { lastLineHash: 7 }]) {
       assert.deepEqual(parse({ ...base, ...bad }), { kind: 'unreadable' }, JSON.stringify(bad));
     }
+  });
+
+  it("reads a mark naming another host's session id, not only a Claude Code UUID (T5050)", () => {
+    const base = { v: 1, area: 'alpha', line: 3, at: '2030-01-07T09:00:00.000Z', lastLineHash: null };
+    assert.deepEqual(parse({ ...base, hostSession: 'thread_7f3a' }), { kind: 'mark', mark: { ...base, hostSession: 'thread_7f3a' } });
   });
 });
 

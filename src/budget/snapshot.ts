@@ -4,8 +4,8 @@ import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { parseObject } from '../core/jsonl.ts';
 import { isTemporaryName, type Files } from '../core/files.ts';
 import type { TeamPaths } from '../core/home.ts';
+import { isHostSessionId } from '../core/host-session.ts';
 import { MS_PER_DAY, MS_PER_HOUR } from '../core/time.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { coloured, meetingLabel, otherTabLabel, type StatusLineMeeting } from '../meeting/status-line.ts';
 import type { DatedRateLimits, RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/host/index.ts';
 
@@ -16,7 +16,7 @@ import type { DatedRateLimits, RateLimits, RateWindow, StatusLine, UsageMeter } 
  * own status line"). The format, one JSON object, its keys in snake_case:
  *
  * - `ts`: when it was written, ISO 8601 UTC;
- * - `session_id`: the Claude Code session id, also the file name;
+ * - `session_id`: the host session id, also the file name;
  * - `cwd`: the session's folder;
  * - `agent_name`, `model`: the agent's name and the model's display name, or null;
  * - `effort`, `host_version`: the session's effort level and the version of the host's program, or null or absent;
@@ -108,7 +108,7 @@ export interface StatusSource {
 export function snapshotOfStatus(source: StatusSource, input: string, now: number): StatusSnapshot | undefined {
   const reading = source.statusLine.parse(input);
   const sessionId = reading?.sessionId;
-  if (reading === undefined || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+  if (reading === undefined || sessionId === undefined || !isHostSessionId(sessionId)) {
     return undefined;
   }
   const ts = new Date(now).toISOString();
@@ -205,7 +205,7 @@ export function parseSnapshot(text: string): StatusSnapshot | undefined {
   }
   const ts = stringField(stored, 'ts');
   const sessionId = stringField(stored, 'session_id');
-  if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+  if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !isHostSessionId(sessionId)) {
     return undefined;
   }
   const rateLimits = rateLimitsOf(stored['rate_limits']);

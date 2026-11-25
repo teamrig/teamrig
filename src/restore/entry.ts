@@ -1,9 +1,8 @@
 import { isNonNegativeInteger, isRecord, stringField, type JsonRecord } from '../core/guards.ts';
-import { hostSessionOf } from '../core/host-session.ts';
+import { hostSessionOf, isHostSessionId } from '../core/host-session.ts';
 import { ID_PATTERN } from '../core/ids.ts';
 import { parseObject } from '../core/jsonl.ts';
 import { MS_PER_MINUTE } from '../core/time.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 
 /**
  * A Claude Code session as the restore after a reboot sees it: where it runs and what it was doing at its
@@ -283,7 +282,7 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
   const restoreAttempts = record['restoreAttempts'];
   if (
     hostSession === undefined ||
-    !CLAUDE_SESSION_ID.test(hostSession) ||
+    !isHostSessionId(hostSession) ||
     projectDir === undefined ||
     state === undefined ||
     createdAt === undefined ||
