@@ -156,6 +156,18 @@ describe('teamrig kit', () => {
       assert.equal(kit.files.get(join(KIT, 'current.4242.1.tmp')), undefined);
     });
 
+    it('exits failed with a NOTE naming a version a running process holds, removing the rest', async () => {
+      const tree = new MemoryKitTree(kit.files);
+      await keptWith('0.509.0');
+      tree.heldFolders.add(kitVersionFolder(KIT, '0.505.0'));
+      const result = await kit.run(['kit', 'prune', '--yes'], { ...options, kitTree: tree });
+      assert.deepEqual(
+        [result.code, result.stdout],
+        [EXIT.failed, ['REMOVED 1: 0.506.0', 'NOTE left for the next prune, a running process holds a file: 0.505.0']],
+      );
+      assert.ok(kit.files.get(join(kitVersionFolder(KIT, '0.505.0'), '.claude-plugin', 'plugin.json')) !== undefined);
+    });
+
     it("waits for a session start's install to let go of the install lock before it removes anything", async () => {
       await keptWith('0.509.0');
       await holdFileLock(kit, LOCK);

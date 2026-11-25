@@ -4,10 +4,12 @@ import type { MemoryFiles } from './memory-files.ts';
 
 /**
  * `KitTree` over `MemoryFiles`, for the kit install's specs: a copy reads and writes each file below the folder, and
- * `failCopyAfter` makes a copy throw once it wrote that many files, as a full disk or a held file would partway.
+ * `failCopyAfter` makes a copy throw once it wrote that many files, as a full disk or a held file would partway, and a
+ * removal of a folder in `heldFolders` throws, leaving it whole, as Windows does for a folder a running process holds.
  */
 export class MemoryKitTree implements KitTree {
   readonly copies: string[] = [];
+  readonly heldFolders = new Set<string>();
   failCopyAfter: number | undefined;
   private readonly files: MemoryFiles;
 
@@ -39,6 +41,9 @@ export class MemoryKitTree implements KitTree {
   }
 
   async removeFolder(path: string): Promise<void> {
+    if (this.heldFolders.has(path)) {
+      throw new Error(`EBUSY: resource busy or locked, rmdir '${path}'`);
+    }
     this.files.removeAll(path);
   }
 }

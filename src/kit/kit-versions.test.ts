@@ -355,6 +355,19 @@ describe('kit versions', () => {
       assert.deepEqual(await listKitVersions(files, KIT), ['0.510.0', '0.509.0', '0.508.0']);
     });
 
+    it("an install whose prune cannot remove a held version still moves current, and leaves it for the next prune", async () => {
+      for (const version of ['0.507.0', '0.508.0', '0.509.0']) {
+        await install(version);
+      }
+      const oldest = kitVersionFolder(KIT, '0.507.0');
+      tree.heldFolders.add(oldest);
+      assert.deepEqual(await install('0.510.0'), { kind: 'installed', version: '0.510.0', previous: '0.509.0' });
+      assert.deepEqual(await listKitVersions(files, KIT), ['0.510.0', '0.509.0', '0.508.0', '0.507.0']);
+      assert.ok(files.get(join(KIT, 'versions', '0.507.0.source.json')) !== undefined);
+      tree.heldFolders.delete(oldest);
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT, lock: new InlineMutex() }), { kind: 'pruned', removed: ['0.507.0'], leftovers: [], failed: [] });
+    });
+
     it('removes nothing with no version in use', async () => {
       await files.write(join(kitVersionFolder(KIT, '0.400.0'), 'x'), 'x');
       assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT, lock: new InlineMutex() }), { kind: 'pruned', removed: [], leftovers: [], failed: [] });
