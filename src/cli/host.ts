@@ -20,6 +20,7 @@ import {
   type TranscriptReader,
   type UsageMeter,
 } from '../ports/host/index.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
 import type { HostSource } from '../composition/host-ports.ts';
 import type { LaunchHost } from '../config/launch.ts';
 import { isEffortLevel, type LaunchConfig } from '../config/types.ts';
@@ -199,6 +200,16 @@ export function launcherOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'
 export function launcherIfTold(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): SessionLauncher | undefined {
   const { launcher } = hostOf(runtime);
   return isUnsupported(launcher) ? undefined : launcher;
+}
+
+/**
+ * The id of the shipped host adapter this run works in, as `--host` takes it. The run's host is the very source
+ * `chooseHost` picked from the shipped hosts (src/cli/host-choice.ts); one that is none of them is the process's own
+ * host, which loads the default adapter (src/composition/host-ports.ts loadHostPorts).
+ */
+export function hostIdOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts'>): string {
+  const chosen = Object.entries(runtime.shippedHosts).find(([, shipped]) => shipped.ports === runtime.host);
+  return chosen === undefined ? DEFAULT_HOST : chosen[0];
 }
 
 /** The way to build the ports of every host adapter teamrig ships with, then the running host's. */
