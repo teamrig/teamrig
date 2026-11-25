@@ -248,8 +248,13 @@ export interface TaskElsewhere {
   readonly task: Task;
 }
 
-/** The tasks of a team tree's other registers by id, as one register's read asks them for an id it lacks. */
-export type TasksElsewhere = ReadonlyMap<string, TaskElsewhere>;
+/**
+ * The tasks of a team tree's other registers by id, as one register's read asks them for an id it lacks; `away`
+ * holds the ids of a tree the team left that its tasks named (`team.detached`, T5469), which no register here holds.
+ */
+export interface TasksElsewhere extends ReadonlyMap<string, TaskElsewhere> {
+  readonly away?: ReadonlySet<string>;
+}
 
 /** What a register outside a team tree reads elsewhere: nothing. */
 export const NO_TASKS_ELSEWHERE: TasksElsewhere = new Map();

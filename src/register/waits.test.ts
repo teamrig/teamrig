@@ -217,3 +217,21 @@ describe("a time wait in the team's zone", () => {
     assert.equal(isReady(day, waitContext(TASKS, at, TimeZone.UTC)), false, 'UTC is at 01-10 22:30');
   });
 });
+
+describe('a task of a tree the team left (T5469)', () => {
+  const left = Object.assign(new Map<string, { readonly task: { readonly status: TaskStatus } }>([['T8', { task: { status: 'done' } }]]), {
+    away: new Set(['T40', 'T8']),
+  });
+  const context = waitContext(TASKS, NOW, TimeZone.UTC, left);
+
+  it('reads an away id no register here holds as unknown: never finished, so a wait or plan step on it stays', () => {
+    assert.equal(context.statusOf('T40'), undefined);
+    assert.equal(isFinished('T40', context), false);
+    assert.equal(isReady({ kind: 'task', id: 'T40' }, context), false);
+    assert.deepEqual(unfinishedAfter(['T40', 'T9'], context), ['T40'], 'T9, in no register and not away, was retired');
+  });
+
+  it('reads an away id a register here holds by its status', () => {
+    assert.equal(isFinished('T8', context), true);
+  });
+});
