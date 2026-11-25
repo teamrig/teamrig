@@ -64,10 +64,31 @@ export interface BudgetFacts extends LiftNames {
    * past the daily stop as p0 work does, helpers too (T2656).
    */
   readonly awaited: readonly string[];
+  /** Its blocker task ids it can work on (`QueuedWork.blockers`): past the week's stop the only work that runs. */
+  readonly blockers: readonly string[];
+  /** The week's stop in force (`weekStopOf`); undefined below its line. */
+  readonly weekStop: WeekStop | undefined;
   /** Who gets the session's inbox line when it escalates: its own leader; undefined for the lead, which gets none. */
   readonly leader: BudgetLeader | undefined;
   /** The team's zone, which the lines print their times in. */
   readonly zone: TimeZone;
+}
+
+/**
+ * The week's stop (T5393): the week's use reached `budget.targetPct`, so the rest of the week, the incident reserve
+ * (`budget.reservePct`), is kept for blockers. Until the weekly reset every session is held whatever its lift, burst,
+ * role or daily room, and only blocker-priority work runs; p0s and awaited answers wait too.
+ */
+export interface WeekStop {
+  /** The stop line, `budget.targetPct`, in % of the week. */
+  readonly linePct: number;
+  /** The weekly reset that ends it, epoch ms; undefined while the week's window is unknown. */
+  readonly resetAt: number | undefined;
+}
+
+/** The week's stop at `weekUsedPct` against `targetPct`: in force from the line on, undefined below it. */
+export function weekStopOf(weekUsedPct: number, targetPct: number, resetAt: number | undefined): WeekStop | undefined {
+  return weekUsedPct >= targetPct ? { linePct: targetPct, resetAt } : undefined;
 }
 
 /** A session's own leader in the team's lead tree (the sub-lead that lists it, else the lead), by id and name. */
@@ -96,6 +117,10 @@ export interface WarnState extends BurstMarks {
   readonly escalated: boolean;
   /** The session's leader got today's inbox line about it (the lead's, before sub-leads, hence the name). */
   readonly leadTold: boolean;
+  /** The session was under the week's stop at the last turn's end, so the person saw its line today. */
+  readonly weekStopped: boolean;
+  /** The model got the week stop's line today. */
+  readonly modelWeekStopped: boolean;
   /** When the quiet hours whose line was shown began, epoch ms. */
   readonly quietFrom: number | undefined;
   /** The `at` of the lift whose line was shown; undefined once its end was shown. */
@@ -103,7 +128,7 @@ export interface WarnState extends BurstMarks {
 }
 
 export function emptyWarnState(day: string): WarnState {
-  return { day, level: 0, modelLevel: 0, ahead: false, held: false, escalated: false, leadTold: false, quietFrom: undefined, liftAt: undefined, burstAt: undefined, modelBurstAt: undefined, surplusShown: undefined };
+  return { day, level: 0, modelLevel: 0, ahead: false, held: false, escalated: false, leadTold: false, weekStopped: false, modelWeekStopped: false, quietFrom: undefined, liftAt: undefined, burstAt: undefined, modelBurstAt: undefined, surplusShown: undefined };
 }
 
 /** The state for `now`'s day: a new day keeps only the quiet-hours, lift and burst marks, which cross midnight. */
@@ -204,10 +229,11 @@ export function isPastDailyBudget(facts: BudgetFacts, extraPct = 0): boolean {
  * turn spent it; and as the quiet hours end the in-day pace is the night's use alone, so the team's room is a few
  * seconds of pace, which the wake's turn would spend at once (T1322). A leader's stop (a cut with `stop`) holds it
  * whatever its use, from the day's start on, when it has all its part left (T3455). A session the budget never holds
- * (`unheld`) is held by that stop alone (T4388).
+ * (`unheld`) is held by that stop alone (T4388). The week's stop holds every session, the lead and the unheld ones too
+ * (T5393).
  */
 export function isHeld(facts: BudgetFacts, extraPct = 0): boolean {
-  if (facts.cut?.stop === true) {
+  if (facts.weekStop !== undefined || facts.cut?.stop === true) {
     return true;
   }
   if (facts.unheld) {
@@ -305,8 +331,14 @@ interface PastStopWork {
   readonly plural: boolean;
 }
 
-/** The session's work that goes on past the daily stop, in the voice `whose` speaks; undefined when it has none. */
+/**
+ * The session's work that goes on past the daily stop, in the voice `whose` speaks; undefined when it has none. Past the
+ * week's stop only its blocker work does.
+ */
 function pastStopWork(facts: BudgetFacts, whose: 'its' | 'your'): PastStopWork | undefined {
+  if (facts.weekStop !== undefined) {
+    return facts.blockers.length === 0 ? undefined : { text: `${whose} blocker work (${facts.blockers.join(', ')})`, plural: false };
+  }
   const parts: string[] = [];
   if (facts.urgent.length > 0) {
     parts.push(`${whose} p0 work (${facts.urgent.join(', ')})`);
@@ -360,6 +392,26 @@ function levelLine(facts: BudgetFacts, budget: WarnBudget, standing: Standing): 
   return joined([`Budget: ${use}`, `${capitalized(heldClause(facts, standing))}.`, escalatedText(facts, budget), MORE]);
 }
 
+/** Why the week's stop holds: the week's use against its line, and the reset that ends it, on the team's clock. */
+function weekStopClause(facts: BudgetFacts, stop: WeekStop): string {
+  const until = stop.resetAt === undefined ? 'until the weekly reset' : `until the reset at ${formatEndTime(stop.resetAt, facts.zone)}`;
+  return `the week passed its stop line: ${formatPct(facts.weekUsedPct)} used against budget.targetPct ${formatPct(stop.linePct)}, so ${until} only blocker-priority tasks run, in every session`;
+}
+
+/** The person's line as the week's stop holds the session, once a day. */
+function weekStopLine(facts: BudgetFacts, stop: WeekStop): string {
+  const goesOn = pastStopWork(facts, 'its');
+  const what = goesOn === undefined ? `${facts.name} has no blocker work: it finishes a merge or release in hand and starts nothing else` : `${facts.name} goes on with ${goesOn.text}, and finishes a merge or release in hand`;
+  return `Budget: ${capitalized(weekStopClause(facts, stop))}. ${what}; new helpers only for blocker work. ${MORE}`;
+}
+
+/** The model's line as the week's stop holds it, once a day. */
+function weekStopModelLine(facts: BudgetFacts, stop: WeekStop): string {
+  const goesOn = pastStopWork(facts, 'your');
+  const what = goesOn === undefined ? 'You have no blocker work: finish a merge or release in hand' : `Go on with ${goesOn.text} and finish a merge or release in hand`;
+  return `${BUDGET_COMMAND}: ${weekStopClause(facts, stop)}. ${what}; start no other work items or helpers. Never skip a test or check to save budget.`;
+}
+
 /** The person's line as quiet hours start, their times on the team's clock. */
 function quietLine(quiet: QuietHours, span: QuietSpan, facts: BudgetFacts): string {
   const helpers = facts.isLead ? undefined : helperClause(quiet.action);
@@ -410,13 +462,18 @@ export function stopWarning(facts: BudgetFacts, budget: WarnBudget, previous: Wa
   if (budget.quietHours !== undefined && standing.quiet !== undefined && standing.quiet.from !== state.quietFrom) {
     lines.push(quietLine(budget.quietHours, standing.quiet, facts));
   }
-  // A state saved before `escalated` was kept reads as not escalated: a session escalated then sees this line once more.
-  if (standing.level > state.level) {
+  // The week's stop holds every session alike, so its line stands for the daily ones and no leader is told.
+  if (facts.weekStop !== undefined) {
+    if (!state.weekStopped) {
+      lines.push(weekStopLine(facts, facts.weekStop));
+    }
+  } else if (standing.level > state.level) {
+    // A state saved before `escalated` was kept reads as not escalated: a session escalated then sees the line below once more.
     lines.push(levelLine(facts, budget, standing));
   } else if (standing.escalated && !state.escalated) {
     lines.push(joined([`Budget: ${facts.name} is past its daily budget, and ${heldClause(facts, standing)}.`, escalatedText(facts, budget), MORE]));
   }
-  const tellLead = standing.escalated && budget.overAction !== 'warn' && !facts.isLead && !state.leadTold && facts.cut === undefined;
+  const tellLead = standing.escalated && facts.weekStop === undefined && budget.overAction !== 'warn' && !facts.isLead && !state.leadTold && facts.cut === undefined;
   return {
     lines,
     leadLine: tellLead ? leadLineOf(facts, standing) : undefined,
@@ -428,6 +485,8 @@ export function stopWarning(facts: BudgetFacts, budget: WarnBudget, previous: Wa
       held: standing.held,
       escalated: standing.escalated,
       leadTold: state.leadTold || tellLead,
+      weekStopped: facts.weekStop !== undefined,
+      modelWeekStopped: state.modelWeekStopped,
       quietFrom: standing.quiet?.from ?? state.quietFrom,
       liftAt: facts.lift?.at,
       burstAt: burst.burstAt,
@@ -477,7 +536,10 @@ export function promptWarning(facts: BudgetFacts, budget: WarnBudget, previous: 
   const state = stateFor(previous, facts.now);
   const standing = standingOf(facts, budget);
   const burst = burstPromptLines(facts, state);
-  const escalation = escalationLine(facts, budget, standing, state);
+  const stop = facts.weekStop;
+  const stopLine = stop === undefined || state.modelWeekStopped ? undefined : weekStopModelLine(facts, stop);
+  // Under the week's stop its line stands for the daily one.
+  const escalation = stop === undefined ? escalationLine(facts, budget, standing, state) : stopLine;
   const lines = escalation === undefined ? burst.lines : [...burst.lines, escalation];
   if (lines.length === 0) {
     return { line: undefined, state };
@@ -486,7 +548,8 @@ export function promptWarning(facts: BudgetFacts, budget: WarnBudget, previous: 
     line: lines.join('\n'),
     state: {
       ...state,
-      modelLevel: escalation === undefined ? state.modelLevel : standing.level,
+      modelWeekStopped: state.modelWeekStopped || stopLine !== undefined,
+      modelLevel: escalation === undefined || stop !== undefined ? state.modelLevel : standing.level,
       modelBurstAt: burst.modelBurstAt,
       surplusShown: burst.surplusShown,
     },
@@ -500,9 +563,14 @@ export type HelperGate = { readonly kind: 'allow' } | { readonly kind: 'ask' | '
  * `quietHours.action`; the stronger wins. Only "ask" and "block" hold a launch back. The lead's own
  * helpers, a session under its own lift and no cut, and one with p0 work or an answer another session waits on always go
  * ahead: the lead decides, a lift is a leader's decision (a cut given after it, a later one), p0 work is done right now,
- * and a held answer blocks its waiter.
+ * and a held answer blocks its waiter. Under the week's stop only a session with blocker work starts one, the lead too
+ * (T5393).
  */
 export function helperGate(facts: BudgetFacts, budget: WarnBudget): HelperGate {
+  const stop = facts.weekStop;
+  if (stop !== undefined) {
+    return facts.blockers.length > 0 ? { kind: 'allow' } : { kind: 'deny', reason: `${BUDGET_COMMAND}: ${capitalized(weekStopClause(facts, stop))}. ${facts.name} has no blocker work, so new helpers are refused. ${MORE}` };
+  }
   if (facts.isLead || (facts.lift !== undefined && facts.cut === undefined) || pastStopWork(facts, 'its') !== undefined) {
     return { kind: 'allow' };
   }

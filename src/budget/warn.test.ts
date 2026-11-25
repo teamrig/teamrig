@@ -9,7 +9,7 @@ import type { Cut } from './cut.ts';
 import type { Lift } from './lift.ts';
 import { DailyProfile } from './active-time.ts';
 import { readPace, weekWindow, type PaceBudget, type TeamDay } from './pace.ts';
-import { emptyWarnState, helperGate, isHeld, isPastDailyBudget, levelOf, promptWarning, quietSpanOf, sessionQuietSpan, stopWarning, type BudgetFacts, type BudgetLeader, type WarnBudget, type WarnState } from './warn.ts';
+import { emptyWarnState, helperGate, isHeld, isPastDailyBudget, levelOf, promptWarning, quietSpanOf, sessionQuietSpan, stopWarning, weekStopOf, type BudgetFacts, type BudgetLeader, type WarnBudget, type WarnState } from './warn.ts';
 
 const RESET = Date.parse('2026-10-21T01:00:00Z');
 const WINDOW = weekWindow(RESET, 1);
@@ -55,6 +55,8 @@ function facts(usedTodayPct: number, weekUsedPct: number, now = DAY, extra: Part
     unheld: false,
     urgent: [],
     awaited: [],
+    blockers: [],
+    weekStop: undefined,
     leader: LEAD,
     zone: TimeZone.UTC,
     ...extra,
@@ -574,5 +576,63 @@ describe('helperGate', () => {
 
   it('holds nothing back without quiet hours', () => {
     assert.equal(helperGate(facts(0.5, AHEAD, NIGHT), DAYTIME).kind, 'allow');
+  });
+});
+
+describe("the week's stop (T5393)", () => {
+  /** The week at the stop line of `budget.targetPct`, its reset known. */
+  const STOP = weekStopOf(99.5, 99.5, RESET);
+  const stopped = (extra: Partial<BudgetFacts> = {}): BudgetFacts => facts(0, 99.5, DAY, { teamDay: ROOM, weekStop: STOP, ...extra });
+
+  it('is in force from the line on, never below it', () => {
+    assert.deepEqual(weekStopOf(99.5, 99.5, RESET), { linePct: 99.5, resetAt: RESET });
+    assert.deepEqual(weekStopOf(100, 99.5, undefined), { linePct: 99.5, resetAt: undefined });
+    assert.equal(weekStopOf(99.4, 99.5, RESET), undefined);
+  });
+
+  it('holds every session whatever its room, lift or role: the lead and the unheld ones too', () => {
+    assert.equal(isHeld(stopped()), true);
+    assert.equal(isHeld(stopped({ isLead: true })), true);
+    assert.equal(isHeld(stopped({ unheld: true })), true);
+    assert.equal(isHeld(stopped({ lift: lift() })), true);
+    assert.equal(isHeld(facts(0, 99.5, DAY, { teamDay: ROOM })), false);
+  });
+
+  it('shows the person its line once a day, naming the blocker work, and tells no leader', () => {
+    const first = stopWarning(stopped({ blockers: ['T3'], urgent: ['T5'], awaited: ['T9'] }), { ...BUDGET, overAction: 'block' }, undefined);
+    assert.equal(first.lines.length, 1);
+    assert.match(first.lines[0] ?? '', /^Budget: The week passed its stop line: 99\.5% used against budget\.targetPct 99\.5%, so until the reset at .+ only blocker-priority tasks run, in every session\. alpha goes on with its blocker work \(T3\), and finishes a merge or release in hand; new helpers only for blocker work\. More: teamrig budget$/);
+    assert.ok(!(first.lines[0] ?? '').includes('T5'), first.lines[0]);
+    assert.equal(first.leadLine, undefined);
+    assert.equal(first.state.weekStopped, true);
+    assert.equal(first.state.leadTold, false);
+    assert.equal(stopWarning(stopped({ blockers: ['T3'] }), BUDGET, first.state).lines.length, 0);
+    const nextDay = stopWarning(facts(0, 99.5, Date.parse('2026-10-16T09:00:00Z'), { teamDay: ROOM, weekStop: STOP }), BUDGET, first.state);
+    assert.equal(nextDay.lines.length, 1);
+  });
+
+  it('tells a session with no blocker work that it starts nothing, and the reset stays unnamed while unknown', () => {
+    const result = stopWarning(stopped({ urgent: ['T5'], weekStop: weekStopOf(99.6, 99.5, undefined) }), BUDGET, undefined);
+    assert.match(result.lines[0] ?? '', /so until the weekly reset only blocker-priority tasks run/);
+    assert.match(result.lines[0] ?? '', /alpha has no blocker work: it finishes a merge or release in hand and starts nothing else;/);
+  });
+
+  it('gives the model its line once a day in place of the escalation, leaving the model level as it was', () => {
+    const first = promptWarning(stopped({ usedTodayPct: 1.1, blockers: ['T3'] }), BUDGET, undefined);
+    assert.match(first.line ?? '', /^teamrig budget: the week passed its stop line: .* Go on with your blocker work \(T3\) and finish a merge or release in hand; start no other work items or helpers\. Never skip a test or check to save budget\.$/);
+    assert.equal(first.state.modelWeekStopped, true);
+    assert.equal(first.state.modelLevel, 0);
+    assert.equal(promptWarning(stopped({ usedTodayPct: 1.1, blockers: ['T3'] }), BUDGET, first.state).line, undefined);
+    const none = promptWarning(stopped(), BUDGET, undefined);
+    assert.match(none.line ?? '', /You have no blocker work: finish a merge or release in hand;/);
+  });
+
+  it('lets only a session with blocker work start a helper, the lead too', () => {
+    assert.equal(helperGate(stopped({ blockers: ['T3'] }), DAYTIME).kind, 'allow');
+    for (const extra of [{}, { isLead: true }, { urgent: ['T5'] }, { awaited: ['T9'] }, { lift: lift() }] satisfies readonly Partial<BudgetFacts>[]) {
+      const gate = helperGate(stopped(extra), DAYTIME);
+      assert.equal(gate.kind, 'deny', JSON.stringify(extra));
+      assert.ok(gate.kind === 'deny' && gate.reason.includes('alpha has no blocker work, so new helpers are refused.'), JSON.stringify(gate));
+    }
   });
 });

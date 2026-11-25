@@ -16,6 +16,8 @@ const STATE: WarnState = {
   held: true,
   escalated: true,
   leadTold: true,
+  weekStopped: true,
+  modelWeekStopped: true,
   quietFrom: 1_760_565_600_000,
   liftAt: 1_760_529_600_000,
   burstAt: 1_760_500_000_000,
@@ -61,6 +63,7 @@ describe('parseWarnState', () => {
     const written: Readonly<Record<number, readonly string[]>> = {
       1: ['ahead', 'burstAt', 'day', 'held', 'leadTold', 'level', 'liftAt', 'modelBurstAt', 'modelLevel', 'quietFrom', 'surplusShown', 'v'],
       2: ['ahead', 'burstAt', 'day', 'escalated', 'held', 'leadTold', 'level', 'liftAt', 'modelBurstAt', 'modelLevel', 'quietFrom', 'surplusShown', 'v'],
+      3: ['ahead', 'burstAt', 'day', 'escalated', 'held', 'leadTold', 'level', 'liftAt', 'modelBurstAt', 'modelLevel', 'modelWeekStopped', 'quietFrom', 'surplusShown', 'v', 'weekStopped'],
     };
     assert.deepEqual(fieldPaths(JSON.parse(formatWarnState(STATE))), written[WARN_FORMAT]);
   });
@@ -75,9 +78,10 @@ describe('parseWarnState', () => {
   });
 
   it('refuses another format, a wrong field type, a bad time and a missing field', () => {
-    const fields = { v: WARN_FORMAT, day: '2026-10-15', level: 100, modelLevel: 80, ahead: true, held: false, escalated: true, leadTold: true, quietFrom: 1 };
+    const fields = { v: WARN_FORMAT, day: '2026-10-15', level: 100, modelLevel: 80, ahead: true, held: false, escalated: true, leadTold: true, weekStopped: true, modelWeekStopped: false, quietFrom: 1 };
     const { day: _day, ...noDay } = fields;
     const { escalated: _escalated, ...noEscalated } = fields;
+    const { weekStopped: _weekStopped, ...noWeekStopped } = fields;
     const variants: readonly object[] = [
       { ...fields, v: WARN_FORMAT + 1 },
       { ...fields, level: 'high' },
@@ -85,6 +89,9 @@ describe('parseWarnState', () => {
       { ...fields, held: 'yes' },
       { ...fields, escalated: 'yes' },
       noEscalated,
+      { ...fields, weekStopped: 'yes' },
+      { ...fields, modelWeekStopped: 0 },
+      noWeekStopped,
       { ...fields, quietFrom: 'tonight' },
       { ...fields, burstAt: 'then' },
       { ...fields, modelBurstAt: null },
@@ -101,5 +108,10 @@ describe('parseWarnState', () => {
     // Saved before `held`, then `escalated`, were kept.
     const old = { v: 1, day: '2026-10-15', level: 100, modelLevel: 80, ahead: true, leadTold: true };
     assert.deepEqual(parseWarnState(JSON.stringify(old)), { ...emptyWarnState('2026-10-15'), level: 100, modelLevel: 80, ahead: true, leadTold: true });
+  });
+
+  it("reads a format-2 file with the week stop's marks as not shown today (T5393)", () => {
+    const old = { v: 2, day: '2026-10-15', level: 100, modelLevel: 80, ahead: true, held: true, escalated: true, leadTold: true };
+    assert.deepEqual(parseWarnState(JSON.stringify(old)), { ...emptyWarnState('2026-10-15'), level: 100, modelLevel: 80, ahead: true, held: true, escalated: true, leadTold: true });
   });
 });

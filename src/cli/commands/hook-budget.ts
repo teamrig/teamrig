@@ -20,7 +20,7 @@ import { UsageStore, type UsageState } from '../../budget/store.ts';
 import { keepTasksWeek, tasksWeekOf } from '../../budget/task-week-file.ts';
 import { teamWeekOf } from '../../budget/team-week.ts';
 import { keepTeamWeek, teamWeekSummaryOf } from '../../budget/team-week-file.ts';
-import { helperGate, promptWarning, stopWarning, type BudgetFacts, type BudgetLeader, type HelperGate } from '../../budget/warn.ts';
+import { helperGate, promptWarning, stopWarning, weekStopOf, type BudgetFacts, type BudgetLeader, type HelperGate } from '../../budget/warn.ts';
 import { WarnStore } from '../../budget/warn-store.ts';
 import { wSince } from '../../budget/week.ts';
 import { cachedWork, WORK_CACHE_FILE } from '../../budget/work.ts';
@@ -215,6 +215,8 @@ export async function budgetFactsOf(runtime: CliRuntime, scope: BudgetScope, tra
     unheld: unheldOf(config, kit.paths.team).has(id),
     urgent: work.urgent.get(id) ?? [],
     awaited: work.awaited.get(id) ?? [],
+    blockers: work.blockers.get(id) ?? [],
+    weekStop: weekStopOf(week.usedPct, budget.targetPct, week.window?.reset),
     leader: budgetLeaderOf(config, roster, id),
     zone: teamZone(config, runtime),
   };

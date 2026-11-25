@@ -393,6 +393,8 @@ describe('wakeRestOf', () => {
     unheld: false,
     urgent: [],
     awaited: [],
+    blockers: [],
+    weekStop: undefined,
     leader: { id: 'lead', name: 'lead', isLead: true },
     zone: TimeZone.UTC,
     ...overrides,
