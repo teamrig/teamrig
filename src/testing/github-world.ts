@@ -1,0 +1,184 @@
+import type { CloseReason, IssueTarget } from '../plugin-api/index.ts';
+import type { TrackerWorld, WorldIssue } from '../conformance/index.ts';
+import type { GhRequest, GhResult, GhRunner } from '../adapters/connectors/github/gh.ts';
+
+/** One issue as the GitHub REST API holds it. */
+interface GitHubIssue {
+  readonly title: string;
+  body: string;
+  state: 'open' | 'closed';
+  /** GitHub's own word (`completed`, `not_planned`, `duplicate`); null while open. */
+  stateReason: string | null;
+  labels: string[];
+  assignees: string[];
+  readonly comments: string[];
+}
+
+/** The port's word for each `state_reason` GitHub keeps on a closed issue. */
+const REASON_OF: ReadonlyMap<string, CloseReason> = new Map([
+  ['completed', 'completed'],
+  ['not_planned', 'not-planned'],
+  ['duplicate', 'duplicate'],
+]);
+
+const NOT_FOUND: GhResult = { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Not Found (HTTP 404)' };
+
+function ok(body: unknown = {}): GhResult {
+  return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(body), stderr: '' };
+}
+
+/** The `-f`/`-F` fields of a command line after its method, in order, or undefined when one is not `key=value`. */
+function fieldsOf(args: readonly string[]): [string, string][] | undefined {
+  const pairs: [string, string][] = [];
+  for (let at = 0; at < args.length; at += 2) {
+    const flag = args[at];
+    const pair = args[at + 1];
+    const equals = pair?.indexOf('=') ?? -1;
+    if ((flag !== '-f' && flag !== '-F') || pair === undefined || equals < 1) {
+      return undefined;
+    }
+    pairs.push([pair.slice(0, equals), pair.slice(equals + 1)]);
+  }
+  return pairs;
+}
+
+function valuesOf(fields: readonly [string, string][], key: string): string[] {
+  return fields.filter(([name]) => name === key).map(([, value]) => value);
+}
+
+/**
+ * One repository on GitHub, faked behind `gh api` as the GitHub connector calls it: the REST lines that open an issue,
+ * comment on it, replace its body, close it, add and take off its labels and assignees, and read a label. It holds
+ * what those lines change, as GitHub does, so the tracker contract reads the result past the port. GitHub's own
+ * answers are kept where the contract can see them: a write on an issue it does not hold, and a label taken off an
+ * issue that does not carry it, answer Not Found; a login that may not be assigned is left out with no error. Any
+ * other line fails, so a spec sees a call this fake does not know.
+ */
+export class GitHubWorld implements GhRunner {
+  /** Every command line run, in order. */
+  readonly ran: (readonly string[])[] = [];
+  private readonly issues = new Map<number, GitHubIssue>();
+  private readonly labels = new Set<string>();
+  private readonly people = new Set<string>();
+  private last = 0;
+
+  readonly repo: string;
+
+  constructor(repo: string) {
+    this.repo = repo;
+  }
+
+  run(request: GhRequest): Promise<GhResult> {
+    this.ran.push(request.args);
+    return Promise.resolve(this.answer(request.args));
+  }
+
+  /** The tracker contract's view of this repository. */
+  world(): TrackerWorld {
+    return {
+      repo: this.repo,
+      fileByHand: (title, body) => this.file(title, body, []),
+      makeLabel: (name) => {
+        this.labels.add(name);
+      },
+      addPerson: (login) => {
+        this.people.add(login);
+      },
+      issue: (target): WorldIssue | undefined => {
+        const held = target.repo === this.repo ? this.issues.get(target.number) : undefined;
+        if (held === undefined) {
+          return undefined;
+        }
+        const reason = held.stateReason === null ? undefined : REASON_OF.get(held.stateReason);
+        return { title: held.title, body: held.body, state: held.state, reason, labels: [...held.labels], assignees: [...held.assignees], comments: [...held.comments] };
+      },
+    };
+  }
+
+  private file(title: string, body: string, labels: readonly string[]): IssueTarget {
+    this.last += 1;
+    for (const label of labels) {
+      // GitHub makes a label an issue is opened with when the repository lacks it.
+      this.labels.add(label);
+    }
+    this.issues.set(this.last, { title, body, state: 'open', stateReason: null, labels: [...labels], assignees: [], comments: [] });
+    return { repo: this.repo, number: this.last };
+  }
+
+  private answer(args: readonly string[]): GhResult {
+    const [verb, path, xFlag, method, ...rest] = args;
+    const fields = fieldsOf(rest);
+    const base = `repos/${this.repo}/`;
+    if (verb !== 'api' || path === undefined || !path.startsWith(base)) {
+      return this.unknown(args);
+    }
+    const route = path.slice(base.length).split('/');
+    if (route[0] === 'labels' && route.length === 2 && xFlag === undefined) {
+      return this.labels.has(decodeURIComponent(route[1] ?? '')) ? ok({ name: route[1] }) : NOT_FOUND;
+    }
+    if (route[0] !== 'issues' || xFlag !== '-X' || method === undefined || fields === undefined) {
+      return this.unknown(args);
+    }
+    if (route.length === 1 && method === 'POST') {
+      const [title] = valuesOf(fields, 'title');
+      const [body] = valuesOf(fields, 'body');
+      return title === undefined || body === undefined ? this.unknown(args) : ok({ number: this.file(title, body, valuesOf(fields, 'labels[]')).number });
+    }
+    const issue = this.issues.get(Number(route[1]));
+    if (issue === undefined) {
+      return NOT_FOUND;
+    }
+    return this.onIssue(issue, route.slice(2), method, fields) ?? this.unknown(args);
+  }
+
+  /** A line on one held issue, by the rest of its path; undefined for one this fake does not know. */
+  private onIssue(issue: GitHubIssue, route: readonly string[], method: string, fields: readonly [string, string][]): GhResult | undefined {
+    const [what, item] = route;
+    if (what === undefined && method === 'PATCH') {
+      const [body] = valuesOf(fields, 'body');
+      issue.body = body ?? issue.body;
+      if (valuesOf(fields, 'state').includes('closed')) {
+        issue.state = 'closed';
+        issue.stateReason = valuesOf(fields, 'state_reason')[0] ?? 'completed';
+      }
+      return ok();
+    }
+    if (what === 'comments' && method === 'POST') {
+      const [body] = valuesOf(fields, 'body');
+      if (body === undefined) {
+        return undefined;
+      }
+      issue.comments.push(body);
+      return ok();
+    }
+    if (what === 'labels' && item === undefined && method === 'POST') {
+      const given = valuesOf(fields, 'labels[]');
+      given.forEach((label) => this.labels.add(label));
+      issue.labels = [...new Set([...issue.labels, ...given])];
+      return ok();
+    }
+    if (what === 'labels' && item !== undefined && method === 'DELETE') {
+      const label = decodeURIComponent(item);
+      if (!issue.labels.includes(label)) {
+        return NOT_FOUND;
+      }
+      issue.labels = issue.labels.filter((each) => each !== label);
+      return ok();
+    }
+    if (what === 'assignees' && method === 'POST') {
+      const may = valuesOf(fields, 'assignees[]').filter((login) => this.people.has(login));
+      issue.assignees = [...new Set([...issue.assignees, ...may])];
+      return ok();
+    }
+    if (what === 'assignees' && method === 'DELETE') {
+      const off = valuesOf(fields, 'assignees[]');
+      issue.assignees = issue.assignees.filter((login) => !off.includes(login));
+      return ok();
+    }
+    return undefined;
+  }
+
+  private unknown(args: readonly string[]): GhResult {
+    return { end: { kind: 'exited', code: 1 }, stdout: '', stderr: `the fake GitHub does not know: gh ${args.join(' ')}` };
+  }
+}
