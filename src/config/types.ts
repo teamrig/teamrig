@@ -261,7 +261,8 @@ export interface PushGuardConfig {
   /**
    * The paths, as review globs, that stay sensitive inside `lowRiskPaths` (T3448), as the generic review paths and the
    * `reviewPaths` entries do. A change touching a sensitive path merges once the security reviewer approved its head (a
-   * leader's approval clears it too); one touching only low-risk paths, on the answerer's own approval.
+   * leader's approval clears it too); one touching only low-risk paths, on the answerer's own approval. Every shipped
+   * host's repository globs (`HostPaths.repoGlobs()`) stay sensitive whatever this list says.
    */
   readonly sensitivePaths: readonly string[];
 }

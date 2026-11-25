@@ -432,11 +432,11 @@
           "default": ["docs/**/*.md", "docs/**/*.png", "docs/**/*.svg", "docs/**/*.jpg"]
         },
         "sensitivePaths": {
-          "description": "The paths that stay sensitive inside lowRiskPaths, as review globs read the same way. The ship tool's merge lets the answerer (watcher) approve a pull request at its head alone when its branch touches only low-risk paths, none of these, no generic review path, no reviewPaths entry and no file another session's open branch changes; one touching a sensitive path needs the security reviewer's approval of that head first, and the leaders approve one that needs a second session's too. A list given replaces the default.",
+          "description": "The paths that stay sensitive inside lowRiskPaths, as review globs read the same way. The ship tool's merge lets the answerer (watcher) approve a pull request at its head alone when its branch touches only low-risk paths, none of these, no generic review path, no reviewPaths entry and no file another session's open branch changes; one touching a sensitive path needs the security reviewer's approval of that head first, and the leaders approve one that needs a second session's too. Each supported host's own instruction files and project folders stay sensitive whatever this list says. A list given replaces the default.",
           "type": "array",
           "maxItems": 128,
           "items": { "type": "string", "maxLength": 200 },
-          "default": ["tools/**", ".github/**", "**/.githooks/**", "**/*guard*/**", "*guard*", "**/hooks/**", "*hook*", "**/merge/**", "*merge*", "**/permissions/**", "*permission*", "**/github/**", "*github*", "**/issues/**", "issue*", "package.json", "**/config/**", "*config*", "*secret*", "*approval*", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "**/.claude/**", "**/.claude-plugin/**", "**/skills/**"]
+          "default": ["tools/**", ".github/**", "**/.githooks/**", "**/*guard*/**", "*guard*", "**/hooks/**", "*hook*", "**/merge/**", "*merge*", "**/permissions/**", "*permission*", "**/github/**", "*github*", "**/issues/**", "issue*", "package.json", "**/config/**", "*config*", "*secret*", "*approval*", "AGENTS.md", "**/skills/**"]
         }
       }
     },

@@ -168,9 +168,10 @@ export const DEFAULT_LOW_RISK_PATHS: readonly string[] = ['docs/**/*.md', 'docs/
  * broad low-risk folder never clears these. The repo's own tooling and CI (`tools/`, `.github/`, git hooks), whatever
  * guards, hooks, merges or grants permissions, the code that writes to GitHub, the package file that chooses what
  * installs (the lock files are generic review paths already), config and the code that reads it (these lists among
- * it), secrets and approvals, and the instructions agents follow (`CLAUDE.md` and `AGENTS.md` at any depth, `.claude/`,
- * plugin manifests and skills). A glob with no slash names a file at any depth, so `*hook*` covers a `hook-*.ts`
- * command beside the others, and `**\/hooks/**` a hooks folder anywhere.
+ * it), secrets and approvals, and the instructions agents follow (`AGENTS.md` at any depth and skills). Each host's
+ * own instruction files and folders are not listed here: the answerer clearance adds every shipped host's
+ * `HostPaths.repoGlobs()` whatever this list says (`mergeStandingOf`). A glob with no slash names a file at any
+ * depth, so `*hook*` covers a `hook-*.ts` command beside the others, and `**\/hooks/**` a hooks folder anywhere.
  */
 export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
   'tools/**',
@@ -193,11 +194,7 @@ export const DEFAULT_SENSITIVE_PATHS: readonly string[] = [
   '*config*',
   '*secret*',
   '*approval*',
-  'CLAUDE.md',
-  'CLAUDE.local.md',
   'AGENTS.md',
-  '**/.claude/**',
-  '**/.claude-plugin/**',
   '**/skills/**',
 ];
 
