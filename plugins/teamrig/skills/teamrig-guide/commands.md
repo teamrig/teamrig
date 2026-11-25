@@ -2462,7 +2462,7 @@ launch block and sub-lead list, so no tab title changes, and a role it has no ho
 `<team>/<id>`. It starts with a copy of your team's settings, so it runs as your team does, and shares your delivery
 setup (its folder, host lock and main checkouts, written as absolute paths), so two teams' queued steps never
 overlap; your budget shares and idle keep-open list go with the sessions they name, and the budget keys of the
-account's week (`enabled`, `account`, `weeklyLimitW`, `subagentWeight`, `modelWeights`, `extraWPerUsd`, `reset`) are not copied: the
+account's week (`enabled`, `account`, `weeklyLimitW`, `pinRateToLimit`, `homePartPct`, `subagentWeight`, `modelWeights`, `extraWPerUsd`, `reset`) are not copied: the
 child reads them from your team, so they never drift. Your GitHub import and your
 folders (`paths`) stay yours. A moved task's lines go to the child's register with each session that stays, as who wrote a line, the
 owner, the source, the pin or a decision or approval wait, named `<team>/<id>`; a task that stays and names a moved
@@ -7357,6 +7357,15 @@ of the model id a transcript line names, such as `claude-fable`, and the longest
 or a line naming none, counts 1. Fit it as the subagent weight: the ratio of the other models' W per 1% to this
 model's. The learned W per % shifts once as the listed model's W is re-weighted.
 
+Two homes (teamrig on two machines) on one Claude account need two more keys. The status line counts both machines'
+use and this home's meter only its own, so a W per percent read from the two comes out too low. [budget.pinRateToLimit]
+(default off) prices the week at `budget.weeklyLimitW` ahead of the learned rate, and prices today's use and the
+week's used W at it too; it needs `budget.weeklyLimitW`, and a pin without one is a config issue and stays off.
+[budget.homePartPct] (1 to 100, default 100) is this home's fixed part of the account's week, which the account's main
+lead sets each week: the home's allowance runs to `budget.targetPct` of that part, read from its own W, and its day,
+spare W for helpers and the week left are read against that part, never against what the other home leaves. Below
+100 it needs `budget.pinRateToLimit`, else it is a config issue and the whole week counts.
+
 ### teamrig budget
 
 Measures every session's use since the last run, keeps 8 days of it in the team's `state/usage` folder, and
@@ -7397,7 +7406,7 @@ account's: a team under a parent on its Claude
 account reads and writes them in the folder of the highest team above it reached through teams all on that account,
 so a child team paces the account's week with its parent; a root team, or one whose parent is on another
 account, keeps its own. A team under another takes the team above's `budget.account` when it names none, and its
-`enabled`, `weeklyLimitW`, `subagentWeight`, `modelWeights`, `extraWPerUsd` and `reset` for each it leaves unset, so a team made
+`enabled`, `weeklyLimitW`, `pinRateToLimit`, `homePartPct`, `subagentWeight`, `modelWeights`, `extraWPerUsd` and `reset` for each it leaves unset, so a team made
 with `team create --parent` paces the root's week with no copy of these keys; one that names another account takes
 none of them.
 
