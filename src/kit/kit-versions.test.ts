@@ -31,14 +31,27 @@ class BusyMutex implements Mutex {
   }
 }
 
+/** Files whose move to one path throws, as a held file or a full disk would at the step that puts a copy in place. */
+class FailingMoveFiles extends MemoryFiles {
+  failMoveTo: string | undefined;
+
+  override async move(from: string, to: string): Promise<boolean> {
+    if (to === this.failMoveTo) {
+      this.failMoveTo = undefined;
+      throw new Error('EBUSY: resource busy or locked');
+    }
+    return super.move(from, to);
+  }
+}
+
 describe('kit versions', () => {
-  let files: MemoryFiles;
+  let files: FailingMoveFiles;
   let tree: MemoryKitTree;
   const install = (version: string, overrides: Partial<KitInstall> = {}): Promise<KitInstallOutcome> =>
     installKitVersion({ files, tree, kitHome: KIT, from: join(PLUGIN, version), version, source: SOURCE, lock: new InlineMutex(), ...overrides });
 
   beforeEach(async () => {
-    files = new MemoryFiles();
+    files = new FailingMoveFiles();
     tree = new MemoryKitTree(files);
     for (const version of ['0.507.0', '0.508.0', '0.509.0', '0.510.0', '0.511.0']) {
       await writeKitRelease(files, join(PLUGIN, version), version);
@@ -126,6 +139,26 @@ describe('kit versions', () => {
       assert.deepEqual(await install('0.509.0', { lock: new BusyMutex() }), { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' });
       assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'current', version: '0.508.0' });
       assert.equal(tree.copies.length, 2);
+    });
+
+    it('replaces a damaged kept version by moves, leaving no aside copy behind', async () => {
+      await install('0.508.0');
+      await files.write(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST), '{}\n');
+      assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
+      assert.equal(files.get(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST)), files.get(join(PLUGIN, '0.508.0', CLIENT_MANIFEST)));
+      assert.deepEqual(await files.list(join(KIT, 'versions')), ['0.508.0', '0.508.0.source.json']);
+    });
+
+    it('puts the old folder back when the whole copy cannot move in, and moves nothing', async () => {
+      await install('0.508.0');
+      await files.write(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST), '{}\n');
+      const record = files.get(kitCurrentRecordPath(KIT));
+      files.failMoveTo = kitVersionFolder(KIT, '0.508.0');
+      const outcome = await install('0.508.0');
+      assert.deepEqual(outcome, { kind: 'refused', why: 'copying 0.508.0 failed: EBUSY: resource busy or locked' });
+      assert.equal(files.get(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST)), '{}\n');
+      assert.equal(files.get(kitCurrentRecordPath(KIT)), record);
+      assert.deepEqual(await files.list(join(KIT, 'versions')), ['0.508.0', '0.508.0.source.json']);
     });
 
     it('refuses a version that is no release version, a path above all', async () => {

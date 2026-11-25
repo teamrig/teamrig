@@ -309,8 +309,7 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
         await tree.removeFolder(partial);
         return { kind: 'refused', why: `the release of ${version} changed while it was copied` };
       }
-      await tree.removeFolder(folder);
-      await files.move(partial, folder);
+      await replacedFolder(install, partial, folder);
       await writeKeptSource(files, kitHome, version, { source, listHash: verified.hash });
     } catch (error) {
       await tree.removeFolder(partial).catch(() => undefined);
@@ -321,6 +320,30 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
   const outcome = await movedCurrent(files, kitHome, before, { version, listHash: verified.hash, source, pinned: false }, wanted);
   await pruneKitVersions(install);
   return outcome;
+}
+
+/**
+ * Puts the whole copy in `partial` at `folder` by moves only, so a launcher reading `folder` finds the old copy or the
+ * new one, never a half-removed tree: the old folder moves aside to `<v>.replaced`, the copy moves in, and the old one
+ * is removed after. A failed move-in puts the old folder back; a `.replaced` a running process holds is left for a
+ * prune.
+ */
+async function replacedFolder(ports: KitPorts, partial: string, folder: string): Promise<void> {
+  const { files, tree } = ports;
+  const replaced = `${folder}.replaced`;
+  await tree.removeFolder(replaced);
+  const hadFolder = await files.move(folder, replaced);
+  try {
+    await files.move(partial, folder);
+  } catch (error) {
+    if (hadFolder) {
+      await files.move(replaced, folder).catch(() => false);
+    }
+    throw error;
+  }
+  if (hadFolder) {
+    await tree.removeFolder(replaced).catch(() => undefined);
+  }
 }
 
 async function movedCurrent(files: Files, kitHome: string, before: KitCurrent | undefined, next: KitCurrent, wanted: Version): Promise<KitInstallOutcome> {
