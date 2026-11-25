@@ -11,8 +11,16 @@ export interface TaskNumbering {
   issue<T>(write: (floor: number) => Promise<T>): Promise<T>;
 }
 
-/** A team on its own: its numbers are its register's, which the register's own lock hands out one at a time. */
-export const OWN_NUMBERS: TaskNumbering = { issue: (write) => write(1) };
+/**
+ * A team on its own whose numbers start at `first`: its numbers are its register's, which the register's own lock
+ * hands out one at a time. A team that left a tree starts past every id the tree had issued (T5469).
+ */
+export function ownNumbersFrom(first: number): TaskNumbering {
+  return { issue: (write) => write(first) };
+}
+
+/** A team on its own that never left a tree: its numbers start at 1. */
+export const OWN_NUMBERS: TaskNumbering = ownNumbersFrom(1);
 
 /** Another register sharing the numbering, read for the number its next task would get. */
 export interface NumberSource {
@@ -40,16 +48,19 @@ export class LogNumbers implements NumberSource {
 export class TreeNumbering implements TaskNumbering {
   private readonly mutex: Mutex;
   private readonly others: readonly NumberSource[];
+  private readonly first: number;
 
-  constructor(mutex: Mutex, others: readonly NumberSource[]) {
+  /** `first` is the lowest number the tree issues: past every id of a tree one of its teams left (T5469). */
+  constructor(mutex: Mutex, others: readonly NumberSource[], first = 1) {
     this.mutex = mutex;
     this.others = others;
+    this.first = first;
   }
 
   issue<T>(write: (floor: number) => Promise<T>): Promise<T> {
     return this.mutex.run(async () => {
       const next = await Promise.all(this.others.map((other) => other.nextNumber()));
-      return write(Math.max(1, ...next));
+      return write(Math.max(this.first, ...next));
     });
   }
 }
