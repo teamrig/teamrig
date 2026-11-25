@@ -147,7 +147,9 @@ Every change ships tests, so the next change cannot break it unnoticed:
   the hook inputs and transcripts a real session sent, and its `expected/` folder pins what teamrig prints for each;
   `src/testing/recorded-pins.test.ts` fails when the code and the pins differ. A refactor leaves the pins as they are.
   A change meant to alter what a hook prints, or a core rule's wording (the session-start pins hold the rules text),
-  runs `node tools/record/pins-cli.ts` from the repository's root and commits the diff with the change.
+  runs `node tools/record/pins-cli.ts` from the repository's root and commits the diff with the change. Each
+  PreToolUse guard also has one refusal pinned, run from a recorded call through `hook.ts` (`GUARD_DENIES` in
+  `src/testing/recorded-pins.ts`, pinned in `expected/guard-denies.json`): a new guard adds its case there.
 - What every adapter of a port must do is a contract of the conformance kit (`src/conformance/`), not a spec of one
   adapter: `defineContract({ port, side, cases, liars })` in the port's own file, listed in `CONTRACTS` with one
   `entryOf(...)` line. A case is a value that fails by throwing and speaks only through its `{ port, world }`, and
