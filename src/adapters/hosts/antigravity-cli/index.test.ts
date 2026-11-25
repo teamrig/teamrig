@@ -22,6 +22,7 @@ describe('the Antigravity CLI adapter', () => {
     assert.equal(isUnsupported(ports.hooks), false);
     assert.equal(isUnsupported(ports.toolCall), false);
     assert.equal(isUnsupported(ports.paths), false);
+    assert.equal(!isUnsupported(ports.launcher) && ports.launcher.program, 'agy');
     assert.deepEqual(!isUnsupported(ports.secrets) && ports.secrets.secretFiles(), []);
     assert.equal(ports.statusLine, statusLine);
     assert.equal(isUnsupported(ports.transcripts), true);

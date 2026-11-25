@@ -67,12 +67,12 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab launching |
-| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab resume |
+| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.wake` | waking an idle session | supported, proved on [windows](proofs/claude-code.md#sessionswake); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake mod |
 | `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `sessions.process` | finding the session's process | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no tab process tracking |
+| `sessions.process` | finding the session's process | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
 | `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
 | `sessions.effort-writeback` | a typed effort level written back to the session | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no effort level hook field |
