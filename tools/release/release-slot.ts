@@ -43,9 +43,9 @@ function headSha(pull: unknown): string {
   return sha;
 }
 
-/** When ci was last started by hand on `sha`, read from its newest dispatched run on the release branch, or null. */
+/** When ci last started on `sha`, read from its newest run on the release branch (pull request or dispatch), or null. */
 async function ciStartedOn(get: RepoGet, branch: ReleaseBranch, sha: string): Promise<Date | null> {
-  const runs = await get(`/actions/workflows/${CI_WORKFLOW}/runs?branch=${encodeURIComponent(branch.head)}&event=workflow_dispatch&per_page=1`);
+  const runs = await get(`/actions/workflows/${CI_WORKFLOW}/runs?branch=${encodeURIComponent(branch.head)}&per_page=1`);
   const list = isRecord(runs) ? runs['workflow_runs'] : undefined;
   if (!Array.isArray(list)) throw new Error("GitHub's workflow run list is not a list");
   const [newest]: unknown[] = list;

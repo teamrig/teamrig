@@ -16,10 +16,13 @@ import { isRecord, type JsonRecord } from '../lib/guards.ts';
 
 /** GitHub Actions' own App: the only one whose `every check passed` run counts (T4712 C7). */
 export const ACTIONS_APP_ID = 15368;
-/** Who the release workflow's token opens the release pull request as: a filter, never a control (C6). */
-export const RELEASE_AUTHOR = 'github-actions[bot]';
-/** The event release.yml starts ci with on the release branch, as its own token's pull request starts none. */
-export const RELEASE_CI_EVENT = 'workflow_dispatch';
+/** Who release.yml opens the release pull request as, with the teamrig-release App's token: a filter, never a control (C6). */
+export const RELEASE_AUTHOR = 'teamrig-release[bot]';
+/**
+ * The events a ci run on the release branch may come from: the App's pull request starts ci as `pull_request`, and
+ * release-slot.yml's hourly nudge starts it as `workflow_dispatch` when a held release gets no new run (T5390).
+ */
+export const RELEASE_CI_EVENTS: readonly string[] = ['pull_request', 'workflow_dispatch'];
 /** Pages of check runs read at most: 1000 runs, far past ci.yml's dozen, so a larger count is refused as odd. */
 const MAX_CHECK_PAGES = 10;
 const PAGE = 100;
@@ -218,10 +221,10 @@ export function lastMergeOf(closed: readonly JsonRecord[]): Date | null {
   return last;
 }
 
-/** Why the ci run is not a passed run of release.yml's dispatch on the release branch of this repository, or null. */
+/** Why the ci run is not a passed pull request or dispatched run on the release branch of this repository, or null. */
 function ciRunRefusal(run: JsonRecord, target: GateTarget): string | null {
   const event = fieldString(run, 'event', 'run');
-  if (event !== RELEASE_CI_EVENT) return `the ci run was started by ${codeSpan(event)}, not by the release workflow's ${codeSpan(RELEASE_CI_EVENT)}`;
+  if (!RELEASE_CI_EVENTS.includes(event)) return `the ci run was started by ${codeSpan(event)}, not by ${RELEASE_CI_EVENTS.map(codeSpan).join(' or ')}`;
   if (fieldString(run, 'status', 'run') !== 'completed' || run['conclusion'] !== 'success') return 'the ci run did not pass';
   if (fieldString(fieldRecord(run, 'head_repository', 'run'), 'full_name', 'run.head_repository') !== target.repo) return 'the ci run is on another repository';
   if (fieldString(run, 'head_branch', 'run') !== target.head) return 'the ci run is not on the release branch';

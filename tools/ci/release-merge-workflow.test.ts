@@ -31,13 +31,13 @@ describe('release-merge.yml', () => {
     assert.match(workflow, /^concurrency:\n {2}group: release-merge\n {2}cancel-in-progress: false\n/m);
   });
 
-  it("narrows both jobs to release.yml's passed dispatch of ci on this repository's release branch, inert until the App exists", () => {
+  it("narrows both jobs to a passed pull request or dispatched ci run on this repository's release branch, inert until the App exists", () => {
     assert.ok(release !== null);
     for (const id of ['gate', 'merge']) {
       const condition = conditionOf(job(id));
       for (const clause of [
         "vars.RELEASE_APP_ID != ''",
-        "github.event.workflow_run.event == 'workflow_dispatch'",
+        "contains(fromJSON('[\"pull_request\", \"workflow_dispatch\"]'), github.event.workflow_run.event)",
         "github.event.workflow_run.conclusion == 'success'",
         'github.event.workflow_run.head_repository.full_name == github.repository',
         `github.event.workflow_run.head_branch == '${release.head}'`,

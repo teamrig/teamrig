@@ -45,9 +45,15 @@ describe('every workflow', () => {
     }
   });
 
-  it('writes pull requests only from release.yml, to open the release pull request, and auto-merge.yml, to switch auto-merge on, once each', () => {
+  it('gives a job token pull request writes only in auto-merge.yml, to switch auto-merge on; release.yml writes with the App token', () => {
     for (const [name, text] of workflows) {
-      assert.equal(text.match(/pull-requests: write/g)?.length ?? 0, name === 'release.yml' || name === 'auto-merge.yml' ? 1 : 0, name);
+      assert.equal(text.match(/pull-requests: write/g)?.length ?? 0, name === 'auto-merge.yml' ? 1 : 0, name);
+    }
+  });
+
+  it("mints the teamrig-release App's token only in release.yml, to write the release pull request, and release-merge.yml, to merge it", () => {
+    for (const [name, text] of workflows) {
+      assert.equal(text.includes('secrets.RELEASE_APP_KEY'), name === 'release.yml' || name === 'release-merge.yml', name);
     }
   });
 });
