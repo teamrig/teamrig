@@ -17,7 +17,10 @@ const CODEX_CONFIG = '/srv/codex/config.toml';
 const PERSONS: unknown = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo done', timeout: 5 }] }] } };
 
 const shipped = Object.values(await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
-const codex: HostSource | undefined = shipped.find((source) => !isUnsupported(source(hostDeps()).userHooks));
+const codex: HostSource | undefined = shipped.find((source) => {
+  const { userHooks } = source(hostDeps());
+  return !isUnsupported(userHooks) && userHooks.host === 'codex';
+});
 
 function options(over: RunOptions = {}): RunOptions {
   assert.ok(codex, 'no shipped host keeps a hooks file of the person');
@@ -147,5 +150,47 @@ describe('teamrig setup hooks --host codex', () => {
     const kit = await kitWithPlugin();
     const result = await kit.run(['setup', 'hooks'], options());
     assert.notEqual(result.code, EXIT.ok);
+  });
+});
+
+describe('teamrig setup hooks --host antigravity-cli', () => {
+  const agySource: HostSource | undefined = shipped.find((source) => {
+    const { userHooks } = source(hostDeps());
+    return !isUnsupported(userHooks) && userHooks.host === 'antigravity-cli';
+  });
+
+  function agyOptions(over: RunOptions = {}): RunOptions {
+    assert.ok(agySource, 'antigravity-cli keeps a user hooks file');
+    return {
+      userHome: '/srv/ada',
+      shippedHosts: { 'antigravity-cli': { ports: agySource, sessionVariables: { marks: [], identity: [] } } },
+      ...over,
+    };
+  }
+
+  const AGY_HOOKS = '/srv/ada/.gemini/config/hooks.json';
+
+  it('previews the counts without --yes and writes nothing', async () => {
+    const kit = await kitWithPlugin();
+    const result = await kit.run(['setup', 'hooks', '--host', 'antigravity-cli'], agyOptions());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.match(result.stdout[0] ?? '', /^PREVIEW nothing written \(add --yes to write\) \/srv\/ada\/\.gemini\/config\/hooks\.json: inserted [1-9]\d*, unchanged 0, changed 0, removed 0$/u);
+    assert.equal(kit.files.get(AGY_HOOKS), undefined);
+  });
+
+  it("writes the teamrig group beside the person's groups, keeps a backup, and prints UNCHANGED on a re-run", async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(AGY_HOOKS, JSON.stringify({ custom: { Stop: [{ type: 'command', command: 'echo mine', timeout: 5 }] } }));
+    const first = await kit.run(['setup', 'hooks', '--host', 'antigravity-cli', '--yes'], agyOptions());
+    assert.equal(first.code, EXIT.ok, first.stdout.join('\n'));
+    assert.match(first.stdout[0] ?? '', /^WROTE \/srv\/ada\/\.gemini\/config\/hooks\.json: inserted [1-9]\d*, .*; the old file is at .*antigravity-cli-hooks\.json$/u);
+    const written: unknown = JSON.parse(kit.files.get(AGY_HOOKS) ?? '{}');
+    assert.ok(isRecord(written));
+    assert.deepEqual(written['custom'], { Stop: [{ type: 'command', command: 'echo mine', timeout: 5 }] });
+    assert.ok(isRecord(written['teamrig']));
+
+    const second = await kit.run(['setup', 'hooks', '--host', 'antigravity-cli', '--yes'], agyOptions());
+    assert.equal(second.code, EXIT.ok, second.stdout.join('\n'));
+    assert.match(second.stdout[0] ?? '', /^UNCHANGED \/srv\/ada\/\.gemini\/config\/hooks\.json: teamrig's hooks are already in it \(inserted 0, unchanged [1-9]\d*, changed 0, removed 0\)$/u);
   });
 });

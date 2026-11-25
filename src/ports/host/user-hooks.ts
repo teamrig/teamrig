@@ -57,3 +57,32 @@ export interface HostUserHooks {
   /** The settings the hooks need in the host's config files, written with them; empty when they need none. */
   readonly configLines: readonly HostConfigLines[];
 }
+
+/** A handler from teamrig's hooks file that a host cannot run. */
+export interface SkippedUserHook {
+  readonly event: string;
+  readonly matcher?: string;
+  readonly words: readonly string[];
+  readonly reason: string;
+}
+
+/** Counts inserted, unchanged, changed, and removed handlers between two keyed maps of JSON-encoded handlers. */
+export function userHooksCounts(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): UserHooksCounts {
+  let inserted = 0;
+  let unchanged = 0;
+  let changed = 0;
+  for (const [key, handler] of after) {
+    const old = before.get(key);
+    if (old === undefined) inserted += 1;
+    else if (old === handler) unchanged += 1;
+    else changed += 1;
+  }
+  const removed = [...before.keys()].filter((key) => !after.has(key)).length;
+  return { inserted, unchanged, changed, removed };
+}
+
+/** Formats a skipped handler for `setup hooks` output. */
+export function skippedUserHookLine(skipped: SkippedUserHook): string {
+  const where = skipped.matcher === undefined ? skipped.event : `${skipped.event} (${skipped.matcher})`;
+  return `${where}: ${skipped.words.join(' ')}: ${skipped.reason}`;
+}

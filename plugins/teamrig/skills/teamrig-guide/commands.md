@@ -5622,7 +5622,8 @@ UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 ### teamrig setup hooks
 
 Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
-`hooks.json` in `$CODEX_HOME` (default `~/.codex`). Your own handlers stay as they are, in their order; teamrig's
+`hooks.json` in `$CODEX_HOME` (default `~/.codex`); for `--host antigravity-cli`, Antigravity CLI's `hooks.json` in
+`~/.gemini/config`. Your own handlers stay as they are, in their order; teamrig's
 earlier handlers are replaced, so running it again after a teamrig update rewrites them. Each handler points at the
 installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
@@ -5641,7 +5642,7 @@ refused where an agent runs it; the preview stays open.
 
 Flags:
 
-- `--host <name>`: required: the host whose hooks file it writes (`codex`).
+- `--host <name>`: required: the host whose hooks file it writes (`codex` or `antigravity-cli`).
 - `--yes`: write the file, keeping the old one in the kit's `backups` folder first; without it, only count.
 
 Example:

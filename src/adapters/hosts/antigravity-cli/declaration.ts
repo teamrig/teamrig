@@ -1,5 +1,19 @@
 import type { HostDeclaration, Support } from '../../../plugin-api/index.ts';
 
+function provedWin(heading: string, date: string): Support {
+  return {
+    kind: 'supported',
+    proofs: [
+      {
+        os: 'windows',
+        toolVersion: '1.5.14',
+        date,
+        evidence: `proofs/antigravity-cli.md#${heading}`,
+      },
+    ],
+  };
+}
+
 const UNPROVED: Support = {
   kind: 'partial',
   missing: 'no live run yet',
@@ -26,31 +40,31 @@ export const declaration: HostDeclaration = {
     identity: ['ANTIGRAVITY_CONVERSATION_ID'],
   },
   manifest: {
-    'rules.session-start': NOT_YET('Antigravity --host-event hook routing'),
+    'rules.session-start': UNPROVED,
     'rules.instruction-files': UNPROVED,
     'rules.rules-folder': UNPROVED,
     'rules.memory': NO_HOST_SUPPORT('per-project memory index'),
     'rules.start-size': UNPROVED,
-    'inbox.prompt-line': NOT_YET('Antigravity --host-event hook routing'),
+    'inbox.prompt-line': UNPROVED,
     'context.compact-hold': NO_HOST_SUPPORT('PreCompact hook'),
     'context.size': NOT_YET('transcript context sizing'),
     'context.refresh': NO_HOST_SUPPORT('in-tab /clear mod'),
-    'hooks.pretool-guard': NOT_YET('Antigravity --host-event hook routing'),
-    'hooks.file-guard': NOT_YET('Antigravity --host-event hook routing'),
-    'hooks.exec-review': NOT_YET('Antigravity --host-event hook routing'),
-    'hooks.readonly-allow': NOT_YET('Antigravity --host-event hook routing'),
-    'hooks.ask-refuse': NOT_YET('Antigravity --host-event hook routing'),
+    'hooks.pretool-guard': UNPROVED,
+    'hooks.file-guard': UNPROVED,
+    'hooks.exec-review': UNPROVED,
+    'hooks.readonly-allow': UNPROVED,
+    'hooks.ask-refuse': UNPROVED,
     'hooks.permission-refuse': NO_HOST_SUPPORT('PermissionRequest hook'),
     'hooks.output-redact': NOT_YET('PreToolUse overwrite redact-exec wrapper'),
     'hooks.prompt-secret': PROMPT_SECRET,
-    'hooks.tool-failure': NOT_YET('Antigravity --host-event hook routing'),
+    'hooks.tool-failure': UNPROVED,
     'permissions.deny-lines': NOT_YET('permissions port'),
     'permissions.auto-mode-routes': NO_HOST_SUPPORT('Claude Code auto-mode routes'),
     'sessions.open': NO_HOST_SUPPORT('terminal tab launching'),
     'sessions.resume': NO_HOST_SUPPORT('terminal tab resume'),
     'sessions.identity': UNPROVED,
     'sessions.wake': NO_HOST_SUPPORT('in-tab wake mod'),
-    'sessions.turn-end': NOT_YET('Antigravity --host-event hook routing'),
+    'sessions.turn-end': UNPROVED,
     'sessions.process': NO_HOST_SUPPORT('tab process tracking'),
     'sessions.in-tab': NO_HOST_SUPPORT('in-tab JS mod'),
     'sessions.carry': NO_HOST_SUPPORT('in-tab refresh carry'),
@@ -65,7 +79,7 @@ export const declaration: HostDeclaration = {
     'skills.session-listing': UNPROVED,
     'helpers.start-rules': UNPROVED,
     'helpers.agent-types': UNPROVED,
-    'plugin.hooks-file': NOT_YET('Antigravity hooks.json writer'),
+    'plugin.hooks-file': provedWin('pluginhooks-file', '2026-11-25'),
     'plugin.hook-trust': UNPROVED,
     'plugin.install-update': NO_HOST_SUPPORT('in-tab plugin reload mod'),
     'plugin.cli-on-path': UNPROVED,

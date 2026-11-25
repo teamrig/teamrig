@@ -13,7 +13,15 @@
  */
 
 import { posix, win32 } from 'node:path';
-import { isRecord, type HostDeps, type HostUserHooks, type JsonRecord, type UserHooksAnswer, type UserHooksCounts } from '../../../plugin-api/index.ts';
+import {
+  isRecord,
+  skippedUserHookLine,
+  userHooksCounts,
+  type HostDeps,
+  type HostUserHooks,
+  type JsonRecord,
+  type UserHooksAnswer,
+} from '../../../plugin-api/index.ts';
 import { withBooleanKey, withBooleanKeyInEach } from './config-toml.ts';
 import { codexHooksFile, type SkippedHandler } from './hooks-file.ts';
 
@@ -35,7 +43,7 @@ const AFTER_WRITE: readonly string[] = [
   'Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.',
 ];
 
-class BadFile extends Error {}
+class BadFile extends Error { }
 
 type Groups = readonly JsonRecord[];
 
@@ -130,25 +138,6 @@ function personsGroups(event: string, groups: Groups): Groups {
   });
 }
 
-function countsOf(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): UserHooksCounts {
-  let inserted = 0;
-  let unchanged = 0;
-  let changed = 0;
-  for (const [key, handler] of after) {
-    const old = before.get(key);
-    if (old === undefined) inserted += 1;
-    else if (old === handler) unchanged += 1;
-    else changed += 1;
-  }
-  const removed = [...before.keys()].filter((key) => !after.has(key)).length;
-  return { inserted, unchanged, changed, removed };
-}
-
-function skippedLine(skipped: SkippedHandler): string {
-  const where = skipped.matcher === undefined ? skipped.event : `${skipped.event} (${skipped.matcher})`;
-  return `${where}: ${skipped.words.join(' ')}: ${skipped.reason}`;
-}
-
 function allOf(events: ReadonlyMap<string, Groups>): ReadonlyMap<string, string> {
   return new Map([...events].flatMap(([event, groups]) => [...teamrigHandlers(event, groups)]));
 }
@@ -164,9 +153,9 @@ function merged(current: JsonRecord, source: unknown, pluginRoot: string): UserH
     // An empty list the person wrote stays; one left empty by taking teamrig's handlers out goes.
     if (groups.length > 0 || events.get(event)?.length === 0) hooks[event] = groups;
   }
-  const counts = countsOf(allOf(events), allOf(ours));
+  const counts = userHooksCounts(allOf(events), allOf(ours));
   const same = counts.inserted + counts.changed + counts.removed === 0;
-  return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped: built.skipped.map(skippedLine) } };
+  return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped: built.skipped.map(skippedUserHookLine) } };
 }
 
 /**

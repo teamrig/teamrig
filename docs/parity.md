@@ -22,7 +22,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.rules-folder` | the rules folder of a project | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.memory` | memory files kept between sessions | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
@@ -32,7 +32,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 
 ### context
 
@@ -46,15 +46,15 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `hooks.permission-refuse` | refusing a permission prompt when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no PermissionRequest hook |
 | `hooks.output-redact` | redacting a secret in tool output | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: PreToolUse overwrite redact-exec wrapper is not built yet |
 | `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: PreInvocation cannot take back a prompt that was already typed), unproved |
-| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 
 ### permissions
 
@@ -71,7 +71,7 @@ The AI CLIs a session runs in.
 | `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab resume |
 | `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.wake` | waking an idle session | supported, proved on [windows](proofs/claude-code.md#sessionswake); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake mod |
-| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.process` | finding the session's process | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no tab process tracking |
 | `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
 | `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
@@ -111,7 +111,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity hooks.json writer is not built yet |
+| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | unsupported: not built for Codex CLI yet | supported, proved on [windows](proofs/antigravity-cli.md#pluginhooks-file); unproved on linux, macos |
 | `plugin.hook-trust` | guards stay on across a teamrig update | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `plugin.install-update` | installing and updating teamrig, and reading its version | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab plugin reload mod |
 | `plugin.cli-on-path` | `teamrig` on the path | supported, proved on [windows](proofs/claude-code.md#plugincli-on-path); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |

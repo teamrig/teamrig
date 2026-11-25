@@ -4,6 +4,7 @@ import { hookBridge } from './hook-bridge.ts';
 import { hostPaths } from './paths.ts';
 import { statusLine } from './status-line.ts';
 import { toolCallShape } from './tool-call.ts';
+import { antigravityUserHooks } from './user-hooks.ts';
 
 /**
  * The Antigravity host adapter: translates Antigravity's `hooks.json` lifecycle events, tool call shapes, and
@@ -26,7 +27,7 @@ export default defineHost({
       launcher: unsupported('Antigravity CLI session launcher port is not built yet'),
       models: unsupported('Antigravity CLI models port is not built yet'),
       steps: unsupported('Antigravity CLI steps port is not built yet'),
-      userHooks: unsupported('Antigravity CLI user hooks port is not built yet'),
+      userHooks: antigravityUserHooks(deps.platform),
     };
   },
 });
