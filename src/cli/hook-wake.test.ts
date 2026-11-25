@@ -955,6 +955,29 @@ describe('hook wake-check runs the idle pass', () => {
     assert.equal(runs.length, 1, 'the next pass wakes it no second time for the same line');
   });
 
+  it('warns on stderr, on a due pass, of a wake the host of a session with no tab mod failed (T5059)', async () => {
+    const kit = await idleTeam();
+    const sessions = new FakeSessionProcesses();
+    sessions.add({ pid: 4200, parentPid: 1, name: 'codex.exe', commandLine: 'codex' });
+    await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 4200, hostSession: '0199aaaa-0000-7000-8000-0000000000c4', at: new Date(kit.clock.now()).toISOString(), host: WAKING_HOST });
+    const hostedCheck = (): Promise<CliResult> =>
+      kit.run(['hook', 'wake-check'], {
+        stdin: payload(),
+        env: { PATH: '/bin' },
+        processes: new FakeProcesses(),
+        probe: new FakePathProbe({ folders: [APP], files: [WAKING_PROGRAM] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts({ kind: 'failed', reason: 'codex queue exited 2' }),
+        sessionProcesses: sessions,
+        program: recordingRunner([]),
+      });
+    await hostedCheck();
+    await new WakeAsks(kit.files, ASKS).post('bravo', { from: 'lead', text: 'the api is ready', at: kit.clock.now() });
+    kit.clock.advance(2 * MINUTE);
+    const result = await hostedCheck();
+    assert.deepEqual(result.stderr, ['WARN teamrig could not wake bravo through its host: codex queue exited 2']);
+  });
+
   it("in mode on starts no reopen for a session a wake's reopen is pending on (#1584)", async () => {
     const kit = await teamWithAlphaTab(ON);
     await new SessionLog(kit.files, SESSION_LOG).append({ kind: 'close', session: 'bravo', by: 'idle-pass', at: '2030-01-08T09:00:00.000Z', hostSession: 'claude-bravo', idleMinutes: 75, freedMb: 1300, folder: APP });

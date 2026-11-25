@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { DEFAULT_HOST } from '../composition/adapters.ts';
-import type { ProgramRequest } from '../core/program-runner.ts';
+import type { ProgramRequest, ProgramRunner } from '../core/program-runner.ts';
 import type { WakeDelivery } from '../ports/host/index.ts';
 import { SessionRecordStore, type SessionRecord } from '../sessions/record.ts';
 import { CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { FakePathProbe } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
-import { recordingRunner, WAKING_HOST, WAKING_PROGRAM, wakingHosts } from '../testing/waking-host.ts';
+import { LOCK_HOLDER } from '../testing/held-file-lock.ts';
+import { failingRunner, recordingRunner, WAKING_HOST, WAKING_PROGRAM, wakingHosts } from '../testing/waking-host.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { wakeHostSessions, type HostWakeResult } from './host-wake.ts';
 import { openKit, rosterOf } from './kit.ts';
@@ -20,14 +21,27 @@ const THREAD = '0199aaaa-0000-7000-8000-0000000000c1';
 const ASKS = join(TEAM_HOME, 'state', 'wake-asks');
 const WAKE_LOG = join(TEAM_HOME, 'state', 'wakes.jsonl');
 const SESSIONS = join(TEAM_HOME, 'state', 'sessions');
+const ALPHA_WAKE_LOCK = join(TEAM_HOME, 'state', 'wake', 'alpha.lock');
 interface Wakes {
   readonly kit: CliHarness;
   readonly runs: ProgramRequest[];
+  readonly processes: FakeSessionProcesses;
   readonly wake: () => Promise<readonly HostWakeResult[]>;
 }
 
+interface CodexAlpha {
+  readonly delivery?: WakeDelivery;
+  readonly host?: string;
+  readonly dead?: boolean;
+  readonly config?: object;
+  /** False when the host's program is not on PATH. */
+  readonly onPath?: boolean;
+  /** The runner each wake runs through, in place of one that records it in `runs`. */
+  readonly runner?: ProgramRunner;
+}
+
 /** A team whose alpha runs in `host` (`codex-cli` unless told) as process CODEX_PID, alive unless `dead`, with an urgent line a batch old. */
-async function teamWithCodexAlpha(options: { readonly delivery?: WakeDelivery; readonly host?: string; readonly dead?: boolean; readonly config?: object } = {}): Promise<Wakes> {
+async function teamWithCodexAlpha(options: CodexAlpha = {}): Promise<Wakes> {
   const kit = new CliHarness({ ...TEAM, ...options.config });
   const runs: ProgramRequest[] = [];
   const processes = new FakeSessionProcesses();
@@ -41,9 +55,9 @@ async function teamWithCodexAlpha(options: { readonly delivery?: WakeDelivery; r
       shippedHosts: wakingHosts(options.delivery),
       platform: 'linux',
       env: { PATH: '/bin' },
-      probe: new FakePathProbe({ files: [WAKING_PROGRAM] }),
+      probe: new FakePathProbe({ files: options.onPath === false ? [] : [WAKING_PROGRAM] }),
       sessionProcesses: processes,
-      program: recordingRunner(runs),
+      program: options.runner ?? recordingRunner(runs),
     });
   const wake = async (): Promise<readonly HostWakeResult[]> => {
     const kitOf = await openKit(runtime(), 'app');
@@ -58,7 +72,7 @@ async function teamWithCodexAlpha(options: { readonly delivery?: WakeDelivery; r
   await wake();
   await new WakeAsks(kit.files, ASKS).post('alpha', { from: 'lead', text: 'the api is ready', at: kit.clock.now() });
   kit.clock.advance(120 * SECOND);
-  return { kit, runs, wake };
+  return { kit, runs, processes, wake };
 }
 
 async function droppedLines(kit: CliHarness): Promise<unknown[]> {
@@ -96,8 +110,32 @@ describe('wakeHostSessions (T5059)', () => {
     ]);
   });
 
-  it("leaves a session of the default host to its tab's mod, and one no longer running, running nothing", async () => {
-    for (const options of [{ host: DEFAULT_HOST }, { dead: true }]) {
+  it('fails a wake whose program is not on PATH, and one whose runner throws, logging each dropped with why', async () => {
+    const missing = await teamWithCodexAlpha({ onPath: false });
+    assert.deepEqual(await missing.wake(), [{ id: 'alpha', kind: 'failed', reason: 'codex is not on PATH' }]);
+    assert.deepEqual(missing.runs, []);
+    assert.deepEqual(await droppedLines(missing.kit), [
+      { v: 1, at: new Date(missing.kit.clock.now()).toISOString(), kind: 'dropped', session: 'alpha', tab: THREAD, reason: 'codex is not on PATH' },
+    ]);
+    const thrown = await teamWithCodexAlpha({ runner: failingRunner('spawn codex EACCES') });
+    assert.deepEqual(await thrown.wake(), [{ id: 'alpha', kind: 'failed', reason: 'spawn codex EACCES' }]);
+    assert.deepEqual(await droppedLines(thrown.kit), [
+      { v: 1, at: new Date(thrown.kit.clock.now()).toISOString(), kind: 'dropped', session: 'alpha', tab: THREAD, reason: 'spawn codex EACCES' },
+    ]);
+  });
+
+  it("is quiet for a session another check holds the wake lock of, and wakes it once the lock is let go", async () => {
+    const { kit, runs, processes, wake } = await teamWithCodexAlpha();
+    processes.add(LOCK_HOLDER);
+    await kit.files.write(ALPHA_WAKE_LOCK, JSON.stringify({ pid: LOCK_HOLDER.pid, at: kit.clock.now(), id: 'held' }));
+    assert.deepEqual(await wake(), [{ id: 'alpha', kind: 'quiet' }]);
+    assert.deepEqual(runs, []);
+    await kit.files.remove(ALPHA_WAKE_LOCK);
+    assert.deepEqual(await wake(), [{ id: 'alpha', kind: 'woken' }]);
+  });
+
+  it("leaves a session of the default host to its tab's mod, one of a host not shipped, and one no longer running, running nothing", async () => {
+    for (const options of [{ host: DEFAULT_HOST }, { host: 'no-such-host' }, { dead: true }]) {
       const { runs, wake } = await teamWithCodexAlpha(options);
       assert.deepEqual(await wake(), [], JSON.stringify(options));
       assert.deepEqual(runs, []);

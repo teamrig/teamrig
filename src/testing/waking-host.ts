@@ -32,3 +32,10 @@ export function recordingRunner(runs: ProgramRequest[]): ProgramRunner {
     return OK;
   };
 }
+
+/** A program runner that throws `message` at each request, as one whose program could not start does. */
+export function failingRunner(message: string): ProgramRunner {
+  return async () => {
+    throw new Error(message);
+  };
+}
