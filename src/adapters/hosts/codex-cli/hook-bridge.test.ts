@@ -192,3 +192,22 @@ describe('the reply Codex CLI reads', () => {
     }
   });
 });
+
+describe("the permission mode in Codex CLI's hook input", () => {
+  it('maps each word its 0.170.0 hook schemas list, and keeps the word', () => {
+    const modes = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', dontAsk: 'no-prompts', bypassPermissions: 'bypass' } as const;
+    for (const [word, mode] of Object.entries(modes)) {
+      assert.deepEqual(parse({ ...SOURCE_BUILT_HOOK_INPUTS.sessionStart.input, permission_mode: word })?.permission, { mode, hostWord: word }, word);
+    }
+  });
+
+  it('keeps a word the schemas do not list as unmapped', () => {
+    for (const word of ['auto', 'yolo', 'DontAsk']) {
+      assert.deepEqual(parse({ ...SOURCE_BUILT_HOOK_INPUTS.sessionStart.input, permission_mode: word })?.permission, { mode: 'unmapped', hostWord: word }, word);
+    }
+  });
+
+  it('reports none for an event that carries no mode', () => {
+    assert.equal(parse(SOURCE_BUILT_HOOK_INPUTS.sessionEnd.input)?.permission, undefined);
+  });
+});

@@ -1,6 +1,7 @@
 import {
   HOOK_EVENTS,
   isRecord,
+  observedPermission,
   recordField,
   stringField,
   type HookBridge,
@@ -10,6 +11,8 @@ import {
   type HookReply,
   type HookVerdict,
   type JsonRecord,
+  type MappedPermissionMode,
+  type ObservedPermission,
   type ToolCall,
   type ToolCallShape,
 } from '../../../plugin-api/index.ts';
@@ -52,6 +55,20 @@ const TAKES_CONTEXT: ReadonlySet<HookEventName> = new Set<HookEventName>(['sessi
 
 /** Codex refuses a blank reason, and a refusal with no reason would then not refuse. */
 const UNEXPLAINED = 'A teamrig hook refused this and gave no reason.';
+
+/** Codex's permission_mode words, from the list its 0.170.0 hook input schemas publish (hook-input.ts). */
+const PERMISSION_WORDS: Readonly<Record<string, MappedPermissionMode>> = {
+  default: 'ask',
+  acceptEdits: 'accept-edits',
+  plan: 'plan',
+  dontAsk: 'no-prompts',
+  bypassPermissions: 'bypass',
+};
+
+function permissionModeOf(payload: JsonRecord): ObservedPermission | undefined {
+  const word = stringField(payload, 'permission_mode');
+  return word === undefined ? undefined : observedPermission(word, PERMISSION_WORDS);
+}
 
 function sessionOf(payload: JsonRecord): string | undefined {
   const id = stringField(payload, 'session_id');
@@ -104,6 +121,7 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
     trigger: stringField(payload, 'trigger'),
     model: stringField(payload, 'model'),
     effort: undefined,
+    permission: permissionModeOf(payload),
     message: undefined,
     error: undefined,
   };

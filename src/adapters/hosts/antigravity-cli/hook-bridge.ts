@@ -89,6 +89,8 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape, hostName: string | u
     trigger: undefined,
     model: stringField(payload, 'modelName'),
     effort: undefined,
+    // Antigravity's hook input carries no permission mode.
+    permission: undefined,
     message: undefined,
     error,
   };

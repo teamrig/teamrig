@@ -1,6 +1,7 @@
 import {
   HOOK_EVENTS,
   isRecord,
+  observedPermission,
   recordField,
   stringField,
   type HookBridge,
@@ -10,6 +11,8 @@ import {
   type HookReply,
   type HookVerdict,
   type JsonRecord,
+  type MappedPermissionMode,
+  type ObservedPermission,
   type ToolCall,
   type ToolCallShape,
 } from '../../../plugin-api/index.ts';
@@ -62,6 +65,18 @@ function titleOf(payload: JsonRecord): string | undefined {
 function effortOf(payload: JsonRecord): string | undefined {
   const effort = recordField(payload, 'effort');
   return effort === undefined ? undefined : stringField(effort, 'level');
+}
+
+/**
+ * Claude Code's permission_mode words that a recording holds (src/testing/recorded/claude-code, 2.1.329): only these
+ * are mapped, and any other word stays unmapped until a recording shows the hook input really carries it.
+ */
+const PERMISSION_WORDS: Readonly<Record<string, MappedPermissionMode>> = { default: 'ask' };
+
+/** The permission mode, which Claude Code 2.1.329 gives its prompt, tool and stop hooks, and not SessionStart, SessionEnd, SubagentStart or a compaction. */
+function permissionModeOf(payload: JsonRecord): ObservedPermission | undefined {
+  const word = stringField(payload, 'permission_mode');
+  return word === undefined ? undefined : observedPermission(word, PERMISSION_WORDS);
 }
 
 /** A hook that fires inside a helper carries `agent_id`; a session started as an agent carries its type alone. */
@@ -132,6 +147,7 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
     trigger: stringField(payload, 'trigger'),
     model: stringField(payload, 'model'),
     effort: effortOf(payload),
+    permission: permissionModeOf(payload),
     // A form with no text of its own is named by the MCP server that asks.
     message: stringField(payload, 'message') ?? (name === 'form-start' ? stringField(payload, 'mcp_server_name') : undefined),
     error: stringField(payload, 'error'),

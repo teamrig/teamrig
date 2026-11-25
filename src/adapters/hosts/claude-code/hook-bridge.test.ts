@@ -32,6 +32,7 @@ const BARE: HookEvent = {
   trigger: undefined,
   model: undefined,
   effort: undefined,
+  permission: undefined,
   message: undefined,
   error: undefined,
 };
@@ -377,13 +378,13 @@ describe('the recorded session read as hook events', () => {
     const told = Object.fromEntries(Object.keys(NAMES).map((fired) => [fired, [...new Set(read(fired).map(({ event }) => toldBy(event)))]]));
     assert.deepEqual(told, {
       SessionStart: ['source', 'model source'],
-      UserPromptSubmit: ['prompt'],
-      PreToolUse: ['call effort'],
-      PostToolUse: ['call effort'],
-      PostToolUseFailure: ['call effort error'],
-      Stop: ['effort lastReply'],
+      UserPromptSubmit: ['permission prompt'],
+      PreToolUse: ['call effort permission'],
+      PostToolUse: ['call effort permission'],
+      PostToolUseFailure: ['call effort error permission'],
+      Stop: ['effort lastReply permission'],
       SubagentStart: ['helper'],
-      SubagentStop: ['effort helper lastReply'],
+      SubagentStop: ['effort helper lastReply permission'],
       PreCompact: ['trigger'],
       PostCompact: ['trigger'],
       SessionEnd: ['reason'],
@@ -411,5 +412,22 @@ describe('the recorded session read as hook events', () => {
       assert.equal(event.helper?.type, stringField(input, 'agent_type'));
       assert.equal(event.helper?.transcript, stringField(input, 'agent_transcript_path'));
     }
+  });
+});
+
+describe("the permission mode in Claude Code's hook input", () => {
+  it('reads the recorded word default as ask, and keeps the word', () => {
+    assert.deepEqual(parse({ hook_event_name: 'PreToolUse', permission_mode: 'default' })?.permission, { mode: 'ask', hostWord: 'default' });
+  });
+
+  it('keeps a word no recording holds as unmapped, until one shows the hook input carries it', () => {
+    for (const word of ['auto', 'manual', 'Default', 'defaultish']) {
+      assert.deepEqual(parse({ hook_event_name: 'PreToolUse', permission_mode: word })?.permission, { mode: 'unmapped', hostWord: word }, word);
+    }
+  });
+
+  it('reports none for an input with no mode, or with one that is not text', () => {
+    assert.equal(parse({ hook_event_name: 'SessionStart', source: 'startup' })?.permission, undefined);
+    assert.equal(parse({ hook_event_name: 'PreToolUse', permission_mode: 3 })?.permission, undefined);
   });
 });

@@ -1,4 +1,5 @@
 import type { JsonRecord } from '../../core/guards.ts';
+import type { ObservedPermission } from './permission-mode.ts';
 import type { ToolCall } from './tool-call.ts';
 
 /**
@@ -76,6 +77,8 @@ export interface HookEvent {
   readonly model: string | undefined;
   /** How hard the model is set to think, in the host's word. */
   readonly effort: string | undefined;
+  /** The permission mode the session runs in, as the host reported it on this call; undefined when it told none. */
+  readonly permission: ObservedPermission | undefined;
   /** The text of a form or a notice the event shows the human. */
   readonly message: string | undefined;
   /** What failed, on `stop-failed` and `tool-failed`. */
