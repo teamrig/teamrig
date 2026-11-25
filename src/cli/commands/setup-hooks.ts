@@ -1,7 +1,7 @@
 import { join, posix, win32 } from 'node:path';
 import { formatConfig, writeConfigWithBackup, writeTextWithBackup } from '../../config/load.ts';
 import { errorMessage, type JsonRecord } from '../../core/guards.ts';
-import type { HostConfigLines } from '../../ports/host/index.ts';
+import type { ConfigLinesAnswer, HostConfigFileSet, HostConfigLines } from '../../ports/host/index.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { noPositionals, requiredFlag, type ParsedArgs } from '../args.ts';
 import { readUserSettings } from '../user-settings.ts';
@@ -17,6 +17,8 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
  * writes the host's trust in a handler: the person gives that in the host, after every write. A setting the hooks need
  * in the host's own config file (the adapter's `configLines`, such as a host's interactive shells off) is set the
  * same way, every other line kept, the old file backed up; any file it cannot edit refuses the run before a write.
+ * A set of config files the host layers over its main one (the adapter's `configFileSets`, such as Codex's
+ * `<name>.config.toml` profiles) is edited file by file the same way; none is created.
  */
 
 /** The plugin's own hooks file, below its root. */
@@ -38,7 +40,8 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     throw new RefusedError(`${answer.problem}; nothing written`);
   }
   // Every file is checked before any is written, so a refusal leaves the hooks and the config as they were.
-  const configs = await configPlans(runtime, port.configLines);
+  const sets = await fileSetPlans(runtime, port.configFileSets ?? [], path);
+  const configs = [...(await configPlans(runtime, port.configLines)), ...sets.plans];
   const { file, counts, skipped } = answer.value;
   const counted = `inserted ${counts.inserted}, unchanged ${counts.unchanged}, changed ${counts.changed}, removed ${counts.removed}`;
   const write = args.switches.has('yes');
@@ -53,7 +56,7 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   for (const config of configs) {
     runtime.out.stdout(await configWritten(runtime, config, port.host, write));
   }
-  skipped.forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
+  [...skipped, ...sets.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
   if (file !== undefined) {
     port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
   }
@@ -79,20 +82,52 @@ interface ConfigPlan {
   readonly setting: string;
   readonly existed: boolean;
   readonly text: string | undefined;
+  /** What the backup's name says after the host's: `config` for the host's main config, a set's file by its name. */
+  readonly backupLabel: string;
 }
+
+const MAIN_CONFIG_LABEL = 'config';
 
 async function configPlans(runtime: CliRuntime, lines: readonly HostConfigLines[]): Promise<readonly ConfigPlan[]> {
   const plans: ConfigPlan[] = [];
   for (const config of lines) {
     const file = config.file(runtime.userHome);
     const current = await runtime.files.read(file);
-    const answer = config.merge(current ?? '');
-    if (!answer.ok) {
-      throw new RefusedError(`${file}: ${answer.problem}; nothing written`);
-    }
-    plans.push({ file, setting: config.setting, existed: current !== undefined, text: answer.text });
+    plans.push(configPlan(file, config.setting, current, config.merge(current ?? ''), MAIN_CONFIG_LABEL));
   }
   return plans;
+}
+
+function configPlan(file: string, setting: string, current: string | undefined, answer: ConfigLinesAnswer, backupLabel: string): ConfigPlan {
+  if (!answer.ok) {
+    throw new RefusedError(`${file}: ${answer.problem}; nothing written`);
+  }
+  return { file, setting, existed: current !== undefined, text: answer.text, backupLabel };
+}
+
+/** Each set's files as they are in its folder, by name: plans for the plain ones, the rest left as they are. */
+interface FileSetPlans {
+  readonly plans: readonly ConfigPlan[];
+  /** The matching entries that are no plain file (a link, a folder): an atomic write would replace a link, so none is written. */
+  readonly skipped: readonly string[];
+}
+
+async function fileSetPlans(runtime: CliRuntime, sets: readonly HostConfigFileSet[], path: typeof posix): Promise<FileSetPlans> {
+  const plans: ConfigPlan[] = [];
+  const skipped: string[] = [];
+  for (const set of sets) {
+    const folder = set.folder(runtime.userHome);
+    for (const name of (await runtime.files.list(folder)).filter((entry) => set.holds(entry)).toSorted()) {
+      const file = path.join(folder, name);
+      if (!(await runtime.files.isPlainFile(file))) {
+        skipped.push(`${file}: not a plain file, so teamrig leaves it as it is; set ${set.setting} in it by hand`);
+        continue;
+      }
+      const current = await runtime.files.read(file);
+      if (current !== undefined) plans.push(configPlan(file, set.setting, current, set.merge(current), name));
+    }
+  }
+  return { plans, skipped };
 }
 
 /** Writes one config file's setting with --yes (keeping the old file first), and says what it found or did. */
@@ -108,7 +143,7 @@ async function configWritten(runtime: CliRuntime, plan: ConfigPlan, host: string
     return `WROTE ${plan.file}: sets ${plan.setting}`;
   }
   const backupsDir = join(resolveKitHome(runtime.env, runtime.userHome), 'backups');
-  const backup = await writeTextWithBackup(runtime.files, { configPath: plan.file, backupsDir, backupName: `${host}-config` }, plan.text, runtime.clock, CONFIG_BACKUP_EXTENSION);
+  const backup = await writeTextWithBackup(runtime.files, { configPath: plan.file, backupsDir, backupName: `${host}-${plan.backupLabel}` }, plan.text, runtime.clock, CONFIG_BACKUP_EXTENSION);
   return `WROTE ${plan.file}: sets ${plan.setting}; the old file is at ${backup}`;
 }
 

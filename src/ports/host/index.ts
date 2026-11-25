@@ -67,6 +67,7 @@ export {
   skippedUserHookLine,
   userHooksCounts,
   type ConfigLinesAnswer,
+  type HostConfigFileSet,
   type HostConfigLines,
   type HostUserHooks,
   type SkippedUserHook,

@@ -204,3 +204,32 @@ describe('codexUserHooks.configLines', () => {
     assert.match(answer.ok ? '' : answer.problem, /^the Codex config is not one teamrig can set unified_exec_tty in: .*inline table/u);
   });
 });
+
+describe("Codex CLI's <name>.config.toml profiles (Codex 0.171)", () => {
+  function onlySet(env: Readonly<Record<string, string>> = {}) {
+    const sets = codexUserHooks(env, 'linux').configFileSets ?? [];
+    assert.equal(sets.length, 1);
+    const [set] = sets;
+    assert.ok(set);
+    return set;
+  }
+
+  it('looks for them beside config.toml: in CODEX_HOME when set, else ~/.codex', () => {
+    assert.equal(onlySet().folder('/srv/people/ada'), '/srv/people/ada/.codex');
+    assert.equal(onlySet({ CODEX_HOME: '/srv/codex' }).folder('/srv/people/ada'), '/srv/codex');
+  });
+
+  it('holds each <name>.config.toml, never config.toml itself or another file', () => {
+    assert.deepEqual(['fast.config.toml', 'a.b.config.toml', 'config.toml', '.config.toml', 'hooks.json', 'fast.toml', 'fast.config.toml.bak'].filter((name) => onlySet().holds(name)), ['fast.config.toml', 'a.b.config.toml']);
+  });
+
+  it('turns tty shells off where the profile turns them on, and adds the key to none', () => {
+    assert.deepEqual(onlySet().merge('[features]\nunified_exec_tty = true\n'), { ok: true, text: '[features]\nunified_exec_tty = false\n' });
+    assert.deepEqual(onlySet().merge('model = "m"\n'), { ok: true, text: undefined });
+  });
+
+  it('refuses an inline features table, naming the Codex profile', () => {
+    const answer = onlySet().merge('features = { unified_exec_tty = true }\n');
+    assert.match(answer.ok ? '' : answer.problem, /^the Codex profile is not one teamrig can set unified_exec_tty in: .*inline table/u);
+  });
+});

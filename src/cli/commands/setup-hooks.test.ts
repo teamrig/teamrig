@@ -14,6 +14,10 @@ const PLUGIN_HOOKS = '/opt/teamrig/hooks/hooks.json';
 const CODEX_HOME = '/srv/codex';
 const CODEX_HOOKS = '/srv/codex/hooks.json';
 const CODEX_CONFIG = '/srv/codex/config.toml';
+/** Codex 0.171 profiles, `<name>.config.toml` beside config.toml (T5361). */
+const CODEX_PROFILE = '/srv/codex/fast.config.toml';
+const QUIET_PROFILE = '/srv/codex/quiet.config.toml';
+const PROFILE_SETTING = '[features] unified_exec_tty = false where the profile sets it';
 const PERSONS: unknown = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo done', timeout: 5 }] }] } };
 
 const shipped = Object.values(await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
@@ -144,6 +148,46 @@ describe('teamrig setup hooks --host codex', () => {
     assert.match(result.stdout[0] ?? '', /^REFUSED \/srv\/codex\/config\.toml: the Codex config is not one teamrig can set unified_exec_tty in: .*; nothing written$/u);
     assert.equal(kit.files.get(CODEX_HOOKS), undefined);
     assert.equal(kit.files.get(CODEX_CONFIG), 'features = { other = true }\n');
+  });
+
+  it("turns tty shells off in each <name>.config.toml profile that turns them on, adds the key to none, and backs each up", async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(CODEX_PROFILE, 'model = "m"\n[features]\nunified_exec_tty = true\n');
+    await kit.files.write(QUIET_PROFILE, 'model = "m"\n');
+    await kit.files.write('/srv/codex/notes.toml', '[features]\nunified_exec_tty = true\n');
+    const preview = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
+    assert.ok(preview.stdout.includes(`PREVIEW nothing written (add --yes to write) ${CODEX_PROFILE}: sets ${PROFILE_SETTING}`), preview.stdout.join('\n'));
+    assert.ok(preview.stdout.includes(`UNCHANGED ${QUIET_PROFILE}: it already sets ${PROFILE_SETTING}`));
+    assert.equal(preview.stdout.some((line) => line.includes('notes.toml')), false);
+
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    const line = result.stdout.find((entry) => entry.startsWith(`WROTE ${CODEX_PROFILE}:`)) ?? '';
+    assert.match(line, /; the old file is at .*codex-fast\.config\.toml\.bak$/u);
+    assert.equal(kit.files.get(line.slice(line.indexOf('the old file is at ') + 'the old file is at '.length)), 'model = "m"\n[features]\nunified_exec_tty = true\n');
+    assert.equal(kit.files.get(CODEX_PROFILE), 'model = "m"\n[features]\nunified_exec_tty = false\n');
+    assert.equal(kit.files.get(QUIET_PROFILE), 'model = "m"\n');
+    assert.equal(kit.files.get('/srv/codex/notes.toml'), '[features]\nunified_exec_tty = true\n');
+  });
+
+  it('refuses a profile it cannot edit before writing anything', async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(CODEX_PROFILE, 'features = { unified_exec_tty = true }\n');
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout[0] ?? '', /^REFUSED \/srv\/codex\/fast\.config\.toml: the Codex profile is not one teamrig can set unified_exec_tty in: .*inline table.*; nothing written$/u);
+    assert.equal(kit.files.get(CODEX_HOOKS), undefined);
+    assert.equal(kit.files.get(CODEX_CONFIG), undefined);
+  });
+
+  it('leaves a profile that is a link as it is and says so, since a write would replace the link', async () => {
+    const kit = await kitWithPlugin();
+    await kit.files.write(CODEX_PROFILE, '[features]\nunified_exec_tty = true\n');
+    kit.files.link(CODEX_PROFILE, '/srv/dotfiles/fast.config.toml');
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.ok(result.stdout.includes(`  SKIPPED ${CODEX_PROFILE}: not a plain file, so teamrig leaves it as it is; set ${PROFILE_SETTING} in it by hand`), result.stdout.join('\n'));
+    assert.equal(kit.files.get(CODEX_PROFILE), '[features]\nunified_exec_tty = true\n');
   });
 
   it('needs --host', async () => {

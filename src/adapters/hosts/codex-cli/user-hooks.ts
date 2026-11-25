@@ -22,7 +22,7 @@ import {
   type JsonRecord,
   type UserHooksAnswer,
 } from '../../../plugin-api/index.ts';
-import { withBooleanKey, withBooleanKeyInEach } from './config-toml.ts';
+import { withBooleanKey, withBooleanKeyInEach, withBooleanKeyWhereSet } from './config-toml.ts';
 import { codexHomeOf } from './codex-home.ts';
 import { codexHooksFile, type SkippedHandler } from './hooks-file.ts';
 
@@ -168,6 +168,17 @@ const NO_TTY = { table: 'features', key: 'unified_exec_tty' } as const;
  */
 const PROFILES = 'profiles';
 
+/**
+ * Codex 0.171's named profiles: `$CODEX_HOME/<name>.config.toml`, picked by `--profile <name>` and layered over
+ * config.toml, so one turning the key on beats the root's off (T5361 results.md, case C). The key is turned off where
+ * a profile sets it; a profile that sets nothing keeps the root's off, so none is added.
+ */
+const PROFILE_FILE_END = `.${CONFIG_FILE}`;
+
+function isProfileFile(name: string): boolean {
+  return name.length > PROFILE_FILE_END.length && name.endsWith(PROFILE_FILE_END);
+}
+
 /** The Codex CLI port of the person's hooks file. */
 export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platform']): HostUserHooks {
   const path = platform === 'win32' ? win32 : posix;
@@ -184,6 +195,17 @@ export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platfor
           const edit = root.ok ? withBooleanKeyInEach(root.text ?? current, PROFILES, `${NO_TTY.table}.${NO_TTY.key}`, false) : root;
           if (!edit.ok) return { ok: false, problem: `the Codex config is not one teamrig can set ${NO_TTY.key} in: ${edit.problem}` };
           return { ok: true, text: edit.text ?? (root.ok ? root.text : undefined) };
+        },
+      },
+    ],
+    configFileSets: [
+      {
+        folder: codexHome,
+        holds: isProfileFile,
+        setting: `[${NO_TTY.table}] ${NO_TTY.key} = false where the profile sets it`,
+        merge: (current) => {
+          const edit = withBooleanKeyWhereSet(current, NO_TTY.table, NO_TTY.key, false);
+          return edit.ok ? edit : { ok: false, problem: `the Codex profile is not one teamrig can set ${NO_TTY.key} in: ${edit.problem}` };
         },
       },
     ],

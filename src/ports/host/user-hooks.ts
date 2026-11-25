@@ -37,6 +37,22 @@ export interface HostConfigLines {
 }
 
 /**
+ * Config files of one kind in a folder, as many as the person keeps, each layered over the host's main config, such
+ * as Codex CLI's `<name>.config.toml` profiles: `setup hooks` edits each existing one the setting needs, and creates
+ * none.
+ */
+export interface HostConfigFileSet {
+  /** The folder the files are in, for the person whose home folder is `userHome`. */
+  folder(userHome: string): string;
+  /** Whether a file in the folder, by its name, is one of the set. */
+  holds(name: string): boolean;
+  /** The setting as the person reads it in each file, such as `[features] unified_exec_tty = false where set`. */
+  readonly setting: string;
+  /** One file's text with the setting in, or undefined when it already reads so. */
+  merge(current: string): ConfigLinesAnswer;
+}
+
+/**
  * The person's own hooks file of a host that loads no plugin's hooks: teamrig's handlers go in beside the person's
  * own, which stay as they are. The core reads and writes the file and keeps the old one; this port only says where
  * the file is and how its content changes.
@@ -56,6 +72,11 @@ export interface HostUserHooks {
   readonly afterWrite: readonly string[];
   /** The settings the hooks need in the host's config files, written with them; empty when they need none. */
   readonly configLines: readonly HostConfigLines[];
+  /**
+   * The sets of config files the hooks need the setting in as well, such as named profiles a host layers over its
+   * main config; none when left out, so an adapter written before this field stays as it was.
+   */
+  readonly configFileSets?: readonly HostConfigFileSet[];
 }
 
 /** A handler from teamrig's hooks file that a host cannot run. */

@@ -179,6 +179,7 @@ export {
   type WakeDelivery,
   type WebCall,
   type ConfigLinesAnswer,
+  type HostConfigFileSet,
   type HostConfigLines,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
