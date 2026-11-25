@@ -104,6 +104,23 @@ Decide it by asking, in order:
 A task says its reach in its description, an approval request in its note, and a pull request in its `## Reach`
 section. A reviewer who reads a one-team or teamrig-development reach on what is really generic asks for it to move.
 
+### How it behaves for everyone
+Where a change lives is half the question; the other half is how it behaves for every user it reaches. Before you
+build a feature or a fix, weigh it in the bigger scope:
+
+- **Every AI CLI teamrig hosts**: Claude Code, Codex CLI, Antigravity and the next one. Name the behaviour in
+  host-neutral words, and put what differs per host behind its adapter, never in a host's own terms in core code.
+- **Every OS**: Windows, macOS and Linux, and each one's shells, paths and line endings.
+- **Every tracker and connector**: GitHub, Jira and the next one; what one provider needs ships with its connector.
+- **Every team shape**: one team, a tree of teams, sub-leads.
+- **Every size**, from one person to a large company: a default stays well scoped and never floods a big team, and
+  every limit a team may want to change is a config key.
+- **Defaults that streamline the work**: permissive and flexible by default; a risky option is an opt-in, offered
+  only after a security review.
+
+Only a truly specific change stays narrow, in the owner's words: if it is very specific and affects no one else, so
+be it. Say so in the pull request's `## Reach`, with the users and tools you weighed.
+
 ## Sign-off (DCO)
 Every commit must carry a `Signed-off-by:` line that matches the commit author, certifying the
 [Developer Certificate of Origin 1.1](https://developercertificate.org/). Add it with:

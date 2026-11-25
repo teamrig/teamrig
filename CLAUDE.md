@@ -8,6 +8,9 @@ project skills in `.claude/skills/` hold the steps of each repeated job.
   plugin skill); only work on this repo goes in `.claude/skills/dev-*` or `tools/`, and only what hinges on one
   team stays in its team rules or session skills. The test is in CONTRIBUTING.md, [Where a change
   lives](CONTRIBUTING.md#where-a-change-lives); the task and the pull request say which reach it has.
+- **Weigh every user and tool**: before a feature or fix, ask how it behaves on every AI CLI, OS, tracker, team shape
+  and size, with defaults that streamline the work; only a truly specific change stays narrow. The questions are in
+  CONTRIBUTING.md, [How it behaves for everyone](CONTRIBUTING.md#how-it-behaves-for-everyone).
 - **A branch per change**, cut from the newest `origin/main`; it lands through a pull request, never a push to `main`.
   A rebase or conflict fix goes back to the same branch with `git push --force-with-lease`: one branch, one pull
   request, never a new branch for the same change.
