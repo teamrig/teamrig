@@ -131,6 +131,7 @@ export const CONFIG_LIMITS = {
   headroomCloseIdleMinutes: { min: 15, max: 10_080 },
   headroomFloorMb: { min: 0, max: 1_048_576 },
   headroomLoadMinutes: { min: 1, max: 60 },
+  headroomMaxTabs: { min: 1, max: 1_000 },
   idleReopenUnreadLines: { min: 0, max: 1_000 },
   deliveryPollSeconds: { min: 1, max: 600 },
   deliveryWaitMaxMinutes: { min: 0, max: 1440 },

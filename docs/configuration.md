@@ -880,6 +880,7 @@ The room teamrig open and teamrig hire --yes need on the host before they add a 
 | `closeIdleMinutes` | integer (15 to 10080) | `60` | How long, in minutes, a session stays quiet before teamrig close may end it to free the host; teamrig open resumes it. |
 | `floorMb` | integer (0 to 1048576) |  | The MB free memory must keep with a new tab and the tabs still loading counted. Unset: delivery.queue.memoryFloorMb plus delivery.queue.heavyReserveMb, so a new tab leaves room for one heavy queued step. |
 | `loadMinutes` | integer (1 to 60) | `5` | How long, in minutes, a tab just opened holds the MB it was counted at, while it loads and free memory does not show it yet. Tab opens and queued steps on the host count the held MB as taken. |
+| `maxTabs` | integer (1 to 1000) |  | The most tabs the team keeps open, its lead's counted: its running sessions plus its tabs still loading. At the cap, teamrig open, hire --yes, restore and the idle pass's reopen refuse every session but the lead, naming this key. Unset: no cap. |
 
 ## `open.idle`
 

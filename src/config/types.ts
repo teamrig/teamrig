@@ -1603,6 +1603,11 @@ export interface HeadroomConfig {
   readonly floorMb?: number;
   /** How long, in minutes, a tab just opened holds the MB it was counted at, while it loads and free memory does not show it yet. */
   readonly loadMinutes: number;
+  /**
+   * The most tabs the team keeps open, its lead's counted: at it `teamrig open`, `hire --yes`, restore and the idle
+   * pass's reopen refuse every session but the lead (src/sessions/headroom.ts). Unset: no cap.
+   */
+  readonly maxTabs?: number;
 }
 
 /**

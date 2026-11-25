@@ -2017,6 +2017,18 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, open: { headroom: 5 } }).issues), ['open.headroom']);
   });
 
+  it('reads the most tabs a team keeps open: unset is no cap, and 0, 1001 or a string is refused', () => {
+    assert.equal(DEFAULT_OPEN.headroom.maxTabs, undefined, 'a team that never set it keeps every tab it opens');
+    const set = parseConfig({ ...ROSTER, open: { headroom: { maxTabs: 6 } } });
+    assert.deepEqual(set.issues, []);
+    assert.equal(set.config.open.headroom.maxTabs, 6);
+    for (const maxTabs of [0, 1001, '6']) {
+      const bad = parseConfig({ ...ROSTER, open: { headroom: { maxTabs } } });
+      assert.deepEqual(paths(bad.issues), ['open.headroom.maxTabs'], `maxTabs ${String(maxTabs)}`);
+      assert.equal(bad.config.open.headroom.maxTabs, undefined);
+    }
+  });
+
   it('reads whether the idle pass runs and the sessions it keeps open, refusing a mode it does not know or a session not on the team', () => {
     // A team that sets nothing closes and reopens its idle sessions (T1409).
     // Only the tree's root lead is never closed unless set (T3387).

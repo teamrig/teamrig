@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { HeadroomConfig } from '../config/types.ts';
-import { headroomFor, noRoomText, tabFloorOf, type TabFloor } from './headroom.ts';
+import { headroomFor, noRoomText, tabCapShort, tabFloorOf, type TabFloor } from './headroom.ts';
 
 const CONFIG: HeadroomConfig = { sessionMb: 1200, commitMaxPct: 92, closeIdleMinutes: 60, loadMinutes: 5 };
 const FLOOR: TabFloor = { mb: 4096, key: 'open.headroom.floorMb' };
-const ROOMY = { freeMb: 20_000, commit: undefined, runningCommittedMb: [], loading: [] };
-const NONE_RUNNING = { runningMb: [], runningCommittedMb: [], loading: [] };
+const ROOMY = { freeMb: 20_000, commit: undefined, runningCommittedMb: [], loading: [], teamTabs: 0 };
+const NONE_RUNNING = { runningMb: [], runningCommittedMb: [], loading: [], teamTabs: 0 };
 
 describe('tabFloorOf', () => {
   it('is open.headroom.floorMb when set', () => {
@@ -35,7 +35,7 @@ describe('headroomFor', () => {
   });
 
   it('checks the commit charge with what a session commits, not what it holds resident', () => {
-    const room = { freeMb: 20_000, commit: { usedMb: 91_000, limitMb: 100_000 }, runningMb: [480], runningCommittedMb: [1100], loading: [] };
+    const room = { freeMb: 20_000, commit: { usedMb: 91_000, limitMb: 100_000 }, runningMb: [480], runningCommittedMb: [1100], loading: [], teamTabs: 0 };
     assert.deepEqual(headroomFor(room, FLOOR, CONFIG).short, [
       'with it the commit charge would be 92100 MB, over 92% of its 100000 MB limit (open.headroom.commitMaxPct)',
     ]);
@@ -64,7 +64,7 @@ describe('headroomFor', () => {
       { needMb: 1000, needCommittedMb: 0 },
       { needMb: 2000, needCommittedMb: 0 },
     ];
-    const room = { freeMb: 8295, commit: undefined, runningMb: [], runningCommittedMb: [], loading };
+    const room = { freeMb: 8295, commit: undefined, runningMb: [], runningCommittedMb: [], loading, teamTabs: 0 };
     assert.deepEqual(headroomFor({ ...room, freeMb: 8296 }, FLOOR, CONFIG).short, []);
     assert.deepEqual(headroomFor(room, FLOOR, CONFIG).short, [
       '8295 MB free, 3000 MB of it held for 2 tabs still loading, under the 4096 MB a new tab keeps free (open.headroom.floorMb) plus 1200 MB for it',
@@ -72,7 +72,7 @@ describe('headroomFor', () => {
   });
 
   it('adds what the tabs still loading commit to the commit charge', () => {
-    const room = { freeMb: 20_000, commit: { usedMb: 90_001, limitMb: 100_000 }, runningMb: [], runningCommittedMb: [], loading: [{ needMb: 0, needCommittedMb: 800 }] };
+    const room = { freeMb: 20_000, commit: { usedMb: 90_001, limitMb: 100_000 }, runningMb: [], runningCommittedMb: [], loading: [{ needMb: 0, needCommittedMb: 800 }], teamTabs: 0 };
     assert.deepEqual(headroomFor({ ...room, commit: { usedMb: 90_000, limitMb: 100_000 } }, FLOOR, CONFIG).short, []);
     assert.deepEqual(headroomFor(room, FLOOR, CONFIG).short, [
       'with it and the 1 tab still loading the commit charge would be 92001 MB, over 92% of its 100000 MB limit (open.headroom.commitMaxPct)',
@@ -80,7 +80,7 @@ describe('headroomFor', () => {
   });
 
   it('names every reason, and the refusal says how to make room', () => {
-    const room = { freeMb: 3000, commit: { usedMb: 99_000, limitMb: 100_700 }, runningMb: [1500], runningCommittedMb: [1700], loading: [] };
+    const room = { freeMb: 3000, commit: { usedMb: 99_000, limitMb: 100_700 }, runningMb: [1500], runningCommittedMb: [1700], loading: [], teamTabs: 0 };
     assert.equal(
       noRoomText('open web', headroomFor(room, FLOOR, CONFIG)),
       'no room on the host to open web, counted at 1500 MB resident and 1700 MB committed: 3000 MB free, under the 4096 MB ' +
@@ -88,5 +88,20 @@ describe('headroomFor', () => {
         '100700 MB, over 92% of its 100700 MB limit (open.headroom.commitMaxPct). Close a session first: teamrig sessions ' +
         'lists what each one holds',
     );
+  });
+
+  it("is short once the team's open tabs reach maxTabs, however roomy the host, and never with no cap set (T5479)", () => {
+    const capped = { ...CONFIG, maxTabs: 6 };
+    assert.deepEqual(headroomFor({ ...ROOMY, runningMb: [], teamTabs: 5 }, FLOOR, capped).short, [], 'one under the cap fits');
+    assert.deepEqual(headroomFor({ ...ROOMY, runningMb: [], teamTabs: 6 }, FLOOR, capped).short, ['the team has 6 tabs open, at its cap of 6 (open.headroom.maxTabs)']);
+    assert.deepEqual(headroomFor({ ...ROOMY, runningMb: [], teamTabs: 40 }, FLOOR, CONFIG).short, [], 'unset: no cap');
+  });
+});
+
+describe('tabCapShort', () => {
+  it('names one tab in the singular', () => {
+    assert.equal(tabCapShort(1, 1), 'the team has 1 tab open, at its cap of 1 (open.headroom.maxTabs)');
+    assert.equal(tabCapShort(0, 1), undefined);
+    assert.equal(tabCapShort(3, undefined), undefined);
   });
 });

@@ -18,6 +18,8 @@ export interface HostRoom {
   readonly runningCommittedMb: readonly number[];
   /** Every team's tabs opened and still loading (src/sessions/tab-holds.ts): free memory and the commit charge lag them. */
   readonly loading: readonly LoadingTab[];
+  /** The team's own tabs open: its sessions running and its tabs still loading whose session is not yet seen running. */
+  readonly teamTabs: number;
 }
 
 /**
@@ -66,7 +68,7 @@ function sumOf(values: readonly number[]): number {
  * against the commit charge (a session commits about twice what it holds resident). The tabs still loading hold
  * their MB of both, since the host shows neither yet. Free memory less those holds must stay over `floor` with it,
  * and the commit charge with the holds at most `commitMaxPct` of the limit; a host that gives no commit charge is
- * checked on free memory only.
+ * checked on free memory only. A team at `maxTabs` open tabs has no room for one more, whatever the host holds.
  */
 export function headroomFor(room: HostRoom, floor: TabFloor, config: HeadroomConfig): Headroom {
   const needMb = medianOf(room.runningMb) ?? config.sessionMb;
@@ -85,7 +87,19 @@ export function headroomFor(room: HostRoom, floor: TabFloor, config: HeadroomCon
     const held = room.loading.length === 0 ? '' : ` and the ${loading} still loading`;
     short.push(`with it${held} the commit charge would be ${committed} MB, over ${config.commitMaxPct}% of its ${commit.limitMb} MB limit (open.headroom.commitMaxPct)`);
   }
+  const cap = tabCapShort(room.teamTabs, config.maxTabs);
+  if (cap !== undefined) {
+    short.push(cap);
+  }
   return { needMb, needCommittedMb, short };
+}
+
+/** Why a team with `open` tabs has no room for one more under `maxTabs`; undefined under the cap or with none set. */
+export function tabCapShort(open: number, maxTabs: number | undefined): string | undefined {
+  if (maxTabs === undefined || open < maxTabs) {
+    return undefined;
+  }
+  return `the team has ${tabsText(open)} open, at its cap of ${maxTabs} (open.headroom.maxTabs)`;
 }
 
 /** Why `what` (`open web`, `hire web`) is refused: the host's room and how to make some. */

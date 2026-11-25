@@ -150,6 +150,22 @@ describe('teamrig open', () => {
     assert.deepEqual(await kit.files.list(TAB_HOLDS), ['id-1.json'], "the lead's tab is held all the same");
   });
 
+  it("refuses a session once the team's open tabs reach open.headroom.maxTabs, and opens the lead whatever the cap (T5479)", async () => {
+    const kit = new CliHarness({ ...TEAM, open: { headroom: { maxTabs: 2 } } });
+    await recordStart(kit, 4100);
+    const host = claudeRuns(4100);
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    const lead = await kit.run(['open', 'lead'], { probe: FOLDERS, processes, platform: 'win32', ...host });
+    assert.equal(lead.code, EXIT.ok, lead.stdout.join('\n'));
+    const refused = await kit.run(['open', 'bravo'], { probe: FOLDERS, processes, platform: 'win32', ...host });
+    assert.equal(refused.code, EXIT.refused);
+    assert.deepEqual(refused.stdout, [
+      'REFUSED no room on the host to open app-bravo (session bravo), counted at 400 MB resident and 1200 MB committed: the team has 2 tabs open, ' +
+        'at its cap of 2 (open.headroom.maxTabs). Close a session first: teamrig sessions lists what each one holds',
+    ]);
+    assert.equal(processes.started.length, 1, "alpha running and the lead's tab still loading fill the cap");
+  });
+
   it('holds the room an opened tab was counted at while it loads, so a second open right after it is refused (T2199)', async () => {
     const kit = new CliHarness(TEAM);
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });

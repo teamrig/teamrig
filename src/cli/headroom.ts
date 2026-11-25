@@ -5,7 +5,7 @@ import { deliveryPlaces } from '../delivery/places.ts';
 import { headroomFor, tabFloorOf, type Headroom } from '../sessions/headroom.ts';
 import { measureSessions, runningPlaces } from '../sessions/measure.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
-import { TabHolds, tabHoldsDir } from '../sessions/tab-holds.ts';
+import { TabHolds, tabHoldsDir, type TabHold } from '../sessions/tab-holds.ts';
 import type { CliRuntime } from './runtime.ts';
 
 type RoomConfig = Pick<KitConfig, 'delivery' | 'open'>;
@@ -25,8 +25,23 @@ export async function headroomOf(runtime: CliRuntime, paths: TeamPaths, config: 
     runningMb: running.map((place) => place.treeMb),
     runningCommittedMb: running.flatMap((place) => (place.committedMb === undefined ? [] : [place.committedMb])),
     loading,
+    teamTabs: teamTabsOf(paths.team, running.map((place) => place.id), loading),
   };
   return headroomFor(room, tabFloorOf(config.open.headroom, config.delivery.queue), config.open.headroom);
+}
+
+/**
+ * The team's tabs open: its sessions running, plus the sessions of its tabs still loading that are not yet seen
+ * running (a tab's process is listed before its session records it), each session once.
+ */
+export function teamTabsOf(team: string, running: readonly string[], loading: readonly Pick<TabHold, 'team' | 'session'>[]): number {
+  const open = new Set(running);
+  for (const hold of loading) {
+    if (hold.team === team) {
+      open.add(hold.session);
+    }
+  }
+  return open.size;
 }
 
 function hostLockOf(paths: TeamPaths, config: RoomConfig): string {

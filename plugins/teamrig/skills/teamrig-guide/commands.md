@@ -4198,6 +4198,11 @@ resident against free memory, and what it committed (about twice that) against t
 (`8000 MB free, 1500 MB of it held for 1 tab still loading, under the 6144 MB a new tab keeps free (...) plus 1200 MB
 for it`): close an idle session, or open it once the tabs loading are up.
 
+A team that sets `open.headroom.maxTabs` (unset by default: no cap) has no room for one more tab once that many of its
+sessions run or still load, whatever the host holds: `open`, `hire --yes` (the hire is made with its tab closed),
+`restore` and the idle pass's reopen all refuse any session but the lead with `the team has 6 tabs open, at its cap of
+6 (open.headroom.maxTabs)`. The key is the person's: it sits under the owner-gated `open.headroom` block.
+
 A tab that opens, the lead's too, holds the MB it was counted at for `open.headroom.loadMinutes` (5) while Claude Code
 loads, since the host's free memory shows a new tab only once it is up: every team's next `teamrig open`,
 `hire --yes` and queued step count it as taken till then, and [teamrig pipeline](#teamrig-pipeline) names it. A tab

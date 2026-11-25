@@ -98,6 +98,18 @@ describe('hire', () => {
     assert.equal(byHand.stdout.at(-1), `${next}once the host has room, open it: teamrig open helper`, 'with the idle pass not on, it is opened by hand');
   });
 
+  it("hires a session home with --yes when the team is at open.headroom.maxTabs, naming the cap (T5479)", async () => {
+    const kit = new CliHarness({ ...LEAD_TEAM, open: { headroom: { maxTabs: 1 } } });
+    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('lead', { claudePid: 6900, hostSession: 'claude-lead', at: '2030-01-08T09:00:00.000Z' });
+    const memory = new FakeHostMemory().lists([{ pid: 6900, parent: 1, bytes: 800 * 2 ** 20 }]);
+    memory.free = 20_000;
+    const hired = await kit.run(['hire', 'helper', ...JOB, '--yes', '--session', 'lead'], { memory });
+    assert.equal(hired.code, EXIT.ok, hired.stdout.join('\n'));
+    assert.match(hired.stdout[0] ?? '', /, home until the host has room; /);
+    assert.match(hired.stdout[1] ?? '', /^NOTE no room on the host to open helper, .*: the team has 1 tab open, at its cap of 1 \(open\.headroom\.maxTabs\)\. /);
+    assert.deepEqual(configOf(kit)['sessions'], ['lead', 'alpha', 'helper']);
+  });
+
   it('hires a third session beside two earlier hires: no cap bounds hiring', async () => {
     const kit = new CliHarness(LEAD_TEAM);
     for (const id of ['helper', 'second', 'third']) {
