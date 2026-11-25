@@ -2716,7 +2716,7 @@ answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.9`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.10`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2748,6 +2748,15 @@ rest), and `cuts`. Since interface 1.6 each task also has:
 Since interface 1.8 `tasks` also has `retired`: how many finished tasks the register's compaction left to the
 archive, which are in no row. It counts every owner's, `--owner` or not, and is `0` when none is; above 0, a count of
 done tasks made from the rows is of the working set only.
+
+Since interface 1.10 `tasks` can be read a page at a time, for a program whose run holds less than the whole working
+set. `--max-bytes <n>` serves as many tasks as fit in `n` bytes of their JSON, and always at least one, so a page
+always moves on; `tasks` then also has `next`, the id of the last task the page serves while more remain, `null` on
+the last page and on a read with no `--max-bytes`. Ask the next page with `--after <next>`; an id the working set no
+longer serves is refused, so start again from the first page. Every page carries the same `revision` while no file
+moved: a page whose revision differs from the first one's was read after a change, so read from the first page again.
+`retired` counts the whole archive on every page. `--max-bytes` needs `tasks` among the documents asked and pages it alone, the others served whole; `--after` needs
+`--max-bytes`.
 
 `plan` (since interface 1.1) adds `at`, `validUntil`, `week`, `tasks`, `finished` and `ownerCards`: where each task
 stands in the team's plan, as `teamrig list` orders it, so a program ranks nothing itself. It holds ids, numbers,
@@ -3014,6 +3023,11 @@ Flags:
   `stats`, or another value, is a usage error.
 - `--since <hours>`: how far back `inbox` serves the lines already read, in whole hours; 24 when left out, and 0
   serves the unread ones only.
+- `--max-bytes <n>`: serves `tasks` a page at a time, as many tasks as fit in `n` bytes of their JSON and always at
+  least one; `next` names the last task served, or is null on the last page. Giving it without asking `tasks` is a
+  usage error.
+- `--after T<id>`: the page after that task, the `next` the page before gave. It needs `--max-bytes`; an id the
+  working set no longer serves is refused, so read again from the first page.
 - `--unless <document>=<revision>[,<document>=<revision>...]`: the revision you already hold of a document this run
   asks, one entry a document, in one flag. A document still at that revision is answered `{ "interface", "document",
   "revision", "unchanged": true }` and nothing more, from the stamps of its files alone: nothing is folded, so

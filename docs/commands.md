@@ -361,7 +361,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   who [<id|name|role|team/id>] the name to message a session by (no argument: every session of yours)
   read <document>... --json [--session <id|name>] [--conversation <id>] [--team <id>] [--owner <id|name>]
       [--task T<id>] [--range 7d|30d|90d|180d|1y|all] [--since <hours>]
-      [--unless <document>=<revision>[,...]]
+      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]]
       [--interface <major.minor>]   the public interface's read side, for a program: each document
       asked is one JSON line on stdout, in the order asked, with its revision and what could not be
       served (problems); a refusal goes to stderr, so stdout holds answers only.
@@ -389,8 +389,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       team above yours, for tasks, plan, goals, history, stats, meetings and config. --task: the one
       task history is asked of. --range: the days stats counts over, 7d unless given. --unless: the
       revision you hold of a document asked; one still at that revision is answered with unchanged:
-      true in place of its body, from its files' stamps alone. --interface: the version you speak,
-      refused when this teamrig does not serve it. It writes nothing
+      true in place of its body, from its files' stamps alone. --max-bytes: serve tasks a page at a
+      time, as many tasks as fit in that many bytes of their JSON and at least one; next names the
+      last task served while more remain, null on the last page. --after: the next a page gave, the
+      task the next page starts after; every page carries the same revision while nothing changed.
+      --interface: the version you speak, refused when this teamrig does not serve it. It writes nothing
   events --json [--documents <document>[,...]] [--session <id|name>] [--conversation <id>] [--team <id>]
       [--owner <id|name>] [--since <hours>] [--task <id>] [--range <days>]   the public interface's
       events side, for a program that starts it and reads its stdout: one JSON line a frame, first
