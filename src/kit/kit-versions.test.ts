@@ -206,8 +206,18 @@ describe('kit versions', () => {
       await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
       const record = files.get(kitCurrentRecordPath(KIT)) ?? '';
       const cases: ReadonlyArray<readonly [string, () => Promise<void>]> = [
-        ['only current', () => files.remove(kitCurrentRecordPath(KIT))],
-        ['only current.json', () => files.remove(kitCurrentPath(KIT))],
+        [
+          'only current',
+          async () => {
+            await files.remove(kitCurrentRecordPath(KIT));
+          },
+        ],
+        [
+          'only current.json',
+          async () => {
+            await files.remove(kitCurrentPath(KIT));
+          },
+        ],
         ['a mismatch', () => files.write(kitCurrentPath(KIT), '0.509.0\n')],
       ];
       for (const [name, damage] of cases) {
