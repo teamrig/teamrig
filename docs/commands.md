@@ -718,7 +718,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       sessions it leads, the lead any, and any session one on a detached HEAD whose every commit is on
       the branch origin/HEAD names, as teamrig merge leaves it. --delete-branch: deletes its branch too,
       once every commit of it is on --base (default the branch origin/HEAD names), even when git stops
-      partway, as a rerun no longer knows the branch; --dry-run: prints the steps
+      partway, as a rerun no longer knows the branch; in a team, one on --base by subject alone (a
+      rebase merge changed a patch) is saved as a git bundle in the state archive first; --dry-run:
+      prints the steps
   queue --what <label> [--session <id|name>] [--max-minutes <n>] [--kind <kind>] [--task <T id>] [--memory-mb <MB>] [--small] [--exclusive] [--pre-push] [--detach] -- <command ...>   runs one queued step
       (a build, a test run, a database script) in its turn under the host lock, so the host runs only what its memory allows, and at
       below-normal CPU priority (nice 10 on POSIX), which every process it starts inherits, so your

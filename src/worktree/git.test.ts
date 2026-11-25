@@ -130,6 +130,55 @@ describe('GIT_WORKTREES', () => {
     }
   });
 
+  it('counts a branch landed by a rebase merge that changed its patch as on its base by subject, a new subject as not (T5506)', () => {
+    const { repo, worktree } = repoWithWorktree('wt-subjects');
+    try {
+      writeFileSync(join(worktree, 'b.txt'), 'b\n');
+      repo.git('-C', worktree, 'add', '-A');
+      repo.git('-C', worktree, 'commit', '-q', '-m', 'feat(b): add b');
+      repo.write('c.txt', 'c\n');
+      repo.git('add', '-A');
+      repo.git('commit', '-q', '-m', 'c on main');
+      // The rebase merge landed it after a conflict fix: the same subject, another patch.
+      repo.write('b.txt', 'b, fixed on the rebase\n');
+      repo.git('add', '-A');
+      repo.git('commit', '-q', '-m', 'feat(b): add b');
+      assert.equal(git.commitsNotOn(repo.dir, 'feat', 'main'), 1, 'its patch is not on main');
+      assert.equal(git.subjectsNotOn(repo.dir, 'feat', 'main'), 0, 'its subject is');
+      writeFileSync(join(worktree, 'd.txt'), 'd\n');
+      repo.git('-C', worktree, 'add', '-A');
+      repo.git('-C', worktree, 'commit', '-q', '-m', 'feat(d): add d');
+      assert.equal(git.subjectsNotOn(repo.dir, 'feat', 'main'), 1, 'a commit main has under no subject');
+      assert.equal(git.subjectsNotOn(repo.dir, 'no-such-branch', 'main'), undefined);
+      assert.equal(git.subjectsNotOn(repo.dir, 'feat', 'no-such-base'), undefined);
+    } finally {
+      repo.remove();
+    }
+  });
+
+  it('reads a branch tip and bundles the commits not on its base, which fetch the branch back once it is deleted (T5506)', () => {
+    const { repo, worktree } = repoWithWorktree('wt-bundle');
+    try {
+      writeFileSync(join(worktree, 'b.txt'), 'b\n');
+      repo.git('-C', worktree, 'add', '-A');
+      repo.git('-C', worktree, 'commit', '-q', '-m', 'b');
+      const tip = git.tipOf(repo.dir, 'feat');
+      assert.equal(tip, repo.git('rev-parse', 'feat').trim());
+      assert.equal(git.tipOf(repo.dir, 'no-such-branch'), undefined);
+      const file = join(repo.outside, 'feat.bundle');
+      assert.deepEqual(git.bundle(repo.dir, 'feat', 'main', file), { ok: true });
+      repo.git('bundle', 'verify', '-q', file);
+      repo.git('worktree', 'remove', worktree);
+      repo.git('branch', '-D', 'feat');
+      repo.git('fetch', '-q', file, 'feat:feat');
+      assert.equal(repo.git('rev-parse', 'feat').trim(), tip);
+      const empty = git.bundle(repo.dir, 'main', 'main', join(repo.outside, 'empty.bundle'));
+      assert.equal(empty.ok, false, 'a branch with nothing past its base makes no bundle');
+    } finally {
+      repo.remove();
+    }
+  });
+
   it("counts the commits of a worktree's detached HEAD not on a base, as it counts a branch's (T1856)", () => {
     const { repo, worktree } = repoWithWorktree('wt-head-merged');
     try {

@@ -29,6 +29,9 @@ const MAIN = '/w/main';
 const TOP = '/w/t4';
 const MODULES = '/w/main/node_modules';
 const LINK = '/w/t4/node_modules';
+const ARCHIVE = '/w/state/archive/branches';
+const TIP = 'abc1234def5678abc1234def5678abc1234def56';
+const BUNDLE = join(ARCHIVE, 't4-abc1234.bundle');
 
 interface World {
   readonly files: FakeWorktreeFiles;
@@ -123,6 +126,27 @@ describe('planRemoval and carryOut', () => {
     const lines = await carried(plan, ports);
     assert.deepEqual(git.steps, [`worktree remove ${TOP} in ${MAIN}`, `branch -D t4 in ${MAIN}`]);
     assert.equal(lines.at(-1), 'deleted branch t4: every commit of it is on origin/main');
+  });
+
+  it('saves a branch on its base by subject alone to a bundle in the archive, then deletes it (T5506)', async () => {
+    const { files, git, ports } = world({ commitsNotOn: 1, subjectsNotOn: 0, tip: TIP });
+    const plan = planOf(await planRemoval(request({ deleteBranch: true, branchArchive: ARCHIVE }), ports));
+    assert.deepEqual(plan.branch, { name: 't4', base: 'origin/main', bundle: BUNDLE });
+    const why = 'each of its commits is on origin/main by subject (a rebase merge changed its patch)';
+    assert.equal(describePlan(plan).at(-1), `would save branch t4 to ${BUNDLE}, then delete it: ${why}`);
+    const lines = await carried(plan, ports);
+    assert.deepEqual(files.madeFolders, [resolve(ARCHIVE)]);
+    assert.deepEqual(git.steps, [`worktree remove ${TOP} in ${MAIN}`, `bundle create ${BUNDLE} t4 ^origin/main in ${MAIN}`, `branch -D t4 in ${MAIN}`]);
+    assert.equal(lines.at(-1), `saved branch t4 to ${BUNDLE}, then deleted it: ${why}`);
+  });
+
+  it('names a bundle by the branch, its characters a file name may not hold made dashes, and its tip (T5506)', async () => {
+    const { ports } = world({ commitsNotOn: 1, subjectsNotOn: 0, tip: TIP, worktrees: [
+      { path: MAIN, branch: 'main', locked: undefined },
+      { path: TOP, branch: 'fix/t4-a:b', locked: undefined },
+    ] });
+    const plan = planOf(await planRemoval(request({ deleteBranch: true, branchArchive: ARCHIVE }), ports));
+    assert.equal(plan.branch?.bundle, join(ARCHIVE, 'fix-t4-a-b-abc1234.bundle'));
   });
 
   it('compares the branch with the base given instead of origin/HEAD', async () => {
@@ -283,6 +307,17 @@ describe('planRemoval and carryOut', () => {
       assert.deepEqual(files.unlinked, []);
       assert.deepEqual(git.steps, []);
     });
+
+    it('a branch on its base by subject alone with no archive, a subject not landed, or a tip git cannot read (T5506)', async () => {
+      const landedBySubject = { commitsNotOn: 1, subjectsNotOn: 0, tip: TIP };
+      assert.match(await refusal(planRemoval(request({ deleteBranch: true }), world(landedBySubject).ports)), /t4 has 1 commit\(s\) whose change is not on origin\/main/);
+      const archived = request({ deleteBranch: true, branchArchive: ARCHIVE });
+      assert.match(await refusal(planRemoval(archived, world({ ...landedBySubject, subjectsNotOn: 1 }).ports)), /t4 has 1 commit\(s\) whose change is not on origin\/main/);
+      assert.match(await refusal(planRemoval(archived, world({ ...landedBySubject, subjectsNotOn: undefined }).ports)), /git cannot compare t4 with origin\/main/);
+      const { git, ports } = world({ ...landedBySubject, tip: undefined });
+      assert.match(await refusal(planRemoval(archived, ports)), /git cannot read the commit t4 points at, so it cannot be saved before its delete/);
+      assert.deepEqual(git.steps, []);
+    });
   });
 
   describe('stops and says what was done', () => {
@@ -307,6 +342,18 @@ describe('planRemoval and carryOut', () => {
       const git = new FakeWorktreeGit({}, () => files.delete(`${MODULES}/keep.txt`));
       const plan: RemovalPlan = { top: TOP, mainDir: MAIN, links: [{ path: resolve(LINK), name: 'node_modules', target: resolve(MODULES), targetEntries: 2 }], branch: undefined, onBranch: 't4', mergedInto: undefined };
       await assert.rejects(carried(plan, { git, files }), /held 2 entries before and 1 entry after the removal/);
+    });
+
+    it('keeping the branch when its bundle or the folder for it fails (T5506)', async () => {
+      const failing = world({ commitsNotOn: 1, subjectsNotOn: 0, tip: TIP, bundling: { ok: false, reason: 'fatal: disk full' } });
+      const plan = planOf(await planRemoval(request({ deleteBranch: true, branchArchive: ARCHIVE }), failing.ports));
+      await assert.rejects(carried(plan, failing.ports), /the worktree is removed, but cannot save t4 to .*: fatal: disk full; the branch is kept$/);
+      assert.deepEqual(failing.git.steps, [`worktree remove ${TOP} in ${MAIN}`, `bundle create ${BUNDLE} t4 ^origin/main in ${MAIN}`]);
+      const unmakeable = world({ commitsNotOn: 1, subjectsNotOn: 0, tip: TIP });
+      unmakeable.files.unmakeable.add(resolve(ARCHIVE));
+      const kept = planOf(await planRemoval(request({ deleteBranch: true, branchArchive: ARCHIVE }), unmakeable.ports));
+      await assert.rejects(carried(kept, unmakeable.ports), /cannot make .* to save t4 in: EACCES: permission denied, mkdir .*; the branch is kept$/);
+      assert.deepEqual(unmakeable.git.steps, [`worktree remove ${TOP} in ${MAIN}`]);
     });
 
     it('when the branch delete fails after the removal', async () => {
@@ -981,6 +1028,31 @@ describe('removing a real worktree with a real node_modules link', () => {
       assert.equal(readFileSync(join(modules, 'pkg', 'index.js'), 'utf8'), 'module.exports = 1;\n');
       assert.equal(repo.git('branch', '--list', 'feat'), '');
       assert.equal(repo.git('worktree', 'list', '--porcelain').match(/^worktree /gm)?.length, 1);
+    } finally {
+      repo.remove();
+    }
+  });
+
+  it('saves a branch a rebase merge landed with a changed patch to a bundle, deletes it, and the bundle fetches it back (T5506)', async () => {
+    const { repo, worktree } = realWorld('wt-real-bundle');
+    try {
+      writeFileSync(join(worktree, 'src', 'b.ts'), 'export const b = 2;\n');
+      repo.git('-C', worktree, 'add', '-A');
+      repo.git('-C', worktree, 'commit', '-q', '-m', 'feat(b): add b');
+      const tip = repo.git('rev-parse', 'feat').trim();
+      repo.write('src/b.ts', 'export const b = 3;\n');
+      repo.git('add', '-A');
+      repo.git('commit', '-q', '-m', 'feat(b): add b');
+      const archive = join(repo.outside, 'archive', 'branches');
+      const asked = { path: worktree, cwd: repo.dir, deleteBranch: true, base: 'main', worktreeFolders: [] };
+      assert.match(await refusal(planRemoval(asked, REAL)), /feat has 1 commit\(s\) whose change is not on main/, 'no archive: refused as before');
+      const plan = planOf(await planRemoval({ ...asked, branchArchive: archive }, REAL));
+      const bundle = join(archive, `feat-${tip.slice(0, 7)}.bundle`);
+      assert.equal(plan.branch?.bundle, bundle);
+      await carried(plan, REAL);
+      assert.equal(repo.git('branch', '--list', 'feat'), '');
+      repo.git('fetch', '-q', bundle, 'feat:feat');
+      assert.equal(repo.git('rev-parse', 'feat').trim(), tip);
     } finally {
       repo.remove();
     }

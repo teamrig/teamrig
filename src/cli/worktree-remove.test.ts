@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
-import { CLAUDE_SESSION, CliHarness, TEAM } from '../testing/cli-harness.ts';
+import { join, resolve } from 'node:path';
+import { CLAUDE_SESSION, CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { FakeWorktreeFiles, FakeWorktreeGit, type FakeGitAnswers } from '../testing/fake-worktrees.ts';
 import { hostTelling, NO_PATHS_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
@@ -149,6 +149,26 @@ describe('runCli: worktree remove in a team removes only what the caller may (T1
     const result = await kit.run(['worktree', 'remove', '/w/t4'], { worktrees: ports, env: { TEAMRIG_SESSION: 'lead', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     assert.deepEqual(git.steps, ['worktree remove /w/t4 in /w/main']);
+  });
+
+  it("saves a branch on its base by subject alone to the team's state archive, then deletes it (T5506)", async () => {
+    const { kit } = await teamWorld();
+    const { files, git, ports } = worktrees({
+      worktrees: [
+        { path: '/w/main', branch: 'main', locked: undefined },
+        { path: '/w/t4', branch: 't1-parser', locked: undefined },
+      ],
+      commitsNotOn: 1,
+      subjectsNotOn: 0,
+      tip: 'abc1234def5678abc1234def5678abc1234def56',
+    });
+    const archive = join(TEAM_HOME, 'state', 'archive', 'branches');
+    const bundle = join(archive, 't1-parser-abc1234.bundle');
+    const result = await kit.run(['worktree', 'remove', '/w/t4', '--delete-branch', '--session', 'alpha'], { worktrees: ports, env: { CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.deepEqual(files.madeFolders, [resolve(archive)]);
+    assert.deepEqual(git.steps, ['worktree remove /w/t4 in /w/main', `bundle create ${bundle} t1-parser ^origin/main in /w/main`, 'branch -D t1-parser in /w/main']);
+    assert.ok(result.stdout.includes(`saved branch t1-parser to ${bundle}, then deleted it: each of its commits is on origin/main by subject (a rebase merge changed its patch)`), result.stdout.join('\n'));
   });
 
   it("refuses another session's worktree before any change, naming who may", async () => {

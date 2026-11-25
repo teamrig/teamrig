@@ -13,7 +13,9 @@ import type { WorktreeEntry, WorktreeGit } from './git.ts';
  * Every check runs before anything changes, and any doubt refuses: a path that is not a worktree's top folder, the
  * main checkout, a locked worktree, a run from inside it, a real `node_modules` folder where a link was expected,
  * files git tracks under a link, uncommitted changes, and, for `--delete-branch`, a branch with a commit whose
- * change is not on its base.
+ * change is not on its base. A commit whose patch is not on its base but whose subject is, as a rebase merge that
+ * changed its patch leaves it (T5506), lets the branch go only when the request names a folder to save it in: the
+ * branch is bundled there first, and a bundle that fails keeps it.
  *
  * A folder git no longer lists, directly in a folder worktrees are made in and holding only folders and links, is the
  * leftover of a removal git stopped partway (T1051): its links are unlinked, their targets shown untouched, and its
@@ -33,6 +35,11 @@ export interface RemovalRequest {
   readonly deleteBranch: boolean;
   /** The branch the worktree's branch merges into; default the one `origin/HEAD` names. */
   readonly base: string | undefined;
+  /**
+   * The folder a branch landed by subject only is saved to as a git bundle before its delete; undefined refuses such a
+   * branch, as with no folder there is no copy to fetch it back from.
+   */
+  readonly branchArchive?: string;
   /**
    * The folders `teamrig worktree add` makes worktrees in, for the repositories the caller knows of. Only a folder
    * directly in one of them is cleared as a leftover: elsewhere, a folder of folders and links could be anything, such
@@ -62,6 +69,15 @@ export interface PlannedLink {
   readonly targetEntries: number | undefined;
 }
 
+/** A branch to delete once the worktree is gone. */
+export interface PlannedBranch {
+  readonly name: string;
+  /** The branch that holds every commit of it, by patch, or by subject when `bundle` is set. */
+  readonly base: string;
+  /** The file the branch is bundled to before its delete; set only when a commit of it is on `base` by subject alone. */
+  readonly bundle?: string;
+}
+
 export interface RemovalPlan {
   /** The worktree's top folder, as git spells it. */
   readonly top: string;
@@ -69,7 +85,7 @@ export interface RemovalPlan {
   readonly mainDir: string;
   readonly links: readonly PlannedLink[];
   /** The branch to delete and the base that holds all of it; undefined to keep the branch. */
-  readonly branch: { readonly name: string; readonly base: string } | undefined;
+  readonly branch: PlannedBranch | undefined;
   /** The branch checked out in the worktree, which tells whose it is (owner.ts); undefined on a detached HEAD. */
   readonly onBranch: string | undefined;
   /**
@@ -199,7 +215,7 @@ function describeChanges(changes: readonly string[]): string {
 }
 
 /** The branch step: which branch goes and the base that holds every commit of it, or why it may not go. */
-function planBranch(git: WorktreeGit, request: RemovalRequest, top: string, branch: string | undefined): { readonly name: string; readonly base: string } | string {
+function planBranch(git: WorktreeGit, request: RemovalRequest, top: string, branch: string | undefined): PlannedBranch | string {
   if (branch === undefined) {
     return `${top} has no branch checked out (a detached HEAD): run without --delete-branch`;
   }
@@ -217,10 +233,30 @@ function planBranch(git: WorktreeGit, request: RemovalRequest, top: string, bran
   if (notOn === undefined) {
     return `git cannot compare ${branch} with ${base}: check that both exist`;
   }
-  if (notOn > 0) {
-    return `${branch} has ${notOn} commit(s) whose change is not on ${base} (as of the last fetch): merge it, or run without --delete-branch to keep the branch`;
+  const notLanded = `${branch} has ${notOn} commit(s) whose change is not on ${base} (as of the last fetch): merge it, or run without --delete-branch to keep the branch`;
+  if (notOn === 0) {
+    return { name: branch, base };
   }
-  return { name: branch, base };
+  if (request.branchArchive === undefined) {
+    return notLanded;
+  }
+  const bySubject = git.subjectsNotOn(top, branch, base);
+  if (bySubject === undefined) {
+    return `git cannot compare ${branch} with ${base}: check that both exist`;
+  }
+  if (bySubject > 0) {
+    return notLanded;
+  }
+  const tip = git.tipOf(top, branch);
+  if (tip === undefined) {
+    return `git cannot read the commit ${branch} points at, so it cannot be saved before its delete: run without --delete-branch to keep it`;
+  }
+  return { name: branch, base, bundle: join(request.branchArchive, bundleName(branch, tip)) };
+}
+
+/** The bundle file a branch is saved to: its name made safe for a file name on every system, then its tip, so two saves never clash. */
+function bundleName(branch: string, tip: string): string {
+  return `${branch.replaceAll(/[^A-Za-z0-9._-]/g, '-')}-${tip.slice(0, 7)}.bundle`;
 }
 
 /** The default branch that holds every commit of the detached HEAD at `top`; undefined when it holds not all, or git cannot tell. */
@@ -403,8 +439,17 @@ export function describePlan(plan: RemovalPlan): string[] {
   return [
     ...plan.links.map((link) => `would unlink ${link.name} (the link only; its target ${link.target} holds ${entriesText(link.targetEntries)})`),
     `would remove the worktree ${plan.top}`,
-    ...(plan.branch === undefined ? [] : [`would delete branch ${plan.branch.name}: every commit of it is on ${plan.branch.base}`]),
+    ...(plan.branch === undefined ? [] : [branchLine(plan.branch, 'would ')]),
   ];
+}
+
+/** The line telling a branch's delete, or with `would ` its dry run. */
+function branchLine(branch: PlannedBranch, would: '' | 'would '): string {
+  if (branch.bundle === undefined) {
+    return `${would}${would === '' ? 'deleted' : 'delete'} branch ${branch.name}: every commit of it is on ${branch.base}`;
+  }
+  const save = would === '' ? `saved branch ${branch.name} to ${branch.bundle}, then deleted it` : `would save branch ${branch.name} to ${branch.bundle}, then delete it`;
+  return `${save}: each of its commits is on ${branch.base} by subject (a rebase merge changed its patch)`;
 }
 
 /** What a dry run on a leftover would do, one line per step. */
@@ -527,16 +572,31 @@ async function proveTargets(links: readonly PlannedLink[], files: WorktreeFiles,
   }
 }
 
-/** Deletes the plan's branch, proven on its base when the plan was made, telling it; why the delete failed, else undefined. */
-function deletePlannedBranch(plan: RemovalPlan, git: WorktreeGit, tell: (line: string) => void): string | undefined {
-  if (plan.branch === undefined) {
+/**
+ * Deletes the plan's branch, proven on its base when the plan was made, telling it; why the delete failed, else
+ * undefined. A branch on its base by subject alone is bundled first, and one whose bundle fails is never deleted.
+ */
+async function deletePlannedBranch(plan: RemovalPlan, ports: WorktreePorts, tell: (line: string) => void): Promise<string | undefined> {
+  const { branch } = plan;
+  if (branch === undefined) {
     return undefined;
   }
-  const deleted = git.deleteBranch(plan.mainDir, plan.branch.name);
-  if (!deleted.ok) {
-    return `git branch -D ${plan.branch.name}: ${deleted.reason}`;
+  if (branch.bundle !== undefined) {
+    try {
+      await ports.files.makeFolder(dirname(branch.bundle));
+    } catch (error) {
+      return `cannot make ${dirname(branch.bundle)} to save ${branch.name} in: ${errorMessage(error)}; the branch is kept`;
+    }
+    const saved = ports.git.bundle(plan.mainDir, branch.name, branch.base, branch.bundle);
+    if (!saved.ok) {
+      return `cannot save ${branch.name} to ${branch.bundle}: ${saved.reason}; the branch is kept`;
+    }
   }
-  tell(`deleted branch ${plan.branch.name}: every commit of it is on ${plan.branch.base}`);
+  const deleted = ports.git.deleteBranch(plan.mainDir, branch.name);
+  if (!deleted.ok) {
+    return `git branch -D ${branch.name}: ${deleted.reason}`;
+  }
+  tell(branchLine(branch, ''));
   return undefined;
 }
 
@@ -571,7 +631,7 @@ export async function carryOut(plan: RemovalPlan, ports: WorktreePorts, tell: (l
     await proveTargets(plan.links, files, tell);
     // The branch is checked out nowhere now, and a rerun on the folder git no longer lists cannot tell which branch it
     // had (T743): delete it here or never.
-    const branchFailure = deletePlannedBranch(plan, git, tell);
+    const branchFailure = await deletePlannedBranch(plan, ports, tell);
     const branchKept = branchFailure === undefined ? '' : `. Its branch is kept: ${branchFailure}`;
     throw new Error(
       `git worktree remove ${plan.top} stopped partway: ${removed.reason}. git no longer lists it, and ${plan.top} is left on disk: ` +
@@ -585,7 +645,7 @@ export async function carryOut(plan: RemovalPlan, ports: WorktreePorts, tell: (l
   }
   tell(`removed the worktree ${plan.top}`);
   await proveTargets(plan.links, files, tell);
-  const branchFailure = deletePlannedBranch(plan, git, tell);
+  const branchFailure = await deletePlannedBranch(plan, ports, tell);
   if (branchFailure !== undefined) {
     throw new Error(`the worktree is removed, but ${branchFailure}`);
   }

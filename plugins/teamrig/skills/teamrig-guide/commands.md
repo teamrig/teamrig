@@ -6169,7 +6169,10 @@ Flags:
 - `--session <id|name>`: the session removing it, when the tab is bound to none.
 - `--delete-branch`: deletes the worktree's branch after it, once every commit of it is on the base: by ancestry,
   or as the same change under a new id, as a rebase merge leaves it (`git cherry`). It compares them as of the
-  last fetch, so fetch first. Refused for a detached HEAD or a commit the base lacks.
+  last fetch, so fetch first. Refused for a detached HEAD or a commit the base lacks. In a team, a commit whose
+  patch the base lacks but whose subject a commit of the base has, as a rebase merge that changed its patch leaves
+  it, does not refuse it: the branch is first saved as a git bundle in the team's state archive (`archive/branches/
+  <branch>-<tip>.bundle`), which `git fetch <bundle> <branch>:<branch>` brings back, and a save that fails keeps it.
 - `--base <ref>`: the branch it merged into, for `--delete-branch`; default the branch `origin/HEAD` names.
 - `--dry-run`: prints the steps it would take and changes nothing.
 

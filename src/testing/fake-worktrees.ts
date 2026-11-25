@@ -23,6 +23,10 @@ export class FakeWorktreeFiles implements WorktreeFiles {
   readonly removedFolders: string[] = [];
   /** Folders a program keeps, whose removal fails with EBUSY as Windows fails one a program has as its working folder. */
   readonly busy = new Set<string>();
+  /** Each folder makeFolder made, in order. */
+  readonly madeFolders: string[] = [];
+  /** Folders makeFolder fails on, as one the user may not write fails with EACCES. */
+  readonly unmakeable = new Set<string>();
   /** The other programs and the folders they run in; none by default. */
   programs: ProgramsRead = { kind: 'read', programs: [] };
   /** What the Windows move probe finds; by default it is not needed, as on Linux and macOS. */
@@ -125,6 +129,19 @@ export class FakeWorktreeFiles implements WorktreeFiles {
     this.removedFolders.push(key);
   }
 
+  async makeFolder(path: string): Promise<void> {
+    const key = resolve(path);
+    if (this.unmakeable.has(key)) {
+      throw systemError('EACCES', `permission denied, mkdir '${path}'`);
+    }
+    const node = this.nodes.get(key);
+    if (node !== undefined && node.kind !== 'folder') {
+      throw systemError('EEXIST', `file already exists, mkdir '${path}'`);
+    }
+    this.put(key, { kind: 'folder' });
+    this.madeFolders.push(key);
+  }
+
   async canonical(path: string): Promise<string | undefined> {
     const key = resolve(path);
     return this.nodes.has(key) ? key : undefined;
@@ -173,6 +190,10 @@ export interface FakeGitAnswers {
   readonly defaultBase?: string | undefined;
   readonly commitsNotOn?: number | undefined;
   readonly headCommitsNotOn?: number | undefined;
+  readonly subjectsNotOn?: number | undefined;
+  /** The commit every branch points at. */
+  readonly tip?: string | undefined;
+  readonly bundling?: GitOutcome;
   readonly removal?: GitOutcome;
   readonly deletion?: GitOutcome;
   /** Every local branch; `hasBranch` answers whether it lists the asked one. */
@@ -234,6 +255,19 @@ export class FakeWorktreeGit implements WorktreeGit {
   headCommitsNotOn(_top: string, base: string): number | undefined {
     this.headBases.push(base);
     return this.answers.headCommitsNotOn;
+  }
+
+  subjectsNotOn(): number | undefined {
+    return this.answers.subjectsNotOn;
+  }
+
+  tipOf(): string | undefined {
+    return this.answers.tip;
+  }
+
+  bundle(mainDir: string, branch: string, base: string, file: string): GitOutcome {
+    this.steps.push(`bundle create ${file} ${branch} ^${base} in ${mainDir}`);
+    return this.answers.bundling ?? { ok: true };
   }
 
   removeWorktree(mainDir: string, top: string): GitOutcome {
