@@ -4,6 +4,7 @@ import { declaration } from './declaration.ts';
 import { launchArgs, PROGRAM } from './launch-args.ts';
 import { backgroundJobSession, isForkOf, sessionPlaceOf } from './session-command-lines.ts';
 import { sessionLauncher } from './session-launcher.ts';
+import { newestRestriction } from './turn-context.ts';
 import { CODEX_WAKE } from './wake.ts';
 
 const NONE = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
@@ -40,6 +41,10 @@ describe("Codex CLI's session launcher", () => {
 
   it('wakes a session through codex queue', () => {
     assert.equal(sessionLauncher({}).wake, CODEX_WAKE);
+  });
+
+  it("reads the session's restriction from its rollout's newest turn (T5089)", () => {
+    assert.equal(sessionLauncher({}).restrictionReading, newestRestriction);
   });
 
   it("reads the session id from the mark its declaration names", () => {

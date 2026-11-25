@@ -4,6 +4,7 @@ import { declaration } from './declaration.ts';
 import { launchArgs, PROGRAM } from './launch-args.ts';
 import { backgroundJobSession, isForkOf, sessionPlaceOf } from './session-command-lines.ts';
 import { isCodexSessionProcess } from './session-process.ts';
+import { newestRestriction } from './turn-context.ts';
 import { AGENT_MARK } from './session-variables.ts';
 import { CODEX_WAKE } from './wake.ts';
 
@@ -37,5 +38,6 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
     backgroundJobSession,
     sessionPlaceOf,
     wake: CODEX_WAKE,
+    restrictionReading: newestRestriction,
   };
 }

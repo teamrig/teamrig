@@ -153,6 +153,14 @@ export interface SessionLauncher {
    * unsupported where the host has no such command, as Claude Code, whose tab's mod submits a wake itself.
    */
   readonly wake: SessionWake | Unsupported;
+  /**
+   * The restriction the session runs under, as the newest turn the tail of its transcript records tells it, for a
+   * host whose hook input does not say it in full (Codex CLI's rollout `turn_context`, whose hook input names only
+   * whether approval prompts run). Undefined is an answer: the tail records no turn, or one of a shape the reader
+   * does not know. A host whose hook input already tells it leaves the method out. teamrig only reports it, and
+   * never changes the host's setting.
+   */
+  readonly restrictionReading?: (tail: string) => SessionRestriction | undefined;
 }
 
 /**
@@ -183,3 +191,24 @@ export type WakeDelivery =
  * `elsewhere`, such as a run the host's SDK or its print mode started.
  */
 export type SessionPlace = 'tab' | 'background' | 'elsewhere';
+
+/**
+ * Where a session's commands may write: only where the host lets them read (`read-only`), its workspace too
+ * (`workspace-write`), anywhere, with no sandbox of the host (`none`), or as a sandbox outside the host decides
+ * (`external`).
+ */
+export type SandboxKind = 'read-only' | 'workspace-write' | 'none' | 'external';
+
+/** The restriction a host's session runs under, in the host's own words where teamrig has none. */
+export interface SessionRestriction {
+  /**
+   * When the host asks the person before a step, in its own word, such as Codex CLI's `never`, `on-request`,
+   * `untrusted` or `granular`. `never` means no prompts, never that the sandbox is off: that is `sandbox`.
+   */
+  readonly approval: string;
+  readonly sandbox: SandboxKind;
+  /** Whether its commands reach the network; undefined when the host does not say. */
+  readonly network: boolean | undefined;
+  /** The host's name of the permission profile the restriction comes from; undefined when it names none. */
+  readonly profile: string | undefined;
+}
