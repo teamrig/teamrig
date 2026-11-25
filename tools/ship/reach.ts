@@ -77,3 +77,13 @@ export function reachRefusal(note: string, files: readonly string[]): string | n
   if (tooling === undefined || hasCarrier(note)) return null;
   return `the pull request note is dev-only and the change touches ${tooling}, but it names no plugin carrier: add ${CARRIER_FORMS}`;
 }
+
+/**
+ * The reach refusal of a repo whose template asks for a `## Reach` section (its profile's pullSections), or null when
+ * it asks for none or there is no note: a missing note is already refused as lacking the section (missingSections).
+ * The changed files are read only when the check runs, so a repo that asks for no reach runs no diff.
+ */
+export function reachGate(note: string | null, sections: readonly string[], files: () => readonly string[]): string | null {
+  if (note === null || !sections.includes('Reach')) return null;
+  return reachRefusal(note, files());
+}

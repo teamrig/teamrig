@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { carriesToUsers, hasCarrier, parseReach, REACH_VALUES, reachRefusal, reachValueOf } from './reach.ts';
+import { carriesToUsers, hasCarrier, parseReach, REACH_VALUES, reachGate, reachRefusal, reachValueOf } from './reach.ts';
 
 describe('reachValueOf', () => {
   it('reads a Reach line anywhere in the note', () => {
@@ -97,5 +97,21 @@ describe('reachRefusal', () => {
 
   it('needs no carrier for a plugin, contributors or team change', () => {
     for (const reach of ['plugin', 'contributors', 'team']) assert.equal(reachRefusal(`Reach: ${reach}`, ['tools/a.ts']), null, reach);
+  });
+});
+
+describe('reachGate', () => {
+  const unread = (): readonly string[] => assert.fail('read the changed files of a repo that asks for no reach');
+
+  it('checks the reach only for a repo whose template asks for a Reach section, reading files only then', () => {
+    assert.match(reachGate('Reach: all users', ['Reach', 'Risks'], () => ['src/a.ts']) ?? '', /is none of plugin/);
+    assert.match(reachGate('Reach: dev-only (x)', ['Reach'], () => ['tools/a.ts']) ?? '', /names no plugin carrier/);
+    assert.equal(reachGate('Reach: all users', ['Risks'], unread), null);
+    assert.equal(reachGate('Reach: all users', [], unread), null);
+  });
+
+  it('leaves a missing note to the sections check, and passes a good reach', () => {
+    assert.equal(reachGate(null, ['Reach'], unread), null);
+    assert.equal(reachGate('## Reach\nplugin\n## Risks\nnone', ['Reach', 'Risks'], () => ['src/a.ts']), null);
   });
 });
