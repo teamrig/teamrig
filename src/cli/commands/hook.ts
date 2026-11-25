@@ -68,6 +68,7 @@ import { effortWritebackOf, type EffortWritebackOutcome } from './hook-effort-wr
 import { meetingHold } from './hook-meeting.ts';
 import { inheritedCrons, restartOrPark, restartTargetOf } from './hook-restart.ts';
 import { helperContextOf } from './hook-helper-start.ts';
+import { restrictionLine, restrictionOfEvent, restrictionStopLines } from './hook-restriction.ts';
 import { turnEndWeekReading } from './hook-turn-end-week.ts';
 import { promptSecretBlock } from './hook-prompt-secret.ts';
 import { guardLoadOf, hookTeam } from './hook-guard-load.ts';
@@ -897,7 +898,8 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
   await ensureWatch(runtime, scope.kit, scope.config).catch(() => undefined);
   const hookless = await checkHooklessTabs(runtime, scope.kit, scope.config).catch((): readonly string[] => []);
   const lead = await leadStopLines(runtime, scope, event.transcript).catch((): readonly string[] => []);
-  const lines = [...effort.lines, ...notices, ...budget, ...verify, ...lead, ...hookless];
+  const restriction = await restrictionStopLines(runtime, scope.kit.paths, event, KIT_NAME).catch((): readonly string[] => []);
+  const lines = [...effort.lines, ...notices, ...restriction, ...budget, ...verify, ...lead, ...hookless];
   const ask = await askBlockOf(runtime, scope, event.stopActive, decision).catch((): string | undefined => undefined);
   if (ask === undefined && decision.kind !== 'block') {
     // Only a turn that ends: a block sends the session on working, which its next tool's end records.
@@ -916,7 +918,8 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
  * writes an `/effort` the user typed in the session to its `launch` entry, logs it and tells its leader
  * (hook-effort-writeback.ts). It also tells the user, once each, when the session runs at another
  * effort than its `launch` entry or Claude Code switched its model after a safeguard stop, and once a
- * day when the date to verify one of its verifying tasks by has come. Under `hiring.policy` `automatic` it asks a
+ * day when the date to verify one of its verifying tasks by has come. In a host whose transcript tells the
+ * restriction a session runs under (hook-restriction.ts), it tells the user that once for each restriction. Under `hiring.policy` `automatic` it asks a
  * hired session whose last open task closed, once, to write its handover and retire; after a `set` to waiting it sends the
  * session, once, to its work it can start that does not come after the waiting task (keep-working.ts),
  * never in quiet hours or past its daily budget. When no `issue watch` holds the team's lease it
@@ -945,7 +948,8 @@ export async function stop(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
 
 /**
  * SessionStart: the core rules from the team config, who the session is (after a refresh, its handover; after a
- * refresh or a compaction, its live tasks), and the team's rules.md. It starts the team's `issue watch` when none runs. A compaction inside a helper fires it too,
+ * refresh or a compaction, its live tasks), the team's rules.md, and, in a host whose transcript tells it, the
+ * restriction the resumed session's last turn ran under (hook-restriction.ts). It starts the team's `issue watch` when none runs. A compaction inside a helper fires it too,
  * under the session's id: that start gets the helper's context (hook-helper-start.ts) and binds, renames and
  * refreshes nothing.
  */
@@ -990,7 +994,10 @@ export async function sessionStart(args: ParsedArgs, runtime: CliRuntime): Promi
           sessionInEnv: false,
           tree: undefined,
         };
-  const context = sessionStartContext({ team: found.team, load: kit.load, ...parts, command: KIT_NAME, platform: runtime.platform, clock: rulesClockOf(runtime) });
+  const rules = sessionStartContext({ team: found.team, load: kit.load, ...parts, command: KIT_NAME, platform: runtime.platform, clock: rulesClockOf(runtime) });
+  // A resumed or compacted session's transcript tells the restriction its last turn ran under; a new one's tells none yet.
+  const restriction = event === undefined ? undefined : await restrictionOfEvent(runtime, event).catch(() => undefined);
+  const context = restriction === undefined ? rules : `${rules}\n${restrictionLine(restriction, KIT_NAME)}`;
   const requirementsNote = await requirementsNoteOnce({
     problems: await runtime.requirements.problems(),
     log: new JsonlHintLog(hookLogOf(runtime, kit.paths, 'bind-hints')),

@@ -7,8 +7,9 @@ export const HINT_VERSION = 1;
 
 /**
  * The hints the hooks already gave, so each is given once per Claude Code session: the prompt hook's
- * bind hints (once for a tab with no title, once more for each title that binds nothing) and the
- * session start's note of missing requirements.
+ * bind hints (once for a tab with no title, once more for each title that binds nothing), the
+ * session start's note of missing requirements, and the turn end's line of each restriction the session runs
+ * under (hook-restriction.ts).
  */
 export interface HintLog {
   shown(hostSession: string, reason: string): Promise<boolean>;

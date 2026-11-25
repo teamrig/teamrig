@@ -15,6 +15,7 @@ import {
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
+  type SessionRestriction,
   type SessionVariables,
   type ShellCall,
   type TitleSwitch,
@@ -76,6 +77,14 @@ export function hostReadingTranscriptWeek(read: (tail: string) => DatedRateLimit
     const { usage } = ports;
     return isUnsupported(usage) ? ports : { ...ports, usage: { ...usage, transcriptWeekReading: read } };
   };
+}
+
+/**
+ * The shipped host whose session launcher also reads the restriction a session runs under from a transcript's tail by
+ * `read`, as Codex CLI's does from a rollout's `turn_context`: every other port is the shipped one.
+ */
+export function hostReadingRestriction(read: (tail: string) => SessionRestriction | undefined): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), restrictionReading: read } });
 }
 
 /** Who a run is when the host tells none of it: each part untold. */
