@@ -19,5 +19,6 @@ export function bareHost(): HostPorts {
     models: unsupported('no models are known'),
     steps: unsupported('no steps are known'),
     userHooks: unsupported('no hooks file of the person is kept'),
+    pluginSkills: unsupported('no skills folder of the person is kept'),
   };
 }

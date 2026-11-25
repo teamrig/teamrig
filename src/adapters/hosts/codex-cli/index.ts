@@ -5,6 +5,7 @@ import { sessionLauncher } from './session-launcher.ts';
 import { codexSecretFiles } from './secret-files.ts';
 import { toolCallShape } from './tool-call.ts';
 import { usageMeter } from './usage.ts';
+import { codexPluginSkills } from './plugin-skills.ts';
 import { codexUserHooks } from './user-hooks.ts';
 
 /** The one reason every port gives until it is built in this folder. */
@@ -34,6 +35,7 @@ export default defineHost({
       models: NOT_BUILT,
       steps: NOT_BUILT,
       userHooks: codexUserHooks(deps.env, deps.platform),
+      pluginSkills: codexPluginSkills(deps.env, deps.platform),
     };
   },
 });

@@ -112,6 +112,7 @@ export {
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
+  type HostPluginSkills,
   type HostSteps,
   type HostPorts,
   type HostSecrets,

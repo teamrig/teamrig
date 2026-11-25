@@ -29,6 +29,7 @@ export default defineHost({
       models: unsupported('Antigravity CLI models port is not built yet'),
       steps: unsupported('Antigravity CLI steps port is not built yet'),
       userHooks: antigravityUserHooks(deps.platform),
+      pluginSkills: unsupported('Antigravity CLI skills folder is not proved yet'),
     };
   },
 });
