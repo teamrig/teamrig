@@ -14,6 +14,10 @@ Run the install commands under [Get started](../../README.md#get-started) in the
 teamrig-pane, which keeps your tasks beside the conversation. It also names the Claude Code and Node.js versions you
 need; teamrig checks for anything else when you set up a team, and tells you in plain words what is missing.
 
+On an AI CLI with no teamrig plugin, run the one-file install under
+[An AI CLI with no teamrig plugin](../../README.md#an-ai-cli-with-no-teamrig-plugin) instead: `node install-teamrig.ts
+--host <name> --yes` clones the release and writes that host's hooks.
+
 ## Your first team
 
 1. Open Claude Code in your project folder. In a tab already open, type `/reload-plugins` first.

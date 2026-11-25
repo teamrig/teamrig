@@ -50,6 +50,20 @@ settings lack, for you to paste: teamrig never writes your permissions.
 - **Updates:** see [Updating the plugin](docs/how-it-works.md#updating-the-plugin). Open tabs reload it by themselves
   once idle.
 
+### An AI CLI with no teamrig plugin
+
+Any other AI CLI installs teamrig from one file. Download
+[install-teamrig.ts](https://raw.githubusercontent.com/teamrig/teamrig/release/src/install/install-teamrig.ts) and
+run it with the hosts to connect:
+
+```sh
+node install-teamrig.ts --host codex --yes
+```
+
+It clones the release under `~/.teamrig/install/teamrig` (a later run updates it), writes each host's hooks file
+through `teamrig setup hooks`, and prints the folder to put on your PATH; it edits no shell profile. Without `--yes`
+it only previews the hooks it would write. It needs git and Node.js.
+
 ### Requirements
 
 Claude Code 2.1.139 or later and Node.js 22.18 or later. teamrig checks for anything else when you set up a team and

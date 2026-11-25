@@ -5878,6 +5878,10 @@ for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so
 every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
 refused where an agent runs it; the preview stays open.
 
+On a host with no teamrig plugin, the person installs teamrig with the one file `install-teamrig.ts` from the release
+branch (`node install-teamrig.ts --host <name> --yes`, README "An AI CLI with no teamrig plugin"): it clones the
+release into `~/.teamrig/install/teamrig` and runs this command from there for each `--host`.
+
 Flags:
 
 - `--host <name>`: required: the host whose hooks file it writes (`codex` or `antigravity-cli`).
