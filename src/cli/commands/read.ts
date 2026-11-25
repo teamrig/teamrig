@@ -33,6 +33,7 @@ import { foundTeamOf, loadedConfig, lookForTeam, openKit, pastOrPresentIdOf, ros
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { loadTree } from '../tree.ts';
 import { configSource, teamlessConfigSource } from './read-config.ts';
+import { decisionsSource } from './read-decisions.ts';
 import { goalsSource } from './read-goals.ts';
 import { historySource } from './read-history.ts';
 import { statsSource } from './read-stats.ts';
@@ -85,6 +86,7 @@ const SOURCES: Record<DocumentName, (scope: ReadScope) => DocumentSource> = {
   history: historySource(DOCUMENT_CONNECTORS),
   stats: statsSource(DOCUMENT_CONNECTORS),
   steps: stepsSource,
+  decisions: decisionsSource,
 };
 
 /** The documents a run with no team is still answered: what a setup screen reads before there is a team to read. */

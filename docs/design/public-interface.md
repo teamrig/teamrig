@@ -97,7 +97,9 @@ A read returns a versioned JSON document built from parsed data, never a file's 
 `plan`, 1.2: `goals`, 1.3: `history`, 1.4: `stats`; 1.5 added a field, `plan`'s `ownerCards`; 1.6 added the
 task fields the pane folded itself, `tasks`' `card`, `descriptionCut`, `sizeBase`, `prepares`, `noGoal`, `startedAt`
 and `waitsAt`; 1.8 added `tasks`' `retired`, the count of finished tasks left to the archive, and each `sessions`
-team's `week`; 1.9: `steps`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
+team's `week`; 1.9: `steps`; 1.10: `decisions`, the owner's batch, a document of its own rather than fields of
+`plan`, since it reads every register of the tree and each team's record of the batches asked, which a plan reader
+need not pay for); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
 the design above left open is settled this way:
 
 - **One line a document.** Each document asked is one JSON object on one line of stdout, in the order asked, and

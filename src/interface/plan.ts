@@ -232,7 +232,7 @@ function plannedTask(task: Task, tree: TaskTree): PlannedTask {
   };
 }
 
-function servedDue(id: string, tree: TaskTree): ServedDue | null {
+export function servedDue(id: string, tree: TaskTree): ServedDue | null {
   const due = tree.effectiveDue(id);
   return due === undefined ? null : { due: due.due, at: new Date(due.at).toISOString(), from: due.from };
 }
@@ -245,7 +245,7 @@ function rankedOf(place: PlanPlace): NonNullable<PlanPlace['ranked']> {
   return place.ranked;
 }
 
-function servedNeed(id: string, tree: TaskTree): ServedNeed {
+export function servedNeed(id: string, tree: TaskTree): ServedNeed {
   const own = tree.task(id);
   if (own !== undefined) {
     return { id, team: null, owner: own.owner, status: own.status };

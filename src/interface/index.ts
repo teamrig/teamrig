@@ -16,6 +16,16 @@ export {
   type SettingInput,
 } from './config.ts';
 export { type Connector, type ConnectorItem, type ConnectorName } from './connector.ts';
+export {
+  decisionsBody,
+  type DecisionsBody,
+  type DecisionsInput,
+  type ServedDecisionCard,
+  type ServedLater,
+  type ServedOwnerWait,
+  type ServedRunFile,
+  type ServedTrigger,
+} from './decisions.ts';
 export { answerOf, DOCUMENTS, isDocumentName, unchangedAnswer, type Answer, type DocumentName, type EnvelopeHead, type UnchangedAnswer } from './envelope.ts';
 export { changedFrame, EVENTS, helloFrame, movedDocuments, type DocumentRevision, type EventFrame, type EventName } from './events.ts';
 export { goalsBody, type GoalsBody, type GoalsInput, type HeldGoals, type ServedGoal, type ServedSlip } from './goals.ts';

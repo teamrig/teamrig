@@ -2705,18 +2705,20 @@ Nothing else is written to stdout, so every line there parses; a refusal is one 
 and no document, where other commands print it to stdout. It writes no file, marks nothing read and takes no lock.
 
 The five documents of interface 1.0 are served, and `plan`, which 1.1 added, `goals`, which 1.2 added, `history`,
-which 1.3 added, `stats`, which 1.4 added, and `steps`, which 1.9 added. `tasks` is the register's working set, the active tasks and the
-finished ones not yet archived. `plan` is the team's active tasks in plan order, each as teamrig's own lists place
-it. `goals` is the goals a task of the team may serve. `history` is every event of the one task `--task` names.
-`stats` is the register's numbers over `--range`, as `teamrig stats` counts them. `steps` is the one-time steps
-teamrig needs its person to take, as `teamrig steps` lists them. `inbox` is the asking
+which 1.3 added, `stats`, which 1.4 added, `steps`, which 1.9 added, and `decisions`, which 1.10 added. `tasks` is
+the register's working set, the active tasks and the finished ones not yet archived. `plan` is the team's active
+tasks in plan order, each as teamrig's own lists place it. `goals` is the goals a task of the team may serve.
+`history` is every event of the one task `--task` names. `stats` is the register's numbers over `--range`, as
+`teamrig stats` counts them. `steps` is the one-time steps teamrig needs its person to take, as `teamrig steps`
+lists them. `decisions` is the owner's batch that holds the team's waits on the owner, as `teamrig decisions`
+reads it. `inbox` is the asking
 session's own inbox. `sessions` is every session of your tree of teams. `meetings` is the team's meetings still
 scheduled or started. `config` is the team's config key by key, and the one document a run with no team is
 answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.9`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.10`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2908,6 +2910,50 @@ steps run` takes; `title` and `why` plain words for the person; `preview` what t
 its `command` in the person's own tab; never run it yourself, since it changes their files. An empty `steps` means
 none is pending. A teamrig update that brings a new config format changes `revision` with no file moving.
 
+`decisions` (since interface 1.10) holds the waits on the owner the lead asks in batches, the groups and order
+`teamrig decisions` prints, so a program sorts nothing itself. A root team's batch holds its own register's waits and
+every team's under it; a team under the root is served only its own and its teams' waits of the root lead's batch.
+`--owner` keeps one session's waits, in the same groups and order; the trigger and times stay the batch's.
+
+- `at`: when the batch was judged, a UTC instant.
+- `validUntil`: the first moment after `at` the batch may turn with no file moving: the next batch time, a wait's
+  due, a put-off card coming back, or the next UTC midnight (the Improvements day). The clock is no part of
+  `revision`: once `validUntil` has passed, ask again without `--unless`.
+- `askedBy`: the address of the root lead who asks this team's waits, for a team under the root; `null` when the
+  team's own lead does.
+- `improvementsDay`: the UTC weekday the waits held for the Improvements batch are asked (`sun` ... `sat`).
+- `trigger`: why the batch is due now, `null` while it waits for the next: `{ "kind": "deadline", "key", "at" }` (a
+  wait due before the next batch), `{ "kind": "count", "pending", "batchAt" }` (`decisions.batchAt` waits not yet
+  asked) or `{ "kind": "time", "at" }` (a batch time passed over waits). Pass over a kind you do not know.
+- `nextBatchAt`: the next time in `decisions.batchTimesUtc`, a UTC instant; `null` with none set.
+- The groups, each a list of waits: `pending` (not yet asked, in the order the lead asks them: register by register,
+  each in its plan order), `overdue` (asked in an earlier batch and now past due), `weekly` (held for the
+  Improvements day, as they free only Improvements work; empty on that day, when they are in `pending`), `dedicated`
+  (a session `decisions.dedicatedOwners` names, asked in its own meeting with the owner, never in a batch) and
+  `later` (put off by the owner, asked again once their time passed). A dedicated session's wait the owner put off is
+  in neither `dedicated` nor `later` until its time passes.
+- `cuts`: as `{ "id", "field", "shape" }`, `id` a wait's `key`.
+
+Each wait holds:
+
+- `key`: how the batch names it, `T5` for the reader's own register, `web/T5` for a team's under it; `id`, and `team`:
+  the team whose register holds it, `null` for the reader's own. A wait carries no title: a tool names it by joining
+  `id` with `tasks`.
+- `owner`, `status`, and `waits` as `tasks` serves them.
+- `due`: the date it works to, `{ "due", "at", "from" }` as `plan` serves one: its own due, or the earlier one of a
+  task that needs it (`from` that task's id); `null` with neither.
+- `card`: its decision card as `tasks` serves one, but `run`: the hand step file `{ "file", "sha256" }`, by its file
+  name alone, never a path, and the sha256 an audit on the task pins it at (`null` when none does: then the owner is
+  not to run it); `run` is `null` when the card names no file, `card` `null` on a wait with no card. Its texts are
+  served as plain text, as `tasks` serves a card's.
+- `frees`: the active tasks of its register that wait on it, directly or not, each `{ "id", "team", "owner",
+  "status" }` as `plan` names a need: what the answer frees.
+- `later`: `{ "until", "at" }` on a card the owner put off, `until` as stored and `at` the same moment as a UTC
+  instant (`null` for a stored text that reads as no time); `null` on every other.
+
+`decisions` reads what `plan` reads, every register of the tree, and each tree team's record of the batches its lead
+asked and its meetings, which say which waits were asked.
+
 `inbox` adds `session` (`{ "id", "name" }`), `unread` (how many lines the session has not read; `null` when it never
 ran `teamrig inbox read`, and then every line counts as unread), `lines` and `cuts`. `lines` holds every unread line
 and the read ones posted in the last 24 hours (`--since`), in file order, each `{ "key", "at", "from", "text",
@@ -3031,7 +3077,7 @@ teamrig read tasks --json --owner api
 Output:
 
 ```text
-{"interface":"1.9","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
+{"interface":"1.10","document":"tasks","revision":"5f0c2a9be41d7c36","problems":[],"tasks":[{"id":"T12","title":{"text":"Cache the price list","source":"team"},"owner":"api","status":"in-progress", ...}],"retired":0,"cuts":[]}
 ```
 
 ### teamrig events
@@ -3084,8 +3130,8 @@ teamrig events --json --documents tasks,inbox --session api
 Output:
 
 ```text
-{"interface":"1.9","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
-{"interface":"1.9","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
+{"interface":"1.10","event":"hello","documents":[{"document":"tasks","revision":"5f0c2a9be41d7c36"},{"document":"inbox","revision":"9a41c07d2be3f518"}]}
+{"interface":"1.10","event":"changed","documents":[{"document":"inbox","revision":"c2d81374e0aa51b9"}]}
 ```
 
 ### teamrig sessions
