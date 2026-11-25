@@ -84,7 +84,7 @@ function answer(runtime: CliRuntime, value: WakeAnswer): ExitCode {
  * credentials file, whose change is the next sign the login works; a tab waiting for another tab's day-start probe,
  * the probe's file (a release wakes it at once) and the login marker (the probe's turn failed).
  */
-function waitAnswer(scope: Extract<WakeScope, { kind: 'found' }>, recheckAt: number | null, also: readonly string[] = []): WakeAnswer {
+function waitAnswer(scope: WakeTarget, recheckAt: number | null, also: readonly string[] = []): WakeAnswer {
   return { kind: 'wait', watch: [scope.kit.paths.events, asksFolderOf(scope.kit.paths.wakeAsks, scope.id), ...also], recheckAt };
 }
 
@@ -159,6 +159,9 @@ export async function wakeScopeOf(runtime: CliRuntime, origin: HookOrigin | unde
   return id === undefined ? { kind: 'off', why: 'this tab is not a team session' } : { kind: 'found', kit, config, roster, id, tab, from: found.from };
 }
 
+/** The session a wake is decided for: a found scope, less the folder its team was found from, which only the idle pass reads. */
+export type WakeTarget = Omit<Extract<WakeScope, { kind: 'found' }>, 'from'>;
+
 /** The W of the turn a wake would start in a tab whose last turn was at `lastTurnAt` (undefined: unknown, counted cold). */
 function wakeWOf(config: KitConfig, lastTurnAt: number | undefined, now: number): number {
   return wakeCost(lastTurnAt === undefined ? undefined : now - lastTurnAt, config.messages.coldAfterMinutes, undefined, undefined).w;
@@ -178,7 +181,7 @@ function dueIdsOf(verdict: WakeVerdict): ReadonlySet<string> {
  * what was due, and leaves the tasks the rest cut out of what the session knows, so they wake it once the rest ends.
  * A task another session waits on is never cut by a rest that yields (`restExemptionOf`, T4948).
  */
-async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, input: WakeInput): Promise<WakeDecision> {
+async function restCappedDecision(runtime: CliRuntime, scope: WakeTarget, input: WakeInput): Promise<WakeDecision> {
   const { config } = scope;
   const decision = decideWake(input);
   const due = dueIdsOf(decision.verdict);
@@ -204,7 +207,7 @@ async function restCappedDecision(runtime: CliRuntime, scope: Extract<WakeScope,
  * CRITICAL one (src/meeting/quiet.ts), and a wake would start a turn in the middle of it. The work handed meanwhile
  * stays new, so it wakes the lead at the first check after the meeting.
  */
-async function meetingHoldsWake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>): Promise<boolean> {
+async function meetingHoldsWake(runtime: CliRuntime, scope: WakeTarget): Promise<boolean> {
   if (scope.roster.holderOf('lead') !== scope.id) {
     return false;
   }
@@ -254,7 +257,7 @@ type PokeCheck =
  */
 async function pokeOf(
   runtime: CliRuntime,
-  scope: Extract<WakeScope, { kind: 'found' }>,
+  scope: WakeTarget,
   tasks: ReadonlyMap<string, Task>,
   elsewhere: TasksElsewhere,
   state: WakeState,
@@ -342,7 +345,7 @@ function earliest(...times: readonly (number | undefined)[]): number | null {
  */
 async function momentsOf(
   runtime: CliRuntime,
-  scope: Extract<WakeScope, { kind: 'found' }>,
+  scope: WakeTarget,
   login: LoginScope,
   tasks: ReadonlyMap<string, Task>,
   elsewhere: TasksElsewhere,
@@ -414,7 +417,7 @@ async function momentsOf(
  */
 async function decide(
   runtime: CliRuntime,
-  scope: Extract<WakeScope, { kind: 'found' }>,
+  scope: WakeTarget,
   store: WakeStore,
   fresh: (() => Promise<boolean>) | undefined,
   login: LoginScope,
@@ -525,7 +528,7 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
  * mod, which submits the prompt in its own tab, and a host that wakes its sessions through its own program
  * (src/cli/host-wake.ts). `cwd` is the folder the session works in, for a restart re-armed from here.
  */
-export async function wakeAnswerOf(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, cwd: string | undefined): Promise<WakeAnswer> {
+export async function wakeAnswerOf(runtime: CliRuntime, scope: WakeTarget, cwd: string | undefined): Promise<WakeAnswer> {
   const { kit, config, id, tab } = scope;
   if (await meetingHoldsWake(runtime, scope)) {
     return waitAnswer(scope, null);
@@ -591,7 +594,7 @@ export async function wakeAnswerOf(runtime: CliRuntime, scope: Extract<WakeScope
 }
 
 /** A wake, its text kept first with the turn log on, so the prompt it submits is logged as teamrig's. */
-async function rememberWake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<WakeAnswer> {
+async function rememberWake(runtime: CliRuntime, scope: WakeTarget, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<WakeAnswer> {
   if (scope.config.turnLog.enabled) {
     await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
   }
