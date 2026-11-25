@@ -94,7 +94,7 @@ import {
   type WatchPath,
 } from './gh.ts';
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
-import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText, unreachableText } from './issues.ts';
 import { readFields } from './fields.ts';
 import { searchIn } from './search.ts';
 import { failedLogExcerpt } from './job-log.ts';
@@ -783,6 +783,8 @@ export function writeFailureText(target: IssueTarget, what: string, code: number
   const shown = targetText(target);
   const token = `the token saved as ${access.credential}`;
   switch (ghFailureKind(code, stderr)) {
+    case 'unreachable':
+      return unreachableText(token);
     case 'no-login':
       return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
     case 'no-permission':
@@ -799,6 +801,8 @@ export function rerunFailureText(repo: string, runId: number, code: number, stde
   const shown = `run ${String(runId)} of ${repo}`;
   const token = `the token saved as ${access.credential}`;
   switch (ghFailureKind(code, stderr)) {
+    case 'unreachable':
+      return unreachableText(token);
     case 'no-login':
       return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
     case 'no-permission':

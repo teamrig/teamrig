@@ -25,17 +25,26 @@ export const ISSUE_LIMIT = 500;
 /** gh's exit code when it has no login to use. */
 const GH_EXIT_NO_LOGIN = 4;
 const NO_LOGIN = /gh auth login|not logged in|authentication required|HTTP 401|bad credentials/i;
+/**
+ * gh's words when it never reached GitHub: its own `error connecting to` line, and the network errors under it, as
+ * a sandbox with the network off or a lost connection gives them. Such a run says nothing of the token, so it is
+ * never read as a refused one (#2281: a check run with the network off looked like an invalid sign-in).
+ */
+const UNREACHABLE = /error connecting to|check your internet connection|dial tcp|no such host|connection refused|network is unreachable|i\/o timeout|TLS handshake timeout/i;
 const NOT_VISIBLE = /could not resolve to a repository|HTTP 404|not found/i;
 /** A token that reaches the repository but was not given the Issues permission. */
 const NO_PERMISSION = /resource not accessible by/i;
 /** A web address as a host gives one for an issue or pull request. */
 export const WEB_URL = /^https:\/\/\S+$/;
 
-/** A known cause of a gh run that exited with an error: no login or a refused token, a missing permission, or nothing visible there. */
-export type GhFailureKind = 'no-login' | 'no-permission' | 'not-visible';
+/** A known cause of a gh run that exited with an error: GitHub not reached, no login or a refused token, a missing permission, or nothing visible there. */
+export type GhFailureKind = 'unreachable' | 'no-login' | 'no-permission' | 'not-visible';
 
 /** The known cause of a gh run that exited with `code` and printed `stderr`, or undefined when it is none of them. */
 export function ghFailureKind(code: number, stderr: string): GhFailureKind | undefined {
+  if (code !== GH_EXIT_NO_LOGIN && UNREACHABLE.test(stderr)) {
+    return 'unreachable';
+  }
   if (code === GH_EXIT_NO_LOGIN || NO_LOGIN.test(stderr)) {
     return 'no-login';
   }
@@ -43,6 +52,11 @@ export function ghFailureKind(code: number, stderr: string): GhFailureKind | und
     return 'no-permission';
   }
   return NOT_VISIBLE.test(stderr) ? 'not-visible' : undefined;
+}
+
+/** Why a gh run that never reached GitHub failed: the network, never the token, which needs nothing done. */
+export function unreachableText(token: string): string {
+  return `gh did not reach GitHub (the network is off where it ran, as in a sandbox without it, or GitHub is down): ${token} was not refused, so nothing needs saving again`;
 }
 
 /** One read of a repository's issues in one state, a page of a shipped query at a time (queries.ts). */
@@ -208,6 +222,8 @@ export function failureText(repo: string, result: GhResult, access: RepoAccess, 
   }
   const token = `the token saved as ${access.credential}`;
   switch (ghFailureKind(result.end.code, result.stderr)) {
+    case 'unreachable':
+      return unreachableText(token);
     case 'no-login':
       return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
     case 'no-permission':
