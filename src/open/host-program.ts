@@ -2,7 +2,7 @@ import { posix, win32 } from 'node:path';
 import type { Files } from '../core/files.ts';
 import type { Env } from '../core/home.ts';
 import type { PathProbe } from '../core/path-probe.ts';
-import { envVariable, pathList } from '../core/path-search.ts';
+import { envVariable, pathList, programFolders } from '../core/path-search.ts';
 
 /** How to start a host's program: `command`, then `prefix`, then the program's own arguments. */
 export interface HostProgram {
@@ -55,7 +55,7 @@ async function shimProgram(deps: ProgramSearchDeps, shim: string): Promise<HostP
 async function windowsSearch(deps: ProgramSearchDeps, name: string): Promise<ProgramSearch> {
   const extensions = pathList(envVariable(deps.env, 'PATHEXT', 'win32') ?? WINDOWS_EXTENSIONS, ';').map((extension) => extension.toLowerCase());
   const skipped: string[] = [];
-  for (const folder of pathList(envVariable(deps.env, 'PATH', 'win32'), ';')) {
+  for (const folder of programFolders(deps.env, 'win32')) {
     for (const extension of extensions) {
       const path = win32.join(folder, `${name}${extension}`);
       if ((await deps.probe.kind(path)) !== 'file') {
@@ -77,7 +77,7 @@ async function windowsSearch(deps: ProgramSearchDeps, name: string): Promise<Pro
 }
 
 async function posixSearch(deps: ProgramSearchDeps, name: string): Promise<ProgramSearch> {
-  for (const folder of pathList(envVariable(deps.env, 'PATH', deps.platform), ':')) {
+  for (const folder of programFolders(deps.env, deps.platform)) {
     const path = posix.join(folder, name);
     if ((await deps.probe.kind(path)) === 'file') {
       return { kind: 'found', program: { command: path, prefix: [] } };

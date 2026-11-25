@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path';
 import type { PathSearchDeps } from './path-search.ts';
-import { envVariable, pathList } from './path-search.ts';
+import { envVariable, programFolders } from './path-search.ts';
 
 /** What finding the store's writer reads: PATH and SystemRoot, the operating system, the files, and the current folder. */
 export interface StoreProgramDeps extends PathSearchDeps {
@@ -44,8 +44,7 @@ async function candidate(deps: StoreProgramDeps): Promise<StoreProgram> {
     case 'darwin':
       return isFile(deps, MACOS_SECURITY);
     default: {
-      const folders = pathList(envVariable(deps.env, 'PATH', deps.platform), ':').filter((folder) => posix.isAbsolute(folder));
-      for (const folder of folders) {
+      for (const folder of programFolders(deps.env, deps.platform)) {
         const found = await isFile(deps, posix.join(folder, STORE_WRITERS.linux));
         if (found.kind === 'found') return found;
       }

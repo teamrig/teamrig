@@ -87,6 +87,12 @@ describe('findProgram on Windows', () => {
     assert.deepEqual(await windows({ PATH: 'C:\\npm' }, [script], { 'C:\\npm\\agent-desk.cmd': shim }, 'agent-desk'), { kind: 'found', program: { command: NODE, prefix: [script] } });
   });
 
+  it("skips a relative PATH folder, so the host's program is never one the working tree holds (T4979)", async () => {
+    const found = await windows({ PATH: '.;bin;C:\\bin' }, ['claude.exe', 'bin\\claude.exe', 'C:\\bin\\claude.exe']);
+    assert.deepEqual(found, { kind: 'found', program: { command: 'C:\\bin\\claude.exe', prefix: [] } });
+    assert.deepEqual(await windows({ PATH: '.;bin' }, ['claude.exe', 'bin\\claude.exe']), { kind: 'missing', skipped: [] });
+  });
+
   it('finds no program by a name that is no plain file name, so the search stays in the folders PATH names', async () => {
     for (const name of ['..\\tools\\run', 'sub/run', 'C:run', '']) {
       const found = await windows({ PATH: 'C:\\bin' }, ['C:\\tools\\run.exe', 'C:\\bin\\sub\\run.exe', 'C:\\bin\\run.exe', 'C:\\bin\\.exe'], {}, name);
@@ -103,6 +109,11 @@ describe('findProgram elsewhere', () => {
   it('takes the first claude on PATH', async () => {
     const found = await elsewhere({ PATH: '/usr/bin::/opt/claude/bin:/usr/local/bin' }, 'darwin', ['/opt/claude/bin/claude', '/usr/local/bin/claude']);
     assert.deepEqual(found, { kind: 'found', program: { command: '/opt/claude/bin/claude', prefix: [] } });
+  });
+
+  it("skips a relative PATH folder, so the host's program is never one the working tree holds (T4979)", async () => {
+    assert.deepEqual(await elsewhere({ PATH: '.:bin:/usr/bin' }, 'linux', ['claude', 'bin/claude', '/usr/bin/claude']), { kind: 'found', program: { command: '/usr/bin/claude', prefix: [] } });
+    assert.deepEqual(await elsewhere({ PATH: '.:bin' }, 'darwin', ['claude', 'bin/claude']), { kind: 'missing', skipped: [] });
   });
 
   it('reads PATH by its exact name, and reports nothing found', async () => {
