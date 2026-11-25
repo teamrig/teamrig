@@ -20,6 +20,7 @@ import {
   SNAPSHOT_TEMPORARY_KEPT_MS,
   snapshotDirOf,
   snapshotOfStatus,
+  snapshotOfTranscript,
   statusLineText,
   weekFoldOf,
   weekUseAt,
@@ -90,6 +91,39 @@ function weekUseOf(snapshots: readonly StatusSnapshot[], now: number): WeekUse |
 function reading(ts: string, usedPct: number, since: string | null = null, after: string | null = null): StatusSnapshot {
   return snapshot({ ts, rateLimits: { fiveHour: null, sevenDay: { usedPct, resetsAt: WEEK_RESET_S * 1000 } }, rateLimitsSince: since, rateLimitsAfter: after });
 }
+
+describe('snapshotOfTranscript', () => {
+  const WEEK = { fiveHour: null, sevenDay: { usedPct: 57, resetsAt: WEEK_RESET_S * 1000 } };
+  const TAKEN = NOW - 3_600_000;
+  const SESSION = { sessionId: SID, cwd: '/work/app', model: 'gpt-5.5', effort: 'high' };
+
+  it("keeps a transcript's reading dated by the host's own time for it, which the status-line fields leave empty (T5060)", () => {
+    assert.deepEqual(
+      snapshotOfTranscript(SESSION, { limits: WEEK, at: TAKEN }, NOW),
+      snapshot({ ts: new Date(NOW).toISOString(), model: 'gpt-5.5', effort: 'high', rateLimits: WEEK, rateLimitsSince: new Date(TAKEN).toISOString() }),
+    );
+  });
+
+  it('round-trips through the stored format, so budget reads it as a status line one, and redating an unchanged reading keeps its time (T5060)', () => {
+    const taken = snapshotOfTranscript(SESSION, { limits: WEEK, at: TAKEN }, NOW);
+    assert.ok(taken !== undefined);
+    assert.deepEqual(parseSnapshot(formatSnapshot(taken)), taken);
+    const later = snapshotOfTranscript(SESSION, { limits: WEEK, at: TAKEN }, NOW + 60_000);
+    assert.ok(later !== undefined);
+    assert.equal(datedSnapshot(later, taken).rateLimitsSince, new Date(TAKEN).toISOString());
+  });
+
+  it("counts a Codex reading beside a Claude one in the week's fold, the higher use winning (T5060)", () => {
+    const codex = snapshotOfTranscript({ ...SESSION, sessionId: OTHER }, { limits: { fiveHour: null, sevenDay: { usedPct: 61, resetsAt: WEEK_RESET_S * 1000 } }, at: TAKEN }, NOW);
+    assert.ok(codex !== undefined);
+    assert.equal(weekUseOf([reading('2026-10-15T11:30:00.000Z', 57), codex], NOW)?.usedPct, 61);
+  });
+
+  it('refuses a session id that is not a valid one, and never dates a reading past now', () => {
+    assert.equal(snapshotOfTranscript({ ...SESSION, sessionId: '../x' }, { limits: WEEK, at: TAKEN }, NOW), undefined);
+    assert.equal(snapshotOfTranscript(SESSION, { limits: WEEK, at: NOW + 5_000 }, NOW)?.rateLimitsSince, new Date(NOW).toISOString());
+  });
+});
 
 describe('snapshotOfStatus and formatSnapshot', () => {
   it('writes the pinned format from Claude Code status input', () => {

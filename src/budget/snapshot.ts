@@ -7,7 +7,7 @@ import type { TeamPaths } from '../core/home.ts';
 import { MS_PER_DAY, MS_PER_HOUR } from '../core/time.ts';
 import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { coloured, meetingLabel, otherTabLabel, type StatusLineMeeting } from '../meeting/status-line.ts';
-import type { RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/host/index.ts';
+import type { DatedRateLimits, RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/host/index.ts';
 
 /**
  * Status line snapshots: what Claude Code's status line input says about one session, saved as
@@ -127,6 +127,41 @@ export function snapshotOfStatus(source: StatusSource, input: string, now: numbe
     costUsd: reading.costUsd ?? null,
     contextUsedPct: reading.contextUsedPct ?? null,
     contextInputTokens: reading.contextInputTokens ?? null,
+  };
+}
+
+/** What a turn's end knows of a session whose transcript told the plan's reading: its id, folder, model and effort. */
+export interface TranscriptSession {
+  readonly sessionId: string;
+  readonly cwd: string;
+  readonly model: string | undefined;
+  readonly effort: string | undefined;
+}
+
+/**
+ * The snapshot of the plan's reading a session's transcript told (`UsageMeter.transcriptWeekReading`, on a host with
+ * no status input, as Codex CLI), taken at `now`. The host dated the reading itself, so `rateLimitsSince` is that
+ * time, not `now`: a turn's end may read it long after. Undefined for a session id that is not a valid one, as it
+ * becomes the snapshot's file name.
+ */
+export function snapshotOfTranscript(session: TranscriptSession, reading: DatedRateLimits, now: number): StatusSnapshot | undefined {
+  if (!CLAUDE_SESSION_ID.test(session.sessionId)) {
+    return undefined;
+  }
+  return {
+    ts: new Date(now).toISOString(),
+    sessionId: session.sessionId,
+    cwd: session.cwd,
+    agentName: null,
+    model: session.model ?? null,
+    effort: session.effort ?? null,
+    hostVersion: null,
+    rateLimits: reading.limits,
+    rateLimitsSince: new Date(Math.min(reading.at, now)).toISOString(),
+    rateLimitsAfter: null,
+    costUsd: null,
+    contextUsedPct: null,
+    contextInputTokens: null,
   };
 }
 
