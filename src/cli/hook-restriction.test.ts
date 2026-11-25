@@ -60,6 +60,13 @@ describe('the Stop hook tells the restriction a session runs under (T5089)', () 
     assert.match(noticeOf(await stop(kit, 'read-only\n')), /approval on-request, sandbox read-only/);
   });
 
+  it('tells nothing, and still ends the turn, when the reader fails', async () => {
+    const failing = hostReadingRestriction(() => {
+      throw new Error('reader broke');
+    });
+    assert.doesNotMatch(noticeOf(await stop(new CliHarness(TEAM), 'workspace\n', failing)), /runs under/);
+  });
+
   it('tells nothing for a tail with no turn, nor in a host whose launcher reads none, as Claude Code', async () => {
     assert.doesNotMatch(noticeOf(await stop(new CliHarness(TEAM), 'other\n')), /runs under/);
     assert.doesNotMatch(noticeOf(await stop(new CliHarness(TEAM), 'workspace\n', SHIPPED_HOST)), /runs under/);

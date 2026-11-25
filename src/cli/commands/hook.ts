@@ -898,7 +898,7 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
   await ensureWatch(runtime, scope.kit, scope.config).catch(() => undefined);
   const hookless = await checkHooklessTabs(runtime, scope.kit, scope.config).catch((): readonly string[] => []);
   const lead = await leadStopLines(runtime, scope, event.transcript).catch((): readonly string[] => []);
-  const restriction = await restrictionStopLines(runtime, scope.kit.paths, event, KIT_NAME).catch((): readonly string[] => []);
+  const restriction = await restrictionStopLines(runtime, scope.kit.paths, event, KIT_NAME);
   const lines = [...effort.lines, ...notices, ...restriction, ...budget, ...verify, ...lead, ...hookless];
   const ask = await askBlockOf(runtime, scope, event.stopActive, decision).catch((): string | undefined => undefined);
   if (ask === undefined && decision.kind !== 'block') {
@@ -996,7 +996,7 @@ export async function sessionStart(args: ParsedArgs, runtime: CliRuntime): Promi
         };
   const rules = sessionStartContext({ team: found.team, load: kit.load, ...parts, command: KIT_NAME, platform: runtime.platform, clock: rulesClockOf(runtime) });
   // A resumed or compacted session's transcript tells the restriction its last turn ran under; a new one's tells none yet.
-  const restriction = event === undefined ? undefined : await restrictionOfEvent(runtime, event).catch(() => undefined);
+  const restriction = event === undefined ? undefined : await restrictionOfEvent(runtime, event);
   const context = restriction === undefined ? rules : `${rules}\n${restrictionLine(restriction, KIT_NAME)}`;
   const requirementsNote = await requirementsNoteOnce({
     problems: await runtime.requirements.problems(),

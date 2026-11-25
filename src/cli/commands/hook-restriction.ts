@@ -38,14 +38,22 @@ export function restrictionLine(restriction: SessionRestriction, command: string
   return `${command}: this session runs under ${parts.join(', ')}. These are the AI CLI's own settings; ${command} changes none of them, and a step they refuse is no sign-in problem.`;
 }
 
-/** The restriction the event's transcript tells, on a host whose launcher reads one; undefined anywhere else. */
+/**
+ * The restriction the event's transcript tells, on a host whose launcher reads one; undefined anywhere else, and when
+ * the transcript cannot be read or the reader fails: a hook never fails its turn over a report.
+ */
 export async function restrictionOfEvent(runtime: CliRuntime, event: HookEvent): Promise<SessionRestriction | undefined> {
   const read = launcherIfTold(runtime)?.restrictionReading;
   if (read === undefined || event.transcript === undefined) {
     return undefined;
   }
-  const tail = await runtime.files.readTail(event.transcript, RESTRICTION_TAIL_BYTES);
-  return tail === undefined ? undefined : read(tail);
+  try {
+    const tail = await runtime.files.readTail(event.transcript, RESTRICTION_TAIL_BYTES);
+    return tail === undefined ? undefined : read(tail);
+  } catch {
+    // The report is a convenience: the next turn's end reads the transcript again.
+    return undefined;
+  }
 }
 
 /**
