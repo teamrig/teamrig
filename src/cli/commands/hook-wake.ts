@@ -516,13 +516,24 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
   if (await runIdlePass(runtime, kit, config, scope.roster, sessionFoldersOf(runtime, config, undefined, scope.from))) {
     await runTreeIdlePasses(runtime, kit.paths.team);
   }
+  return answer(runtime, await wakeAnswerOf(runtime, scope, event?.cwd));
+}
+
+/**
+ * Whether the session of `scope` wakes now, and with what prompt, else what to watch (`wakeCheck` without its idle
+ * pass). On a wake it logs the wake and its cost and keeps the prompt's text for the turn log. Shared by the plugin's
+ * mod, which submits the prompt in its own tab, and a host that wakes its sessions through its own program
+ * (src/cli/host-wake.ts). `cwd` is the folder the session works in, for a restart re-armed from here.
+ */
+export async function wakeAnswerOf(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, cwd: string | undefined): Promise<WakeAnswer> {
+  const { kit, config, id, tab } = scope;
   if (await meetingHoldsWake(runtime, scope)) {
-    return answer(runtime, waitAnswer(scope, null));
+    return waitAnswer(scope, null);
   }
   const restarts = new RefreshStore(runtime.files, kit.paths);
-  const rearm: RearmScope = { team: kit.paths.team, id, tab, refresh: { enabled: config.refresh.enabled, autoRestart: autoRestartOf(config, id) }, cwd: event?.cwd };
+  const rearm: RearmScope = { team: kit.paths.team, id, tab, refresh: { enabled: config.refresh.enabled, autoRestart: autoRestartOf(config, id) }, cwd };
   if (await restartHoldsWake(runtime, restarts, rearm)) {
-    return answer(runtime, waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS));
+    return waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS);
   }
   const parked = await parkedHere(restarts, rearm);
   const fresh = parked === undefined ? undefined : (): Promise<boolean> => armParkedRestart(runtime, restarts, rearm, parked);
@@ -533,15 +544,15 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
     verdict = await decide(runtime, scope, store, fresh, login);
   } catch (error) {
     if (error instanceof LockBusyError) {
-      return answer(runtime, waitAnswer(scope, runtime.clock.now()));
+      return waitAnswer(scope, runtime.clock.now());
     }
     throw error;
   }
   if (verdict.kind === 'wait') {
-    return answer(runtime, waitAnswer(scope, verdict.recheckAt, verdict.watch));
+    return waitAnswer(scope, verdict.recheckAt, verdict.watch);
   }
   if (verdict.kind === 'fresh') {
-    return answer(runtime, waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS));
+    return waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS);
   }
   const now = runtime.clock.now();
   const last = verdict.kind === 'moments' || verdict.kind === 'poke' ? verdict.lastTurnAt : await lastWriteOf(runtime.transcripts, transcriptsFolderIfKnown(runtime), [tab]);
@@ -552,39 +563,39 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
     await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids: [], cost, retry: 'login' });
     await runtime.files.append(login.log, `${new Date(now).toISOString()} ${loginRetryLine(`${kit.paths.team}/${id} (${tab})`, verdict.why)}\n`);
     const text = loginRetryPrompt(id, verdict.failAt, verdict.why, cost, teamZone(config, runtime));
-    return wake(runtime, scope, { kind: 'wake', ids: [], text, toast: loginRetryToast(verdict.why, cost) });
+    return rememberWake(runtime, scope, { kind: 'wake', ids: [], text, toast: loginRetryToast(verdict.why, cost) });
   }
   if (verdict.kind === 'api') {
     const { retry } = verdict;
     await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids: [], cost, retry: 'api' });
     await runtime.files.append(login.log, `${new Date(now).toISOString()} ${apiRetryLine(`${kit.paths.team}/${id} (${tab})`, retry.code, retry.n)}\n`);
     const text = apiRetryPrompt(id, retry, cost, teamZone(config, runtime));
-    return wake(runtime, scope, { kind: 'wake', ids: [], text, toast: apiRetryToast(retry, cost) });
+    return rememberWake(runtime, scope, { kind: 'wake', ids: [], text, toast: apiRetryToast(retry, cost) });
   }
   if (verdict.kind === 'poke') {
     const { rush, task, idleMs, plannedAfter } = verdict;
     await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids: [task.id], cost, poke: true });
-    return wake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost, plannedAfter), toast: rushPokeToast(rush, task, idleMs, cost) });
+    return rememberWake(runtime, scope, { kind: 'wake', ids: [task.id], text: rushPokePrompt(id, rush, task, idleMs, cost, plannedAfter), toast: rushPokeToast(rush, task, idleMs, cost) });
   }
   const ids = verdict.tasks.map((task) => task.id);
   if (verdict.kind === 'handed') {
     const { tasks, asks } = verdict;
     await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids, cost, ...(asks.length === 0 ? {} : { asks: asks.length }) });
     const text = handedPrompt(id, tasks, asks, cost, teamZone(config, runtime));
-    return wake(runtime, scope, { kind: 'wake', ids, text, toast: handedToast(tasks, asks, cost) });
+    return rememberWake(runtime, scope, { kind: 'wake', ids, text, toast: handedToast(tasks, asks, cost) });
   }
   const moments = verdict.moments.map((moment) => moment.kind);
   await logWake(runtime.files, kit.paths.wakeLog, { kind: 'wake', at: now, session: id, tab, ids, cost, moments });
   const text = dayStartPrompt(id, scope.roster.nameOf(id) ?? id, verdict.moments, verdict.tasks, cost, teamZone(config, runtime));
-  return wake(runtime, scope, { kind: 'wake', ids, text, toast: dayStartToast(verdict.moments, verdict.tasks, cost) });
+  return rememberWake(runtime, scope, { kind: 'wake', ids, text, toast: dayStartToast(verdict.moments, verdict.tasks, cost) });
 }
 
-/** Answers a wake, keeping its text first with the turn log on, so the prompt it submits is logged as teamrig's. */
-async function wake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<ExitCode> {
+/** A wake, its text kept first with the turn log on, so the prompt it submits is logged as teamrig's. */
+async function rememberWake(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<WakeAnswer> {
   if (scope.config.turnLog.enabled) {
     await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
   }
-  return answer(runtime, value);
+  return value;
 }
 
 /**
