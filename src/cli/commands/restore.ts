@@ -25,7 +25,7 @@ import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from '../host.ts';
 import { runsHostSession } from '../session-process.ts';
 import { loadTree, type TreeTeam } from '../tree.ts';
-import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
+import { hostExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from './open.ts';
 
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
@@ -318,9 +318,10 @@ export async function restoreResume(args: ParsedArgs, runtime: CliRuntime): Prom
   const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
   const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
   const { command, prefix } = await hostProgramOf(runtime, env);
-  runtime.out.stdout(`Resuming Claude Code session ${hostSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
+  const launcher = launcherOf(runtime);
+  runtime.out.stdout(`Resuming ${launcher.programName} session ${hostSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
   // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
   const start = { name: undefined, model: undefined, effort, resume: hostSession, settingsFile: undefined, prompt };
-  const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
-  return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
+  const claudeArgs = [...prefix, ...launcher.launchArgs(start)];
+  return hostExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }
