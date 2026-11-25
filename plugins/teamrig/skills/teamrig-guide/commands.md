@@ -5002,6 +5002,10 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
 `allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`.
 
+A `tree-parent` or `tree-role` finding of the session's own team also shows in each session start note, since what
+the team takes from the teams above (waits, roles, budget keys, rules) is missing until it is fixed: a home copied to
+another machine without its parent meets both.
+
 `context-size` weighs, in characters (about 4 per token), the user's CLAUDE.md with the project folder's and each
 parent's (`CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`), the project's memory index (`MEMORY.md`) and the
 skill listing of the team's and the project's skills folders, against [contextFiles.maxClaudeMdChars] (12,000),
