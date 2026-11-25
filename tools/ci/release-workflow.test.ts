@@ -29,7 +29,7 @@ function readRecord(path: string): JsonRecord {
 
 describe('release.yml', () => {
   it('runs on each push to main, hourly and by hand', () => {
-    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}schedule:\n {4}- cron: '1 \* \* \* \*'\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
+    assert.match(workflow, /^on:\n(?: {2}#.*\n)*? {2}push:\n {4}branches: \[main\]\n {2}schedule:\n {4}- cron: '13 \* \* \* \*'\n {2}workflow_dispatch:\n {4}inputs:\n {6}main-as-is:\n(?: {8}.+\n)+\n/m);
   });
 
   it('moves the release pull request only when the slot gate opens, so a push to main never restarts its ci', () => {

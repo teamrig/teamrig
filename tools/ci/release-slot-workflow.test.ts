@@ -19,7 +19,7 @@ const steps: readonly string[] = (slot.split(/^ {4}steps:\n/m)[1] ?? '').split(/
 
 describe('release-slot.yml', () => {
   it('runs hourly and by hand, one at a time, never cancelled, with a read-only token by default', () => {
-    assert.match(workflow, /^on:\n(?: {2}#.*\n)* {2}schedule:\n {4}- cron: '5 \* \* \* \*'\n {2}workflow_dispatch:\n/m);
+    assert.match(workflow, /^on:\n(?: {2}#.*\n)* {2}schedule:\n {4}- cron: '19 \* \* \* \*'\n {2}workflow_dispatch:\n/m);
     assert.match(workflow, /^permissions:\n {2}contents: read\n/m);
     assert.match(workflow, /^concurrency:\n {2}group: release-slot\n {2}cancel-in-progress: false\n/m);
   });
