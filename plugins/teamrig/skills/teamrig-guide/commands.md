@@ -4894,8 +4894,9 @@ WROTE current 0.502.1 (was 0.503.0), pinned: a session start of a newer plugin l
 ```
 
 It is `REFUSED` for a version that is not kept (it names the kept ones), one whose files no longer match its
-integrity list (a session start of the teamrig plugin at that version copies it again), or a name that is no release
-version.
+integrity list, or a name that is no release version. A damaged version's refusal with `--yes` drops its source
+record, so the next session start of the teamrig plugin at that version copies it again; without `--yes` it only says
+so.
 
 ### teamrig kit prune
 
