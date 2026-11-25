@@ -67,6 +67,7 @@ import { effortWritebackOf, type EffortWritebackOutcome } from './hook-effort-wr
 import { meetingHold } from './hook-meeting.ts';
 import { inheritedCrons, restartOrPark, restartTargetOf } from './hook-restart.ts';
 import { helperContextOf } from './hook-helper-start.ts';
+import { turnEndWeekReading } from './hook-turn-end-week.ts';
 import { promptSecretBlock } from './hook-prompt-secret.ts';
 import { guardLoadOf, hookTeam } from './hook-guard-load.ts';
 import {
@@ -932,6 +933,9 @@ export async function stop(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const { event } = await readHookInput(runtime);
   const reply = event === undefined ? undefined : await stopReplyOf(runtime, event).catch((): HookReply | undefined => undefined);
   writeReply(runtime, 'stop', reply);
+  if (event !== undefined) {
+    await turnEndWeekReading(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the plan's reading was not saved: ${errorMessage(error)}`));
+  }
   return EXIT.ok;
 }
 

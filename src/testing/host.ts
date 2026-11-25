@@ -4,6 +4,7 @@ import {
   isUnsupported,
   unsupported,
   type ChildEnvironment,
+  type DatedRateLimits,
   type EditedFile,
   type HookBridge,
   type HookEvent,
@@ -64,6 +65,18 @@ export const NO_PATHS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), p
  * does when its host names no folder a session started in, whatever the environment holds.
  */
 export const NO_SESSION_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), launcher: unsupported('no session of the host is told') });
+
+/**
+ * The shipped host whose usage meter also reads the plan's windows from a transcript's tail by `read`, as Codex CLI's
+ * does from a rollout: every other port is the shipped one.
+ */
+export function hostReadingTranscriptWeek(read: (tail: string) => DatedRateLimits | undefined): HostSource {
+  return (given) => {
+    const ports = SHIPPED_HOST(given);
+    const { usage } = ports;
+    return isUnsupported(usage) ? ports : { ...ports, usage: { ...usage, transcriptWeekReading: read } };
+  };
+}
 
 /** Who a run is when the host tells none of it: each part untold. */
 export const UNTOLD_IDENTITY: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
