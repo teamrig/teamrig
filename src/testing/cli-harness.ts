@@ -13,6 +13,7 @@ import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { resolveKitHome, type Env } from '../core/home.ts';
 import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
+import type { ProgramRunner } from '../core/program-runner.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
@@ -173,6 +174,8 @@ export interface RunOptions {
   readonly shell?: ShellRunner;
   /** The GitHub CLI `issue sync` reads through; default one that sees no repository. */
   readonly gh?: GhRunner;
+  /** The programs the CLI runs and waits for (`CliRuntime.run`), such as a host's wake program; default `gh`'s, else none answers. */
+  readonly program?: ProgramRunner;
   /** The saved secrets `issue sync` reads tokens from; default a store with none. */
   readonly credentials?: CredentialStore;
   /** What `teamrig key` writes with; default no person at the terminal and writes to a store apart from `credentials`. */
@@ -297,7 +300,7 @@ export class CliHarness {
       ...(options.interactive === undefined ? {} : { interactive: options.interactive }),
       sessionProcesses: options.sessionProcesses ?? this.sessionProcesses,
       ...(options.shell === undefined ? {} : { shell: options.shell }),
-      ...(options.gh === undefined ? {} : { run: programOverGh(options.gh) }),
+      ...programOf(options),
       ...(options.credentials === undefined ? {} : { credentials: options.credentials }),
       ...(options.keys === undefined ? {} : { keys: options.keys }),
       ...(options.http === undefined ? {} : { http: options.http }),
@@ -327,6 +330,14 @@ export class CliHarness {
       ...(options.cmdShimLine === undefined ? {} : { cmdShimLine: options.cmdShimLine }),
     };
   }
+}
+
+/** The program runner a run is given: the spec's own, else one over its `gh`, else the quiet world's. */
+function programOf(options: RunOptions): { readonly run?: ProgramRunner } {
+  if (options.program !== undefined) {
+    return { run: options.program };
+  }
+  return options.gh === undefined ? {} : { run: programOverGh(options.gh) };
 }
 
 /** Quiet restore ports on a machine whose user PATH already holds the kit home's bin folder (T5095). */
