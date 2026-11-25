@@ -6,6 +6,7 @@ import { resolveKitHome } from '../../core/home.ts';
 import { noPositionals, requiredFlag, type ParsedArgs } from '../args.ts';
 import { readUserSettings } from '../user-settings.ts';
 import { userHooksOf } from '../host.ts';
+import { pluginRootOf } from '../plugin-root.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
 /**
@@ -18,9 +19,6 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
  * same way, every other line kept, the old file backed up; any file it cannot edit refuses the run before a write.
  */
 
-/** The plugin's entry script, below its root: `<root>/dist/cli/main.js`. */
-const ENTRY_FOLDERS: readonly string[] = ['dist', 'cli'];
-const ENTRY_SCRIPT = 'main.js';
 /** The plugin's own hooks file, below its root. */
 const PLUGIN_HOOKS: readonly string[] = ['hooks', 'hooks.json'];
 /** A host config file's backup keeps its original's text whatever its format, so it takes no format's extension. */
@@ -31,7 +29,7 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   noPositionals(args);
   const port = userHooksOf(runtime, requiredFlag(args.flags, 'host'));
   const path = runtime.platform === 'win32' ? win32 : posix;
-  const pluginRoot = pluginRootOf(runtime.self.script, path);
+  const pluginRoot = pluginRootOf(runtime.self.script, path, 'setup hooks');
   const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
   const target = port.file(runtime.userHome);
   const current = await readUserSettings(runtime, target);
@@ -60,19 +58,6 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
   }
   return EXIT.ok;
-}
-
-/**
- * The installed plugin's root, from this CLI's entry script. A run from the source tree, or any script but the
- * plugin's built entry, has no installed hooks to point the host at, so it is refused.
- */
-function pluginRootOf(script: string, path: typeof posix): string {
-  const cli = path.dirname(script);
-  const dist = path.dirname(cli);
-  if (path.basename(script) !== ENTRY_SCRIPT || [path.basename(dist), path.basename(cli)].join('/') !== ENTRY_FOLDERS.join('/')) {
-    throw new RefusedError(`setup hooks runs from the installed plugin's dist/cli/main.js, not ${script}, so the host runs the installed teamrig; nothing written`);
-  }
-  return path.dirname(dist);
 }
 
 async function pluginHooks(runtime: CliRuntime, file: string): Promise<unknown> {
