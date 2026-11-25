@@ -6,6 +6,7 @@ import { nodeFiles } from '../../src/core/files.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
 import { changePatch, clearMergeFrom, repoChanges, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import { shippedHostGlobs } from './host-globs.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { proveTree, realGateDeps } from './local-gate.ts';
 import { mergeBranch } from './merge.ts';
@@ -51,7 +52,7 @@ export function realShipDeps(repo: string, noteFile: string | null): ShipDeps {
     push: () => pushOwnBranch(gitLine, profile.main),
     merge: (branch) => mergeBranch([repo, '--head', branch, ...(noteFile === null ? [] : ['--note-file', noteFile])]),
     mainMove: () => mainMovedPast(gitLine, profile.main),
-    clearMerge: clearMergeFrom(process.env, { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock }, repoChanges(git, profile.main, profile.regenerated)),
+    clearMerge: clearMergeFrom(process.env, { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock }, repoChanges(git, profile.main, profile.regenerated), shippedHostGlobs()),
     patchOf: (rev) => changePatch(git, rev, `refs/remotes/origin/${profile.main}`, teamrigShipWritesOf(profile.regenerated)),
     workOf: (rev) => workCommitsOf(git, rev, `refs/remotes/origin/${profile.main}`, teamrigShipWritesOf(profile.regenerated)),
   };

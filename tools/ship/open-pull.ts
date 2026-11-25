@@ -4,6 +4,7 @@ import { nodeFiles } from '../../src/core/files.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
 import { gitSyncIn } from '../lib/git.ts';
 import { type ClearMerge, clearMergeFrom, originRepoChanges } from './approval.ts';
+import { shippedHostGlobs } from './host-globs.ts';
 import { type Gh, ghWithToken } from './github.ts';
 import { type Credential, SHIP_TOKEN_TARGET, readCredential, windowsPowerShell } from './keychain.ts';
 import { lackingSections, missingSections, pullBody } from './merge.ts';
@@ -132,7 +133,7 @@ export function realOpenPullDeps(dir: string): OpenPullDeps {
     profiles,
     credential: () => readCredential(SHIP_TOKEN_TARGET, windowsPowerShell),
     ghFor: ghWithToken,
-    clearMerge: clearMergeFrom(process.env, kitReader, originRepoChanges(runGit, profiles)),
+    clearMerge: clearMergeFrom(process.env, kitReader, originRepoChanges(runGit, profiles), shippedHostGlobs()),
     pullTask: pullTaskFrom(process.env, kitReader),
     readText: path => (existsSync(path) ? readFileSync(path, 'utf8') : null),
     out: line => console.log(line),

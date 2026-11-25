@@ -284,6 +284,9 @@ export interface ChangeReads {
   readonly taskBranches: () => readonly TaskBranch[];
 }
 
+/** The repository paths through which the shipped hosts change what a session does (`repoGlobsOf`), read once the merge needs them. */
+export type HostGlobs = () => Promise<readonly string[]>;
+
 /** What a merge's clearance reads: the tab's session, then that session's standing, then, for the GitHub answerer, the repo. */
 export interface MergeReads {
   readonly tabCallerOf: TabCallerOf;
@@ -337,10 +340,11 @@ export type ClearMerge = (branch: string, head: string, approved: string | null)
  * `clearMerge` for the session, team and tab `env` names (`$TEAMRIG_SESSION`, `$TEAMRIG_TEAM`,
  * `$CLAUDE_CODE_SESSION_ID`), reading the inbox marks and the register through `reader`. The session must be the one
  * the tab is bound to, so a typed name merges no other session's task; the marks are files of the shared account
- * (stopgap T791), so the guards stay the trust boundary. `changes` reads the repo for the GitHub answerer's clearance.
+ * (stopgap T791), so the guards stay the trust boundary. `changes` reads the repo for the GitHub answerer's clearance,
+ * and `hostGlobs` the hosts' paths that clearance counts sensitive.
  */
-export function clearMergeFrom(env: Env, reader: KitReader, changes: ChangeReads): ClearMerge {
-  const { caller, reads } = mergeContextOf(env, reader, changes);
+export function clearMergeFrom(env: Env, reader: KitReader, changes: ChangeReads, hostGlobs: HostGlobs): ClearMerge {
+  const { caller, reads } = mergeContextOf(env, reader, changes, hostGlobs);
   return (branch, head, approved) => clearMerge(caller, reads, branch, head, approved);
 }
 
@@ -348,17 +352,17 @@ export function clearMergeFrom(env: Env, reader: KitReader, changes: ChangeReads
 export type ClearTaskMerge = (taskId: string, head: string, approved: string | null) => Promise<MergeClearance>;
 
 /** `clearTaskMerge` for the session, team and tab `env` names, read as `clearMergeFrom` reads them. */
-export function clearTaskMergeFrom(env: Env, reader: KitReader, changes: ChangeReads): ClearTaskMerge {
-  const { caller, reads } = mergeContextOf(env, reader, changes);
+export function clearTaskMergeFrom(env: Env, reader: KitReader, changes: ChangeReads, hostGlobs: HostGlobs): ClearTaskMerge {
+  const { caller, reads } = mergeContextOf(env, reader, changes, hostGlobs);
   return (taskId, head, approved) => clearTaskMerge(caller, reads, taskId, head, approved);
 }
 
-function mergeContextOf(env: Env, reader: KitReader, changes: ChangeReads): { readonly caller: MergeCaller; readonly reads: MergeReads } {
+function mergeContextOf(env: Env, reader: KitReader, changes: ChangeReads, hostGlobs: HostGlobs): { readonly caller: MergeCaller; readonly reads: MergeReads } {
   return {
     caller: { session: env[ENV.session]?.trim(), team: env[ENV.team]?.trim(), hostSession: env[TAB_VARIABLE]?.trim() },
     reads: {
       tabCallerOf: (team, hostSession, session) => tabCallerOf(reader, team, hostSession, session),
-      standingOf: (team, session, taskId) => mergeStandingOf(reader, team, session, taskId),
+      standingOf: async (team, session, taskId) => mergeStandingOf(reader, team, session, taskId, await hostGlobs()),
       changes,
     },
   };

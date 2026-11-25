@@ -8,6 +8,7 @@ import { gitSyncIn } from '../lib/git.ts';
 import { realSleep, systemClock } from '../../src/core/lock.ts';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
 import { type ClearMerge, type ClearTaskMerge, approvedRebase, clearanceText, clearMergeFrom, clearTaskMergeFrom, originRepoChanges, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
+import { shippedHostGlobs } from './host-globs.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { type CatchUp, type CatchUpRequest, catchUp } from './catch-up.ts';
 import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
@@ -936,6 +937,7 @@ export function realMergeDeps(dir: string): MergeDeps {
   const kitReader = { env: process.env, userHome: homedir(), files: nodeFiles(realSleep), clock: systemClock };
   const profiles = readProfiles();
   const changes = originRepoChanges(runGit, profiles);
+  const hostGlobs = shippedHostGlobs();
   return {
     git,
     profiles,
@@ -945,8 +947,8 @@ export function realMergeDeps(dir: string): MergeDeps {
     gate: realGateDeps(dir, out),
     renamedCallers: (base, tip, repo) => renamedCallersRefusal({ base, tip, repo }, { env: process.env, userHome: homedir() }, realRenamedCallersDeps(dir, out)),
     sweep: (merged, profile, gh) => sweepAfterMerge(merged, profile, { git, pullsOf: pullsOfHead(gh, merged.repo), out, err }),
-    clearMerge: clearMergeFrom(process.env, kitReader, changes),
-    clearTaskMerge: clearTaskMergeFrom(process.env, kitReader, changes),
+    clearMerge: clearMergeFrom(process.env, kitReader, changes, hostGlobs),
+    clearTaskMerge: clearTaskMergeFrom(process.env, kitReader, changes, hostGlobs),
     // The untrimmed git: a trim would hide a whitespace edit in the diff the release check reads.
     releaseRefusal: (profile, release, sha) => releaseRefusal(runGit, `refs/remotes/origin/${profile.main}`, sha, release, teamrigShipWritesOf(profile.regenerated).versionFiles),
     catchUp: request =>

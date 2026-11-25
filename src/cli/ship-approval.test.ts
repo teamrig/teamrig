@@ -20,7 +20,7 @@ async function approved(): Promise<CliHarness> {
 describe('mergeStandingOf: who merges, its task and who approves it, read from the register (T2788)', () => {
   it("reads a member's task with the lead's answer, and its leaders as approvers", async () => {
     const kit = await approved();
-    const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1');
+    const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', []);
     assert.equal(standing.caller, 'alpha');
     assert.deepEqual(standing.approvers, ['lead']);
     assert.deepEqual([standing.task?.owner, standing.task?.status, standing.task?.answer?.verdict, standing.task?.answer?.by], ['alpha', 'waiting', 'approved', 'lead']);
@@ -29,46 +29,52 @@ describe('mergeStandingOf: who merges, its task and who approves it, read from t
 
   it('names the GitHub answerer, the low-risk paths, and the generic review paths, the review entries and the sensitive paths as sensitive (T3448)', async () => {
     const kit = new CliHarness({ ...TEAM, github: { watcher: 'bravo' }, pushGuard: { reviewPaths: [{ glob: '*.sql' }], lowRiskPaths: ['src/pane/**'], sensitivePaths: ['src/billing/**'] } });
-    const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1');
+    const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', []);
     assert.equal(standing.answerer, 'bravo');
     assert.deepEqual(standing.lowRisk, ['src/pane/**']);
     assert.deepEqual(standing.sensitive.slice(-2), ['*.sql', 'src/billing/**']);
     assert.ok(standing.sensitive.includes('package-lock.json') && standing.sensitive.includes('.github/workflows/**'), JSON.stringify(standing.sensitive));
-    const unset = await mergeStandingOf((await approved()).runtime(), 'app', 'alpha', 'T1');
+    const unset = await mergeStandingOf((await approved()).runtime(), 'app', 'alpha', 'T1', []);
     assert.equal(unset.answerer, 'lead', 'no watcher and no intake role: the lead answers');
     assert.ok(unset.sensitive.includes('tools/**') && unset.sensitive.includes('*hook*'), "the owner's default list");
     assert.ok(unset.lowRisk.includes('docs/**/*.md') && unset.lowRisk.every((glob) => glob.startsWith('docs/')), 'the default allows docs text and pictures, no code');
   });
 
+  it("counts the hosts' repository globs sensitive after the team's own, so a team listing none still holds them (T3448)", async () => {
+    const kit = new CliHarness({ ...TEAM, pushGuard: { lowRiskPaths: ['*'], sensitivePaths: ['src/billing/**'] } });
+    const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', ['GEMINI.md', '**/.agents/**']);
+    assert.deepEqual(standing.sensitive.slice(-3), ['src/billing/**', 'GEMINI.md', '**/.agents/**']);
+  });
+
   it('reads no task for an id the register does not hold', async () => {
     const kit = await approved();
-    assert.equal((await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9')).task, undefined);
+    assert.equal((await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9', [])).task, undefined);
   });
 
   it("names no approver for a root team's lead, whose own merge needs none", async () => {
     const kit = await approved();
-    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'app', 'lead', 'T1')).approvers, []);
+    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'app', 'lead', 'T1', [])).approvers, []);
   });
 
   it("names the parent team's lead as the approver of a child team's lead (T1140)", async () => {
     const kit = await treeHarness();
-    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'web', 'lead', 'T1')).approvers, ['app/lead']);
-    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'web', 'front', 'T1')).approvers, ['lead']);
+    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'web', 'lead', 'T1', [])).approvers, ['app/lead']);
+    assert.deepEqual((await mergeStandingOf(kit.runtime(), 'web', 'front', 'T1', [])).approvers, ['lead']);
   });
 
   it('refuses a caller that is no session of the team', async () => {
     const kit = await approved();
-    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'stranger', 'T1'), RefusedError);
+    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'stranger', 'T1', []), RefusedError);
   });
 
   it("refuses a child team's lead whose parent team has no config to name its approver", async () => {
     const kit = new CliHarness({ ...TEAM, team: { id: 'app', parent: 'gone' } });
-    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'lead', 'T1'), /team gone, the parent team, has no config/);
+    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'lead', 'T1', []), /team gone, the parent team, has no config/);
   });
 
   it('refuses a team whose config does not load', async () => {
     const kit = new CliHarness(null);
-    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1'), /config at .* is missing: the merge cannot tell who approves it/);
+    await assert.rejects(mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', []), /config at .* is missing: the merge cannot tell who approves it/);
   });
 });
 

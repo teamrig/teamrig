@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { EXIT, RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
-import { CLAUDE_SESSION, CliHarness, TEAM_HOME } from '../../src/testing/cli-harness.ts';
+import { CLAUDE_SESSION, CliHarness, TEAM, TEAM_HOME } from '../../src/testing/cli-harness.ts';
+import { shippedHostGlobs } from './host-globs.ts';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
 import { DEFAULT_SENSITIVE_PATHS } from '../../src/config/defaults.ts';
@@ -59,7 +60,7 @@ async function waitingKit(answer?: readonly string[]): Promise<CliHarness> {
   return kit;
 }
 
-const standing = async (kit: CliHarness, caller = 'alpha'): Promise<MergeStanding> => mergeStandingOf(kit.runtime(), 'app', caller, 'T1');
+const standing = async (kit: CliHarness, caller = 'alpha', hostGlobs: readonly string[] = []): Promise<MergeStanding> => mergeStandingOf(kit.runtime(), 'app', caller, 'T1', hostGlobs);
 const approvedBy = async (note: string): Promise<MergeStanding> => standing(await waitingKit(['--note', note]));
 const reasonOf = (clearance: ReturnType<typeof mergeClearance>): string => (clearance.kind === 'refused' ? clearance.reason : `not refused: ${clearance.kind}`);
 /** A repo the clearance must never read: it decides before the answerer's clearance, or the caller is no answerer. */
@@ -71,6 +72,8 @@ const UNREAD: ChangeReads = {
     throw new Error("the clearance read the repo's branches");
   },
 };
+/** The hosts' repository globs for a clearance whose spec counts none of them. */
+const NO_HOST_GLOBS = async (): Promise<readonly string[]> => [];
 /**
  * A repo whose head changes `paths` and whose task branches (`refs/heads/t<n>-x`) change `branches[task]`, counting
  * the head's reads and listing every rev read.
@@ -153,7 +156,7 @@ describe('mergeClearance: the merge needs its approver to have approved the head
 
   it('refuses a task the register does not hold', async () => {
     const kit = await waitingKit(['--note', HEAD]);
-    const clearance = mergeClearance(await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9'), 'T9', HEAD, HEAD, UNREAD);
+    const clearance = mergeClearance(await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T9', []), 'T9', HEAD, HEAD, UNREAD);
     assert.match(reasonOf(clearance), /holds no task T9/);
   });
 
@@ -377,7 +380,7 @@ describe("sensitivePathsOf: the security verdict's paths stay sensitive under th
   const CARVED = ['docs/CLAUDE.md', 'docs/.claude/commands/x.md', 'docs/skills/x/SKILL.md', 'tools/ship/approval.test.ts', 'src/merge/merge.test.ts', 'src/testing/fake-guard.ts'];
 
   it('names each of them, and clears only docs text and pictures', async () => {
-    const team = await standing(await waitingKit());
+    const team = await standing(await waitingKit(), 'alpha', await shippedHostGlobs({}, 'linux')());
     assert.deepEqual(sensitivePathsOf([...VERDICT, ...CARVED], team), [...VERDICT, ...CARVED]);
     const ranOnHost = ['src/cli/list.test.ts', 'src/testing/fake-steps.ts', 'web/app.spec.tsx', 'docs/build.ts', 'docs/setup.sh', 'docs/tools/run.mjs'];
     assert.deepEqual(sensitivePathsOf(ranOnHost, team), ranOnHost, 'tests and any code, in docs too, run on the host');
@@ -386,10 +389,17 @@ describe("sensitivePathsOf: the security verdict's paths stay sensitive under th
     assert.deepEqual(sensitivePathsOf(['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], team), ['src/testing/notes.md', '.claude/commands/fix.test.md', 'README.md', 'src/brand-new/x.ts'], 'not code, or not listed');
   });
 
-  it("keeps the gate's own code, secrets and agent rules sensitive inside a team's broad low-risk folder", () => {
-    const broad = { lowRisk: ['*'], sensitive: DEFAULT_SENSITIVE_PATHS };
+  it("keeps the gate's own code, secrets and agent rules sensitive inside a team's broad low-risk folder", async () => {
+    const broad = { lowRisk: ['*'], sensitive: [...DEFAULT_SENSITIVE_PATHS, ...(await shippedHostGlobs({}, 'linux')())] };
     const held = ['src/config/defaults.ts', 'src/cli/ship-approval.ts', 'src/register/approval.ts', 'src/core/secrets.ts', 'tsconfig.json', 'plugins/teamrig/skills/a/SKILL.md', 'src/CLAUDE.md'];
     assert.deepEqual(sensitivePathsOf([...held, 'src/pane/view.ts'], broad), held);
+  });
+
+  it("keeps every shipped host's instruction files and folders sensitive in a team whose own lists name none of them", async () => {
+    const kit = new CliHarness({ ...TEAM, pushGuard: { lowRiskPaths: ['*'], sensitivePaths: [] } });
+    const team = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', await shippedHostGlobs({}, 'linux')());
+    const held = ['CLAUDE.md', 'CLAUDE.local.md', 'src/.claude/settings.json', 'plugins/x/.claude-plugin/plugin.json', 'GEMINI.md', '.agents/rules.md'];
+    assert.deepEqual(sensitivePathsOf([...held, 'src/pane/view.ts'], team), held);
   });
 });
 
@@ -437,11 +447,11 @@ describe('clearMerge', () => {
     const marks = join(TEAM_HOME, 'state', 'inbox-marks.jsonl');
     await kit.files.append(marks, `${JSON.stringify({ v: 1, area: 'alpha', line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: CLAUDE_SESSION, lastLineHash: null })}\n`);
     const env = { TEAMRIG_SESSION: ' alpha ', TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION };
-    assert.deepEqual(await clearMergeFrom(env, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD), { kind: 'approved', by: 'lead' });
-    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /this Claude Code tab is not bound to bravo alone/);
-    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'stranger' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /not bound to stranger alone/);
-    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
-    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app' }, kit.runtime(), UNREAD)('t1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
+    assert.deepEqual(await clearMergeFrom(env, kit.runtime(), UNREAD, NO_HOST_GLOBS)('t1-cli', HEAD, HEAD), { kind: 'approved', by: 'lead' });
+    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('t1-cli', HEAD, HEAD)), /this Claude Code tab is not bound to bravo alone/);
+    assert.match(reasonOf(await clearMergeFrom({ ...env, TEAMRIG_SESSION: 'stranger' }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('t1-cli', HEAD, HEAD)), /not bound to stranger alone/);
+    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('t1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
+    assert.match(reasonOf(await clearMergeFrom({ TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app' }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('t1-cli', HEAD, HEAD)), /CLAUDE_CODE_SESSION_ID/);
   });
 
   it("refuses with the tab's or the register's refusal, and lets any other failure through", async () => {
@@ -480,8 +490,8 @@ describe('clearMerge', () => {
     const marks = join(TEAM_HOME, 'state', 'inbox-marks.jsonl');
     await kit.files.append(marks, `${JSON.stringify({ v: 1, area: 'alpha', line: 0, at: '2030-01-08T09:00:00.000Z', claudeSession: CLAUDE_SESSION, lastLineHash: null })}\n`);
     const env = { TEAMRIG_SESSION: 'alpha', TEAMRIG_TEAM: 'app', CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION };
-    assert.deepEqual(await clearTaskMergeFrom(env, kit.runtime(), UNREAD)('T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
-    assert.match(reasonOf(await clearTaskMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD)('T1', HEAD, HEAD)), /not bound to bravo alone/);
+    assert.deepEqual(await clearTaskMergeFrom(env, kit.runtime(), UNREAD, NO_HOST_GLOBS)('T1', HEAD, HEAD), { kind: 'approved', by: 'lead' });
+    assert.match(reasonOf(await clearTaskMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('T1', HEAD, HEAD)), /not bound to bravo alone/);
   });
 
   it("reads the paths of the head it clears for the GitHub answerer's low-risk merge (T3448)", async () => {

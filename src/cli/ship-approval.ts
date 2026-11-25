@@ -35,7 +35,7 @@ export interface MergeStanding {
   readonly lowRisk: readonly string[];
   /**
    * The review globs a change must touch none of to be low-risk, low-risk paths too (T3448): the generic review paths,
-   * then `pushGuard.reviewPaths`, then `pushGuard.sensitivePaths`.
+   * then `pushGuard.reviewPaths`, then `pushGuard.sensitivePaths`, then the hosts' repository globs (`repoGlobsOf`).
    */
   readonly sensitive: readonly string[];
   /** The team's security reviewer, who passes a sensitive change before the GitHub answerer merges it (T3448). */
@@ -48,11 +48,12 @@ export interface MergeStanding {
 const UNSHIPPED: readonly TaskStatus[] = ['open', 'in-progress', 'waiting'];
 
 /**
- * The merge standing of `callerText` (an id or a name, from `$TEAMRIG_SESSION`) on team `team` for task `taskId`.
- * Refused when the team's config does not load, the caller is no session of the team, or the caller is a child team's
- * lead whose parent team has no config to name who approves it.
+ * The merge standing of `callerText` (an id or a name, from `$TEAMRIG_SESSION`) on team `team` for task `taskId`, with
+ * `hostGlobs`, the repository paths through which the hosts change what a session does (`repoGlobsOf`), counted
+ * sensitive whatever the team's config says. Refused when the team's config does not load, the caller is no session of
+ * the team, or the caller is a child team's lead whose parent team has no config to name who approves it.
  */
-export async function mergeStandingOf(reader: KitReader, team: string, callerText: string, taskId: string): Promise<MergeStanding> {
+export async function mergeStandingOf(reader: KitReader, team: string, callerText: string, taskId: string, hostGlobs: readonly string[]): Promise<MergeStanding> {
   const kit = await openKit(reader, team);
   if (kit.load.status !== 'loaded') {
     throw new RefusedError(`team ${team}'s config at ${kit.load.path} is ${kit.load.status}: the merge cannot tell who approves it`);
@@ -66,7 +67,7 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
     approvers: await approversOf(reader, team, config, caller),
     answerer: githubWatcher(config),
     lowRisk: config.pushGuard.lowRiskPaths,
-    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.pushGuard.sensitivePaths],
+    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.pushGuard.sensitivePaths, ...hostGlobs],
     securityReviewer: config.roles.securityReviewer,
     open: new Map([...state.tasks.values()].filter((task) => UNSHIPPED.includes(task.status)).map((task) => [task.id, task.owner])),
   };
