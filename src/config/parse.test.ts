@@ -2227,6 +2227,7 @@ describe('parseConfig budget', () => {
         account: 'work',
         accountLead: 'app',
         weeklyLimitW: 680_000_000,
+        pinRateToLimit: true,
         subagentWeight: 2.15,
         modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
         extraWPerUsd: 120_000,
@@ -2255,6 +2256,7 @@ describe('parseConfig budget', () => {
       account: 'work',
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
+      pinRateToLimit: true,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2285,6 +2287,7 @@ describe('parseConfig budget', () => {
       account: 'work',
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
+      pinRateToLimit: true,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2308,6 +2311,11 @@ describe('parseConfig budget', () => {
       const { config, issues } = parseConfig({ ...ROSTER, budget: { weeklyLimitW: -1 } }, ABOVE);
       assert.deepEqual(paths(issues), ['budget.weeklyLimitW']);
       assert.equal(config.budget.weeklyLimitW, ABOVE.weeklyLimitW);
+    });
+
+    it("keeps the team above's pinned rate under a weekly limit of its own, and drops it with its own off (T5468)", () => {
+      assert.equal(parseConfig({ ...ROSTER, budget: { weeklyLimitW: 500_000_000 } }, ABOVE).config.budget.pinRateToLimit, true);
+      assert.equal(parseConfig({ ...ROSTER, budget: { pinRateToLimit: false } }, ABOVE).config.budget.pinRateToLimit, false);
     });
 
     it('takes none of them when it names another account', () => {
@@ -2533,6 +2541,18 @@ describe('parseConfig budget', () => {
     assert.deepEqual(config.budget, { ...DEFAULT_BUDGET, sessions: { alpha: { share: 1 } }, warnAtPct: [80] });
     const overAction = issues.find((issue) => issue.path === 'budget.overAction');
     assert.equal(overAction?.message, 'expected one of warn, ask-lead, ask, block (got "stop")');
+  });
+
+  it('leaves the rate unpinned by default, and refuses a pin with no weekly limit or one not a boolean (T5468)', () => {
+    assert.equal(parseConfig(ROSTER).config.budget.pinRateToLimit, false);
+    for (const [pin, message] of [
+      [true, 'needs budget.weeklyLimitW, the rate it pins the week to'],
+      ['yes', 'expected true or false, got "yes"'],
+    ] as const) {
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { pinRateToLimit: pin } });
+      assert.deepEqual(issues.map((issue) => [issue.path, issue.message]), [['budget.pinRateToLimit', message]]);
+      assert.equal(config.budget.pinRateToLimit, false);
+    }
   });
 
   it('refuses a target and reserve that pass 100% of the week', () => {

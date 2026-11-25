@@ -276,16 +276,22 @@ export function meteredOf(wPerPct: number | undefined, states: readonly UsageSta
   return wPerPct === undefined ? undefined : { wPerPct, wFrom: (from) => wSince(states, from, now) };
 }
 
-/** The week's W per percent and where it comes from (`RateSource`), first that is known; undefined while none is. */
+/**
+ * The week's W per percent and where it comes from (`RateSource`), first that is known; undefined while none is. With
+ * `budget.pinRateToLimit` the limit comes ahead of the fit, which two homes on one account would learn too low.
+ */
 export function rateOf(
   calibration: Calibration,
-  budget: Pick<BudgetConfig, 'weeklyLimitW'>,
+  budget: Pick<BudgetConfig, 'weeklyLimitW' | 'pinRateToLimit'>,
   estimate: number | undefined,
 ): { readonly wPerPct: number; readonly from: RateSource } | undefined {
+  const limit = limitWPerPct(budget);
+  if (budget.pinRateToLimit && limit !== undefined) {
+    return { wPerPct: limit, from: 'limit' };
+  }
   if (calibration.fit !== undefined) {
     return { wPerPct: calibration.fit.wPerPct, from: 'learned' };
   }
-  const limit = limitWPerPct(budget);
   if (limit !== undefined) {
     return { wPerPct: limit, from: 'limit' };
   }
@@ -340,8 +346,10 @@ export function readWeek(input: WeekInput): WeekReading {
   const sight: StatusSight | undefined = wPerPct === undefined ? undefined : { readings, start: period?.start, covered, statusUse, weekW, wPerPct, now };
   const statusToday = sight === undefined ? undefined : statusTodayPct(sight, todayW);
   const todayPct = statusToday ?? (wPerPct === undefined ? undefined : todayW / wPerPct);
-  const todayWPerPct = todayRateOf(todayW, statusToday, wPerPct);
-  const useNow = sight === undefined ? undefined : useNowOf(sight);
+  // Pinned, the status line's points, which count the account's other home too, never price this home's W.
+  const pinned = budget.pinRateToLimit && rate?.from === 'limit';
+  const todayWPerPct = pinned ? wPerPct : todayRateOf(todayW, statusToday, wPerPct);
+  const useNow = sight === undefined || pinned ? undefined : useNowOf(sight);
   const usedWPerPct = useNow === undefined || useNow <= 0 || weekW <= 0 ? wPerPct : weekW / useNow;
   const profile = DailyProfile.ofQuietHours(budget.quietHours);
   const pace = window === undefined || usedPct === undefined ? undefined : readPace(window, budget, now, usedPct, profile);

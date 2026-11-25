@@ -995,7 +995,7 @@ export interface BudgetLiftConfig {
  * leaves one unset takes the team above's, unless it names another account (src/cli/kit.ts openKit), so the teams of
  * a tree read one week alike without a copy that drifts.
  */
-export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
+export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'pinRateToLimit', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
 
 /** The keys of ACCOUNT_BUDGET_KEYS as a team reads them, its own or the team above's. */
 export type AccountBudget = Pick<BudgetConfig, (typeof ACCOUNT_BUDGET_KEYS)[number]>;
@@ -1022,6 +1022,13 @@ export interface BudgetConfig {
   readonly accountLead?: string;
   /** The weekly limit in weighted tokens (W). Unset: the team above's (`AccountBudget`), else derived from the status line's weekly %. */
   readonly weeklyLimitW?: number;
+  /**
+   * Prices the week at `weeklyLimitW` ahead of the meter log's learned rate, and prices today's use and the week's
+   * used W at it too, never at the status line's points over this home's W. Set it when two homes (teamrig on two
+   * machines) share one Claude account: the status line counts both machines, the meter only this one, so a rate read
+   * from them comes out too low. Needs `weeklyLimitW`. Unset: the team above's (`AccountBudget`), else off.
+   */
+  readonly pinRateToLimit: boolean;
   /**
    * What one W of a subagent's transcript costs against the weekly limit, in W of a main session. The meter
    * multiplies each subagent call's W by it, so every W (and `weeklyLimitW`) is in main-session W. 1: alike.

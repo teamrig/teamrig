@@ -1150,6 +1150,11 @@
           "minimum": 1000000,
           "maximum": 1000000000000
         },
+        "pinRateToLimit": {
+          "description": "Price the week at weeklyLimitW ahead of the rate learned from the meter log, and price today's use and the week's used W at it too. Set it when two homes (teamrig on two machines) share one Claude account: the status line counts both machines and the meter only this one, so a rate read from the two comes out too low. Needs weeklyLimitW. Unset in a team under another on its account: the team above's.",
+          "type": "boolean",
+          "default": false
+        },
         "subagentWeight": {
           "description": "What one W of a subagent's transcript costs against the weekly limit, in W of a main session. The meter multiplies each subagent call's W by it, so weeklyLimitW is in main-session W. 1: both cost alike. Unset in a team under another on its account: the team above's.",
           "type": "number",

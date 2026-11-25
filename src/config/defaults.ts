@@ -239,6 +239,7 @@ export const DEFAULT_COMMITS: CommitsConfig = {
  */
 export const DEFAULT_BUDGET: BudgetConfig = {
   enabled: false,
+  pinRateToLimit: false,
   subagentWeight: 1,
   modelWeights: [],
   resets: [],

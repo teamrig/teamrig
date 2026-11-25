@@ -1475,6 +1475,11 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
   const account = stated ?? inherited?.account;
   const accountLead = read.optionalString(raw, 'accountLead', path, isSessionName) ?? inherited?.accountLead;
   const weeklyLimitW = read.optionalInteger(raw, 'weeklyLimitW', path, CONFIG_LIMITS.weeklyLimitW) ?? inherited?.weeklyLimitW;
+  const pinned = read.boolean(raw, 'pinRateToLimit', path, inherited?.pinRateToLimit ?? defaults.pinRateToLimit);
+  if (pinned && weeklyLimitW === undefined) {
+    read.report(`${path}.pinRateToLimit`, 'needs budget.weeklyLimitW, the rate it pins the week to');
+  }
+  const pinRateToLimit = pinned && weeklyLimitW !== undefined;
   const extraWPerUsd = read.optionalInteger(raw, 'extraWPerUsd', path, CONFIG_LIMITS.extraWPerUsd) ?? inherited?.extraWPerUsd;
   const reset = parseBudgetReset(read, raw) ?? inherited?.reset;
   const resets = raw['resets'] === undefined ? (inherited?.resets ?? defaults.resets) : parseResetStocks(read, raw, defaults.resets);
@@ -1492,6 +1497,7 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     ...(account === undefined ? {} : { account }),
     ...(accountLead === undefined ? {} : { accountLead }),
     ...(weeklyLimitW === undefined ? {} : { weeklyLimitW }),
+    pinRateToLimit,
     subagentWeight: read.number(raw, 'subagentWeight', path, inherited?.subagentWeight ?? defaults.subagentWeight, CONFIG_LIMITS.subagentWeight),
     modelWeights,
     ...(extraWPerUsd === undefined ? {} : { extraWPerUsd }),
