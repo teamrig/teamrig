@@ -4,6 +4,7 @@
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
 import { LAUNCHER_CONTRACT } from './host/launcher.ts';
+import { PERMISSION_MODE_CONTRACT } from './host/permission-mode.ts';
 import { PERMISSIONS_CONTRACT } from './host/permissions.ts';
 import { MODELS_CONTRACT } from './host/models.ts';
 import { STEPS_CONTRACT } from './host/steps.ts';
@@ -26,6 +27,7 @@ export { nothingUsage, USAGE_CONTRACT, yesUsage, type UsageCase, type UsageSubje
 export { nothingStatusLine, STATUS_LINE_CONTRACT, yesStatusLine, type StatusLineCase, type StatusLineSubject, type StatusLineWorld, type WorldStatus } from './host/status-line.ts';
 export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions, type PermissionsCase, type PermissionsSubject, type PermissionsWorld, type WorldRules } from './host/permissions.ts';
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin, type PluginCase, type PluginSubject, type PluginWorld, type WorldInstall, type WorldMarketplace } from './host/plugin.ts';
+export { PERMISSION_MODE_CONTRACT, nothingPermissionMode, yesPermissionMode, type PermissionModeCase, type PermissionModePort, type PermissionModeSubject, type PermissionModeWorld, type WorldModeInput } from './host/permission-mode.ts';
 export { MODELS_CONTRACT, nothingModels, yesModels, type ModelsCase, type ModelsSubject, type ModelsWorld } from './host/models.ts';
 export { STEPS_CONTRACT, nothingSteps, yesSteps, type StepsCase, type StepsSubject, type StepsWorld } from './host/steps.ts';
 export { TRACKER_CONTRACT, type TrackerCase, type TrackerPort, type TrackerSubject, type TrackerWorld, type WorldIssue } from './connector/tracker.ts';
@@ -48,4 +50,5 @@ export const CONTRACTS: readonly KitEntry[] = [
   entryOf(STEPS_CONTRACT),
   entryOf(LAUNCHER_CONTRACT),
   entryOf(TRACKER_CONTRACT),
+  entryOf(PERMISSION_MODE_CONTRACT),
 ];
