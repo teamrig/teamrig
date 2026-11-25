@@ -5,6 +5,7 @@ import { launchArgs, PROGRAM } from './launch-args.ts';
 import { backgroundJobSession, isForkOf, sessionPlaceOf } from './session-command-lines.ts';
 import { isCodexSessionProcess } from './session-process.ts';
 import { AGENT_MARK } from './session-variables.ts';
+import { CODEX_WAKE } from './wake.ts';
 
 /** The variable's value trimmed, or undefined when it is unset or blank: a blank one tells nothing. */
 function told(env: HostDeps['env'], name: string): string | undefined {
@@ -35,5 +36,6 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
     isForkOf,
     backgroundJobSession,
     sessionPlaceOf,
+    wake: CODEX_WAKE,
   };
 }

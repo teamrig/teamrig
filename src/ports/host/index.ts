@@ -58,6 +58,8 @@ export type {
   SessionPlace,
   SessionStart,
   SessionVariables,
+  SessionWake,
+  WakeDelivery,
 } from './session-launcher.ts';
 export {
   skippedUserHookLine,

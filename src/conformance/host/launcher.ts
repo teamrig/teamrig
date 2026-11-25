@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { HostDeps, RunningProgram, SessionIdentity, SessionLauncher, SessionPlace, SessionStart } from '../../plugin-api/index.ts';
+import { unsupported, type HostDeps, type RunningProgram, type SessionIdentity, type SessionLauncher, type SessionPlace, type SessionStart } from '../../plugin-api/index.ts';
 import { defineContract, type ContractCase, type Subject } from '../contract.ts';
 
 type Env = HostDeps['env'];
@@ -203,12 +203,14 @@ const WORLD: LauncherWorld = {
 
 const VARIABLES = { marks: [], identity: [] } as const;
 const CHILD_ENV = { session: [], parked: [], login: [] } as const;
+/** The liars claim no wake: the contract holds what a launcher tells of a run, and a wake is checked by its own specs. */
+const NO_WAKE = unsupported('the liar wakes no session');
 
 /** A liar that claims the port and does nothing: no name, no argument, no part of who a run is, no process its own. */
 export function nothingLauncher(): LauncherSubject {
   return {
     world: WORLD,
-    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined }),
+    port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined, wake: NO_WAKE }),
   };
 }
 
@@ -228,6 +230,7 @@ export function yesLauncher(): LauncherSubject {
       isForkOf: () => true,
       backgroundJobSession: () => 'yes',
       sessionPlaceOf: () => 'tab',
+      wake: NO_WAKE,
     }),
   };
 }

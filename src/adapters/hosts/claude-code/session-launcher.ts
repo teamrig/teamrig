@@ -1,4 +1,4 @@
-import type { HostDeps, SessionLauncher } from '../../../plugin-api/index.ts';
+import { unsupported, type HostDeps, type SessionLauncher } from '../../../plugin-api/index.ts';
 import { CHILD_ENVIRONMENT } from './child-env.ts';
 import { declaration } from './declaration.ts';
 import { launchArgs, PROGRAM } from './launch-args.ts';
@@ -11,6 +11,8 @@ import { ENTRYPOINT, PROJECT_DIR, SESSION_ID, SESSION_VARIABLES } from './sessio
 const SESSION_KIND = 'CLAUDE_CODE_SESSION_KIND';
 /** Forces one effort level on every session Claude Code starts, whatever the session picked. */
 const EFFORT_LEVEL = 'CLAUDE_CODE_EFFORT_LEVEL';
+/** Claude Code has no command that hands a running session a prompt: the teamrig mod in its tab submits a wake. */
+const NO_WAKE = unsupported("Claude Code's tab submits a wake through the teamrig mod");
 
 /** The variable's value trimmed, or undefined when it is unset or blank: a blank one tells nothing. */
 function told(env: HostDeps['env'], name: string): string | undefined {
@@ -37,5 +39,6 @@ export function sessionLauncher(env: HostDeps['env']): SessionLauncher {
     isForkOf,
     backgroundJobSession,
     sessionPlaceOf,
+    wake: NO_WAKE,
   };
 }

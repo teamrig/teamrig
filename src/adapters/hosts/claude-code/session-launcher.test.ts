@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { isUnsupported } from '../../../plugin-api/index.ts';
 import { declaration } from './declaration.ts';
 import { sessionLauncher } from './session-launcher.ts';
 
@@ -22,6 +23,10 @@ describe("Claude Code's session launcher", () => {
   it("names the program by its declaration's name, whatever the environment holds", () => {
     assert.equal(sessionLauncher({}).programName, declaration.name);
     assert.equal(sessionLauncher({ CLAUDE_CODE_SESSION_ID: 's-1' }).programName, 'Claude Code');
+  });
+
+  it('wakes no session through its program: the mod in the tab submits a wake', () => {
+    assert.ok(isUnsupported(sessionLauncher({}).wake));
   });
 
   it('reads no variable but its own five', () => {

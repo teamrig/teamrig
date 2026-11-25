@@ -1,9 +1,12 @@
 /**
  * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
  * host says a run is, what a child inherits of a session, which process runs one and what its command line says (a
- * fork, a background job), where a session ran, and the program and arguments that start or resume one; a wake joins
- * it as it moves out of the core.
+ * fork, a background job), where a session ran, the program and arguments that start or resume one, and how the host
+ * hands a running session a prompt from outside its tab (a wake).
  */
+
+import type { ProgramResult } from '../../core/program-runner.ts';
+import type { Unsupported } from './unsupported.ts';
 
 /**
  * What the host tells a run about the session that started it. A host tells it its own way (Claude Code in the
@@ -145,7 +148,35 @@ export interface SessionLauncher {
    * record kept them; undefined when they say nothing of it. The restore reopens only a `tab`.
    */
   sessionPlaceOf(told: Pick<SessionIdentity, 'startedAs' | 'sessionKind'>): SessionPlace | undefined;
+  /**
+   * How the host's own program hands a running session a prompt as its next turn, from outside the session's tab:
+   * unsupported where the host has no such command, as Claude Code, whose tab's mod submits a wake itself.
+   */
+  readonly wake: SessionWake | Unsupported;
 }
+
+/**
+ * A wake through the host's own program: teamrig finds `program` on PATH as for a start, runs it with `args`, through
+ * no shell, and reads the run's end with `outcome`.
+ */
+export interface SessionWake {
+  /**
+   * The arguments, to follow the program, that hand the host's session `session` (the id `identity` told) the prompt
+   * `text`. Each is handed to the program as it is.
+   */
+  args(session: string, text: string): readonly string[];
+  /** What the run's end and output say came of the wake. */
+  outcome(result: ProgramResult): WakeDelivery;
+}
+
+/**
+ * What came of a wake: the host took the prompt (`delivered`), runs no session of that id to take it (`no-session`:
+ * the session ended, so a wake waits for its next start), or failed, the reason in words a human reads.
+ */
+export type WakeDelivery =
+  | { readonly kind: 'delivered' }
+  | { readonly kind: 'no-session' }
+  | { readonly kind: 'failed'; readonly reason: string };
 
 /**
  * Where a session of the host ran: a terminal `tab` the person works in, a `background` job of the host, or
