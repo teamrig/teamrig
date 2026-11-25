@@ -249,10 +249,6 @@ describe("a reply to Claude Code's hook", () => {
     assert.equal(bridge.reply('stop', { tabTitle: 'T12 build' }), JSON.stringify({ terminalSequence: TAB_TITLE }));
     assert.equal(bridge.reply('stop', { notice: 'refresh due' }), '{"systemMessage":"refresh due"}');
   });
-
-  it('lets the moment go on when a hook fails', () => {
-    assert.equal(bridge.failureRule, 'passes');
-  });
 });
 
 /**

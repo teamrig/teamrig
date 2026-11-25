@@ -130,8 +130,6 @@ export interface HookBridge {
   parse(raw: string, hostEvent?: string): HookEvent | undefined;
   /** The text to write on standard output for `reply` to the event `on`; empty when there is nothing to write. */
   reply(on: HookEventName, reply: HookReply): string;
-  /** What the host does when a hook itself fails: `blocks` stops the moment, `passes` lets it go on. */
-  readonly failureRule: 'blocks' | 'passes';
   /** The switch that leaves the tab's title to hooks; undefined when the host writes no title of its own, so hooks always have it. */
   readonly titleSwitch: TitleSwitch | undefined;
 }

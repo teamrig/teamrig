@@ -104,10 +104,6 @@ describe("Codex CLI's hook input", () => {
     }
   });
 
-  it('lets the moment go on when a hook itself fails', () => {
-    assert.equal(bridge.failureRule, 'passes');
-  });
-
   it('names no environment switch that leaves the tab title to hooks', () => {
     assert.equal(bridge.titleSwitch, undefined);
   });

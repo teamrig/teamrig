@@ -217,8 +217,6 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
       return isRecord(payload) ? eventOf(payload, shape) : undefined;
     },
     reply: replyText,
-    // A hook that exits with an error other than 2 is shown to the human and the moment goes on.
-    failureRule: 'passes',
     titleSwitch: TITLE_SWITCH,
   };
 }

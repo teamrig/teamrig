@@ -189,8 +189,6 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
       return isRecord(payload) ? eventOf(payload, shape) : undefined;
     },
     reply: replyText,
-    // A hook that exits with any code but 2 is marked failed and the moment goes on (`hooks_src_events_pre_tool_use.rs`).
-    failureRule: 'passes',
     // Codex CLI turns its own tab title off by a config key (`tui.terminal_title`, `config_src_types.rs`), not an
     // environment switch, and its hook output has no title field, so there is no switch to name here.
     titleSwitch: undefined,
