@@ -1,8 +1,8 @@
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { LockBusyError, type Mutex } from '../core/lock.ts';
 import { CLIENT_MANIFEST, clientFileHash } from '../exec/client-integrity.ts';
+import { BusyMutex } from '../testing/busy-mutex.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
@@ -24,12 +24,6 @@ import {
 const KIT = '/home/user/.teamrig';
 const PLUGIN = '/home/user/.claude/plugins/cache/teamrig/teamrig';
 const SOURCE: KitSource = { kind: 'claude-code-plugin' };
-
-class BusyMutex implements Mutex {
-  async run<T>(): Promise<T> {
-    throw new LockBusyError('install.lock', 0);
-  }
-}
 
 /** Files whose move to one path throws, as a held file or a full disk would at the step that puts a copy in place. */
 class FailingMoveFiles extends MemoryFiles {
