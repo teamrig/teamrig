@@ -1,5 +1,5 @@
 import type { Check } from './reader.ts';
-import { EFFORT_LEVELS, isEffortLevel, type KitConfig, type LaunchConfig } from './types.ts';
+import { EFFORT_LEVELS, isEffortLevel, isTerminalChoice, TERMINALS, type KitConfig, type LaunchConfig, type TerminalChoice } from './types.ts';
 
 /**
  * The team config's word that leaves the model to the host: a launch passes no model for it. It is teamrig's own
@@ -22,6 +22,8 @@ export const isModel: Check<string> = (model) =>
 
 export const isEffort: Check<string> = (effort) => (isEffortLevel(effort) ? undefined : `expected one of ${EFFORT_LEVELS.join(', ')}`);
 
+export const isTerminalName: Check<string> = (terminal) => (isTerminalChoice(terminal) ? undefined : `expected one of ${TERMINALS.join(', ')}`);
+
 /**
  * What the team config itself sets for the session (`launch.<id>`), without the lead's defaults: the restore reopens a
  * session on an effort set here, and on the level it last ran at otherwise (T2440).
@@ -39,6 +41,15 @@ export function ownLaunchOf(config: KitConfig, id: string): LaunchConfig {
 export function launchOf(config: KitConfig, id: string, leadDefault: LaunchConfig): LaunchConfig {
   const own = ownLaunchOf(config, id);
   return config.roles.lead === id ? { ...leadDefault, ...own } : own;
+}
+
+/**
+ * The terminal a session opens in when no `--terminal` names one: its own `launch.<id>.terminal`, else the team's
+ * `open.terminal`. Every path that opens or reopens a session reads it (open, a refresh restart, the idle pass's
+ * reopen, a meeting's, a restore after a reboot), so a session that opted in to headless comes back headless.
+ */
+export function terminalOf(config: KitConfig, id: string): TerminalChoice {
+  return ownLaunchOf(config, id).terminal ?? config.open.terminal;
 }
 
 /** What a launch takes from the host it runs on (src/cli/host.ts `launchHostOf`). */

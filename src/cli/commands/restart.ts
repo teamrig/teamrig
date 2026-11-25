@@ -1,4 +1,4 @@
-import { launchOf } from '../../config/launch.ts';
+import { launchOf, terminalOf } from '../../config/launch.ts';
 import { autoRestartOf } from '../../config/refresh.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { withoutCredentials } from '../../core/child-env.ts';
@@ -96,7 +96,7 @@ export async function restart(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
       isSessionProcess: sessionProcessCheckOf(runtime),
       openTab: async () => {
         // A restart is never typed by a person: its tab keeps the focus where the owner left it (T2510).
-        const tab: SessionTab = { team, id, name, project, prompt: refreshPrompt(team, id, store.handoverPath(id)), terminal: config.open.terminal, teamWindow: config.open.teamWindow, focus: 'keep' };
+        const tab: SessionTab = { team, id, name, project, prompt: refreshPrompt(team, id, store.handoverPath(id)), terminal: terminalOf(config, id), teamWindow: config.open.teamWindow, focus: 'keep' };
         const { outcome } = await openSessionTab(runtime, tab);
         return outcome.kind === 'opened' ? { kind: 'opened' } : outcome;
       },

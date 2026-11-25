@@ -1,3 +1,4 @@
+import { terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { KIT_NAME } from '../../core/home.ts';
@@ -109,7 +110,7 @@ export async function meet(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const { found, kit, config, roster, id, name } = facts;
   // `--terminal` names where the session's tab is, so it picks the terminal searched for a running tab as well as the
   // one a closed session opens in.
-  const terminal = terminalFlag(args.flags.get('terminal')) ?? config.open.terminal;
+  const terminal = terminalFlag(args.flags.get('terminal')) ?? terminalOf(config, id);
   if ((await runningRecordOf(runtime, kit.paths, roster.ids, id)) !== undefined) {
     const title = sessionDisplay(kit.paths.team, name);
     runtime.out.stdout(focusLine(await focusTab(runtime, terminal, title), name, title));

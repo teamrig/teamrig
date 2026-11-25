@@ -973,6 +973,7 @@ Each session's Claude Code model and effort, and the folder it works in, by id: 
 | `model` | string (at most 100 characters, matching `^[A-Za-z0-9][A-Za-z0-9._@:/-]*(?:\[[a-z0-9]+\])?$`) |  | A Claude Code model alias or a full model id such as claude-opus-5-5. best is Fable where the account has it, else Opus; default leaves the model to Claude Code. |
 | `effort` | one of `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"` |  | The effort level; a model that lacks it runs at the highest level it has below it. An /effort the user types in the session's tab is written here. |
 | `project` | string |  | The session's project folder, an absolute path: teamrig open starts it there, and close and hire look for its Claude Code sessions there. Unset, team.project, else the folder holding the team's .teamrig.json pointer; doctor flags a folder that does not exist. |
+| `terminal` | one of `"auto"`, `"tmux"`, `"windows-terminal"`, `"macos-terminal"`, `"gnome-terminal"`, `"konsole"`, `"x-terminal-emulator"`, `"headless"`, `"print"` |  | The terminal the session opens and reopens in (teamrig open, a refresh restart, the idle pass's reopen, a meeting's, a restore after a reboot), such as headless for a session no one watches; the values are open.terminal's. Unset, open.terminal; teamrig open --terminal wins over it. |
 
 ## `refresh`
 

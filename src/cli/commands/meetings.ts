@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { KIT_NAME } from '../../core/home.ts';
@@ -448,7 +449,7 @@ async function deliver(runtime: CliRuntime, mk: MeetingsKit, meeting: ScheduledM
   const project = await sessionProjectOf(runtime, mk.config, id, undefined, mk.from);
   try {
     // The meeting's own tab takes the focus, as focusTab gives it to a running one above (T2510).
-    const opened = await openSession(runtime, mk.kit, mk.config, mk.roster, { team: mk.kit.paths.team, id, project, terminal: mk.config.open.terminal, asked: false, focus: 'take', urgent: [ask] });
+    const opened = await openSession(runtime, mk.kit, mk.config, mk.roster, { team: mk.kit.paths.team, id, project, terminal: terminalOf(mk.config, id), asked: false, focus: 'take', urgent: [ask] });
     if (opened.kind === 'opened') {
       return [`${opened.line}; its first prompt opens the meeting`];
     }

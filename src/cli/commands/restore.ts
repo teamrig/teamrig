@@ -64,6 +64,12 @@ async function restoreTeamsOf(runtime: CliRuntime, teams: ReadonlyMap<string, Tr
           return effort === undefined ? [] : [[id, effort] as const];
         }),
       ),
+      terminals: new Map(
+        roster.ids.flatMap((id) => {
+          const { terminal } = ownLaunchOf(config, id);
+          return terminal === undefined ? [] : [[id, terminal] as const];
+        }),
+      ),
     });
   }
   return found;

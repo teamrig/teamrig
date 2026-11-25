@@ -76,6 +76,7 @@ const APP: RestoreTeam = {
   teamWindow: false,
   areaBySession: new Map(),
   efforts: new Map(),
+  terminals: new Map(),
 };
 /** {@link APP} after a config change set alpha's effort, which last ran at max. */
 const APP_CONFIGURED: RestoreTeam = { ...APP, efforts: new Map([['alpha', 'medium']]) };

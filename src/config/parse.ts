@@ -73,7 +73,7 @@ import {
   QUEUE_TTL_MARGIN_MINUTES,
   DEFAULT_UI,
 } from './defaults.ts';
-import { isEffort, isModel } from './launch.ts';
+import { isEffort, isModel, isTerminalName } from './launch.ts';
 import {
   APPLY_FLAG_PATTERN,
   BUDGET_ACCOUNT_MAX_LENGTH,
@@ -152,7 +152,6 @@ import {
   SECRET_READS,
   SECRET_WRITES,
   SKIP_HOOKS,
-  TERMINALS,
   type AlertsConfig,
   type ChangesConfig,
   type ContextFilesConfig,
@@ -484,10 +483,12 @@ function readLaunch(read: ConfigReader, raw: JsonRecord, sessions: readonly stri
     const model = read.optionalString(entry, 'model', path, isModel);
     const effort = read.optionalString(entry, 'effort', path, isEffort);
     const project = read.optionalString(entry, 'project', path, isAbsoluteFolder);
+    const terminal = read.optionalString(entry, 'terminal', path, isTerminalName);
     launch[id] = {
       ...(model === undefined ? {} : { model }),
       ...(isEffortLevel(effort) ? { effort } : {}),
       ...(project === undefined ? {} : { project }),
+      ...(isTerminalChoice(terminal) ? { terminal } : {}),
     };
   }
   return launch;
@@ -1902,9 +1903,7 @@ function parseOtherAreas(read: ConfigReader, raw: JsonRecord, path: string): Oth
 }
 
 function parseOpen(read: ConfigReader, raw: JsonRecord, sessions: readonly string[]): OpenConfig {
-  const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, (value) =>
-    isTerminalChoice(value) ? undefined : `expected one of ${TERMINALS.join(', ')}`,
-  );
+  const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, isTerminalName);
   return {
     terminal: isTerminalChoice(terminal) ? terminal : DEFAULT_OPEN.terminal,
     teamWindow: read.boolean(raw, 'teamWindow', 'open', DEFAULT_OPEN.teamWindow),

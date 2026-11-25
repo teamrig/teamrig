@@ -38,6 +38,7 @@ const APP: RestoreTeam = {
   teamWindow: true,
   areaBySession: new Map([[OTHER, 'alpha']]),
   efforts: new Map([['alpha', 'medium']]),
+  terminals: new Map([['alpha', 'headless']]),
 };
 
 const WEB: RestoreTeam = {
@@ -51,6 +52,7 @@ const WEB: RestoreTeam = {
     [OTHER, 'gone'],
   ]),
   efforts: new Map(),
+  terminals: new Map(),
 };
 
 describe('teamSessionOf', () => {
@@ -70,6 +72,12 @@ describe('teamSessionOf', () => {
   it('carries the effort its config sets, by either route, for the restore to reopen it on (T2440)', () => {
     assert.equal(teamSessionOf(entry({ team: 'app', session: 'alpha' }), [APP, WEB])?.effort, 'medium');
     assert.equal(teamSessionOf(entry({ hostSession: OTHER }), [APP])?.effort, 'medium');
+  });
+
+  it('reopens a session in the terminal its config sets, by either route, and the rest in the team one (T5093)', () => {
+    assert.equal(teamSessionOf(entry({ team: 'app', session: 'alpha' }), [APP, WEB])?.terminal, 'headless');
+    assert.equal(teamSessionOf(entry({ hostSession: OTHER }), [APP])?.terminal, 'headless');
+    assert.equal(teamSessionOf(entry({ team: 'app', session: 'lead' }), [APP])?.terminal, 'windows-terminal');
   });
 
   it('falls back to the inbox it last read when its variables name no current session', () => {

@@ -185,6 +185,18 @@ describe('parseConfig', () => {
     assert.deepEqual(config.launch, { alpha: { model: 'opus' }, bravo: {} });
   });
 
+  it("keeps a session's terminal, and refuses one teamrig has no terminal for (T5093)", () => {
+    const kept = parseConfig({ ...ROSTER, launch: { alpha: { terminal: 'headless' } } });
+    assert.deepEqual(kept.issues, []);
+    assert.deepEqual(kept.config.launch, { alpha: { terminal: 'headless' } });
+    const { config, issues } = parseConfig({ ...ROSTER, launch: { alpha: { effort: 'high', terminal: 'xterm' } } });
+    assert.deepEqual(
+      issues.map((issue) => `${issue.path}: ${issue.message}`),
+      ['launch.alpha.terminal: expected one of auto, tmux, windows-terminal, macos-terminal, gnome-terminal, konsole, x-terminal-emulator, headless, print (got "xterm")'],
+    );
+    assert.deepEqual(config.launch, { alpha: { effort: 'high' } });
+  });
+
   it('reports launch settings of strangers and wrong models and efforts, and leaves each out', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,

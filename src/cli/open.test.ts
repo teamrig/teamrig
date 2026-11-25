@@ -311,6 +311,19 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started.map((request) => request.command), ['konsole']);
   });
 
+  it("takes the session's own launch terminal over the team's, and the flag over both (T5093)", async () => {
+    const kit = new CliHarness({ ...TEAM, open: { terminal: 'konsole' }, launch: { alpha: { terminal: 'print' } } });
+    const processes = new FakeProcesses().onStart('konsole', { kind: 'started', end: 'exited' });
+    const own = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes });
+    assert.equal(own.code, EXIT.printed);
+    assert.equal(processes.started.length, 0);
+    const others = await kit.run(['open', 'bravo'], { probe: FOLDERS, processes });
+    assert.equal(others.code, EXIT.ok);
+    const flagged = await kit.run(['open', 'alpha', '--terminal', 'konsole'], { probe: FOLDERS, processes });
+    assert.equal(flagged.code, EXIT.ok);
+    assert.deepEqual(processes.started.map((request) => request.command), ['konsole', 'konsole']);
+  });
+
   it('carries a hostile prompt and project folder as data, never as shell text', async () => {
     const folder = resolve('/', 'w', `a "b"; $(id) & %PATH% \`x\``);
     const prompt = `Fix "it"; rm -rf / & echo $(id) | cat %PATH%\nnext`;

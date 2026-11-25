@@ -1790,6 +1790,8 @@ export interface LaunchConfig {
   readonly effort?: EffortLevel;
   /** The session's project folder, an absolute path; unset, the team's (`TeamLink.project`). */
   readonly project?: string;
+  /** The terminal the session opens and reopens in, such as `headless` for one no one watches; unset, `open.terminal` (T5093). */
+  readonly terminal?: TerminalChoice;
 }
 
 /** Character budgets for the text Claude Code puts in every call's context; `doctor` flags a file over its budget. */

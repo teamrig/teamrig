@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { describeLaunch, launchModelProblem, launchOf } from '../../config/launch.ts';
+import { describeLaunch, launchModelProblem, launchOf, terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
@@ -173,7 +173,7 @@ export async function open(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const config = requireConfig(kit, runtime, 'read');
   const roster = await rosterOf(runtime, kit, config);
   const id = sessionIdOf(roster, address?.session ?? target);
-  const terminal = terminalFlag(args.flags.get('terminal')) ?? config.open.terminal;
+  const terminal = terminalFlag(args.flags.get('terminal')) ?? terminalOf(config, id);
   const project = await sessionProjectOf(runtime, config, id, args.flags.get('project'), found.from);
   const prompt = args.flags.get('prompt');
   const given = args.flags.get('project') !== undefined;
