@@ -4,7 +4,7 @@ import { beforeEach, describe, it } from 'node:test';
 import { settingsWriteRefusal } from '../../core/settings-writers.ts';
 import { kitCurrentPath, kitVersionFolder, readKitCurrent } from '../../kit/kit-versions.ts';
 import { CliHarness, KIT, type RunOptions } from '../../testing/cli-harness.ts';
-import { writeKitRelease } from '../../testing/kit-release.ts';
+import { writeKeptKitVersion } from '../../testing/kit-release.ts';
 import { MemoryKitTree } from '../../testing/memory-kit-tree.ts';
 import { EXIT } from '../runtime.ts';
 
@@ -17,7 +17,7 @@ describe('teamrig kit', () => {
   /** Keeps every version of KEPT in the kit home and runs `use` once with --yes, so `current` names `version`. */
   async function keptWith(version: string): Promise<void> {
     for (const kept of KEPT) {
-      await writeKitRelease(kit.files, kitVersionFolder(KIT, kept), kept);
+      await writeKeptKitVersion(kit.files, KIT, kept);
     }
     const result = await kit.run(['kit', 'use', version, '--yes'], options);
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
