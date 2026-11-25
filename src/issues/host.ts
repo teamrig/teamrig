@@ -108,6 +108,12 @@ export type HostList =
       readonly issues: readonly HostIssue[];
       readonly notes: readonly string[];
       /**
+       * True when the read of open issues stopped at its cap with more on the tracker, so an issue missing from
+       * `issues` may still be open: the status push names it as cut off, not as closed (T5451). Left out, the read
+       * was whole, which keeps connectors written before it valid.
+       */
+      readonly cut?: boolean;
+      /**
        * The accounts the tracker counted as the team's people for a scoped list, as its issues name assignees (its
        * connector's `people` key and the signed-in account): the core's scope check counts them beside the request's.
        */

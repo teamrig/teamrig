@@ -189,6 +189,7 @@ describe('listing a Jira project', () => {
     http.answers('POST', SEARCH, 200, page([issue]));
     assert.deepEqual(await tracker.list(REPO, '2026-11-10'), {
       kind: 'listed',
+      cut: false,
       issues: [
         hostIssue(12, {
           title: 'Fix the login',
@@ -240,6 +241,7 @@ describe('listing a Jira project', () => {
     );
     assert.deepEqual(await tracker.list(REPO, '2026-11-10'), {
       kind: 'listed',
+      cut: false,
       issues: [
         hostIssue(2, { state: 'closed', stateReason: 'COMPLETED', closedAt: '2026-11-10T00:00:00.000Z' }),
         hostIssue(3, { state: 'closed', closedAt: '2026-11-12T10:00:00.000Z' }),
@@ -258,7 +260,7 @@ describe('listing a Jira project', () => {
     const { tracker, http } = kit();
     http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')], 't1')).answers('POST', SEARCH, 200, page([jiraIssue('ENG-2')], ''));
     const list = await tracker.list(REPO, '2026-11-10');
-    assert.deepEqual(list, { kind: 'listed', issues: [hostIssue(1), hostIssue(2)], notes: [] });
+    assert.deepEqual(list, { kind: 'listed', issues: [hostIssue(1), hostIssue(2)], notes: [], cut: false });
     assert.deepEqual(
       sent(http).map(([, , body]) => (typeof body === 'object' && body !== null && 'nextPageToken' in body ? body.nextPageToken : undefined)),
       [undefined, 't1'],
@@ -268,7 +270,7 @@ describe('listing a Jira project', () => {
   it('stops at its page bound and says the list may leave some out', async () => {
     const { tracker, http } = kit();
     http.answers('POST', SEARCH, 200, page([], 'more'));
-    assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [`the list reached ${MAX_PAGES * PAGE_SIZE} issues, so it may leave some out`] });
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [`the list reached ${MAX_PAGES * PAGE_SIZE} issues, so it may leave some out`], cut: true });
     assert.equal(signed(http).length, MAX_PAGES);
   });
 
@@ -277,6 +279,7 @@ describe('listing a Jira project', () => {
     http.answers('POST', SEARCH, 200, page(['text', { key: 'OPS-3', fields: {} }, { key: 'ENG-7' }, { fields: {} }, jiraIssue('ENG-8')]));
     assert.deepEqual(await tracker.list(REPO, '2026-11-10'), {
       kind: 'listed',
+      cut: false,
       issues: [hostIssue(8)],
       notes: ['4 item(s) Jira listed did not read as issues of ENG and were left out'],
     });
@@ -392,7 +395,7 @@ describe('listing a Jira project in an import scope (T5013)', () => {
   it('lists the whole project, with no read of the account, for a scope of all', async () => {
     const { tracker, http } = kit();
     http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')]));
-    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: { ...TEAM, all: true }, people: [], held: [9] }), { kind: 'listed', issues: [hostIssue(1)], notes: [] });
+    assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: { ...TEAM, all: true }, people: [], held: [9] }), { kind: 'listed', issues: [hostIssue(1)], notes: [], cut: false });
     assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: BASE, fields: LIST_FIELDS, maxResults: PAGE_SIZE }]]);
   });
 
@@ -546,7 +549,7 @@ describe("judging a listed Jira issue's trust (T5012)", () => {
     for (const trust of [WRITTEN, own]) {
       const { tracker, http } = kit({ trust });
       http.answers('POST', SEARCH, 200, page([])).answers('GET', CHANGELOG, 200, JSON.stringify({ values: [], isLast: true }));
-      assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [] });
+      assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [], cut: false });
       assert.deepEqual(http.requests.filter((request) => request.url === GUARD), []);
     }
   });

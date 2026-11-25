@@ -5,7 +5,7 @@ import { isIssueQuery, isViewerRead } from '../adapters/connectors/github/gh.ts'
 import { PUSH_WRITES_PER_RUN } from '../issues/status-push.ts';
 import { CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeGh, ghIssue, ghPull } from '../testing/fake-gh.ts';
-import { SHOWN_CHANGES } from './commands/issue-push.ts';
+import { planLines, SHOWN_CHANGES } from './commands/issue-push.ts';
 import { USAGE } from './run.ts';
 import { EXIT } from './runtime.ts';
 
@@ -94,6 +94,18 @@ describe('teamrig issue sync --push', () => {
       'OPEN acme/web#7 T1 dropped: taken by eve, outside the team; the push leaves it open, for its taker or a person to close',
       'OPEN acme/web#8 T2 dropped: a design issue, which ends by its maintainers\' Agreed; the push leaves it open, for its taker or a person to close',
     ]);
+  });
+
+  it('names an unlisted issue as possibly open past a cut-short open list, not as closed (T5451)', () => {
+    const plan = {
+      repo: 'acme/web', changes: [], deferred: [], heldCloses: [], unchanged: 0, closedActive: [], keptOpen: [], shared: [], openPulls: [], wantsViewer: false,
+      unlisted: [{ target: { repo: 'acme/web', number: 12 }, task: 'T2', status: 'in-progress' as const }],
+    };
+    assert.equal(
+      planLines(plan, true)[1],
+      'UNLISTED acme/web#12 T2 in-progress: not on the open list, which stopped at its cap (NOTE above), so it may be open past it, or it closed before github.closedDays, or is gone while the task is active; the push never reopens an issue',
+    );
+    assert.equal(planLines(plan)[1], 'UNLISTED acme/web#12 T2 in-progress: not open on the host (closed before github.closedDays, or gone) while the task is active; the push never reopens an issue');
   });
 
   it('writes nothing for an issue two team tasks hold, and names them (#1449)', async () => {

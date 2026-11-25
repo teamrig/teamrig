@@ -158,7 +158,7 @@ export async function pushRepos(run: PushRun, say: (line: string) => void): Prom
       continue;
     }
     const plan = assigned.plan.unlisted.length === 0 ? assigned.plan : planFor(assigned.who, await openPullsOf(run.pulls, repo, say));
-    planLines(plan).forEach(say);
+    planLines(plan, read.cut === true).forEach(say);
     const planned = plan.changes.reduce((sum, change) => sum + changeWrites(change), 0);
     left -= planned;
     let failed: string | undefined;
@@ -205,8 +205,14 @@ async function openPullsOf(host: PullRequests, repo: string, say: (line: string)
   return new Set(read.open.map((pull) => pull.number));
 }
 
-/** A repository's plan: its counts, the changes this run sends, then each issue the push leaves as it is and why. */
-export function planLines(plan: PushPlan): string[] {
+/**
+ * A repository's plan: its counts, the changes this run sends, then each issue the push leaves as it is and why. With
+ * `cut`, the open list stopped at its cap, so an unlisted issue may be open past it, not closed (T5451).
+ */
+export function planLines(plan: PushPlan, cut = false): string[] {
+  const unlistedWhy = cut
+    ? 'not on the open list, which stopped at its cap (NOTE above), so it may be open past it, or it closed before github.closedDays, or is gone'
+    : 'not open on the host (closed before github.closedDays, or gone)';
   const counts = [
     `${plan.changes.length} to change`,
     `${plan.unchanged} unchanged`,
@@ -235,7 +241,7 @@ export function planLines(plan: PushPlan): string[] {
         `OPEN ${targetText(kept.target)} ${kept.task} ${kept.status}: ${kept.why.kind === 'design' ? 'a design issue, which ends by its maintainers\' Agreed' : `taken by ${kept.why.assignees.join(', ')}, outside the team`}; the push leaves it open, for its taker or a person to close`,
     ),
     ...plan.openPulls.map((held) => `PULL ${targetText(held.target)} ${held.task} ${held.status}: an open pull request, not an issue; the push writes only issues`),
-    ...plan.unlisted.map((held) => `UNLISTED ${targetText(held.target)} ${held.task} ${held.status}: not open on the host (closed before github.closedDays, or gone) while the task is active; the push never reopens an issue`),
+    ...plan.unlisted.map((held) => `UNLISTED ${targetText(held.target)} ${held.task} ${held.status}: ${unlistedWhy} while the task is active; the push never reopens an issue`),
     ...plan.shared.map(
       (shared) => `SHARED ${targetText(shared.target)} ${shared.tasks.join(', ')}: two or more team tasks hold it, so the push writes nothing; give the ref to one of them`,
     ),

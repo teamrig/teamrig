@@ -131,6 +131,8 @@ describe('GitHubIssueHost.list', () => {
       `the open list reached ${ISSUE_LIMIT} issues, so it may leave some out`,
       '1 closed item(s) gh printed did not read as issues and were left out',
     ]);
+    // T5451: the push reads this to name an unlisted issue as cut off, not closed.
+    assert.equal(list.kind === 'listed' && list.cut, true);
   });
 
   it('lists the newest open issue of a repository past 500 open issues, as the list runs oldest first', async () => {
@@ -141,6 +143,7 @@ describe('GitHubIssueHost.list', () => {
     assert.equal(list.kind === 'listed' && list.issues.length, 600);
     assert.ok(list.kind === 'listed' && list.issues.some((issue) => issue.number === 600));
     assert.deepEqual(list.kind === 'listed' && list.notes, []);
+    assert.equal(list.kind === 'listed' && list.cut, false);
   });
 
   it('gives nothing of the repository when either read fails', async () => {

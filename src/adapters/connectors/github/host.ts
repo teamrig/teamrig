@@ -183,7 +183,7 @@ export class GitHubIssueHost implements IssueHost {
     if (closed.kind === 'failed') {
       return closed;
     }
-    return { kind: 'listed', issues: latestIssues(open.issues, closed.issues), notes: [...listNotes('open', open), ...listNotes('closed', closed)] };
+    return { kind: 'listed', issues: latestIssues(open.issues, closed.issues), notes: [...listNotes('open', open), ...listNotes('closed', closed)], cut: open.full };
   }
 
   /**
