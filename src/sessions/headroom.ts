@@ -1,5 +1,5 @@
 import type { HeadroomConfig, QueueConfig } from '../config/types.ts';
-import type { CommitCharge } from '../delivery/memory.ts';
+import { commitCeilingMb, type CommitCharge } from '../delivery/memory.ts';
 import { tabsText, type LoadingTab } from '../delivery/memory-gate.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { median } from '../core/quantile.ts';
@@ -83,15 +83,20 @@ export function headroomFor(room: HostRoom, floor: TabFloor, config: HeadroomCon
   }
   const { commit } = room;
   const committed = commit === undefined ? 0 : commit.usedMb + heldCommittedMb + needCommittedMb;
-  if (commit !== undefined && committed * 100 > config.commitMaxPct * commit.limitMb) {
+  if (commit !== undefined && committed * 100 > config.commitMaxPct * commitCeilingMb(commit)) {
     const held = room.loading.length === 0 ? '' : ` and the ${loading} still loading`;
-    short.push(`with it${held} the commit charge would be ${committed} MB, over ${config.commitMaxPct}% of its ${commit.limitMb} MB limit (open.headroom.commitMaxPct)`);
+    short.push(`with it${held} the commit charge would be ${committed} MB, over ${config.commitMaxPct}% of ${ceilingText(commit)} (open.headroom.commitMaxPct)`);
   }
   const cap = tabCapShort(room.teamTabs, config.maxTabs);
   if (cap !== undefined) {
     short.push(cap);
   }
   return { needMb, needCommittedMb, short };
+}
+
+/** The limit a refusal judges against: `its 100000 MB limit`, or `the 130000 MB its 114000 MB limit can grow to with the page files`. */
+function ceilingText(commit: CommitCharge): string {
+  return commit.reachMb === undefined ? `its ${commit.limitMb} MB limit` : `the ${commit.reachMb} MB its ${commit.limitMb} MB limit can grow to with the page files`;
 }
 
 /** Why a team with `open` tabs has no room for one more under `maxTabs`; undefined under the cap or with none set. */

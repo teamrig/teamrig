@@ -1,5 +1,5 @@
 import type { Sleep } from '../core/lock.ts';
-import type { CommitCharge, MemoryProbe } from './memory.ts';
+import { commitCeilingMb, type CommitCharge, type MemoryProbe } from './memory.ts';
 
 /** What the gate reads of the host: its free memory, its RAM and its commit charge. */
 export type GateProbe = Pick<MemoryProbe, 'freeMb' | 'totalMb' | 'commit'>;
@@ -111,7 +111,7 @@ export class MemoryGate {
       if (read === FREE_READS) {
         const commit = await this.probe.commit();
         const tabsCommittedMb = tabs.reduce((total, tab) => total + tab.needCommittedMb, 0);
-        if (commit !== undefined && (commit.usedMb + tabsCommittedMb + reserveMb) * 100 > commitMaxPct * commit.limitMb) {
+        if (commit !== undefined && (commit.usedMb + tabsCommittedMb + reserveMb) * 100 > commitMaxPct * commitCeilingMb(commit)) {
           return { kind: 'commit', ...commit, maxPct: commitMaxPct, reserveMb, ...loadingOf(tabs, tabsCommittedMb) };
         }
         return { kind: 'room', freeMb };
@@ -135,13 +135,18 @@ export function shortText(short: MemoryShort | CommitShort, sharing: number): st
   if (short.kind === 'commit') {
     const basis = short.basis === undefined ? '' : ` (${short.basis})`;
     const held = tabs === '' ? '' : `${tabs} and `;
-    return `host commit charge: ${short.usedMb} of ${short.limitMb} MB, ${held}${short.reserveMb} MB more for this step${basis} would pass ${short.maxPct}% (open.headroom.commitMaxPct)`;
+    return `host commit charge: ${short.usedMb} of ${limitText(short)}, ${held}${short.reserveMb} MB more for this step${basis} would pass ${short.maxPct}% (open.headroom.commitMaxPct)`;
   }
   const steps = sharing === 0 ? '' : `, ${short.heldMb} MB held for ${sharing === 1 ? 'it' : 'them'}`;
   const held = tabs === '' ? steps : `${steps}, ${tabs}`;
   const basis = short.basis === undefined ? '' : `, ${short.basis}`;
   const need = short.hostMb === undefined ? `${short.floorMb} kept free for the host + ${short.reserveMb} for this step${basis}` : `half the host's ${short.hostMb} MB`;
   return `host memory: ${short.freeMb} MB free${held}, ${short.needMb} MB needed (${need})`;
+}
+
+/** A commit limit as a wait names it: `32000 MB`, or `114000 MB (130000 MB the page files can grow to)`. */
+export function limitText(charge: CommitCharge): string {
+  return charge.reachMb === undefined ? `${charge.limitMb} MB` : `${charge.limitMb} MB (${charge.reachMb} MB the page files can grow to)`;
 }
 
 /** `1 tab`, `2 tabs`. */

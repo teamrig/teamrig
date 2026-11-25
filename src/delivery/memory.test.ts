@@ -2,7 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  commitCeilingMb,
   holdersText,
+  parseWindowsCommitReport,
   linuxCommitOf,
   freeMbOf,
   namedListCommand,
@@ -160,6 +162,46 @@ describe('treeCommittedMb', () => {
   });
 });
 
+describe('parseWindowsCommitReport', () => {
+  const OS = '116790136,12436472\r\n';
+  const NOW = { usedMb: 101_908, limitMb: 114_053 };
+  const RAM = 65_536;
+
+  it('reaches as far as a page file can grow to its maximum, the volume having room (T5622)', () => {
+    assert.deepEqual(parseWindowsCommitReport(`${OS}page,49152,65536,189949,952789\r\n`, RAM), { ...NOW, reachMb: 130_437 });
+  });
+
+  it('grows a page file only as far as its volume has free space', () => {
+    assert.deepEqual(parseWindowsCommitReport(`${OS}page,49152,65536,1000,952789\r\n`, RAM), { ...NOW, reachMb: 115_053 });
+  });
+
+  it("grows a system-managed page file to three times the RAM, at most an eighth of its volume", () => {
+    assert.deepEqual(parseWindowsCommitReport(`${OS}page,49152,auto,500000,2000000\r\n`, RAM), { ...NOW, reachMb: 114_053 + 196_608 - 49_152 });
+    assert.deepEqual(parseWindowsCommitReport(`${OS}page,49152,auto,500000,800000\r\n`, RAM), { ...NOW, reachMb: 114_053 + 100_000 - 49_152 });
+  });
+
+  it('sums the room of every page file', () => {
+    assert.deepEqual(parseWindowsCommitReport(`${OS}page,4096,8192,50000,100000\npage,2048,4096,50000,100000\n`, RAM), { ...NOW, reachMb: 114_053 + 4096 + 2048 });
+  });
+
+  it('sets no reach when no page file can grow: at its maximum, a full volume or none listed', () => {
+    for (const pages of ['page,65536,65536,189949,952789', 'page,49152,65536,0,952789', '']) {
+      assert.deepEqual(parseWindowsCommitReport(`${OS}${pages}`, RAM), NOW, pages);
+    }
+  });
+
+  it('counts no growth from a damaged page line, so the gate keeps the limit now', () => {
+    for (const pages of ['page,49152,x,189949,952789', 'page,49152,65536,189949', 'page,49152,65536,189949,952789,1', 'disk,1,2,3,4', 'page,-1,65536,189949,952789']) {
+      assert.deepEqual(parseWindowsCommitReport(`${OS}page,4096,8192,50000,100000\n${pages}\n`, RAM), NOW, pages);
+    }
+  });
+
+  it('judges a charge against its reach, else its limit', () => {
+    assert.equal(commitCeilingMb({ ...NOW, reachMb: 130_437 }), 130_437);
+    assert.equal(commitCeilingMb(NOW), 114_053);
+  });
+});
+
 describe('parseWindowsCommit and parseMeminfoCommit', () => {
   it('read the commit limit and what is used of it, in MB', () => {
     assert.deepEqual(parseWindowsCommit('103116800,15769600\r\n'), { usedMb: 85_300, limitMb: 100_700 });
@@ -177,6 +219,7 @@ describe('parseWindowsCommit and parseMeminfoCommit', () => {
 
   it('read nothing from damaged output', () => {
     for (const text of ['', '100', '100,x', '100,200', '0,0', '1,2,3']) {
+      assert.equal(parseWindowsCommitReport(text, 32_768), undefined, text);
       assert.equal(parseWindowsCommit(text), undefined, text);
     }
     assert.equal(parseMeminfoCommit('MemTotal: 16384000 kB\nCommitLimit: 20480000 kB\n'), undefined);

@@ -41,6 +41,14 @@ describe('headroomFor', () => {
     ]);
   });
 
+  it('judges the commit charge against the limit the page files can grow to, not the limit now (T5622)', () => {
+    const room = { freeMb: 20_000, commit: { usedMb: 101_908, limitMb: 114_053, reachMb: 130_437 }, runningMb: [480], runningCommittedMb: [1100], loading: [], teamTabs: 0 };
+    assert.deepEqual(headroomFor(room, FLOOR, CONFIG).short, [], '103008 MB is 90% of the limit now but 79% of what it can grow to');
+    assert.deepEqual(headroomFor({ ...room, commit: { usedMb: 119_000, limitMb: 125_000, reachMb: 130_000 } }, FLOOR, CONFIG).short, [
+      'with it the commit charge would be 120100 MB, over 92% of the 130000 MB its 125000 MB limit can grow to with the page files (open.headroom.commitMaxPct)',
+    ]);
+  });
+
   it('fits with free memory at the floor plus the session and the commit charge at its cap', () => {
     const room = { freeMb: 5296, commit: { usedMb: 91_444, limitMb: 100_700 }, ...NONE_RUNNING };
     assert.deepEqual(headroomFor(room, FLOOR, CONFIG), { needMb: 1200, needCommittedMb: 1200, short: [] });
