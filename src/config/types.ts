@@ -1798,6 +1798,21 @@ export interface TeamLink {
    * work unless their own `launch` entry names another. Unset, the folder holding the team's pointer file.
    */
   readonly project?: string;
+  /** Set when the team left a tree and became a root team (`teamrig team detach`, T5469); never beside a parent. */
+  readonly detached?: TeamDetached;
+}
+
+/**
+ * What a team keeps of the tree it left (T5469): its numbering goes on past every id the tree had issued, and the ids
+ * its tasks named in another register of the tree, whose status this home can no longer read, read as unknown.
+ */
+export interface TeamDetached {
+  /** The parent the team left. */
+  readonly from: string;
+  /** The lowest task number the team issues: one past the tree's highest at the detach. */
+  readonly firstId: number;
+  /** Task ids its waits and after lists named that another team's register held, as `T<n>`. */
+  readonly away: readonly string[];
 }
 
 /** The owner's daily meeting in the lead's tab (T2512). */

@@ -79,6 +79,17 @@ Where the team sits in a tree of teams. A team with no parent is the root of its
 | `id` (required) | [session name](#shared-types) |  | The team's id: the name of its folder under \<kit home>/teams/. |
 | `parent` | [session name](#shared-types) |  | The parent team: this team's lead reports to that team's lead. A tree has at most 3 levels, and a team at most 8 child teams. |
 | `project` | string |  | The team's project folder, an absolute path: where its CLAUDE.md and rule files sit (teamrig check, doctor and rule-conflicts read them there), and where teamrig open starts its sessions unless a session's launch.\<id>.project names another. Unset, the folder holding the team's .teamrig.json pointer; doctor flags a folder that does not exist. |
+| `detached` | [object](#teamdetached) |  | Set by teamrig team detach when the team left its tree and became a root team, never beside parent. The team's new task ids start at firstId, past every id the tree had issued, and a wait on a task in away reads as unknown, never done, as this home no longer holds that task's register. |
+
+## `team.detached`
+
+Set by teamrig team detach when the team left its tree and became a root team, never beside parent. The team's new task ids start at firstId, past every id the tree had issued, and a wait on a task in away reads as unknown, never done, as this home no longer holds that task's register.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `from` (required) | [session name](#shared-types) |  | The parent team the team left. |
+| `firstId` (required) | integer (at least 1) |  | The lowest task number the team issues: one past the tree's highest when it left. |
+| `away` | array (at most 1000 items) of string (matching `^T[1-9][0-9]*$`) |  | Task ids (T\<n>) the team's waits and after lists named that another team's register held when it left. |
 
 ## `roles`
 

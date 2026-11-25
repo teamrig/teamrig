@@ -2184,6 +2184,34 @@ describe('parseConfig', () => {
     assert.deepEqual(bad.config.team, { id: 'web' });
   });
 
+  it('reads team.detached: the parent left, the first id and the away ids, with away empty when absent (T5469)', () => {
+    const full = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 5500, away: ['T12', 'T40'] } } });
+    assert.deepEqual(full.issues, []);
+    assert.deepEqual(full.config.team, { id: 'web', detached: { from: 'app', firstId: 5500, away: ['T12', 'T40'] } });
+    const bare = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 7 } } });
+    assert.deepEqual(bare.issues, []);
+    assert.deepEqual(bare.config.team, { id: 'web', detached: { from: 'app', firstId: 7, away: [] } });
+  });
+
+  it('refuses a team.detached beside a parent, or with no from, a bad first id or a bad away id (T5469)', () => {
+    const beside = parseConfig({ ...ROSTER, team: { id: 'web', parent: 'app', detached: { from: 'app', firstId: 9 } } });
+    assert.deepEqual(beside.issues, [{ path: 'team.detached', message: 'is set beside team.parent; a detached team is a root team: drop one of them' }]);
+    assert.deepEqual(beside.config.team, { id: 'web', parent: 'app' });
+    const noFrom = parseConfig({ ...ROSTER, team: { id: 'web', detached: { firstId: 9 } } });
+    assert.deepEqual(paths(noFrom.issues), ['team.detached.from']);
+    assert.deepEqual(noFrom.config.team, { id: 'web' });
+    const noFirst = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app' } } });
+    assert.deepEqual(noFirst.issues, [{ path: 'team.detached.firstId', message: 'is required' }]);
+    for (const firstId of [0, 1.5, '9']) {
+      assert.deepEqual(paths(parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId } } }).issues), ['team.detached.firstId'], String(firstId));
+    }
+    const badAway = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 9, away: ['T0', 'x'] } } });
+    assert.deepEqual(paths(badAway.issues), ['team.detached.away[0]', 'team.detached.away[1]']);
+    assert.deepEqual(badAway.config.team, { id: 'web' });
+    const notObject = parseConfig({ ...ROSTER, team: { id: 'web', detached: 'app' } });
+    assert.deepEqual(paths(notObject.issues), ['team.detached']);
+  });
+
   it('ignores keys it does not know, including $schema', () => {
     const { issues } = parseConfig({ ...ROSTER, $schema: './config.schema.json', futureKey: { any: 1 } });
     assert.deepEqual(issues, []);

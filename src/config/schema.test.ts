@@ -192,6 +192,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   maxFailureChars: 'tests.maxFailureChars',
   stepBackupDays: 'steps.backupDays',
   githubRepos: 'github.repos',
+  detachedAway: 'team.detached.away',
   issueTypeNames: 'github.fields.types.task',
   closedDays: 'github.closedDays',
   githubProbeSeconds: 'github.probeSeconds',

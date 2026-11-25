@@ -8,7 +8,7 @@ import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { isReservedName, NAME_PATTERN, NAME_RULE, RESERVED_NAMES } from '../core/ids.ts';
 import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from '../core/time.ts';
 import { TimeZone } from '../core/zone.ts';
-import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
+import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
 import { isItemType, ITEM_TYPES, type ItemType } from '../register/events.ts';
 import { branchPatternProblem, isBranchType } from '../worktree/branch-name.ts';
 import { KEEP_RULE_PATTERN } from '../permissions/allow-rules.ts';
@@ -214,6 +214,7 @@ import {
   WIP_MODES,
   type MeetingConfig,
   type PriorityConfig,
+  type TeamDetached,
   type TeamLink,
   type TurnLogConfig,
   type UiConfig,
@@ -509,12 +510,33 @@ function readTeam(read: ConfigReader, raw: JsonRecord): TeamLink | undefined {
   if (id === '') {
     return undefined;
   }
-  const where = project === undefined ? {} : { project };
+  const detached = readDetached(read, section);
+  const where = { ...(project === undefined ? {} : { project }), ...(detached === undefined || parent !== undefined ? {} : { detached }) };
+  if (detached !== undefined && parent !== undefined) {
+    read.report('team.detached', 'is set beside team.parent; a detached team is a root team: drop one of them');
+  }
   if (parent === id) {
     read.report('team.parent', 'is the team itself; a root team has no parent');
     return { id, ...where };
   }
   return { id, ...(parent === undefined ? {} : { parent }), ...where };
+}
+
+/** `team.detached` (T5469): the parent left, the first id the team issues, and the ids of the tree it waited on. */
+function readDetached(read: ConfigReader, team: JsonRecord): TeamDetached | undefined {
+  const value = team['detached'];
+  const section = read.section(team, 'detached', 'team');
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const issues = read.issues.length;
+  const from = read.requiredString(section, 'from', 'team.detached', isSessionName);
+  const firstId = read.optionalInteger(section, 'firstId', 'team.detached', { min: 1 });
+  if (section['firstId'] === undefined) {
+    read.report('team.detached.firstId', 'is required');
+  }
+  const away = read.stringList(section, 'away', 'team.detached', [], (id) => (TASK_ID.test(id) ? undefined : 'expected a task id such as T12'), CONFIG_LIMITS.detachedAway.maxItems);
+  return read.issues.length > issues || firstId === undefined ? undefined : { from, firstId, away };
 }
 
 /**

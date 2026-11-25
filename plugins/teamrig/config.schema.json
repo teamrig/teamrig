@@ -29,6 +29,28 @@
         "project": {
           "description": "The team's project folder, an absolute path: where its CLAUDE.md and rule files sit (teamrig check, doctor and rule-conflicts read them there), and where teamrig open starts its sessions unless a session's launch.<id>.project names another. Unset, the folder holding the team's .teamrig.json pointer; doctor flags a folder that does not exist.",
           "type": "string"
+        },
+        "detached": {
+          "description": "Set by teamrig team detach when the team left its tree and became a root team, never beside parent. The team's new task ids start at firstId, past every id the tree had issued, and a wait on a task in away reads as unknown, never done, as this home no longer holds that task's register.",
+          "type": "object",
+          "required": ["from", "firstId"],
+          "properties": {
+            "from": {
+              "description": "The parent team the team left.",
+              "$ref": "#/$defs/sessionName"
+            },
+            "firstId": {
+              "description": "The lowest task number the team issues: one past the tree's highest when it left.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "away": {
+              "description": "Task ids (T<n>) the team's waits and after lists named that another team's register held when it left.",
+              "type": "array",
+              "items": { "type": "string", "pattern": "^T[1-9][0-9]*$" },
+              "maxItems": 1000
+            }
+          }
         }
       }
     },
