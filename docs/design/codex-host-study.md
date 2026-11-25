@@ -156,7 +156,7 @@ named.
 | Finding transcripts | `~/.claude/projects/<project>/` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` | with change: a discoverer that maps a rollout to its project by its `cwd` |
 | Per-call usage and W | input, cache writes, cache reads, output | `token_count` `info`: `total_token_usage` and `last_token_usage` (input, cached input, output, reasoning; no cache-write split), `model_context_window` | with change: a Codex weight set; W is per host |
 | Model and effort share | per line | `model`, `model_reasoning_effort` in the turn context | with change |
-| The week reading | the status line's `rate_limits` | `token_count.rate_limits`: a primary and a secondary window, each with `used_percent`, `window_minutes` and `resets_at`; the week is the one with `window_minutes` = 10080 | with change: one reading per account, never added across chats, since every chat repeats the same account-wide snapshot |
+| The week reading | the status line's `rate_limits` | `token_count.rate_limits`: a primary and a secondary window, each with `used_percent`, `window_minutes` and `resets_at`; the week is the one with `window_minutes` = 10080 | with change: one reading per account, never added across chats, since every chat repeats the same account-wide snapshot; each turn's Stop hook reads the newest one from its rollout's tail (the hook input's `transcript_path`) and saves it as the session's snapshot, where `budget` and the pace line read it |
 | teamrig's status-line text | the status-line command | Codex's footer takes built-in items only | cannot; shown elsewhere |
 | Five-hour forecast | the five-hour window | none on Pro | with change: the week alone |
 | Helper weight | fitted on Claude Code | not known | with change: fitted again on Codex |
