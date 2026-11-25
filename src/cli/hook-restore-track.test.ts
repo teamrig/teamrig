@@ -22,7 +22,8 @@ import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { FakeWebhook } from '../testing/fake-webhook.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
-import { hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
+import { hostReadingLines, hostTelling, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
@@ -111,6 +112,19 @@ describe('hook restore-track', () => {
     await untold.run(['hook', 'restore-track'], { stdin, env: { ...LAUNCHED, CLAUDE_CODE_SESSION_KIND: 'bg' }, sessionProcesses, host: NO_SESSION_HOST });
     const bare = await entryOf(untold);
     assert.deepEqual([bare?.projectDir, bare?.entrypoint, bare?.sessionKind], [join(APP, 'sub'), undefined, undefined], 'the folder its payload names');
+  });
+
+  it('records the shipped host the session runs in, so a restore reopens it there, and leaves out the default one (T5059)', async () => {
+    const shippedHosts = { [DEFAULT_HOST]: shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(hostReadingLines({})) };
+    const stdin = payload('UserPromptSubmit');
+    const codex = new CliHarness({ ...TEAM, hosts: [DEFAULT_HOST, 'codex-cli'] });
+    await codex.run(['hook', 'restore-track', '--host', 'codex-cli'], { stdin, env: LAUNCHED, sessionProcesses: new FakeSessionProcesses(7000), shippedHosts });
+    assert.equal((await entryOf(codex))?.host, 'codex-cli');
+    const plain = new CliHarness({ ...TEAM, hosts: [DEFAULT_HOST, 'codex-cli'] });
+    await plain.run(['hook', 'restore-track'], { stdin, env: LAUNCHED, sessionProcesses: new FakeSessionProcesses(7000), shippedHosts });
+    const entry = await entryOf(plain);
+    assert.equal(entry?.state, 'working');
+    assert.equal('host' in entry, false);
   });
 
   it("leaves a session in a turn as it was at a compaction's start, which comes mid-turn", async () => {

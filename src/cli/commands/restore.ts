@@ -124,11 +124,13 @@ async function reopen(runtime: CliRuntime, teams: ReadonlyMap<string, TreeTeam>,
  * Opens the tab of one restored session. A session `launch` ran comes back through `launch` again, as its team
  * session, on its effort; any other resumes through `restore resume`, outside any team, as it ran before.
  * Every restored tab keeps the focus (T2510): the tabs come back one by one while the owner works in another.
+ * Either line names the host the session ran in (`--host`), so a Codex CLI session resumes in Codex (T5059).
  */
 async function openRestoredTab(runtime: CliRuntime, tab: ReopenTab, terminal: TerminalChoice | undefined): Promise<ReopenOutcome> {
-  const { team } = tab;
+  const { team, host } = tab;
   if (team?.launched === true) {
-    const { outcome, argv } = await openSessionTab(runtime, {
+    // openSessionTab passes the run's host id on to `launch`: the session's own, not the restore's.
+    const { outcome, argv } = await openSessionTab(host === undefined ? runtime : { ...runtime, hostId: host }, {
       team: team.team,
       id: team.session,
       name: team.name,
@@ -151,6 +153,7 @@ async function openRestoredTab(runtime: CliRuntime, tab: ReopenTab, terminal: Te
     '--project',
     tab.folder,
     ...homeArgs(runtime),
+    ...(host === undefined ? [] : ['--host', host]),
     ...(tab.effort === undefined ? [] : ['--effort', tab.effort]),
     ...(tab.prompt === undefined ? [] : ['--encoded-prompt', encodePrompt(tab.prompt)]),
   ];

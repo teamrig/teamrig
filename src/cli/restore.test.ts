@@ -208,6 +208,21 @@ describe('teamrig restore run', () => {
     assert.doesNotMatch(await logOf(kit), /tab opened/, 'a run by hand is not in its tab');
   });
 
+  it('reopens each session in the host it ran in, its launch and resume lines naming it (T5059)', async () => {
+    const codex = { host: 'codex-cli' };
+    const kit = await restoreKit([entry(ALPHA, 1, { team: 'app', session: 'alpha', ...codex }), entry(NOTES, 2, { state: 'working', pid: REUSED_PID, ...codex })]);
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    okResult(await kit.run(['restore', 'run'], machine(kit, processes)));
+    const hosted = (argv: readonly string[]): string[] => {
+      const at = argv.indexOf('--project') + 2 + HOME_ARGS.length;
+      return [...argv.slice(0, at), '--host', 'codex-cli', ...argv.slice(at)];
+    };
+    assert.deepEqual(
+      processes.started.map((request) => request.args),
+      [windowsTab('[app] alpha', APP, hosted(ALPHA_LAUNCH)), windowsTab('notes', APP, hosted(NOTES_RESUME))],
+    );
+  });
+
   it('reopens a team session on the effort its config sets after a config change, so the restore never brings back the old level (T2440)', async () => {
     const kit = await restoreKit(undefined, { ...TEAM, launch: { alpha: { effort: 'medium' } } });
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });

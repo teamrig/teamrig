@@ -141,6 +141,17 @@ describe('formatEntry and parseEntry', () => {
     assert.deepEqual(parseEntry(text), ENTRY);
   });
 
+  it('keeps the host the session runs in from its events, round-trips it, and refuses a damaged one (T5059)', () => {
+    const started = written(applyEvent(undefined, { kind: 'start' }, facts({ host: 'codex-cli' })));
+    assert.equal(started.host, 'codex-cli');
+    assert.equal(written(applyEvent(started, { kind: 'ready' }, facts({ at: T1 + TOOL_END_WRITE_MS }))).host, 'codex-cli', 'an event naming none keeps it');
+    assert.equal('host' in written(applyEvent(undefined, { kind: 'start' }, facts())), false, 'the default host is left out');
+    const hosted: RestoreEntry = { ...ENTRY, host: 'codex-cli' };
+    assert.match(formatEntry(hosted), /"host": "codex-cli"/);
+    assert.deepEqual(parseEntry(formatEntry(hosted)), hosted);
+    assert.equal(parseEntry(formatEntry(hosted).replace('"codex-cli"', '"not a host!"')), undefined);
+  });
+
   it('writes an entry as the very text every installed teamrig reads (T4762)', () => {
     // The file names each field itself, so this text may change only in the commit that moves the written name.
     const lines = [

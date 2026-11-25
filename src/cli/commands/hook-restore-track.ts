@@ -20,7 +20,8 @@ import { LAUNCHER_SCRIPT, launcherPath } from '../../statusline/launcher.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { fileLockOf } from '../file-locks.ts';
 import { openKit } from '../kit.ts';
-import { identityOf, transcriptsIfKept } from '../host.ts';
+import { DEFAULT_HOST } from '../../composition/adapters.ts';
+import { hostIdOf, identityOf, transcriptsIfKept } from '../host.ts';
 import { loginPageLogLine, loginPageOf, sendLoginPage, type LoginPage } from '../login-page.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readHookInput, writeReply } from './hook-input.ts';
@@ -281,6 +282,7 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
     return undefined;
   }
   const told = identityOf(runtime);
+  const host = hostIdOf(runtime);
   const facts: TrackFacts = {
     hostSession,
     at: runtime.clock.now(),
@@ -293,6 +295,8 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
     pid: runtime.sessionProcesses.parentPid,
     team: envId(runtime, ENV.team),
     session: envId(runtime, ENV.session),
+    // So a restore reopens it in the host it ran in; the default host is left out, as in the session's record.
+    ...(host === DEFAULT_HOST ? {} : { host }),
   };
   const kitHome = resolveKitHome(runtime.env, runtime.userHome);
   const event = await codedEvent(reported, facts, runtime);

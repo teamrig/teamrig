@@ -56,6 +56,11 @@ export interface RestoreEntry {
    * the entry drops it, which only loses the retry count.
    */
   readonly apiError?: ApiErrorState | undefined;
+  /**
+   * The shipped host the session ran in, as `--host` names it; left out for the default host, so an entry reads the
+   * same to a teamrig that keeps no host (as `SessionRecord.host`). A restore reopens the session in that host (T5059).
+   */
+  readonly host?: string | undefined;
 }
 
 /** A turn that ended on an API error, and the retries the wake check sent since the session's last good turn. */
@@ -101,9 +106,16 @@ export interface TrackFacts {
   readonly pid: number | undefined;
   readonly team: string | undefined;
   readonly session: string | undefined;
+  /** The shipped host the hook ran for; undefined for the default host. */
+  readonly host?: string | undefined;
 }
 
 export type TrackChange = { readonly kind: 'write'; readonly entry: RestoreEntry } | { readonly kind: 'remove' } | { readonly kind: 'none' };
+
+/** The entry's `host` field, left out for none. */
+function hostOf(host: string | undefined): Pick<RestoreEntry, 'host'> {
+  return host === undefined ? {} : { host };
+}
 
 /** `entry` with its failed turn's state, left out when there is none. */
 function withApiError(entry: RestoreEntry, apiError: ApiErrorState | undefined): RestoreEntry {
@@ -147,6 +159,7 @@ export function applyEvent(existing: RestoreEntry | undefined, event: TrackEvent
     restoredAt: existing?.restoredAt,
     endedAt: undefined,
     endReason: undefined,
+    ...hostOf(facts.host ?? existing?.host),
   };
   const kept = existing?.apiError;
   switch (event.kind) {
@@ -193,6 +206,7 @@ export function entryRecord(entry: RestoreEntry): EntryFields {
     restoredAt: isoOf(entry.restoredAt),
     endedAt: isoOf(entry.endedAt),
     endReason: entry.endReason,
+    host: entry.host,
     apiError: apiError === undefined ? undefined : { code: apiError.code, failedAt: isoOf(apiError.failedAt), retries: apiError.retries, retriedAt: isoOf(apiError.retriedAt) },
   };
 }
@@ -263,6 +277,7 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
   const endedAt = instantField(record, 'endedAt');
   const team = idField(record, 'team');
   const session = idField(record, 'session');
+  const host = idField(record, 'host');
   const rawPid = record['pid'];
   const pid = rawPid === undefined ? undefined : isNonNegativeInteger(rawPid) ? rawPid : null;
   const restoreAttempts = record['restoreAttempts'];
@@ -279,6 +294,7 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
     endedAt === null ||
     team === null ||
     session === null ||
+    host === null ||
     !isNonNegativeInteger(restoreAttempts) ||
     pid === null
   ) {
@@ -300,6 +316,7 @@ export function entryOfRecord(record: JsonRecord): RestoreEntry | undefined {
     restoredAt,
     endedAt,
     endReason: stringField(record, 'endReason'),
+    ...hostOf(host),
   };
   return withApiError(entry, apiErrorOf(record['apiError']));
 }
