@@ -82,6 +82,11 @@ export interface IdleOptions {
   /** The waited-on work past `maxPriority` that still keeps a held session open (`restExemptionOf`); absent: none. */
   readonly exemption?: RestExemption | undefined;
   readonly project: string;
+  /**
+   * Why the team's tab cap holds the session's work (`tabCapHoldText`): its work it can start then keeps it open no
+   * more, while every other check still does. Absent: its work keeps it open.
+   */
+  readonly heldByCap?: string | undefined;
 }
 
 /** Why a tab's last turn keeps it open (or refuses the owner's wake), by where it stands. */
@@ -240,7 +245,7 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   }
   const { now, zone, tasks } = facts;
   const startable = startableOf(config, facts, id, options);
-  if (startable.length > 0) {
+  if (startable.length > 0 && options.heldByCap === undefined) {
     return keep(`has work it can start (${startable.map((task) => task.id).join(', ')})`);
   }
   const asks = facts.asks.get(id) ?? [];

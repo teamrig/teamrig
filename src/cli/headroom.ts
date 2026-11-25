@@ -44,6 +44,11 @@ export function teamTabsOf(team: string, running: readonly string[], loading: re
   return open.size;
 }
 
+/** The team's tabs open now ({@link teamTabsOf}), its sessions `running` and the host's live tab holds read. */
+export async function teamTabsNow(runtime: CliRuntime, paths: TeamPaths, config: RoomConfig, running: readonly string[]): Promise<number> {
+  return teamTabsOf(paths.team, running, await tabHoldsOf(runtime, paths, config).live());
+}
+
 function hostLockOf(paths: TeamPaths, config: RoomConfig): string {
   return deliveryPlaces(config.delivery, paths).hostLock;
 }

@@ -11,6 +11,7 @@ import { RefreshStore } from '../refresh/store.ts';
 import { RestoreRegistry, restoreSessionsDir } from '../restore/registry.ts';
 import { SessionLog } from '../sessions/log.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
+import { TabHolds } from '../sessions/tab-holds.ts';
 import { HOLDING_BUDGET, holdAlpha } from '../testing/budget-hold.ts';
 import { APP, CLAUDE_SESSION, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
 import { ok } from '../testing/hired-team.ts';
@@ -120,6 +121,20 @@ async function recordedForRestore(alpha: Alpha): Promise<RestoreRegistry> {
     await registry.write(entry);
   }
   return registry;
+}
+
+/** The lead's tab, opened just now and still loading: one more of the team's tabs open, held on the host. */
+async function leadTabLoading(alpha: Alpha): Promise<void> {
+  const now = alpha.kit.clock.now();
+  await new TabHolds(join(KIT, 'host.lock.tabs'), alpha.kit).add({
+    id: 'lead-tab',
+    team: 'app',
+    session: 'lead',
+    needMb: 1200,
+    needCommittedMb: 2400,
+    openedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + 5 * MINUTE_MS).toISOString(),
+  });
 }
 
 /** A refusal prints `REFUSED <why>` and exits 2. */
@@ -296,6 +311,34 @@ describe('teamrig close', () => {
     assert.match(preview.stdout[0] ?? '', /^CLOSE app-alpha \(session alpha\): quiet 75 min/, [...preview.stdout, ...preview.stderr].join('\n'));
     ok(await quiet.kit.run(['add', '--title', 'Stop the outage', '--description', 'what and why', '--priority', 'p0', '--owner', 'alpha', '--session', 'lead']));
     assertRefused(await close(quiet, ['alpha', '--yes', '--session', 'lead']), /alpha \(session alpha\) has work it can start \(T2\)/);
+  });
+
+  it('closes a session with p0 work once the team is past open.headroom.maxTabs, and still keeps one at a tool call (T5479)', async () => {
+    const capped = { ...TEAM, open: { headroom: { maxTabs: 1 } } };
+    const alpha = await runningAlpha(75, reply(40_000), undefined, capped);
+    ok(await alpha.kit.run(['add', '--title', 'Stop the outage', '--description', 'what and why', '--priority', 'p0', '--owner', 'alpha', '--session', 'lead']));
+    assertRefused(await close(alpha, ['alpha', '--session', 'lead']), /alpha \(session alpha\) has work it can start \(T1\)/);
+
+    await leadTabLoading(alpha);
+    const preview = await close(alpha, ['alpha', '--session', 'lead']);
+    assert.deepEqual(preview.stdout, [
+      'CLOSE app-alpha (session alpha): quiet 75 min, its Claude Code holds 1300 MB, its work held: the team has 2 tabs open, over its cap of 1 ' +
+        `(open.headroom.maxTabs); teamrig open app-alpha resumes Claude Code session ${CLAUDE_SESSION}. Run again with --yes to close it`,
+    ]);
+
+    const call = { type: 'assistant', isSidechain: false, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: {} }] } };
+    const calling = await runningAlpha(75, `${reply(40_000)}${JSON.stringify(call)}\n`, undefined, capped);
+    ok(await calling.kit.run(['add', '--title', 'Stop the outage', '--description', 'what and why', '--priority', 'p0', '--owner', 'alpha', '--session', 'lead']));
+    await leadTabLoading(calling);
+    assertRefused(await close(calling, ['alpha', '--yes', '--session', 'lead']), /alpha \(session alpha\) is at a tool call/);
+    assert.deepEqual(calling.processes.ends, []);
+  });
+
+  it('keeps open a session with work past open.headroom.maxTabs when the team is at its cap, not over it (T5479)', async () => {
+    const alpha = await runningAlpha(75, reply(40_000), undefined, { ...TEAM, open: { headroom: { maxTabs: 2 } } });
+    ok(await alpha.kit.run(['add', '--title', 'Stop the outage', '--description', 'what and why', '--priority', 'p0', '--owner', 'alpha', '--session', 'lead']));
+    await leadTabLoading(alpha);
+    assertRefused(await close(alpha, ['alpha', '--yes', '--session', 'lead']), /has work it can start \(T1\)/);
   });
 
   it('keeps open a session at a tool call, one that put a decision to the person, and one whose time wait ends soon', async () => {

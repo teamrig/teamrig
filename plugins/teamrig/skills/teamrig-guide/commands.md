@@ -3069,7 +3069,12 @@ would cut off, and one too big or idle to resume (`hiring.resumeMaxTokens`,
 starts fresh on its handover. Claude Code resumes a session only from the
 folder it started in, whose project folder holds its transcript: the project, or a worktree or subfolder its
 transcript's entries ran in. The close logs that folder for the reopen, and refuses a session whose transcript is
-filed under no such folder. Without `--yes` it shows the close and ends nothing. A tab [teamrig open](#teamrig-open) started closes with it: its launch finds the close in the log, says
+filed under no such folder. Work its budget holds is not work it can start (p0 only while the budget holds it).
+A team past [open.headroom.maxTabs] (its sessions running and its tabs still loading, the lead's too) lets the
+lowest-ranked sessions close with work they could start, as many as it has tabs over the cap: first one with no work,
+then the least urgent top task, the newest of equals; the line says so (`its work held: the team has 8 tabs open, over
+its cap of 6 (open.headroom.maxTabs)`). Every other check still keeps them open. Without `--yes` it shows the close
+and ends nothing. A tab [teamrig open](#teamrig-open) started closes with it: its launch finds the close in the log, says
 why and exits 0, so the tab is never left on an error that offers to run its old launch again.
 A close also takes the session off the restore list, so a reboot's [restore](#teamrig-restore-run) leaves it closed.
 When it cannot (`WARN the restore entry of <id> was not dropped`), the session is still closed, but the next restore
