@@ -57,7 +57,9 @@ To update an installed teamrig, follow
 - **Tree of teams**: a team may have a parent team, at most 3 levels and 8 child teams under one team. Each team
   keeps its own sessions, task list, inboxes and `rules.md`; a child team's lead answers to the parent team's lead
   (approvals, a push to main among them), and the root lead is the only one the human talks to. Task ids are one
-  numbering across the tree, so a wait or an `after` may name another team's task; work crosses teams as a task
+  numbering across the tree, so a wait or an `after` may name another team's task (a team that left its tree
+  numbers past the tree's ids, and a wait on a task of that tree stays until you drop it [team.detached]); work
+  crosses teams as a task
   (`teamrig add --team <team>`), a note as `<team>/<id>`. A child team's sessions also start with the `rules.md` of
   each team above, and a role it leaves to a team above names that holder (`root/security`). `teamrig team split`
   moves sessions into a new child team; `teamrig team tree` prints the tree. A sub-lead group inside one team
