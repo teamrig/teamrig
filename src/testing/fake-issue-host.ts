@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueReopen, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -20,6 +20,7 @@ export type HostCall =
   | { readonly kind: 'comment'; readonly target: IssueTarget; readonly body: string }
   | { readonly kind: 'body'; readonly target: IssueTarget; readonly body: string }
   | { readonly kind: 'close'; readonly target: IssueTarget; readonly reason?: CloseReason; readonly duplicateId?: number }
+  | { readonly kind: 'reopen'; readonly target: IssueTarget }
   | { readonly kind: 'label-add'; readonly target: IssueTarget; readonly labels: readonly string[] }
   | { readonly kind: 'label-remove'; readonly target: IssueTarget; readonly label: string }
   | { readonly kind: 'label-create'; readonly repo: string; readonly label: LabelSpec }
@@ -85,6 +86,26 @@ export class FakeIssueHost implements IssueHost {
   search?: IssueSearch;
   /** Each search asked, with its repository, in order. */
   readonly searches: Array<{ readonly repo: string; readonly query: IssueQuery }> = [];
+  private reopenEnd: HostEnd = { kind: 'done' };
+  /** A reopen, recorded and ending done unless a test made it fail, until a test takes it away (withoutReopen). */
+  reopen?: IssueReopen = {
+    reopenIssue: (target: IssueTarget) => {
+      this.calls.push({ kind: 'reopen', target });
+      return Promise.resolve(this.reopenEnd);
+    },
+  };
+
+  /** From now on, it has no reopen, as a connector built before plugin API 0.4.0 has none. */
+  withoutReopen(): this {
+    delete this.reopen;
+    return this;
+  }
+
+  /** From now on, a reopen fails for `reason`. */
+  failsReopen(reason: string): this {
+    this.reopenEnd = { kind: 'failed', reason };
+    return this;
+  }
 
   /** From now on, it has a search: each one is recorded and ends as `end`. */
   hasSearch(end: HostSearch): this {

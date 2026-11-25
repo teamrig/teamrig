@@ -4,7 +4,7 @@ import { SecretScanner } from '../core/secrets.ts';
 import { FakeIssueHost } from '../testing/fake-issue-host.ts';
 import { codeHostOnly, trackerOnly } from '../testing/split-hosts.ts';
 import { areaLabelSpec } from './managed-labels.ts';
-import { editIssueBody, labelIssue, labelRefusal, MAX_COMMENT, MAX_LABEL, postRefusal, writeIssue, type IssueWrite, type LabelWrite } from './write.ts';
+import { editIssueBody, labelIssue, labelRefusal, MAX_COMMENT, MAX_LABEL, postRefusal, reopenIssue, writeIssue, type IssueWrite, type LabelWrite } from './write.ts';
 
 const TARGET = { repo: 'acme/web', number: 7 };
 
@@ -124,6 +124,59 @@ describe('writeIssue', () => {
       'FAILED acme/web#7: HTTP 403; the comment was posted: rerun teamrig issue close acme/web#7 without --comment',
     ]);
     assert.deepEqual((await run(new FakeIssueHost().failsClose('HTTP 403'), { target: TARGET, close: true })).lines.slice(1), ['FAILED acme/web#7: HTTP 403']);
+  });
+});
+
+/** Runs a reopen of TARGET on `host`, with `comment` when given, giving whether every step was done and the lines it said. */
+async function reopen(host: FakeIssueHost, comment?: string): Promise<{ done: boolean; lines: string[] }> {
+  const lines: string[] = [];
+  const done = await reopenIssue(trackerOnly(host), { target: TARGET, ...(comment === undefined ? {} : { comment }) }, (line) => lines.push(line));
+  return { done, lines };
+}
+
+describe('reopenIssue', () => {
+  it('comments, then reopens, saying how the host was reached', async () => {
+    const host = new FakeIssueHost();
+    assert.deepEqual(await reopen(host, 'The head moved; reopened to refresh it.'), {
+      done: true,
+      lines: ['ACCESS acme: writes as the test', 'COMMENTED acme/web#7', 'REOPENED acme/web#7'],
+    });
+    assert.deepEqual(host.calls, [{ kind: 'comment', target: TARGET, body: 'The head moved; reopened to refresh it.' }, { kind: 'reopen', target: TARGET }]);
+  });
+
+  it('only reopens when no comment is given', async () => {
+    const host = new FakeIssueHost();
+    assert.deepEqual(await reopen(host), { done: true, lines: ['ACCESS acme: writes as the test', 'REOPENED acme/web#7'] });
+    assert.deepEqual(host.calls, [{ kind: 'reopen', target: TARGET }]);
+  });
+
+  it('writes nothing, not reaching the host, on a tracker that cannot reopen', async () => {
+    const host = new FakeIssueHost().withoutReopen();
+    assert.deepEqual(await reopen(host, 'Thanks'), {
+      done: false,
+      lines: ['FAILED acme/web#7: its tracker cannot reopen an issue (plugin API 0.7.0 adds it); nothing was written'],
+    });
+    assert.deepEqual(host.calls, []);
+  });
+
+  it('writes nothing when the host cannot be reached', async () => {
+    const host = new FakeIssueHost().unreachable('the keyring is locked');
+    assert.deepEqual(await reopen(host, 'Thanks'), { done: false, lines: ['FAILED acme/web#7: the keyring is locked; nothing was written'] });
+    assert.deepEqual(host.calls, []);
+  });
+
+  it('reopens nothing when the comment fails', async () => {
+    const host = new FakeIssueHost().failsComment('HTTP 403');
+    assert.deepEqual((await reopen(host, 'Thanks')).lines.slice(1), ['FAILED acme/web#7: HTTP 403; it was not reopened']);
+    assert.deepEqual(host.calls.map((call) => call.kind), ['comment']);
+  });
+
+  it('says the comment was posted when the reopen after it fails, so a rerun does not post it twice', async () => {
+    assert.deepEqual((await reopen(new FakeIssueHost().failsReopen('HTTP 403'), 'Thanks')).lines.slice(1), [
+      'COMMENTED acme/web#7',
+      'FAILED acme/web#7: HTTP 403; the comment was posted: rerun teamrig issue reopen acme/web#7 without --comment',
+    ]);
+    assert.deepEqual((await reopen(new FakeIssueHost().failsReopen('HTTP 403'))).lines.slice(1), ['FAILED acme/web#7: HTTP 403']);
   });
 });
 

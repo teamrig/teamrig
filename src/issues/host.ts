@@ -329,8 +329,20 @@ export interface Searchable {
   readonly search?: IssueSearch;
 }
 
+/** A tracker's reopen of a closed issue or pull request. */
+export interface IssueReopen {
+  /** Opens the closed issue or pull request again; one already open is left as it is. */
+  reopenIssue(target: IssueTarget): Promise<HostEnd>;
+}
+
+/** A tracker's reopen, when it has one. */
+export interface Reopenable {
+  /** A capability (plugin API 0.7.0), so a connector that cannot reopen leaves it out and `issue reopen` says so. */
+  readonly reopen?: IssueReopen;
+}
+
 /** A tracker: where a team's issues live, with every capability over them. */
-export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable {}
+export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable, Reopenable {}
 
 /** A code host's pull requests, read. */
 export interface PullRequests {

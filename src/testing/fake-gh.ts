@@ -11,6 +11,7 @@ import {
   isIssueUnassign,
   isIssueBodyEdit,
   isIssueClose,
+  isIssueReopen,
   isFieldValueSet,
   isIssueComment,
   isIssueTypeSet,
@@ -758,7 +759,7 @@ export class FakeGh implements GhRunner {
       const run = this.runs.get(Number(runId));
       return this.canned.get(repo) ?? (run === undefined ? { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' } : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(run), stderr: '' });
     }
-    if (isIssueComment(request) || isIssueBodyEdit(request) || isIssueClose(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
+    if (isIssueComment(request) || isIssueBodyEdit(request) || isIssueClose(request.args) || isIssueReopen(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };
     }
     if (isLinkAdd(request.args)) {

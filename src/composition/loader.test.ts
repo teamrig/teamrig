@@ -102,7 +102,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     ]);
   });
 
-  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, or on 0.3.0 when it serves issue search, all loading on this teamrig, and the rest still loads', async () => {
+  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, on 0.3.0 when it serves issue search, or on 0.7.0 when it reopens, all loading on this teamrig, and the rest still loads', async () => {
     assert.equal(apiVersionNotice('0.2.0', API_VERSION), undefined);
     const { hosts, connectors, terminals } = await readDeclarations();
     const loads = [...hosts, ...connectors, ...terminals];
@@ -113,7 +113,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     const newer = loads.flatMap((load) => (load.kind === 'loaded' && (load.value.terms !== undefined || load.value.steps !== undefined) ? [[load.id, load.value.apiVersion]] : []));
     assert.deepEqual(newer, [
       ['claude-code', '0.2.0'],
-      ['github', '0.3.0'],
+      ['github', '0.7.0'],
       ['jira', '0.3.0'],
     ]);
   });

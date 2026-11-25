@@ -54,6 +54,7 @@ export const declaration: ConnectorDeclaration = {
       "a link from a duplicate to its original, and a reason the project's workflow has no name for",
       'a Jira issue closes by a transition to a closed status: its reason is kept when the workflow has a status or a resolution named for it, and a duplicate gets no link to its original',
     ),
+    'tracker.reopen': unsupported('the Jira connector does not reopen an issue yet'),
     'tracker.labels': partial(
       'a label made with a colour and a description, and a name holding a space',
       'a Jira label has no colour and no description and exists once an issue carries it; it holds no space, so a name with one is held with a hyphen in its place',

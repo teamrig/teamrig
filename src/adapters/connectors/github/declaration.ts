@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.3.0',
+  apiVersion: '0.7.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
@@ -35,6 +35,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.comment': SUPPORTED,
     'tracker.edit-body': SUPPORTED,
     'tracker.close': SUPPORTED,
+    'tracker.reopen': SUPPORTED,
     'tracker.labels': SUPPORTED,
     'tracker.status-push': SUPPORTED,
     'tracker.assign': SUPPORTED,

@@ -12,6 +12,7 @@ const TRACKER_ROWS: Readonly<Record<string, Support['kind']>> = {
   'tracker.comment': 'partial',
   'tracker.edit-body': 'partial',
   'tracker.close': 'partial',
+  'tracker.reopen': 'unsupported',
   'tracker.labels': 'partial',
   'tracker.status-push': 'partial',
   'tracker.assign': 'partial',

@@ -26,8 +26,8 @@ export const GH_PROGRAM = 'gh';
 /**
  * The kinds of `gh` command line teamrig runs: a page of a shipped query (the issue import, the links read and the
  * pull request monitor, which never write to GitHub), the creation of one issue (issue migrate, which opens an issue for a team task), one
- * comment on or the close of one issue or pull request (issue reply and issue close, a close with or without its
- * reason), its body replaced (issue edit), its labels: the read of one label of a repository, labels added to one
+ * comment on, the close or the reopen of one issue or pull request (issue reply, issue close, a close with or without
+ * its reason, and issue reopen), its body replaced (issue edit), its labels: the read of one label of a repository, labels added to one
  * issue, one label taken off it (issue label), the read of one issue, for the id a duplicate close names (issue close
  * --duplicate-of), logins added to one issue's assignees, the read of one user, for the case GitHub spells its login
  * in, the read of whether one login may be assigned (the status push) or assigned to one issue (issue assign, which
@@ -39,8 +39,8 @@ export const GH_PROGRAM = 'gh';
  * and pull request bodies changed since a time and of one pull request's reviews (the mention scan), and `pr approve`
  * and `pr merge`'s lines (T4817): one pull request's stand read, its APPROVE review pinned to a full head sha with a
  * fixed body, and its landing pinned to that sha, by enqueue where the repository has a merge queue, else a rebase
- * merge. The runner refuses any other command line before it starts: no title or state edit besides the close, no
- * reopen, removal of more than one assignee at once, label create but teamrig's own, label edit or delete, link
+ * merge. The runner refuses any other command line before it starts: no title or state edit besides the close and
+ * the bare reopen, removal of more than one assignee at once, label create but teamrig's own, label edit or delete, link
  * removal, a merge not pinned to a head, a review other than that approval, branch delete, run rerun or cancel, or
  * log download.
  *
@@ -190,6 +190,14 @@ export function issueCloseArgs(target: IssueNumber, reason?: CloseReason, duplic
   const why = reason === undefined ? [] : [RAW_FIELD, `state_reason=${GITHUB_CLOSE_REASON[reason]}`];
   const of = reason === 'duplicate' && duplicateId !== undefined ? [TYPED_FIELD, `${DUPLICATE_FIELD}=${duplicateId}`] : [];
   return ['api', `repos/${target.repo}/issues/${target.number}`, '-X', 'PATCH', RAW_FIELD, 'state=closed', ...why, ...of];
+}
+
+/**
+ * The command line that reopens one closed issue or pull request: the issues API reopens a pull request too, and
+ * GitHub sets the reason `reopened` itself, so no other field is sent.
+ */
+export function issueReopenArgs(target: IssueNumber): string[] {
+  return ['api', `repos/${target.repo}/issues/${target.number}`, '-X', 'PATCH', RAW_FIELD, 'state=open'];
 }
 
 /** The command line that reads one issue or pull request, for its id or its labels. */
@@ -358,6 +366,16 @@ export function isIssueClose(args: readonly string[]): boolean {
   const why = reason === undefined || (reason[0] === 'state_reason' && CLOSE_REASON_VALUES.has(reason[1]));
   const of = typed.length === 0 || (reason?.[1] === GITHUB_CLOSE_REASON.duplicate && DUPLICATE_PAIR.test(typed[1] ?? ''));
   return call?.method === 'PATCH' && call.part === 'issue' && closes && why && of && rest.length === 0;
+}
+
+/**
+ * True for `gh api repos/<owner>/<name>/issues/<number> -X PATCH -f state=open` and nothing more: the reopen of one
+ * issue or pull request. Any other field (a reason, a title, a body, labels) is refused.
+ */
+export function isIssueReopen(args: readonly string[]): boolean {
+  const call = issueCall(args);
+  const pairs = rawPairs(args.slice(4));
+  return call?.method === 'PATCH' && call.part === 'issue' && pairs?.length === 1 && pairs[0]?.[0] === 'state' && pairs[0][1] === 'open';
 }
 
 /**
@@ -1069,12 +1087,12 @@ export function isPullMerge(args: readonly string[]): boolean {
   return target !== undefined && FULL_SHA.test(head) && sameArgs(args, pullMergeArgs(target, head));
 }
 
-/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, link, type or field, a failed job's log, a CI run's read or re-run, a mention scan's read, or a pull request's stand read, approval or landing. */
+/** A command line the runner will not start: none of a shipped query's page, a watch probe, one issue's creation, comment, body, labels, close, reopen, link, type or field, a failed job's log, a CI run's read or re-run, a mention scan's read, or a pull request's stand read, approval or landing. */
 export class GhRefusedError extends Error {
   override readonly name = 'GhRefusedError';
 
   constructor(args: readonly string[]) {
-    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
+    super(`teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, reopen, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh ${args.slice(0, 2).join(' ')} with these arguments`);
   }
 }
 
@@ -1099,6 +1117,7 @@ export function isAllowedGh(args: readonly string[]): boolean {
     isIssueQuery(args) ||
     isCommentsRead(args) ||
     isIssueClose(args) ||
+    isIssueReopen(args) ||
     isLabelAdd(args) ||
     isLabelRemove(args) ||
     isLabelRead(args) ||

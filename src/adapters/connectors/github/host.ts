@@ -42,6 +42,7 @@ import {
   type IssueFields,
   type IssueHost,
   type IssueQuery,
+  type IssueReopen,
   type IssueSearch,
   type IssueState,
   type IssueTarget,
@@ -61,6 +62,7 @@ import {
   issueUnassignArgs,
   issueBodyCall,
   issueCloseArgs,
+  issueReopenArgs,
   issueCommentCall,
   issueCreateCall,
   issueLabelAddArgs,
@@ -353,6 +355,11 @@ export class GitHubIssueHost implements IssueHost {
   close(target: IssueTarget, reason?: CloseReason, duplicateId?: number): Promise<HostEnd> {
     return this.write(target, { args: issueCloseArgs(target, reason, duplicateId) }, 'close');
   }
+
+  /** The reopen of one closed issue or pull request, through its allowlisted line (gh.ts isIssueReopen). */
+  readonly reopen: IssueReopen = {
+    reopenIssue: (target: IssueTarget): Promise<HostEnd> => this.write(target, { args: issueReopenArgs(target) }, 'reopen'),
+  };
 
   /**
    * Reads the one issue for its `id`: found with it, missing when GitHub answers Not Found (no such issue, or one the
