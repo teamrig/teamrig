@@ -17,7 +17,7 @@ function provedWin(heading: string, date: string): Support {
 const WIN_PERM_PROOF = {
   os: 'windows',
   toolVersion: '1.5.14',
-  date: '2026-11-23',
+  date: '2026-11-24',
   evidence: 'proofs/antigravity-cli.md#permissionsdeny-lines',
 } as const;
 

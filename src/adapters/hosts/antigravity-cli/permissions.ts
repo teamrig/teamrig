@@ -21,37 +21,20 @@ const TOOL_PERMISSION_KEY = 'toolPermission';
 const BYPASS_VALUE = 'always-proceed';
 const NO_ROUTES = 'Antigravity CLI has no auto-mode routes';
 
-const SHARED_DENY_LINES: readonly string[] = [
+/**
+ * Only exact `command(...)` and root-relative `read_file(...)` rules without `~` or `*`:
+ * `agy 1.5.14` did not expand `~` or match `*` / `**` patterns in live runs.
+ */
+const DENY_LINES: readonly string[] = [
   'read_file(secrets.yaml)',
   'read_file(.env)',
-  'read_file(~/.npmrc)',
-  'command(kubectl *get*secret*)',
-  'command(kubectl exec *printenv*)',
-  'command(kubectl exec *-- env*)',
   'command(env)',
   'command(printenv)',
-  'command(printenv*)',
   'command(set)',
   'command(type .env)',
-  'command(type *.env*)',
-  'command(type *secrets.yaml*)',
   'command(Get-Content .env)',
-  'command(Get-Content *.env*)',
-  'command(Get-Content *secrets.yaml*)',
   'command(Get-ChildItem env:)',
-  'command(Get-ChildItem env*)',
-  'read_file(~/.ssh/id_*)',
-  'read_file(~/.aws/credentials)',
-  'read_file(~/.kube/config)',
-  'read_file(~/.docker/config.json)',
-  'read_file(~/.git-credentials)',
-  'read_file(*.pem)',
-  'read_file(*.key)',
 ];
-
-function ghHostsDenyLine(platform: NodeJS.Platform): string {
-  return platform === 'win32' ? 'read_file(~/AppData/Roaming/GitHub CLI/hosts.yml)' : 'read_file(~/.config/gh/hosts.yml)';
-}
 
 function permissionsOf(settings: JsonRecord): PermissionsAnswer<JsonRecord> {
   const permissions = settings[PERMISSIONS_KEY] ?? {};
@@ -90,7 +73,7 @@ export const antigravityPermissions: HostPermissions = {
   denySetting: `${PERMISSIONS_KEY}.${DENY_KEY}`,
   routesSetting: 'none (Antigravity CLI has no routes setting)',
   read,
-  denyLines: (platform) => [...SHARED_DENY_LINES, ghHostsDenyLine(platform)],
+  denyLines: () => [...DENY_LINES],
   writeAllow,
   /** `agy 1.5.14` did not match trailing `*` (`command(echo *)`) in `allow` or `deny`, so prefix allow sync is empty. */
   prefixAllowRules: () => [],
