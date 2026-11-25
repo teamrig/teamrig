@@ -49,6 +49,19 @@ describe('nodeKitTree', () => {
     assert.equal(existsSync(join(to, 'package.json')), true);
   });
 
+  it('copies what a root that is itself a link names, still leaving links inside it out', async () => {
+    const real = release('root-link-real');
+    const outside = join(root, 'root-link-outside');
+    mkdirSync(outside);
+    symlinkSync(outside, join(real, 'linked'), 'junction');
+    const from = join(root, 'root-link-from');
+    symlinkSync(real, from, 'junction');
+    const to = join(root, 'root-link-to');
+    await nodeKitTree().copyFolder(from, to);
+    assert.equal(readFileSync(join(to, 'package.json'), 'utf8'), '{"version":"0.508.0"}');
+    assert.equal(existsSync(join(to, 'linked')), false);
+  });
+
   it('removes a folder with all it holds, and does nothing for one that is missing', async () => {
     const folder = release('remove');
     await nodeKitTree().removeFolder(folder);

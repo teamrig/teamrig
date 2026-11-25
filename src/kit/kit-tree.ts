@@ -1,4 +1,4 @@
-import { cp, lstat, rm } from 'node:fs/promises';
+import { cp, lstat, realpath, rm } from 'node:fs/promises';
 
 /**
  * The folder copies teamrig's own install takes (kit-versions.ts): a release's files copied byte for byte into the kit
@@ -8,7 +8,8 @@ import { cp, lstat, rm } from 'node:fs/promises';
 export interface KitTree {
   /**
    * Copies the folder `from`, with all it holds, to `to`, byte for byte. A link or junction in it is left out, never
-   * followed, so the copy holds only what is inside `from`. Throws when something is at `to` already.
+   * followed, so the copy holds only what is inside `from`; a `from` that is itself a link (a plugin folder linked
+   * in) is copied from the folder it names. Throws when something is at `to` already.
    */
   copyFolder(from: string, to: string): Promise<void>;
   /** Removes the folder and all it holds; nothing when it is missing. Throws when a file in it cannot be removed. */
@@ -19,7 +20,8 @@ export interface KitTree {
 export function nodeKitTree(): KitTree {
   return {
     async copyFolder(from, to) {
-      await cp(from, to, {
+      // cp's filter sees the root too, so a linked root would copy nothing: resolve it first.
+      await cp(await realpath(from), to, {
         recursive: true,
         errorOnExist: true,
         force: false,
