@@ -123,6 +123,33 @@ export async function readKitCurrent(files: Pick<Files, 'read'>, kitHome: string
   return state.kind === 'current' ? state.current : undefined;
 }
 
+/** What `<v>.source.json` holds: where the version came from and the hash of the integrity list it was copied with. */
+interface KeptSource {
+  readonly source: KitSource;
+  readonly listHash: string;
+}
+
+/** A kept version's source record, or undefined when it is missing or malformed. */
+async function readKeptSource(files: Pick<Files, 'read'>, kitHome: string, version: string): Promise<KeptSource | undefined> {
+  const record = parseObject((await files.read(sourcePath(kitHome, version)))?.trim() ?? '');
+  if (record === undefined) {
+    return undefined;
+  }
+  const source = sourceOf(record['source']);
+  const listHash = stringField(record, 'listHash');
+  return source === undefined || listHash === undefined || !isListHash(listHash) ? undefined : { source, listHash };
+}
+
+async function writeKeptSource(files: Files, kitHome: string, version: string, kept: KeptSource): Promise<void> {
+  await files.write(sourcePath(kitHome, version), `${JSON.stringify(kept)}\n`);
+}
+
+/** The sha256 of a folder's integrity list, read as `clientFileHash` reads it, or undefined with no list. */
+async function listHashOf(files: Pick<Files, 'read'>, root: string): Promise<string | undefined> {
+  const list = await files.read(join(root, CLIENT_MANIFEST));
+  return list === undefined ? undefined : clientFileHash(list);
+}
+
 /** Writes `current.json`, then `current`, each by temp file and rename. */
 async function writeKitCurrent(files: Files, kitHome: string, current: KitCurrent): Promise<void> {
   const record = { [VERSION_FIELD]: KIT_CURRENT_FORMAT, ...current };
@@ -196,14 +223,10 @@ export interface KitInstall extends KitPorts {
  * copy that fails partway is removed and leaves `current` untouched. It never throws for a failed copy.
  */
 export async function installKitVersion(install: KitInstall): Promise<KitInstallOutcome> {
-  const { files, kitHome, version } = install;
+  const { version } = install;
   const wanted = parseVersion(version);
   if (wanted === undefined) {
     return { kind: 'refused', why: `${version} is no release version` };
-  }
-  const before = await readKitCurrent(files, kitHome);
-  if (before?.version === version && (await files.read(join(kitVersionFolder(kitHome, version), CLIENT_MANIFEST))) !== undefined) {
-    return { kind: 'current', version };
   }
   try {
     return await install.lock.run(() => installUnderLock(install, wanted));
@@ -221,9 +244,25 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
   if (state.kind === 'disagree') {
     return { kind: 'refused', why: 'the records naming the version in use disagree or one is missing; teamrig kit use <version> names one' };
   }
+  const running = await listHashOf(files, install.from);
+  if (running === undefined) {
+    return { kind: 'refused', why: `the release to copy has no ${CLIENT_MANIFEST}` };
+  }
+  const otherBuild: KitInstallOutcome = { kind: 'refused', why: `${version} is kept from another build than the running client (its ${CLIENT_MANIFEST} differs)` };
   const folder = kitVersionFolder(kitHome, version);
+  const kept = await readKeptSource(files, kitHome, version);
+  if (kept !== undefined && kept.listHash !== running) {
+    return otherBuild;
+  }
   let verified = await verifiedListHash(files, folder, version);
-  if ('why' in verified) {
+  if ('hash' in verified && verified.hash !== running && kept === undefined) {
+    return otherBuild;
+  }
+  if ('hash' in verified && verified.hash === running) {
+    if (kept === undefined) {
+      await writeKeptSource(files, kitHome, version, { source, listHash: verified.hash });
+    }
+  } else {
     const partial = `${folder}.partial`;
     try {
       await tree.removeFolder(partial);
@@ -233,9 +272,13 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
         await tree.removeFolder(partial);
         return { kind: 'refused', why: `the copy of ${version} is not whole: ${verified.why}` };
       }
+      if (verified.hash !== running) {
+        await tree.removeFolder(partial);
+        return { kind: 'refused', why: `the release of ${version} changed while it was copied` };
+      }
       await tree.removeFolder(folder);
       await files.move(partial, folder);
-      await files.write(sourcePath(kitHome, version), `${JSON.stringify(source)}\n`);
+      await writeKeptSource(files, kitHome, version, { source, listHash: verified.hash });
     } catch (error) {
       await tree.removeFolder(partial).catch(() => undefined);
       return { kind: 'refused', why: `copying ${version} failed: ${errorMessage(error)}` };
@@ -266,6 +309,9 @@ async function movedCurrent(files: Files, kitHome: string, before: KitCurrent | 
   return before === undefined ? { kind: 'installed', version } : { kind: 'installed', version, previous: before.version };
 }
 
+/** How a refusal of `teamrig kit use` names the way to a whole copy: an install copies a damaged version again. */
+const RECOPY = 'a session start of the teamrig plugin at that version copies it again';
+
 /** Which version `teamrig kit use` moves to: one named, which pins it, or the newest kept, which clears the pin. */
 export type KitUseTarget = { readonly kind: 'version'; readonly version: string } | { readonly kind: 'latest' };
 
@@ -295,10 +341,16 @@ export async function planKitUse(ports: Pick<KitPorts, 'files' | 'kitHome'>, tar
   }
   const verified = await verifiedListHash(files, kitVersionFolder(kitHome, version), version);
   if ('why' in verified) {
-    return { kind: 'refused', why: `${version} is damaged (${verified.why}); install it again` };
+    return { kind: 'refused', why: `${version} is damaged (${verified.why}); ${RECOPY}` };
   }
-  const source = sourceOf(parseObject((await files.read(sourcePath(kitHome, version)))?.trim() ?? '')) ?? { kind: 'claude-code-plugin' };
-  const next: KitCurrent = { version, listHash: verified.hash, source, pinned: target.kind === 'version' };
+  const record = await readKeptSource(files, kitHome, version);
+  if (record === undefined) {
+    return { kind: 'refused', why: `${version} has no record of where it came from (${version}.source.json); ${RECOPY}` };
+  }
+  if (record.listHash !== verified.hash) {
+    return { kind: 'refused', why: `${version} is not the build it was copied from (its ${CLIENT_MANIFEST} differs)` };
+  }
+  const next: KitCurrent = { version, listHash: verified.hash, source: record.source, pinned: target.kind === 'version' };
   const previous = await readKitCurrent(files, kitHome);
   return previous === undefined ? { kind: 'move', next } : { kind: 'move', next, previous };
 }
