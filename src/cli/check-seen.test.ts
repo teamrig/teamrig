@@ -20,7 +20,7 @@ function taskFlag(kind: FlagKind, task: Partial<Task>, detail = 'due 01-07'): Ch
 }
 
 function report(overrides: Partial<CheckReport>): CheckReport {
-  return { sections: [], scope: 'week 2030-01-07', skills: [], skillsDir: 'skills-dir', hires: [], unowned: [], lead: 'lead', decisions: undefined, ...overrides };
+  return { sections: [], scope: 'week 2030-01-07', skills: [], skillsDir: 'skills-dir', hires: [], unowned: [], covered: [], lead: 'lead', decisions: undefined, ...overrides };
 }
 
 const FULL = report({

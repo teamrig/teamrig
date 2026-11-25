@@ -71,7 +71,7 @@ import { secretHookWarnings } from '../secret-hook-check.ts';
 import { stampHookWarnings } from '../stamp-hook-check.ts';
 import { ownerBatchOf, type BatchedTeam } from '../owner-batch.ts';
 import { rollUp, type RolledTeam, type RollUp } from '../roll-up.ts';
-import { splitUnowned } from '../unowned.ts';
+import { coverUnowned, splitUnowned } from '../unowned.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { addIssuePlan } from '../../sync/issue-at-add.ts';
 import { ADD_ISSUE_FLAGS, addIssueAskOf, addIssueHost, addWithIssue } from './add-issue.ts';
@@ -1247,7 +1247,8 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const sessionRuns = (pid: number): Promise<boolean> => runsHostSession(runtime, pid);
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
+  const cover = coverUnowned([...unowned, ...idle, ...hooks, ...stamps, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], own.snapshot.state.tasks.values(), runtime.userHome);
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: cover.unowned, covered: cover.covered, lead, decisions };
 }
 
 /**
