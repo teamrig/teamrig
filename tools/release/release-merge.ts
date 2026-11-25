@@ -345,29 +345,41 @@ export function mergeComment(target: MergeTarget): string {
 }
 
 /**
- * Merges the release pull request at the gate's sha with an installation token of the App narrowed to this repository
- * and to contents and pull requests, leaves the gate comment, then revokes the token. A merge GitHub refuses (the head
- * moved, a rule unmet) is a refusal; a comment that fails after the merge is reported, never retried as a merge.
+ * An installation token of the App for `repo` (`owner/name`) alone, with contents and pull requests write and nothing
+ * else, valid for GitHub's hour unless `revokeAppToken` ends it first. Rejects when GitHub refuses or answers oddly.
  */
-export async function mergeRelease(target: MergeTarget, key: AppKey, deps: MergeDeps): Promise<MergeOutcome> {
+export async function mintAppToken(repo: string, key: AppKey, deps: MergeDeps): Promise<string> {
   const jwt = appJwt(key.appId, key.privateKey, deps.nowSeconds());
-  const installation = recordOf(await deps.api({ method: 'GET', path: `/repos/${target.repo}/installation`, token: jwt }), 'installation');
+  const installation = recordOf(await deps.api({ method: 'GET', path: `/repos/${repo}/installation`, token: jwt }), 'installation');
   const minted = recordOf(
     await deps.api({
       method: 'POST',
       path: `/app/installations/${fieldNumber(installation, 'id', 'installation')}/access_tokens`,
       token: jwt,
-      body: { repositories: [target.repo.split('/')[1] ?? target.repo], permissions: { contents: 'write', pull_requests: 'write' } },
+      body: { repositories: [repo.split('/')[1] ?? repo], permissions: { contents: 'write', pull_requests: 'write' } },
     }),
     'access token',
   );
-  const token = fieldString(minted, 'token', 'access token');
-  const landed = await mergeWith(target, deps.api, token);
-  const revoked = await deps.api({ method: 'DELETE', path: '/installation/token', token }).then(
+  return fieldString(minted, 'token', 'access token');
+}
+
+/** Ends an installation token at once; false when GitHub refused, as the token then lapses within the hour anyway. */
+export async function revokeAppToken(api: GitHubApi, token: string): Promise<boolean> {
+  return api({ method: 'DELETE', path: '/installation/token', token }).then(
     () => true,
     () => false,
   );
-  return { ...landed, revoked };
+}
+
+/**
+ * Merges the release pull request at the gate's sha with an installation token of the App narrowed to this repository
+ * and to contents and pull requests, leaves the gate comment, then revokes the token. A merge GitHub refuses (the head
+ * moved, a rule unmet) is a refusal; a comment that fails after the merge is reported, never retried as a merge.
+ */
+export async function mergeRelease(target: MergeTarget, key: AppKey, deps: MergeDeps): Promise<MergeOutcome> {
+  const token = await mintAppToken(target.repo, key, deps);
+  const landed = await mergeWith(target, deps.api, token);
+  return { ...landed, revoked: await revokeAppToken(deps.api, token) };
 }
 
 type Landed = { readonly kind: 'merged'; readonly sha: string; readonly commented: boolean } | { readonly kind: 'refused'; readonly reason: string };

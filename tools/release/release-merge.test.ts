@@ -10,7 +10,9 @@ import {
   fetchGitHubApi,
   mergeComment,
   mergeRelease,
+  mintAppToken,
   releaseGate,
+  revokeAppToken,
   requiredChecksOf,
   type ApiRequest,
   type CheckRun,
@@ -352,6 +354,22 @@ describe('mergeRelease', () => {
 });
 
 describe('fetchGitHubApi', () => {
+  it('mints a token alone for another caller, and revokes it apart', async () => {
+    const github = app();
+    assert.equal(await mintAppToken(REPO, key, { api: github.api, nowSeconds: () => 1_000 }), 'install-token');
+    assert.equal(await revokeAppToken(github.api, 'install-token'), true);
+    assert.deepEqual(
+      github.calls.map((call) => `${call.method} ${call.path}`),
+      [`GET /repos/${REPO}/installation`, 'POST /app/installations/9/access_tokens', 'DELETE /installation/token'],
+    );
+    assert.equal(await revokeAppToken(app().on('DELETE', '/installation/token', new Error('500')).api, 'install-token'), false);
+  });
+
+  it('rejects a mint GitHub answers without a token', async () => {
+    const github = app().on('POST', '/app/installations/9/access_tokens', { expires_at: 'soon' });
+    await assert.rejects(mintAppToken(REPO, key, { api: github.api, nowSeconds: () => 1_000 }), /GitHub's access token\.token is not a string/);
+  });
+
   const seen: { url: string; init: RequestInit }[] = [];
   const fake =
     (response: () => Response): Fetch =>
