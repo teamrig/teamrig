@@ -1480,6 +1480,11 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     read.report(`${path}.pinRateToLimit`, 'needs budget.weeklyLimitW, the rate it pins the week to');
   }
   const pinRateToLimit = pinned && weeklyLimitW !== undefined;
+  const part = read.number(raw, 'homePartPct', path, inherited?.homePartPct ?? defaults.homePartPct, CONFIG_LIMITS.budgetHomePartPct);
+  if (part < 100 && !pinRateToLimit) {
+    read.report(`${path}.homePartPct`, 'needs budget.pinRateToLimit, since the status line counts every home of the account');
+  }
+  const homePartPct = pinRateToLimit ? part : 100;
   const extraWPerUsd = read.optionalInteger(raw, 'extraWPerUsd', path, CONFIG_LIMITS.extraWPerUsd) ?? inherited?.extraWPerUsd;
   const reset = parseBudgetReset(read, raw) ?? inherited?.reset;
   const resets = raw['resets'] === undefined ? (inherited?.resets ?? defaults.resets) : parseResetStocks(read, raw, defaults.resets);
@@ -1498,6 +1503,7 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     ...(accountLead === undefined ? {} : { accountLead }),
     ...(weeklyLimitW === undefined ? {} : { weeklyLimitW }),
     pinRateToLimit,
+    homePartPct,
     subagentWeight: read.number(raw, 'subagentWeight', path, inherited?.subagentWeight ?? defaults.subagentWeight, CONFIG_LIMITS.subagentWeight),
     modelWeights,
     ...(extraWPerUsd === undefined ? {} : { extraWPerUsd }),

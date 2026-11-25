@@ -995,7 +995,7 @@ export interface BudgetLiftConfig {
  * leaves one unset takes the team above's, unless it names another account (src/cli/kit.ts openKit), so the teams of
  * a tree read one week alike without a copy that drifts.
  */
-export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'pinRateToLimit', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
+export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'pinRateToLimit', 'homePartPct', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
 
 /** The keys of ACCOUNT_BUDGET_KEYS as a team reads them, its own or the team above's. */
 export type AccountBudget = Pick<BudgetConfig, (typeof ACCOUNT_BUDGET_KEYS)[number]>;
@@ -1029,6 +1029,13 @@ export interface BudgetConfig {
    * from them comes out too low. Needs `weeklyLimitW`. Unset: the team above's (`AccountBudget`), else off.
    */
   readonly pinRateToLimit: boolean;
+  /**
+   * This home's fixed part of the account's week, in %, when two homes share one Claude account: the account's main
+   * lead sets it each week, and this home's day, its spare and the week left are read against that part, never
+   * against what the other home leaves. Below 100 needs `pinRateToLimit`. Unset: the team above's (`AccountBudget`),
+   * else 100, the whole week.
+   */
+  readonly homePartPct: number;
   /**
    * What one W of a subagent's transcript costs against the weekly limit, in W of a main session. The meter
    * multiplies each subagent call's W by it, so every W (and `weeklyLimitW`) is in main-session W. 1: alike.

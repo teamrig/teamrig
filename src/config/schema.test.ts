@@ -202,6 +202,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   syncMaxOpen: 'sync.maxOpen',
   syncMaxNewPerSync: 'sync.maxNewPerSync',
   budgetTargetPct: 'budget.targetPct',
+  budgetHomePartPct: 'budget.homePartPct',
   budgetReservePct: 'budget.reservePct',
   weeklyLimitW: 'budget.weeklyLimitW',
   subagentWeight: 'budget.subagentWeight',

@@ -2228,6 +2228,7 @@ describe('parseConfig budget', () => {
         accountLead: 'app',
         weeklyLimitW: 680_000_000,
         pinRateToLimit: true,
+        homePartPct: 60,
         subagentWeight: 2.15,
         modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
         extraWPerUsd: 120_000,
@@ -2257,6 +2258,7 @@ describe('parseConfig budget', () => {
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
       pinRateToLimit: true,
+      homePartPct: 60,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2288,6 +2290,7 @@ describe('parseConfig budget', () => {
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
       pinRateToLimit: true,
+      homePartPct: 60,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2316,6 +2319,14 @@ describe('parseConfig budget', () => {
     it("keeps the team above's pinned rate under a weekly limit of its own, and drops it with its own off (T5468)", () => {
       assert.equal(parseConfig({ ...ROSTER, budget: { weeklyLimitW: 500_000_000 } }, ABOVE).config.budget.pinRateToLimit, true);
       assert.equal(parseConfig({ ...ROSTER, budget: { pinRateToLimit: false } }, ABOVE).config.budget.pinRateToLimit, false);
+    });
+
+    it("keeps the team above's home part, and takes the whole week with its own pin off (T5468)", () => {
+      assert.equal(parseConfig({ ...ROSTER, budget: { targetPct: 90 } }, ABOVE).config.budget.homePartPct, 60);
+      assert.equal(parseConfig({ ...ROSTER, budget: { homePartPct: 40 } }, ABOVE).config.budget.homePartPct, 40);
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { pinRateToLimit: false } }, ABOVE);
+      assert.deepEqual(paths(issues), ['budget.homePartPct']);
+      assert.equal(config.budget.homePartPct, 100);
     });
 
     it('takes none of them when it names another account', () => {
@@ -2553,6 +2564,20 @@ describe('parseConfig budget', () => {
       assert.deepEqual(issues.map((issue) => [issue.path, issue.message]), [['budget.pinRateToLimit', message]]);
       assert.equal(config.budget.pinRateToLimit, false);
     }
+  });
+
+  it('gives the home the whole week by default, and refuses a part out of range, not a number or with no pinned rate (T5468)', () => {
+    assert.equal(parseConfig(ROSTER).config.budget.homePartPct, 100);
+    const pinned = { weeklyLimitW: 680_000_000, pinRateToLimit: true };
+    assert.equal(parseConfig({ ...ROSTER, budget: { ...pinned, homePartPct: 60 } }).config.budget.homePartPct, 60);
+    for (const part of [0, 101, 'x']) {
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { ...pinned, homePartPct: part } });
+      assert.deepEqual(paths(issues), ['budget.homePartPct']);
+      assert.equal(config.budget.homePartPct, 100);
+    }
+    const { config, issues } = parseConfig({ ...ROSTER, budget: { homePartPct: 60 } });
+    assert.deepEqual(issues, [{ path: 'budget.homePartPct', message: 'needs budget.pinRateToLimit, since the status line counts every home of the account' }]);
+    assert.equal(config.budget.homePartPct, 100);
   });
 
   it('refuses a target and reserve that pass 100% of the week', () => {

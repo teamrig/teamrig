@@ -1155,6 +1155,13 @@
           "type": "boolean",
           "default": false
         },
+        "homePartPct": {
+          "description": "This home's fixed part of the account's week, in %, when two homes (teamrig on two machines) share one Claude account: the account's main lead sets it each week, and this home's daily budget, its spare and the week it has left are read against that part, never against what the other home leaves. Below 100 needs pinRateToLimit. Unset in a team under another on its account: the team above's.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 100
+        },
         "subagentWeight": {
           "description": "What one W of a subagent's transcript costs against the weekly limit, in W of a main session. The meter multiplies each subagent call's W by it, so weeklyLimitW is in main-session W. 1: both cost alike. Unset in a team under another on its account: the team above's.",
           "type": "number",

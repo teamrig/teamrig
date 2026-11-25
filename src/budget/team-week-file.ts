@@ -17,6 +17,8 @@ export interface TeamWeekInput {
   /** W per percent of the week's use so far (src/budget/week.ts `WeekReading.usedWPerPct`), so the teams' parts add up to the account's use. */
   readonly wPerPct: number | undefined;
   readonly targetPct: number;
+  /** This home's fixed part of the account's week, in % (`budget.homePartPct`): the teams split only that part of what is left. */
+  readonly homePartPct: number;
   /** The team's sessions' usage stores only, never the outside one. */
   readonly states: readonly UsageState[];
   /** The team and the other teams on its account, which split what the account has left (`teamShareOf`). */
@@ -37,7 +39,7 @@ export function teamWeekSummaryOf(input: TeamWeekInput): NamedTeamWeek | undefin
     return undefined;
   }
   const teamUsedPct = wSince(input.states, window.start, now) / wPerPct;
-  const leftPct = teamShareOf(Math.max(0, input.targetPct - usedPct), input.teams.split, input.teams.others);
+  const leftPct = teamShareOf((Math.max(0, input.targetPct - usedPct) * input.homePartPct) / 100, input.teams.split, input.teams.others);
   return {
     account: input.account,
     usedPct: summaryPct(teamUsedPct),

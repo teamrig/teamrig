@@ -330,6 +330,34 @@ function teamAllowancePct(input: AllowanceInput, pool: ExtraPool | undefined, wP
   return spanAllowancePct({ start: window.start, end: window.paceEnd, stopPct: usedPct + leftW / wPerPct, now, usedPct, todayPct, profile });
 }
 
+/** This home's own use against its fixed part of the account's week (`budget.homePartPct`), in percent of the week. */
+interface HomeUse {
+  /** The part, as a fraction of the week. */
+  readonly part: number;
+  /** This home's use of the week, from its own W. */
+  readonly usedPct: number;
+  /** This home's use today, from its own W. */
+  readonly todayPct: number;
+}
+
+/**
+ * This home's use when it holds a part of the account's week below 100% on a pinned rate, else undefined. The status
+ * line counts every home of the account, so its points never stand for this home's use: its W over the pinned rate
+ * does, or the account's use times the part while the usage stores miss the week's start.
+ */
+function homeUseOf(
+  budget: Pick<BudgetConfig, 'homePartPct'>,
+  pinned: boolean,
+  use: { readonly usedPct: number | undefined; readonly wPerPct: number | undefined; readonly weekW: number | undefined; readonly todayW: number },
+): HomeUse | undefined {
+  const part = budget.homePartPct / 100;
+  if (!pinned || part >= 1 || use.wPerPct === undefined || use.usedPct === undefined) {
+    return undefined;
+  }
+  const usedPct = use.weekW === undefined ? use.usedPct * part : use.weekW / use.wPerPct;
+  return { part, usedPct, todayPct: use.todayW / use.wPerPct };
+}
+
 export function readWeek(input: WeekInput): WeekReading {
   const { budget, now, statusUse, states, period, calibration, readings, extra } = input;
   const reset = period?.end;
@@ -359,16 +387,19 @@ export function readWeek(input: WeekInput): WeekReading {
     extra === undefined || window === undefined || usedPct === undefined
       ? undefined
       : poolOf(extra.entries, { start: window.start, w: weekW, usedPct, wAtFull: extra.wAtFull, configuredWPerUsd: budget.extraWPerUsd });
+  const home = homeUseOf(budget, pinned, { usedPct, wPerPct, weekW: covered ? weekW : undefined, todayW });
   const allowancePct =
     window === undefined || usedPct === undefined || wPerPct === undefined || todayPct === undefined
       ? undefined
-      : teamAllowancePct({ window, budget, now, usedPct, todayPct, profile }, pool, wPerPct);
+      : home === undefined
+        ? teamAllowancePct({ window, budget, now, usedPct, todayPct, profile }, pool, wPerPct)
+        : spanAllowancePct({ start: window.start, end: window.paceEnd, stopPct: budget.targetPct * home.part, now, usedPct: home.usedPct, todayPct: home.todayPct, profile });
   const pastLimit = usedPct === undefined ? undefined : pastLimitOf(usedPct, pool);
   const teamDay =
     window === undefined || todayPct === undefined || todayWPerPct === undefined || allowancePct === undefined
       ? undefined
       : {
-          usedPct: todayPct,
+          usedPct: home?.todayPct ?? todayPct,
           pacePct: dayPacePct({ window, now, allowancePct, idlePct: idleWSince(states, todayFrom, now, profile) / todayWPerPct, profile }),
           ...(pastLimit === undefined ? {} : { pastLimit }),
         };
@@ -384,7 +415,7 @@ export function readWeek(input: WeekInput): WeekReading {
     covered,
     pace,
     allowancePct,
-    plannedPct,
+    plannedPct: plannedPct === undefined || home === undefined ? plannedPct : plannedPct * home.part,
     todayFrom,
     todayW,
     todayWPerPct,

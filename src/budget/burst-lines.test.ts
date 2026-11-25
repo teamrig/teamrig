@@ -151,7 +151,16 @@ describe('burstPromptLines', () => {
 });
 
 describe('surplusHintOf', () => {
-  const input = { config: DEFAULT_BURST, window: weekWindow(RESET, 1), now: NOW, usedPct: 60, targetPct: 99.5, teams: ALONE, ownerAsk: 'the owner' };
+  const input = { config: DEFAULT_BURST, window: weekWindow(RESET, 1), now: NOW, usedPct: 60, targetPct: 99.5, teams: ALONE, homePartPct: 100, ownerAsk: 'the owner' };
+
+  it("reads only this home's part of the spare, and none worth a burst once that part is too small (T5468)", () => {
+    const whole = surplusHintOf(input);
+    const home = surplusHintOf({ ...input, homePartPct: 50 });
+    assert.ok(whole !== undefined && home !== undefined);
+    assert.ok(Math.abs(home.sparePct - whole.sparePct / 2) < 1e-9);
+    assert.equal(home.accountSparePct, whole.sparePct);
+    assert.equal(surplusHintOf({ ...input, homePartPct: 1 }), undefined);
+  });
 
   it('reads a surplus worth a burst, and whom to ask when the owner approves it', () => {
     const hint = surplusHintOf(input);
