@@ -57,6 +57,7 @@ import { loadTree } from '../tree.ts';
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle, type TitleRead } from './hook-bind.ts';
 import { helperGateReply, promptBudgetLine, stopBudgetLines } from './hook-budget.ts';
 import { ensureWatch } from './issue-watch.ts';
+import { turnEndIdlePass } from './hook-turn-end-pass.ts';
 import { leaderDigestText } from './hook-leader-digest.ts';
 import { closedSendHold } from './hook-closed-send.ts';
 import { coldSendHold } from './hook-cold-send.ts';
@@ -922,7 +923,8 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
  * starts one hidden in the background (issue-watch.ts), and every 10 minutes it tells the lead of
  * a team tab that runs without its hooks (hook-hookless.ts). With tab status on, it also sets the
  * tab's title to the ready circle, or the working one while a helper runs, in any tab of the team (hook-tab-status.ts).
- * Each team session's reply is logged for the task pane (hook-turn-log.ts).
+ * Each team session's reply is logged for the task pane (hook-turn-log.ts). In a host with no tab mod, such as Codex
+ * CLI, it then runs the team's idle pass, which such a host's tabs would otherwise never run (hook-turn-end-pass.ts).
  * A turn with nothing to say reads only small files and the transcript's tail (and, at the first stop of a UTC day,
  * the register log; with tab status on, the longer tail where helpers start), and prints nothing but the tab's title.
  * It never blocks on an error, and ignores input that is not a hook payload (which would judge a boundary without
@@ -933,8 +935,10 @@ export async function stop(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const { event } = await readHookInput(runtime);
   const reply = event === undefined ? undefined : await stopReplyOf(runtime, event).catch((): HookReply | undefined => undefined);
   writeReply(runtime, 'stop', reply);
+  // After the reply, which neither step may hold up or cost: an error here leaves the next turn's end to try again.
   if (event !== undefined) {
     await turnEndWeekReading(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the plan's reading was not saved: ${errorMessage(error)}`));
+    await turnEndIdlePass(runtime, event).catch(() => undefined);
   }
   return EXIT.ok;
 }

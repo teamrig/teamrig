@@ -502,6 +502,15 @@ export function hostNameIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'plat
   return isUnsupported(launcher) ? undefined : launcher.programName;
 }
 
+/**
+ * Whether the run's host wakes its sessions through its own program, as Codex CLI does: such a host has no tab mod
+ * running the wake check, and with it the team's idle pass, while its session sits idle (src/cli/host-wake.ts).
+ */
+export function wakesThroughProgram(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): boolean {
+  const { launcher } = hostOf(runtime);
+  return !isUnsupported(launcher) && !isUnsupported(launcher.wake);
+}
+
 /** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
 export function hostNameOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>): string {
   const { launcher } = hostOf(runtime);

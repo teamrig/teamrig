@@ -513,13 +513,31 @@ export async function wakeCheck(args: ParsedArgs, runtime: CliRuntime): Promise<
   if (scope.kind === 'off') {
     return answer(runtime, scope);
   }
-  const { kit, config, id, tab } = scope;
-  // The pass is the team's, not this tab's wake: before the holds that keep only this session from waking. A pass
-  // this check ran also runs the stale passes of the tree's other teams, which may have no tab left to run their own.
+  // The pass is the team's, not this tab's wake: before the holds that keep only this session from waking.
+  await teamIdlePass(runtime, scope);
+  return answer(runtime, await wakeAnswerOf(runtime, scope, event?.cwd));
+}
+
+/**
+ * The team's idle pass, at most once a minute across the team (hook-idle-pass.ts). A pass this call ran also runs the
+ * stale passes of the tree's other teams, which may have no tab left to run their own.
+ */
+async function teamIdlePass(runtime: CliRuntime, scope: Extract<WakeScope, { kind: 'found' }>): Promise<void> {
+  const { kit, config } = scope;
   if (await runIdlePass(runtime, kit, config, scope.roster, sessionFoldersOf(runtime, config, undefined, scope.from))) {
     await runTreeIdlePasses(runtime, kit.paths.team);
   }
-  return answer(runtime, await wakeAnswerOf(runtime, scope, event?.cwd));
+}
+
+/**
+ * The team's idle pass for the hook call `origin` names, under the wake check's own gates: none outside a team
+ * session or with `wake.enabled` false. For a host with no tab mod to run the wake check (hook-turn-end-pass.ts).
+ */
+export async function idlePassOfScope(runtime: CliRuntime, origin: HookOrigin | undefined): Promise<void> {
+  const scope = await wakeScopeOf(runtime, origin, true);
+  if (scope.kind === 'found') {
+    await teamIdlePass(runtime, scope);
+  }
 }
 
 /**

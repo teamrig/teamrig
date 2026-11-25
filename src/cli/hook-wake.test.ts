@@ -28,6 +28,7 @@ import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../r
 import type { RestoreEntry } from '../restore/entry.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../restore/registry.ts';
 import { HOLDING_BUDGET, holdAlpha, meterDearDay, meterToday } from '../testing/budget-hold.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
 import { APP, AUTO_RESTART_TEAM, CliHarness, EVENTS_PATH, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
@@ -976,6 +977,37 @@ describe('hook wake-check runs the idle pass', () => {
     kit.clock.advance(2 * MINUTE);
     const result = await hostedCheck();
     assert.deepEqual(result.stderr, ['WARN teamrig could not wake bravo through its host: codex queue exited 2']);
+  });
+
+  it('runs at the turn end of a session of a host with no tab mod, and never at a Claude Code turn end (T5059)', async () => {
+    // A team whose every session runs in Codex has no tab mod to run the wake check, so no other caller runs its pass.
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST] });
+    const turnEnd = (host: readonly string[]): Promise<CliResult> =>
+      kit.run(['hook', 'stop', ...host], {
+        stdin: payload(),
+        probe: new FakePathProbe({ folders: [APP] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts(),
+      });
+    assert.equal((await turnEnd([])).code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), [], 'a Claude Code tab leaves the pass to its mod');
+    assert.equal((await turnEnd(['--host', WAKING_HOST])).code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), [pass(kit.clock.now(), [AWAY_LEAD, AWAY_ALPHA, CLOSED_BRAVO])]);
+    kit.clock.advance(30 * SECOND);
+    await turnEnd(['--host', WAKING_HOST]);
+    assert.equal((await logLines(kit, PASS_LOG)).length, 1, 'still once a minute across the team');
+  });
+
+  it('runs at no turn end of a host with no tab mod while wake.enabled is false (T5059)', async () => {
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST], wake: { enabled: false } });
+    const result = await kit.run(['hook', 'stop', '--host', WAKING_HOST], {
+      stdin: payload(),
+      probe: new FakePathProbe({ folders: [APP] }),
+      memory: new FakeHostMemory().lists([], COMMIT),
+      shippedHosts: wakingHosts(),
+    });
+    assert.equal(result.code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), []);
   });
 
   it("in mode on starts no reopen for a session a wake's reopen is pending on (#1584)", async () => {
