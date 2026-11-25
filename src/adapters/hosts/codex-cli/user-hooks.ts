@@ -23,11 +23,9 @@ import {
   type UserHooksAnswer,
 } from '../../../plugin-api/index.ts';
 import { withBooleanKey, withBooleanKeyInEach } from './config-toml.ts';
+import { codexHomeOf } from './codex-home.ts';
 import { codexHooksFile, type SkippedHandler } from './hooks-file.ts';
 
-/** Moves Codex's own folder (config, hooks, login) away from `~/.codex`. */
-const HOME_VAR = 'CODEX_HOME';
-const DEFAULT_HOME = '.codex';
 const HOOKS_FILE = 'hooks.json';
 const CONFIG_FILE = 'config.toml';
 
@@ -173,10 +171,7 @@ const PROFILES = 'profiles';
 /** The Codex CLI port of the person's hooks file. */
 export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platform']): HostUserHooks {
   const path = platform === 'win32' ? win32 : posix;
-  const codexHome = (userHome: string): string => {
-    const moved = env[HOME_VAR]?.trim();
-    return moved ? moved : path.join(userHome, DEFAULT_HOME);
-  };
+  const codexHome = codexHomeOf(env, platform);
   return {
     host: 'codex',
     file: (userHome) => path.join(codexHome(userHome), HOOKS_FILE),
