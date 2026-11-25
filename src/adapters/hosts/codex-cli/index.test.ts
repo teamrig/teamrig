@@ -17,11 +17,31 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(declaration.sessionVariables, { marks: ['CODEX_THREAD_ID'], identity: [] });
   });
 
-  it('claims no host feature before a live run proves it', () => {
-    const claimed = featuresOf('host')
-      .filter((row) => declaration.manifest[row.id].kind !== 'unsupported')
-      .map((row) => row.id);
-    assert.deepEqual(claimed, []);
+  it('claims the rows its built ports serve, none with a proof yet (T5559)', () => {
+    const claimed = (kind: string): readonly string[] => featuresOf('host').filter((row) => declaration.manifest[row.id].kind === kind).map((row) => row.id);
+    assert.deepEqual(claimed('supported'), [
+      'rules.session-start',
+      'inbox.prompt-line',
+      'hooks.pretool-guard',
+      'hooks.file-guard',
+      'hooks.permission-refuse',
+      'hooks.prompt-secret',
+      'sessions.identity',
+      'sessions.process',
+      'helpers.start-rules',
+      'plugin.hooks-file',
+      'os.windows-sessions',
+      'os.windows-hooks',
+      'os.linux',
+    ]);
+    assert.deepEqual(claimed('partial'), ['rules.start-size', 'context.compact-hold', 'context.refresh', 'hooks.exec-review', 'hooks.readonly-allow', 'hooks.tool-failure', 'sessions.open', 'sessions.resume', 'sessions.turn-end', 'tabs.memory']);
+    assert.deepEqual(
+      featuresOf('host').flatMap((row) => {
+        const support = declaration.manifest[row.id];
+        return support.kind === 'unsupported' ? [] : support.proofs;
+      }),
+      [],
+    );
   });
 
   it("enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools, usage meter, secret files, session launcher, the person's hooks file and skills folder", () => {
