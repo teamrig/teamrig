@@ -67,8 +67,8 @@ export const declaration: HostDeclaration = {
     'hooks.tool-failure': UNPROVED,
     'permissions.deny-lines': {
       kind: 'partial',
-      missing: 'wildcards in both read_file() and command(), subfolder globbing, ~ expansion in read_file(), and prefix allow rules',
-      notice: 'agy 1.5.14 blocks root/full-path read_file(<file>) and exact command(<cmd>), but wildcards (*, **), ~, and trailing-* allow rules do not fire on 1.5.14',
+      missing: 'pattern wildcards in read_file() and command(), subfolder globbing, ~ expansion in read_file(), and prefix allow rules',
+      notice: 'agy 1.5.14 blocks root/full-path read_file(<file>) and exact command(<cmd>); bare command(*) matches in allow, but path/pattern wildcards (*, **), ~, and trailing-* rules do not fire on 1.5.14',
       proofs: [WIN_PERM_PROOF],
     },
     'permissions.auto-mode-routes': NO_HOST_SUPPORT('Claude Code auto-mode routes'),
