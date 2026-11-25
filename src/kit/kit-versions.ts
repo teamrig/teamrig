@@ -181,6 +181,31 @@ export interface KitPorts {
   readonly kitHome: string;
 }
 
+/** The ports `teamrig kit use` takes: it writes the records only, under the kit home's install lock. */
+export interface KitUsePorts extends Pick<KitPorts, 'files' | 'kitHome'> {
+  readonly lock: Mutex;
+}
+
+/** The ports `teamrig kit prune` takes: it removes folders, under the kit home's install lock. */
+export interface KitPrunePorts extends KitPorts {
+  readonly lock: Mutex;
+}
+
+/** Why `teamrig kit use` or `teamrig kit prune` changed nothing while another process held the install lock. */
+export const KIT_LOCK_BUSY = 'another teamrig process holds the kit install lock (a session start copying a release); retry';
+
+/** The task's result under `lock`, or busy when another process held the lock past the lock's wait. */
+async function underLock<T>(lock: Mutex, task: () => Promise<T>): Promise<{ readonly kind: 'done'; readonly result: T } | { readonly kind: 'busy' }> {
+  try {
+    return { kind: 'done', result: await lock.run(task) };
+  } catch (error) {
+    if (error instanceof LockBusyError) {
+      return { kind: 'busy' };
+    }
+    throw error;
+  }
+}
+
 /**
  * The version folder's integrity list hash when every file in it matches the list, else why not. A release whose
  * plugin.json names another version is refused, so a folder's name is always the version it holds.
@@ -241,14 +266,8 @@ export async function installKitVersion(install: KitInstall): Promise<KitInstall
   if (settled !== undefined) {
     return settled;
   }
-  try {
-    return await install.lock.run(() => installUnderLock(install, wanted));
-  } catch (error) {
-    if (error instanceof LockBusyError) {
-      return { kind: 'busy' };
-    }
-    throw error;
-  }
+  const held = await underLock(install.lock, () => installUnderLock(install, wanted));
+  return held.kind === 'done' ? held.result : held;
 }
 
 /**
@@ -327,7 +346,7 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
   }
   const before = state.kind === 'current' ? state.current : undefined;
   const outcome = await movedCurrent(files, kitHome, before, { version, listHash: verified.hash, source, pinned: false }, wanted);
-  await pruneKitVersions(install);
+  await prunedUnderLock(install);
   return outcome;
 }
 
@@ -420,8 +439,17 @@ export async function planKitUse(ports: Pick<KitPorts, 'files' | 'kitHome'>, tar
   return previous === undefined ? { kind: 'move', next } : { kind: 'move', next, previous };
 }
 
-/** Moves `current` as `planKitUse` plans it. */
-export async function useKitVersion(ports: Pick<KitPorts, 'files' | 'kitHome'>, target: KitUseTarget): Promise<KitUseOutcome> {
+/**
+ * Moves `current` as `planKitUse` plans it, checking and writing under the install lock, so a session start's install
+ * never rewrites the records between them and a prune never removes the version it checked. Refused while another
+ * process holds the lock past its wait.
+ */
+export async function useKitVersion(ports: KitUsePorts, target: KitUseTarget): Promise<KitUseOutcome> {
+  const held = await underLock(ports.lock, () => usedUnderLock(ports, target));
+  return held.kind === 'done' ? held.result : { kind: 'refused', why: KIT_LOCK_BUSY };
+}
+
+async function usedUnderLock(ports: KitUsePorts, target: KitUseTarget): Promise<KitUseOutcome> {
   const plan = await planKitUse(ports, target);
   if (plan.kind === 'refused') {
     return plan;
@@ -433,12 +461,16 @@ export async function useKitVersion(ports: Pick<KitPorts, 'files' | 'kitHome'>, 
 }
 
 /** What a prune removed, and what it could not remove (a running process holds a file), left for the next one. */
-export interface KitPruneOutcome {
+export interface KitPruned {
+  readonly kind: 'pruned';
   readonly removed: readonly string[];
   /** The leftovers removed, by their path under the kit home: an install's stopped copy, a set-aside folder, a temp file. */
   readonly leftovers: readonly string[];
   readonly failed: readonly string[];
 }
+
+/** What `teamrig kit prune` did: pruned, or nothing while another process held the install lock past its wait. */
+export type KitPruneOutcome = KitPruned | { readonly kind: 'busy' };
 
 /**
  * The kept versions past the rollback window, newest first, which a prune removes: all but the version `current` names,
@@ -491,8 +523,17 @@ export async function kitLeftovers(files: Pick<Files, 'list'>, kitHome: string):
   return [...inVersions, ...inHome];
 }
 
-/** Removes the versions `prunableKitVersions` names and the leftovers `kitLeftovers` finds. */
-export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome> {
+/**
+ * Removes the versions `prunableKitVersions` names and the leftovers `kitLeftovers` finds, under the install lock, so
+ * it never removes a version `teamrig kit use` just checked nor a copy a session start is putting in place.
+ */
+export async function pruneKitVersions(ports: KitPrunePorts): Promise<KitPruneOutcome> {
+  const held = await underLock(ports.lock, () => prunedUnderLock(ports));
+  return held.kind === 'done' ? held.result : held;
+}
+
+/** The prune itself, for a caller holding the install lock already: an install after it moved `current`. */
+async function prunedUnderLock(ports: KitPorts): Promise<KitPruned> {
   const { files, tree, kitHome } = ports;
   const removed: string[] = [];
   const leftovers: string[] = [];
@@ -515,5 +556,5 @@ export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome
       failed.push(leftover.path);
     }
   }
-  return { removed, leftovers, failed };
+  return { kind: 'pruned', removed, leftovers, failed };
 }

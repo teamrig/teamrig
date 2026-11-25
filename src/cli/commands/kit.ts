@@ -1,7 +1,21 @@
 import { resolveKitHome } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
-import { kitLeftovers, listKitVersions, planKitUse, prunableKitVersions, pruneKitVersions, readKitCurrent, useKitVersion, type KitCurrent, type KitUseTarget } from '../../kit/kit-versions.ts';
+import type { Mutex } from '../../core/lock.ts';
+import { KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
+import {
+  KIT_LOCK_BUSY,
+  kitLeftovers,
+  listKitVersions,
+  planKitUse,
+  prunableKitVersions,
+  pruneKitVersions,
+  readKitCurrent,
+  useKitVersion,
+  type KitCurrent,
+  type KitUseTarget,
+} from '../../kit/kit-versions.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
+import { fileLockOf, type FileLockRuntime } from '../file-locks.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
 /**
@@ -12,10 +26,15 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
 
 const LATEST = 'latest';
 
-type KitRuntime = Pick<CliRuntime, 'files' | 'kitTree' | 'env' | 'userHome' | 'out'>;
+type KitRuntime = Pick<CliRuntime, 'kitTree' | 'env' | 'userHome' | 'out'> & FileLockRuntime;
 
 function kitHomeOf(runtime: KitRuntime): string {
   return resolveKitHome(runtime.env, runtime.userHome);
+}
+
+/** The kit home's install lock as the person's command takes it: a short wait for a session start's copy. */
+function commandLockOf(runtime: KitRuntime, kitHome: string): Mutex {
+  return fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_COMMAND_LOCK);
 }
 
 /** How a record names where its version came from. */
@@ -78,7 +97,7 @@ export async function kitUse(args: ParsedArgs, runtime: KitRuntime): Promise<Exi
     runtime.out.stdout(`PREVIEW nothing written (add --${WRITE_SWITCH} to write): current ${from} -> ${plan.next.version}${pin}`);
     return EXIT.ok;
   }
-  const outcome = await useKitVersion(ports, target);
+  const outcome = await useKitVersion({ ...ports, lock: commandLockOf(runtime, ports.kitHome) }, target);
   if (outcome.kind === 'refused') {
     throw new RefusedError(`teamrig kit use: ${outcome.why}`);
   }
@@ -110,7 +129,10 @@ export async function kitPrune(args: ParsedArgs, runtime: KitRuntime): Promise<E
     }
     return EXIT.ok;
   }
-  const outcome = await pruneKitVersions({ files: runtime.files, tree: runtime.kitTree, kitHome });
+  const outcome = await pruneKitVersions({ files: runtime.files, tree: runtime.kitTree, kitHome, lock: commandLockOf(runtime, kitHome) });
+  if (outcome.kind === 'busy') {
+    throw new RefusedError(`teamrig kit prune: ${KIT_LOCK_BUSY}`);
+  }
   runtime.out.stdout(`REMOVED ${countedList(outcome.removed)}`);
   if (outcome.leftovers.length > 0) {
     runtime.out.stdout(`REMOVED leftovers of stopped installs ${countedList(outcome.leftovers)}`);

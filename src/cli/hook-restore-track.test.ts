@@ -599,7 +599,7 @@ describe('hook restore-track: the kit self-install (T5278)', () => {
     const older = '0.1.0';
     await writeKitRelease(kit.files, '/plugins/older', older);
     await installKitVersion({ files: kit.files, tree, kitHome: KIT, from: '/plugins/older', version: older, source: { kind: 'claude-code-plugin' }, lock: new InlineMutex() });
-    await useKitVersion({ files: kit.files, kitHome: KIT }, { kind: 'version', version: older });
+    await useKitVersion({ files: kit.files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: older });
     await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
     for (let start = 0; start < 2; start += 1) {
       const { stdout } = await startFrom(kit, tree);

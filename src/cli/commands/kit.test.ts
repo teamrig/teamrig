@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 import { settingsWriteRefusal } from '../../core/settings-writers.ts';
-import { kitCurrentPath, kitVersionFolder, readKitCurrent } from '../../kit/kit-versions.ts';
+import { kitInstallLockPath } from '../../kit/kit-self-install.ts';
+import { KIT_LOCK_BUSY, kitCurrentPath, kitVersionFolder, readKitCurrent } from '../../kit/kit-versions.ts';
 import { CliHarness, KIT, type RunOptions } from '../../testing/cli-harness.ts';
+import { holderLetsGo, holdFileLock } from '../../testing/held-file-lock.ts';
 import { writeKeptKitVersion } from '../../testing/kit-release.ts';
 import { MemoryKitTree } from '../../testing/memory-kit-tree.ts';
 import { EXIT } from '../runtime.ts';
 
 const KEPT = ['0.505.0', '0.506.0', '0.507.0', '0.508.0', '0.509.0'];
+const LOCK = kitInstallLockPath(KIT);
 
 describe('teamrig kit', () => {
   let kit: CliHarness;
@@ -95,6 +98,30 @@ describe('teamrig kit', () => {
       }
     });
 
+    it("waits for a session start's install to let go of the install lock before it checks and writes", async () => {
+      await keptWith('0.509.0');
+      await holdFileLock(kit, LOCK);
+      const seen: Array<string | undefined> = [];
+      const result = await kit.run(['kit', 'use', '0.507.0', '--yes'], { ...options, sleep: holderLetsGo(kit, LOCK, kitCurrentPath(KIT), seen) });
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.deepEqual([seen, kit.files.get(kitCurrentPath(KIT)), kit.files.get(LOCK)], [['0.509.0\n'], '0.507.0\n', undefined]);
+    });
+
+    it('refuses, moving nothing, while another process holds the install lock past the wait', async () => {
+      await keptWith('0.509.0');
+      await holdFileLock(kit, LOCK);
+      const result = await kit.run(['kit', 'use', '0.507.0', '--yes'], options);
+      assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED teamrig kit use: ${KIT_LOCK_BUSY}`]]);
+      assert.equal((await readKitCurrent(kit.files, KIT))?.version, '0.509.0');
+    });
+
+    it('takes no lock for a preview, so an install in progress never holds it up', async () => {
+      await keptWith('0.509.0');
+      await holdFileLock(kit, LOCK);
+      const result = await kit.run(['kit', 'use', '0.507.0'], options);
+      assert.deepEqual([result.code, kit.clock.sleeps], [EXIT.ok, []]);
+    });
+
     it("refuses the write where an agent's host runs it, as a settings writer", async () => {
       await keptWith('0.509.0');
       const result = await kit.run(['kit', 'use', '0.507.0', '--yes'], { ...options, env: { CLAUDECODE: '1' } });
@@ -127,6 +154,24 @@ describe('teamrig kit', () => {
       assert.equal(result.code, EXIT.ok);
       assert.deepEqual(result.stdout, ['REMOVED 2: 0.506.0, 0.505.0', `REMOVED leftovers of stopped installs ${leftovers}`]);
       assert.equal(kit.files.get(join(KIT, 'current.4242.1.tmp')), undefined);
+    });
+
+    it("waits for a session start's install to let go of the install lock before it removes anything", async () => {
+      await keptWith('0.509.0');
+      await holdFileLock(kit, LOCK);
+      const oldest = join(kitVersionFolder(KIT, '0.505.0'), '.claude-plugin', 'plugin.json');
+      const seen: Array<string | undefined> = [];
+      const result = await kit.run(['kit', 'prune', '--yes'], { ...options, sleep: holderLetsGo(kit, LOCK, oldest, seen) });
+      assert.deepEqual([result.code, result.stdout], [EXIT.ok, ['REMOVED 2: 0.506.0, 0.505.0']]);
+      assert.deepEqual([seen.map((text) => text !== undefined), kit.files.get(oldest)], [[true], undefined]);
+    });
+
+    it('refuses, removing nothing, while another process holds the install lock past the wait', async () => {
+      await keptWith('0.509.0');
+      await holdFileLock(kit, LOCK);
+      const result = await kit.run(['kit', 'prune', '--yes'], options);
+      assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED teamrig kit prune: ${KIT_LOCK_BUSY}`]]);
+      assert.ok(kit.files.get(join(kitVersionFolder(KIT, '0.505.0'), '.claude-plugin', 'plugin.json')) !== undefined);
     });
   });
 });

@@ -47,7 +47,7 @@ describe('installRunningKit', () => {
 
   it('names the pin and the newer version at each start of a pinned install', async () => {
     await selfInstall(join(PLUGIN, '0.508.0'), '0.508.0');
-    await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+    await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' });
     const outcome = await selfInstall(join(PLUGIN, '0.509.0'), '0.509.0');
     assert.equal(kitSelfInstallNote(outcome), 'teamrig pinned at 0.508.0; 0.509.0 is installed; `teamrig kit use --latest` moves to it.');
     assert.equal(kitSelfInstallLogLine(outcome), 'kit: 0.509.0 kept; current pinned at 0.508.0');

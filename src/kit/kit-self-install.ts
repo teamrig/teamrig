@@ -9,6 +9,12 @@ import { installKitVersion, kitVersionsFolder, type KitInstallOutcome, type KitP
  */
 export const KIT_INSTALL_LOCK: LockTimings = { ttlMs: 300_000, pollMs: 50, waitMs: 0 };
 
+/**
+ * The install lock as `teamrig kit use` and `teamrig kit prune` take it: they wait up to 30 s, so a session start's
+ * copy in progress delays the person's command rather than refusing it, and refuse past that.
+ */
+export const KIT_COMMAND_LOCK: LockTimings = { ttlMs: 300_000, pollMs: 100, waitMs: 30_000 };
+
 /** The install lock: `<kit home>/versions.lock`, beside the folder it guards. */
 export function kitInstallLockPath(kitHome: string): string {
   return join(kitHome, 'versions.lock');

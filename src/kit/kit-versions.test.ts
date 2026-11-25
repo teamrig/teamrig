@@ -9,6 +9,7 @@ import { MemoryFiles } from '../testing/memory-files.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import {
   installKitVersion,
+  KIT_LOCK_BUSY,
   kitCurrentPath,
   kitCurrentRecordPath,
   kitVersionFolder,
@@ -129,7 +130,7 @@ describe('kit versions', () => {
       await install('0.508.0');
       await install('0.509.0');
       assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'older', version: '0.508.0', current: '0.509.0' });
-      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' });
       assert.deepEqual(await install('0.509.0', { lock: new BusyMutex() }), { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' });
       assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'current', version: '0.508.0' });
       assert.equal(tree.copies.length, 2);
@@ -197,7 +198,7 @@ describe('kit versions', () => {
       };
       await install('0.508.0');
       await install('0.509.0');
-      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' });
       const record = files.get(kitCurrentRecordPath(KIT)) ?? '';
       const cases: ReadonlyArray<readonly [string, () => Promise<void>]> = [
         [
@@ -236,7 +237,7 @@ describe('kit versions', () => {
     it('pins a kept older version, so a later install of a newer plugin leaves current there', async () => {
       await install('0.508.0');
       await install('0.509.0');
-      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' }), {
         kind: 'moved',
         version: '0.508.0',
         previous: '0.509.0',
@@ -250,9 +251,9 @@ describe('kit versions', () => {
     it('use --latest moves to the newest kept version and clears the pin', async () => {
       await install('0.508.0');
       await install('0.509.0');
-      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' });
       await install('0.510.0');
-      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'latest' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'latest' }), {
         kind: 'moved',
         version: '0.510.0',
         previous: '0.508.0',
@@ -264,7 +265,7 @@ describe('kit versions', () => {
     it('refuses a version that is not kept, or whose files changed since install', async () => {
       await install('0.508.0');
       await install('0.509.0');
-      const ports = { files, tree, kitHome: KIT };
+      const ports = { files, tree, kitHome: KIT, lock: new InlineMutex() };
       assert.deepEqual(await useKitVersion(ports, { kind: 'version', version: '0.400.0' }), { kind: 'refused', why: '0.400.0 is not installed; kept: 0.509.0, 0.508.0' });
       await files.write(join(kitVersionFolder(KIT, '0.508.0'), 'package.json'), '{"type":"commonjs"}\n');
       assert.deepEqual(await useKitVersion(ports, { kind: 'version', version: '0.508.0' }), {
@@ -280,20 +281,27 @@ describe('kit versions', () => {
       const source = join(KIT, 'versions', '0.508.0.source.json');
       const record = files.get(source) ?? '';
       await files.remove(source);
-      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' }), {
         kind: 'refused',
         why: '0.508.0 has no record of where it came from (0.508.0.source.json); a session start of the teamrig plugin at that version copies it again',
       });
       await files.write(source, record.replace(/"listHash":"[0-9a-f]+"/, `"listHash":"${'0'.repeat(64)}"`));
-      assert.deepEqual(await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' }), {
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' }), {
         kind: 'refused',
         why: `0.508.0 is not the build it was copied from (its ${CLIENT_MANIFEST} differs)`,
       });
       assert.equal((await readKitCurrent(files, KIT))?.version, '0.509.0');
     });
 
+    it('refuses, moving nothing, while another process holds the install lock', async () => {
+      await install('0.508.0');
+      await install('0.509.0');
+      assert.deepEqual(await useKitVersion({ files, kitHome: KIT, lock: new BusyMutex() }, { kind: 'version', version: '0.508.0' }), { kind: 'refused', why: KIT_LOCK_BUSY });
+      assert.equal((await readKitCurrent(files, KIT))?.version, '0.509.0');
+    });
+
     it('refuses with no version installed', async () => {
-      assert.equal((await useKitVersion({ files, kitHome: KIT }, { kind: 'latest' })).kind, 'refused');
+      assert.equal((await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'latest' })).kind, 'refused');
     });
   });
 
@@ -321,8 +329,8 @@ describe('kit versions', () => {
       }
       assert.deepEqual(await listKitVersions(files, KIT), ['0.511.0', '0.510.0', '0.509.0']);
       assert.equal(files.get(join(KIT, 'versions', '0.507.0.source.json')), undefined);
-      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.509.0' });
-      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: ['0.510.0'], leftovers: [], failed: [] });
+      await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.509.0' });
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT, lock: new InlineMutex() }), { kind: 'pruned', removed: ['0.510.0'], leftovers: [], failed: [] });
       assert.deepEqual(await listKitVersions(files, KIT), ['0.511.0', '0.509.0']);
       await writeKitRelease(files, join(PLUGIN, '0.512.0'), '0.512.0');
       assert.deepEqual(await install('0.512.0'), { kind: 'pinned', version: '0.512.0', pinned: '0.509.0' });
@@ -330,9 +338,26 @@ describe('kit versions', () => {
       assert.equal(files.get(join(KIT, 'versions', '0.511.0.source.json')), undefined);
     });
 
+    it('is busy, removing nothing, while another process holds the install lock', async () => {
+      await install('0.508.0');
+      const partial = join(KIT, 'versions', '0.509.0.partial', 'x');
+      await files.write(partial, 'x\n');
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT, lock: new BusyMutex() }), { kind: 'busy' });
+      assert.equal(files.get(partial), 'x\n');
+    });
+
+    it("an install's own prune runs under the lock the install holds, taking it once", async () => {
+      const lock = new InlineMutex();
+      for (const version of ['0.507.0', '0.508.0', '0.509.0', '0.510.0']) {
+        await install(version, { lock });
+      }
+      assert.equal(lock.runs, 4);
+      assert.deepEqual(await listKitVersions(files, KIT), ['0.510.0', '0.509.0', '0.508.0']);
+    });
+
     it('removes nothing with no version in use', async () => {
       await files.write(join(kitVersionFolder(KIT, '0.400.0'), 'x'), 'x');
-      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: [], leftovers: [], failed: [] });
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT, lock: new InlineMutex() }), { kind: 'pruned', removed: [], leftovers: [], failed: [] });
     });
 
     it("removes a stopped install's folders and temp files, and nothing else in the kit home", async () => {
@@ -348,7 +373,8 @@ describe('kit versions', () => {
       for (const path of [...stray, join('versions', 'notes.partial', 'x'), 'settings.json.4242.1.tmp']) {
         await files.write(join(KIT, path), 'x\n');
       }
-      const outcome = await pruneKitVersions({ files, tree, kitHome: KIT });
+      const outcome = await pruneKitVersions({ files, tree, kitHome: KIT, lock: new InlineMutex() });
+      assert.ok(outcome.kind === 'pruned');
       assert.deepEqual(outcome.leftovers, [
         join('versions', '0.508.0.replaced'),
         join('versions', '0.508.0.source.json.4242.1.tmp'),
