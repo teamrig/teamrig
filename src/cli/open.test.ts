@@ -8,7 +8,7 @@ import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../ope
 import { shellCommand } from '../open/quote.ts';
 import type { SessionStart } from '../ports/host/index.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -64,6 +64,14 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started, [
       { command: 'wt.exe', args: ['-w', '0', 'new-tab', '--title', '[app] alpha', '-d', APP, '--', ...launchArgv()], cwd: APP, mode: 'exit' },
     ]);
+  });
+
+  it('passes the host the run named with --host on to the launch line, so the session starts in that host (T5006)', async () => {
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    const result = await openAlpha(processes, { platform: 'win32', shippedHosts: { 'antigravity-cli': shippedHost(SHIPPED_HOST) } }, ['--host', 'antigravity-cli']);
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    const [home, prompt] = [launchArgv().slice(0, 10), launchArgv().slice(10)];
+    assert.deepEqual(processes.started[0]?.args.slice(8), [...home, '--host', 'antigravity-cli', ...prompt]);
   });
 
   it("opens the tab in the team's own Windows Terminal window when open.teamWindow is on (T1427)", async () => {
