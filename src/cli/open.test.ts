@@ -1,12 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
+import { loadShippedHosts } from '../composition/host-ports.ts';
 import { formatConfig } from '../config/load.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import type { SessionStart } from '../ports/host/index.ts';
+import { hostDeps } from '../testing/adapter-deps.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { hostCalled, hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost, TEST_PROGRAM } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
@@ -822,6 +824,23 @@ describe('teamrig launch', () => {
     ]);
     const missing = await launch(new FakeProcesses(), [], { host });
     assert.deepEqual(missing.stdout, [`REFUSED ${TEST_PROGRAM} (agent-desk) is not on PATH; install it, then run this again`]);
+  });
+
+  it('starts a Codex CLI session in its own tab when the run names --host codex-cli: codex resumes its thread with the first prompt (T5059)', async () => {
+    const codex = '/usr/local/bin/codex';
+    // Codex names a thread by a UUID, as Claude Code does a session.
+    const CODEX_THREAD = '019a2b3c-0000-7000-8000-00000000000c';
+    const probe = new FakePathProbe({ folders: [APP], files: [codex] });
+    const shippedHosts = await loadShippedHosts(hostDeps().run);
+    const processes = new FakeProcesses();
+    const argv = [...LAUNCH, '--host', 'codex-cli', '--resume', CODEX_THREAD, '--encoded-prompt', encodePrompt('Go on')];
+    const result = await new CliHarness({ ...TEAM, hosts: ['claude-code', 'codex-cli'] }).run(argv, { probe, processes, env: { PATH: '/usr/local/bin' }, shippedHosts });
+    assert.deepEqual([result.code, result.stdout, result.stderr], [
+      EXIT.ok,
+      [`Starting Codex CLI as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming Codex CLI session ${CODEX_THREAD}`],
+      [],
+    ]);
+    assert.deepEqual(processes.ran.map((run) => [run.command, run.args]), [[codex, ['resume', CODEX_THREAD, '-c', 'features.unified_exec_tty=false', '--', 'Go on']]]);
   });
 
   it('starts with the arguments the running host spells, telling it what the session is to be and no flag of its own', async () => {
