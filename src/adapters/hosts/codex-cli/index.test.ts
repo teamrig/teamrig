@@ -24,7 +24,7 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(claimed, []);
   });
 
-  it("enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools, secret files, session launcher and the person's hooks file", () => {
+  it("enters through defineHost with that declaration, and names every host port unsupported but its hooks, tools, usage meter, secret files, session launcher and the person's hooks file", () => {
     assert.equal(adapter.declaration, declaration);
     assert.deepEqual(hostAdapterProblems(adapter), []);
     const ports = adapter.create(hostDeps());
@@ -33,7 +33,7 @@ describe('the Codex CLI adapter', () => {
       Object.entries(ports)
         .filter(([, port]) => !isUnsupported(port))
         .map(([name]) => name),
-      ['hooks', 'toolCall', 'secrets', 'launcher', 'userHooks'],
+      ['hooks', 'toolCall', 'usage', 'secrets', 'launcher', 'userHooks'],
     );
   });
 
