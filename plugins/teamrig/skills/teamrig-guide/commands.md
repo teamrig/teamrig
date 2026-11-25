@@ -4816,8 +4816,8 @@ It refuses when `claude` is not on the PATH.
 
 ### teamrig kit versions
 
-The teamrig versions kept in the kit home's `versions` folder, newest first. Every host's hooks run the one marked
-`current`, with where it came from; `pinned` means `teamrig kit use` named it, so a session start of a newer plugin
+The teamrig versions kept in the kit home's `versions` folder, newest first. The one the kit home names is marked
+`current`, with where it came from (hosts run it once their hooks point at the kit home); `pinned` means `teamrig kit use` named it, so a session start of a newer plugin
 leaves it in use. Versions a prune would remove are marked `past the rollback window`.
 
 Flags: none.
@@ -4844,10 +4844,12 @@ kit use --latest` names the newest.
 
 ### teamrig kit use
 
-Moves which kept version every host's hooks run. A named version is pinned, so a session start of a newer plugin
-leaves it in use; `--latest` moves to the newest kept version and clears the pin. Without `--yes` it shows the move
-and writes nothing. Only you write it, in your terminal or by typing `/teamrig`: it changes the code behind every
-host's guards, so an agent's tool call is refused.
+Moves which kept version the kit home names current; hosts run it once their hooks point at the kit home. A named
+version is pinned, so a session start of a newer plugin leaves it current; `--latest` moves to the newest kept version
+and clears the pin. Without `--yes` it shows the move and writes nothing. Only you write it, in your terminal or by
+typing `/teamrig`: it names the code behind every host's guards once their hooks point there, so an agent's tool call
+is refused. It waits up to 30 s while a session start copies a release, and is `REFUSED` past that: `another teamrig
+process holds the kit install lock (a session start copying a release); retry`.
 
 Flags:
 
@@ -4867,12 +4869,16 @@ WROTE current 0.502.1 (was 0.503.0), pinned: a session start of a newer plugin l
 ```
 
 It is `REFUSED` for a version that is not kept (it names the kept ones), one whose files no longer match its
-integrity list (install it again), or a name that is no release version.
+integrity list (a session start of the teamrig plugin at that version copies it again), or a name that is no release
+version.
 
 ### teamrig kit prune
 
-Removes the kept versions past the rollback window: every version older than the current one but the two before it.
-It never removes the current one nor a newer one. Without `--yes` it names them and removes nothing.
+Removes the kept versions past the rollback window: every version older than the current one but the two before it,
+and every newer one but the newest. It never removes the current one. It also removes what stopped installs left in
+the kit home: a `versions/<version>.partial` or `<version>.replaced` folder and temp files. Without `--yes` it names
+them (`PREVIEW leftovers of stopped installs <n>: <paths>` for the leftovers) and removes nothing. Like `kit use`, it
+waits up to 30 s while a session start copies a release and is `REFUSED` past that.
 
 Flags:
 
@@ -4890,8 +4896,9 @@ Output:
 REMOVED 1: 0.500.2
 ```
 
-A version a running process still holds open stays, named on a `NOTE left for the next prune` line, and the command
-exits with a failure.
+Leftovers it removed follow on a `REMOVED leftovers of stopped installs <n>: <paths>` line. A version a running
+process still holds open stays, named on a `NOTE left for the next prune, a running process holds a file: <names>`
+line, and the command exits 1.
 
 ### teamrig restart
 

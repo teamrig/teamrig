@@ -499,14 +499,16 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       value naming a launcher in the kit home) and adds the Start-menu shortcut "Restore Claude
       Sessions" that runs restore run by hand; without --yes it shows the change and writes nothing
   restore uninstall [--yes]    stops both: removes the logon entry and the shortcut, then the launchers
-  kit versions                 the teamrig versions kept in the kit home, newest first: the one every
-      host's hooks run (current, and pinned when kit use pinned it) and those past the rollback window
-  kit use <version>|--latest [--yes]   moves which kept version every host's hooks run, refusing one whose
-      files no longer match its integrity list; a named version is pinned, so a newer plugin's session start
-      leaves it in use, and --latest moves to the newest kept one and clears the pin; without --yes it shows
-      the move and writes nothing; only the person writes it, never an agent's tool call
+  kit versions                 the teamrig versions kept in the kit home, newest first: the one it names
+      current (pinned when kit use pinned it) and those past the rollback window
+  kit use <version>|--latest [--yes]   moves which kept version the kit home names current (hosts run it once
+      their hooks point at the kit home), refusing one whose files no longer match its integrity list; a named
+      version is pinned, so a newer plugin's session start leaves it current, and --latest moves to the newest
+      kept one and clears the pin; without --yes it shows the move and writes nothing; only the person writes
+      it, never an agent's tool call; it waits up to 30 s for a session start's copy and is refused past that
   kit prune [--yes]            removes the kept versions past the rollback window (all but the current one,
-      newer ones and the two before it); without --yes it names them and removes nothing
+      the newest newer one and the two before it) and what stopped installs left; without --yes it names
+      them and removes nothing; one a running process holds stays for the next prune (exit 1)
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the

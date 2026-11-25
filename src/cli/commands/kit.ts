@@ -19,9 +19,9 @@ import { fileLockOf, type FileLockRuntime } from '../file-locks.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
 /**
- * `teamrig kit ...`: teamrig's own install under the kit home (src/kit/kit-versions.ts), the copy of each release that
- * every host's hook line runs through the kit home's launcher. `kit versions` lists what is kept, `kit use` moves which
- * one runs, `kit prune` removes the ones past the rollback window.
+ * `teamrig kit ...`: teamrig's own install under the kit home (src/kit/kit-versions.ts), the copy of each release a
+ * session start ran, one named current; hosts run it once their hooks point at the kit home. `kit versions` lists
+ * what is kept, `kit use` moves which one is current, `kit prune` removes the ones past the rollback window.
  */
 
 const LATEST = 'latest';
@@ -82,7 +82,8 @@ function useTargetOf(args: ParsedArgs): KitUseTarget {
  * `teamrig kit use <version>|--latest [--yes]`: moves `current` to a kept version whose files match its integrity list.
  * A named version is pinned, so a session start of a newer plugin leaves it in use; `--latest` moves to the newest kept
  * one and clears the pin. Without `--yes` it shows the move and writes nothing. Its write is a settings writer's
- * (src/core/settings-writers.ts): it changes the code behind every host's guards, so only the person runs it.
+ * (src/core/settings-writers.ts): it names the code every host's guards run once their hooks point at the kit
+ * home, so only the person runs it.
  */
 export async function kitUse(args: ParsedArgs, runtime: KitRuntime): Promise<ExitCode> {
   const target = useTargetOf(args);
