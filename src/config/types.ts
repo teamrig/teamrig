@@ -1576,9 +1576,10 @@ export interface RushConfig {
 
 /**
  * Where `teamrig open` opens a session's tab: `auto` picks tmux inside tmux, else the platform's
- * terminal; `print` opens nothing and prints the command to run.
+ * terminal; `headless` runs the session with no window, an opt-in `auto` never picks (T5093); `print` opens nothing
+ * and prints the command to run.
  */
-export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'print'] as const;
+export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'headless', 'print'] as const;
 export type TerminalChoice = (typeof TERMINALS)[number];
 
 export function isTerminalChoice(value: unknown): value is TerminalChoice {

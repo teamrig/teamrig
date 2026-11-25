@@ -9,7 +9,7 @@ import { TERMINAL_ADAPTERS } from './adapters.ts';
 import { importModule, loadConnector, loadHost, loadTerminal, readConnectorSteps, readDeclarations, readHostSteps, type Load, type ModuleImporter } from './loader.ts';
 
 const HOST_ENTRY = '../adapters/hosts/claude-code/index.ts';
-const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator'];
+const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'headless'];
 const TERMINAL_LIST = TERMINAL_IDS.join(', ');
 const terminalDeclarationFile = (id: string): string => `../adapters/terminals/${id}/declaration.ts`;
 /** The declaration module of each built-in terminal, by its specifier. */
@@ -71,6 +71,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
         ['gnome-terminal', 'loaded', 'GNOME Terminal'],
         ['konsole', 'loaded', 'Konsole'],
         ['x-terminal-emulator', 'loaded', 'x-terminal-emulator'],
+        ['headless', 'loaded', 'headless'],
       ],
     );
     assert.deepEqual(
@@ -155,7 +156,7 @@ describe('reading the declarations', () => {
     });
     const { hosts, connectors, terminals } = await readDeclarations(importer);
     assert.deepEqual(hosts.map(noticesOf), [undefined, ['its declaration.ts did not load: Cannot find module ../adapters/hosts/codex-cli/declaration.ts'], undefined]);
-    assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined]);
+    assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined, undefined]);
     assert.deepEqual(connectors.map(noticesOf), [
       ['its refPrefix must be a lower-case word ending in a colon'],
       ['its declaration.ts did not load: Cannot find module ../adapters/connectors/jira/declaration.ts'],

@@ -2071,9 +2071,9 @@
       "type": "object",
       "properties": {
         "terminal": {
-          "description": "The terminal to open the tab in. auto takes tmux inside tmux, else Windows Terminal on Windows, Terminal on macOS, or the first of gnome-terminal, konsole and x-terminal-emulator on Linux; print opens nothing and prints the command to run. teamrig open --terminal wins over it.",
+          "description": "The terminal to open the tab in. auto takes tmux inside tmux, else Windows Terminal on Windows, Terminal on macOS, or the first of gnome-terminal, konsole and x-terminal-emulator on Linux; headless runs the session with no window (conhost --headless on Windows, a detached tmux session elsewhere), an opt-in auto never picks; print opens nothing and prints the command to run. teamrig open --terminal wins over it.",
           "type": "string",
-          "enum": ["auto", "tmux", "windows-terminal", "macos-terminal", "gnome-terminal", "konsole", "x-terminal-emulator", "print"],
+          "enum": ["auto", "tmux", "windows-terminal", "macos-terminal", "gnome-terminal", "konsole", "x-terminal-emulator", "headless", "print"],
           "default": "auto"
         },
         "teamWindow": {

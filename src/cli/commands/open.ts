@@ -44,6 +44,7 @@ export const TERMINAL_LABELS: Readonly<Record<Terminal, string>> = {
   'gnome-terminal': 'GNOME Terminal tab',
   konsole: 'Konsole tab',
   'x-terminal-emulator': 'terminal window',
+  headless: 'headless session, no window',
 };
 
 /** What bringing the running tab of session `name`, titled `title`, to the front prints. */
