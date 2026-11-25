@@ -38,6 +38,7 @@ export async function readLeadStart(runtime: CliRuntime, kit: Kit, kitTree: KitT
     verifyNote: undefined,
     duplicateNote: undefined,
     worktreeNote: undefined,
+    treeNote: undefined,
     session: lead,
     sessionInEnv: true,
     platform: runtime.platform,

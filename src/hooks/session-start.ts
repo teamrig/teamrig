@@ -50,6 +50,8 @@ export interface SessionStartInput {
   readonly duplicateNote: string | undefined;
   /** When the session starts in a Claude Code worktree: the shell forms its isolation refuses (hooks/worktree-note.ts). */
   readonly worktreeNote: string | undefined;
+  /** When the team's own place in its tree is broken (a parent or a role holder missing): the line naming each fix (hooks/tree-note.ts). */
+  readonly treeNote: string | undefined;
   /**
    * Who the session is: an id or any name it has had, from `$TEAMRIG_SESSION`, a `--session` flag, or
    * the area this Claude Code session last read its inbox as.
@@ -220,6 +222,9 @@ export function sessionStartContext(input: SessionStartInput): string {
   }
   if (input.worktreeNote !== undefined) {
     notes.push(input.worktreeNote);
+  }
+  if (input.treeNote !== undefined) {
+    notes.push(input.treeNote);
   }
   if (load.newerVersion !== undefined) {
     notes.push(`The team config is version ${load.newerVersion}, from a newer ${KIT_NAME}: these rules are read best-effort.`);
