@@ -8,6 +8,7 @@ import { lineHash } from '../inbox/line-hash.ts';
 import { WakeAsks, type WakeAsk } from '../wake/asks.ts';
 import { inboxDepsOf } from './commands/inbox.ts';
 import { closedByTeamrig, closedWakeLine, wakeClosedSession } from './closed-wake.ts';
+import { wakeHostedSessions } from './hosted-wake.ts';
 import { rosterOf, type Kit } from './kit.ts';
 import { RefusedError, type CliRuntime } from './runtime.ts';
 
@@ -50,7 +51,12 @@ export async function postUrgentLine(runtime: CliRuntime, kit: Kit, config: KitC
     return `not posted: ${errorMessage(error)}`;
   }
   const problem = await askWake(runtime, { paths: kit.paths, config, roster: async () => rosterOf(runtime, kit, config) }, { ...line, text }, at);
-  return problem === undefined ? undefined : `posted to the inbox, but ${problem}`;
+  if (problem !== undefined) {
+    return `posted to the inbox, but ${problem}`;
+  }
+  // A receiver in a host with no tab mod takes the ask now, not at the next idle pass (src/cli/hosted-wake.ts).
+  (await wakeHostedSessions(runtime, kit, config, await rosterOf(runtime, kit, config), [line.to])).forEach((warning) => runtime.out.stderr(warning));
+  return undefined;
 }
 
 /** The team a wake ask goes to: where its files are, its config, and its roster, read only for a closed receiver. */

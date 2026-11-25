@@ -25,6 +25,7 @@ import { refuseUnlessPerson, runBy, untoldRefusal } from '../agent-run.ts';
 import { noPositionals, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { closedByTeamrig, closedTimedWakeLine, closedWakeLine, wakeClosedSession } from '../closed-wake.ts';
 import { hookLogOf } from '../hook-logs.ts';
+import { wakeHostedSessions } from '../hosted-wake.ts';
 import { identityOf, transcriptsFolderIfKnown } from '../host.ts';
 import { callerOf, instantOf, sessionRef } from '../inputs.ts';
 import { findTeam, openKit, openTeamKit, pastOrPresentIdOf, requireConfig, rosterOf, sessionIdOf, teamZone } from '../kit.ts';
@@ -422,6 +423,7 @@ async function postWakes(runtime: CliRuntime, own: SenderTeam, recipients: reado
       closedLines.push(closedLine);
       continue;
     }
+    failed.push(...(await hostedWakeOf(runtime, recipient, when)));
     const last = await lastWriteOf(runtime.transcripts, projects, tabsOf(await marksOf(recipient), recipient.id, RECEIVER_TABS));
     const measured = await readMeasuredTurns(runtime, recipient.paths, recipient.id, recipient.config.sessions, now);
     const cost = wakeCost(last === undefined ? undefined : wakeAt - last, recipient.config.messages.coldAfterMinutes, wPerPct, measured);
@@ -445,6 +447,19 @@ async function closedWakeLineOf(runtime: CliRuntime, recipient: Recipient, when:
   const kit = await openKit(runtime, recipient.team);
   const roster = await rosterOf(runtime, kit, recipient.config);
   return closedWakeLine(await wakeClosedSession(runtime, recipient, recipient.config, roster, recipient.id), recipient.label, recipient.id);
+}
+
+/**
+ * A `--wake now` recipient in a host with no tab mod, such as Codex CLI, takes its ask now through its host's program
+ * (src/cli/hosted-wake.ts), not at the next idle pass; a `--wake-by` ask waits for the pass, as it is not due yet. A
+ * WARN line for a wake that failed.
+ */
+async function hostedWakeOf(runtime: CliRuntime, recipient: Recipient, when: WakeWhen): Promise<readonly string[]> {
+  if (when.kind === 'by') {
+    return [];
+  }
+  const kit = await openKit(runtime, recipient.team);
+  return wakeHostedSessions(runtime, kit, recipient.config, await rosterOf(runtime, kit, recipient.config), [recipient.id]);
 }
 
 /** The wake `--wake now` or `--wake-by <time>` asks; undefined with neither. A `--wake-by` time not after now is refused. */

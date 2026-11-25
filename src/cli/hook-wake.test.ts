@@ -36,8 +36,10 @@ import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { steplessHost } from '../testing/shipped-steps.ts';
 import { testPaths } from '../testing/host.ts';
 import { teamConfigOf, teamHomeOf, teamInboxOf } from '../testing/team-tree.ts';
+import { recordingRunner, WAKING_HOST, WAKING_PROGRAM, wakingHosts } from '../testing/waking-host.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
+import type { ProgramRequest } from '../core/program-runner.ts';
 
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
 const OTHER_TAB = '0123abcd-0000-4000-8000-0000000000b9';
@@ -918,6 +920,39 @@ describe('hook wake-check runs the idle pass', () => {
     kit.clock.advance(MINUTE);
     await passCheck(kit, { processes });
     assert.equal(processes.hidden.length, 2, 'started again once the hold ran out and its step still asks for it');
+  });
+
+  it("wakes a running session of a host with no tab mod through the host's program, once for an urgent line (T5059)", async () => {
+    const kit = await idleTeam();
+    const thread = '0199aaaa-0000-7000-8000-0000000000c2';
+    const sessions = new FakeSessionProcesses();
+    sessions.add({ pid: 4200, parentPid: 1, name: 'codex.exe', commandLine: 'codex' });
+    await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 4200, hostSession: thread, at: new Date(kit.clock.now()).toISOString(), host: WAKING_HOST });
+    const runs: ProgramRequest[] = [];
+    const hostedCheck = (): Promise<CliResult> =>
+      kit.run(['hook', 'wake-check'], {
+        stdin: payload(),
+        env: { PATH: '/bin' },
+        processes: new FakeProcesses(),
+        probe: new FakePathProbe({ folders: [APP], files: [WAKING_PROGRAM] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts(),
+        sessionProcesses: sessions,
+        program: recordingRunner(runs),
+      });
+    await hostedCheck();
+    assert.equal(runs.length, 0, 'nothing posted for bravo yet');
+    await new WakeAsks(kit.files, ASKS).post('bravo', { from: 'lead', text: 'the api is ready', at: kit.clock.now() });
+    kit.clock.advance(2 * MINUTE);
+    await hostedCheck();
+    assert.deepEqual(
+      runs.map(({ program, args }) => [program, ...args.slice(0, 2)]),
+      [[WAKING_PROGRAM, 'wake', thread]],
+    );
+    assert.match(runs[0]?.args[2] ?? '', /lead: the api is ready/);
+    kit.clock.advance(MINUTE);
+    await hostedCheck();
+    assert.equal(runs.length, 1, 'the next pass wakes it no second time for the same line');
   });
 
   it("in mode on starts no reopen for a session a wake's reopen is pending on (#1584)", async () => {
