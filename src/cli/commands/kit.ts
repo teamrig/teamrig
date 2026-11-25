@@ -1,6 +1,6 @@
 import { resolveKitHome } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
-import { listKitVersions, planKitUse, prunableKitVersions, pruneKitVersions, readKitCurrent, useKitVersion, type KitCurrent, type KitUseTarget } from '../../kit/kit-versions.ts';
+import { kitLeftovers, listKitVersions, planKitUse, prunableKitVersions, pruneKitVersions, readKitCurrent, useKitVersion, type KitCurrent, type KitUseTarget } from '../../kit/kit-versions.ts';
 import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
@@ -88,20 +88,33 @@ export async function kitUse(args: ParsedArgs, runtime: KitRuntime): Promise<Exi
   return EXIT.ok;
 }
 
+/** A count, then the names when there are any: `2: a, b`, or `0`. */
+function countedList(names: readonly string[]): string {
+  return names.length === 0 ? '0' : `${names.length}: ${names.join(', ')}`;
+}
+
 /**
- * `teamrig kit prune [--yes]`: removes the kept versions past the rollback window, never the one in use nor a newer one.
- * Without `--yes` it names them and removes nothing. A version a running process holds open stays for the next prune.
+ * `teamrig kit prune [--yes]`: removes the kept versions past the rollback window, never the one in use nor the newest
+ * newer one, and what stopped installs left (`versions/<v>.partial`, `<v>.replaced`, temp files). Without `--yes` it
+ * names them and removes nothing. A version a running process holds open stays for the next prune.
  */
 export async function kitPrune(args: ParsedArgs, runtime: KitRuntime): Promise<ExitCode> {
   noPositionals(args);
   const kitHome = kitHomeOf(runtime);
   if (!args.switches.has(WRITE_SWITCH)) {
     const prunable = await prunableKitVersions(runtime.files, kitHome);
-    runtime.out.stdout(`PREVIEW nothing removed (add --${WRITE_SWITCH} to remove): removed ${prunable.length}${prunable.length === 0 ? '' : `: ${prunable.join(', ')}`}`);
+    runtime.out.stdout(`PREVIEW nothing removed (add --${WRITE_SWITCH} to remove): removed ${countedList(prunable)}`);
+    const leftovers = (await kitLeftovers(runtime.files, kitHome)).map((leftover) => leftover.path);
+    if (leftovers.length > 0) {
+      runtime.out.stdout(`PREVIEW leftovers of stopped installs ${countedList(leftovers)}`);
+    }
     return EXIT.ok;
   }
   const outcome = await pruneKitVersions({ files: runtime.files, tree: runtime.kitTree, kitHome });
-  runtime.out.stdout(`REMOVED ${outcome.removed.length}${outcome.removed.length === 0 ? '' : `: ${outcome.removed.join(', ')}`}`);
+  runtime.out.stdout(`REMOVED ${countedList(outcome.removed)}`);
+  if (outcome.leftovers.length > 0) {
+    runtime.out.stdout(`REMOVED leftovers of stopped installs ${countedList(outcome.leftovers)}`);
+  }
   if (outcome.failed.length > 0) {
     runtime.out.stdout(`NOTE left for the next prune, a running process holds a file: ${outcome.failed.join(', ')}`);
     return EXIT.failed;

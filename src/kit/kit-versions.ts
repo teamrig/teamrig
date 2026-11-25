@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { Files } from '../core/files.ts';
+import { isTemporaryName, type Files } from '../core/files.ts';
 import { errorMessage, isRecord, stringField } from '../core/guards.ts';
 import { parseObject, recordVersion, VERSION_FIELD } from '../core/jsonl.ts';
 import { LockBusyError, type Mutex } from '../core/lock.ts';
@@ -30,6 +30,15 @@ export const KIT_CURRENT_FORMAT = 1;
 
 /** How many versions older than `current` an install keeps, so `teamrig kit use` can roll back to them. */
 export const KEPT_OLDER_VERSIONS = 2;
+
+/**
+ * How many versions newer than `current` a prune keeps: a pinned install's way back up, the newest only, so a pin held
+ * for months does not keep every release a session start copied since.
+ */
+export const KEPT_NEWER_VERSIONS = 1;
+
+/** The folders an install leaves beside `versions/<v>` when it stopped partway: its copy, or the old folder set aside. */
+const LEFTOVER_FOLDER_SUFFIXES = ['.partial', '.replaced'] as const;
 
 /** The folder of every installed version: `<kit home>/versions`. */
 export function kitVersionsFolder(kitHome: string): string {
@@ -423,16 +432,18 @@ export async function useKitVersion(ports: Pick<KitPorts, 'files' | 'kitHome'>, 
   return previous === undefined || previous.version === next.version ? moved : { ...moved, previous: previous.version };
 }
 
-/** What a prune removed, and the versions whose removal failed (a running process holds a file), left for the next. */
+/** What a prune removed, and what it could not remove (a running process holds a file), left for the next one. */
 export interface KitPruneOutcome {
   readonly removed: readonly string[];
+  /** The leftovers removed, by their path under the kit home: an install's stopped copy, a set-aside folder, a temp file. */
+  readonly leftovers: readonly string[];
   readonly failed: readonly string[];
 }
 
 /**
  * The kept versions past the rollback window, newest first, which a prune removes: all but the version `current` names,
- * every newer one (a pinned install's way back up) and the `KEPT_OLDER_VERSIONS` newest older ones. None with no
- * `current`.
+ * the `KEPT_NEWER_VERSIONS` newest newer ones (a pinned install's way back up) and the `KEPT_OLDER_VERSIONS` newest
+ * older ones. None with no `current`.
  */
 export async function prunableKitVersions(files: Pick<Files, 'read' | 'list'>, kitHome: string): Promise<readonly string[]> {
   const current = await readKitCurrent(files, kitHome);
@@ -440,17 +451,51 @@ export async function prunableKitVersions(files: Pick<Files, 'read' | 'list'>, k
   if (inUse === undefined) {
     return [];
   }
-  const older = (await listKitVersions(files, kitHome)).filter((name) => {
+  const kept = await listKitVersions(files, kitHome);
+  const sideOf = (name: string): number => {
     const version = parseVersion(name);
-    return version !== undefined && compareVersions(version, inUse) < 0;
-  });
-  return older.slice(KEPT_OLDER_VERSIONS);
+    return version === undefined ? 0 : compareVersions(version, inUse);
+  };
+  const newer = kept.filter((name) => sideOf(name) > 0);
+  const older = kept.filter((name) => sideOf(name) < 0);
+  return [...newer.slice(KEPT_NEWER_VERSIONS), ...older.slice(KEPT_OLDER_VERSIONS)];
 }
 
-/** Removes the versions `prunableKitVersions` names. */
+/** One thing an install left behind when it stopped partway, by its path under the kit home. */
+export interface KitLeftover {
+  readonly kind: 'folder' | 'file';
+  readonly path: string;
+}
+
+/** Whether a name in `versions/` is a stopped install's folder for a release version: `<v>.partial` or `<v>.replaced`. */
+function isLeftoverFolderName(name: string): boolean {
+  return LEFTOVER_FOLDER_SUFFIXES.some((suffix) => name.endsWith(suffix) && parseVersion(name.slice(0, -suffix.length)) !== undefined);
+}
+
+/**
+ * What stopped installs and writes left in the kit home, which a prune removes: `versions/<v>.partial` and
+ * `versions/<v>.replaced` folders, temp files in `versions/`, and the temp siblings of `current` and `current.json`.
+ * Only teamrig's own names: nothing else in the kit home is touched.
+ */
+export async function kitLeftovers(files: Pick<Files, 'list'>, kitHome: string): Promise<readonly KitLeftover[]> {
+  const inVersions = (await files.list(kitVersionsFolder(kitHome))).flatMap((name): KitLeftover[] => {
+    const path = join('versions', name);
+    if (isLeftoverFolderName(name)) {
+      return [{ kind: 'folder', path }];
+    }
+    return isTemporaryName(name) ? [{ kind: 'file', path }] : [];
+  });
+  const inHome = (await files.list(kitHome))
+    .filter((name) => name.startsWith('current.') && isTemporaryName(name))
+    .map((name): KitLeftover => ({ kind: 'file', path: name }));
+  return [...inVersions, ...inHome];
+}
+
+/** Removes the versions `prunableKitVersions` names and the leftovers `kitLeftovers` finds. */
 export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome> {
   const { files, tree, kitHome } = ports;
   const removed: string[] = [];
+  const leftovers: string[] = [];
   const failed: string[] = [];
   for (const version of await prunableKitVersions(files, kitHome)) {
     try {
@@ -461,5 +506,14 @@ export async function pruneKitVersions(ports: KitPorts): Promise<KitPruneOutcome
       failed.push(version);
     }
   }
-  return { removed, failed };
+  for (const leftover of await kitLeftovers(files, kitHome)) {
+    const path = join(kitHome, leftover.path);
+    try {
+      await (leftover.kind === 'folder' ? tree.removeFolder(path) : files.remove(path));
+      leftovers.push(leftover.path);
+    } catch {
+      failed.push(leftover.path);
+    }
+  }
+  return { removed, leftovers, failed };
 }

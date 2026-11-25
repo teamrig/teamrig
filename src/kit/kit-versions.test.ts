@@ -240,7 +240,7 @@ describe('kit versions', () => {
       });
       assert.deepEqual(await install('0.510.0'), { kind: 'pinned', version: '0.510.0', pinned: '0.508.0' });
       assert.equal((await readKitCurrent(files, KIT))?.version, '0.508.0');
-      assert.deepEqual(await listKitVersions(files, KIT), ['0.510.0', '0.509.0', '0.508.0']);
+      assert.deepEqual(await listKitVersions(files, KIT), ['0.510.0', '0.508.0']);
     });
 
     it('use --latest moves to the newest kept version and clears the pin', async () => {
@@ -311,19 +311,53 @@ describe('kit versions', () => {
   });
 
   describe('pruneKitVersions', () => {
-    it('keeps current, every newer version and the two before current, and removes the rest', async () => {
+    it('keeps current, the two before current and the newest newer one, and removes the rest', async () => {
       for (const version of ['0.507.0', '0.508.0', '0.509.0', '0.510.0', '0.511.0']) {
         await install(version);
       }
       assert.deepEqual(await listKitVersions(files, KIT), ['0.511.0', '0.510.0', '0.509.0']);
-      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.509.0' });
-      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: [], failed: [] });
       assert.equal(files.get(join(KIT, 'versions', '0.507.0.source.json')), undefined);
+      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.509.0' });
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: ['0.510.0'], leftovers: [], failed: [] });
+      assert.deepEqual(await listKitVersions(files, KIT), ['0.511.0', '0.509.0']);
+      await writeKitRelease(files, join(PLUGIN, '0.512.0'), '0.512.0');
+      assert.deepEqual(await install('0.512.0'), { kind: 'pinned', version: '0.512.0', pinned: '0.509.0' });
+      assert.deepEqual(await listKitVersions(files, KIT), ['0.512.0', '0.509.0']);
+      assert.equal(files.get(join(KIT, 'versions', '0.511.0.source.json')), undefined);
     });
 
     it('removes nothing with no version in use', async () => {
       await files.write(join(kitVersionFolder(KIT, '0.400.0'), 'x'), 'x');
-      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: [], failed: [] });
+      assert.deepEqual(await pruneKitVersions({ files, tree, kitHome: KIT }), { removed: [], leftovers: [], failed: [] });
+    });
+
+    it("removes a stopped install's folders and temp files, and nothing else in the kit home", async () => {
+      await install('0.508.0');
+      const stray = [
+        join('versions', '0.509.0.partial', 'dist', 'cli', 'main.js'),
+        join('versions', '0.508.0.replaced', 'dist', 'cli', 'main.js'),
+        join('versions', '0.508.0.source.json.4242.1.tmp'),
+        'current.4242.2.tmp',
+        'current.json.4242.3.tmp',
+      ];
+      const kept = [join('versions', 'notes.partial', 'x'), 'settings.json.4242.1.tmp', 'current.json'];
+      for (const path of [...stray, join('versions', 'notes.partial', 'x'), 'settings.json.4242.1.tmp']) {
+        await files.write(join(KIT, path), 'x\n');
+      }
+      const outcome = await pruneKitVersions({ files, tree, kitHome: KIT });
+      assert.deepEqual(outcome.leftovers, [
+        join('versions', '0.508.0.replaced'),
+        join('versions', '0.508.0.source.json.4242.1.tmp'),
+        join('versions', '0.509.0.partial'),
+        'current.4242.2.tmp',
+        'current.json.4242.3.tmp',
+      ]);
+      assert.deepEqual(
+        stray.map((path) => files.get(join(KIT, path))),
+        stray.map(() => undefined),
+      );
+      assert.ok(kept.every((path) => files.get(join(KIT, path)) !== undefined));
+      assert.equal((await readKitCurrent(files, KIT))?.version, '0.508.0');
     });
   });
 });

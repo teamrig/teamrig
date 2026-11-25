@@ -115,5 +115,18 @@ describe('teamrig kit', () => {
       assert.deepEqual(result.stdout, ['REMOVED 2: 0.506.0, 0.505.0']);
       assert.equal(kit.files.get(join(kitVersionFolder(KIT, '0.505.0'), '.claude-plugin', 'plugin.json')), undefined);
     });
+
+    it('names and removes what stopped installs left, each on its own line', async () => {
+      await keptWith('0.509.0');
+      await kit.files.write(join(KIT, 'versions', '0.510.0.partial', 'x'), 'x\n');
+      await kit.files.write(join(KIT, 'current.4242.1.tmp'), 'x\n');
+      const leftovers = `2: ${join('versions', '0.510.0.partial')}, current.4242.1.tmp`;
+      const preview = await kit.run(['kit', 'prune'], options);
+      assert.deepEqual(preview.stdout, ['PREVIEW nothing removed (add --yes to remove): removed 2: 0.506.0, 0.505.0', `PREVIEW leftovers of stopped installs ${leftovers}`]);
+      const result = await kit.run(['kit', 'prune', '--yes'], options);
+      assert.equal(result.code, EXIT.ok);
+      assert.deepEqual(result.stdout, ['REMOVED 2: 0.506.0, 0.505.0', `REMOVED leftovers of stopped installs ${leftovers}`]);
+      assert.equal(kit.files.get(join(KIT, 'current.4242.1.tmp')), undefined);
+    });
   });
 });
