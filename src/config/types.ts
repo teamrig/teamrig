@@ -803,9 +803,9 @@ export interface GithubConfig {
   readonly watcher?: string;
   /**
    * The repository of `repos` a new task's issue opens in: while set, `teamrig add` opens the task's issue there with
-   * the public wording given (`--issue`, `--issue-body`), or records why the task stays local (`--local`), and adds no
-   * task with neither, so every task has its issue from the start. Unset, the default: an add opens an issue only when
-   * asked.
+   * the public wording given (`--issue`, `--issue-body`), records why the task stays local (`--local`) or why its issue
+   * opens later from the migrate role's holder (`--issue-later`), and adds no task with none of them, so every task has
+   * its issue from the start or says why not. Unset, the default: an add opens an issue only when asked.
    */
   readonly issueAtAdd?: string;
   /**
