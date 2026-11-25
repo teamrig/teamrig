@@ -8,13 +8,16 @@ import type { WarnState } from './warn.ts';
  * The format of the warning files this code writes. A file in an older format it knows reads with the fields added
  * since at their defaults; one in any other format reads as nothing shown, and one in a newer format refuses a write.
  */
-export const WARN_FORMAT = 2;
+export const WARN_FORMAT = 3;
 
 /**
  * The format before `escalated` was kept: it reads as not escalated, so a session escalated at the upgrade sees its
  * line once more.
  */
 const UNESCALATED_FORMAT = 1;
+
+/** The format before the week stop's marks were kept (T5393): they read as not shown today. */
+const UNSTOPPED_FORMAT = 2;
 
 /** An optional epoch-ms field: absent is undefined, anything but a finite number is damage. */
 function optionalTime(record: JsonRecord, key: string): { readonly ok: boolean; readonly value: number | undefined } {
@@ -29,7 +32,7 @@ function optionalTime(record: JsonRecord, key: string): { readonly ok: boolean; 
 export function parseWarnState(text: string): WarnState | undefined {
   const record = parseObject(text.trim());
   const version = record?.[VERSION_FIELD];
-  if (record === undefined || (version !== WARN_FORMAT && version !== UNESCALATED_FORMAT)) {
+  if (record === undefined || (version !== WARN_FORMAT && version !== UNSTOPPED_FORMAT && version !== UNESCALATED_FORMAT)) {
     return undefined;
   }
   const day = stringField(record, 'day');
@@ -40,6 +43,9 @@ export function parseWarnState(text: string): WarnState | undefined {
   const held = record['held'] ?? false;
   const escalated = version === UNESCALATED_FORMAT ? false : record['escalated'];
   const leadTold = record['leadTold'];
+  const stopKept = version === WARN_FORMAT;
+  const weekStopped = stopKept ? record['weekStopped'] : false;
+  const modelWeekStopped = stopKept ? record['modelWeekStopped'] : false;
   const quietFrom = optionalTime(record, 'quietFrom');
   const marks = [optionalTime(record, 'liftAt'), optionalTime(record, 'burstAt'), optionalTime(record, 'modelBurstAt'), optionalTime(record, 'surplusShown')] as const;
   const [liftAt, burstAt, modelBurstAt, surplusShown] = marks;
@@ -51,6 +57,8 @@ export function parseWarnState(text: string): WarnState | undefined {
     typeof held !== 'boolean' ||
     typeof escalated !== 'boolean' ||
     typeof leadTold !== 'boolean' ||
+    typeof weekStopped !== 'boolean' ||
+    typeof modelWeekStopped !== 'boolean' ||
     !quietFrom.ok ||
     marks.some((mark) => !mark.ok)
   ) {
@@ -64,6 +72,8 @@ export function parseWarnState(text: string): WarnState | undefined {
     held,
     escalated,
     leadTold,
+    weekStopped,
+    modelWeekStopped,
     quietFrom: quietFrom.value,
     liftAt: liftAt.value,
     burstAt: burstAt.value,
@@ -82,6 +92,8 @@ export function formatWarnState(state: WarnState): string {
     held: state.held,
     escalated: state.escalated,
     leadTold: state.leadTold,
+    weekStopped: state.weekStopped,
+    modelWeekStopped: state.modelWeekStopped,
     ...(state.quietFrom === undefined ? {} : { quietFrom: state.quietFrom }),
     ...(state.liftAt === undefined ? {} : { liftAt: state.liftAt }),
     ...(state.burstAt === undefined ? {} : { burstAt: state.burstAt }),
