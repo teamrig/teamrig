@@ -64,7 +64,8 @@ teamrig setup backup --project "<project>" && teamrig setup scan --project "<pro
     the user's folder into their `.claude/skills` or `.claude/agents` (a copy in each).
   - `OVERRIDE` and `SETTINGS` need the team: step 7 settles those rule lines and the wide allow rules. Name them
     now and change nothing yet.
-- Ask one yes or no per group in AskUserQuestion (up to 4 per call): what changes, in which files, and the tokens
+- Ask one yes or no per group, in the question picker (up to 4 per call; a host with no picker: numbered choices
+  in your reply, then stop for the answer): what changes, in which files, and the tokens
   a turn it saves. No `CONTEXT`, `DUPLICATE` or `UNUSED` finding: say so in one line and go on to step 4.
 - Carry out each yes: write the shortened or moved text with the Edit tool, and park or move a skill or agent type with Bash `mv` (`cp` first for each extra project).
   Change only the files its findings name, and never a settings file's `autoMode` line.
@@ -101,7 +102,7 @@ teamrig add --session lead --owner <id> --priority p2 --title "<first task>" --d
 ## 6. Turn on the daily budget
 
 The budget turns what is left of the week into a daily budget for the team, recomputed at every reading, so the work
-lasts until the weekly reset; there is no daily number to choose. Ask the user in one AskUserQuestion call with these
+lasts until the weekly reset; there is no daily number to choose. Ask the user in one question picker call with these
 two questions, the recommended answer first:
 
 - Past the line, when a session goes over its share of the day while the team runs ahead of pace: `ask-lead`
@@ -123,7 +124,7 @@ the user types `/teamrig statusline install --yes` (Claude Code refuses its `--y
 If the user skips this step, say they can ask you to turn it on later.
 
 When another root team (one under no other team) already runs on this Claude account, ask the user, in the same
-AskUserQuestion call, whose lead is the main lead that splits the account's week among its root teams (step 10),
+question picker call, whose lead is the main lead that splits the account's week among its root teams (step 10),
 each root team a choice. Set `"accountLead": "<team>"` under `budget` in every root team's `config.json` on the
 account, then run `teamrig config validate` for each.
 
@@ -150,7 +151,7 @@ it the other way, so settle each one with the user now, and again whenever they 
 3. Show the user the conflicts, each as `<path>:<line>`, its text, what the core rule asks and how they differ. The
    user has not read teamrig's rules, so say what each one asks in plain words, from the core rules in your context
    (`teamrig rules` prints them): never name a rule by its number alone. None: say so in one line and go on.
-4. Ask about each in AskUserQuestion (up to 4 per call). The question says what the line asks and what teamrig asks
+4. Ask about each in the question picker (up to 4 per call; with no picker, as in step 3). The question says what the line asks and what teamrig asks
    instead, in plain words: "CLAUDE.md:12 says to push straight to main. teamrig has each session edit in its own
    worktree and branch, and asks you before each push to main. Which should apply?". The choices, the recommended
    one first:
