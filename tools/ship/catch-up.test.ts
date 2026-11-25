@@ -458,37 +458,17 @@ test('a release manifest set beside a raise follows the raise made again, before
   assert.equal(readFileSync(join(dir, RELEASE), 'utf8'), release('0.2.1'));
 });
 
-test('a release manifest set in the raise commit, or to another version than the plugin version, is refused before any rebase (T4298)', (t) => {
-  for (const [change, why] of [
-    [
-      ({ commitFiles }: ReturnType<typeof teamrigRepo>) =>
-        commitFiles({ [PLUGIN]: '{\n  "name": "teamrig",\n  "version": "0.1.1"\n}\n', [KIT]: "export const KIT_VERSION = '0.1.1';\n", [RELEASE]: release('0.1.1') }, 'plugin: version 0.1.1'),
-      /, and its commit [0-9a-f]{9} raises the version and sets \.release-please-manifest\.json together, so they cannot be made again apart: ship it again with its plan/,
-    ],
-    [({ commitFiles }: ReturnType<typeof teamrigRepo>) => commitFiles({ [RELEASE]: release('0.0.7') }, SET_MANIFEST('0.0.7')), /, and its \.release-please-manifest\.json holds 0\.0\.7, not its plugin version 0\.1\.0, so it cannot be set again/],
-  ] as const) {
-    const { git, sha, request, deps } = manifestChange(t, change);
-    assert.match(reasonOf(catchUp(deps, request)), why);
-    assertRestored(git, sha);
-  }
-});
-
-
 test('a work commit that conflicts with main is aborted and refused, the repo dir back on the head (T2988)', (t) => {
   const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n' }, mainWork: { 'src/a.ts': 'export const a = 3;\n' } });
   assert.match(reasonOf(catchUp(deps, request)), /, and replaying its commit [0-9a-f]{9} onto that tip conflicts: rebase it by hand, ship it again with its plan \(ship\.ts <dir> <plan\.json> --merge\)/);
   assertRestored(git, sha);
 });
 
+// Every rule that refuses a change before any rebase runs on a fake git in regenerate.test.ts; this is the one real-git
+// proof that such a refusal reaches the ship's reason and leaves the repo dir as it was (T5032).
 test('a commit that mixes work with the version files is refused before any rebase (T2988)', (t) => {
   const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n', [KIT]: "export const KIT_VERSION = '0.1.1';\n" } });
   assert.match(reasonOf(catchUp(deps, request)), /, and its commit [0-9a-f]{9} changes the version files or the dist together with its work, so they cannot be made again apart: ship it again with its plan/);
-  assertRestored(git, sha);
-});
-
-test('work that writes down the version it raised to is refused when main\'s raise sets another (T2988)', (t) => {
-  const { git, request, deps, sha } = movedPast(t, { work: { 'src/a.ts': 'export const a = 2;\n', 'docs/news.md': 'New in 0.1.1: a is 2.\n' } });
-  assert.match(reasonOf(catchUp(deps, request)), /, and its work names the version 0\.1\.1 it raised to \(docs\/news\.md\), which becomes 0\.2\.1 on that tip: ship it again with its plan/);
   assertRestored(git, sha);
 });
 
