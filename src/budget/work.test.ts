@@ -110,6 +110,20 @@ describe('queuedWork', () => {
     assert.deepEqual([...work.urgent], [['alpha', ['T1', 'T2']]]);
   });
 
+  it('lists the blockers apart from the p0s, the only work that runs past the week stop (T5393)', () => {
+    const work = queuedWork(
+      [
+        workTask({ id: 'T1', owner: 'alpha', status: 'open', priority: BLOCKER_PRIORITY_ID }),
+        workTask({ id: 'T2', owner: 'alpha', status: 'open', priority: 0 }),
+        workTask({ id: 'T3', owner: 'bravo', status: 'done', priority: BLOCKER_PRIORITY_ID }),
+        workTask({ id: 'T4', owner: 'charlie', status: 'in-progress', priority: BLOCKER_PRIORITY_ID }),
+      ],
+      priorities,
+      NOW,
+    );
+    assert.deepEqual([...work.blockers], [['alpha', ['T1']], ['charlie', ['T4']]]);
+  });
+
   it('lists a waiting p0 whose every wait is over (an answered approval, a finished task) as work past the daily stop, never one still waiting or on a time (T4388)', () => {
     const approved = { verdict: 'approved' as const, by: 'lead', at: LONG_AGO, note: 'OK abc1234' };
     const work = queuedWork(
@@ -320,10 +334,11 @@ describe('cachedWork', () => {
     const { files } = await team();
     assert.deepEqual([...(await cachedWork(files, PATH, CACHE, priorities, NOW)).weights], BOTH);
     assert.deepEqual(cacheIn(files), {
-      [VERSION_FIELD]: 8,
+      [VERSION_FIELD]: 9,
       key: { tail: await files.stamp(tail), snapshot: null, priorities: [1, 2, 3, 4, 5] },
       work: { alpha: { 1: 5 }, bravo: { 3: 3 } },
       urgent: {},
+      blockers: {},
       awaited: {},
       sizeBases: {},
       likeTasks: [],
@@ -354,6 +369,14 @@ describe('cachedWork', () => {
     assert.deepEqual([...(await cachedWork(files, PATH, CACHE, priorities, NOW)).urgent], [['charlie', ['T3']]]);
     assert.deepEqual(cacheIn(files)['urgent'], { charlie: ['T3'] });
     assert.deepEqual([...(await cachedWork(unreadable(files), PATH, CACHE, priorities, NOW)).urgent], [['charlie', ['T3']]]);
+  });
+
+  it("keeps each session's blocker ids in the cache and answers them from it (T5393)", async () => {
+    const { files, add } = await team();
+    await add('charlie', BLOCKER_PRIORITY_ID);
+    assert.deepEqual([...(await cachedWork(files, PATH, CACHE, priorities, NOW)).blockers], [['charlie', ['T3']]]);
+    assert.deepEqual(cacheIn(files)['blockers'], { charlie: ['T3'] });
+    assert.deepEqual([...(await cachedWork(unreadable(files), PATH, CACHE, priorities, NOW)).blockers], [['charlie', ['T3']]]);
   });
 
   it("keeps each session's answers awaited in the cache and answers them from it (T2656)", async () => {
@@ -398,7 +421,10 @@ describe('cachedWork', () => {
   type Damage = (cache: JsonRecord, key: JsonRecord) => string;
   const DAMAGES: readonly (readonly [string, Damage])[] = [
     ['damaged', (cache) => JSON.stringify(cache).slice(0, -2)],
-    ['in another format', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 9, work: {} })],
+    ['in another format', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 10, work: {} })],
+    ['in the eighth format, its blockers not apart from its p0s', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 8, work: {} })],
+    ['without its blocker ids', (cache) => JSON.stringify({ ...cache, work: {}, blockers: 'none' })],
+    ['with blocker ids that are not text', (cache) => JSON.stringify({ ...cache, work: {}, blockers: { alpha: [5] } })],
     ['in the seventh format, its p0 ids without the waiting ones whose waits are over', (cache) => JSON.stringify({ ...cache, [VERSION_FIELD]: 7, work: {} })],
     ['in the sixth format, with no answers awaited', (cache) => JSON.stringify({ [VERSION_FIELD]: 6, key: cache['key'], work: {}, urgent: {}, sizeBases: {}, likeTasks: [] })],
     ['without its answers awaited', (cache) => JSON.stringify({ ...cache, work: {}, awaited: 'none' })],
