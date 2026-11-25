@@ -1783,13 +1783,13 @@ SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.sim
 
 ### teamrig issue assign
 
-Gives one issue or pull request of the team's repositories to its takers, with the same access as `teamrig issue
+Gives one issue or change request of the team's repositories to its takers, with the same access as `teamrig issue
 reply`: use it once someone says they take the item, such as a commenter asking for it. `--add` and `--remove` are
-comma-separated lists of GitHub logins (a leading `@` is dropped); give at least one, no login in both, and at most 3
+comma-separated lists of the tracker's logins (a leading `@` is dropped); give at least one, no login in both, and at most 3
 logins in all. Before any change it reads the item's labels and each login to add: an add to a design issue (one
 labelled `design`, talk not yet agreed) is refused, as no one takes design talk until it is agreed and the label
-comes off; and a login GitHub would drop is refused, as GitHub assigns only someone with access to the repository or
-someone who took part in the item (a comment counts). The logins to add go in one call, as GitHub spells them, then
+comes off; and a login the tracker would drop is refused, as it assigns only someone with access to the repository or
+someone who took part in the item (a comment counts). The logins to add go in one call, as the tracker spells them, then
 each login to remove comes off in turn; the first failure stops it, and a `FAILED` line after a change says what it
 already did. It prints `ASSIGNED <target>: <logins>` and `UNASSIGNED <target>: <login>`. Exit 1 when it failed, 2
 when refused, else 0.
