@@ -12,7 +12,7 @@ import { CONNECTOR_OFF } from '../connector-off.ts';
 import { githubOffBy } from './issue-sync-auto.ts';
 
 /** The flags of `add` that ask about the new task's issue (sync/issue-at-add.ts). */
-export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local'] as const;
+export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local', 'issue-later'] as const;
 
 /** What an add asked about its issue: its issue flags, with the task's own ref, type and priority. */
 export function addIssueAskOf(flags: Flags, input: AddInput): AddIssueAsk {
@@ -21,6 +21,7 @@ export function addIssueAskOf(flags: Flags, input: AddInput): AddIssueAsk {
     body: flags.get('issue-body'),
     repo: flags.get('issue-repo'),
     local: flags.get('local'),
+    later: flags.get('issue-later'),
     ref: input.ref,
     type: input.type,
     priority: input.priority,

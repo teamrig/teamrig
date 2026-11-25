@@ -138,6 +138,25 @@ describe('teamrig issue migrate', () => {
     assert.equal(tasksOf(kit).get('T2')?.ref, 'gh:acme/api#1');
   });
 
+  it("lets the migrate role's holder link a task the lead added with --issue-later, never one added --local (T5457)", async () => {
+    const kit = new CliHarness({ ...GITHUB_TEAM, github: { repos: ['acme/web', 'acme/api'], issueAtAdd: 'acme/web' }, serviceRoles: { github: { holders: ['bravo'], commands: ['issue migrate'] } } });
+    const task = (title: string): string[] => ['add', '--title', title, '--description', 'private what and why', '--priority', 'p2', '--owner', 'alpha'];
+    for (const argv of [[...task('Private health check'), '--issue-later', 'the lead opens no issues; bravo opens it'], [...task('Private login bug'), '--local', 'security hole, private']]) {
+      const added = await kit.run(argv, AS_LEAD);
+      assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
+    }
+    await kit.files.write(ROWS, [issueRow('T1', 'acme/web', 'Add a health check'), issueRow('T2', 'acme/web', 'Login fails on retry'), ''].join('\n'));
+    const result = await kit.run(['issue', 'migrate', 'rows.jsonl', '--yes'], { env: { TEAMRIG_SESSION: 'bravo' }, gh: new FakeGh() });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout.slice(0, 3), [
+      'REPLACES T1: its ref issue later: the lead opens no issues; bravo opens it gives way to its issue',
+      'SKIPPED T2: only the owner (alpha) or the lead (lead) changes T2',
+      '1 issue(s) to open, 0 kept local, 1 skipped, 0 live task(s) with no row',
+    ]);
+    assert.equal(tasksOf(kit).get('T1')?.ref, 'gh:acme/web#1');
+    assert.equal(tasksOf(kit).get('T2')?.ref, 'local: security hole, private');
+  });
+
   it('stops, opening nothing through the gh login, when the store holds the key but cannot read it', async () => {
     const kit = await migratingTeam();
     const gh = new FakeGh();

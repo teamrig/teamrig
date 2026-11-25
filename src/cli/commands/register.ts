@@ -232,7 +232,7 @@ async function addHere(args: ParsedArgs, runtime: CliRuntime, caller: string): P
     throw new RefusedError(issue.error);
   }
   const by = sessionIdOf(team.roster, caller);
-  const ids = addInputIds(team, issue.value.kind === 'local' ? { ...input, ref: issue.value.ref } : input);
+  const ids = addInputIds(team, issue.value.kind === 'local' || issue.value.kind === 'later' ? { ...input, ref: issue.value.ref } : input);
   const end =
     issue.value.kind === 'open'
       ? await addWithIssue((line) => runtime.out.stdout(line), team.register, await addIssueHost(runtime, scanner, team.config.github.stamp, team.config.connectors), by, ids, issue.value.draft)

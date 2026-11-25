@@ -64,6 +64,15 @@ describe('teamrig add with its issue', () => {
     assert.equal(tasksOf(kit).get('T1')?.ref, 'local: names an unfixed weakness');
   });
 
+  it("leaves the task's issue for later with its reason as its ref, opening nothing (T5457)", async () => {
+    const kit = new CliHarness(AT_ADD_TEAM);
+    const gh = new FakeGh();
+    const result = await kit.run([...TASK, '--issue-later', 'the github role opens it'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(gh.ran, []);
+    assert.equal(tasksOf(kit).get('T1')?.ref, 'issue later: the github role opens it');
+  });
+
   it('refuses an add with neither, while github.issueAtAdd is set, and writes no task', async () => {
     const kit = new CliHarness(AT_ADD_TEAM);
     const result = await kit.run(TASK, { ...AS_LEAD, gh: new FakeGh() });

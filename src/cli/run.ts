@@ -153,7 +153,7 @@ const TASK_FIELDS = ['title', 'description', 'owner', 'ref', 'priority', 'due', 
 const REVIEW_FLAGS = ['cause', 'how', 'prevent', 'harden', 'missed-test', 'missed-monitor', 'missed-log'];
 
 const COMMANDS: Readonly<Record<string, CommandSpec>> = {
-  add: { effect: 'write', flags: ['session', 'source', 'team', ...TASK_FIELDS, 'issue', 'issue-body', 'issue-repo', 'local'], switches: ['critical'], load: async () => (await registerCommands()).add },
+  add: { effect: 'write', flags: ['session', 'source', 'team', ...TASK_FIELDS, 'issue', 'issue-body', 'issue-repo', 'local', 'issue-later'], switches: ['critical'], load: async () => (await registerCommands()).add },
   set: { effect: 'write', flags: ['session', 'status', 'note', 'evidence', 'skill', 'followups', 'waits', 'question', 'options', 'recommend', 'default', 'why-ask', 'gate', 'affects', 'run', 'proof', 'watch', 'met', 'due', 'ask', 'text', ...REVIEW_FLAGS], switches: ['one-commit', 'security', 'drop-approval'], load: async () => (await registerCommands()).set },
   // --prepares only here: a lead marks a task that exists, so `add` (which shares TASK_FIELDS) never takes it.
   update: { effect: 'write', flags: ['session', 'note', 'later', 'prepares', ...TASK_FIELDS], switches: ['pin', 'unpin', 'exempt', 'not-exempt', 'critical', 'not-critical', 'decided'], load: async () => (await registerCommands()).update },
@@ -591,13 +591,16 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       to mark it, here and when it starts
       --class: the work class, one of focus.classes in any case, stored as configured (Roadmap, Maintenance,
       Improvements by default); a task without one counts as focus.defaultClass
-      [--issue "<public title>" --issue-body "<public text>" [--issue-repo <owner/repo>] | --local "<why>"]
+      [--issue "<public title>" --issue-body "<public text>" [--issue-repo <owner/repo>] | --local "<why>" | --issue-later "<why>"]
       --issue: opens the task's GitHub issue with this public wording, labelled by --type and --priority, in
       --issue-repo, else github.issueAtAdd, else the one repo of github.repos, and points the task's ref at it
       (no task id, secret, private data or second line in the title); the task is written once its issue
       opened, so a failure writes neither
       --local: why the task gets no issue, written as its ref "local: <why>"; a security hole is always added
-      with --local; while github.issueAtAdd is set, an add gives --issue or --local (or a --ref to an issue),
+      with --local, and only the task's owner or a leader lifts that mark
+      --issue-later: why its issue opens later, written as its ref "issue later: <why>": the holder of the
+      service role giving issue migrate may open it and link it, and check flags NO-ISSUE until then
+      while github.issueAtAdd is set, an add gives --issue, --local or --issue-later (or a --ref to an issue),
       else it is refused
   add --team <team> [--owner <s>] [--source owner] --title .. --description .. --priority p<n>|blocker [...]   asks a team of your tree for work
       --source owner: the lead of a team above <team> relays the owner's order, sourced owner there
