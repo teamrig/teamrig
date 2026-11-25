@@ -1,6 +1,7 @@
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { BusyMutex } from '../testing/busy-mutex.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
@@ -62,6 +63,12 @@ describe('installRunningKit', () => {
     assert.equal(kitSelfInstallNote(outcome), "teamrig 0.509.0 stays current; this plugin's 0.508.0 is older and kept; `teamrig kit use 0.508.0` moves to it.");
     assert.equal(kitSelfInstallLogLine(outcome), 'kit: 0.508.0 kept; current 0.509.0 is newer');
     assert.equal(files.get(kitCurrentPath(KIT)), '0.509.0\n');
+  });
+
+  it('gives no note and no log line for a start that finds another start copying', async () => {
+    const outcome = await installRunningKit({ files, tree, kitHome: KIT, clientRoot: join(PLUGIN, '0.508.0'), version: '0.508.0', lock: new BusyMutex() });
+    assert.deepEqual([outcome, kitSelfInstallNote(outcome), kitSelfInstallLogLine(outcome)], [{ kind: 'busy' }, undefined, undefined]);
+    assert.deepEqual([tree.copies.length, files.get(kitCurrentPath(KIT))], [0, undefined]);
   });
 
   it('logs a refused copy and leaves current alone', async () => {
