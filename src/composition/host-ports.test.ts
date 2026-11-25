@@ -115,6 +115,17 @@ describe('loadShippedHosts', () => {
     assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
   });
 
+  it('gives each shipped adapter that starts sessions a program name to tell its tab shell by (T5010)', async () => {
+    for (const [id, shipped] of Object.entries(await loadShippedHosts(run))) {
+      for (const platform of ['win32', 'linux', 'darwin'] as const) {
+        const { launcher } = shipped.ports({ env: {}, platform });
+        if (!isUnsupported(launcher)) {
+          assert.notEqual(launcher.program.trim(), '', `${id} on ${platform}: an empty program would name no tab shell`);
+        }
+      }
+    }
+  });
+
   it("gives each shipped host the session variables its declaration names, its ports built or not (T5188)", async () => {
     const sessionVariables = { marks: ['STANDIN_AGENT'], identity: ['STANDIN_SESSION'] };
     const importer: ModuleImporter = (specifier) => {
