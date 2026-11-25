@@ -1,6 +1,13 @@
 import { posix, win32 } from 'node:path';
 import type { HostDeps, HostPaths } from '../../../plugin-api/index.ts';
 
+/**
+ * The repository paths through which Antigravity changes what a session does: its own instruction file in any folder
+ * (`GEMINI.md`; `AGENTS.md`, which other hosts read too, is in the core's sensitive paths) and its project folder at
+ * any depth (rules, skills, agent types).
+ */
+const REPO_GLOBS: readonly string[] = ['GEMINI.md', '**/.agents/**'];
+
 function unsupportedPath(what: string): never {
   throw new Error(`unsupported: Antigravity has no verified ${what} path`);
 }
@@ -37,5 +44,6 @@ export function hostPaths(platform: HostDeps['platform']): HostPaths {
     transcriptsFolder: () => unsupportedPath('transcriptsFolder'),
     pluginsFolder: () => unsupportedPath('pluginsFolder'),
     loginFile: () => undefined,
+    repoGlobs: () => REPO_GLOBS,
   };
 }

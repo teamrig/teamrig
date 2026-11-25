@@ -145,4 +145,9 @@ describe("Claude Code's paths", () => {
     env['CLAUDE_CONFIG_DIR'] = join('/', 'second');
     assert.equal(paths.home(USER_HOME), join('/', 'first'));
   });
+
+  it("names a repository's instruction files at any depth, its own folder and a plugin's manifest folder anywhere as the paths that change a session (T3448)", () => {
+    assert.deepEqual(pathsIn({}).repoGlobs(), ['CLAUDE.md', 'CLAUDE.local.md', '**/.claude/**', '**/.claude-plugin/**']);
+    assert.deepEqual(pathsIn({ CLAUDE_CONFIG_DIR: join('/', 'cfg') }).repoGlobs(), pathsIn({}).repoGlobs());
+  });
 });

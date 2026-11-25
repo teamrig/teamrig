@@ -15,6 +15,12 @@ const FOLDER_SETTINGS = [
 ] as const;
 /** The instruction files Claude Code reads in a folder, as path parts below it, in the order it reads them. */
 const FOLDER_INSTRUCTIONS: readonly (readonly string[])[] = [['CLAUDE.md'], ['CLAUDE.local.md'], [PROJECT_DIR, 'CLAUDE.md']];
+/**
+ * The repository paths through which Claude Code changes what a session does: the instruction files it reads in any
+ * folder (`CLAUDE.md`, `CLAUDE.local.md`), its project folder at any depth (settings, hooks, skills, rules, agent
+ * types and the `CLAUDE.md` inside it), and a plugin's manifest folder.
+ */
+const REPO_GLOBS: readonly string[] = ['CLAUDE.md', 'CLAUDE.local.md', `**/${PROJECT_DIR}/**`, '**/.claude-plugin/**'];
 /** The index of a project's memory, the one memory file Claude Code loads at a session's start. */
 const MEMORY_INDEX = 'MEMORY.md';
 
@@ -84,5 +90,6 @@ export function hostPaths(env: HostDeps['env'], platform: HostDeps['platform']):
     pluginsFolder: (userHome) => join(home(userHome), 'plugins'),
     // Where the login is in the system's keychain (macOS) the file is absent, which a stat reads as no new login.
     loginFile: (userHome) => join(home(userHome), '.credentials.json'),
+    repoGlobs: () => REPO_GLOBS,
   };
 }

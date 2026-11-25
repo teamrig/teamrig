@@ -48,4 +48,9 @@ describe("Antigravity's paths", () => {
     assert.throws(() => p.planFile(home, 'slug'), /unsupported:/);
     assert.throws(() => p.shellSnapshots(home), /unsupported:/);
   });
+
+  it("names its own instruction file at any depth and its project folder anywhere as the repository paths that change a session (T3448)", () => {
+    assert.deepEqual(hostPaths('linux').repoGlobs(), ['GEMINI.md', '**/.agents/**']);
+    assert.deepEqual(hostPaths('win32').repoGlobs(), ['GEMINI.md', '**/.agents/**']);
+  });
 });

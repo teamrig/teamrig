@@ -69,4 +69,10 @@ export interface HostPaths {
    * it. Undefined where the host keeps the login in no file of its own.
    */
   loginFile(userHome: string): string | undefined;
+  /**
+   * The paths of a repository through which this host changes what its sessions there do (their instruction files, the
+   * host's project folder with its settings, hooks, skills, rules and agent types, a plugin's manifest), as review globs
+   * from the repository's root: a glob with no slash names a file at any depth. A change to one is never low-risk.
+   */
+  repoGlobs(): readonly string[];
 }
