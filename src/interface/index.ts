@@ -97,6 +97,7 @@ export { sourceOf,type ServedSource, type SourceKind, type SourceNames } from '.
 export { stepsBody, type ServedStep, type StepInput, type StepsBody, type StepsInput } from './steps.ts';
 export {
   tasksBody,
+  UnknownCursorError,
   type ServedAnswer,
   type ServedDecision,
   type ServedDescriptionCut,
@@ -106,6 +107,7 @@ export {
   type ServedWait,
   type TasksBody,
   type TasksInput,
+  type TasksPage,
 } from './tasks.ts';
 export { cutText, ServedText, type Cut, type MarkedText, type SecretShapes, type TextSource } from './text.ts';
 export { checkInterfaceRange, INTERFACE_MAJOR, INTERFACE_MINOR, INTERFACE_VERSION, parseInterfaceVersion, type InterfaceVersion, type RangeCheck } from './version.ts';

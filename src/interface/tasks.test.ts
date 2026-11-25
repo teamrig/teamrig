@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { describe, it } from 'node:test';
 import { SecretScanner } from '../core/secrets.ts';
 import type { Task } from '../register/fold.ts';
 import { testTask } from '../testing/task.ts';
-import { cutText, tasksBody, type Connector, type ServedTask, type SourceNames, type TasksBody } from './index.ts';
+import { cutText, tasksBody, UnknownCursorError, type Connector, type ServedTask, type SourceNames, type TasksBody, type TasksPage } from './index.ts';
 
 /** A text the shipped shapes take for a secret, built here so no secret-shaped line sits in the repository. */
 const SECRET = ['pass', 'word', '=', 'hunter2'].join('');
@@ -65,8 +66,8 @@ const SERVED_FIELDS = [
   'waitsAt',
 ];
 
-function bodyOf(tasks: readonly Task[], owner: string | null = null): TasksBody {
-  return tasksBody({ tasks, retired: 0, owner, shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES });
+function bodyOf(tasks: readonly Task[], owner: string | null = null, page: TasksPage | null = null): TasksBody {
+  return tasksBody({ tasks, retired: 0, owner, shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page });
 }
 
 function only(body: TasksBody): ServedTask {
@@ -322,9 +323,51 @@ describe('the tasks document', () => {
   });
 
   it('serves the count of retired tasks it was given, whatever the owner asked', () => {
-    const body = tasksBody({ tasks: [testTask({ id: 'T1', owner: 'alpha' })], retired: 3, owner: 'bravo', shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES });
+    const body = tasksBody({ tasks: [testTask({ id: 'T1', owner: 'alpha' })], retired: 3, owner: 'bravo', shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page: null });
 
     assert.deepEqual([body.tasks, body.retired], [[], 3]);
+  });
+
+  it('serves every task with no next when no page is asked', () => {
+    const body = bodyOf([testTask({ id: 'T1' }), testTask({ id: 'T2' })]);
+
+    assert.deepEqual([body.tasks.map((task) => task.id), body.next], [['T1', 'T2'], null]);
+  });
+
+  it("fills a page up to its size in the UTF-8 bytes of the tasks' JSON, the commas between them counted", () => {
+    const tasks = ['T1', 'T2', 'T3'].map((id) => testTask({ id, title: 'Fix the é gate' }));
+    const one = Buffer.byteLength(JSON.stringify(only(bodyOf(tasks.slice(0, 1)))), 'utf8');
+
+    const exact = bodyOf(tasks, null, { after: null, maxBytes: one * 2 + 1 });
+    const short = bodyOf(tasks, null, { after: null, maxBytes: one * 2 });
+
+    assert.deepEqual([exact.tasks.map((task) => task.id), exact.next], [['T1', 'T2'], 'T2']);
+    assert.deepEqual([short.tasks.map((task) => task.id), short.next], [['T1'], 'T1']);
+  });
+
+  it('starts a page just past after, and the page holding the last task has no next', () => {
+    const tasks = ['T1', 'T2', 'T3'].map((id) => testTask({ id }));
+
+    const page = bodyOf(tasks, null, { after: 'T1', maxBytes: 1_000_000 });
+    const pastLast = bodyOf(tasks, null, { after: 'T3', maxBytes: 1_000_000 });
+
+    assert.deepEqual([page.tasks.map((task) => task.id), page.next], [['T2', 'T3'], null]);
+    assert.deepEqual([pastLast.tasks, pastLast.next], [[], null]);
+  });
+
+  it('lists the cuts of the tasks a page serves alone, never those of a task outside it', () => {
+    const tasks = [testTask({ id: 'T1', note: SECRET }), testTask({ id: 'T2' }), testTask({ id: 'T3', note: SECRET })];
+
+    const page = bodyOf(tasks, null, { after: 'T1', maxBytes: 1 });
+
+    assert.deepEqual([page.tasks.map((task) => task.id), page.next, page.cuts], [['T2'], 'T2', []]);
+  });
+
+  it('throws UnknownCursorError for a page after a task it does not serve, one another owner holds too', () => {
+    const tasks = [testTask({ id: 'T1', owner: 'alpha' }), testTask({ id: 'T2', owner: 'bravo' })];
+
+    assert.throws(() => bodyOf(tasks, null, { after: 'T9', maxBytes: 1 }), UnknownCursorError);
+    assert.throws(() => bodyOf(tasks, 'alpha', { after: 'T2', maxBytes: 1 }), (error: unknown) => error instanceof UnknownCursorError && error.after === 'T2');
   });
 
   it('keeps the order it was given and has no cuts for clean tasks', () => {
