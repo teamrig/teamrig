@@ -191,6 +191,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   wakeMaxGapMinutes: 'wake.maxGapMinutes',
   maxFailureChars: 'tests.maxFailureChars',
   stepBackupDays: 'steps.backupDays',
+  idleStopSeconds: 'tests.idleStopSeconds',
   githubRepos: 'github.repos',
   detachedAway: 'team.detached.away',
   issueTypeNames: 'github.fields.types.task',

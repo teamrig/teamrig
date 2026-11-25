@@ -42,7 +42,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `leadBoundary` | [object](#leadboundary) |  | How teamrig keeps the lead leading: its own edits, tests and code searches are nudged and shown, never blocked. |
 | `loops` | [object](#loops) |  | Loop discipline inside a turn. |
 | `wake` | [object](#wake) |  | Waking a session idle at its prompt when work is handed to it, instead of at its next prompt. Only work the session can go on with wakes (open or started past every task it comes after, or waiting with every wait cleared or answered), tasks handed together wake once, and each wake says what it costs. |
-| `tests` | [object](#tests) |  | What teamrig test prints of a failed run. |
+| `tests` | [object](#tests) |  | What teamrig test prints of a failed run, and when it stops a silent one. |
 | `steps` | [object](#steps) |  | The one-time steps teamrig needs its person to take, listed by teamrig steps and taken with teamrig steps run. |
 | `github` | [object](#github) |  | The team's GitHub repositories. teamrig issue sync reads their issues into the register as tasks of source github, and never writes to GitHub; local tasks stay local. teamrig issue migrate, teamrig issue reply, teamrig issue assign, teamrig issue label, teamrig issue edit and teamrig issue close, run by hand, write only to these repositories. Each owner's repositories are reached with the token saved as teamrig-gh-\<owner> in the system's credential store, never the gh login; no saved token, or one that cannot be read, stops the read or write for that owner (docs/github-sync.md). |
 | `sync` | [object](#sync) |  | What teamrig issue sync takes from each tracker (GitHub, Jira and every other connector): the scope each place's list is read with, and the caps on the tasks one tracker's import adds. A task the register already imports keeps following whatever the scope. A changed scope adds nothing on an automatic run until a session runs teamrig issue sync --yes once by hand. |
@@ -625,11 +625,12 @@ Waking a session idle at its prompt when work is handed to it, instead of at its
 
 ## `tests`
 
-What teamrig test prints of a failed run.
+What teamrig test prints of a failed run, and when it stops a silent one.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `maxFailureChars` | integer (500 to 50000) | `4000` | The most characters of failing tests teamrig test prints after a failed run, all of them together; the rest stays in its log. |
+| `idleStopSeconds` | integer (0 to 86400) | `600` | Seconds a teamrig test run may print nothing before it is stopped with every process it started and reported as a failure; a busy host stretches it up to three times, as in the coverage gate. 0 never stops a run. |
 
 ## `steps`
 

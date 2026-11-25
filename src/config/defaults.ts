@@ -317,7 +317,8 @@ export const DEFAULT_MEETING: MeetingConfig = {
 };
 
 /** About a screenful: two or three failing tests with their errors and first stack frames. */
-export const DEFAULT_TESTS: TestsConfig = { maxFailureChars: 4000 };
+/** Ten silent minutes: a quiet build or a slow suite step prints within it, while a hung run is stopped the same hour. */
+export const DEFAULT_TESTS: TestsConfig = { maxFailureChars: 4000, idleStopSeconds: 600 };
 
 /** A week: time to notice a step went wrong and take its backup back. */
 export const DEFAULT_STEPS: StepsConfig = { backupDays: 7 };

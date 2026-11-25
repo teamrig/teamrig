@@ -67,6 +67,7 @@ export const CONFIG_LIMITS = {
   wakeMaxGapMinutes: { min: 0, max: 1440 },
   maxFailureChars: { min: 500, max: 50_000 },
   stepBackupDays: { min: 1, max: 365 },
+  idleStopSeconds: { min: 0, max: 86_400 },
   githubRepos: { maxItems: 20, maxLength: 140 },
   /** Only the ids a detached team's waits named: a team rarely waits on more than a few of another team's tasks. */
   detachedAway: { maxItems: 1000 },

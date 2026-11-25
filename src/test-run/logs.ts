@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
-import type { ShellEnd } from '../core/shell-end.ts';
 import { cleanOutput } from './parse.ts';
+import type { TestEnd } from './shell.ts';
 
 /** How many logs are kept for each session (and for runs with no session); older ones are removed. */
 export const KEPT_LOGS = 20;
@@ -52,8 +52,11 @@ export async function pruneLogs(files: Files, dir: string, session: string | nul
   }
 }
 
-/** How the command ended, as the log's last line: `exit 1`, or `ended by SIGTERM`. */
-export function endLine(end: ShellEnd): string {
+/** How the command ended, as the log's last line: `exit 1`, `ended by SIGTERM`, or `stopped: no output for 600 s`. */
+export function endLine(end: TestEnd): string {
+  if (end.kind === 'idle') {
+    return `stopped: no output for ${end.silentMs / 1000} s, every process it started ended`;
+  }
   return end.kind === 'exited' ? `exit ${end.code}` : `ended by ${end.signal}`;
 }
 
@@ -95,7 +98,7 @@ export class LiveLog {
   }
 
   /** Writes the output's last part line, `heldOpen`'s line and how the run ended; throws the first write that failed. */
-  async end(end: ShellEnd, heldOpen: boolean): Promise<void> {
+  async end(end: TestEnd, heldOpen: boolean): Promise<void> {
     const rest = cleanOutput(this.pending);
     this.pending = '';
     this.append(`${rest === '' || rest.endsWith('\n') ? rest : `${rest}\n`}${heldOpen ? `${HELD_OPEN_LINE}\n` : ''}${endLine(end)}\n`);

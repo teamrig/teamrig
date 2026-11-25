@@ -673,6 +673,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     wake: parseWake(read, read.section(raw, 'wake', ''), budget.quietHours),
     tests: {
       maxFailureChars: read.integer(read.section(raw, 'tests', ''), 'maxFailureChars', 'tests', DEFAULT_TESTS.maxFailureChars, CONFIG_LIMITS.maxFailureChars),
+      idleStopSeconds: read.integer(read.section(raw, 'tests', ''), 'idleStopSeconds', 'tests', DEFAULT_TESTS.idleStopSeconds, CONFIG_LIMITS.idleStopSeconds),
     },
     steps: {
       backupDays: read.integer(read.section(raw, 'steps', ''), 'backupDays', 'steps', DEFAULT_STEPS.backupDays, CONFIG_LIMITS.stepBackupDays),

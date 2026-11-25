@@ -1,8 +1,14 @@
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { endOf } from '../core/shell-end.ts';
+import { CpuGate } from '../delivery/cpu.ts';
+import { nodeTreeKill } from '../delivery/tree-kill.ts';
+import { FakeClock } from '../testing/fake-clock.ts';
+import { FakeHostCpu } from '../testing/fake-host-cpu.ts';
 import { commandLine, nodeShellRunner, unrunnableReason } from './shell.ts';
 
 const DIR = mkdtempSync(join(tmpdir(), 'teamrig-shell-'));
@@ -83,7 +89,7 @@ describe('nodeShellRunner', () => {
       'order.mjs',
       "const wait = () => new Promise((done) => setTimeout(done, 40));\nprocess.stdout.write('one\\n'); await wait();\nprocess.stderr.write('two\\n'); await wait();\nprocess.stdout.write('three é\\n');\n",
     );
-    const { end, output } = await shell.run({ command, cwd: DIR, env: ENV });
+    const { end, output } = await shell.run({ command, cwd: DIR, env: ENV, idleMs: 0 });
     assert.deepEqual(end, { kind: 'exited', code: 0 });
     // stdout and stderr are two pipes, read as each one's reads fire: a parent starved past the child's gaps may
     // read both stdout writes before the stderr one, so only each stream's own order is certain.
@@ -94,7 +100,7 @@ describe('nodeShellRunner', () => {
 
   it('reports a failing exit code with what was printed', async () => {
     const command = script('fail.mjs', "console.error('broke');\nprocess.exitCode = 3;\n");
-    assert.deepEqual(await shell.run({ command, cwd: DIR, env: ENV }), { end: { kind: 'exited', code: 3 }, output: 'broke\n' });
+    assert.deepEqual(await shell.run({ command, cwd: DIR, env: ENV, idleMs: 0 }), { end: { kind: 'exited', code: 3 }, output: 'broke\n' });
   });
 
   it('runs in the folder and environment given, with stdin already at its end', async () => {
@@ -102,7 +108,7 @@ describe('nodeShellRunner', () => {
       'where.mjs',
       "let input = '';\nprocess.stdin.on('data', (chunk) => { input += chunk; });\nprocess.stdin.on('end', () => console.log(JSON.stringify({ cwd: process.cwd(), probe: process.env.TEAMRIG_PROBE, input })));\n",
     );
-    const { end, output } = await shell.run({ command, cwd: DIR, env: ENV });
+    const { end, output } = await shell.run({ command, cwd: DIR, env: ENV, idleMs: 0 });
     assert.deepEqual(end, { kind: 'exited', code: 0 });
     assert.deepEqual(JSON.parse(output), { cwd: realpathSync(DIR), probe: 'probe value', input: '' });
   });
@@ -110,7 +116,7 @@ describe('nodeShellRunner', () => {
   it('hands each piece of output to onOutput as it arrives, all of it in order', async () => {
     const command = script('pieces.mjs', "process.stdout.write('one\\n');\nsetTimeout(() => process.stderr.write('two\\n'), 40);\n");
     const pieces: string[] = [];
-    const result = await shell.run({ command, cwd: DIR, env: ENV, onOutput: (chunk) => pieces.push(chunk) });
+    const result = await shell.run({ command, cwd: DIR, env: ENV, idleMs: 0, onOutput: (chunk) => pieces.push(chunk) });
     assert.equal(pieces.join(''), 'one\ntwo\n');
     assert.equal(result.output, 'one\ntwo\n');
     assert.equal(result.heldOpen, undefined);
@@ -127,12 +133,89 @@ describe('nodeShellRunner', () => {
     const started = Date.now();
     // The orphan outlives the test and keeps its working folder busy; on Windows that folder cannot be removed
     // until it exits, so it runs in the system temp folder, not in DIR, which after() removes.
-    const result = await nodeShellRunner(200).run({ command, cwd: tmpdir(), env: ENV });
+    const result = await nodeShellRunner({ graceMs: 200 }).run({ command, cwd: tmpdir(), env: ENV, idleMs: 0 });
     assert.ok(Date.now() - started < 4_000, `ended ${Date.now() - started} ms after the start, not when the orphan let go`);
     assert.deepEqual(result, { end: { kind: 'exited', code: 3 }, output: 'before\n', heldOpen: true });
   });
 
   it('rejects when the command cannot start, such as in a missing folder', async () => {
-    await assert.rejects(shell.run({ command: 'node --version', cwd: join(DIR, 'missing'), env: ENV }), /ENOENT/);
+    await assert.rejects(shell.run({ command: 'node --version', cwd: join(DIR, 'missing'), env: ENV, idleMs: 0 }), /ENOENT/);
+  });
+});
+
+describe('nodeShellRunner idle stop (#1532)', () => {
+  // A host with CPU to spare, so the silence limit is not stretched.
+  const calm = new CpuGate(new FakeHostCpu(80), new FakeClock().sleep, 25);
+  const kill = nodeTreeKill(process.platform);
+
+  /** Whether a process id still names a live process; one this user may not signal is alive too. */
+  function alive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
+    }
+  }
+
+  /** Waits up to `ms` for the process to be gone (its new parent reaps it), and says whether it is. */
+  async function gone(pid: number, ms: number): Promise<boolean> {
+    for (let waited = 0; waited < ms; waited += 50) {
+      if (!alive(pid)) {
+        return true;
+      }
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    return !alive(pid);
+  }
+
+  it('stops a command that prints once and never ends, with the process it started, keeping what it printed', async () => {
+    const command = script(
+      'hang.mjs',
+      "import { spawn } from 'node:child_process';\nconst child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });\nprocess.stdout.write(`grandchild ${child.pid}\\n`);\nsetInterval(() => {}, 1000);\n",
+    );
+    // The silence clock starts at spawn: a loaded host may take seconds to start node, so the first output gets a
+    // load-tolerant window, as in the coverage gate's own spec; the silence after it still ends the run.
+    const idleMs = 10_000;
+    const { end, output } = await nodeShellRunner({ kill, cpu: calm }).run({ command, cwd: DIR, env: ENV, idleMs });
+    assert.deepEqual(end, { kind: 'idle', silentMs: idleMs });
+    const pid = Number(/grandchild (\d+)/.exec(output)?.[1]);
+    assert.ok(pid > 0, output);
+    assert.equal(await gone(pid, 5_000), true, 'the process the command started is ended with it');
+  });
+
+  it('times nothing before the idleFrom output, then stops a command silent after it (a queued run waiting its turn)', async () => {
+    const command = script(
+      'queued.mjs',
+      "process.stdout.write('waiting for the host lock\\n');\nsetTimeout(() => { process.stdout.write('12:00:00 UTC running: test: npm test\\n'); setInterval(() => {}, 1000); }, 2500);\n",
+    );
+    const idleMs = 1_000;
+    const { end, output } = await nodeShellRunner({ kill, cpu: calm }).run({ command, cwd: DIR, env: ENV, idleMs, idleFrom: 'running: test: npm test' });
+    assert.ok(output.includes('running: test: npm test'), `the wait past idleMs is not taken for a hang: ${output}`);
+    assert.deepEqual(end, { kind: 'idle', silentMs: idleMs });
+  });
+
+  it('never stops a silent command when idleMs is 0', async () => {
+    const command = script('quiet.mjs', 'setTimeout(() => { process.exitCode = 4; }, 300);\n');
+    assert.deepEqual(await nodeShellRunner({ kill, cpu: calm }).run({ command, cwd: DIR, env: ENV, idleMs: 0 }), { end: { kind: 'exited', code: 4 }, output: '' });
+  });
+
+  it('ends the command group when this process is ended on POSIX, listens for nothing on Windows, and stops listening once the run ends', async () => {
+    const signals = new EventEmitter();
+    const listening = (): number[] => ['SIGINT', 'SIGTERM', 'SIGHUP'].map((signal) => signals.listenerCount(signal));
+    const command = script('wait.mjs', "process.stdout.write('ready\\n');\nsetInterval(() => {}, 1000);\n");
+    const grouped = process.platform !== 'win32';
+    // Windows runs the command in the console's own group, which Ctrl-C reaches with no help: the runner listens for
+    // nothing there, so the idle stop ends this run instead.
+    const run = nodeShellRunner({ kill, cpu: calm, signals }).run({ command, cwd: DIR, env: ENV, idleMs: grouped ? 0 : 3_000 });
+    // The listeners go on as the run starts, before its first wait.
+    assert.deepEqual(listening(), grouped ? [1, 1, 1] : [0, 0, 0]);
+    if (grouped) {
+      await new Promise((done) => setTimeout(done, 200));
+      signals.emit('SIGTERM');
+    }
+    const { end } = await run;
+    assert.deepEqual(end, grouped ? { kind: 'signal', signal: 'SIGKILL' } : { kind: 'idle', silentMs: 3_000 });
+    assert.deepEqual(listening(), [0, 0, 0]);
   });
 });
