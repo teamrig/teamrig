@@ -112,9 +112,12 @@ test('reads whether main merges through GitHub\'s merge queue, false when not li
   assert.throws(() => parseProfiles(entry('local', 'true')), /O\/R "queue": true needs the "ci" gate/);
 });
 
-test('the shipped repos.json merges no repo through the merge queue until main\'s ruleset turns the queue on (T3386)', () => {
+test('the shipped repos.json merges teamrig through the merge queue its main ruleset requires, and no other repo (T3386, T5460)', () => {
+  // main's ruleset refuses the direct merge call ("Repository rule violations found", or HTTP 405 once auto-merge.yml
+  // queued the pull request), so without queue every ship.ts merge of teamrig ends refused even when it lands.
+  assert.ok(MAIN_RULESETS.some(file => ruleTypesOf(file).includes('merge_queue')), 'teamrig\'s main requires the merge queue');
   const profiles = readProfiles();
-  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, false, slug);
+  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, slug === 'GeneralA6/teamrig', slug);
 });
 
 test('the shipped repos.json keeps every repo\'s merge on the whole local suite until its main requires CI (T3414); teamrig\'s does, so its merge runs the changed checks (#1464)', () => {
@@ -141,6 +144,17 @@ const MAIN_RULESETS = ['main.json', 'main-checks.json', 'main-review.json'];
 /** The status checks main's rulesets require before GitHub accepts a merge, whichever ruleset holds them (T4916). */
 function rulesetRequiredChecks(): string[] {
   return MAIN_RULESETS.flatMap(file => requiredChecksOf(file));
+}
+
+/** The type of each rule a ruleset file in .github/rulesets holds. */
+function ruleTypesOf(file: string): string[] {
+  const ruleset: unknown = JSON.parse(readFileSync(new URL(`../../.github/rulesets/${file}`, import.meta.url), 'utf8'));
+  assert.ok(typeof ruleset === 'object' && ruleset !== null && 'rules' in ruleset && Array.isArray(ruleset.rules));
+  const types: string[] = [];
+  for (const rule of ruleset.rules) {
+    if (typeof rule === 'object' && rule !== null && 'type' in rule && typeof rule.type === 'string') types.push(rule.type);
+  }
+  return types;
 }
 
 function requiredChecksOf(file: string): string[] {
