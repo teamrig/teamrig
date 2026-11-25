@@ -56,11 +56,20 @@ export async function installRunningKit(install: KitSelfInstall): Promise<KitSel
   return installKitVersion({ ...install, from: clientRoot, source: { kind: 'claude-code-plugin' } });
 }
 
-/** The session-start note of a pinned install, which names the pin each time so it is never silent; else undefined. */
+/**
+ * The session-start note of an install that left `current` elsewhere, named each time so it is never silent: a pin, or
+ * an older plugin (a move from the preview channel back to stable) whose version an install never moves down to;
+ * else undefined.
+ */
 export function kitSelfInstallNote(outcome: KitSelfInstallOutcome): string | undefined {
-  return outcome.kind === 'pinned'
-    ? `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig kit use --latest\` moves to it.`
-    : undefined;
+  switch (outcome.kind) {
+    case 'pinned':
+      return `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig kit use --latest\` moves to it.`;
+    case 'older':
+      return `teamrig ${outcome.current} stays current; this plugin's ${outcome.version} is older and kept; \`teamrig kit use ${outcome.version}\` moves to it.`;
+    default:
+      return undefined;
+  }
 }
 
 /** The restore log's line for a self-copy that changed or refused something; undefined for one that did nothing. */
@@ -70,11 +79,12 @@ export function kitSelfInstallLogLine(outcome: KitSelfInstallOutcome): string | 
       return `kit: ${outcome.previous ?? 'none'} -> ${outcome.version}: current`;
     case 'pinned':
       return `kit: ${outcome.version} kept; current pinned at ${outcome.pinned}`;
+    case 'older':
+      return `kit: ${outcome.version} kept; current ${outcome.current} is newer`;
     case 'refused':
       return `kit: refused: ${outcome.why}`;
     case 'skipped':
     case 'current':
-    case 'older':
     case 'busy':
       return undefined;
   }

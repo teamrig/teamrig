@@ -54,6 +54,16 @@ describe('installRunningKit', () => {
     assert.equal(files.get(kitCurrentPath(KIT)), '0.508.0\n');
   });
 
+  it('names the newer current and the way to the older version at each start of an older plugin', async () => {
+    await selfInstall(join(PLUGIN, '0.508.0'), '0.508.0');
+    await selfInstall(join(PLUGIN, '0.509.0'), '0.509.0');
+    const outcome = await selfInstall(join(PLUGIN, '0.508.0'), '0.508.0');
+    assert.deepEqual(outcome, { kind: 'older', version: '0.508.0', current: '0.509.0' });
+    assert.equal(kitSelfInstallNote(outcome), "teamrig 0.509.0 stays current; this plugin's 0.508.0 is older and kept; `teamrig kit use 0.508.0` moves to it.");
+    assert.equal(kitSelfInstallLogLine(outcome), 'kit: 0.508.0 kept; current 0.509.0 is newer');
+    assert.equal(files.get(kitCurrentPath(KIT)), '0.509.0\n');
+  });
+
   it('logs a refused copy and leaves current alone', async () => {
     await selfInstall(join(PLUGIN, '0.508.0'), '0.508.0');
     await files.write(join(PLUGIN, '0.509.0', 'package.json'), '{"type":"commonjs"}\n');
