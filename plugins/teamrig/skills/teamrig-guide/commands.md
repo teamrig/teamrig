@@ -98,7 +98,7 @@ Flags:
   service role giving `issue migrate` skips a task marked local.
 - `--issue-later "<why>"`: the task's public issue opens later, from another session; the reason is written as its
   ref, `issue later: <why>`. Use it when the session adding the task does not open issues itself, such as a lead
-  whose GitHub writes go through the team's GitHub session: the holder of the service role giving `issue migrate`
+  whose issue writes go through another session of the team: the holder of the service role giving `issue migrate`
   opens the issue from its rows file and links it, which it may not do on a task marked `--local`. `teamrig check`
   flags NO-ISSUE on the task until its issue is linked. Not with `--issue`, `--ref` or `--local`.
 - While `[github.issueAtAdd]` names a repository, every add gives `--issue` and `--issue-body`, `--local`,
