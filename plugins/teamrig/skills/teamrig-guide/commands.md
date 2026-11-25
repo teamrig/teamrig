@@ -1730,9 +1730,37 @@ COMMENTED acme/web#12
 CLOSED acme/web#12
 ```
 
+### teamrig issue reopen
+
+Reopens one closed issue or change request of the team's repositories, first posting `--comment` when given, with
+the same access and checks as `teamrig issue close`. Reopening a change request makes the host read its branch
+again, which refreshes a head it shows stale; close it, then reopen it. When the comment fails nothing is reopened;
+when the reopen fails after the comment was posted, the `FAILED` line says so: rerun without `--comment`. A tracker
+that cannot reopen (a connector built before plugin API 0.4.0, or one whose host has no reopen) is refused, writing
+nothing. Exit 1 when it failed, 2 when refused, else 0.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team.
+- `--comment <text>`: a comment posted before the reopen.
+
+Example:
+
+```sh
+teamrig issue reopen acme/web#12 --comment "Reopening to refresh the head."
+```
+
+Output:
+
+```text
+ACCESS acme: writes with the token saved as teamrig-gh-acme
+COMMENTED acme/web#12
+REOPENED acme/web#12
+```
+
 ### teamrig issue label
 
-Adds labels to and takes labels off one issue or pull request of the team's repositories, with the same access as
+Adds labels to and takes labels off one issue or change request of the team's repositories, with the same access as
 `teamrig issue reply`. `--add` and `--remove` are comma-separated lists; give at least one, and no label in both.
 Each label to add must already be one of the repository's, read before any change, so a typo never makes a new
 label: make it on the host first. Three kinds are made where the repository lacks them, each with a `MADE` line:

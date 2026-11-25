@@ -9,9 +9,10 @@ import { apiEndpointOf, endpointPath, ghCommandSlotOf } from './gh-writes.ts';
 
 const REPLY = '`teamrig issue reply <owner/name#n> --body-file <file>` comments on an issue or pull request';
 const CLOSE = '`teamrig issue close <owner/name#n> [--comment <text>]` closes an issue or pull request';
+const REOPEN = '`teamrig issue reopen <owner/name#n> [--comment <text>]` reopens a closed issue or pull request';
 const LABEL = '`teamrig issue label <owner/name#n> --add|--remove <label,...>` sets its labels';
 const ASSIGN = '`teamrig issue assign <owner/name#n> --add|--remove <login,...>` sets its assignees';
-const EDIT = `\`teamrig issue edit <owner/name#n> --body-file <file>\` replaces its body; ${LABEL}; ${ASSIGN}; ${CLOSE}`;
+const EDIT = `\`teamrig issue edit <owner/name#n> --body-file <file>\` replaces its body; ${LABEL}; ${ASSIGN}; ${CLOSE}; ${REOPEN}`;
 const OPEN_ISSUE = '`teamrig add ... --issue "<title>" --issue-body "<text>"` opens an issue with its task';
 const MERGE = '`teamrig merge`, run in the branch\'s folder, lands a branch (a repository\'s own merge command, such as its pull request flow, runs in its place)';
 const RERUN = '`teamrig ci rerun <owner/name> --run <id>` starts the failed jobs of one CI run again (T5063)';
@@ -25,6 +26,8 @@ export const GH_WRITE_ROUTES: ReadonlyMap<string, string> = new Map([
   ['pr comment', REPLY],
   ['issue close', CLOSE],
   ['pr close', CLOSE],
+  ['issue reopen', REOPEN],
+  ['pr reopen', REOPEN],
   ['issue edit', EDIT],
   ['pr edit', EDIT],
   ['issue create', OPEN_ISSUE],

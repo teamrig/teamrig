@@ -555,6 +555,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       first posting --comment when given, with the same checks; a failed comment closes nothing;
       --reason is the one the host shows; --duplicate-of closes it as a duplicate of that issue of the
       same repository, which the host links, and is refused when the host has no such issue
+  issue reopen <owner/name#n> [--comment <text>]   reopens one closed issue or pull request of the
+      team's repositories, first posting --comment when given, with the same checks; a failed comment
+      reopens nothing; refused on a tracker that cannot reopen
   issue label <owner/name#n> [--add <label,...>] [--remove <label,...>]   adds labels to and takes
       labels off one issue or pull request of the team's repositories, with the same access; each
       label to add must already be one of the repository's, but design (talk only, not work to take

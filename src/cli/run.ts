@@ -280,6 +280,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   },
   'issue edit': { effect: 'write', flags: ['session', 'body-file'], load: async () => (await issueCommands()).issueEdit },
   'issue close': { effect: 'write', flags: ['session', 'comment', 'reason', 'duplicate-of'], load: async () => (await issueCommands()).issueClose },
+  'issue reopen': { effect: 'write', flags: ['session', 'comment'], load: async () => (await issueCommands()).issueReopen },
   'issue label': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueLabel },
   'issue similar': { effect: 'read', flags: [], load: async () => (await issueCommands()).issueSimilar },
   'issue search': { effect: 'read', flags: ['session', 'repo', 'state', 'kind'], load: async () => (await issueCommands()).issueSearch },
@@ -981,6 +982,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       first posting --comment when given, with the same checks; a failed comment closes nothing;
       --reason is the one the host shows; --duplicate-of closes it as a duplicate of that issue of the
       same repository, which the host links, and is refused when the host has no such issue
+  issue reopen <owner/name#n> [--comment <text>]   reopens one closed issue or pull request of the
+      team's repositories, first posting --comment when given, with the same checks; a failed comment
+      reopens nothing; refused on a tracker that cannot reopen
   issue label <owner/name#n> [--add <label,...>] [--remove <label,...>]   adds labels to and takes
       labels off one issue or pull request of the team's repositories, with the same access; each
       label to add must already be one of the repository's, but design (talk only, not work to take

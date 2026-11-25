@@ -120,6 +120,7 @@ const EXPECTED = {
   'issue reply': 'write',
   'issue edit': 'write',
   'issue close': 'write',
+  'issue reopen': 'write',
   'issue label': 'write',
   'issue similar': 'read',
   'issue search': 'read',

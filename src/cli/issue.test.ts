@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { withStampFooter } from '../core/stamp.ts';
-import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueRead, isIssueSearch, isIssueUnassign, issueSearchArgs, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
+import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueRead, isIssueReopen, isIssueSearch, isIssueUnassign, issueSearchArgs, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
 import { areaLabelSpec } from '../issues/managed-labels.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
@@ -225,6 +225,47 @@ describe('teamrig issue close', () => {
       'FAILED acme/web#7: the token saved as teamrig-gh-acme may not comment on acme/web#7: on GitHub, edit that token and set Issues and Pull requests to Read and write; its text stays the same, so nothing needs saving again; it was not closed',
     ]);
     assert.equal(gh.ran.length, 1);
+  });
+});
+
+describe('teamrig issue reopen (T5612)', () => {
+  it("comments, then reopens, with the owner's token, never printing it", async () => {
+    const gh = new FakeGh();
+    const credentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-issues-token');
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'reopen', 'acme/web#612', '--comment', 'Reopening to refresh the head.'], { ...AS_LEAD, gh, credentials });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [LOGIN, 'COMMENTED acme/web#612', 'REOPENED acme/web#612']);
+    assert.equal(gh.ran.length, 2);
+    assert.ok(isIssueComment(gh.ran[0]?.args ?? []) && isIssueReopen(gh.ran[1]?.args ?? []));
+    assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token']);
+    assert.ok(![...result.stdout, ...result.stderr].some((line) => line.includes('acme-issues-token')));
+  });
+
+  it('reopens by the one state=open call when no comment is given', async () => {
+    const gh = new FakeGh();
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'reopen', 'acme/web#7'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [LOGIN, 'REOPENED acme/web#7']);
+    assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=open']]);
+  });
+
+  it('fails, reopening nothing, when GitHub refuses the comment', async () => {
+    const gh = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Resource not accessible by integration (HTTP 403)\n' });
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'reopen', 'acme/web#7', '--comment', 'Again'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stdout.join('\n'), /^FAILED acme\/web#7: .*it was not reopened$/mu);
+    assert.equal(gh.ran.length, 1);
+  });
+
+  it('refuses, running no gh, a caller not on the team or a repository not listed', async () => {
+    const kit = new CliHarness(GITHUB_TEAM);
+    const gh = new FakeGh();
+    const stranger = await kit.run(['issue', 'reopen', 'acme/web#7'], { env: { TEAMRIG_SESSION: 'stranger' }, gh });
+    assert.equal(stranger.code, EXIT.refused);
+    const unlisted = await kit.run(['issue', 'reopen', 'acme/api#7'], { ...AS_LEAD, gh });
+    assert.equal(unlisted.code, EXIT.refused);
+    assert.match([...unlisted.stdout, ...unlisted.stderr].join('\n'), /acme\/api is not one of the team's repositories/u);
+    assert.deepEqual(gh.ran, []);
   });
 });
 

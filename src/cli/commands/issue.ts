@@ -10,7 +10,7 @@ import { bareRef, refOf } from '../../issues/ref.ts';
 import { checkReply, sendReply, type FollowUp, type ReplyWrite } from '../../issues/reply.ts';
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from '../../issues/similar.ts';
 import { holderOf, sessionLogins } from '../../issues/status-push.ts';
-import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue, type IssueWrite } from '../../issues/write.ts';
+import { editIssueBody, labelIssue, labelRefusal, postRefusal, reopenIssue, writeIssue, type IssueWrite, type ReopenWrite } from '../../issues/write.ts';
 import type { Task } from '../../register/fold.ts';
 import { publicIssueText } from '../../sync/migrate.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
@@ -205,6 +205,23 @@ export async function issueClose(args: ParsedArgs, runtime: CliRuntime): Promise
     ...(duplicateOf === undefined ? {} : { duplicateOf }),
   };
   return writeOn(args, runtime, write, '--comment');
+}
+
+/**
+ * `issue reopen <owner/name#n> [--comment <text>]` (T5612): reopens one closed issue or pull request of the team's
+ * repositories, first posting `--comment` when given, through the same host and checks as `issue close`; reopening a
+ * pull request makes GitHub read its branch again, which refreshes a head it showed stale. A tracker without the
+ * reopen capability is refused, and a failed comment reopens nothing. Exit 1 when the host failed, else 0.
+ */
+export async function issueReopen(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  const target = targetOf(args);
+  const comment = args.flags.get('comment');
+  const hosts = await hostsFor(args, runtime, target.repo, comment === undefined ? undefined : { flag: '--comment', text: comment });
+  if (hosts === undefined) {
+    return EXIT.ok;
+  }
+  const write: ReopenWrite = { target, ...(comment === undefined ? {} : { comment }) };
+  return (await reopenIssue(hosts.tracker, write, (line) => runtime.out.stdout(line))) ? EXIT.ok : EXIT.failed;
 }
 
 /**
