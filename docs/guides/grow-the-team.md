@@ -183,6 +183,8 @@ sequenceDiagram
   writes then follow it.
 - `teamrig open <session>` opens a tab in tmux (when run inside tmux), Windows Terminal, macOS Terminal, GNOME
   Terminal, Konsole or x-terminal-emulator, in that order; `open.terminal` in the config or `--terminal` picks one.
+  `headless` runs the session with no window at all, an opt-in for sessions no one watches (`conhost --headless` on
+  Windows, a detached tmux session elsewhere).
   With `open.teamWindow: true`, each tab of the team's sessions opens in a Windows Terminal window of the team's
   own (`teamrig-<team>`), apart from other teams' tabs, a restore after a reboot included.
   It refuses any session but the lead when the host has no room for one more (`hire --yes` then hires it home):

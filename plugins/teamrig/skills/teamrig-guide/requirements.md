@@ -60,6 +60,9 @@ entry you removed stays removed; `teamrig doctor` names the folder when it is no
 | Linux | `gnome-terminal`, then `konsole`, then `x-terminal-emulator` | the first one found |
 
 When none works, or with `--terminal print`, `open` prints the command to run in a new terminal and exits 3.
+`--terminal headless`, an opt-in `auto` never picks, runs the session with no window: on Windows under the
+`conhost.exe --headless` Windows ships, started by `cmd start`; elsewhere in a detached tmux session (tmux 3.0 or
+later), `teamrig-<title>`.
 With [open.teamWindow] on, each tab of the team's sessions (`open`, a meeting start, a refresh restart, the idle
 pass's reopen, a restore after a reboot) opens in a Windows Terminal window of the team's own, `teamrig-<team>`, made
 when none is open, so each team's tabs stay apart; the other terminals open as before.
