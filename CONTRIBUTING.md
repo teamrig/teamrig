@@ -84,25 +84,33 @@ The author builds to these and the reviewer checks each one:
 
 ## Where a change lives
 teamrig is its own main user: its own sessions build it with it, so a fix they need is most often one every team
-needs. Each change has one of three reaches, and generic is the default:
+needs. Each change has one of four reaches, and `plugin` is the default:
 
 | Reach | Where it lives | Such as |
 | --- | --- | --- |
-| **all users** | the plugin: a command or flag (`src/`), a config key with a default, a hook, a plugin skill (`plugins/teamrig/skills/`), the core rules | a check flag, a guard, a step of the guide |
-| **teamrig development** | this repository's own tooling: `.claude/skills/dev-*`, `tools/`, `.github/`, CONTRIBUTING.md, CLAUDE.md | the ship tool, the docs checks, a CI gate |
-| **one team** | that team's own files: its team rules, its sessions' skills and memory, outside this repository | a team's repository names, its owner's decisions |
+| **plugin** | every user: a command or flag (`src/`), a config key with a default, a hook, a plugin skill (`plugins/teamrig/skills/`), the core rules | a check flag, a guard, a step of the guide |
+| **contributors** | what anyone sending a change meets: `.github/`, CONTRIBUTING.md, the CI gates, the docs checks | the pull request template, a commit gate |
+| **dev-only** | the maintainers' own tooling: `tools/`, `.claude/skills/dev-*`, CLAUDE.md | the ship tool, a dev skill |
+| **team** | that team's own files: its team rules, its sessions' skills and memory, outside this repository | a team's repository names, its owner's decisions |
 
 Decide it by asking, in order:
 
-1. Would a team that never touches teamrig's code need this, maybe with values of its own? Then it is for **all
-   users**: ship it in the plugin, and put any value that differs per team in a config key with a default, never
-   hard-coded.
-2. Is it about building, testing, documenting or releasing teamrig itself? Then it is **teamrig development**.
-3. Only what neither answers is for **one team**. A one-team stopgap for a need that is really generic names the
-   all-users task that replaces it (`stopgap T<id>`).
+1. Would a team that never touches teamrig's code need this, maybe with values of its own? Then it is **plugin**:
+   ship it in the plugin, and put any value that differs per team in a config key with a default, never hard-coded.
+2. Does everyone who sends teamrig a change meet it? Then it is **contributors**.
+3. Is it only the maintainers' own way of building, testing or releasing teamrig? Then it is **dev-only**, and it
+   says why users do not need it.
+4. Only what none answers is for **team**. A one-team stopgap for a need that is really generic names the plugin
+   task that replaces it (`stopgap T<id>`).
 
 A task says its reach in its description, an approval request in its note, and a pull request in its `## Reach`
-section. A reviewer who reads a one-team or teamrig-development reach on what is really generic asks for it to move.
+section, whose first line starts with one of the four words: `plugin`, `contributors`, `dev-only (<why users do not
+need it>)` or `team`. A dev-only pull request that touches `tools/` or `.claude/skills/dev-*` also names its plugin
+carrier on a line of its own: `Plugin carrier: #<n>`, the issue that brings the same help to every user, or
+`Plugin carrier: none: <why no user needs it>`. The ship tool opens no pull request whose note breaks either rule
+(`tools/ship/reach.ts`, in a repo whose `pullSections` in `tools/ship/repos.json` holds `Reach`); one already open
+merges with a warning line. A reviewer who reads a team, contributors or dev-only reach on what is really generic
+asks for it to move.
 
 ### How it behaves for everyone
 Where a change lives is half the question; the other half is how it behaves for every user it reaches. Before you

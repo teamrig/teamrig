@@ -9,9 +9,10 @@ The steps every repository shares (a branch per change, the description, one mer
 branch) are the plugin's [ship-change skill](../../../plugins/teamrig/skills/ship-change/SKILL.md); these are teamrig's
 own on top of it.
 
-1. Before you build, settle the change's reach (CONTRIBUTING.md, Where a change lives): all users by default, so a
-   team's value is a config key with a default and a how-to is a plugin skill; teamrig development only for this
-   repo's own tooling. Write it in the task's description.
+1. Before you build, settle the change's reach (CONTRIBUTING.md, Where a change lives): `plugin` by default, so a
+   team's value is a config key with a default and a how-to is a plugin skill; `contributors` for what every sender
+   of a change meets; `dev-only (<why>)` only for the maintainers' own tooling; `team` for one team. Write it in the
+   task's description.
 2. Work on a branch cut from the newest main: `git fetch origin && git switch -c <branch> origin/main`, named
    `<type>/<id>-<slug>` such as `feat/t12-parse-input` (CONTRIBUTING.md, Branches and releases). A worktree works
    too: `teamrig worktree add --task <id>` names the branch and runs the setup, or `git worktree add -b <branch>
@@ -35,7 +36,9 @@ own on top of it.
    `tools/ship` opens takes its text from `--note-file`: give that file a `## Reach` and a `## Risks` section. The
    merge opens no pull request without them (`pullSections` in
    `tools/ship/repos.json`), refusing before it waits on any check; one already open without it merges with a warning
-   line. The repository is public: a security fix's branch name, commits, pull request text, comments and test names
+   line. The `## Reach` line starts with `plugin`, `contributors`, `dev-only (<why>)` or `team`, and a dev-only change
+   of `tools/` or a dev skill adds `Plugin carrier: #<n>` or `Plugin carrier: none: <why>`; `ship.ts merge` and
+   `ship.ts pr` refuse any other, the same way. The repository is public: a security fix's branch name, commits, pull request text, comments and test names
    describe the hardening, never how to get past the old code, nor the private report or review by its id
    ([SECURITY.md](../../../SECURITY.md)). It is rebase-merged once every check passes on its head, and the branch is
    deleted.

@@ -7,7 +7,7 @@
 <!-- The reason: the bug it fixes or what it makes possible. -->
 
 ## Reach
-<!-- All users (the plugin: a command, a config key, a hook, a plugin skill), teamrig development (dev skills, tools/, CI) or one team, and why: see CONTRIBUTING.md, Where a change lives. Then which users and tools you weighed (AI CLIs, OSes, trackers, team shapes and sizes) and how it behaves for each: see How it behaves for everyone. -->
+<!-- Start with one word: plugin (every user: a command, a config key, a hook, a plugin skill), contributors (the template, CI, CONTRIBUTING.md), dev-only (<why users do not need it>) (tools/, dev skills) or team; then why. A dev-only change of tools/ or a dev skill adds "Plugin carrier: #<n>" or "Plugin carrier: none: <why>". See CONTRIBUTING.md, Where a change lives. Then which users and tools you weighed (AI CLIs, OSes, trackers, team shapes and sizes) and how it behaves for each: see How it behaves for everyone. -->
 
 ## Changes
 <!-- The parts it touches, one line each. -->
