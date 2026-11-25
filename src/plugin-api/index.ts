@@ -194,6 +194,20 @@ export {
   type ConfigLinesAnswer,
   type HostConfigFileSet,
   type HostConfigLines,
+  OBSERVED_FROM,
+  PERMISSION_MODES,
+  UNKNOWN_WHY,
+  effectiveOf,
+  hostCannotTell,
+  knownFrom,
+  observedPermission,
+  type EffectiveConfig,
+  type Known,
+  type MappedPermissionMode,
+  type ObservedFrom,
+  type ObservedPermission,
+  type PermissionMode,
+  type UnknownWhy,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a
