@@ -24,6 +24,11 @@ describe('terminalPortOf', () => {
     }
   });
 
+  it("hands back the adapter's declaration with its port, whose notices say why a call goes unserved (T5093)", async () => {
+    const reach = await terminalPortOf('headless', depsOf());
+    assert.equal(reach.kind === 'port' ? reach.declaration.id : reach.why, 'headless');
+  });
+
   it('builds the port from what the call hands it, and its open starts through those processes', async () => {
     const processes = new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' });
     const reach = await terminalPortOf('tmux', depsOf(processes));

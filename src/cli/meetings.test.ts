@@ -292,7 +292,7 @@ describe('runCli: meeting start <id>', () => {
       'STARTED M1 started, Tue 01-08 14:00 UTC, 30 min, alpha with bravo, tasks T1 | the release plan',
       'TOLD alpha',
       'TOLD bravo',
-      "NOT FOCUSED app-alpha's tab, [app] alpha: gnome-terminal, konsole, x-terminal-emulator cannot select a tab by its title",
+      "NOT FOCUSED app-alpha's tab, [app] alpha: gnome-terminal: GNOME Terminal has no call for it on a tab already open; konsole: teamrig does not ask Konsole for it yet; x-terminal-emulator: the terminal has no call for it on a window already open",
       'WAKES app-alpha with the meeting\'s opening prompt once its tab is idle, within about 15 s (a running turn ends first)',
     ]);
     assert.deepEqual(await asksOf(kit, 'alpha'), [OPENING]);
@@ -301,6 +301,15 @@ describe('runCli: meeting start <id>', () => {
     assert.equal((await stored(kit, 'M1'))?.status, 'started');
     assert.ok((await inboxOf(kit, 'alpha')).some((line) => line.endsWith(`lead: ${OPENING}`)));
     assert.ok((await inboxOf(kit, 'bravo')).some((line) => line.endsWith("lead: Meeting M1 with the owner started in alpha's tab: the release plan")));
+  });
+
+  it('focuses the session met in its own launch terminal, and says how to watch one that runs headless (T5093)', async () => {
+    const kit = await team({ ...TEAM, launch: { alpha: { terminal: 'headless' } } });
+    await booked(kit, '--session', 'lead');
+    const result = await kit.run(['meeting', 'start', 'M1', '--session', 'lead'], await alphaRuns(kit));
+    assert.equal(result.code, EXIT.ok, said(result));
+    assert.match(result.stdout.find((line) => line.startsWith('NOT FOCUSED')) ?? '', /^NOT FOCUSED app-alpha's tab, \[app\] alpha: headless: a headless session has no window to bring forward: off Windows, watch it with tmux attach/);
+    assert.equal((await asksOf(kit, 'alpha')).length, 1);
   });
 
   it("brings the session met's running tab to the front in Windows Terminal, by its title", async () => {
