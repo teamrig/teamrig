@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  folderStamp,
   installTeamrig,
   kitHomeOf,
   parseInstallArgs,
@@ -32,8 +33,35 @@ const KIT = '/home/user/.teamrig';
 const CLONE = '/home/user/.teamrig/install/teamrig';
 const CLI = `${CLONE}/plugins/teamrig/dist/cli/main.js`;
 
+const STAMP = '20261125T183005Z';
+const FRESH = `${CLONE}.new-${STAMP}`;
+const ASIDE = `${CLONE}.old-${STAMP}`;
+
+/** A rename that records each move as `from>to`, and throws for the moves `failing` names. */
+function fakeRename(failing: readonly string[] = []) {
+  const moves: string[] = [];
+  const rename = (from: string, to: string): void => {
+    if (failing.includes(`${from}>${to}`)) {
+      throw new Error('EPERM');
+    }
+    moves.push(`${from}>${to}`);
+  };
+  return { moves, rename };
+}
+
 function input(overrides: Partial<InstallInput> = {}, present: readonly string[] = []): InstallInput {
-  return { kitHome: KIT, platform: 'linux', nodePath: '/usr/bin/node', hosts: [], write: false, exists: (path) => present.includes(path), ...overrides };
+  return {
+    kitHome: KIT,
+    platform: 'linux',
+    nodePath: '/usr/bin/node',
+    hosts: [],
+    write: false,
+    exists: (path) => present.includes(path),
+    rename: fakeRename().rename,
+    cwd: '/home/user',
+    stamp: STAMP,
+    ...overrides,
+  };
 }
 
 const words = (call: Call): string => [call.command, ...call.args].join(' ');
@@ -43,8 +71,13 @@ describe('installTeamrig', () => {
     const { calls, run } = fakeRunner([{ when: (call) => call.args.includes('--version') && call.command === '/usr/bin/node', give: { code: 0, out: 'teamrig 1.2.3' } }]);
     const report = installTeamrig(input(), run);
     assert.equal(report.ok, true);
-    assert.deepEqual(calls.map(words), ['git --version', `git clone -q --depth 1 --branch release ${RELEASE_REPO} ${CLONE}`, `/usr/bin/node ${CLI} --version`]);
+    assert.deepEqual(calls.map(words), [
+      'git --version',
+      `git clone -q --depth 1 --branch release ${RELEASE_REPO} ${FRESH}`,
+      `/usr/bin/node ${FRESH}/plugins/teamrig/dist/cli/main.js --version`,
+    ]);
     assert.ok(report.lines.includes('teamrig 1.2.3'));
+    assert.ok(report.lines.includes(`CLONED ${RELEASE_REPO} (release) into ${CLONE}`));
     assert.ok(report.lines.some((line) => line.includes(`export PATH="${CLONE}/plugins/teamrig/bin:$PATH"`)));
   });
 
@@ -58,23 +91,57 @@ describe('installTeamrig', () => {
     assert.match(report.lines.at(-1) ?? '', /trust teamrig's hooks/);
   });
 
-  it('updates its own clone to the newest release on a later run', () => {
-    const { calls, run } = fakeRunner([{ when: (call) => call.args.includes('get-url'), give: { code: 0, out: 'https://github.com/teamrig/teamrig' } }]);
-    const report = installTeamrig(input({}, [`${CLONE}/.git`]), run);
+  it('updates by a fresh clone beside the old install, moving the old one aside, never running git inside it', () => {
+    const { calls, run } = fakeRunner();
+    const { moves, rename } = fakeRename();
+    const report = installTeamrig(input({ rename }, [CLONE, `${CLONE}/.git`]), run);
     assert.equal(report.ok, true);
-    assert.deepEqual(calls.slice(1, 4).map(words), [
-      `git -C ${CLONE} remote get-url origin`,
-      `git -C ${CLONE} fetch -q --depth 1 origin release`,
-      `git -C ${CLONE} checkout -q --detach FETCH_HEAD`,
-    ]);
+    assert.equal(calls.some((call) => call.args.includes('-C')), false);
+    assert.equal(calls[1]?.args.at(-1), FRESH);
+    assert.deepEqual(moves, [`${CLONE}>${ASIDE}`, `${FRESH}>${CLONE}`]);
+    assert.ok(report.lines.includes(`UPDATED ${RELEASE_REPO} (release) into ${CLONE}`));
+    assert.ok(report.lines.includes(`KEPT the old install at ${ASIDE}: delete it once this one works`));
   });
 
-  it('refuses a clone of another repository and leaves it alone', () => {
-    const { calls, run } = fakeRunner([{ when: (call) => call.args.includes('get-url'), give: { code: 0, out: 'https://example.invalid/other.git' } }]);
-    const report = installTeamrig(input({}, [`${CLONE}/.git`]), run);
+  it('leaves the old install in place when the new clone or its teamrig fails', () => {
+    const steps: readonly { readonly failing: string; readonly when: (call: Call) => boolean }[] = [
+      { failing: 'clone', when: (call) => call.args[0] === 'clone' },
+      { failing: 'new teamrig', when: (call) => call.command === '/usr/bin/node' },
+    ];
+    for (const { failing, when } of steps) {
+      const { run } = fakeRunner([{ when, give: { code: 1, out: 'bad' } }]);
+      const { moves, rename } = fakeRename();
+      const report = installTeamrig(input({ rename }, [CLONE, `${CLONE}/.git`]), run);
+      assert.equal(report.ok, false, failing);
+      assert.deepEqual(moves, [], failing);
+    }
+  });
+
+  it('moves the old install back when the new one cannot take its place', () => {
+    const { moves, rename } = fakeRename([`${FRESH}>${CLONE}`]);
+    const report = installTeamrig(input({ rename }, [CLONE, `${CLONE}/.git`]), fakeRunner().run);
     assert.equal(report.ok, false);
-    assert.match(report.lines.join('\n'), /REFUSED .* not https:\/\/github\.com\/teamrig\/teamrig\.git; move it away/);
-    assert.equal(calls.some((call) => call.args.includes('fetch') || call.args.includes('checkout')), false);
+    assert.deepEqual(moves, [`${CLONE}>${ASIDE}`, `${ASIDE}>${CLONE}`]);
+    assert.equal(report.lines.at(-1), `FAILED move ${FRESH} to ${CLONE}: Error: EPERM; the install in use is unchanged`);
+  });
+
+  it('stops naming the move when the old install cannot be moved aside, connecting no host', () => {
+    const { calls, run } = fakeRunner();
+    const { moves, rename } = fakeRename([`${CLONE}>${ASIDE}`]);
+    const report = installTeamrig(input({ rename, hosts: ['one'] }, [CLONE, `${CLONE}/.git`]), run);
+    assert.equal(report.ok, false);
+    assert.deepEqual(moves, []);
+    assert.equal(report.lines.at(-1), `FAILED move ${CLONE} to ${ASIDE}: Error: EPERM`);
+    assert.equal(calls.length, 3);
+  });
+
+  it('refuses on Windows when a git program sits in the current folder, before running anything', () => {
+    const { calls, run } = fakeRunner();
+    const planted = 'D:\\people\\you\\Downloads\\git.cmd';
+    const report = installTeamrig(input({ platform: 'win32', kitHome: 'D:\\people\\you\\.teamrig', cwd: 'D:\\people\\you\\Downloads' }, [planted]), run);
+    assert.equal(report.ok, false);
+    assert.deepEqual(calls, []);
+    assert.equal(report.lines.at(-1), `REFUSED ${planted} would run as git; run this from your home folder (cd ~) instead`);
   });
 
   it('refuses a folder at the install path that is no git clone, running nothing past git --version', () => {
@@ -101,12 +168,18 @@ describe('installTeamrig', () => {
   it('builds Windows paths and the Windows PATH step on win32', () => {
     const { calls, run } = fakeRunner();
     const report = installTeamrig(input({ kitHome: 'D:\\people\\you\\.teamrig', platform: 'win32', nodePath: 'node.exe' }), run);
-    assert.equal(calls[1]?.args.at(-1), 'D:\\people\\you\\.teamrig\\install\\teamrig');
+    assert.equal(calls[1]?.args.at(-1), `D:\\people\\you\\.teamrig\\install\\teamrig.new-${STAMP}`);
     assert.ok(report.lines.some((line) => line.includes('Environment Variables > Path > New: D:\\people\\you\\.teamrig\\install\\teamrig\\plugins\\teamrig\\bin')));
   });
 
   it('tells a run with no --host how to connect one', () => {
     assert.match(installTeamrig(input(), fakeRunner().run).lines.at(-1) ?? '', /run this again with --host <name>/);
+  });
+});
+
+describe('folderStamp', () => {
+  it('gives a UTC stamp holding no character a folder name refuses', () => {
+    assert.equal(folderStamp(new Date('2026-11-25T18:30:05.123Z')), STAMP);
   });
 });
 
@@ -131,6 +204,9 @@ function environment(run: InstallEnvironment['run']) {
     nodePath: '/usr/bin/node',
     home: '/home/user',
     exists: () => false,
+    rename: fakeRename().rename,
+    cwd: '/home/user',
+    now: new Date('2026-11-25T18:30:05Z'),
     run,
     print: (line) => out.push(line),
     printError: (line) => err.push(line),
@@ -151,7 +227,7 @@ describe('runInstall', () => {
     const { calls, run } = fakeRunner();
     const { env, out, err } = environment(run);
     assert.equal(runInstall(['--host', 'one'], env), 0);
-    assert.equal(calls[1]?.args.at(-1), CLONE);
+    assert.equal(calls[1]?.args.at(-1), FRESH);
     assert.ok(out.some((line) => line.startsWith('CLONED ')));
     assert.deepEqual(err, []);
   });

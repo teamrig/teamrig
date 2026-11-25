@@ -1,8 +1,9 @@
 /**
  * teamrig's host-neutral install, for an AI CLI that loads no teamrig plugin: a person downloads this one file from the
  * release branch and runs `node install-teamrig.ts [--host <name>]... [--yes]`. It keeps a shallow clone of the public
- * release branch at `<teamrig home>/install/teamrig` (TEAMRIG_HOME, else ~/.teamrig), updates it on a later run, and
- * refuses a folder there that is not that clone. Then, for each `--host`, it runs that install's own
+ * release branch at `<teamrig home>/install/teamrig` (TEAMRIG_HOME, else ~/.teamrig); a later run clones afresh and
+ * swaps the new clone in, keeping the old one aside, and a folder there that is no git clone is refused. Then, for
+ * each `--host`, it runs that install's own
  * `teamrig setup hooks --host <name>`, which previews and, with --yes, writes the host's hooks file. It edits no shell
  * profile: it prints the folder to put on PATH.
  *
@@ -10,7 +11,7 @@
  * names no host: each host's words come from its adapter, through `setup hooks`.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { posix, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +38,16 @@ export interface InstallInput {
   readonly write: boolean;
   /** Whether a path exists. */
   readonly exists: (path: string) => boolean;
+  /** Moves a folder; throws when it cannot. */
+  readonly rename: (from: string, to: string) => void;
+  /** The folder the script runs in, where Windows looks for a bare program before PATH. */
+  readonly cwd: string;
+  /** A name-safe time stamp for this run's new and old folders. */
+  readonly stamp: string;
 }
+
+/** The names Windows would start for a bare `git` found in the current folder. */
+const WINDOWS_PROGRAM_SUFFIXES = ['.exe', '.com', '.bat', '.cmd'];
 
 export interface InstallReport {
   readonly ok: boolean;
@@ -70,16 +80,15 @@ export function parseInstallArgs(argv: readonly string[]): InstallArgs {
   return { kind: 'args', hosts, write };
 }
 
-/** The same repository whether or not its URL ends in `.git`, as git prints whichever was cloned. */
-function isReleaseRepo(url: string): boolean {
-  return url === RELEASE_REPO || `${url}.git` === RELEASE_REPO;
-}
-
 class InstallStop extends Error {}
 
 /**
  * Installs or updates the clone, runs its teamrig, and connects each host. Stops at the first step that fails, with
  * what failed and what to do; a refusal leaves the folder it found as it was.
+ *
+ * It never runs git inside an install already there: anything under the teamrig home may have been changed since
+ * (a hook or config in its .git runs in the person's own terminal, and a checkout keeps local edits), so every run
+ * clones fresh into a sibling folder, checks it runs, and only then moves the old install aside, never deleting it.
  */
 export function installTeamrig(input: InstallInput, run: InstallRunner): InstallReport {
   const path = input.platform === 'win32' ? win32 : posix;
@@ -97,26 +106,41 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     throw new InstallStop();
   };
   const clone = path.join(input.kitHome, 'install', 'teamrig');
+  const fresh = `${clone}.new-${input.stamp}`;
+  const aside = `${clone}.old-${input.stamp}`;
+  const cliIn = (folder: string): string => path.join(folder, 'plugins', 'teamrig', 'dist', 'cli', 'main.js');
   try {
-    must('git is needed: install it from https://git-scm.com', 'git', ['--version']);
-    if (input.exists(path.join(clone, '.git'))) {
-      // Only the clone this script made is updated: a folder of another repository is left alone.
-      const origin = must('read the install folder origin', 'git', ['-C', clone, 'remote', 'get-url', 'origin']);
-      if (!isReleaseRepo(origin)) {
-        refuse(`REFUSED ${clone} is a git folder of ${origin}, not ${RELEASE_REPO}; move it away and run this again`);
+    if (input.platform === 'win32') {
+      // Windows starts a bare program from the current folder before PATH, so a downloaded git.exe would run.
+      const planted = WINDOWS_PROGRAM_SUFFIXES.map((suffix) => path.join(input.cwd, `git${suffix}`)).find(input.exists);
+      if (planted !== undefined) {
+        refuse(`REFUSED ${planted} would run as git; run this from your home folder (cd ~) instead`);
       }
-      must('fetch the release branch', 'git', ['-C', clone, 'fetch', '-q', '--depth', '1', 'origin', RELEASE_BRANCH]);
-      must('move to the newest release', 'git', ['-C', clone, 'checkout', '-q', '--detach', 'FETCH_HEAD']);
-      lines.push(`UPDATED ${clone} to the newest release`);
-    } else if (input.exists(clone)) {
+    }
+    must('git is needed: install it from https://git-scm.com', 'git', ['--version']);
+    const present = input.exists(clone);
+    if (present && !input.exists(path.join(clone, '.git'))) {
       refuse(`REFUSED ${clone} exists and is not a teamrig install; move it away and run this again`);
-    } else {
-      must('clone the release branch', 'git', ['clone', '-q', '--depth', '1', '--branch', RELEASE_BRANCH, RELEASE_REPO, clone]);
-      lines.push(`CLONED ${RELEASE_REPO} (${RELEASE_BRANCH}) into ${clone}`);
+    }
+    must('clone the release branch', 'git', ['clone', '-q', '--depth', '1', '--branch', RELEASE_BRANCH, RELEASE_REPO, fresh]);
+    const version = must(`run the new teamrig (it stays in ${fresh}; the install in use is unchanged)`, input.nodePath, [cliIn(fresh), '--version']);
+    if (present) {
+      moveOrStop(input, clone, aside, lines);
+    }
+    try {
+      input.rename(fresh, clone);
+    } catch (error) {
+      if (present) {
+        moveOrStop(input, aside, clone, lines);
+      }
+      refuse(`FAILED move ${fresh} to ${clone}: ${String(error)}; the install in use is unchanged`);
+    }
+    lines.push(`${present ? 'UPDATED' : 'CLONED'} ${RELEASE_REPO} (${RELEASE_BRANCH}) into ${clone}`, version);
+    if (present) {
+      lines.push(`KEPT the old install at ${aside}: delete it once this one works`);
     }
     const plugin = path.join(clone, 'plugins', 'teamrig');
-    const cli = path.join(plugin, 'dist', 'cli', 'main.js');
-    lines.push(must('run the installed teamrig', input.nodePath, [cli, '--version']));
+    const cli = cliIn(clone);
     for (const host of input.hosts) {
       lines.push(must(`setup hooks --host ${host}`, input.nodePath, [cli, 'setup', 'hooks', '--host', host, ...(input.write ? ['--yes'] : [])]));
     }
@@ -135,6 +159,21 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     }
     throw error;
   }
+}
+
+/** Moves a folder, or stops the install naming the move that failed. */
+function moveOrStop(input: InstallInput, from: string, to: string, lines: string[]): void {
+  try {
+    input.rename(from, to);
+  } catch (error) {
+    lines.push(`FAILED move ${from} to ${to}: ${String(error)}`);
+    throw new InstallStop();
+  }
+}
+
+/** A time stamp safe in a folder name on every OS, such as 20261125T183005Z. */
+export function folderStamp(now: Date): string {
+  return now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 }
 
 function nextStep(input: InstallInput): string {
@@ -170,6 +209,9 @@ export interface InstallEnvironment {
   readonly nodePath: string;
   readonly home: string;
   readonly exists: (path: string) => boolean;
+  readonly rename: (from: string, to: string) => void;
+  readonly cwd: string;
+  readonly now: Date;
   readonly run: InstallRunner;
   readonly print: (line: string) => void;
   readonly printError: (line: string) => void;
@@ -190,6 +232,9 @@ export function runInstall(argv: readonly string[], env: InstallEnvironment): nu
       hosts: parsed.hosts,
       write: parsed.write,
       exists: env.exists,
+      rename: env.rename,
+      cwd: env.cwd,
+      stamp: folderStamp(env.now),
     },
     env.run,
   );
@@ -205,6 +250,9 @@ if (isEntry()) {
       nodePath: process.execPath,
       home: homedir(),
       exists: existsSync,
+      rename: renameSync,
+      cwd: process.cwd(),
+      now: new Date(),
       run: runProgram,
       print: (line) => console.log(line),
       printError: (line) => console.error(line),
