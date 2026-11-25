@@ -57,12 +57,14 @@ Any other AI CLI installs teamrig from one file. Download
 run it with the hosts to connect:
 
 ```sh
-node install-teamrig.ts --host codex --yes
+cd ~
+node Downloads/install-teamrig.ts --host codex --yes
 ```
 
-It clones the release under `~/.teamrig/install/teamrig` (a later run updates it), writes each host's hooks file
-through `teamrig setup hooks`, and prints the folder to put on your PATH; it edits no shell profile. Without `--yes`
-it only previews the hooks it would write. It needs git and Node.js.
+Run it from your home folder, not the downloads folder: on Windows it refuses a folder holding a git program. It clones the release under `~/.teamrig/install/teamrig`
+(a later run clones afresh and keeps the old install beside it, to delete once the new one works), writes each host's
+hooks file through `teamrig setup hooks`, and prints the folder to put on your PATH; it edits no shell profile.
+Without `--yes` it only previews the hooks it would write. It needs git and Node.js 22.18 or later.
 
 ### Requirements
 
