@@ -159,7 +159,7 @@ describe('hook wake-check', () => {
     assert.deepEqual(answerOf(await check(kit)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'never twice for one task');
   });
 
-  it('keeps no wake prompt with turnLog off', async () => {
+  it('keeps the wake prompt with turnLog off too, so the last-typed mark a UI follows does not move to it (T5388)', async () => {
     const kit = await teamWithAlphaTab({ ...TEAM, turnLog: { enabled: false } });
     await check(kit);
     await hand(kit, 'Fix the login', 'p1');
@@ -167,7 +167,7 @@ describe('hook wake-check', () => {
     kit.clock.advance(120 * SECOND);
     const woke = answerOf(await check(kit));
     assert.ok(isRecord(woke) && woke['kind'] === 'wake', 'it woke');
-    assert.equal(await keptPrompt(kit), undefined);
+    assert.deepEqual(await keptPrompt(kit), { tab: ALPHA_TAB, text: woke['text'] });
   });
 
   it('never wakes for less urgent work by default, and wakes for p2 when wake.priority is 2, costed cold with no transcript', async () => {

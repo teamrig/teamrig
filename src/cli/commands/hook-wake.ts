@@ -611,11 +611,12 @@ export async function wakeAnswerOf(runtime: CliRuntime, scope: WakeTarget, cwd: 
   return rememberWake(runtime, scope, { kind: 'wake', ids, text, toast: dayStartToast(verdict.moments, verdict.tasks, cost) });
 }
 
-/** A wake, its text kept first with the turn log on, so the prompt it submits is logged as teamrig's. */
+/**
+ * A wake, its text kept first, so the prompt it submits is told teamrig's: by the turn log when it is on, and always
+ * by the last-typed mark a UI follows, which must not move to a woken tab (T5388).
+ */
 async function rememberWake(runtime: CliRuntime, scope: WakeTarget, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<WakeAnswer> {
-  if (scope.config.turnLog.enabled) {
-    await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
-  }
+  await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });
   return value;
 }
 
