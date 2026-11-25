@@ -5903,6 +5903,36 @@ PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [
   NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
 ```
 
+### teamrig setup skills
+
+Copies teamrig's skills into your own skills folder of a host that loads no plugin's skills, so its sessions read the
+guide, the team setup and every other teamrig skill: for `--host codex`, Codex CLI's `skills/teamrig` in
+`$CODEX_HOME` (default `~/.codex`), which Codex reads in every project. The folder is teamrig's alone: the copy leaves
+it holding exactly the installed plugin's skills, so running it again after a teamrig update rewrites the changed
+ones and drops those the plugin no longer ships. It copies from the installed plugin, so it is refused from a source
+checkout (`setup skills runs from the installed plugin's dist/cli/main.js`). It prints `PREVIEW nothing written (add
+--yes to write) <folder>: inserted <n>, unchanged <n>, changed <n>, removed <n>` (counted in files); when the folder
+already holds the same files, one `UNCHANGED` line. With `--yes` a folder that held files is first moved whole into
+the kit's `backups` folder, and a `NOTE` line says to start a new session, which loads the new skills.
+
+Flags:
+
+- `--host <name>`: required: the host whose skills folder it writes (`codex`).
+- `--yes`: copy the skills, moving the old folder into the kit's `backups` folder first; without it, only count.
+
+Example:
+
+```sh
+teamrig setup skills --host codex --yes
+```
+
+Output:
+
+```text
+WROTE /home/me/.codex/skills/teamrig: inserted 15, unchanged 0, changed 0, removed 0
+  NOTE Codex reads its skills when a session starts: start a new Codex session to load the new ones
+```
+
 ### teamrig commits check
 
 Checks the commits in `base..tip` against the small-commits rule: a commit over 400 changed non-test lines or 15

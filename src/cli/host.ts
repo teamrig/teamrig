@@ -8,6 +8,7 @@ import {
   type HostPaths,
   type HostPermissions,
   type HostPlugin,
+  type HostPluginSkills,
   type HostPorts,
   type HostSecrets,
   type HostSteps,
@@ -318,6 +319,26 @@ export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 
   const names = [...new Set(offered.map((port) => port.host))];
   const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
   throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
+}
+
+/**
+ * The person's own skills folder of the host named `name` (as `setup skills --host` takes it), from every host adapter
+ * teamrig ships with and the run's own host, as `userHooksOf` finds a hooks file. A name no host answers to refuses,
+ * naming those that keep one; a host whose plugin loads teamrig's skills keeps none.
+ */
+export function pluginSkillsOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>, name: string): HostPluginSkills {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const offered = sourcesOf(runtime).flatMap((source) => {
+    const { pluginSkills } = source(seen);
+    return isUnsupported(pluginSkills) ? [] : [pluginSkills];
+  });
+  const found = offered.find((port) => port.host === name);
+  if (found !== undefined) {
+    return found;
+  }
+  const names = [...new Set(offered.map((port) => port.host))];
+  const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
+  throw new RefusedError(`no host named ${name} keeps a skills folder of yours teamrig copies its skills into (${known})`);
 }
 
 /**

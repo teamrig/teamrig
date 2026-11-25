@@ -143,6 +143,7 @@ const refsCommands = () => import('./commands/refs.ts');
 const sweepCommands = () => import('./commands/sweep.ts');
 const setupBackupCommands = () => import('./commands/setup-backup.ts');
 const setupHooksCommand = () => import('./commands/setup-hooks.ts');
+const setupSkillsCommand = () => import('./commands/setup-skills.ts');
 const auditCommand = () => import('./commands/audit.ts');
 const readCommand = () => import('./commands/read.ts');
 const eventsCommand = () => import('./commands/events.ts');
@@ -325,6 +326,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'setup restore': { effect: 'write', flags: [], switches: ['yes', 'remove-new'], load: async () => (await setupBackupCommands()).restore },
   'setup scan': { effect: 'read', flags: ['project', 'days', 'max-mb'], switches: [], load: async () => (await setupScanCommand()).scan },
   'setup hooks': { effect: 'write', flags: ['host'], switches: ['yes'], load: async () => (await setupHooksCommand()).hooks },
+  'setup skills': { effect: 'write', flags: ['host'], switches: ['yes'], load: async () => (await setupSkillsCommand()).skills },
   'config get': { effect: 'read', flags: ['team'], switches: ['json'], load: async () => (await configCommands()).get },
   'config set': { effect: 'write', flags: ['session'], switches: ['unset', 'yes'], load: async () => (await configCommands()).set },
   'config validate': { effect: 'read', flags: [], load: async () => (await configCommands()).validate },
@@ -1086,6 +1088,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
       the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
+  setup skills --host <name> [--yes]   copies teamrig's skills into your own skills folder of a host that
+      loads no plugin's skills (an unknown name lists those that do), a folder teamrig alone writes, so run
+      it again after every teamrig update; without --yes it counts the files it would insert, keep, change
+      and remove and writes nothing; --yes moves the old folder into the backups folder first
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
       skill and agent type listings a session loads, with chars and tokens; files over 6,000 chars, skill

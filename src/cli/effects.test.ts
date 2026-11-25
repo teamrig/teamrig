@@ -154,6 +154,7 @@ const EXPECTED = {
   'permissions trim': 'write',
   'setup backup': 'write',
   'setup hooks': 'write',
+  'setup skills': 'write',
   'setup restore': 'write',
   'setup scan': 'read',
   'config get': 'read',
