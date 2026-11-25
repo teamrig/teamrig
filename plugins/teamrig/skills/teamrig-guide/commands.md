@@ -4353,7 +4353,8 @@ Flags:
   it is gone, over `hiring.resumeMaxTokens` or idle over `hiring.resumeMaxIdleDays`. A closed session needs no
   `--resume`; with it, it refuses rather than open fresh.
 - `--terminal <name>`: `auto`, `tmux`, `windows-terminal`, `macos-terminal`, `gnome-terminal`, `konsole`,
-  `x-terminal-emulator`, `headless` or `print`; default the config's `open.terminal` (`auto`). With [open.teamWindow]
+  `x-terminal-emulator`, `headless` or `print`; default the session's [launch.<id>.terminal], else the config's
+  `open.terminal` (`auto`), which every reopen (a refresh restart, the idle pass, a meeting, a restore) reads too. With [open.teamWindow]
   on, a Windows Terminal tab opens in the team's own window, `teamrig-<team>`. `headless` runs the session with no
   window, an opt-in `auto` never picks: under `conhost --headless` on Windows, else in a detached tmux session
   `teamrig-<title>` (watch it with `tmux attach -t`).
