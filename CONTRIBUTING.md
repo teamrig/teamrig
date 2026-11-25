@@ -139,6 +139,10 @@ Every change ships tests, so the next change cannot break it unnoticed:
   or says yes to everything), and the kit's spec fails a contract whose liar passes every case of a feature. An
   adapter's contract spec is one call, `describeContracts({ side, declaration, bound: [bind(...)] })` of
   `src/testing/contracts.ts`: its manifest picks the cases, and the spec fails when it binds less than it claims.
+  A connector binds the tracker contract over a fake of its tool that keeps what each call changes, as the tool does
+  (`src/testing/github-world.ts` behind `gh`, `src/testing/jira-world.ts` behind Jira's REST API), and builds its
+  tracker through its own `defineConnector` entry; a case a partial feature cannot pass is left out in `without`, with
+  the reason the manifest gives.
 
 `npm run check` runs every gate CI runs on the tree; the local gate also checks each pushed commit's sign-off and scrubs it,
 which the git hooks `npm run setup` sets do before each commit. Its coverage gate (`npm run coverage`) fails when:
