@@ -4306,9 +4306,10 @@ always take the focus.
 
 It refuses any session but the lead when the host has no room for one more: its free memory, less what the tabs
 still loading hold, must stay over the floor a new tab keeps free with the session counted, and its commit charge,
-with those tabs counted, within `open.headroom.commitMaxPct` (92%; Windows, and Linux under strict overcommit). The floor is
-`open.headroom.floorMb` when set, else `delivery.queue.memoryFloorMb` plus `delivery.queue.heavyReserveMb` (4096 +
-2048), so a tab opened at the floor still leaves a heavy queued step the room it starts at. A session is counted at
+with those tabs counted, within `open.headroom.commitMaxPct` (92%; Windows, and Linux under strict overcommit) of the
+commit limit, on Windows the limit its page files can grow to (each at its maximum, as its volume's free space
+allows). The floor is `open.headroom.floorMb` when set, else `delivery.queue.memoryFloorMb` plus
+`delivery.queue.heavyReserveMb` (4096 + 2048), so a tab opened at the floor still leaves a heavy queued step the room it starts at. A session is counted at
 the median running session's Claude Code process tree, else at `open.headroom.sessionMb` (1200 MB): what it holds
 resident against free memory, and what it committed (about twice that) against the commit charge.
 [teamrig sessions](#teamrig-sessions) shows what each one holds and committed. The refusal names the numbers
@@ -6346,8 +6347,8 @@ deploy tool) may still take a free lock first.
 Every step, merge and deploy first waits in its turn for host memory, so a step never starts on a host too short
 for it. It goes ahead while the host's free memory, less the MB held for the running small steps and for the tabs
 still loading, leaves `delivery.queue.memoryFloorMb` (4096) plus its own, and the commit charge with its own and
-those tabs' counted stays under `open.headroom.commitMaxPct` (92). A tab [teamrig open](#teamrig-open) just opened
-holds the MB it was counted at for `open.headroom.loadMinutes` (5), as free memory does not show it while Claude Code
+those tabs' counted stays under `open.headroom.commitMaxPct` (92) of the limit the page files can grow to. A tab
+[teamrig open](#teamrig-open) just opened holds the MB it was counted at for `open.headroom.loadMinutes` (5), as free memory does not show it while Claude Code
 loads; the wait line names them (`..., 1500 MB held for 1 tab still loading, ...`). Free memory is read 3 times 1 s apart and the least read counts, since a step
 that just ended or started gives back or takes its memory in a burst. On a host with less than twice that RAM, half
 the host's RAM is enough. Until then it waits first in line (`...; host memory: 7000 MB free, 4096 MB held for them,

@@ -1592,7 +1592,10 @@ export function isTerminalChoice(value: unknown): value is TerminalChoice {
 export interface HeadroomConfig {
   /** The MB a new session is counted to need while no session runs to measure; else the median running session's tree. */
   readonly sessionMb: number;
-  /** The most of the host's commit limit, in %, its commit charge may reach with the new session counted. */
+  /**
+   * The most of the host's commit limit, in %, its commit charge may reach with the new session counted; on Windows the
+   * limit its page files can grow to.
+   */
   readonly commitMaxPct: number;
   /** How long, in minutes, a session stays quiet before `teamrig close` may end it. */
   readonly closeIdleMinutes: number;
