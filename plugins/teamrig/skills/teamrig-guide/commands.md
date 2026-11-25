@@ -5319,7 +5319,7 @@ git cannot restore or what guards the session: a file with uncommitted changes, 
 the session has not read, `rm -rf` of a folder, git commands that discard work or history, another session's
 worktree, a main checkout, and agent config and gates (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks). The delivery
 line names the whole team, never a list of sessions, so a new hire needs no edit, and takes the repositories from
-the config when it is written (`github.repos`, and the names in `delivery.repos`). It covers a call only under the
+the config when it is written (the code host's repository list, and the names in `delivery.repos`). It covers a call only under the
 calling session's own id, never one naming another session. It states only what each command checks before it writes: `teamrig merge` merges the branch of a worktree of those repositories as `pushGuard` says,
 `teamrig pr approve` and `teamrig pr merge` act only on a change request whose task the caller owns and whose head
 the caller's leader approved, `teamrig issue migrate` opens public issues only for tasks the caller may set, and only from a
