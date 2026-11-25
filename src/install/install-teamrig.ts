@@ -146,8 +146,9 @@ function nextStep(input: InstallInput): string {
     : 'Nothing was written to the hosts yet: run it again with --yes to write their hooks.';
 }
 
-function runProgram(command: string, args: readonly string[]): InstallRun {
-  const result = spawnSync(command, args, { encoding: 'utf8', shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+/** Runs a program to its end with no shell and no window, giving its exit code and both output streams. */
+export function runProgram(command: string, args: readonly string[]): InstallRun {
+  const result = spawnSync(command, args, { encoding: 'utf8', shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const out = `${result.stdout ?? ''}${result.stderr ?? ''}${result.error === undefined ? '' : String(result.error)}`.trim();
   return { code: result.status ?? -1, out };
 }
@@ -162,23 +163,51 @@ function isEntry(): boolean {
   return started !== undefined && existsSync(started) && realpathSync(started) === realpathSync(fileURLToPath(import.meta.url));
 }
 
-if (isEntry()) {
-  const parsed = parseInstallArgs(process.argv.slice(2));
+/** What one run of the script reads from its machine and where it prints. */
+export interface InstallEnvironment {
+  readonly teamrigHome: string | undefined;
+  readonly platform: NodeJS.Platform;
+  readonly nodePath: string;
+  readonly home: string;
+  readonly exists: (path: string) => boolean;
+  readonly run: InstallRunner;
+  readonly print: (line: string) => void;
+  readonly printError: (line: string) => void;
+}
+
+/** The script's whole run from its arguments: 0 installed, 1 a step failed or was refused, 2 a usage problem. */
+export function runInstall(argv: readonly string[], env: InstallEnvironment): number {
+  const parsed = parseInstallArgs(argv);
   if (parsed.kind === 'usage') {
-    console.error(`${parsed.problem}\n${USAGE}`);
-    process.exit(2);
+    env.printError(`${parsed.problem}\n${USAGE}`);
+    return 2;
   }
   const report = installTeamrig(
     {
-      kitHome: kitHomeOf(process.env['TEAMRIG_HOME'], process.platform),
-      platform: process.platform,
-      nodePath: process.execPath,
+      kitHome: kitHomeOf(env.teamrigHome, env.platform, env.home),
+      platform: env.platform,
+      nodePath: env.nodePath,
       hosts: parsed.hosts,
       write: parsed.write,
-      exists: existsSync,
+      exists: env.exists,
     },
-    runProgram,
+    env.run,
   );
-  report.lines.forEach((line) => (report.ok ? console.log(line) : console.error(line)));
-  process.exit(report.ok ? 0 : 1);
+  report.lines.forEach((line) => (report.ok ? env.print(line) : env.printError(line)));
+  return report.ok ? 0 : 1;
+}
+
+if (isEntry()) {
+  process.exit(
+    runInstall(process.argv.slice(2), {
+      teamrigHome: process.env['TEAMRIG_HOME'],
+      platform: process.platform,
+      nodePath: process.execPath,
+      home: homedir(),
+      exists: existsSync,
+      run: runProgram,
+      print: (line) => console.log(line),
+      printError: (line) => console.error(line),
+    }),
+  );
 }

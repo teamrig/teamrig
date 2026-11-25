@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { installTeamrig, kitHomeOf, parseInstallArgs, RELEASE_REPO, type InstallInput, type InstallRun } from './install-teamrig.ts';
+import {
+  installTeamrig,
+  kitHomeOf,
+  parseInstallArgs,
+  RELEASE_REPO,
+  runInstall,
+  runProgram,
+  type InstallEnvironment,
+  type InstallInput,
+  type InstallRun,
+} from './install-teamrig.ts';
 
 interface Call {
   readonly command: string;
@@ -109,6 +119,62 @@ describe('parseInstallArgs', () => {
     assert.deepEqual(parseInstallArgs(['--host']), { kind: 'usage', problem: '--host needs a host name' });
     assert.deepEqual(parseInstallArgs(['--host', '--yes']), { kind: 'usage', problem: '--host needs a host name' });
     assert.deepEqual(parseInstallArgs(['--force']), { kind: 'usage', problem: 'unknown argument --force' });
+  });
+});
+
+function environment(run: InstallEnvironment['run']) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const env: InstallEnvironment = {
+    teamrigHome: undefined,
+    platform: 'linux',
+    nodePath: '/usr/bin/node',
+    home: '/home/user',
+    exists: () => false,
+    run,
+    print: (line) => out.push(line),
+    printError: (line) => err.push(line),
+  };
+  return { env, out, err };
+}
+
+describe('runInstall', () => {
+  it('prints a usage problem and gives 2, running nothing', () => {
+    const { calls, run } = fakeRunner();
+    const { env, out, err } = environment(run);
+    assert.equal(runInstall(['--force'], env), 2);
+    assert.deepEqual(err, ['unknown argument --force\nusage: node install-teamrig.ts [--host <name>]... [--yes]']);
+    assert.deepEqual([out, calls], [[], []]);
+  });
+
+  it('installs under the home folder\'s .teamrig, printing to out and giving 0', () => {
+    const { calls, run } = fakeRunner();
+    const { env, out, err } = environment(run);
+    assert.equal(runInstall(['--host', 'one'], env), 0);
+    assert.equal(calls[1]?.args.at(-1), CLONE);
+    assert.ok(out.some((line) => line.startsWith('CLONED ')));
+    assert.deepEqual(err, []);
+  });
+
+  it('prints a failed step to err and gives 1', () => {
+    const { run } = fakeRunner([{ when: (call) => call.args.includes('clone'), give: { code: 128, out: 'fatal' } }]);
+    const { env, out, err } = environment(run);
+    assert.equal(runInstall([], { ...env, teamrigHome: '/kits/mine' }), 1);
+    assert.deepEqual(out, []);
+    assert.equal(err.at(-1), 'FAILED clone the release branch (exit 128):\nfatal');
+  });
+});
+
+describe('runProgram', () => {
+  it('gives the exit code and both streams of a program run to its end', () => {
+    const result = runProgram(process.execPath, ['-e', 'process.stdout.write("out ");process.stderr.write("err");process.exit(3)']);
+    assert.deepEqual(result, { code: 3, out: 'out err' });
+  });
+
+  it('gives -1 and the start error for a program that cannot start', () => {
+    const result = runProgram('teamrig-install-no-such-program', []);
+    assert.equal(result.code, -1);
+    assert.match(result.out, /ENOENT/);
   });
 });
 
