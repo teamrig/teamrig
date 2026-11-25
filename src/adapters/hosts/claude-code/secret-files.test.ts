@@ -10,6 +10,11 @@ describe("Claude Code's secret files", () => {
     assert.deepEqual(hostSecrets({}, process.platform).secretFiles(), SECRET_FILES_ALWAYS);
   });
 
+  it('names its login in any folder as a file the guard counts only where a word names it outright (T4870)', () => {
+    assert.deepEqual(hostSecrets({}, process.platform).namedFiles?.(), ['**/.credentials.json']);
+    assert.deepEqual(hostSecrets({ CLAUDE_CONFIG_DIR: '/cfg' }, 'linux').namedFiles?.(), ['**/.credentials.json'], 'whatever folder the variable names');
+  });
+
   it('names its login and prompt history in the folder CLAUDE_CONFIG_DIR moves its own to as well, keeping the default place', () => {
     const always = SECRET_FILES_ALWAYS;
     const moved = (value: string, platform: NodeJS.Platform): readonly string[] => hostSecrets({ CLAUDE_CONFIG_DIR: value }, platform).secretFiles();

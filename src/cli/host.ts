@@ -136,19 +136,20 @@ export function pathsOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform'>):
 
 /**
  * Who tells the secret guard the hosts' own secret files in this run: every host adapter teamrig ships with, then
- * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
+ * the host the run works in, each glob once, its `namedFiles` too. A file is a secret for what it holds, whatever host runs the session,
  * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
  * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
  * its secret files adds none.
  */
 export function secretFilesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): HostSecrets {
   const seen = { env: runtime.env, platform: runtime.platform };
-  const named = sourcesOf(runtime).flatMap((source) => {
+  const told = sourcesOf(runtime).flatMap((source) => {
     const { secrets } = source(seen);
-    return isUnsupported(secrets) ? [] : secrets.secretFiles();
+    return isUnsupported(secrets) ? [] : [secrets];
   });
-  const once: readonly string[] = [...new Set(named)];
-  return { secretFiles: () => once };
+  const listed: readonly string[] = [...new Set(told.flatMap((secrets) => secrets.secretFiles()))];
+  const named: readonly string[] = [...new Set(told.flatMap((secrets) => secrets.namedFiles?.() ?? []))];
+  return { secretFiles: () => listed, namedFiles: () => named };
 }
 
 /** What a host telling nothing of its sessions tells a run: no part of who it is. */

@@ -3,7 +3,7 @@ import { SecretShapes } from '../core/secret-shapes.ts';
 import type { HostSecrets } from '../ports/host/index.ts';
 import { DEFAULT_SECRET_COMMANDS } from './commands.ts';
 import { DEFAULT_SECRET_ENV_NAMES, SecretNames } from './names.ts';
-import { DEFAULT_SECRET_PATHS, SecretPaths } from './paths.ts';
+import { DEFAULT_SECRET_PATHS, SecretPaths, type ListedGlob } from './paths.ts';
 import { PatternList } from './pattern-list.ts';
 import { readKeyText } from './public-key.ts';
 
@@ -20,11 +20,14 @@ export interface SecretRules {
 }
 
 /**
- * The globs `host` names. A `!glob` among them is left out: a host adds secret files, and only a team's own `!glob`
- * keeps a file readable, so no host can open what the defaults or another host keeps.
+ * The globs `host` names, its `namedFiles` as `NamedGlob`s. A `!glob` among them is left out: a host adds secret
+ * files, and only a team's own `!glob` keeps a file readable, so no host can open what the defaults or another host
+ * keeps.
  */
-function hostGlobs(host: HostSecrets): readonly string[] {
-  return host.secretFiles().filter((glob) => !glob.startsWith('!'));
+function hostGlobs(host: HostSecrets): readonly ListedGlob[] {
+  const opening = (glob: string): boolean => glob.startsWith('!');
+  const named = (host.namedFiles?.() ?? []).filter((glob) => !opening(glob)).map((glob): ListedGlob => ({ named: glob }));
+  return [...host.secretFiles().filter((glob) => !opening(glob)), ...named];
 }
 
 /**
