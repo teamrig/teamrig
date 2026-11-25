@@ -59,6 +59,7 @@ import { findTeam, openKit, pastOrPresentIdOf, projectFolder, sessionIdOf, teamZ
 import { checkLines, listLines, SHORT_TITLE_CHARS, waitingOnLines, type CheckReport, type CheckSection, type LeadDecisions, type TaskRow } from '../reports.ts';
 import { fiveHourWarnings } from '../five-hour-check.ts';
 import { transcriptsIfKept } from '../host.ts';
+import { idleFactsOf } from '../idle-check.ts';
 import { logSizeWarnings } from '../log-size-check.ts';
 import { githubLateWarnings } from '../github-late-check.ts';
 import { promptHoldWarnings } from '../prompt-hold-page.ts';
@@ -72,6 +73,8 @@ import { secretHookWarnings } from '../secret-hook-check.ts';
 import { stampHookWarnings } from '../stamp-hook-check.ts';
 import { ownerBatchOf, type BatchedTeam } from '../owner-batch.ts';
 import { rollUp, type RolledTeam, type RollUp } from '../roll-up.ts';
+import { tabCapExcessOf } from '../tab-cap.ts';
+import { tabCapWarnings } from '../tab-cap-check.ts';
 import { splitUnowned } from '../unowned.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { addIssuePlan } from '../../sync/issue-at-add.ts';
@@ -1177,7 +1180,7 @@ function withOverLimit(sections: readonly CheckSection[], fit: WeekFit): CheckSe
  * starts the restore and starts a file gone or something install did not set up (RESTORE-DEAD, RESTORE-STRAY,
  * src/cli/launcher-record-check.ts), each of its tabs held on a permission prompt (PROMPT-HELD,
  * src/cli/prompt-hold-page.ts), each file of its state or inbox near the task pane's read limit (LOG-SIZE,
- * src/cli/log-size-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
+ * src/cli/log-size-check.ts), a team past its tab cap (OVER-CAP, src/cli/tab-cap-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
  * src/cli/restart-stalled-check.ts) are the unowned
  * warnings, which go to the lead (src/cli/unowned.ts, T951).
  */
@@ -1245,11 +1248,15 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
   const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
   const logs = await logSizeWarnings(runtime.files, own.paths);
+  const overCap = await tabCapWarnings(own.team, own.config.open.headroom.maxTabs, async () => {
+    const kit = await openKit(runtime, own.team);
+    return tabCapExcessOf(runtime, kit, own.config, own.roster, await idleFactsOf(runtime, kit, own.config, own.roster));
+  }, (id) => own.roster.nameOf(id) ?? id);
   const sessionRuns = (pid: number): Promise<boolean> => runsHostSession(runtime, pid);
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
   const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
 }
 
 /**
