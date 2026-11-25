@@ -22,6 +22,7 @@ import { APP, CLAUDE_SESSION, CliHarness, CONFIG_PATH, KIT, SKILLS_DIR, TEAM, TE
 import { teamConfigOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 import { CLOSE_LOG_WAIT_MS } from './commands/open.ts';
 import { EXIT } from './runtime.ts';
+import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
 
 const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
@@ -608,6 +609,37 @@ describe('teamrig launch', () => {
     assert.equal(result.stdout[0], `Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming Claude Code session ${CLAUDE_SESSION}`);
     assert.deepEqual(processes.ran[0]?.args, ['--resume', CLAUDE_SESSION, '--name', 'app-alpha', '--', 'Go on']);
     assert.deepEqual(processes.ran[1]?.args, ['--name', 'app-alpha', '--', refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha'))]);
+  });
+
+  /** Claude Code whose every start records the first prompt teamrig kept for the turn log, the first one restarted. */
+  class KeptPrompts extends RestartedOnce {
+    readonly kept: (WakePrompt | undefined)[] = [];
+    private readonly prompts: WakePrompts;
+
+    constructor(kit: CliHarness) {
+      super(kit, ENDING);
+      this.prompts = new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake'));
+    }
+
+    override async run(request: RunRequest): Promise<RunOutcome> {
+      this.kept.push(await this.prompts.read('alpha'));
+      return super.run(request);
+    }
+  }
+
+  it("keeps each first prompt it passes as teamrig's, for the resumed tab or any tab of a fresh start (T5388)", async () => {
+    const kit = new CliHarness(TEAM);
+    const processes = new KeptPrompts(kit);
+    const result = await kit.run([...LAUNCH, '--resume', CLAUDE_SESSION, '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
+    assert.equal(result.code, EXIT.ok, result.stderr.join('\n'));
+    assert.deepEqual(processes.kept, [{ tab: CLAUDE_SESSION, text: 'Go on' }, { text: refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha')) }]);
+  });
+
+  it('keeps no first prompt for a start with none', async () => {
+    const kit = new CliHarness(TEAM);
+    const processes = new FakeProcesses();
+    assert.equal((await kit.run([...LAUNCH, '--no-prompt'], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } })).code, EXIT.ok);
+    assert.equal(await new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake')).read('alpha'), undefined);
   });
 
   it('ends with Claude Code when no restart ended it for launch', async () => {

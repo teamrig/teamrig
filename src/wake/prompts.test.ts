@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { formatWakePrompt, parseWakePrompt, WakePrompts, type WakePrompt } from './prompts.ts';
+import { formatWakePrompt, parseWakePrompt, WakePrompts, type SentWakePrompt, type WakePrompt } from './prompts.ts';
 
 const FOLDER = join('team', 'state', 'wake');
-const WOKE: WakePrompt = { tab: 'tab-1', text: 'New work was handed to you while this tab was idle: T2.' };
+const WOKE: SentWakePrompt = { tab: 'tab-1', text: 'New work was handed to you while this tab was idle: T2.' };
 
 describe('WakePrompts', () => {
   it("keeps each session's last wake in its own file beside its wake state, the later wake in place of the earlier", async () => {
@@ -33,6 +33,19 @@ describe('WakePrompts', () => {
     assert.equal(await prompts.take('alpha', WOKE), false, 'the same text typed again is the person’s');
   });
 
+  it("takes a first prompt kept with no tab from any tab, once, and keeps it through another tab's dropped wake", async () => {
+    const files = new MemoryFiles();
+    const prompts = new WakePrompts(files, FOLDER);
+    const first: WakePrompt = { text: 'Read your handover first.' };
+    await prompts.remember('alpha', first);
+    assert.equal(formatWakePrompt(first), `${JSON.stringify({ v: 1, text: first.text })}\n`);
+    assert.deepEqual(await prompts.read('alpha'), first);
+    await prompts.forget('alpha', 'tab-9');
+    assert.equal(await prompts.take('alpha', { tab: 'tab-9', text: 'Something else' }), false, 'other words');
+    assert.equal(await prompts.take('alpha', { tab: 'tab-9', text: first.text }), true);
+    assert.equal(await prompts.take('alpha', { tab: 'tab-9', text: first.text }), false, 'typed again it is the person’s');
+  });
+
   it('forgets a dropped wake of its own tab only', async () => {
     const files = new MemoryFiles();
     const prompts = new WakePrompts(files, FOLDER);
@@ -48,7 +61,7 @@ describe('WakePrompts', () => {
     const files = new MemoryFiles();
     const prompts = new WakePrompts(files, FOLDER);
     const path = join(FOLDER, 'alpha.prompt.json');
-    for (const text of ['{not json', JSON.stringify({ v: 2, tab: 'tab-1', text: WOKE.text }), JSON.stringify({ v: 1, tab: 'tab-1' })]) {
+    for (const text of ['{not json', JSON.stringify({ v: 2, tab: 'tab-1', text: WOKE.text }), JSON.stringify({ v: 1, tab: 'tab-1' }), JSON.stringify({ v: 1 })]) {
       await files.write(path, text);
       assert.equal(await prompts.read('alpha'), undefined, text);
       assert.equal(await prompts.take('alpha', WOKE), false, text);

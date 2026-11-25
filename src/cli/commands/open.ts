@@ -23,6 +23,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { closedOf, SessionLog, type CloseRecord } from '../../sessions/log.ts';
 import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals.ts';
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
+import { WakePrompts } from '../../wake/prompts.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, launcherOf, launchHostOf } from '../host.ts';
@@ -539,6 +540,7 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   runtime.out.stdout(`Starting ${programName} as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
   const store = new RefreshStore(runtime.files, kit.paths);
   const closes = new SessionLog(runtime.files, kit.paths.sessionLog);
+  const sent = new WakePrompts(runtime.files, kit.paths.wake);
   let first: string | undefined = prompt;
   let resuming = resume;
   for (;;) {
@@ -546,6 +548,11 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     // The host spells its own flags: this start only says what the session is to be.
     const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
     const args = [...prefix, ...launcher.launchArgs(start)];
+    // teamrig wrote this first prompt, not the person: kept like a wake's text, so the turn log marks it teamrig's and
+    // the UI does not follow it (T5388). A fresh start's tab id is unknown until Claude Code starts, so any tab matches.
+    if (first !== undefined) {
+      await sent.remember(id, { ...(resuming === undefined ? {} : { tab: resuming }), text: first });
+    }
     const startedAt = runtime.clock.now();
     const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
     if (!(await restartTaken(store, id))) {
