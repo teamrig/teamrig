@@ -115,6 +115,32 @@ describe('kit versions', () => {
       assert.equal(tree.copies.length, 0);
     });
 
+    it('moves nothing and keeps the pin when only one record is there or they name different versions', async () => {
+      const refused: KitInstallOutcome = {
+        kind: 'refused',
+        why: 'the records naming the version in use disagree or one is missing; teamrig kit use <version> names one',
+      };
+      await install('0.508.0');
+      await install('0.509.0');
+      await useKitVersion({ files, kitHome: KIT }, { kind: 'version', version: '0.508.0' });
+      const record = files.get(kitCurrentRecordPath(KIT)) ?? '';
+      const cases: ReadonlyArray<readonly [string, () => Promise<void>]> = [
+        ['only current', () => files.remove(kitCurrentRecordPath(KIT))],
+        ['only current.json', () => files.remove(kitCurrentPath(KIT))],
+        ['a mismatch', () => files.write(kitCurrentPath(KIT), '0.509.0\n')],
+      ];
+      for (const [name, damage] of cases) {
+        await files.write(kitCurrentPath(KIT), '0.508.0\n');
+        await files.write(kitCurrentRecordPath(KIT), record);
+        await damage();
+        const line = files.get(kitCurrentPath(KIT));
+        const json = files.get(kitCurrentRecordPath(KIT));
+        assert.deepEqual(await install('0.510.0'), refused, name);
+        assert.deepEqual([files.get(kitCurrentPath(KIT)), files.get(kitCurrentRecordPath(KIT))], [line, json], name);
+        assert.deepEqual(await listKitVersions(files, KIT), ['0.509.0', '0.508.0'], name);
+      }
+    });
+
     it('is busy, copying nothing, while another process holds the install lock', async () => {
       assert.deepEqual(await install('0.508.0', { lock: new BusyMutex() }), { kind: 'busy' });
       assert.equal(tree.copies.length, 0);

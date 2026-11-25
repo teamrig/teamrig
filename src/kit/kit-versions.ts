@@ -18,6 +18,11 @@ import type { KitTree } from './kit-tree.ts';
  * list, so a half-copied version is never one `current` names. Both records are written by temp file and rename. A pin
  * keeps `current` where `teamrig kit use` put it: an install of a newer version adds its folder and moves nothing, or the
  * next session start of a newer plugin would undo a rollback.
+ *
+ * Every change to `current` or to the kept folders (an install, `teamrig kit use`, `teamrig kit prune`) runs under the
+ * kit home's install lock, so none reads `current` while another rewrites it. Records that disagree, or only one of
+ * them, never read as a first install: an install then moves nothing until `teamrig kit use` names a version. A kept
+ * version is the build it was copied from: a client of the same version with another integrity list is refused.
  */
 
 /** `current.json`'s format; a field added to it raises this. */
@@ -77,24 +82,45 @@ function sourceOf(value: unknown): KitSource | undefined {
   return kind === 'github-release' && tag !== undefined && commit !== undefined ? { kind, tag, commit } : undefined;
 }
 
+/** What the two records say about the version in use. */
+export type KitCurrentState =
+  /** Neither record is there: no version was ever named, so an install may name one. */
+  | { readonly kind: 'none' }
+  | { readonly kind: 'current'; readonly current: KitCurrent }
+  /** Only one record is there, one is malformed, or they name different versions: an install moves nothing. */
+  | { readonly kind: 'disagree' };
+
+function isListHash(value: string): boolean {
+  return /^[0-9a-f]{64}$/.test(value);
+}
+
 /**
- * The version in use, or undefined when there is none or the two records disagree: `current` must be one release
- * version (no path, no `..`), and `current.json` must name that same version with a well-formed list hash.
+ * The version in use as both records name it: `current` must be one release version (no path, no `..`), and
+ * `current.json` must name that same version with a well-formed list hash. Only both records missing reads as none.
  */
-export async function readKitCurrent(files: Pick<Files, 'read'>, kitHome: string): Promise<KitCurrent | undefined> {
+export async function readKitCurrentState(files: Pick<Files, 'read'>, kitHome: string): Promise<KitCurrentState> {
   const line = (await files.read(kitCurrentPath(kitHome)))?.trim();
   const text = await files.read(kitCurrentRecordPath(kitHome));
+  if (line === undefined && text === undefined) {
+    return { kind: 'none' };
+  }
   const record = text === undefined ? undefined : parseObject(text.trim());
   if (line === undefined || parseVersion(line) === undefined || record === undefined || recordVersion(record) !== KIT_CURRENT_FORMAT) {
-    return undefined;
+    return { kind: 'disagree' };
   }
   const listHash = stringField(record, 'listHash');
   const source = sourceOf(record['source']);
   const pinned = record['pinned'];
-  if (stringField(record, 'version') !== line || listHash === undefined || !/^[0-9a-f]{64}$/.test(listHash) || source === undefined || typeof pinned !== 'boolean') {
-    return undefined;
+  if (stringField(record, 'version') !== line || listHash === undefined || !isListHash(listHash) || source === undefined || typeof pinned !== 'boolean') {
+    return { kind: 'disagree' };
   }
-  return { version: line, listHash, source, pinned };
+  return { kind: 'current', current: { version: line, listHash, source, pinned } };
+}
+
+/** The version in use, or undefined when there is none or the two records disagree (readKitCurrentState). */
+export async function readKitCurrent(files: Pick<Files, 'read'>, kitHome: string): Promise<KitCurrent | undefined> {
+  const state = await readKitCurrentState(files, kitHome);
+  return state.kind === 'current' ? state.current : undefined;
 }
 
 /** Writes `current.json`, then `current`, each by temp file and rename. */
@@ -191,6 +217,10 @@ export async function installKitVersion(install: KitInstall): Promise<KitInstall
 
 async function installUnderLock(install: KitInstall, wanted: Version): Promise<KitInstallOutcome> {
   const { files, tree, kitHome, version, source } = install;
+  const state = await readKitCurrentState(files, kitHome);
+  if (state.kind === 'disagree') {
+    return { kind: 'refused', why: 'the records naming the version in use disagree or one is missing; teamrig kit use <version> names one' };
+  }
   const folder = kitVersionFolder(kitHome, version);
   let verified = await verifiedListHash(files, folder, version);
   if ('why' in verified) {
@@ -211,7 +241,7 @@ async function installUnderLock(install: KitInstall, wanted: Version): Promise<K
       return { kind: 'refused', why: `copying ${version} failed: ${errorMessage(error)}` };
     }
   }
-  const before = await readKitCurrent(files, kitHome);
+  const before = state.kind === 'current' ? state.current : undefined;
   const outcome = await movedCurrent(files, kitHome, before, { version, listHash: verified.hash, source, pinned: false }, wanted);
   await pruneKitVersions(install);
   return outcome;
