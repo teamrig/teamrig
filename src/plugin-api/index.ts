@@ -6,6 +6,7 @@ export { API_VERSION, apiVersionNotice, isApiVersion } from './version.ts';
 export { OSES, isManifest, isOs, isProofRef, isSupport, manifestProblems, provedOn, supportProblem, type Manifest, type Os, type ProofRef, type Support } from './support.ts';
 export { ADAPTER_ID, adapterEntry, declarationProblems, type AdapterDeclaration, type AdapterEntry, type EntryFunction } from './declaration.ts';
 export { defineHost, hostAdapterProblems, hostDeclarationProblems, isHostAdapter, isHostDeclaration, type HostAdapter, type HostDeclaration, type HostDeps } from './host.ts';
+export { HOST_PORT_FEATURES, isHostPortName, portFeatureProblems } from './port-features.ts';
 export {
   CONNECTOR_RUN_MAX_BYTES,
   CONNECTOR_RUN_TIMEOUT_MS,
