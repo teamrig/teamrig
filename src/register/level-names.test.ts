@@ -26,15 +26,16 @@ function readValue(value: unknown): { setting: ReturnType<typeof readLevelNamesS
 }
 
 describe('LEVEL_PRESETS', () => {
-  it('ships the seven presets the design names, each naming every level', () => {
-    assert.deepEqual(LEVEL_PRESET_NAMES, ['youtrack', 'jira', 'azure-devops', 'linear', 'github', 'asana', 'clickup']);
+  it("ships teamrig's default set and the seven trackers the design names, each naming every level", () => {
+    assert.deepEqual(LEVEL_PRESET_NAMES, ['default', 'youtrack', 'jira', 'azure-devops', 'linear', 'github', 'asana', 'clickup']);
     assert.deepEqual(Object.keys(LEVEL_PRESETS).sort(), [...LEVEL_PRESET_NAMES].sort());
     for (const preset of LEVEL_PRESET_NAMES) assert.deepEqual(Object.keys(LEVEL_PRESETS[preset]), [...NAMED_LEVELS]);
   });
 
   it('holds each tracker’s own words', () => {
     const words = (preset: keyof typeof LEVEL_PRESETS): string[] => NAMED_LEVELS.map((level) => LEVEL_PRESETS[preset][level].singular);
-    assert.deepEqual(words('youtrack'), ['Goal', 'Feature', 'Task', 'Subtask']);
+    assert.deepEqual(words('default'), ['Goal', 'Feature', 'Task', 'Subtask']);
+    assert.deepEqual(words('youtrack'), ['Epic', 'User Story', 'Task', 'Subtask']);
     assert.deepEqual(words('jira'), ['Initiative', 'Epic', 'Story', 'Sub-task']);
     assert.deepEqual(words('azure-devops'), ['Epic', 'Feature', 'User Story', 'Task']);
     assert.deepEqual(words('linear'), ['Initiative', 'Project', 'Issue', 'Sub-issue']);
@@ -43,8 +44,8 @@ describe('LEVEL_PRESETS', () => {
     assert.deepEqual(words('clickup'), ['Goal', 'List', 'Task', 'Subtask']);
   });
 
-  it('defaults to the youtrack set', () => {
-    assert.equal(DEFAULT_LEVEL_PRESET, 'youtrack');
+  it("defaults to teamrig's own set, not any tracker's", () => {
+    assert.equal(DEFAULT_LEVEL_PRESET, 'default');
   });
 });
 
@@ -66,7 +67,7 @@ describe('readLevelNamesSetting', () => {
     const { setting, issues } = readValue('trello');
     assert.equal(setting, undefined);
     assert.equal(issues.length, 1);
-    assert.match(issues[0] ?? '', /^levels\.names: expected "auto", one of youtrack, jira, azure-devops, linear, github, asana, clickup or a map of each level, got "trello"$/);
+    assert.match(issues[0] ?? '', /^levels\.names: expected "auto", one of default, youtrack, jira, azure-devops, linear, github, asana, clickup or a map of each level, got "trello"$/);
   });
 
   it('refuses a value that is neither a name nor a map', () => {
@@ -91,7 +92,7 @@ describe('readLevelNamesSetting', () => {
 describe('levelNamesOf', () => {
   it('reads auto as the connector’s names, else the default set', () => {
     assert.deepEqual(levelNamesOf({ team: 'auto', user: null, connector: OWN }), OWN);
-    assert.deepEqual(levelNamesOf({ team: 'auto', user: null, connector: null }), LEVEL_PRESETS.youtrack);
+    assert.deepEqual(levelNamesOf({ team: 'auto', user: null, connector: null }), LEVEL_PRESETS.default);
   });
 
   it('reads a preset or a map as itself, ahead of the connector', () => {

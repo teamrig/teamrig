@@ -22,11 +22,12 @@ function named(singular: string, plural: string): LevelName {
 }
 
 /**
- * The trackers' own words, each checked against its platform's docs when it landed (11-25). `youtrack` is the default
- * set the design agreed; YouTrack's own current templates say Epic / User Story / Task, which a team can set as a map.
+ * `default` is teamrig's own neutral set; every other preset is a tracker's own words, each checked against its
+ * platform's docs when it landed (11-25).
  */
 export const LEVEL_PRESETS = {
-  youtrack: { goal: named('Goal', 'Goals'), feature: named('Feature', 'Features'), task: named('Task', 'Tasks'), subtask: named('Subtask', 'Subtasks') },
+  default: { goal: named('Goal', 'Goals'), feature: named('Feature', 'Features'), task: named('Task', 'Tasks'), subtask: named('Subtask', 'Subtasks') },
+  youtrack: { goal: named('Epic', 'Epics'), feature: named('User Story', 'User Stories'), task: named('Task', 'Tasks'), subtask: named('Subtask', 'Subtasks') },
   jira: { goal: named('Initiative', 'Initiatives'), feature: named('Epic', 'Epics'), task: named('Story', 'Stories'), subtask: named('Sub-task', 'Sub-tasks') },
   'azure-devops': {
     goal: named('Epic', 'Epics'),
@@ -42,10 +43,10 @@ export const LEVEL_PRESETS = {
 
 export type LevelPreset = keyof typeof LEVEL_PRESETS;
 
-export const LEVEL_PRESET_NAMES: readonly LevelPreset[] = ['youtrack', 'jira', 'azure-devops', 'linear', 'github', 'asana', 'clickup'];
+export const LEVEL_PRESET_NAMES: readonly LevelPreset[] = ['default', 'youtrack', 'jira', 'azure-devops', 'linear', 'github', 'asana', 'clickup'];
 
 /** The set shown when nothing names one: no key, `auto` with no tracker that names its levels. */
-export const DEFAULT_LEVEL_PRESET: LevelPreset = 'youtrack';
+export const DEFAULT_LEVEL_PRESET: LevelPreset = 'default';
 
 /** `auto`: the team's tracker connector's names when it declares them, else the default set. */
 export const AUTO_LEVEL_NAMES = 'auto';
