@@ -144,6 +144,7 @@ export async function openSessionTab(runtime: CliRuntime, tab: SessionTab): Prom
     '--project',
     tab.project,
     ...homeArgs(runtime),
+    ...(runtime.hostId === undefined ? [] : ['--host', runtime.hostId]),
     ...(tab.resume === undefined ? [] : ['--resume', tab.resume]),
     ...(tab.effort === undefined ? [] : ['--effort', tab.effort]),
     ...(tab.prompt === undefined ? ['--no-prompt'] : ['--encoded-prompt', encodePrompt(tab.prompt)]),

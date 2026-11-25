@@ -91,6 +91,11 @@ export interface CliRuntime {
    */
   readonly host: HostSource;
   /**
+   * The id the run named with `--host`; undefined when it named none. A tab the run opens passes it on to `launch`,
+   * so a session started for one host runs in it, never in the default one (T5006).
+   */
+  readonly hostId?: string;
+  /**
    * Every host adapter teamrig ships with by id, the one the run works in among them: for the host a run names
    * (`--host`), and for what holds on a machine whatever host runs the session, the hosts' own secret files
    * (`secretFilesOf`, host.ts).

@@ -1403,7 +1403,8 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     const teamHosts = async (): Promise<readonly string[] | undefined> => (await import('./team-hosts.ts')).teamHostsOf(runtime, teamFlag);
     const host = await chooseHost(args.command, args.host, runtime, teamHosts);
     // Every check and the command itself work in the host the run names, never the process's default one.
-    const hosted: CliRuntime = host === runtime.host ? runtime : { ...runtime, host };
+    const chosen: CliRuntime = host === runtime.host ? runtime : { ...runtime, host };
+    const hosted: CliRuntime = args.host === undefined ? chosen : { ...chosen, hostId: args.host };
     refuseSettingsWrite(args.command, args.switches, hosted);
     if (args.common.size > 0) {
       // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
