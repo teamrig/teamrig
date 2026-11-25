@@ -459,23 +459,23 @@ async function closeSince(runtime: CliRuntime, log: SessionLog, id: string, resu
  * Refused when it is not there, and with the host's own reason on a host that tells nothing of its sessions.
  */
 export async function hostProgramOf(runtime: CliRuntime, env: Env): Promise<HostProgram> {
-  const { program } = launcherOf(runtime);
+  const { program, programName } = launcherOf(runtime);
   const found = await findProgram({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, program);
   if (found.kind === 'missing') {
     const skipped = found.skipped.length === 0 ? '' : ` (skipped: ${found.skipped.join('; ')})`;
-    throw new RefusedError(`Claude Code (${program}) is not on PATH${skipped}; install it, then run this again`);
+    throw new RefusedError(`${programName} (${program}) is not on PATH${skipped}; install it, then run this again`);
   }
   return found.program;
 }
 
-/** The exit for how Claude Code ended, for a command that ran it on this terminal. */
-export function claudeExit(runtime: CliRuntime, command: string, result: RunOutcome): ExitCode {
+/** The exit for how the running host's program ended, named as people know it, for a command that ran it on this terminal. */
+export function hostExit(runtime: CliRuntime, command: string, result: RunOutcome): ExitCode {
   switch (result.kind) {
     case 'exited':
       if (result.code === 0) {
         return EXIT.ok;
       }
-      runtime.out.stderr(`FAILED Claude Code exited with code ${result.code}`);
+      runtime.out.stderr(`FAILED ${launcherOf(runtime).programName} exited with code ${result.code}`);
       return EXIT.failed;
     case 'missing':
       runtime.out.stderr(`FAILED ${command} is gone`);
@@ -532,9 +532,10 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   if (modelProblem !== undefined) {
     throw new RefusedError(`launch.${id}.model ${settings.model ?? ''}: ${modelProblem}; fix it in the team config, or \`${KIT_NAME} doctor\` lists each`);
   }
-  const resumed = resume === undefined ? '' : `, resuming Claude Code session ${resume}`;
+  const { programName } = launcher;
+  const resumed = resume === undefined ? '' : `, resuming ${programName} session ${resume}`;
   let listing = await launchListing(sessionRuntime, kit, config, roster, id);
-  runtime.out.stdout(`Starting Claude Code as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
+  runtime.out.stdout(`Starting ${programName} as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
   const store = new RefreshStore(runtime.files, kit.paths);
   const closes = new SessionLog(runtime.files, kit.paths.sessionLog);
   let first: string | undefined = prompt;
@@ -549,12 +550,12 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     if (!(await restartTaken(store, id))) {
       const close = await closeSince(runtime, closes, id, result, startedAt);
       if (close === undefined) {
-        return claudeExit(runtime, command, result);
+        return hostExit(runtime, command, result);
       }
-      runtime.out.stdout(`Claude Code was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
+      runtime.out.stdout(`${programName} was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
       return EXIT.ok;
     }
-    runtime.out.stdout(`Starting Claude Code again as ${name} with a fresh context: it reads its handover first`);
+    runtime.out.stdout(`Starting ${programName} again as ${name} with a fresh context: it reads its handover first`);
     first = refreshPrompt(team, id, store.handoverPath(id));
     resuming = undefined;
     // The restart ended a session that ran at another level than its config's (T2444): it starts again at the

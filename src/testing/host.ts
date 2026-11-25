@@ -108,6 +108,14 @@ export function hostStarting(program: string, launchArgs: SessionLauncher['launc
 }
 
 /**
+ * The shipped host under the name `programName`, its sessions started by the program named `program`: for a spec of
+ * a line that must name the running host as people know it, never Claude Code itself.
+ */
+export function hostCalled(programName: string, program: string): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), programName, program } });
+}
+
+/**
  * The shipped host, reading a session's command line with `lines` where given and its own readers elsewhere: for a
  * spec of a reader that must ask the host which process is a session's fork or background job and know no host's
  * flag itself.

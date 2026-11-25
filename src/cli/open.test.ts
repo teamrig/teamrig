@@ -8,7 +8,7 @@ import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../ope
 import { shellCommand } from '../open/quote.ts';
 import type { SessionStart } from '../ports/host/index.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
+import { hostCalled, hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost, TEST_PROGRAM } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -808,6 +808,20 @@ describe('teamrig launch', () => {
     const none = new FakeProcesses();
     const untold = await launch(none, [], { probe: both, host: NO_SESSION_HOST });
     assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
+  });
+
+  it('names the running host as people know it in every line, never Claude Code on another host (T5006)', async () => {
+    const desk = '/usr/local/bin/agent-desk';
+    const probe = new FakePathProbe({ folders: [APP], files: [desk] });
+    const host = hostCalled(TEST_PROGRAM, 'agent-desk');
+    const failed = await launch(new FakeProcesses().onRun(desk, { kind: 'exited', code: 7 }), ['--no-prompt', '--resume', CLAUDE_SESSION], { probe, host });
+    assert.deepEqual([failed.code, failed.stdout, failed.stderr], [
+      EXIT.failed,
+      [`Starting ${TEST_PROGRAM} as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming ${TEST_PROGRAM} session ${CLAUDE_SESSION}`],
+      [`FAILED ${TEST_PROGRAM} exited with code 7`],
+    ]);
+    const missing = await launch(new FakeProcesses(), [], { host });
+    assert.deepEqual(missing.stdout, [`REFUSED ${TEST_PROGRAM} (agent-desk) is not on PATH; install it, then run this again`]);
   });
 
   it('starts with the arguments the running host spells, telling it what the session is to be and no flag of its own', async () => {
