@@ -1,3 +1,4 @@
+import type { BudgetConfig } from '../config/types.ts';
 import { MS_PER_HOUR, MS_PER_MINUTE } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
 import type { FiveHourFold } from './five-hour-summary.ts';
@@ -29,6 +30,14 @@ export function fiveHourForecast(fold: FiveHourFold): FiveHourForecast | undefin
   const rise = fold.usedPct - fold.firstPct;
   const endPct = fold.usedPct + (rise * (fold.resetsAt - fold.at)) / span;
   return { ptsPerHour: (rise * MS_PER_HOUR) / span, fullAt: endPct > 100 ? fold.at + ((100 - fold.usedPct) * span) / rise : undefined, endPct };
+}
+
+/**
+ * Whether the window warns (T1968): at `budget.fiveHourWarnPct`, or rising fast enough to fill before its reset. At 100%
+ * every session stalls until it resets. The budget switch is the caller's: with it off, nothing warns.
+ */
+export function fiveHourWarns(fold: FiveHourFold, forecast: FiveHourForecast | undefined, budget: Pick<BudgetConfig, 'fiveHourWarnPct'>): boolean {
+  return fold.usedPct >= budget.fiveHourWarnPct || forecast?.fullAt !== undefined;
 }
 
 /** `teamrig budget`'s line on the window: its use and reset, then where its rise takes it once there is one to read. */

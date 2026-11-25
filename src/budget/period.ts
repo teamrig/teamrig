@@ -275,10 +275,11 @@ export class PeriodStore {
   /**
    * The period `periodAt` would move to, left unwritten, for a reader that logs no meter line. The next reader that
    * logs one finds the percent the use passed from the stored period's latest use (`crossingOf`, budget/calibration.ts),
-   * so a reader that moved it first and logged nothing lost that percent's line for good (T2028).
+   * so a reader that moved it first and logged nothing lost that percent's line for good (T2028). Given the `metered`
+   * W, it is the period `moveAt` would write.
    */
-  async peekAt(budget: Pick<BudgetConfig, 'reset'>, use: WeekUse | undefined, now: number): Promise<Period | undefined> {
-    const sight = sightOf(budget, use, now);
+  async peekAt(budget: Pick<BudgetConfig, 'reset'>, use: WeekUse | undefined, now: number, metered?: Metered): Promise<Period | undefined> {
+    const sight = sightOf(budget, use, now, metered);
     return sight === undefined ? undefined : (await this.stepped(sight)).period;
   }
 }

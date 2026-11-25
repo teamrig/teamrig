@@ -13,7 +13,7 @@ import { treeTeamsOf } from './read-sessions.ts';
 import { belowOf, servedPathOf, stampsOf, workingSetOf, type DocumentSource, type ReadScope } from './read-source.ts';
 
 /** The tasks the tree's other registers hold, or why they could not be read. */
-type Elsewhere = { readonly tasks: TasksElsewhere; readonly problem: null } | { readonly tasks: null; readonly problem: string };
+export type Elsewhere = { readonly tasks: TasksElsewhere; readonly problem: null } | { readonly tasks: null; readonly problem: string };
 
 /**
  * `plan`: the team's active tasks in plan order, each with what teamrig's own task tree answers of it (the keys of
@@ -36,26 +36,13 @@ export function planSource(scope: ReadScope): DocumentSource {
   const layout = layoutPaths(kit.paths.events);
   return {
     async parts() {
-      const loaded = await scope.tree();
-      const configs = [...[...loaded.teams.values()].map((other) => other.kit.load.path), ...[...loaded.leftOut.values()].map((load) => load.path)];
-      const teams = treeTeamsOf(loaded, team);
-      const kept = [...loaded.teams.values()].map((other) => other.kit.paths);
       return {
         document: 'plan',
         args: [
           ['team', team],
           ['owner', scope.owner],
         ],
-        stamps: [
-          // A team folder added or removed moves no file the tree read: the folder's own listing tells.
-          (await runtime.files.list(teamsFolderOf(runtime))).join(','),
-          ...(await stampsOf(runtime, configs)),
-          ...(await registerStampsOf(runtime, teams)),
-          ...(await stampsOf(runtime, teams.map((other) => other.kit.paths.goals))),
-          ...(await stampsOf(runtime, kept.map((paths) => paths.renames))),
-          ...(await foldersStampsOf(runtime, kept.flatMap((paths) => [paths.usage, outsideUsageDir(paths.usage)]))),
-          ...(await folderStampsOf(runtime, snapshotDirOf(config.budget, kit.paths))),
-        ],
+        stamps: await planStampsOf(scope),
       };
     },
     async build() {
@@ -81,11 +68,33 @@ export function planSource(scope: ReadScope): DocumentSource {
 }
 
 /**
+ * What a document judged in plan order is built from, by its files' stamps: the team folders, every tree team's
+ * config, register, goals and renames, and the metered spend a score's size is read from (planSource says which).
+ */
+export async function planStampsOf(scope: ReadScope): Promise<(string | null)[]> {
+  const { runtime, kit, config } = scope;
+  const loaded = await scope.tree();
+  const configs = [...[...loaded.teams.values()].map((other) => other.kit.load.path), ...[...loaded.leftOut.values()].map((load) => load.path)];
+  const teams = treeTeamsOf(loaded, kit.paths.team);
+  const kept = [...loaded.teams.values()].map((other) => other.kit.paths);
+  return [
+    // A team folder added or removed moves no file the tree read: the folder's own listing tells.
+    (await runtime.files.list(teamsFolderOf(runtime))).join(','),
+    ...(await stampsOf(runtime, configs)),
+    ...(await registerStampsOf(runtime, teams)),
+    ...(await stampsOf(runtime, teams.map((other) => other.kit.paths.goals))),
+    ...(await stampsOf(runtime, kept.map((paths) => paths.renames))),
+    ...(await foldersStampsOf(runtime, kept.flatMap((paths) => [paths.usage, outsideUsageDir(paths.usage)]))),
+    ...(await folderStampsOf(runtime, snapshotDirOf(config.budget, kit.paths))),
+  ];
+}
+
+/**
  * The tasks of the tree's other registers. One whose archive lost a segment cannot be read, and a plan judged
  * without it would call a task ready whose need there is unfinished: no task is served then, and the problem names
  * the segment as its own team's folder holds it, never the reader's words for it.
  */
-async function elsewhereOf(runtime: CliRuntime, loaded: KitTree, team: string): Promise<Elsewhere> {
+export async function elsewhereOf(runtime: CliRuntime, loaded: KitTree, team: string): Promise<Elsewhere> {
   try {
     return { tasks: await new TreeTasks(runtime, loaded).elsewhereFor(team), problem: null };
   } catch (error) {
@@ -102,7 +111,7 @@ function segmentNameOf(loaded: KitTree, path: string): string {
 }
 
 /** What moves when a register of the tree does: its snapshot, its events after it, and its archive's segments by name. */
-async function registerStampsOf(runtime: CliRuntime, teams: readonly TreeTeam[]): Promise<(string | null)[]> {
+export async function registerStampsOf(runtime: CliRuntime, teams: readonly TreeTeam[]): Promise<(string | null)[]> {
   const stamps: (string | null)[] = [];
   for (const { kit } of teams) {
     const layout = layoutPaths(kit.paths.events);
@@ -112,7 +121,7 @@ async function registerStampsOf(runtime: CliRuntime, teams: readonly TreeTeam[])
 }
 
 /** Each folder's stamps, as {@link folderStampsOf} takes them, one folder after another. */
-async function foldersStampsOf(runtime: CliRuntime, folders: readonly string[]): Promise<(string | null)[]> {
+export async function foldersStampsOf(runtime: CliRuntime, folders: readonly string[]): Promise<(string | null)[]> {
   const stamps: (string | null)[] = [];
   for (const folder of folders) {
     stamps.push(...(await folderStampsOf(runtime, folder)));
@@ -121,7 +130,7 @@ async function foldersStampsOf(runtime: CliRuntime, folders: readonly string[]):
 }
 
 /** A folder's entries by name, then each one's stamp: a file added, removed or written moves it. */
-async function folderStampsOf(runtime: CliRuntime, folder: string): Promise<(string | null)[]> {
+export async function folderStampsOf(runtime: CliRuntime, folder: string): Promise<(string | null)[]> {
   const names = (await runtime.files.list(folder)).sort();
   return [names.join(','), ...(await stampsOf(runtime, names.map((name) => join(folder, name))))];
 }

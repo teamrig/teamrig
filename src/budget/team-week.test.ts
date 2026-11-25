@@ -9,7 +9,7 @@ import { emptyPatterns } from './patterns.ts';
 import { formatPeriod, parsePeriod, type Period } from './period.ts';
 import type { WeekUse } from './snapshot.ts';
 import type { UsageState } from './store.ts';
-import { teamWeekOf, type WeekFiles } from './team-week.ts';
+import { peekTeamWeekOf, teamWeekOf, type WeekFiles } from './team-week.ts';
 import { readWeek } from './week.ts';
 
 const PATHS = { period: '/team/state/usage/period.json', meterLog: '/team/state/usage/meter-log.jsonl', extraLog: '/team/state/usage/extra-log.jsonl' };
@@ -116,6 +116,33 @@ describe('teamWeekOf', () => {
     const status: WeekUse = { ...STATUS, usedPct: 100 };
     const week = await teamWeekOf(files, ROOT_KEEPS, { budget: DEFAULT_BUDGET, now: NOW, statusUse: status, states: STATES });
     assert.deepEqual(week.limits, [{ start: status.at, end: END }]);
+  });
+});
+
+describe('peekTeamWeekOf', () => {
+  it('reads the week teamWeekOf reads, and moves no period and logs no meter line', async () => {
+    const kept = new MemoryFiles();
+    await storedAt(kept, 15);
+    const peeked = new MemoryFiles();
+    const stored = await storedAt(peeked, 15);
+    const input = { budget: DEFAULT_BUDGET, now: NOW, statusUse: STATUS, states: STATES };
+    const read = await teamWeekOf(kept, ROOT_KEEPS, input);
+    assert.deepEqual(await peekTeamWeekOf(peeked, ROOT_KEEPS, input), { ...read, limits: [] });
+    assert.deepEqual(parsePeriod((await peeked.read(PATHS.period)) ?? ''), stored);
+    assert.equal(await peeked.read(PATHS.meterLog), undefined);
+  });
+
+  it('reads the period teamWeekOf would move to from metered W alone, with no status line', async () => {
+    const kept = new MemoryFiles();
+    const peeked = new MemoryFiles();
+    for (const files of [kept, peeked]) {
+      await storedAt(files, 15);
+    }
+    const input = { budget: { ...DEFAULT_BUDGET, weeklyLimitW: 2_000 }, now: NOW, statusUse: undefined, states: STATES };
+    const read = await teamWeekOf(kept, ROOT_KEEPS, input);
+    const peek = await peekTeamWeekOf(peeked, ROOT_KEEPS, input);
+    assert.deepEqual([peek.usedPct, peek.window], [read.usedPct, read.window]);
+    assert.equal(await peeked.read(PATHS.meterLog), undefined);
   });
 });
 

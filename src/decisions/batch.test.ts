@@ -92,6 +92,15 @@ describe('the decision batch', () => {
     assert.deepEqual([ids(undedicated.pending), undedicated.trigger], [['T2', 'T1'], deadline], 'while no session is dedicated, T2 is due first');
   });
 
+  it("lists the waits it leaves to a dedicated session's own meeting, in plan order, and a child team sees only its own", () => {
+    const tasks = [ownerWait('T1', '2030-01-08T09:00:00.000Z', { owner: 'pricing' }), ownerWait('T2', '2030-01-08T09:00:00.000Z'), ownerWait('T3', '2030-01-08T09:00:00.000Z', { owner: 'pricing' })];
+    const child = { ...registerOf([ownerWait('T9', '2030-01-08T09:00:00.000Z', { owner: 'pricing' })], 'web'), dedicatedOwners: ['pricing'] };
+    const batch = decisionBatch({ ...inputOf([], undefined), registers: [{ ...registerOf(tasks), dedicatedOwners: ['pricing'] }, child] });
+    assert.deepEqual([ids(batch.pending), ids(batch.dedicated)], [['T2'], ['T1', 'T3', 'web/T9']]);
+    assert.deepEqual(ids(waitsOfTeams(batch, ['web']).dedicated), ['web/T9']);
+    assert.deepEqual(decisionBatch(inputOf(tasks, undefined)).dedicated, [], 'with no session dedicated, none is left out');
+  });
+
   it('counts every wait not yet asked when no batch was ever asked', () => {
     const batch = decisionBatch(inputOf([ownerWait('T1', '2030-01-06T09:00:00.000Z'), ownerWait('T2', '2030-01-08T09:00:00.000Z')], undefined));
     assert.deepEqual([ids(batch.pending), ids(batch.overdue)], [['T1', 'T2'], []]);
@@ -157,6 +166,14 @@ describe('the decision batch', () => {
     const later = (id: string, at: string): Task => ownerWait(id, '2030-01-06T09:00:00.000Z', { due: '2030-01-07', waits: [{ kind: 'decision', who: 'owner' }, { kind: 'time', at }] });
     const batch = decisionBatch(inputOf([later('T1', '2030-01-09 12:00')], undefined));
     assert.deepEqual([ids(batch.pending), ids(batch.overdue), batch.trigger], [[], [], undefined]);
+  });
+
+  it("lists the cards the owner put off, but a dedicated session's", () => {
+    const later = (id: string, owner = 'a'): Task => ownerWait(id, '2030-01-06T09:00:00.000Z', { owner, waits: [{ kind: 'decision', who: 'owner' }, { kind: 'time', at: '2030-01-09 12:00' }] });
+    const tasks = [later('T1'), later('T2', 'pricing'), ownerWait('T3', '2030-01-08T09:00:00.000Z')];
+    // teamDecisions hands each register's tasks as a map's values, which can be read only once.
+    const batch = decisionBatch({ ...inputOf([], undefined), registers: [{ ...registerOf(tasks), tasks: new Map(tasks.map((task) => [task.id, task])).values(), dedicatedOwners: ['pricing'] }] });
+    assert.deepEqual([ids(batch.pending), ids(batch.later), ids(batch.dedicated)], [['T3'], ['T1'], []]);
   });
 
   it('asks a card put off again once its time passed after the last batch, counting from that time', () => {

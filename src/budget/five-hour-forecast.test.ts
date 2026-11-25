@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MS_PER_MINUTE } from '../core/time.ts';
 import { TimeZone } from '../core/zone.ts';
-import { FIVE_HOUR_RATE_SPAN_MS, fiveHourForecast, fiveHourLine } from './five-hour-forecast.ts';
+import { FIVE_HOUR_RATE_SPAN_MS, fiveHourForecast, fiveHourLine, fiveHourWarns } from './five-hour-forecast.ts';
 import type { FiveHourFold } from './five-hour-summary.ts';
 
 const RESETS_AT = Date.parse('2030-01-08T13:00:00Z');
@@ -66,5 +66,19 @@ describe('fiveHourLine', () => {
 
   it('gives only the use and the reset while there is no rate to read', () => {
     assert.equal(fiveHourLine({ ...SLOW, firstAt: SLOW.at }, TimeZone.UTC), 'Five-hour window: 12.0% used at 10:00 UTC. Resets 13:00 UTC.');
+  });
+});
+
+describe('fiveHourWarns', () => {
+  const budget = { fiveHourWarnPct: 80 };
+
+  it('warns at the warn percent, or for a window rising to fill before its reset', () => {
+    assert.equal(fiveHourWarns({ ...SLOW, usedPct: 80 }, undefined, budget), true);
+    assert.equal(fiveHourWarns(RISING, fiveHourForecast(RISING), budget), true);
+  });
+
+  it('stays quiet for a slow window under the warn percent, and with no rate to read', () => {
+    assert.equal(fiveHourWarns(SLOW, fiveHourForecast(SLOW), budget), false);
+    assert.equal(fiveHourWarns(RISING, undefined, budget), false);
   });
 });

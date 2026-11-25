@@ -3,7 +3,7 @@ import { MS_PER_DAY } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
 import { isImprovementsDay, waitsForWeeklyBatch, type DecisionFocus } from '../meeting/decision-order.ts';
 import type { Task } from '../register/fold.ts';
-import { askableSince, asksOwner, isDedicated } from '../register/owner-waits.ts';
+import { askableSince, asksOwner, isDedicated, ownerLater } from '../register/owner-waits.ts';
 import type { TaskTree } from '../register/tree.ts';
 import { taskLabel } from '../register/views.ts';
 
@@ -70,6 +70,10 @@ export interface DecisionBatch {
   readonly overdue: readonly OwnerWait[];
   /** The waits held for the weekly Improvements batch, in the same order; none on its day, when they are in the batch. */
   readonly weekly: readonly OwnerWait[];
+  /** The waits on the owner of its registers' dedicated sessions, in the same order: no batch asks them, each session's own meeting does (T868). */
+  readonly dedicated: readonly OwnerWait[];
+  /** The waits the owner put off (Later) of the sessions no meeting of their own decides, in the same order: each is asked again once its time passed (ownerLater). */
+  readonly later: readonly OwnerWait[];
   /** `focus.improvementsDay`: the UTC weekday the weekly waits are asked. */
   readonly improvementsDay: Weekday;
   /** Why the batch is due now; undefined while it waits for the next one. */
@@ -121,7 +125,11 @@ interface BatchRow {
 export function decisionBatch(input: BatchInput): DecisionBatch {
   const { now, askedAt, improvementsDay } = input;
   const today = isImprovementsDay(now, improvementsDay);
-  const rows = input.registers.flatMap((register) => rowsOf(register, now, today));
+  // A register's tasks may be a one-shot iterator (a map's values): each list below reads them, so they are read once here.
+  const registers = input.registers.map((register) => ({ ...register, tasks: [...register.tasks] }));
+  const rows = registers.flatMap((register) => rowsOf(register, now, today));
+  const dedicated = registers.flatMap(dedicatedOf);
+  const later = registers.flatMap(laterOf);
   const held = rows.filter((row) => row.weekly && !today);
   const batched = rows.filter((row) => !row.weekly || today);
   const asked = (row: BatchRow): boolean => askedAt !== undefined && row.since <= askedAt;
@@ -132,6 +140,8 @@ export function decisionBatch(input: BatchInput): DecisionBatch {
     pending: pending.map(waitOf),
     overdue: overdue.map(waitOf),
     weekly: held.map(waitOf),
+    dedicated,
+    later,
     improvementsDay,
     trigger: triggerOf(input, pending, overdue, nextAt),
     nextAt,
@@ -148,15 +158,33 @@ function waitOf(row: BatchRow): OwnerWait {
  */
 export function waitsOfTeams(batch: DecisionBatch, teams: readonly string[]): DecisionBatch {
   const held = (wait: OwnerWait): boolean => wait.team !== undefined && teams.includes(wait.team);
-  return { ...batch, pending: batch.pending.filter(held), overdue: batch.overdue.filter(held), weekly: batch.weekly.filter(held) };
+  return { ...batch, pending: batch.pending.filter(held), overdue: batch.overdue.filter(held), weekly: batch.weekly.filter(held), dedicated: batch.dedicated.filter(held), later: batch.later.filter(held) };
+}
+
+/** A register's waits the lead would ask the owner now (asksOwner), split by whether their session is dedicated (isDedicated). */
+function askedOf({ tasks, tree, ownerMarker, requireGate, dedicatedOwners }: BatchRegister, dedicated: boolean): Task[] {
+  return [...tasks].filter((task) => asksOwner(task, ownerMarker, requireGate, tree.context) && isDedicated(task, dedicatedOwners) === dedicated);
+}
+
+/** A register's waits of its dedicated sessions, in its plan order: what its batch leaves to their own meetings. */
+function dedicatedOf(register: BatchRegister): OwnerWait[] {
+  const { team, tree } = register;
+  return tree.inPlanOrder(askedOf(register, true)).map((task) => ({ task, team, tree }));
+}
+
+/** A register's waits the owner put off (ownerLater), but those of its dedicated sessions, in its plan order. */
+function laterOf({ team, tasks, tree, ownerMarker, requireGate, dedicatedOwners }: BatchRegister): OwnerWait[] {
+  const putOff = [...tasks].filter((task) => ownerLater(task, ownerMarker, requireGate, tree.context) !== undefined && !isDedicated(task, dedicatedOwners));
+  return tree.inPlanOrder(putOff).map((task) => ({ task, team, tree }));
 }
 
 /**
  * A register's waits the lead asks the owner now (asksOwner) but those of its dedicated sessions, in its plan order,
  * each with its {@link BatchRow} facts.
  */
-function rowsOf({ team, tasks, tree, ownerMarker, requireGate, focus, dedicatedOwners }: BatchRegister, now: number, today: boolean): BatchRow[] {
-  const asked = [...tasks].filter((task) => asksOwner(task, ownerMarker, requireGate, tree.context) && !isDedicated(task, dedicatedOwners));
+function rowsOf(register: BatchRegister, now: number, today: boolean): BatchRow[] {
+  const { team, tree, focus } = register;
+  const asked = askedOf(register, false);
   return tree.inPlanOrder(asked).map((task) => {
     const weekly = waitsForWeeklyBatch(task, tree, focus);
     const since = askableSince(task, tree.context);

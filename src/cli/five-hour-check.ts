@@ -1,4 +1,4 @@
-import { fiveHourForecast, type FiveHourForecast } from '../budget/five-hour-forecast.ts';
+import { fiveHourForecast, fiveHourWarns, type FiveHourForecast } from '../budget/five-hour-forecast.ts';
 import { readFolderFiveHour, type FiveHourFold } from '../budget/five-hour-summary.ts';
 import { formatPct } from '../budget/format.ts';
 import type { BudgetConfig } from '../config/types.ts';
@@ -35,7 +35,7 @@ export async function fiveHourWarnings(
     return [];
   }
   const forecast = fiveHourForecast(fold);
-  if (fold.usedPct < budget.fiveHourWarnPct && forecast?.fullAt === undefined) {
+  if (!fiveHourWarns(fold, forecast, budget)) {
     return [];
   }
   return [{ key: `five-hour ${fold.resetsAt}`, source: 'the five-hour check [budget.fiveHourWarnPct]', text: fiveHourText(fold, forecast, zone) }];

@@ -4,6 +4,23 @@
  * built-ins, and `interface/index.test.ts` fails if anything reachable from here imports one. The command
  * (src/cli/commands/read.ts) gathers through the ports and calls these.
  */
+export {
+  budgetBody,
+  type BudgetBody,
+  type BudgetClassInput,
+  type BudgetInput,
+  type BudgetPaceState,
+  type BudgetRateSource,
+  type BudgetTeamInput,
+  type BudgetWeekInput,
+  type FiveHourInput,
+  type ServedBudgetTeam,
+  type ServedBudgetToday,
+  type ServedBudgetWeek,
+  type ServedClass,
+  type ServedFiveHour,
+  type ServedWeekForecast,
+} from './budget.ts';
 export { servedCard, type ServedCard } from './card.ts';
 export {
   configBody,
@@ -16,6 +33,16 @@ export {
   type SettingInput,
 } from './config.ts';
 export { type Connector, type ConnectorItem, type ConnectorName } from './connector.ts';
+export {
+  decisionsBody,
+  type DecisionsBody,
+  type DecisionsInput,
+  type ServedDecisionCard,
+  type ServedLater,
+  type ServedOwnerWait,
+  type ServedRunFile,
+  type ServedTrigger,
+} from './decisions.ts';
 export { answerOf, DOCUMENTS, isDocumentName, unchangedAnswer, type Answer, type DocumentName, type EnvelopeHead, type UnchangedAnswer } from './envelope.ts';
 export { changedFrame, EVENTS, helloFrame, movedDocuments, type DocumentRevision, type EventFrame, type EventName } from './events.ts';
 export { goalsBody, type GoalsBody, type GoalsInput, type HeldGoals, type ServedGoal, type ServedSlip } from './goals.ts';

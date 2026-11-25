@@ -1,9 +1,9 @@
 import type { Files } from '../core/files.ts';
 import type { TeamPaths } from '../core/home.ts';
 import type { LimitSpan } from '../register/stats.ts';
-import { accountReadings, ACCOUNT_SCOPE, calibrationOf, crossingOf, MeterLog, type LoggedReading } from './calibration.ts';
+import { accountReadings, ACCOUNT_SCOPE, calibrationOf, crossingOf, MeterLog, type Calibration, type LoggedReading } from './calibration.ts';
 import { ExtraLog, limitSpansOf, wAtFullOf } from './extra.ts';
-import { PeriodStore } from './period.ts';
+import { PeriodStore, type Metered, type Period } from './period.ts';
 import { meteredOf, rateOf, readWeek, wSince, type WeekInput, type WeekReading } from './week.ts';
 
 /** The team paths the week now reads and writes. */
@@ -41,17 +41,49 @@ export async function teamWeekOf(
   const { budget, statusUse, states, now } = input;
   const log = new MeterLog(files, week.paths.meterLog);
   const logged = await log.read(now);
-  const readings = accountReadings(logged, week.keeper);
-  const calibration = calibrationOf(readings);
-  const metered = meteredOf(rateOf(calibration, budget, undefined)?.wPerPct, states, now);
-  const move = await new PeriodStore(files, week.paths.period).moveAt(budget, statusUse, now, metered);
+  const fitted = fittedOf(logged, week, input);
+  const move = await new PeriodStore(files, week.paths.period).moveAt(budget, statusUse, now, fitted.metered);
   const period = move?.period;
-  const entries = await new ExtraLog(files, week.paths.extraLog).read();
-  const wAtFull = period === undefined ? undefined : wAtFullOf(readings, period.start);
-  const reading = readWeek({ ...input, period, calibration, readings, extra: { entries, wAtFull } });
+  const reading = await weekIn(files, week, input, fitted, period);
   const w = period === undefined ? 0 : wSince(states, period.start, now);
-  const crossing = crossingOf({ before: move?.before, period, use: statusUse, covered: reading.covered, w, readings, now }, calibration.fit);
+  const crossing = crossingOf({ before: move?.before, period, use: statusUse, covered: reading.covered, w, readings: fitted.readings, now }, fitted.calibration.fit);
   const lines: readonly LoggedReading[] = crossing === undefined ? [] : [{ ...crossing, scope: ACCOUNT_SCOPE }];
   await log.appendAll(lines, now);
   return { ...reading, limits: limitSpansOf([...logged, ...lines]) };
+}
+
+/**
+ * The week as `teamWeekOf` reads it, for a reader that must change no file (the `budget` document of `teamrig read`):
+ * the period it would move to, left unwritten, and no meter line logged, so the next hook still logs the percent the
+ * status line passed (T2028). Its stretches at the limit are the logged ones only.
+ */
+export async function peekTeamWeekOf(
+  files: Files,
+  week: WeekFiles,
+  input: Omit<WeekInput, 'period' | 'calibration' | 'readings' | 'extra'>,
+): Promise<TeamWeekReading> {
+  const logged = await new MeterLog(files, week.paths.meterLog).read(input.now);
+  const fitted = fittedOf(logged, week, input);
+  const period = await new PeriodStore(files, week.paths.period).peekAt(input.budget, input.statusUse, input.now, fitted.metered);
+  return { ...(await weekIn(files, week, input, fitted, period)), limits: limitSpansOf(logged) };
+}
+
+/** The account's meter lines, their fit and the W metered at its rate, as both readers of the week take them. */
+interface Fitted {
+  readonly readings: readonly LoggedReading[];
+  readonly calibration: Calibration;
+  readonly metered: Metered | undefined;
+}
+
+function fittedOf(logged: readonly LoggedReading[], week: WeekFiles, input: Pick<WeekInput, 'budget' | 'states' | 'now'>): Fitted {
+  const readings = accountReadings(logged, week.keeper);
+  const calibration = calibrationOf(readings);
+  return { readings, calibration, metered: meteredOf(rateOf(calibration, input.budget, undefined)?.wPerPct, input.states, input.now) };
+}
+
+/** The week read in `period` with the extra-usage log. */
+async function weekIn(files: Files, week: WeekFiles, input: Omit<WeekInput, 'period' | 'calibration' | 'readings' | 'extra'>, fitted: Fitted, period: Period | undefined): Promise<WeekReading> {
+  const entries = await new ExtraLog(files, week.paths.extraLog).read();
+  const wAtFull = period === undefined ? undefined : wAtFullOf(fitted.readings, period.start);
+  return readWeek({ ...input, period, calibration: fitted.calibration, readings: fitted.readings, extra: { entries, wAtFull } });
 }

@@ -70,7 +70,7 @@ function teamFilesOf(runtime: CliRuntime, { kit, config }: TreeTeam): string[] {
 }
 
 /** A team's week file as the document serves it: null when it is missing, damaged or in a format this teamrig cannot read. */
-function servedWeekOf(text: string | undefined): ServedWeek | null {
+export function servedWeekOf(text: string | undefined): ServedWeek | null {
   const week = text === undefined ? undefined : parseTeamWeek(text);
   if (week === undefined) {
     return null;
