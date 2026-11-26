@@ -64,7 +64,7 @@ export const declaration: HostDeclaration = {
     'tabs.memory': partial("the killed-step notice reads only Claude Code's reaper"),
     'wake.api-retry': NOT_BUILT,
     'wake.cost': NOT_BUILT,
-    'skills.plugin': NOT_BUILT,
+    'skills.plugin': partial("teamrig's skills reach Codex only once `teamrig setup skills --host codex --yes` copies them; no install step runs it"),
     'skills.team': NOT_BUILT,
     'skills.session-listing': NOT_BUILT,
     'helpers.start-rules': BUILT,

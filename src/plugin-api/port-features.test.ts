@@ -15,6 +15,7 @@ const NO_PORTS: HostPorts = {
   toolCall: unsupported('no tool calls'),
   transcripts: unsupported('no transcripts'),
   usage: unsupported('no usage'),
+  pluginSkills: unsupported('no skills folder'),
   statusLine: unsupported('no status line'),
   paths: unsupported('no paths'),
   secrets: unsupported('no secret files'),

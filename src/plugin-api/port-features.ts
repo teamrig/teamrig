@@ -43,6 +43,7 @@ export const HOST_PORT_FEATURES = {
   models: ['sessions.open'],
   steps: ['plugin.install-update', 'sessions.in-tab', 'sessions.resume'],
   userHooks: ['plugin.hooks-file', 'plugin.hook-trust'],
+  pluginSkills: ['skills.plugin'],
 } as const satisfies Readonly<Record<keyof HostPorts, ServedRows>>;
 
 export function isHostPortName(value: string): value is keyof HostPorts {

@@ -96,7 +96,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `skills.plugin` | the plugin skills | supported, proved on [windows](proofs/claude-code.md#skillsplugin); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `skills.plugin` | the plugin skills | supported, proved on [windows](proofs/claude-code.md#skillsplugin); unproved on linux, macos | partial (missing: teamrig's skills reach Codex only once `teamrig setup skills --host codex --yes` copies them; no install step runs it), built, not proven live | partial (missing: no live run yet), built, not proven live |
 | `skills.team` | team and session skills | supported, proved on [windows](proofs/claude-code.md#skillsteam); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 | `skills.session-listing` | a session's own skill listing | supported, proved on [windows](proofs/claude-code.md#skillssession-listing); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 
