@@ -11,7 +11,7 @@ import {
   DEFAULT_PERSON_HOLD,
   DIR_RETRY_MS,
   HOLD_BUTTON_MS,
-  isHostSessionId,
+  isClaudeSessionId,
   KEEP_ACTIVITY_GAP_MS,
   liveAgentsOf,
   outcomeFileOf,
@@ -755,7 +755,7 @@ describe('the ask files', () => {
     assert.equal(askFileOf(DIR, SESSION), `${DIR}/${SESSION}.ask`);
     assert.equal(outcomeFileOf(DIR, SESSION), `${DIR}/${SESSION}.outcome`);
     for (const unsafe of ['', '../x', 'a b', 'a\\b', 'x'.repeat(65)]) {
-      assert.equal(isHostSessionId(unsafe), false, unsafe);
+      assert.equal(isClaudeSessionId(unsafe), false, unsafe);
       assert.equal(askFileOf(DIR, unsafe), undefined, unsafe);
       assert.equal(outcomeFileOf(DIR, unsafe), undefined, unsafe);
     }

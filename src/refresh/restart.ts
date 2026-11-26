@@ -2,7 +2,7 @@ import type { EffortLevel, RefreshConfig } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
 import type { Env } from '../core/home.ts';
 import { typedEffortsOf } from '../effort/typed-effort.ts';
-import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isHostSessionId, type ClaimOutcome, type ClearMode, type PersonHold } from '../mod/clear-hand.ts';
+import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isClaudeSessionId, type ClaimOutcome, type ClearMode, type PersonHold } from '../mod/clear-hand.ts';
 import { endAndWait, tabProcessOf, workCutOffBy, type TabEnder } from '../open/end-tab.ts';
 import type { FeedOutcome, ProcessInfo, SessionProcessCheck, SessionProcesses } from '../open/session-processes.ts';
 import type { TranscriptReader } from '../ports/host/index.ts';
@@ -375,7 +375,7 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
     if ((await pendingOf(deps, plan)) === undefined) {
       return CANCELLED;
     }
-    if (!isHostSessionId(request.hostSession)) {
+    if (!isClaudeSessionId(request.hostSession)) {
       return endSession(deps, plan, request, claude);
     }
     const answer = await handToTab(deps, plan, request.hostSession, await modeOf(deps, request, claude, transcript));
