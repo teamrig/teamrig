@@ -1489,24 +1489,33 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     // Every check and the command itself work in the host the run names, never the process's default one.
     const chosen: CliRuntime = host === runtime.host ? runtime : { ...runtime, host };
     const hosted: CliRuntime = args.host === undefined ? chosen : { ...chosen, hostId: args.host };
-    refuseSettingsWrite(args.command, args.switches, hosted);
-    if (args.common.size > 0) {
-      // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
-      const common = await import('./common-flags.ts');
-      await common.checkCommonFlags(args, hosted);
+    const execute = async (run: CliRuntime): Promise<ProcessExit> => {
+      refuseSettingsWrite(args.command, args.switches, run);
+      if (args.common.size > 0) {
+        // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
+        const common = await import('./common-flags.ts');
+        await common.checkCommonFlags(args, run);
+      }
+      if (spec.effect === 'write' && spec.bindsTab !== true) {
+        // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
+        await (await tabSessionCommands()).refuseAnotherTabSession(args, run);
+      }
+      const command = await spec.load();
+      const lockDeadline = hookLockDeadline(args.command, run.clock.now());
+      const hookRuntime = lockDeadline === undefined ? run : { ...run, lockDeadline };
+      if (args.hostEvent === undefined) {
+        return await command(args, hookRuntime);
+      }
+      const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
+      return gated === undefined ? EXIT.ok : await command(args, gated);
+    };
+    // A dry run is no act: it promises to write nothing, the act log included.
+    if (spec.effect !== 'write' || args.switches.has('dry-run')) {
+      return await execute(hosted);
     }
-    if (spec.effect === 'write' && spec.bindsTab !== true) {
-      // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
-      await (await tabSessionCommands()).refuseAnotherTabSession(args, hosted);
-    }
-    const command = await spec.load();
-    const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
-    const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
-    if (args.hostEvent === undefined) {
-      return await command(args, hookRuntime);
-    }
-    const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
-    return gated === undefined ? EXIT.ok : await command(args, gated);
+    // Every write is an act the team's log keeps, its refusals too (T4813); loaded only for a write, so a hook or a
+    // read loads none of the log's code.
+    return await (await import('./act-record.ts')).recordedRun(argv, args, hosted, execute);
   } catch (error) {
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));
