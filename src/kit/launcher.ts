@@ -333,14 +333,16 @@ function kitHomeOf(script: string): string {
   return dirname(dirname(script));
 }
 
-/** The real process: run when Node runs this file itself, never when a spec imports it. */
-async function main(script: string): Promise<void> {
-  const launcherHash = textHash(readFileSync(script, 'utf8'));
+/**
+ * The real process `script`, the launcher file Node runs, starts teamrig in: its words, its kit home, its hash, and
+ * the process hooks a run ends through. Only wiring, kept apart from `launch` so a spec can check each part.
+ */
+export function processLauncher(script: string): LauncherProcess {
   const head = process.argv.slice(0, 2);
-  await launch({
+  return {
     argv: process.argv.slice(2),
     kitHome: kitHomeOf(script),
-    launcherHash,
+    launcherHash: textHash(readFileSync(script, 'utf8')),
     files: nodeLauncherFiles,
     run: async (entry, words) => {
       process.argv = [...head.slice(0, 1), entry, ...words];
@@ -360,7 +362,7 @@ async function main(script: string): Promise<void> {
       });
     },
     exit: (code) => process.exit(code),
-  });
+  };
 }
 
 /**
@@ -378,4 +380,4 @@ export function isRunBy(script: string, argv1: string | undefined): boolean {
 }
 
 const self = fileURLToPath(import.meta.url);
-if (isRunBy(self, process.argv[1])) await main(self);
+if (isRunBy(self, process.argv[1])) await launch(processLauncher(self));
