@@ -97,6 +97,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     const terms = [...hosts, ...connectors, ...terminals].flatMap((load) => (load.kind === 'loaded' && load.value.terms !== undefined ? [[load.id, load.value.terms]] : []));
     assert.deepEqual(terms, [
       ['claude-code', ['Claude Code', 'CLAUDE.md', '.claude/', '/clear']],
+      ['codex-cli', ['Codex', 'AGENTS.md', '.codex/', 'CODEX_HOME']],
       ['github', ['GitHub', 'gh', 'pull request']],
       ['jira', ['Jira', 'JQL']],
     ]);

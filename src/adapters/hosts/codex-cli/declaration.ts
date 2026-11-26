@@ -37,6 +37,7 @@ export const declaration: HostDeclaration = {
   id: 'codex-cli',
   name: 'Codex CLI',
   sessionVariables: SESSION_VARIABLES,
+  terms: ['Codex', 'AGENTS.md', '.codex/', 'CODEX_HOME'],
   steps: ['host.hooks-file', 'host.skills-folder'],
   manifest: {
     'rules.session-start': provedOnWindows('rules.session-start'),
