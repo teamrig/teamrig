@@ -100,10 +100,12 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       holds it), then writes the kit launcher hook lines run and puts teamrig on the user's PATH as a session
       start does; the teamrig install script runs it for a host with no teamrig plugin; without --yes it shows
       the copy and the PATH steps and writes nothing; only the person writes it
-  kit update [--channel stable|preview] [--yes]   installs the newest release of the channel (default
-      stable): the release tag at the head of its branch, cloned by that tag and checked to be the tag's
-      commit, then copied in as kit install does; refuses a release older than current (only kit use goes
-      down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
+  kit update [--channel stable|preview] [--no-attestation] [--yes]   installs the newest release of the
+      channel (default stable): the release tag at the head of its branch, cloned by that tag and checked to
+      be the tag's commit, its integrity list checked with gh attestation verify to be one the release
+      workflow attested under the tag's name, then copied in as kit install does; refuses without gh on PATH
+      unless --no-attestation, which says what it skips; refuses a release older than current (only kit use
+      goes down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
       person writes it
   kit uninstall [--yes]        takes teamrig's handlers out of each hooks file of yours whose host runs the
       kit launcher (your own stay, the old file is backed up), then removes the launcher, the current records

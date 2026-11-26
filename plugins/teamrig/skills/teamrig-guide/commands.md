@@ -5008,8 +5008,11 @@ version ships no launcher.
 Installs the newest teamrig release of a channel into the kit home, for a host with no teamrig plugin to update it at
 a session start. The teamrig already installed does the checks: it lists the channel's branch in the public
 repository (`release` for stable, `preview` for preview), takes the release tag at its head, clones that tag one
-commit deep into a folder of the kit home's `install/`, checks the clone is at the tag's commit, and copies it in as
-`kit install` does, the launcher too; the clone is removed after. It never moves current down (`teamrig kit use` does)
+commit deep into a folder of the kit home's `install/`, checks the clone is at the tag's commit, checks
+that the repository's release workflow attested the release's integrity list (the sha256 of every file it runs)
+under the tag's name, and copies it in as `kit install` does, the launcher too; the clone is removed after. The
+attestation check runs the repository host's command-line tool, which must be on PATH and signed in; a refusal names
+the tool and its sign-in command. It never moves current down (`teamrig kit use` does)
 and changes no hooks file, so the hook lines and the trust a host gave them stay. Without `--yes` it shows the release
 and writes nothing. It moves the code every host's guards run, so only the person writes it: `--yes` is refused where
 an agent runs it.
@@ -5017,6 +5020,8 @@ an agent runs it.
 Flags:
 
 - `--channel <stable|preview>`: the release line to follow, stable by default; another name is a usage error.
+- `--no-attestation`: install without the attestation check, where that tool cannot be installed; it prints a `NOTE` that
+  only the tag names the release. Type it yourself; never let an agent add it.
 - `--yes`: clone and install it; without it, only show the release.
 
 Example:
@@ -5028,14 +5033,16 @@ teamrig kit update --yes
 Output:
 
 ```text
+VERIFIED v0.510.0: the release workflow attested its integrity list, sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 WROTE current 0.510.0 (was 0.509.0): teamrig 0.510.0 (github-release v0.510.0 0123456789abcdef0123456789abcdef01234567)
 WROTE /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.510.0
 ```
 
 When current is the channel's newest release it prints `UNCHANGED`, and a pin prints a `NOTE` naming it, the new
 version kept beside it. It is `REFUSED`, nothing written, for a release older than current, a branch head not tagged
-yet (run it again once the release is tagged), a clone at another commit than the tag's, no git on PATH, and a failed
-listing or clone.
+yet (run it again once the release is tagged), a clone at another commit than the tag's, no git on PATH, no
+attestation tool on PATH without `--no-attestation`, an attestation the tool cannot verify (the tool signed out, a
+release from before attestations, a signature from another workflow) or one under another release's name, and a failed listing or clone.
 
 ### teamrig kit uninstall
 
