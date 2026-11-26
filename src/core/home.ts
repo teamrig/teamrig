@@ -23,6 +23,11 @@ export const ENV = {
   launched: 'TEAMRIG_LAUNCHED',
   /** `off` turns `teamrig issue sync` off on this machine: it reads nothing and writes nothing. */
   github: 'TEAMRIG_GITHUB',
+  /**
+   * How many times longer the kit's wall-clock limits on a child program run, 1 to 20 (time-limit.ts). The check sets
+   * it for the specs it runs, so a loaded host slows them without failing them; unset, every limit is as written.
+   */
+  timeScale: 'TEAMRIG_TIME_SCALE',
 } as const;
 
 export type Env = Readonly<Record<string, string | undefined>>;
