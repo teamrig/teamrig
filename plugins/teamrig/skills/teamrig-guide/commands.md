@@ -1832,8 +1832,10 @@ class security, `[pushGuard.reviewPaths]`), or the read could not see every file
 out as no plain path), the security reviewer (`[roles.securityReviewer]`, on this team or one above) gets a "Security
 review of outside PR" task too, in that reviewer's team, saying which. Last comes the caller's task, "Reply to
 outside PR <owner/name#number> once its reviews are in", planned after every review task, so the answer waits for
-each verdict; it lists the paths no area holds, for the caller to judge. Each task takes the priority, due date and
-goals given, as `teamrig add` does.
+each verdict; it lists the paths no area holds, for the caller to judge. A code host that cannot list a change
+request's files (no `codehost.pull-files`, see the parity page) reads nothing: every other session owning an area of
+that repository gets a review task, and the security reviewer always does, each saying the files could not be
+listed. Each task takes the priority, due date and goals given, as `teamrig add` does.
 
 It refuses, adding nothing, a caller not on the team, a target that is not `owner/name#number`, a repository not in
 `github.repos`, a missing `--priority`, and a change request taken in already while its reply task is not dropped
