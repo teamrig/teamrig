@@ -15,7 +15,7 @@ export function surplusHintOf(input) {
     if (config.policy === 'off' || window === undefined) {
         return undefined;
     }
-    const surplus = surplusOf({ window, now: input.now, usedPct: input.usedPct, targetPct: input.targetPct, config, teams: input.teams });
+    const surplus = surplusOf({ window, now: input.now, usedPct: input.usedPct, targetPct: input.targetPct, config, teams: input.teams, homePartPct: input.homePartPct });
     return surplus === undefined || !surplus.worth
         ? undefined
         : {

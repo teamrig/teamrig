@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { formatConfig } from '../../config/load.ts';
 import type { JsonRecord } from '../../core/guards.ts';
 import { INTERFACE_VERSION } from '../../interface/index.ts';
 import { layoutPaths } from '../../register/layout.ts';
@@ -9,7 +10,7 @@ import { CliHarness, KIT, TEAM_HOME, type RunOptions } from '../../testing/cli-h
 import { normalisePath } from '../../testing/memory-files.ts';
 import { problemsOf, rowsOf, served } from '../../testing/read-answers.ts';
 import { rotateRegister } from '../../testing/rotation.ts';
-import { teamConfigOf, teamEventsOf, teamHomeOf, treeHarness } from '../../testing/team-tree.ts';
+import { SUB_TEAMS, teamConfigOf, teamEventsOf, teamHomeOf, treeHarness } from '../../testing/team-tree.ts';
 import { WatchedFiles } from '../../testing/watched-files.ts';
 import { EXIT } from '../runtime.ts';
 
@@ -130,6 +131,17 @@ describe('teamrig read plan', () => {
     assert.deepEqual([waiting['ready'], waiting['next']], [false, { kind: 'elsewhere', who: 'lead', task: 'T2', team: 'app', need: 'T1' }]);
     assert.deepEqual(idsOf(served(result)), ['T2']);
     assert.equal(result.stdout.join('\n').includes(ROOT_TITLE), false);
+  });
+
+  it('keeps a plan step on a task of the tree the team left unready, where an id in no register reads retired (T5469)', async () => {
+    const detachedWeb = async (away: readonly string[]): Promise<CliHarness> => {
+      const kit = await needingTheRoot();
+      await kit.files.write(teamConfigOf('web'), formatConfig({ ...SUB_TEAMS['web'], team: { id: 'web', detached: { from: 'app', firstId: 3, away } } }));
+      await kit.files.write(teamEventsOf('app'), '');
+      return kit;
+    };
+    const readyOf = async (kit: CliHarness): Promise<unknown> => plannedTask(served(await kit.run(READ_PLAN, AS_WEB)), 'T2')['ready'];
+    assert.deepEqual([await readyOf(await detachedWeb(['T1'])), await readyOf(await detachedWeb([]))], [false, true]);
   });
 
   it('serves the plan of a team above with --team, and refuses a team below or beside', async () => {

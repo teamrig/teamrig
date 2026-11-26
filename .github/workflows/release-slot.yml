@@ -3,9 +3,11 @@ name: release slot
 on:
   # Each hour, runs ci on the open release pull request's head when its preview slot opened and no release merged in
   # it yet (T5133, tools/release/channels.json): release-merge.yml merges only after a passed ci run, so this is what
-  # starts a held release head again once its next slot opens. By hand it runs the same check at once.
+  # starts a held release head again once its next slot opens. By hand it runs the same check at once. Its minute, 19,
+  # sits away from :00, :05, :15 and :30, where GitHub drops and delays most scheduled runs (T5449), after release.yml's
+  # 13, which moves the release head first, and before release-promote's 25.
   schedule:
-    - cron: '5 * * * *'
+    - cron: '19 * * * *'
   workflow_dispatch:
 
 permissions:

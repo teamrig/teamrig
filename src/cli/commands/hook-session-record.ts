@@ -1,6 +1,8 @@
 import { errorMessage } from '../../core/guards.ts';
 import { KIT_NAME } from '../../core/home.ts';
-import { SessionRecordStore } from '../../sessions/record.ts';
+import { DEFAULT_HOST } from '../../composition/adapters.ts';
+import { SessionRecordStore, type SessionRecord } from '../../sessions/record.ts';
+import { hostIdOf } from '../host.ts';
 import type { Kit } from '../kit.ts';
 import { isLiveRunOwn, liveRunOf, type LiveRun } from '../live-run.ts';
 import type { CliRuntime } from '../runtime.ts';
@@ -39,8 +41,15 @@ export async function recordSessionStart(
       // Its own tree, a fork of its conversation or the background job it handed it to is no second one.
       return { failure: undefined, duplicate: (await isLiveRunOwn(runtime, live, claudePid)) ? undefined : duplicateText(id, claudePid, live) };
     }
-    const started = { claudePid, hostSession, at: new Date(runtime.clock.now()).toISOString() };
-    const record = transcript === undefined ? started : { ...started, transcript };
+    const host = hostIdOf(runtime);
+    const record: SessionRecord = {
+      claudePid,
+      hostSession,
+      at: new Date(runtime.clock.now()).toISOString(),
+      ...(transcript === undefined ? {} : { transcript }),
+      // The default host is left out, so a record reads the same to a teamrig that keeps no host.
+      ...(host === DEFAULT_HOST ? {} : { host }),
+    };
     await new SessionRecordStore(runtime.files, kit.paths).write(id, record);
     return RECORDED;
   } catch (error) {

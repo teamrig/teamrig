@@ -1,10 +1,14 @@
+import { join } from 'node:path';
 import { ENV, resolveKitHome } from "../../core/home.js";
 import { ID_PATTERN } from "../../core/ids.js";
 import { KIT_VERSION } from "../../core/version.js";
+import { clientRootOf } from "../../exec/client-integrity.js";
 import { INBOX_ADD_LAUNCHER_SCRIPT, inboxAddLauncherPath } from "../../inbox/host-launcher.js";
+import { installRunningKit, KIT_INSTALL_LOCK, kitInstallLockPath, kitSelfInstallLogLine, kitSelfInstallNote } from "../../kit/kit-self-install.js";
 import { dayProbePath, dayProbeReleaseLine } from "../../restore/day-probe.js";
 import { DayProbeStore } from "../../restore/day-probe-store.js";
 import { apiGaveUpLine, apiRetriesSpentOn } from "../../restore/api-error.js";
+import { KIT_LAUNCHER_FILE } from "../../restore/cli-launcher.js";
 import { cliOnPathNote, cliOnPathSteps } from "../../restore/cli-on-path.js";
 import { applyEvent } from "../../restore/entry.js";
 import { LAUNCHER_REFRESH_LOCK, launcherRecordPath, refreshLaunchers } from "../../restore/launcher-refresh.js";
@@ -16,7 +20,8 @@ import { LAUNCHER_SCRIPT, launcherPath } from "../../statusline/launcher.js";
 import { noPositionals } from "../args.js";
 import { fileLockOf } from "../file-locks.js";
 import { openKit } from "../kit.js";
-import { identityOf, transcriptsIfKept } from "../host.js";
+import { DEFAULT_HOST } from "../../composition/adapters.js";
+import { hostIdOf, identityOf, transcriptsIfKept } from "../host.js";
 import { loginPageLogLine, loginPageOf, sendLoginPage } from "../login-page.js";
 import { EXIT } from "../runtime.js";
 import { readHookInput, writeReply } from "./hook-input.js";
@@ -200,8 +205,11 @@ async function trackLaunchers(event, facts, runtime, kitHome) {
     const { files, restore, platform } = runtime;
     const added = [];
     const userPath = addRecorded(restore.userPath, added);
-    const cliOnPath = (await putsCliOnPath(runtime, facts.team))
-        ? [() => cliOnPathSteps({ files, kitHome, platform, userPath, markExecutable: restore.markExecutable })]
+    // A client with no built kit launcher (a run from the source tree) puts nothing on the PATH: the PATH must never
+    // name a folder whose `teamrig.mjs` is missing, or an older one this client did not ship.
+    const launcherText = await files.read(join(clientRootOf(runtime.self.script), KIT_LAUNCHER_FILE)).catch(() => undefined);
+    const cliOnPath = launcherText !== undefined && (await putsCliOnPath(runtime, facts.team))
+        ? [() => cliOnPathSteps({ files, kitHome, launcherText, platform, userPath, markExecutable: restore.markExecutable })]
         : [];
     await refreshLaunchers({
         machine: { files, kitHome, node: runtime.self.node, userHome: runtime.userHome, logon: restore.logon, shortcuts: restore.shortcuts },
@@ -218,11 +226,41 @@ async function trackLaunchers(event, facts, runtime, kitHome) {
     return folder === undefined ? undefined : cliOnPathNote(folder, userPath.where);
 }
 /**
+ * At a session start, copies the running client into the kit home's `versions/` and names it current
+ * (src/kit/kit-self-install.ts), logging a change or refusal to the restore log. Returns the note of a pinned install,
+ * which names the pin at every start.
+ */
+async function trackKitVersion(event, runtime, kitHome) {
+    if (event.kind !== 'start') {
+        return undefined;
+    }
+    const outcome = await installRunningKit({
+        files: runtime.files,
+        tree: runtime.kitTree,
+        kitHome,
+        clientRoot: clientRootOf(runtime.self.script),
+        version: KIT_VERSION,
+        source: { kind: 'claude-code-plugin' },
+        lock: fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_INSTALL_LOCK),
+    });
+    const line = kitSelfInstallLogLine(outcome);
+    if (line !== undefined) {
+        await runtime.files.append(restoreLogPath(kitHome), `${new Date(runtime.clock.now()).toISOString()} ${line}\n`);
+    }
+    return kitSelfInstallNote(outcome);
+}
+/** The start's notes joined one per line; undefined when it has none. */
+function joinedNotes(notes) {
+    const present = notes.filter((note) => note !== undefined);
+    return present.length === 0 ? undefined : present.join('\n');
+}
+/**
  * Records what the hook event `hook` reports in its session's restore entry, at a turn's end in the login marker, at
- * a reply in the day-start probe, and at a session start refreshes the launchers; an event of no session, or one it
- * skips, writes nothing. A marker, probe or refresh that cannot be written (its lock busy) never keeps the entry from
- * its update; an entry that cannot be written fails the call once they are done. Returns the note of a start that put
- * teamrig on the user's PATH (`trackLaunchers`), else undefined.
+ * a reply in the day-start probe, and at a session start refreshes the launchers and installs the running client into
+ * the kit home; an event of no session, or one it skips, writes nothing. A marker, probe, refresh or install that
+ * cannot be written (its lock busy) never keeps the entry from its update; an entry that cannot be written fails the
+ * call once they are done. Returns the notes of a start that put teamrig on the user's PATH (`trackLaunchers`) or found
+ * the install pinned (`trackKitVersion`), else undefined.
  */
 export async function trackRestore(hook, runtime) {
     const hostSession = hook.session;
@@ -231,6 +269,7 @@ export async function trackRestore(hook, runtime) {
         return undefined;
     }
     const told = identityOf(runtime);
+    const host = hostIdOf(runtime);
     const facts = {
         hostSession,
         at: runtime.clock.now(),
@@ -243,19 +282,22 @@ export async function trackRestore(hook, runtime) {
         pid: runtime.sessionProcesses.parentPid,
         team: envId(runtime, ENV.team),
         session: envId(runtime, ENV.session),
+        // So a restore reopens it in the host it ran in; the default host is left out, as in the session's record.
+        ...(host === DEFAULT_HOST ? {} : { host }),
     };
     const kitHome = resolveKitHome(runtime.env, runtime.userHome);
     const event = await codedEvent(reported, facts, runtime);
     const login = trackLogin(event, facts, runtime, kitHome).catch(() => undefined);
     const dayProbe = trackDayProbe(event, facts, runtime, kitHome).catch(() => undefined);
     const launchers = trackLaunchers(event, facts, runtime, kitHome).catch(() => undefined);
+    const kit = trackKitVersion(event, runtime, kitHome).catch(() => undefined);
     try {
         await trackEntry(event, facts, runtime, kitHome);
     }
     finally {
-        await Promise.all([login, dayProbe, launchers]);
+        await Promise.all([login, dayProbe, launchers, kit]);
     }
-    return launchers;
+    return joinedNotes([await launchers, await kit]);
 }
 /**
  * SessionStart, UserPromptSubmit, Stop, StopFailure and SessionEnd: records the session in the restore
@@ -267,8 +309,10 @@ export async function trackRestore(hook, runtime) {
  * (`<kit home>/restore/day-probe.json`), as does the probe tab's tool end. A turn that failed on a transient API error
  * after the wake check's last retry logs `api-error: gave up on <tab>` to the restore log. The first session start of a
  * newer plugin version rewrites the launchers, logon entry and shortcuts an install left that are out of date, and
- * logs each change as `launchers: <old> -> <new>: <change>` (src/restore/launcher-refresh.ts). It prints nothing but the
- * note of the start that put teamrig on the user's PATH, to the person and the model once, and on any error it exits 0
+ * logs each change as `launchers: <old> -> <new>: <change>` (src/restore/launcher-refresh.ts). A session start also
+ * copies the running plugin into `<kit home>/versions/<v>` and names it current unless `teamrig kit use` pinned another,
+ * logging `kit: ...` (src/kit/kit-self-install.ts). It prints nothing but the note of the start that put teamrig on the
+ * user's PATH or found the install pinned, to the person and the model, and on any error it exits 0
  * having written nothing: a tracker must never hold up a turn.
  */
 export async function restoreTrack(args, runtime) {
@@ -277,7 +321,7 @@ export async function restoreTrack(args, runtime) {
     if (event !== undefined) {
         const note = await trackRestore(event, runtime).catch(() => undefined);
         if (note !== undefined) {
-            // Only a start returns a note (`trackLaunchers`).
+            // Only a start returns a note (`trackLaunchers`, `trackKitVersion`).
             writeReply(runtime, 'session-start', { context: note, notice: note });
         }
     }

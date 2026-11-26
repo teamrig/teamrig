@@ -13,6 +13,7 @@ import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { resolveKitHome, type Env } from '../core/home.ts';
 import { cliLauncherFolder } from '../restore/cli-launcher.ts';
 import type { PathProbe } from '../core/path-probe.ts';
+import type { ProgramRunner } from '../core/program-runner.ts';
 import type { StoreFolders } from '../plugin-store/store.ts';
 import type { TranscriptSource } from '../budget/discover.ts';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
@@ -30,6 +31,7 @@ import type { KeyPorts } from '../core/terminal.ts';
 import type { HttpClient } from '../core/http.ts';
 import type { GhRunner } from '../adapters/connectors/github/gh.ts';
 import type { ShellRunner } from '../test-run/shell.ts';
+import type { KitTree } from '../kit/kit-tree.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
 import type { StarterWatch } from '../delivery/starter-watch.ts';
@@ -41,6 +43,7 @@ import type { TreeState } from '../delivery/push-pass.ts';
 import type { PackageRegistry } from '../package-guard/registry.ts';
 import { CONTEXT_MAX_CHARS, TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
 import type { ExecPorts } from '../exec/ports.ts';
+import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
 import type { PointerGit } from '../setup/pointer-ignore.ts';
 import { FakeClock } from './fake-clock.ts';
@@ -172,6 +175,8 @@ export interface RunOptions {
   readonly shell?: ShellRunner;
   /** The GitHub CLI `issue sync` reads through; default one that sees no repository. */
   readonly gh?: GhRunner;
+  /** The programs the CLI runs and waits for (`CliRuntime.run`), such as a host's wake program; default `gh`'s, else none answers. */
+  readonly program?: ProgramRunner;
   /** The saved secrets `issue sync` reads tokens from; default a store with none. */
   readonly credentials?: CredentialStore;
   /** What `teamrig key` writes with; default no person at the terminal and writes to a store apart from `credentials`. */
@@ -198,6 +203,8 @@ export interface RunOptions {
    * doctor run is clean unless a spec empties it.
    */
   readonly restore?: RestorePorts;
+  /** The folder copies of a session start's self-install; default the quiet host's, which copies nothing. */
+  readonly kitTree?: KitTree;
   /** The runner `teamrig queue` runs its step in; default one whose steps exit 0 at once. */
   readonly steps?: StepRunner;
   /** The host memory (queue's watch, `teamrig sessions`); default one that lists no process and measures nothing. */
@@ -218,6 +225,8 @@ export interface RunOptions {
   readonly packageRegistry?: PackageRegistry;
   /** The process `teamrig exec` runs a command in and the checkout it binds to; default a spawner whose command exits 0 and a clean checkout of the fixture request's repository. */
   readonly exec?: ExecPorts;
+  /** How `teamrig conformance terminal` stages and runs the pinned program; default the reference terminal over the protocol. */
+  readonly terminalPrograms?: TerminalPrograms;
   /** The chat webhook posts go to; default one that keeps them and answers each as posted. */
   readonly webhook?: ChatWebhook;
   /** Where the CLI runs from and the node options it was started with; default the quiet world's, with none. */
@@ -294,7 +303,7 @@ export class CliHarness {
       ...(options.interactive === undefined ? {} : { interactive: options.interactive }),
       sessionProcesses: options.sessionProcesses ?? this.sessionProcesses,
       ...(options.shell === undefined ? {} : { shell: options.shell }),
-      ...(options.gh === undefined ? {} : { run: programOverGh(options.gh) }),
+      ...programOf(options),
       ...(options.credentials === undefined ? {} : { credentials: options.credentials }),
       ...(options.keys === undefined ? {} : { keys: options.keys }),
       ...(options.http === undefined ? {} : { http: options.http }),
@@ -306,6 +315,7 @@ export class CliHarness {
       ...(options.shippedHosts === undefined ? {} : { shippedHosts: options.shippedHosts }),
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
       restore: options.restore ?? cliOnPathRestore(env, userHome),
+      ...(options.kitTree === undefined ? {} : { kitTree: options.kitTree }),
       ...(options.steps === undefined ? {} : { steps: options.steps }),
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),
@@ -316,6 +326,7 @@ export class CliHarness {
       ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
       ...(options.packageRegistry === undefined ? {} : { packageRegistry: options.packageRegistry }),
       ...(options.exec === undefined ? {} : { exec: options.exec }),
+      ...(options.terminalPrograms === undefined ? {} : { terminalPrograms: options.terminalPrograms }),
       ...(options.webhook === undefined ? {} : { webhook: options.webhook }),
       ...(options.self === undefined ? {} : { self: options.self }),
       out,
@@ -323,6 +334,14 @@ export class CliHarness {
       ...(options.cmdShimLine === undefined ? {} : { cmdShimLine: options.cmdShimLine }),
     };
   }
+}
+
+/** The program runner a run is given: the spec's own, else one over its `gh`, else the quiet world's. */
+function programOf(options: RunOptions): { readonly run?: ProgramRunner } {
+  if (options.program !== undefined) {
+    return { run: options.program };
+  }
+  return options.gh === undefined ? {} : { run: programOverGh(options.gh) };
 }
 
 /** Quiet restore ports on a machine whose user PATH already holds the kit home's bin folder (T5095). */

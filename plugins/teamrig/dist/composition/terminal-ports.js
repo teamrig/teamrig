@@ -20,7 +20,7 @@ export async function terminalPortOf(id, deps, importer = importModule) {
     }
     // `create` is typed, but the type holds only an adapter compiled against this release's ports, so what it built is read as a value.
     const port = isRecord(built) ? built['terminal'] : undefined;
-    return isTerminalPort(port) ? { kind: 'port', port } : { kind: 'refused', why: 'its adapter builds no terminal port' };
+    return isTerminalPort(port) ? { kind: 'port', port, declaration: load.value.declaration } : { kind: 'refused', why: 'its adapter builds no terminal port' };
 }
 /** Every call of a terminal port: its capabilities, then one per protocol request. */
 const PORT_CALLS = ['capabilities', ...TERMINAL_REQUESTS];

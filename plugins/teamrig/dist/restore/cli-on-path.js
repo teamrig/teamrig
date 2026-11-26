@@ -29,9 +29,9 @@ export function cliOnPathNote(folder, where) {
  * already keep their PATH: only ones opened after the step find `teamrig`.
  */
 export async function cliOnPathSteps(cli) {
-    const { files, kitHome, platform, userPath, markExecutable } = cli;
+    const { files, kitHome, launcherText, platform, userPath, markExecutable } = cli;
     const shim = shShimPath(kitHome);
-    const perLauncher = await Promise.all(cliLaunchers(kitHome, platform).map(async (launcher) => {
+    const perLauncher = await Promise.all(cliLaunchers(kitHome, platform, launcherText).map(async (launcher) => {
         const written = await launcherStep(files, launcher, 'refresh');
         return launcher.path === shim ? written.map((step) => markedStep(step, shim, markExecutable)) : written;
     }));

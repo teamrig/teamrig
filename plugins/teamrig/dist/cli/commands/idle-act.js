@@ -1,3 +1,4 @@
+import { terminalOf } from "../../config/launch.js";
 import { errorMessage } from "../../core/guards.js";
 import { KIT_NAME } from "../../core/home.js";
 import { SessionLog } from "../../sessions/log.js";
@@ -127,7 +128,7 @@ export async function idleOpen(args, runtime) {
     try {
         const found = await asksNowOf(await asks.read(id), runtime.clock.now(), () => unseenLinesOf(inboxDepsOf(runtime, kit.paths), id), () => seenLinesOf(inboxDepsOf(runtime, kit.paths), id));
         // The idle pass runs unattended: a reopened tab never pulls the owner away (T2510).
-        const opened = await openSession(runtime, kit, config, roster, { team, id, project, terminal: config.open.terminal, asked: false, focus: 'keep', urgent: found.asks });
+        const opened = await openSession(runtime, kit, config, roster, { team, id, project, terminal: terminalOf(config, id), asked: false, focus: 'keep', urgent: found.asks });
         const done = { ...act, ...measured, at: runtime.clock.now() };
         if (opened.kind !== 'opened') {
             return report(runtime, kit, { ...done, outcome: 'failed', line: `FAILED to reopen ${label}: no terminal opened (${opened.reasons.join('; ')})` });

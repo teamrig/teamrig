@@ -125,7 +125,7 @@ export type JudgedStep = Exclude<PassStep, { readonly kind: 'reopen' }> | Reopen
  */
 async function wakeWeightOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, work: RestWork, configured: number): Promise<RestCap & { readonly rest: WakeRest }> {
   const { id } = work;
-  const rest = config.budget.enabled ? wakeRestOf(await budgetFactsOf(runtime, { kit, config, roster, id }, undefined), config.budget.quietHours, runtime.clock.now(), COLD_WAKE_W) : AWAKE;
+  const rest = config.budget.enabled ? wakeRestOf(await budgetFactsOf(runtime, { kit, config, roster, id }, undefined), config.budget, runtime.clock.now(), COLD_WAKE_W) : AWAKE;
   return { rest, maxPriority: effectivePriority(configured, rest, config.budget.quietHours), exemption: restExemptionOf(rest, configured, work.tasks, work.elsewhere) };
 }
 

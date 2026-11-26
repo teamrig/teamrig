@@ -82,6 +82,11 @@ export interface IdleOptions {
   /** The waited-on work past `maxPriority` that still keeps a held session open (`restExemptionOf`); absent: none. */
   readonly exemption?: RestExemption | undefined;
   readonly project: string;
+  /**
+   * Why the team's tab cap holds the session's work (`tabCapHoldText`): its work it can start then keeps it open no
+   * more, while every other check still does. Absent: its work keeps it open.
+   */
+  readonly heldByCap?: string | undefined;
 }
 
 /** Why a tab's last turn keeps it open (or refuses the owner's wake), by where it stands. */
@@ -189,6 +194,29 @@ function measuredOf(last: LastSession): MeasuredSession | undefined {
 }
 
 /**
+ * Why `id` is never closed, whatever it runs, as the clause after its name: the delivery owner's role or a lead's
+ * that open.idle.leaders keeps, open.idle.keepOpen, or a started booked owner meeting it is in. Undefined: none holds.
+ */
+export function neverClosedWhy(config: KitConfig, roster: Roster, facts: Pick<IdleFacts, 'meetings' | 'now'>, id: string): string | undefined {
+  // A child team's lead is judged like any session unless open.idle.leaders is all: only the root's lead is kept (T3387).
+  const kept = roster.rolesOf(id).filter((role) => role === 'deliveryOwner' || (role === 'lead' && leadNeverCloses(config.open.idle, config.team)));
+  if (kept.length > 0) {
+    return `holds the ${kept.join(' and ')} role: ${KIT_NAME} never closes it`;
+  }
+  if (config.open.idle.keepOpen.includes(id)) {
+    return `is in open.idle.keepOpen: ${KIT_NAME} never closes it`;
+  }
+  // The owner talks to the tab, not to the session's transcript, so a meeting's idle minutes say nothing (T2542).
+  const meeting = bookedMeetingOf(facts.meetings, id, facts.now);
+  return meeting === undefined ? undefined : `is in the owner's open meeting ${meeting.id}: ${KIT_NAME} keeps it open until the meeting ends`;
+}
+
+/** The work `id` can start within `maxPriority` and its rest's exemption, most urgent first (`startableTasks`). */
+export function startableOf(config: KitConfig, facts: Pick<IdleFacts, 'tasks' | 'elsewhere' | 'now' | 'zone'>, id: string, cap: Pick<IdleOptions, 'maxPriority' | 'exemption'>): readonly Task[] {
+  return startableTasks(facts.tasks, facts.elsewhere, id, facts.now, facts.zone, parkRulesOf(config), cap.maxPriority, cap.exemption);
+}
+
+/**
  * Whether `id` closes, with the checks in the order they cost: the delivery owner's role or a lead's that
  * open.idle.leaders keeps, open.idle.keepOpen or a started booked owner meeting it is in that keeps it, not running in
  * the host's process list, work it can start within `maxPriority`, an urgent line waiting to wake it (closed, it would
@@ -206,27 +234,18 @@ export async function idleVerdictOf(runtime: CliRuntime, config: KitConfig, rost
   const label = `${roster.nameOf(id) ?? id} (session ${id})`;
   const keep = (why: string): IdleVerdict => ({ kind: 'keep', why: `${label} ${why}` });
   const notRunning = 'is not running: nothing to close';
-  // A child team's lead is judged like any session unless open.idle.leaders is all: only the root's lead is kept (T3387).
-  const kept = roster.rolesOf(id).filter((role) => role === 'deliveryOwner' || (role === 'lead' && leadNeverCloses(config.open.idle, config.team)));
-  if (kept.length > 0) {
-    return keep(`holds the ${kept.join(' and ')} role: ${KIT_NAME} never closes it`);
-  }
-  if (config.open.idle.keepOpen.includes(id)) {
-    return keep(`is in open.idle.keepOpen: ${KIT_NAME} never closes it`);
-  }
-  // The owner talks to the tab, not to the session's transcript, so a meeting's idle minutes say nothing (T2542).
-  const meeting = bookedMeetingOf(facts.meetings, id, facts.now);
-  if (meeting !== undefined) {
-    return keep(`is in the owner's open meeting ${meeting.id}: ${KIT_NAME} keeps it open until the meeting ends`);
+  const never = neverClosedWhy(config, roster, facts, id);
+  if (never !== undefined) {
+    return keep(never);
   }
   const record = facts.records.get(id);
   const place = facts.places.find((each) => each.id === id);
   if (record === undefined || place?.state !== 'running') {
     return keep(notRunning);
   }
-  const { now, zone, tasks, elsewhere } = facts;
-  const startable = startableTasks(tasks, elsewhere, id, now, zone, parkRulesOf(config), options.maxPriority, options.exemption);
-  if (startable.length > 0) {
+  const { now, zone, tasks } = facts;
+  const startable = startableOf(config, facts, id, options);
+  if (startable.length > 0 && options.heldByCap === undefined) {
     return keep(`has work it can start (${startable.map((task) => task.id).join(', ')})`);
   }
   const asks = facts.asks.get(id) ?? [];

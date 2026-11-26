@@ -1,8 +1,12 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorCode } from "../core/guards.js";
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 import { nodeTranscriptBytes } from "./cursor.js";
+/**
+ * A Claude Code session id, the UUID its transcript files are named by: the folder layout read here is Claude
+ * Code's, so this is its own shape, not the shared stores' neutral check (src/core/host-session.ts).
+ */
+const CLAUDE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The real filesystem. An entry removed while it is listed is left out. */
 export const nodeTranscriptFolders = {
     async entries(dir) {

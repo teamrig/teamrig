@@ -30,6 +30,7 @@ function context(overrides: Partial<SessionStartInput> = {}): string {
     verifyNote: undefined,
     duplicateNote: undefined,
     worktreeNote: undefined,
+    treeNote: undefined,
     session: 'alpha',
     sessionInEnv: true,
     tree: undefined,
@@ -147,6 +148,13 @@ VERIFY 1, oldest first:
 VERIFY 1, oldest first:
   T1 (proof: the nightly run)
 WORKTREE line.`));
+  });
+
+  it('says the tree line after the worktree line', () => {
+    const text = context({ worktreeNote: 'WORKTREE line.', treeNote: 'TREE line.' });
+    assert.ok(text.endsWith(`${NAMES}
+WORKTREE line.
+TREE line.`));
   });
 
   it("appends the team's rules", () => {

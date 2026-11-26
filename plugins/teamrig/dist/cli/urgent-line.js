@@ -5,6 +5,7 @@ import { lineHash } from "../inbox/line-hash.js";
 import { WakeAsks } from "../wake/asks.js";
 import { inboxDepsOf } from "./commands/inbox.js";
 import { closedByTeamrig, closedWakeLine, wakeClosedSession } from "./closed-wake.js";
+import { wakeHostedSessions } from "./hosted-wake.js";
 import { rosterOf } from "./kit.js";
 import { RefusedError } from "./runtime.js";
 /**
@@ -35,7 +36,12 @@ export async function postUrgentLine(runtime, kit, config, line) {
         return `not posted: ${errorMessage(error)}`;
     }
     const problem = await askWake(runtime, { paths: kit.paths, config, roster: async () => rosterOf(runtime, kit, config) }, { ...line, text }, at);
-    return problem === undefined ? undefined : `posted to the inbox, but ${problem}`;
+    if (problem !== undefined) {
+        return `posted to the inbox, but ${problem}`;
+    }
+    // A receiver in a host with no tab mod takes the ask now, not at the next idle pass (src/cli/hosted-wake.ts).
+    (await wakeHostedSessions(runtime, kit, config, await rosterOf(runtime, kit, config), [line.to])).forEach((warning) => runtime.out.stderr(warning));
+    return undefined;
 }
 /**
  * The wake ask that makes a line already in its receiver's inbox wake it ({@link urgentAskOf}); a session teamrig

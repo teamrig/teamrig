@@ -4,11 +4,13 @@ import { TERMINAL_REQUESTS, type TerminalRequest } from '../../../plugin-api/ind
 import { TERMINAL_CONTRACT, bind, nothingTerminal, referenceTerminal, runCases, yesTerminal, type ReferenceOptions, type TerminalSubject } from '../../../conformance/index.ts';
 import { terminalProtocolHost } from '../../../testing/terminal-protocol-host.ts';
 import { protocolTerminal, type Transport } from './client.ts';
+import { kitWorld } from './kit.ts';
 
-/** The same terminal, reached through the protocol: its port served as an outside program, the client in front of it. */
+/** The same terminal, reached through the protocol: its port and world served as an outside program in kit mode, the client and the kit's world in front of it. */
 function overWire(subject: TerminalSubject): TerminalSubject {
-  const host = terminalProtocolHost(subject.port);
-  return { port: protocolTerminal(async (line) => ({ kind: 'answered', output: await host(line) })), world: subject.world };
+  const host = terminalProtocolHost(subject.port, subject.world);
+  const transport: Transport = async (line) => ({ kind: 'answered', output: await host(line) });
+  return { port: protocolTerminal(transport), world: kitWorld(transport) };
 }
 
 async function failedCases(make: () => TerminalSubject): Promise<readonly string[]> {

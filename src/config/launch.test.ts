@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { testConfig } from '../testing/config.ts';
-import { describeLaunch, isDefaultModel, isEffort, isModel, launchModelProblem, launchOf, MODEL_NAME_MAX_LENGTH, ownLaunchOf } from './launch.ts';
+import { describeLaunch, isDefaultModel, isEffort, isModel, isTerminalName, launchModelProblem, launchOf, MODEL_NAME_MAX_LENGTH, ownLaunchOf, terminalOf } from './launch.ts';
 import type { LaunchConfig } from './types.ts';
 
 /** A host's lead default, as the CLI hands it in (src/cli/host.ts `leadLaunchOf`). */
@@ -81,6 +81,23 @@ describe('ownLaunchOf', () => {
     assert.deepEqual(ownLaunchOf(config, 'alpha'), { model: 'sonnet' });
     assert.deepEqual(ownLaunchOf(testConfig(), 'lead'), {});
     assert.deepEqual(ownLaunchOf(testConfig(), 'constructor'), {});
+  });
+});
+
+describe('terminalOf', () => {
+  it("is the session's own terminal, else the team's open.terminal, never one read off the prototype (T5093)", () => {
+    const config = testConfig({ open: { terminal: 'tmux' }, launch: { alpha: { terminal: 'headless' }, bravo: { effort: 'high' } } });
+    assert.equal(terminalOf(config, 'alpha'), 'headless');
+    assert.equal(terminalOf(config, 'bravo'), 'tmux');
+    assert.equal(terminalOf(config, 'constructor'), 'tmux');
+    assert.equal(terminalOf(testConfig(), 'alpha'), 'auto');
+  });
+});
+
+describe('isTerminalName', () => {
+  it('takes every terminal teamrig opens and refuses any other name', () => {
+    assert.equal(isTerminalName('headless'), undefined);
+    assert.match(isTerminalName('xterm') ?? '', /^expected one of auto, tmux, .*, headless, print$/);
   });
 });
 

@@ -16,7 +16,7 @@ export function teamRegister(runtime, paths, config, above) {
     return new Register({
         log: new JsonlEventLog(files, paths.events),
         mutex: fileLockOf(runtime, paths.eventsLock, config.lock),
-        numbering: new KitTreeNumbering(runtime, paths.team, config.lock),
+        numbering: new KitTreeNumbering(runtime, paths.team, config),
         elsewhere: new KitTreeTasks(runtime, paths.team),
         goals: new KitTreeGoals(runtime, paths, config),
         clock,

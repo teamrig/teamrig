@@ -13,7 +13,7 @@ export function teamWeekSummaryOf(input) {
         return undefined;
     }
     const teamUsedPct = wSince(input.states, window.start, now) / wPerPct;
-    const leftPct = teamShareOf(Math.max(0, input.targetPct - usedPct), input.teams.split, input.teams.others);
+    const leftPct = teamShareOf((Math.max(0, input.targetPct - usedPct) * input.homePartPct) / 100, input.teams.split, input.teams.others);
     return {
         account: input.account,
         usedPct: summaryPct(teamUsedPct),

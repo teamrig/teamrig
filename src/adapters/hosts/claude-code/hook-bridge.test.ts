@@ -24,6 +24,7 @@ const BARE: HookEvent = {
   helper: undefined,
   call: undefined,
   prompt: undefined,
+  hostPrompt: false,
   lastReply: undefined,
   stopActive: false,
   source: undefined,
@@ -160,6 +161,17 @@ describe("Claude Code's hook input", () => {
   it('reads a stop, one that follows a blocked stop, and one that failed', () => {
     assert.deepEqual(parse({ hook_event_name: 'Stop', last_assistant_message: 'done', stop_hook_active: true }), { ...BARE, name: 'stop', hostName: 'Stop', lastReply: 'done', stopActive: true });
     assert.equal(parse({ hook_event_name: 'Stop', stop_hook_active: 'true' })?.stopActive, false);
+  });
+
+  it('marks a prompt Claude Code submitted itself, by how it starts, and never a typed one that quotes it (T5388)', () => {
+    const own = ['<task-notification>\n<task-id>b1</task-id>\n</task-notification>', '\n<cross-session-message from="x">hi</cross-session-message>'];
+    for (const prompt of own) {
+      assert.equal(parse({ hook_event_name: 'UserPromptSubmit', prompt })?.hostPrompt, true, prompt);
+    }
+    for (const prompt of ['go on', 'why did <task-notification> show?']) {
+      assert.equal(parse({ hook_event_name: 'UserPromptSubmit', prompt })?.hostPrompt, false, prompt);
+    }
+    assert.equal(parse({ hook_event_name: 'Stop', prompt: own[0] })?.hostPrompt, false, 'only on a prompt');
     assert.deepEqual(parse({ hook_event_name: 'StopFailure', error: 'overloaded' }), { ...BARE, name: 'stop-failed', hostName: 'StopFailure', error: 'overloaded' });
   });
 
@@ -280,7 +292,7 @@ describe('the recorded session read as hook events', () => {
   };
 
   /** The fields every event carries whatever happened: the rest are what one event tells. */
-  const ALWAYS: ReadonlySet<string> = new Set(['name', 'hostName', 'session', 'cwd', 'transcript', 'stopActive']);
+  const ALWAYS: ReadonlySet<string> = new Set(['name', 'hostName', 'session', 'cwd', 'transcript', 'stopActive', 'hostPrompt']);
 
   /** One recorded input beside the event the bridge reads out of it. */
   interface Read {

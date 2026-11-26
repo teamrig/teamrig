@@ -100,6 +100,17 @@ function callOf(payload: JsonRecord, shape: ToolCallShape): ToolCall | undefined
   };
 }
 
+/**
+ * How Claude Code opens a prompt it submits itself: a background task's end (`<task-notification>`) or a message
+ * another session sent (`<cross-session-message`). Only the start is read: a typed prompt may quote either further on.
+ */
+const HOST_PROMPT_STARTS: readonly string[] = ['<task-notification>', '<cross-session-message'];
+
+function isHostPrompt(prompt: string | undefined): boolean {
+  const head = prompt?.trimStart();
+  return head !== undefined && HOST_PROMPT_STARTS.some((start) => head.startsWith(start));
+}
+
 function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
   const hostName = stringField(payload, 'hook_event_name');
   const name = eventNameOf(hostName);
@@ -113,6 +124,7 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
     helper: helperOf(payload),
     call: callOf(payload, shape),
     prompt: stringField(payload, 'prompt'),
+    hostPrompt: name === 'prompt' && isHostPrompt(stringField(payload, 'prompt')),
     lastReply: stringField(payload, 'last_assistant_message'),
     stopActive: payload['stop_hook_active'] === true,
     source: stringField(payload, 'source'),

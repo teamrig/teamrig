@@ -41,7 +41,7 @@ export async function readScaleOutBudget(
   const work = workWeights(all, config.register.priorities);
   const asks = awaitedAnswers(all);
   const teams = await teamsOnAccountOf(runtime, { team: paths.team, config, usageDir: paths.usage, ids: config.sessions, liftsPath: paths.lifts, work, asks }, now, usedPct);
-  const spare = surplusOf({ window, now, usedPct, targetPct: config.budget.targetPct, config: config.burst, teams });
+  const spare = surplusOf({ window, now, usedPct, targetPct: config.budget.targetPct, config: config.burst, teams, homePartPct: config.budget.homePartPct });
   if (spare === undefined) {
     return { spare, hirePct: undefined };
   }

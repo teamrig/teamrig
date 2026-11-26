@@ -28,6 +28,11 @@ export function issuePage(repo, number) {
 }
 /** Why an issue was closed, as the host shows it: done, not to be done, or a duplicate of another. */
 export const CLOSE_REASONS = ['completed', 'not-planned', 'duplicate'];
+/**
+ * The most issues one search gives of each kind it asks for: one page per kind, so a search of a large tracker stays
+ * bounded (a search of both kinds gives up to twice this).
+ */
+export const SEARCH_PAGE = 30;
 /** The host whose list is `github.repos`: the one a command that works through that list reaches. */
 export const GITHUB_REPOS_HOST = 'github';
 /** The host whose config list names `repo`, or undefined when none does. */

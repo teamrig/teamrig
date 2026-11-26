@@ -16,12 +16,13 @@ describe('integrity', () => {
   });
   afterEach(() => repo.remove());
 
-  it("lists a hash of each launcher, compiled file and hook, and nothing else of the plugin's, no test file either", () => {
+  it("lists a hash of each launcher, compiled file, hook and package.json, and nothing else of the plugin's, no test file either", () => {
     const files = {
       'bin/teamrig': '#!/bin/sh\n',
       'bin/teamrig.cmd': '@echo off\r\n',
       'dist/cli/main.js': 'export {};\n',
       'hooks/hooks.json': '{}\n',
+      'package.json': '{"type":"module"}\n',
     };
     for (const [path, text] of Object.entries(files)) {
       repo.write(`${ROOT}/${path}`, text);
@@ -39,6 +40,14 @@ describe('integrity', () => {
 
   it('fails when a client folder is missing, so a broken build never writes a short list', () => {
     repo.write(`${ROOT}/dist/cli/main.js`, 'export {};\n');
+    assert.notEqual(repo.run(CLI).status, 0);
+    assert.equal(repo.has(`${ROOT}/${CLIENT_MANIFEST}`), false);
+  });
+
+  it("fails when the plugin's package.json is missing, which decides how Node loads the client", () => {
+    for (const path of ['bin/teamrig', 'dist/cli/main.js', 'hooks/hooks.json']) {
+      repo.write(`${ROOT}/${path}`, 'x\n');
+    }
     assert.notEqual(repo.run(CLI).status, 0);
     assert.equal(repo.has(`${ROOT}/${CLIENT_MANIFEST}`), false);
   });

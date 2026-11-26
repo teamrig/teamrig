@@ -3,7 +3,9 @@ import { declaration } from "./declaration.js";
 import { launchArgs, PROGRAM } from "./launch-args.js";
 import { backgroundJobSession, isForkOf, sessionPlaceOf } from "./session-command-lines.js";
 import { isCodexSessionProcess } from "./session-process.js";
+import { newestRestriction } from "./turn-context.js";
 import { AGENT_MARK } from "./session-variables.js";
+import { CODEX_WAKE } from "./wake.js";
 /** The variable's value trimmed, or undefined when it is unset or blank: a blank one tells nothing. */
 function told(env, name) {
     const value = env[name]?.trim();
@@ -32,5 +34,7 @@ export function sessionLauncher(env) {
         isForkOf,
         backgroundJobSession,
         sessionPlaceOf,
+        wake: CODEX_WAKE,
+        restrictionReading: newestRestriction,
     };
 }

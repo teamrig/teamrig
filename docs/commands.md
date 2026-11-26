@@ -52,11 +52,13 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       other task on its session's list (moving that session's earlier pin), wakes the session to start
       it once the step in hand is done, and tells the lead; refused on a done, dropped or in-progress
       task, and where Claude Code sets $CLAUDECODE; --preview prints what it would do and writes nothing
-  owner decide <[team/]T<id>> --option <n>|--approve|--decline   the owner answers a card from the pane:
-      kept in the task's history as the owner's decision, naming the option chosen or yes or no, which
-      ends the task's wait on the owner and wakes its session to go on from it; refused on a task that
-      waits on no decision or approval of the owner, an option its card lacks, yes or no to a decision,
-      an option to an approval, and where Claude Code sets $CLAUDECODE
+  owner decide <[team/]T<id>> --option <n>|--approve|--decline [--read <digest>]   the owner answers a
+      card from the pane: kept in the task's history as the owner's decision, naming the option chosen
+      or yes or no, which ends the task's wait on the owner and wakes its session to go on from it;
+      --read binds the answer to the card read (its cardDigest); refused on a task that waits on no
+      decision or approval of the owner, an option its card lacks, yes or no to a decision, an option
+      to an approval, a --read the card no longer matches, a security card without its current
+      verdict, and where Claude Code sets $CLAUDECODE
   owner later <[team/]T<id>> --until in-<n>h|tomorrow|monday|<time>   the owner puts a card off from
       the pane: to n hours from now, 09:00 on the team's clock tomorrow or next Monday, or a time; kept
       in the task's history as the owner's, the session told with no wake; refused on a task that
@@ -82,6 +84,30 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       value naming a launcher in the kit home) and adds the Start-menu shortcut "Restore Claude
       Sessions" that runs restore run by hand; without --yes it shows the change and writes nothing
   restore uninstall [--yes]    stops both: removes the logon entry and the shortcut, then the launchers
+  kit versions                 the teamrig versions kept in the kit home, newest first: the one it names
+      current (pinned when kit use pinned it) and those past the rollback window
+  kit use <version>|--latest [--yes]   moves which kept version the kit home names current (hosts run it once
+      their hooks point at the kit home), refusing one whose files no longer match its integrity list; a named
+      version is pinned, so a newer plugin's session start leaves it current, and --latest moves to the newest
+      kept one and clears the pin; without --yes it shows the move and writes nothing; only the person writes
+      it, never an agent's tool call; it waits up to 30 s for a session start's copy and is refused past that
+  kit prune [--yes]            removes the kept versions past the rollback window (all but the current one,
+      the newest newer one and the two before it) and what stopped installs left; without --yes it names
+      them and removes nothing; one a running process holds stays for the next prune (exit 1)
+  kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
+      branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
+      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
+      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
+  kit update [--channel stable|preview] [--yes]   installs the newest release of the channel (default
+      stable): the release tag at the head of its branch, cloned by that tag and checked to be the tag's
+      commit, then copied in as kit install does; refuses a release older than current (only kit use goes
+      down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
+      person writes it
+  kit uninstall [--yes]        takes teamrig's handlers out of each hooks file of yours whose host runs the
+      kit launcher (your own stay, the old file is backed up), then removes the launcher, the current records
+      and every kept version; teams, backups and the install clone stay; without --yes it counts what would
+      go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
+      a file a running process holds stays (exit 1)
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the
@@ -117,7 +143,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       line, and no other session, and carries each card asked with no answer to the next meeting, whose
       agenda asks it first; in a tree of teams each team's lead holds its own, and its stats,
       decisions and end cover every team under it; a card decided there leaves the root's agenda
-  meeting schedule --meets <id|name> --at <time> --about "<one line>" [--minutes <n>] [--with a,b]
+  meeting schedule --meets <id|name|team/id> --at <time> --about "<one line>" [--minutes <n>] [--with a,b]
       [--tasks T1,T2] [--brief <path>]   books the owner's meeting with one session at a set time, apart
       from the daily one: it prints its id (M3) and tells the session met and those joining by one inbox
       line; the lead or the session met books, moves, ends and drops one
@@ -130,7 +156,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       opening prompt (the topic, tasks, brief and those joining), its running tab brought to the front
       and woken once idle or a closed one opened, and those joining are told by one inbox line; started
       in the session met's own tab, the prompt prints there instead
-  meeting start --about "<one line>" [--meets <id|name>] [--minutes <n>] [--with a,b] [--tasks T1,T2]
+  meeting start --about "<one line>" [--meets <id|name|team/id>] [--minutes <n>] [--with a,b] [--tasks T1,T2]
       [--brief <path>]   the owner's meeting on the spot with any session, a worker too: the caller's own,
       else --meets's; booked and started at once (M3), refused while that session is in one already.
       While a meeting is on, its tab is in meeting mode: messages to its session are held but CRITICAL
@@ -162,13 +188,16 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       to mark it, here and when it starts
       --class: the work class, one of focus.classes in any case, stored as configured (Roadmap, Maintenance,
       Improvements by default); a task without one counts as focus.defaultClass
-      [--issue "<public title>" --issue-body "<public text>" [--issue-repo <owner/repo>] | --local "<why>"]
+      [--issue "<public title>" --issue-body "<public text>" [--issue-repo <owner/repo>] | --local "<why>" | --issue-later "<why>"]
       --issue: opens the task's GitHub issue with this public wording, labelled by --type and --priority, in
       --issue-repo, else github.issueAtAdd, else the one repo of github.repos, and points the task's ref at it
       (no task id, secret, private data or second line in the title); the task is written once its issue
       opened, so a failure writes neither
       --local: why the task gets no issue, written as its ref "local: <why>"; a security hole is always added
-      with --local; while github.issueAtAdd is set, an add gives --issue or --local (or a --ref to an issue),
+      with --local, and only the task's owner or a leader lifts that mark
+      --issue-later: why its issue opens later, written as its ref "issue later: <why>": the holder of the
+      service role giving issue migrate may open it and link it, and check flags NO-ISSUE until then
+      while github.issueAtAdd is set, an add gives --issue, --local or --issue-later (or a --ref to an issue),
       else it is refused
   add --team <team> [--owner <s>] [--source owner] --title .. --description .. --priority p<n>|blocker [...]   asks a team of your tree for work
       --source owner: the lead of a team above <team> relays the owner's order, sourced owner there
@@ -349,7 +378,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   who [<id|name|role|team/id>] the name to message a session by (no argument: every session of yours)
   read <document>... --json [--session <id|name>] [--conversation <id>] [--team <id>] [--owner <id|name>]
       [--task T<id>] [--range 7d|30d|90d|180d|1y|all] [--since <hours>]
-      [--unless <document>=<revision>[,...]]
+      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]]
       [--interface <major.minor>]   the public interface's read side, for a program: each document
       asked is one JSON line on stdout, in the order asked, with its revision and what could not be
       served (problems); a refusal goes to stderr, so stdout holds answers only.
@@ -377,8 +406,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       team above yours, for tasks, plan, goals, history, stats, meetings and config. --task: the one
       task history is asked of. --range: the days stats counts over, 7d unless given. --unless: the
       revision you hold of a document asked; one still at that revision is answered with unchanged:
-      true in place of its body, from its files' stamps alone. --interface: the version you speak,
-      refused when this teamrig does not serve it. It writes nothing
+      true in place of its body, from its files' stamps alone. --max-bytes: serve tasks a page at a
+      time, as many tasks as fit in that many bytes of their JSON and at least one; next names the
+      last task served while more remain, null on the last page. --after: the next a page gave, the
+      task the next page starts after; every page carries the same revision while nothing changed.
+      --interface: the version you speak, refused when this teamrig does not serve it. It writes nothing
   events --json [--documents <document>[,...]] [--session <id|name>] [--conversation <id>] [--team <id>]
       [--owner <id|name>] [--since <hours>] [--task <id>] [--range <days>]   the public interface's
       events side, for a program that starts it and reads its stdout: one JSON line a frame, first
@@ -529,6 +561,15 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   issue similar <owner/name#n>   the issues the task list mirrors that may be duplicates of this one,
       best first: at most 3 at or above github.similarThreshold by TF-IDF over their titles and bodies,
       with no model and no GitHub call; reads the task list only, so issue sync must have added the issue
+  issue search <words...> --repo <owner/name> [--state open|closed|all] [--kind issue|pull|all]
+      the issues of one of the team's repositories whose text holds the words, best match first, at
+      most 30 of each kind, through its tracker's own search: open issues unless --state, --kind say
+      otherwise; fails when the tracker has no search
+  issue show <owner/name#n>   one issue or pull request of the team's repositories as its tracker
+      holds it now: state, kind, title, labels, assignees and body
+  issue open --repo <owner/name> --title <text> --body-file <path> [--label <label,...>]
+      opens one issue on one of the team's repositories, adding no task: each label must already be
+      the repository's, and the title and body pass the checks of every issue teamrig opens
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,
@@ -578,7 +619,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   budget cut <id|name> [--until <HH:MM|date>] [--stop] --reason "<why>"
       (its leaders; a sub-lead its own too) holds that session to its own daily budget today, until --until or
       the day's end: past it, it is held whatever room the team has; --stop: held whatever its use, so woken
-      and reopened for p0 work only, until --until or the week's reset; a new lift of it ends the cut
+      and reopened for p0 work only, until --until or the week's reset; under budget.overAction warn either
+      only warns; a new lift of it ends the cut
   budget extra [--add <usd>] [--spent <usd>]
       the extra-usage pool past 100% of the week: what is left, in dollars and W; (the lead only) --add: dollars
       put in it, --spent: the dollars claude.ai shows spent from it so far, which teach its W per dollar
@@ -621,9 +663,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       plugin commands; without --yes they show the change and write nothing
   automode install [--yes]     writes the team's lines (protected branches, the register commands, queue and
       test, who removes a worktree, rebasing one's own branch, editing a clean tracked file in one's own
-      worktree) into Claude Code's autoMode.environment, the facts auto mode trusts, and adds teamrig's
-      own allow rules for the commands that touch only the team's files, taking out only rules it wrote
-      that are no longer synced; run it again after a config change or an upgrade; without --yes it shows
+      worktree, delivering one's own work through teamrig's merge, pull request, issue and CI commands on
+      the config's repositories) into Claude Code's autoMode.environment, the facts auto mode trusts, and
+      adds teamrig's own allow rules for the commands that touch only the team's files, taking out only
+      rules it wrote that are no longer synced; run it again after a config change or an upgrade (check
+      flags AUTOMODE-STALE until then); without --yes it shows
       the change and writes nothing
   automode uninstall [--yes]   takes the team's lines back out, leaving every other line and teamrig's
       allow rules
@@ -640,10 +684,16 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       prints the restore that undoes it; --remove-new also removes the files made since
   setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
-      earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
+      earlier ones are replaced, so run it again after every teamrig update (lines that run the kit launcher,
+      as Codex's do, last across updates; their --yes is refused until the kit home holds teamrig, which a
+      session start or kit install puts there); without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
       the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
+  setup skills --host <name> [--yes]   copies teamrig's skills into your own skills folder of a host that
+      loads no plugin's skills (an unknown name lists those that do), a folder teamrig alone writes, so run
+      it again after every teamrig update; without --yes it counts the files it would insert, keep, change
+      and remove and writes nothing; --yes moves the old folder into the backups folder first
   setup scan [--project <dir>] [--days <n>] [--max-mb <n>]   what the Claude Code setup costs every turn
       in the project (default: the team's, else the working folder) and what to slim: each file and the
       skill and agent type listings a session loads, with chars and tokens; files over 6,000 chars, skill
@@ -653,10 +703,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       1024) MB (one changed within them is not judged), and by Claude Code's /skill-doctor, which also
       counts plugins' skills, and the user's ones used only in other projects; it names the newest setup
       backup, or NO BACKUP; works before a team exists; it only reads
-  config get [<key>] [--json]   every key of the team config, or those at and under <key>: its value
+  config get [<key>] [--json] [--team <id>]   every key of the team config, or those at and under <key>: its value
       against its default, and read-only with why (the roster, an owner gate, a folder, a map, a key off
       the lead's list); <key> may name a key under a map entry the file holds
-      (delivery.repos.<name>.shipTool), read-only; --json for a screen
+      (delivery.repos.<name>.shipTool), read-only; --json for a screen; --team for another team of your tree
   config set <key> <value> | config set <key> --unset [--yes] [--session <id|name>]   the lead only:
       changes one key config get marks editable, the value read by the key's type (a list as JSON or
       a,b); --unset removes it to read its default; without --yes it shows the change; the whole new
@@ -704,7 +754,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       sessions it leads, the lead any, and any session one on a detached HEAD whose every commit is on
       the branch origin/HEAD names, as teamrig merge leaves it. --delete-branch: deletes its branch too,
       once every commit of it is on --base (default the branch origin/HEAD names), even when git stops
-      partway, as a rerun no longer knows the branch; --dry-run: prints the steps
+      partway, as a rerun no longer knows the branch; in a team, one on --base by subject alone (a
+      rebase merge changed a patch) is saved as a git bundle in the state archive first; --dry-run:
+      prints the steps
   queue --what <label> [--session <id|name>] [--max-minutes <n>] [--kind <kind>] [--task <T id>] [--memory-mb <MB>] [--small] [--exclusive] [--pre-push] [--detach] -- <command ...>   runs one queued step
       (a build, a test run, a database script) in its turn under the host lock, so the host runs only what its memory allows, and at
       below-normal CPU priority (nice 10 on POSIX), which every process it starts inherits, so your
@@ -857,6 +909,20 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       extension, for a host other than github.com, and for a write on one of the team's github.repos,
       which names the teamrig command to run instead; gh runs up to 60 s and 32 MB of output; exit 0
       when gh did, 1 otherwise, adding a line naming the key when gh says it lacks a right
+  conformance terminal --program <absolute path> --sha256 <hex> [--args <a,b>]   runs the terminal
+      contract's cases on an outside terminal program over the terminal protocol, a staged copy of the
+      file whose bytes hash to --sha256, each case on a new fake terminal of the program's own (kit
+      mode), then checks it serves no kit request outside kit mode; prints PASS or FAIL per case, SKIP
+      for a case this operating system lacks, LEAK per kit request served; exit 0 when all passed
+  conformance client --script <file.json> --home <absolute path> [--steps <n>]   builds a scripted
+      team for a UI client's tests: writes the script's team config into a private kit home at --home
+      and runs its steps there (add, set, update and inbox add only, on the script's fixed clock, one
+      minute apart, with no network, chat, program, shell or wake), so the client runs the real read
+      --json and events --json with $TEAMRIG_HOME set to it; --steps stops after step n, and a later run
+      with a larger n applies the rest; prints one JSON line (home, team, applied), each step's lines
+      on stderr; REFUSED for a folder the kit did not make, another script's home, a smaller --steps,
+      or a step running any other command or a flag that reaches past the home (--issue, --team,
+      --wake); exit 1 when a step fails
   git-credential get | store | erase
       (run by git as its credential helper for https to github.com: get
       answers with the key saved for the owner in git's repository path, else quit=1 with the reason on

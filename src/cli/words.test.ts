@@ -108,7 +108,8 @@ describe('runCli: every output speaks in words, with no pictograph markers (T242
     ]) {
       assert.ok(all.includes(words), `no output printed "${words}"`);
     }
-    assert.ok(!printed.some((text) => text.includes(`(exit ${EXIT.failed})`)), all);
+    // Each step's exit is on its own first line; help text may name an exit code in its words.
+    assert.ok(!printed.some((text) => (text.split('\n')[0] ?? '').endsWith(`(exit ${EXIT.failed})`)), all);
     // T3356: no teamrig hook asks a person; a push to a protected branch is refused with its route.
     assert.ok(!all.includes('"permissionDecision":"ask"'), all);
     for (const text of printed) {

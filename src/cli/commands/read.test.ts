@@ -210,6 +210,71 @@ describe('teamrig read tasks', () => {
   });
 });
 
+describe('teamrig read tasks --max-bytes', () => {
+  /** Pages through the working set as a capped reader does, from the first page to the one whose next is null. */
+  async function pagesOf(kit: CliHarness, maxBytes: number): Promise<JsonRecord[]> {
+    const pages: JsonRecord[] = [];
+    let after: unknown = undefined;
+    do {
+      const cursor: string[] = typeof after === 'string' ? ['--after', after] : [];
+      const page = served(await kit.run([...READ_TASKS, '--max-bytes', String(maxBytes), ...cursor]));
+      pages.push(page);
+      after = page['next'];
+    } while (typeof after === 'string');
+    return pages;
+  }
+
+  it('serves a set too big for one answer page by page, each page under the size, every task once, one revision', async () => {
+    const kit = new CliHarness();
+    // Titles of one length, so every task's JSON is as long and two of them fill a page.
+    for (const title of ['Gate A', 'Gate B', 'Gate C', 'Gate D', 'Gate E']) {
+      await add(kit, title, 'alpha');
+    }
+    const whole = served(await kit.run(READ_TASKS));
+    const twoTasks = JSON.stringify(tasksOf(whole).slice(0, 2)).length - '[]'.length;
+    const pages = await pagesOf(kit, twoTasks);
+    assert.deepEqual(pages.map(titlesOf), [['Gate A', 'Gate B'], ['Gate C', 'Gate D'], ['Gate E']]);
+    assert.deepEqual(pages.map((page) => page['next']), ['T2', 'T4', null]);
+    assert.deepEqual(new Set(pages.map((page) => page['revision'])), new Set([whole['revision']]));
+    assert.equal(whole['next'], null);
+  });
+
+  it('serves one task a page when one task alone passes the size, so a page always moves on', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'First gate', 'alpha');
+    await add(kit, 'Second gate', 'alpha');
+    assert.deepEqual((await pagesOf(kit, 1)).map(titlesOf), [['First gate'], ['Second gate']]);
+  });
+
+  it("pages one owner's tasks with --owner, after a task of that owner", async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Alpha one', 'alpha');
+    await add(kit, 'Bravo one', 'bravo');
+    await add(kit, 'Alpha two', 'alpha');
+    const first = served(await kit.run([...READ_TASKS, '--owner', 'alpha', '--max-bytes', '1']));
+    const second = served(await kit.run([...READ_TASKS, '--owner', 'alpha', '--max-bytes', '1', '--after', 'T1']));
+    assert.deepEqual([titlesOf(first), first['next'], titlesOf(second), second['next']], [['Alpha one'], 'T1', ['Alpha two'], null]);
+  });
+
+  it('answers a page as unchanged to a reader holding the set\'s revision', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'First gate', 'alpha');
+    const held = heldOf([served(await kit.run(READ_TASKS))]);
+    assert.equal(served(await kit.run([...READ_TASKS, '--max-bytes', '1', '--unless', held]))['unchanged'], true);
+  });
+
+  it('refuses on stderr, printing no document, a page asked after a task the document does not serve', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'For alpha', 'alpha');
+    await add(kit, 'For bravo', 'bravo');
+    for (const argv of [[...READ_TASKS, '--max-bytes', '1', '--after', 'T9'], [...READ_TASKS, '--owner', 'alpha', '--max-bytes', '1', '--after', 'T2']]) {
+      const result = await kit.run(argv);
+      assert.deepEqual([result.code, result.stdout], [EXIT.refused, []], argv.join(' '));
+      assert.match(result.stderr.join('\n'), /^REFUSED --after T\d names no task this tasks document serves: read it again from the first page$/);
+    }
+  });
+});
+
 describe('teamrig read inbox', () => {
   it('serves a session that never read its inbox every line as unread, with no count', async () => {
     const kit = new CliHarness();
@@ -671,6 +736,11 @@ describe('teamrig read: what is asked', () => {
     ['an --unless document read does not have', [...READ_TASKS, '--unless', `weather=${HELD}`], /--unless names an unknown document "weather"; the documents are tasks, inbox/],
     ['an --unless document the run does not ask', [...READ_TASKS, '--unless', `inbox=${HELD}`], /--unless names inbox, which this run does not ask for/],
     ['an --unless document named twice', [...READ_TASKS, '--unless', `tasks=${HELD},tasks=${HELD}`], /--unless names tasks twice/],
+    ['--after with no --max-bytes', [...READ_TASKS, '--after', 'T1'], /--after continues a page of tasks: give it with --max-bytes/],
+    ['--max-bytes on a run that asks no tasks', [...READ_SESSIONS, '--max-bytes', '1000'], /--max-bytes pages tasks, and this run does not ask for tasks/],
+    ['a --max-bytes that is no count', [...READ_TASKS, '--max-bytes', '1MB'], /--max-bytes takes a whole number of bytes, such as 1000000; got "1MB"/],
+    ['a --max-bytes of 0', [...READ_TASKS, '--max-bytes', '0'], /--max-bytes takes a whole number of bytes/],
+    ['an --after that is no task id', [...READ_TASKS, '--max-bytes', '1000', '--after', '../T1'], /--after takes a task id, such as T12; got "\.\.\/T1"/],
   ];
 
   for (const [what, argv, message] of USAGE_ERRORS) {

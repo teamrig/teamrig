@@ -9,11 +9,13 @@ import { formatIdlePassTrouble } from "./idle-pass-log.js";
  * permissions change is the owner's gate, which the lead takes to the owner; a skill flag goes to its skill's `Owner:`, which may be missing or name no
  * session on the team; the idle pass (T1100) closes and reopens the team's sessions, so a pass that stopped or fails
  * is the whole team's; a repository's git hooks (SECRET-HOOK, T1480; STAMP-HOOK, T4869) are its own, not one session's area; a secret
- * check turned off (SECRET-GUARD-OFF, T1369) is the owner's call, which the lead takes to the owner; a five-hour
+ * check turned off (SECRET-GUARD-OFF, T1369) is the owner's call, which the lead takes to the owner, and so is
+ * rewriting the team's auto mode lines once they read the team as it was (AUTOMODE-STALE, T5338); a five-hour
  * window near full (FIVE-HOUR, T1968) stalls every session on the account at once; a part of this machine that
  * starts the restore and starts a file gone or something install did not set up (RESTORE-DEAD, RESTORE-STRAY, T2030)
  * is the machine's, every team's on it, so each of their leads hears of it; a state or inbox file near the task
- * pane's read limit (LOG-SIZE, T3482) is the team's state, no one area's. Such a
+ * pane's read limit (LOG-SIZE, T3482) is the team's state, no one area's; a team past its tab cap (OVER-CAP, T5479)
+ * is the whole team's tab count, no one session's. Such a
  * warning goes to the team's lead, with the check it came from, so it never reaches no one: the lead fixes it, hands
  * it on or settles the check.
  */

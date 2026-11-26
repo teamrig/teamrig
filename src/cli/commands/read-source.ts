@@ -2,7 +2,7 @@ import { basename, isAbsolute, relative, sep } from 'node:path';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import type { TeamPaths } from '../../core/home.ts';
-import type { RevisionParts, SessionPlace } from '../../interface/index.ts';
+import type { RevisionParts, SessionPlace, TasksPage } from '../../interface/index.ts';
 import type { Task } from '../../register/fold.ts';
 import type { RegisterEvent } from '../../register/events.ts';
 import type { StatsRange } from '../../register/stats.ts';
@@ -38,6 +38,8 @@ export interface ReadScope {
   readonly task: string | null;
   /** The calendar days `stats` counts over (`--range`); `7d` when the run names none, which only `stats` minds. */
   readonly range: StatsRange;
+  /** The one page of `tasks` asked (`--max-bytes`, `--after`); null serves every task, which only `tasks` minds. */
+  readonly page: TasksPage | null;
   /** What the config's own read has to tell: every document is read through it, so each carries these. */
   readonly warnings: readonly string[];
 }

@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { JsonRecord } from '../../../plugin-api/index.ts';
+import type { JsonRecord, SiteTrust } from '../../../plugin-api/index.ts';
 import { CONFIG_KEYS, MAX_PEOPLE, parseJiraConfig, type JiraConfig } from './config.ts';
+
+const NO_TRUST_RULE: SiteTrust = { inside: undefined, never: [], edits: undefined, projects: new Map() };
 
 interface Read {
   readonly config: JiraConfig;
@@ -15,7 +17,7 @@ function read(section: JsonRecord): Read {
   return { config, problems };
 }
 
-const NOTHING: JiraConfig = { site: undefined, projects: [], issueType: undefined, people: [] };
+const NOTHING: JiraConfig = { site: undefined, projects: [], issueType: undefined, people: [], trust: NO_TRUST_RULE };
 const SITE = "site must be the site's name, the part before .atlassian.net (acme for acme.atlassian.net), not ";
 const PROJECTS = 'projects must be a list of project keys, as Jira spells them (["ENG"])';
 const ISSUE_TYPE = 'issueType must be the name of an issue type on one line, as the project lists it (Task), not ';
@@ -29,14 +31,14 @@ describe("the Jira connector's config section (T4766)", () => {
 
   it('reads the site in lowercase, each project key in capitals and the issue type as written', () => {
     assert.deepEqual(read({ site: ' Acme ', projects: ['ENG', 'ops', ' Web_2 '], issueType: ' Bug ' }), {
-      config: { site: 'acme', projects: ['ENG', 'OPS', 'WEB_2'], issueType: 'Bug', people: [] },
+      config: { site: 'acme', projects: ['ENG', 'OPS', 'WEB_2'], issueType: 'Bug', people: [], trust: NO_TRUST_RULE },
       problems: [],
     });
     assert.deepEqual(read({ site: 'acme-labs' }).config, { ...NOTHING, site: 'acme-labs' });
   });
 
   it('declares the keys it reads, each with its line', () => {
-    assert.deepEqual(Object.keys(CONFIG_KEYS), ['site', 'projects', 'issueType', 'people']);
+    assert.deepEqual(Object.keys(CONFIG_KEYS), ['site', 'projects', 'issueType', 'people', 'trust']);
     assert.deepEqual(Object.keys(read({ site: 'acme' }).config), Object.keys(CONFIG_KEYS));
   });
 

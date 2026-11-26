@@ -7,10 +7,10 @@ export { OSES, isManifest, isOs, isProofRef, isSupport, manifestProblems, proved
 export { ADAPTER_ID, adapterEntry, declarationProblems } from "./declaration.js";
 export { defineHost, hostAdapterProblems, hostDeclarationProblems, isHostAdapter, isHostDeclaration } from "./host.js";
 export { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS, connectorAdapterProblems, connectorDeclarationProblems, defineConnector, isConnectorAdapter, isConnectorDeclaration, } from "./connector.js";
-export { PANE_STATES, TERMINAL_REQUESTS, isPaneState, isTerminalRequest, } from "./terminal.js";
+export { PANE_STATES, TERMINAL_REQUESTS, isPaneState, isTerminalRequest, KIT_MODE_ENV, KIT_REQUESTS, isKitRequest, } from "./terminal.js";
 export { defineTerminal, isTerminalAdapter, isTerminalDeclaration, terminalAdapterProblems, terminalDeclarationProblems, } from "./terminal-adapter.js";
 export { CONNECTOR_FEATURES, CONNECTOR_KINDS, HOST_FEATURES, TERMINAL_FEATURES, featuresOf, isConnectorFeatureId, isConnectorKind, isHostFeatureId, isTerminalFeatureId, } from "../features/registry.js";
-export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName, isToolKind, isUnsupported, unsupported, } from "../ports/host/index.js";
+export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName, isToolKind, isUnsupported, unsupported, skippedUserHookLine, userHooksCounts, } from "../ports/host/index.js";
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a
 // thrown value's code and text.
 export { errorCode, errorMessage, instantField, isNonNegativeInteger, isRecord, isStringArray, numberField, recordField, stringField, } from "../core/guards.js";
@@ -29,7 +29,10 @@ export { folderGlob, movedFolderSecrets } from "../secret-guard/folder-glob.js";
 // Whether a comment's text is a claim line: a tracker matches it as it reads the comment, and drops the text.
 export { isClaim } from "../issues/claim.js";
 export { parseRef } from "../issues/ref.js";
-export { issuePage, targetText, } from "../issues/host.js";
+export { issuePage, targetText, SEARCH_PAGE, } from "../issues/host.js";
+// A tracker's trust rule: whose issues become tasks as written, judged the same for every connector (sync/trust-rule.ts).
+export { judgeTrust, resolveTrust } from "../sync/trust-rule.js";
+export { NO_TRUST_RULE, parseTrustRule } from "../sync/trust-config.js";
 // A repository's label file, and the labels teamrig keeps: the only labels a tracker may make.
 export { LABEL_FILE, parseLabelFile } from "../issues/label-file.js";
 export { areaLabelSpec, MANAGED_LABEL_SPECS } from "../issues/managed-labels.js";

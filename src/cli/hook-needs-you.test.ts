@@ -17,8 +17,8 @@ const LEAD_PID = 7200;
 const ASKING: TabNeed = { session: 'bravo', state: 'waiting', kind: 'permission', text: 'Bash: teamrig merge T1', task: 'T1', pid: BRAVO_PID, since: '2030-01-08T09:58:00.000Z' };
 
 /** A team whose alpha read its inbox from ALPHA_TAB, so that tab is alpha's, with bravo's and lead's Claude Code running. */
-async function team(needsYou: JsonRecord = {}): Promise<CliHarness> {
-  const kit = new CliHarness({ ...TEAM, needsYou });
+async function team(needsYou: JsonRecord = {}, launch: JsonRecord = {}): Promise<CliHarness> {
+  const kit = new CliHarness({ ...TEAM, needsYou, launch });
   await kit.run(['inbox', 'read', '--session', 'alpha'], { env: { CLAUDE_CODE_SESSION_ID: ALPHA_TAB } });
   for (const pid of [BRAVO_PID, LEAD_PID]) {
     kit.sessionProcesses.add({ pid, parentPid: 1, name: 'claude.exe', commandLine: 'claude' });
@@ -117,5 +117,14 @@ describe('runCli: hook needs-you-focus', () => {
     assert.deepEqual(answerOf(await focus(kit, 'lead', processes)), { kind: 'refused', why: 'lead asks nothing now' });
     const unnamed = await kit.run(['hook', 'needs-you-focus'], { stdin: JSON.stringify({ session_id: ALPHA_TAB, cwd: APP }), processes });
     assert.deepEqual(answerOf(unnamed), { kind: 'refused', why: 'stdin names no session' });
+  });
+
+  it("focuses in the asking session's own launch terminal, and says how to watch one that runs headless (T5093)", async () => {
+    const kit = await team({}, { bravo: { terminal: 'headless' } });
+    await tabs(kit, ASKING);
+    const processes = new FakeProcesses();
+    const answer = answerOf(await focus(kit, 'bravo', processes));
+    assert.deepEqual(processes.ran, []);
+    assert.match(JSON.stringify(answer), /"kind":"none".*headless: a headless session has no window to bring forward: off Windows, watch it with tmux attach/);
   });
 });

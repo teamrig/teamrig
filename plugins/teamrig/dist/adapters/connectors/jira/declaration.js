@@ -21,7 +21,7 @@ function unsupported(notice) {
 /** An assign names an account by its id, and Jira keeps one per issue. */
 const ONE_ASSIGNEE = partial('a second assignee', 'a Jira issue holds one assignee, named by its account id, so an assign replaces who held it');
 export const declaration = {
-    apiVersion: '0.2.0',
+    apiVersion: '0.3.0',
     id: 'jira',
     name: 'Jira',
     kinds: ['tracker'],

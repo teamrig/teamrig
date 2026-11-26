@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SecretScanner } from '../core/secrets.ts';
 import { addIssuePlan, type AddIssueAsk, type AddIssuePlan } from './issue-at-add.ts';
 
-const NONE: AddIssueAsk = { title: undefined, body: undefined, repo: undefined, local: undefined, ref: undefined, type: undefined, priority: 2 };
+const NONE: AddIssueAsk = { title: undefined, body: undefined, repo: undefined, local: undefined, later: undefined, ref: undefined, type: undefined, priority: 2 };
 const ONE_REPO = { repos: ['acme/web'] };
 const TWO_REPOS = { repos: ['acme/web', 'acme/api'] };
 const AT_ADD = { repos: ['acme/web', 'acme/api'], issueAtAdd: 'acme/api' };
@@ -28,7 +28,10 @@ describe('addIssuePlan', () => {
   });
 
   it('refuses an add with neither an issue nor a reason while github.issueAtAdd is set, unless --ref names an issue', () => {
-    assert.match(refused({}, AT_ADD), /^github\.issueAtAdd is acme\/api: give the task's public issue with --issue <title> --issue-body <text>, or why it stays local with --local <reason>$/u);
+    assert.match(
+      refused({}, AT_ADD),
+      /^github\.issueAtAdd is acme\/api: give the task's public issue with --issue <title> --issue-body <text>, why it stays local with --local <reason>, or why its issue opens later with --issue-later <reason>$/u,
+    );
     assert.match(refused({ ref: 'notes/plan.md' }, AT_ADD), /^github\.issueAtAdd is acme\/api/u);
     assert.deepEqual(planned({ ref: 'gh:acme/web#7' }, AT_ADD), { kind: 'none' });
   });
@@ -85,5 +88,16 @@ describe('addIssuePlan', () => {
     assert.equal(refused({ local: 'why', ref: 'notes/plan.md' }, AT_ADD), "--local writes the task's ref as the reason; give --local or --ref, not both");
     assert.equal(refused({ local: '  ' }, AT_ADD), '--local is one line saying why the task gets no issue');
     assert.equal(refused({ local: 'two\nlines' }, AT_ADD), '--local is one line saying why the task gets no issue');
+  });
+
+  it('leaves the issue for later with its reason as its ref, and refuses it with an issue, a ref, --local or no text (T5457)', () => {
+    assert.deepEqual(planned({ later: ' the github role opens it ' }, AT_ADD), { kind: 'later', ref: 'issue later: the github role opens it' });
+    assert.equal(
+      refused({ later: 'why', title: 'An issue' }, AT_ADD),
+      "--issue-later leaves the task's issue to the holder of the issue migrate role, so it takes no --issue, --issue-body or --issue-repo",
+    );
+    assert.equal(refused({ later: 'why', ref: 'notes/plan.md' }, AT_ADD), "--issue-later writes the task's ref as the reason; give --issue-later or --ref, not both");
+    assert.equal(refused({ later: 'why', local: 'why' }, AT_ADD), '--local keeps the task off GitHub and --issue-later opens its issue later; give one');
+    assert.equal(refused({ later: ' ' }, AT_ADD), "--issue-later is one line saying why the task's issue opens later");
   });
 });

@@ -34,6 +34,7 @@ import { postUrgentLine } from '../urgent-line.ts';
 import { fileLockOf } from '../file-locks.ts';
 import { sweepDeadDetachedRuns } from '../detached-sweep.ts';
 import { pagePromptHolds } from '../prompt-hold-page.ts';
+import { wakeHostedSessions } from '../hosted-wake.ts';
 
 /** The pass's steps and the hookless reopens now, or the error it failed with. */
 type PassRun =
@@ -163,7 +164,8 @@ async function passOnce(runtime: CliRuntime, kit: Kit, config: KitConfig, roster
  * in (src/cli/hookless-reopen.ts). In dry-run it changes nothing else; in `on` it starts the closes and the reopen
  * its steps ask for, and tells the lead of each hookless reopen with an urgent line. In both it tells each of the team's
  * detached queue runs that died with no end of its own (src/cli/detached-sweep.ts), and pages the owner once for each
- * tab held on a permission prompt (src/cli/prompt-hold-page.ts). With mode off it reads nothing. Each session is read
+ * tab held on a permission prompt (src/cli/prompt-hold-page.ts), and wakes the sessions of a host with no tab mod
+ * (src/cli/hosted-wake.ts). With mode off it reads nothing. Each session is read
  * and acted on in the folder `folderOf` names. Whether this call ran the pass.
  */
 export async function runIdlePass(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, folderOf: SessionFolderOf): Promise<boolean> {
@@ -185,6 +187,8 @@ export async function runIdlePass(runtime: CliRuntime, kit: Kit, config: KitConf
         await files.write(kit.paths.idlePass, formatIdlePassState(await passOnce(runtime, kit, config, roster, folderOf, previous, now)));
         (await sweepDeadDetachedRuns(runtime, kit, config)).problems.forEach((problem) => runtime.out.stderr(`WARN ${problem}`));
         (await pagePromptHolds(runtime, kit, new SecretScanner(config.register.secretPatterns), now)).forEach((problem) => runtime.out.stderr(`WARN ${problem}`));
+        // The mod of a Claude Code tab checks only its own session; one of a host with no such mod is woken from here.
+        (await wakeHostedSessions(runtime, kit, config, roster, roster.ids)).forEach((problem) => runtime.out.stderr(problem));
       }
     });
   } catch (error) {

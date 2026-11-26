@@ -27,11 +27,13 @@ import {
   type HostLanding,
   type HostPosts,
   type HostPulls,
+  type FoundIssue,
   type HostCommit,
   type HostPullStand,
   type HostPullWork,
   type HostReach,
   type HostRerun,
+  type HostSearch,
   type HostThread,
   type HostUse,
   type HostViewer,
@@ -39,6 +41,8 @@ import {
   type IssueDraft,
   type IssueFields,
   type IssueHost,
+  type IssueQuery,
+  type IssueSearch,
   type IssueState,
   type IssueTarget,
   type IssueThread,
@@ -55,13 +59,17 @@ import {
   issueAssignArgs,
   issueAssigneeReadArgs,
   issueUnassignArgs,
-  issueBodyArgs,
+  issueBodyCall,
   issueCloseArgs,
-  issueCommentArgs,
-  issueCreateArgs,
+  issueCommentCall,
+  issueCreateCall,
   issueLabelAddArgs,
   issueLabelRemoveArgs,
   issueReadArgs,
+  issueSearchArgs,
+  type SearchKind,
+  searchTerms,
+  widensSearch,
   issueTypeSetArgs,
   jobLogArgs,
   pullApproveArgs,
@@ -81,13 +89,15 @@ import {
   watchProbeArgs,
   userReadArgs,
   viewerReadArgs,
+  type GhCall,
   type GhResult,
   type GhRunner,
   type WatchPath,
 } from './gh.ts';
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
-import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText } from './issues.ts';
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText, unreachableText } from './issues.ts';
 import { readFields } from './fields.ts';
+import { searchIn } from './search.ts';
 import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
 import { readPosts } from './posts.ts';
@@ -294,7 +304,7 @@ export class GitHubIssueHost implements IssueHost {
     }
     let result: GhResult;
     try {
-      result = await this.gh.run({ args: issueCreateArgs({ ...draft, body: this.stamped(draft.body) }), env: access.env });
+      result = await this.gh.run({ ...issueCreateCall({ ...draft, body: this.stamped(draft.body) }), env: access.env });
     } catch (error) {
       return { kind: 'failed', reason: startFailureText(error) };
     }
@@ -310,15 +320,15 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   comment(target: IssueTarget, body: string): Promise<HostEnd> {
-    return this.write(target, issueCommentArgs(target, this.stamped(body)), 'comment on');
+    return this.write(target, issueCommentCall(target, this.stamped(body)), 'comment on');
   }
 
   editBody(target: IssueTarget, body: string): Promise<HostEnd> {
-    return this.write(target, issueBodyArgs(target, this.stamped(body)), 'edit the body of');
+    return this.write(target, issueBodyCall(target, this.stamped(body)), 'edit the body of');
   }
 
   close(target: IssueTarget, reason?: CloseReason, duplicateId?: number): Promise<HostEnd> {
-    return this.write(target, issueCloseArgs(target, reason, duplicateId), 'close');
+    return this.write(target, { args: issueCloseArgs(target, reason, duplicateId) }, 'close');
   }
 
   /**
@@ -543,13 +553,13 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   addLabels(target: IssueTarget, labels: readonly string[]): Promise<HostEnd> {
-    return this.write(target, issueLabelAddArgs(target, labels), 'label');
+    return this.write(target, { args: issueLabelAddArgs(target, labels) }, 'label');
   }
 
   /** Takes the label off; Not Found here means the issue does not carry it (or is not there), which the reason says. */
   removeLabel(target: IssueTarget, label: string): Promise<HostEnd> {
     const shown = JSON.stringify(label);
-    return this.write(target, issueLabelRemoveArgs(target, label), `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
+    return this.write(target, { args: issueLabelRemoveArgs(target, label) }, `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
   }
 
   /** Every issue of the repository with its links, read with the same access as a list. */
@@ -559,15 +569,15 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   addSubIssue(parent: IssueTarget, childId: number): Promise<HostEnd> {
-    return this.write(parent, subIssueAddArgs(parent, childId), 'add a sub-issue to');
+    return this.write(parent, { args: subIssueAddArgs(parent, childId) }, 'add a sub-issue to');
   }
 
   addBlockedBy(target: IssueTarget, blockerId: number): Promise<HostEnd> {
-    return this.write(target, blockedByAddArgs(target, blockerId), 'add a blocker to');
+    return this.write(target, { args: blockedByAddArgs(target, blockerId) }, 'add a blocker to');
   }
 
   assign(target: IssueTarget, logins: readonly string[]): Promise<HostEnd> {
-    return this.write(target, issueAssignArgs(target, logins), 'assign');
+    return this.write(target, { args: issueAssignArgs(target, logins) }, 'assign');
   }
 
   /**
@@ -586,9 +596,49 @@ export class GitHubIssueHost implements IssueHost {
       return access instanceof NoAccessError ? { kind: 'failed', reason: access.message } : readFields(this.gh, access, repo);
     },
     setField: (target: IssueTarget, field: HostField, value: FieldValue): Promise<HostEnd> =>
-      this.write(target, fieldValueSetArgs(target, field.id, value), `set the field ${JSON.stringify(field.name)} of`),
-    setType: (target: IssueTarget, type: string): Promise<HostEnd> => this.write(target, issueTypeSetArgs(target, type), 'set the type of'),
+      this.write(target, { args: fieldValueSetArgs(target, field.id, value) }, `set the field ${JSON.stringify(field.name)} of`),
+    setType: (target: IssueTarget, type: string): Promise<HostEnd> => this.write(target, { args: issueTypeSetArgs(target, type) }, 'set the type of'),
   };
+
+  /**
+   * A search of one repository: one page of GitHub's issue search per kind through its allowlisted read (gh.ts
+   * isIssueSearch), with the repository's own access. GitHub searches one kind at a time, so both kinds are the
+   * issues' page then the pull requests', and the first failure fails the whole. The words go as quoted terms
+   * (gh.ts searchTerms), so GitHub reads none as its own syntax; words naming another repository, owner or user, or
+   * holding nothing but double quotes, are refused unsent.
+   */
+  readonly search: IssueSearch = {
+    searchIssues: async (repo: string, query: IssueQuery): Promise<HostSearch> => {
+      if (widensSearch(query.words)) {
+        return { kind: 'failed', reason: 'a search stays in its repository: its words may not name a repo:, org:, user: or owner: qualifier' };
+      }
+      if (searchTerms(query.words) === '') {
+        return { kind: 'failed', reason: 'the words hold nothing to look for once their double quotes are dropped' };
+      }
+      const kinds: readonly SearchKind[] = query.kind === 'all' ? ['issue', 'pull'] : [query.kind];
+      const issues: FoundIssue[] = [];
+      let more = false;
+      for (const kind of kinds) {
+        const page = await this.searchPage(repo, { ...query, kind });
+        if (page.kind === 'failed') {
+          return page;
+        }
+        issues.push(...page.issues);
+        more ||= page.more;
+      }
+      return { kind: 'found', issues, more };
+    },
+  };
+
+  /** One page of one kind's search of `repo` (search). */
+  private async searchPage(repo: string, query: Omit<IssueQuery, 'kind'> & { readonly kind: SearchKind }): Promise<HostSearch> {
+    const read = await this.read(repo, issueSearchArgs(repo, query), `the issues of ${repo}`);
+    if (read.kind !== 'found') {
+      return read.kind === 'missing' ? { kind: 'failed', reason: `GitHub shows no repository ${repo} to search, or the access may not see it` } : read;
+    }
+    const page = searchIn(repo, read.stdout);
+    return page === undefined ? { kind: 'failed', reason: `gh printed no search answer for ${repo}` } : { kind: 'found', ...page };
+  }
 
   async watch(repo: string, marks: WatchMarks): Promise<HostWatch> {
     const access = await this.tokens.accessFor(repo);
@@ -626,7 +676,7 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   unassign(target: IssueTarget, login: string): Promise<HostEnd> {
-    return this.write(target, issueUnassignArgs(target, login), `take ${login} off the assignees of`);
+    return this.write(target, { args: issueUnassignArgs(target, login) }, `take ${login} off the assignees of`);
   }
 
   /**
@@ -684,7 +734,7 @@ export class GitHubIssueHost implements IssueHost {
 
   /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */
   approvePull(target: IssueTarget, head: string): Promise<HostEnd> {
-    return this.write(target, pullApproveArgs(target, head), 'approve');
+    return this.write(target, { args: pullApproveArgs(target, head) }, 'approve');
   }
 
   /**
@@ -694,19 +744,19 @@ export class GitHubIssueHost implements IssueHost {
   async landPull(target: IssueTarget, pull: PullStand): Promise<HostLanding> {
     const queue = pull.mergeQueue;
     const args = queue ? pullEnqueueArgs(pull.id, pull.head) : pullMergeArgs(target, pull.head);
-    const end = await this.write(target, args, queue ? 'add to the merge queue' : 'merge');
+    const end = await this.write(target, { args }, queue ? 'add to the merge queue' : 'merge');
     return end.kind === 'failed' ? end : { kind: queue ? 'enqueued' : 'merged' };
   }
 
   /** One write; `missing`, when given, says what a Not Found means for it in place of the issue not being there. */
-  private async write(target: IssueTarget, args: readonly string[], what: string, missing?: string): Promise<HostEnd> {
+  private async write(target: IssueTarget, call: GhCall, what: string, missing?: string): Promise<HostEnd> {
     const access = await this.tokens.accessFor(target.repo);
     if (access instanceof NoAccessError) {
       return { kind: 'failed', reason: access.message };
     }
     let result: GhResult;
     try {
-      result = await this.gh.run({ args, env: access.env });
+      result = await this.gh.run({ ...call, env: access.env });
     } catch (error) {
       return { kind: 'failed', reason: startFailureText(error) };
     }
@@ -734,6 +784,8 @@ export function writeFailureText(target: IssueTarget, what: string, code: number
   const shown = targetText(target);
   const token = `the token saved as ${access.credential}`;
   switch (ghFailureKind(code, stderr)) {
+    case 'unreachable':
+      return unreachableText(token);
     case 'no-login':
       return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
     case 'no-permission':
@@ -750,6 +802,8 @@ export function rerunFailureText(repo: string, runId: number, code: number, stde
   const shown = `run ${String(runId)} of ${repo}`;
   const token = `the token saved as ${access.credential}`;
   switch (ghFailureKind(code, stderr)) {
+    case 'unreachable':
+      return unreachableText(token);
     case 'no-login':
       return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
     case 'no-permission':
@@ -781,7 +835,7 @@ export function loginIn(stdout: string): string | undefined {
 
 /**
  * An issue or pull request as GitHub's REST API prints it (`state` open or closed, `labels` of names, `assignees` of
- * logins, a `pull_request` field on a pull request only, `body` null when empty), else undefined.
+ * logins, a `pull_request` field on a pull request only, `body` null when empty, its `title`), else undefined.
  */
 export function threadIn(stdout: string): IssueThread | undefined {
   let parsed: unknown;
@@ -793,14 +847,14 @@ export function threadIn(stdout: string): IssueThread | undefined {
   if (!isRecord(parsed)) {
     return undefined;
   }
-  const { state, labels, assignees, body } = parsed;
+  const { state, labels, assignees, body, title } = parsed;
   const names = namesIn(labels, 'name');
   const logins = namesIn(assignees, 'login');
   if ((state !== 'open' && state !== 'closed') || names === undefined || logins === undefined || (body !== null && body !== undefined && typeof body !== 'string')) {
     return undefined;
   }
   const pull = parsed['pull_request'];
-  return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '' };
+  return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '', ...(typeof title === 'string' ? { title } : {}) };
 }
 
 /** The string `key` of each record of a REST list, or undefined when it is no list or one item has none. */

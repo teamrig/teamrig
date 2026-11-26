@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { CLIENT_FOLDERS, CLIENT_MANIFEST, clientFileHash, clientManifestText } from '../../src/exec/client-integrity.ts';
+import { CLIENT_FILES, CLIENT_FOLDERS, CLIENT_MANIFEST, clientFileHash, clientManifestText } from '../../src/exec/client-integrity.ts';
 import { DIST_DIR } from './dist-dir.ts';
 
 // Runs after tsc: lists a hash of every client file, so the exec guard can tell an installed client edited by hand
@@ -8,13 +8,19 @@ import { DIST_DIR } from './dist-dir.ts';
 const pluginRoot = dirname(DIST_DIR);
 const manifestPath = join(pluginRoot, CLIENT_MANIFEST);
 const manifest = new Map<string, string>();
+const keyOf = (path: string): string => relative(pluginRoot, path).replaceAll('\\', '/');
 for (const folder of CLIENT_FOLDERS) {
   for (const entry of await readdir(join(pluginRoot, folder), { recursive: true, withFileTypes: true })) {
     const path = join(entry.parentPath, entry.name);
     // A test file is no part of the client: it never runs from the plugin, and a packaged install may leave it out.
     if (entry.isFile() && path !== manifestPath && !entry.name.endsWith('.test.ts')) {
-      manifest.set(relative(pluginRoot, path).replaceAll('\\', '/'), clientFileHash(await readFile(path, 'utf8')));
+      manifest.set(keyOf(path), clientFileHash(await readFile(path, 'utf8')));
     }
   }
+}
+// A missing one fails the build, as a missing folder does, so a broken build never writes a short list.
+for (const file of CLIENT_FILES) {
+  const path = join(pluginRoot, file);
+  manifest.set(keyOf(path), clientFileHash(await readFile(path, 'utf8')));
 }
 await writeFile(manifestPath, clientManifestText(manifest));

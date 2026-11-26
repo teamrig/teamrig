@@ -11,13 +11,16 @@ export function parseWakePrompt(text) {
     }
     const tab = stringField(record, 'tab');
     const prompt = stringField(record, 'text');
-    return tab === undefined || prompt === undefined ? undefined : { tab, text: prompt };
+    if (prompt === undefined) {
+        return undefined;
+    }
+    return tab === undefined ? { text: prompt } : { tab, text: prompt };
 }
 export function formatWakePrompt(prompt) {
-    return toJsonlLine({ [VERSION_FIELD]: WAKE_PROMPT_FORMAT, tab: prompt.tab, text: prompt.text });
+    return toJsonlLine({ [VERSION_FIELD]: WAKE_PROMPT_FORMAT, ...(prompt.tab === undefined ? {} : { tab: prompt.tab }), text: prompt.text });
 }
 /**
- * The text of each session's last wake, one small file per session (`<id>.prompt.json`), kept until a prompt in the
+ * The text of each session's last wake or teamrig-passed first prompt, one small file per session (`<id>.prompt.json`), kept until a prompt in the
  * tab it woke matches it, so the turn log tells a prompt teamrig submitted from one the person typed. The match is
  * exact, outer white space aside: a wake text the person edited is theirs. Ids are session ids, checked by the
  * roster, so they are safe in a path.
@@ -38,12 +41,13 @@ export class WakePrompts {
         await this.files.write(this.pathOf(id), formatWakePrompt(prompt));
     }
     /**
-     * Whether `prompt` is the wake the tab was told to submit. A match is removed, so it marks one prompt only; of two
-     * hooks taking it at once, only the one that removed it is told true.
+     * Whether `prompt` is the wake the tab was told to submit, or the first prompt teamrig passed (any tab). A match is
+     * removed, so it marks one prompt only; of two hooks taking it at once, only the one that removed it is told true.
      */
     async take(id, prompt) {
         const stored = await this.read(id);
-        if (stored === undefined || stored.tab !== prompt.tab || stored.text.trim() !== prompt.text.trim()) {
+        const tabMatches = stored?.tab === undefined || stored.tab === prompt.tab;
+        if (stored === undefined || !tabMatches || stored.text.trim() !== prompt.text.trim()) {
             return false;
         }
         return this.files.remove(this.pathOf(id));

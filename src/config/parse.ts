@@ -8,7 +8,7 @@ import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { isReservedName, NAME_PATTERN, NAME_RULE, RESERVED_NAMES } from '../core/ids.ts';
 import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from '../core/time.ts';
 import { TimeZone } from '../core/zone.ts';
-import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
+import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
 import { isItemType, ITEM_TYPES, type ItemType } from '../register/events.ts';
 import { branchPatternProblem, isBranchType } from '../worktree/branch-name.ts';
 import { KEEP_RULE_PATTERN } from '../permissions/allow-rules.ts';
@@ -73,7 +73,7 @@ import {
   QUEUE_TTL_MARGIN_MINUTES,
   DEFAULT_UI,
 } from './defaults.ts';
-import { isEffort, isModel } from './launch.ts';
+import { isEffort, isModel, isTerminalName } from './launch.ts';
 import {
   APPLY_FLAG_PATTERN,
   BUDGET_ACCOUNT_MAX_LENGTH,
@@ -152,7 +152,6 @@ import {
   SECRET_READS,
   SECRET_WRITES,
   SKIP_HOOKS,
-  TERMINALS,
   type AlertsConfig,
   type ChangesConfig,
   type ContextFilesConfig,
@@ -214,6 +213,7 @@ import {
   WIP_MODES,
   type MeetingConfig,
   type PriorityConfig,
+  type TeamDetached,
   type TeamLink,
   type TurnLogConfig,
   type UiConfig,
@@ -483,10 +483,12 @@ function readLaunch(read: ConfigReader, raw: JsonRecord, sessions: readonly stri
     const model = read.optionalString(entry, 'model', path, isModel);
     const effort = read.optionalString(entry, 'effort', path, isEffort);
     const project = read.optionalString(entry, 'project', path, isAbsoluteFolder);
+    const terminal = read.optionalString(entry, 'terminal', path, isTerminalName);
     launch[id] = {
       ...(model === undefined ? {} : { model }),
       ...(isEffortLevel(effort) ? { effort } : {}),
       ...(project === undefined ? {} : { project }),
+      ...(isTerminalChoice(terminal) ? { terminal } : {}),
     };
   }
   return launch;
@@ -509,12 +511,33 @@ function readTeam(read: ConfigReader, raw: JsonRecord): TeamLink | undefined {
   if (id === '') {
     return undefined;
   }
-  const where = project === undefined ? {} : { project };
+  const detached = readDetached(read, section);
+  const where = { ...(project === undefined ? {} : { project }), ...(detached === undefined || parent !== undefined ? {} : { detached }) };
+  if (detached !== undefined && parent !== undefined) {
+    read.report('team.detached', 'is set beside team.parent; a detached team is a root team: drop one of them');
+  }
   if (parent === id) {
     read.report('team.parent', 'is the team itself; a root team has no parent');
     return { id, ...where };
   }
   return { id, ...(parent === undefined ? {} : { parent }), ...where };
+}
+
+/** `team.detached` (T5469): the parent left, the first id the team issues, and the ids of the tree it waited on. */
+function readDetached(read: ConfigReader, team: JsonRecord): TeamDetached | undefined {
+  const value = team['detached'];
+  const section = read.section(team, 'detached', 'team');
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const issues = read.issues.length;
+  const from = read.requiredString(section, 'from', 'team.detached', isSessionName);
+  const firstId = read.optionalInteger(section, 'firstId', 'team.detached', { min: 1 });
+  if (section['firstId'] === undefined) {
+    read.report('team.detached.firstId', 'is required');
+  }
+  const away = read.stringList(section, 'away', 'team.detached', [], (id) => (TASK_ID.test(id) ? undefined : 'expected a task id such as T12'), CONFIG_LIMITS.detachedAway.maxItems);
+  return read.issues.length > issues || firstId === undefined ? undefined : { from, firstId, away };
 }
 
 /**
@@ -1453,6 +1476,16 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
   const account = stated ?? inherited?.account;
   const accountLead = read.optionalString(raw, 'accountLead', path, isSessionName) ?? inherited?.accountLead;
   const weeklyLimitW = read.optionalInteger(raw, 'weeklyLimitW', path, CONFIG_LIMITS.weeklyLimitW) ?? inherited?.weeklyLimitW;
+  const pinned = read.boolean(raw, 'pinRateToLimit', path, inherited?.pinRateToLimit ?? defaults.pinRateToLimit);
+  if (pinned && weeklyLimitW === undefined) {
+    read.report(`${path}.pinRateToLimit`, 'needs budget.weeklyLimitW, the rate it pins the week to');
+  }
+  const pinRateToLimit = pinned && weeklyLimitW !== undefined;
+  const part = read.number(raw, 'homePartPct', path, inherited?.homePartPct ?? defaults.homePartPct, CONFIG_LIMITS.budgetHomePartPct);
+  if (part < 100 && !pinRateToLimit) {
+    read.report(`${path}.homePartPct`, 'needs budget.pinRateToLimit, since the status line counts every home of the account');
+  }
+  const homePartPct = pinRateToLimit ? part : 100;
   const extraWPerUsd = read.optionalInteger(raw, 'extraWPerUsd', path, CONFIG_LIMITS.extraWPerUsd) ?? inherited?.extraWPerUsd;
   const reset = parseBudgetReset(read, raw) ?? inherited?.reset;
   const resets = raw['resets'] === undefined ? (inherited?.resets ?? defaults.resets) : parseResetStocks(read, raw, defaults.resets);
@@ -1470,6 +1503,8 @@ function parseBudget(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     ...(account === undefined ? {} : { account }),
     ...(accountLead === undefined ? {} : { accountLead }),
     ...(weeklyLimitW === undefined ? {} : { weeklyLimitW }),
+    pinRateToLimit,
+    homePartPct,
     subagentWeight: read.number(raw, 'subagentWeight', path, inherited?.subagentWeight ?? defaults.subagentWeight, CONFIG_LIMITS.subagentWeight),
     modelWeights,
     ...(extraWPerUsd === undefined ? {} : { extraWPerUsd }),
@@ -1868,9 +1903,7 @@ function parseOtherAreas(read: ConfigReader, raw: JsonRecord, path: string): Oth
 }
 
 function parseOpen(read: ConfigReader, raw: JsonRecord, sessions: readonly string[]): OpenConfig {
-  const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, (value) =>
-    isTerminalChoice(value) ? undefined : `expected one of ${TERMINALS.join(', ')}`,
-  );
+  const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, isTerminalName);
   return {
     terminal: isTerminalChoice(terminal) ? terminal : DEFAULT_OPEN.terminal,
     teamWindow: read.boolean(raw, 'teamWindow', 'open', DEFAULT_OPEN.teamWindow),
@@ -1904,12 +1937,14 @@ function parseIdle(read: ConfigReader, raw: JsonRecord, sessions: readonly strin
 function parseHeadroom(read: ConfigReader, raw: JsonRecord): HeadroomConfig {
   const path = 'open.headroom';
   const floorMb = read.optionalInteger(raw, 'floorMb', path, CONFIG_LIMITS.headroomFloorMb);
+  const maxTabs = read.optionalInteger(raw, 'maxTabs', path, CONFIG_LIMITS.headroomMaxTabs);
   return {
     sessionMb: read.integer(raw, 'sessionMb', path, DEFAULT_HEADROOM.sessionMb, CONFIG_LIMITS.headroomSessionMb),
     commitMaxPct: read.integer(raw, 'commitMaxPct', path, DEFAULT_HEADROOM.commitMaxPct, CONFIG_LIMITS.headroomCommitMaxPct),
     closeIdleMinutes: read.integer(raw, 'closeIdleMinutes', path, DEFAULT_HEADROOM.closeIdleMinutes, CONFIG_LIMITS.headroomCloseIdleMinutes),
     ...(floorMb === undefined ? {} : { floorMb }),
     loadMinutes: read.integer(raw, 'loadMinutes', path, DEFAULT_HEADROOM.loadMinutes, CONFIG_LIMITS.headroomLoadMinutes),
+    ...(maxTabs === undefined ? {} : { maxTabs }),
   };
 }
 

@@ -42,8 +42,11 @@ export const LEGACY_PRIORITY_FIELD = 'tier';
  * priority without it moves the task off the blocker.
  */
 export const BLOCKER_FIELD = 'blocker';
-/** Fields as a line holds them: a blocker priority as p0 with BLOCKER_FIELD, every other field as it is. */
-function diskPriority(fields) {
+/**
+ * Fields as a line holds them: a blocker priority as p0 with BLOCKER_FIELD, every other field as it is. Event lines
+ * and snapshot task lines (task-line.ts) both write this form, as both read back through the same field parser.
+ */
+export function diskPriority(fields) {
     return fields.priority === BLOCKER_PRIORITY_ID ? { ...fields, priority: 0, [BLOCKER_FIELD]: true } : fields;
 }
 /** True for a prep marker as a line holds it: a goal tag and a slice from FIRST_SLICE. */

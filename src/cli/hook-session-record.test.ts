@@ -6,7 +6,8 @@ import { isRecord } from '../core/guards.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostReadingLines, NO_PATHS_HOST } from '../testing/host.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
+import { hostReadingLines, NO_PATHS_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { APP, CLAUDE_SESSION, CliHarness, contextOf, TEAM, TEAM_HOME, type CliResult } from '../testing/cli-harness.ts';
 
@@ -50,6 +51,18 @@ describe('the SessionStart hook records where the session started', () => {
     kit.clock.advance(60_000);
     contextOf(await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('compact', CLEARED), sessionProcesses: UNDER_CLAUDE() }));
     assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLEARED, at: '2030-01-08T10:02:00.000Z' }, 'a payload naming no transcript records none');
+  });
+
+  it('records the shipped host the session runs in, and leaves out the default one (T5059)', async () => {
+    // Each host's hooks file names its host on the hook line, and the team lists every host it runs.
+    const kit = new CliHarness({ ...TEAM, hosts: [DEFAULT_HOST, 'codex-cli'] });
+    const store = new SessionRecordStore(kit.files, { sessions: SESSIONS });
+    const shippedHosts = { [DEFAULT_HOST]: shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(hostReadingLines({})) };
+    contextOf(await kit.run(['hook', 'session-start', '--host', 'codex-cli'], { env: AS_ALPHA, stdin: start('startup'), sessionProcesses: UNDER_CLAUDE(), shippedHosts }));
+    assert.equal((await store.read('alpha'))?.host, 'codex-cli');
+    kit.clock.advance(60_000);
+    contextOf(await kit.run(['hook', 'session-start'], { env: AS_ALPHA, stdin: start('clear', CLEARED), sessionProcesses: UNDER_CLAUDE(), shippedHosts }));
+    assert.deepEqual(await store.read('alpha'), { claudePid: 6900, hostSession: CLEARED, at: '2030-01-08T10:01:00.000Z' });
   });
 
   it('records nothing for a tab that is no session', async () => {

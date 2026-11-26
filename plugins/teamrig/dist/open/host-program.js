@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path';
-import { envVariable, pathList } from "../core/path-search.js";
+import { envVariable, pathList, programFolders } from "../core/path-search.js";
 const WINDOWS_EXTENSIONS = '.COM;.EXE;.BAT;.CMD';
 const SCRIPT = /\.[cm]?js$/i;
 /** npm's cmd-shim ends by running `"%dp0%\<target>" %*`: the target, beside the shim. */
@@ -29,7 +29,7 @@ async function shimProgram(deps, shim) {
 async function windowsSearch(deps, name) {
     const extensions = pathList(envVariable(deps.env, 'PATHEXT', 'win32') ?? WINDOWS_EXTENSIONS, ';').map((extension) => extension.toLowerCase());
     const skipped = [];
-    for (const folder of pathList(envVariable(deps.env, 'PATH', 'win32'), ';')) {
+    for (const folder of programFolders(deps.env, 'win32')) {
         for (const extension of extensions) {
             const path = win32.join(folder, `${name}${extension}`);
             if ((await deps.probe.kind(path)) !== 'file') {
@@ -50,7 +50,7 @@ async function windowsSearch(deps, name) {
     return { kind: 'missing', skipped };
 }
 async function posixSearch(deps, name) {
-    for (const folder of pathList(envVariable(deps.env, 'PATH', deps.platform), ':')) {
+    for (const folder of programFolders(deps.env, deps.platform)) {
         const path = posix.join(folder, name);
         if ((await deps.probe.kind(path)) === 'file') {
             return { kind: 'found', program: { command: path, prefix: [] } };

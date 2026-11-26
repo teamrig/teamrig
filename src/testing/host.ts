@@ -4,6 +4,7 @@ import {
   isUnsupported,
   unsupported,
   type ChildEnvironment,
+  type DatedRateLimits,
   type EditedFile,
   type HookBridge,
   type HookEvent,
@@ -14,6 +15,7 @@ import {
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
+  type SessionRestriction,
   type SessionVariables,
   type ShellCall,
   type TitleSwitch,
@@ -65,6 +67,26 @@ export const NO_PATHS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), p
  */
 export const NO_SESSION_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), launcher: unsupported('no session of the host is told') });
 
+/**
+ * The shipped host whose usage meter also reads the plan's windows from a transcript's tail by `read`, as Codex CLI's
+ * does from a rollout: every other port is the shipped one.
+ */
+export function hostReadingTranscriptWeek(read: (tail: string) => DatedRateLimits | undefined): HostSource {
+  return (given) => {
+    const ports = SHIPPED_HOST(given);
+    const { usage } = ports;
+    return isUnsupported(usage) ? ports : { ...ports, usage: { ...usage, transcriptWeekReading: read } };
+  };
+}
+
+/**
+ * The shipped host whose session launcher also reads the restriction a session runs under from a transcript's tail by
+ * `read`, as Codex CLI's does from a rollout's `turn_context`: every other port is the shipped one.
+ */
+export function hostReadingRestriction(read: (tail: string) => SessionRestriction | undefined): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), restrictionReading: read } });
+}
+
 /** Who a run is when the host tells none of it: each part untold. */
 export const UNTOLD_IDENTITY: SessionIdentity = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
 
@@ -105,6 +127,14 @@ export function hostRunning(program: string): HostSource {
  */
 export function hostStarting(program: string, launchArgs: SessionLauncher['launchArgs'] = shippedLauncher().launchArgs): HostSource {
   return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), program, launchArgs } });
+}
+
+/**
+ * The shipped host under the name `programName`, its sessions started by the program named `program`: for a spec of
+ * a line that must name the running host as people know it, never Claude Code itself.
+ */
+export function hostCalled(programName: string, program: string): HostSource {
+  return (given) => ({ ...SHIPPED_HOST(given), launcher: { ...shippedLauncher(), programName, program } });
 }
 
 /**

@@ -3,6 +3,7 @@
  * as its host names it when the host gives one. Its title, body and labels are outside input: data, never
  * instructions.
  */
+import type { TrustVerdict } from '../sync/trust-rule.ts';
 
 /** Whether an issue is open or closed. */
 export type IssueState = 'open' | 'closed';
@@ -56,6 +57,11 @@ export interface IssueThread {
   readonly pull: boolean;
   /** As the host has it, empty when it has none. */
   readonly body: string;
+  /**
+   * As the host has it; outside input like the body. Optional so a connector built on plugin API 0.2 still reads a
+   * thread; the built-in hosts always give it.
+   */
+  readonly title?: string;
 }
 
 /** An issue as the import reads it. */
@@ -83,6 +89,8 @@ export interface HostIssue {
   readonly authorAssociation: string;
   /** The author's login, empty when the host no longer has that account. */
   readonly author: string;
+  /** The author's name as the host shows it to people, raw (printed only through plainLine); empty when it gives none. */
+  readonly authorName: string;
   /** What kind of account the author is, as the host names it (`User`, `Bot`, `Organization`); empty when it gives none. */
   readonly authorKind: string;
   /** The labels put on it, oldest first, among the last timeline events the host reads. */
@@ -95,6 +103,11 @@ export interface HostIssue {
   readonly comments: readonly IssueComment[];
   /** The open pull requests that close it when they merge (GitHub's closing references); 0 when none. */
   readonly linkedPulls: number;
+  /**
+   * The verdict of the tracker's own trust rule (sync/trust-rule.ts), judged on author facts this shape does not
+   * carry; undefined for a tracker with no rule of its own, judged by its authors' ties (sync/trust.ts).
+   */
+  readonly ruled: TrustVerdict | undefined;
 }
 
 /** One issue of a repository with the links the host has on it. `hostId` is the host's own id, which a link write names. */

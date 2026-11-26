@@ -88,17 +88,21 @@ function storedWait(record) {
     const value = record[VALUE_FIELD[kind]];
     return typeof value === 'string' ? waitOf(kind, value) : `a ${kind} wait has no ${VALUE_FIELD[kind]}`;
 }
+const NO_AWAY = new Set();
 /**
  * The context of one register read at `now`, in the team's `zone`; an id the read lacks reads its status from
  * `elsewhere`. The read wins an id both hold, which only a register numbered before its tree was can have.
  */
 export function waitContext(tasks, now, zone, elsewhere = new Map()) {
-    return { now: now.getTime(), zone, statusOf: (id) => (tasks.get(id) ?? elsewhere.get(id)?.task)?.status };
+    return { now: now.getTime(), zone, statusOf: (id) => (tasks.get(id) ?? elsewhere.get(id)?.task)?.status, away: elsewhere.away ?? NO_AWAY };
 }
-/** True when the task is done or dropped, or retired from every register, which only a finished task is. */
+/**
+ * True when the task is done or dropped, or retired from every register, which only a finished task is; an id of a
+ * tree the team left reads unknown, so a wait on it stays until its owner drops the wait (T5469).
+ */
 export function isFinished(id, context) {
     const status = context.statusOf(id);
-    return status === undefined || status === 'done' || status === 'dropped';
+    return status === undefined ? !context.away.has(id) : status === 'done' || status === 'dropped';
 }
 /** A task reason once its task finished, a time once it passed; a decision or an approval never: its owner says. */
 export function isReady(reason, context) {

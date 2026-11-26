@@ -874,15 +874,33 @@ describe('runCli: hook secret-guard', () => {
     assert.deepEqual((await kit.run(['hook', 'secret-guard'], { ...run, stdin: read(join(moved, 'settings.json')) })).stdout, []);
   });
 
-  it("refuses a read of Claude Code's login in a folder named like its own that no variable names, and lets one in another folder run", async () => {
+  it("refuses a read of Claude Code's login in a folder named like its own that no variable names", async () => {
     const kit = new CliHarness();
     const userHome = resolve(USER_HOME);
     for (const folder of ['.claude-work', '.claude2']) {
       assert.equal(decisionOf(await kit.run(['hook', 'secret-guard'], { userHome, stdin: read(join(userHome, folder, '.credentials.json')) })), 'deny', folder);
       assert.equal(decisionOf(await kit.run(['hook', 'secret-guard'], { userHome, stdin: bash(`cat ~/${folder}/.credentials.json`) })), 'deny', `cat in ${folder}`);
     }
-    assert.deepEqual((await kit.run(['hook', 'secret-guard'], { userHome, stdin: read(join(APP, 'vendor', 'agent', '.credentials.json')) })).stdout, []);
-    assert.deepEqual((await kit.run(['hook', 'secret-guard'], { userHome, stdin: bash('cat vendor/agent/.credentials.json') })).stdout, []);
+  });
+
+  it('refuses a Read, a cat and a Grep that name a login file outright in any folder, and lets a search of *.json files there run (T4870)', async () => {
+    const kit = new CliHarness();
+    const userHome = resolve(USER_HOME);
+    const grep = (tool_input: Readonly<Record<string, string>>): string => JSON.stringify({ tool_name: 'Grep', tool_input: { output_mode: 'content', ...tool_input }, cwd: APP });
+    const refused = [
+      read(join(APP, 'vendor', 'agent', '.credentials.json')),
+      bash('cat vendor/agent/.credentials.json'),
+      bash('cat */.credentials.json'),
+      grep({ pattern: 'token', path: join(APP, 'vendor', 'agent', '.credentials.json') }),
+      grep({ pattern: 'token', path: APP, glob: '**/.credentials.json' }),
+    ];
+    for (const stdin of refused) {
+      assert.equal(decisionOf(await kit.run(['hook', 'secret-guard'], { userHome, stdin })), 'deny', stdin);
+    }
+    const run = [bash('grep -h token vendor/agent/*.json'), grep({ pattern: 'token', path: APP, glob: '*.json' })];
+    for (const stdin of run) {
+      assert.deepEqual((await kit.run(['hook', 'secret-guard'], { userHome, stdin })).stdout, [], stdin);
+    }
   });
 
   it('keeps to the default place when CLAUDE_CONFIG_DIR is blank', async () => {

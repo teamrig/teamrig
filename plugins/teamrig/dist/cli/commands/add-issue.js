@@ -5,7 +5,7 @@ import { EXIT, RefusedError } from "../runtime.js";
 import { CONNECTOR_OFF } from "../connector-off.js";
 import { githubOffBy } from "./issue-sync-auto.js";
 /** The flags of `add` that ask about the new task's issue (sync/issue-at-add.ts). */
-export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local'];
+export const ADD_ISSUE_FLAGS = ['issue', 'issue-body', 'issue-repo', 'local', 'issue-later'];
 /** What an add asked about its issue: its issue flags, with the task's own ref, type and priority. */
 export function addIssueAskOf(flags, input) {
     return {
@@ -13,6 +13,7 @@ export function addIssueAskOf(flags, input) {
         body: flags.get('issue-body'),
         repo: flags.get('issue-repo'),
         local: flags.get('local'),
+        later: flags.get('issue-later'),
         ref: input.ref,
         type: input.type,
         priority: input.priority,

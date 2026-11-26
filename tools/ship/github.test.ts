@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { type CheckOutcome, type Gh, type GhSpawn, type Job, type Run, evaluate, ghWithToken, newestRuns, parseJobs, parseRuns, parseStatuses, plannedOut, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
+import { type CheckOutcome, type Gh, type GhSpawn, type Job, type Run, evaluate, ghWithToken, newestRuns, parseJobs, parseRuns, parseStatuses, plannedOut, readChecks, rerunFailedJobs, settleJobs, verdictOf } from './github.ts';
 
 const TOKEN = ['github', '_pat_', 'secret_value'].join('');
 const REPO = 'Owner/repo';
 const SHA = 'abc1234';
+/** The time a check read runs at, for reads whose jobs carry no times, so the limit cuts none of them. */
+const NOW = Date.parse('2026-11-16T10:00:00Z');
 
 test('gh gets the token in its own environment only', () => {
   const spawn = mock.fn<GhSpawn>(() => ({ status: 0, stdout: '{}', stderr: '' }));
@@ -30,8 +32,8 @@ test('a failed gh call throws its first error line and never the token', () => {
 
 test('parses runs, jobs and statuses, and refuses a body of the wrong shape', () => {
   assert.deepEqual(parseRuns('{"workflow_runs":[{"id":7,"workflow_id":1,"event":"push","run_number":3,"run_attempt":2,"head_branch":"t9-x"},{"id":8,"workflow_id":1,"event":"push","run_number":4,"run_attempt":1,"head_branch":null}]}'), [
-    { id: 7, workflowId: 1, event: 'push', runNumber: 3, runAttempt: 2, branch: 't9-x' },
-    { id: 8, workflowId: 1, event: 'push', runNumber: 4, runAttempt: 1, branch: null },
+    { id: 7, workflowId: 1, event: 'push', runNumber: 3, runAttempt: 2, branch: 't9-x', status: null },
+    { id: 8, workflowId: 1, event: 'push', runNumber: 4, runAttempt: 1, branch: null, status: null },
   ]);
   assert.deepEqual(parseJobs('{"jobs":[{"name":"a","status":"completed","conclusion":"success","steps":[{"name":"x"}]},{"name":"b","status":"queued","conclusion":null}]}', { id: 9, runAttempt: 2 }), [
     { name: 'a', status: 'completed', conclusion: 'success', runId: 9, runAttempt: 2, started: true },
@@ -44,7 +46,7 @@ test('parses runs, jobs and statuses, and refuses a body of the wrong shape', ()
 });
 
 test('keeps the newest run of each workflow and event, so an older cancelled run does not count', () => {
-  const run = (id: number, workflowId: number, event: string, runNumber: number, runAttempt = 1): Run => ({ id, workflowId, event, runNumber, runAttempt, branch: 'dev' });
+  const run = (id: number, workflowId: number, event: string, runNumber: number, runAttempt = 1): Run => ({ id, workflowId, event, runNumber, runAttempt, branch: 'dev', status: 'completed' });
   const kept = newestRuns([run(1, 1, 'push', 4), run(2, 1, 'push', 5), run(3, 1, 'pull_request', 6), run(4, 1, 'pull_request', 6, 2), run(5, 2, 'push', 1)]);
   assert.deepEqual(kept.map(({ id }) => id).sort(), [2, 4, 5]);
 });
@@ -128,7 +130,7 @@ test('reads the newest runs\' latest jobs and the commit statuses of the sha', (
     if (path === `repos/${REPO}/commits/${SHA}/status`) return JSON.stringify({ statuses: [{ context: 'ext/ci', state: 'success' }] });
     throw new Error(`unexpected ${path}`);
   });
-  assert.deepEqual(readChecks(gh, REPO, SHA, 'dev', { names: ['gates', 'ext/ci'], summary: null, flaky: [], conditional: [] }).map(({ state }) => state), ['passed', 'passed']);
+  assert.deepEqual(readChecks(gh, REPO, SHA, 'dev', { names: ['gates', 'ext/ci'], summary: null, flaky: [], conditional: [], checkMinutes: 30 }, NOW).map(({ state }) => state), ['passed', 'passed']);
   assert.equal(gh.mock.callCount(), 3);
 });
 
@@ -154,12 +156,12 @@ test('reads only the runs of the merged branch, so a cancelled run of the same s
     if (jobs === undefined) throw new Error(`unexpected ${path}`);
     return jobs;
   };
-  const required = { names: ['windows'], summary: null, flaky: [], conditional: [] };
-  const before = readChecks(ghFor(false), REPO, SHA, 't2657-b', required);
+  const required = { names: ['windows'], summary: null, flaky: [], conditional: [], checkMinutes: 30 };
+  const before = readChecks(ghFor(false), REPO, SHA, 't2657-b', required, NOW);
   assert.deepEqual(before.map(({ state }) => state), ['missing']);
   assert.equal(verdictOf(before), 'waiting');
-  assert.deepEqual(readChecks(ghFor(true), REPO, SHA, 't2657-b', required).map(({ state, detail }) => `${state}: ${detail}`), ['pending: in_progress']);
-  assert.deepEqual(readChecks(ghFor(true), REPO, SHA, 't2657', required).map(({ state }) => state), ['failed'], 'the earlier branch keeps its own verdict');
+  assert.deepEqual(readChecks(ghFor(true), REPO, SHA, 't2657-b', required, NOW).map(({ state, detail }) => `${state}: ${detail}`), ['pending: in_progress']);
+  assert.deepEqual(readChecks(ghFor(true), REPO, SHA, 't2657', required, NOW).map(({ state }) => state), ['failed'], 'the earlier branch keeps its own verdict');
 });
 
 test('a flaky check that failed in its run\'s first attempt waits on a re-run; failing again on attempt 2 fails (T2988)', () => {
@@ -194,4 +196,63 @@ test('a conditional check its run left out passes once the summary passed; befor
   assert.equal(verdictOf(settled([job('gates', 'success'), job('all', 'success')], [])), 'waiting', 'a check not listed as conditional waits');
   assert.equal(verdictOf(settled([job('gates', 'success'), job('mac', 'failure'), job('all', 'success')])), 'failed', 'a conditional check that ran keeps its verdict');
   assert.equal(verdictOf(plannedOut(evaluate(['mac'], [], []), null, ['mac'])), 'waiting', 'no summary named');
+});
+
+const T0 = Date.parse('2026-11-16T10:00:00Z');
+const at = (minutes: number): string => new Date(T0 + minutes * 60_000).toISOString();
+const run = (status: string | null): Run => ({ id: 1, workflowId: 1, event: 'push', runNumber: 1, runAttempt: 1, branch: 'dev', status });
+
+test('reads each job\'s queue, start and completion times', () => {
+  const [job1, job2] = parseJobs(`{"jobs":[{"name":"a","status":"in_progress","conclusion":null,"created_at":"${at(0)}","started_at":"${at(1)}","completed_at":null},{"name":"b","status":"queued","conclusion":null}]}`, { id: 9, runAttempt: 1 });
+  assert.deepEqual([job1?.createdAt, job1?.startedAt, job1?.completedAt], [at(0), at(1), undefined]);
+  assert.deepEqual([job2?.createdAt, job2?.startedAt], [undefined, undefined]);
+});
+
+test('a job listed running after its run completed is read as done: its conclusion, else failed (#1341)', () => {
+  const [settled] = settleJobs([job('test', 'success', 'in_progress')], [run('completed')], undefined, 30);
+  assert.equal(evaluate(['test'], [settled!], [])[0]?.state, 'passed', 'a success GitHub already gave passes at once');
+  const [none] = settleJobs([job('test', null, 'in_progress')], [run('completed')], undefined, 30);
+  const [outcome] = evaluate(['test'], [none!], []);
+  assert.deepEqual([outcome?.state, outcome?.detail], ['failed', 'failure, listed in_progress after its run completed, with no conclusion']);
+  const [stamped] = settleJobs([{ ...job('test', null, 'in_progress'), completedAt: at(5) }], [run('in_progress')], undefined, 30);
+  assert.equal(stamped?.note, 'listed in_progress after its completion time was set, with no conclusion');
+});
+
+test('a run read as completed settles only its own attempt\'s jobs, so a re-run\'s queued jobs still wait (#1341)', () => {
+  const rerunJob = { ...job('test', null, 'queued'), jobAttempt: 2 };
+  assert.equal(settleJobs([rerunJob], [run('completed')], undefined, 30)[0]?.status, 'queued');
+  assert.equal(settleJobs([{ ...rerunJob, jobAttempt: 1 }], [run('completed')], undefined, 30)[0]?.status, 'completed');
+  const [parsed] = parseJobs('{"jobs":[{"name":"a","status":"queued","conclusion":null,"run_attempt":2}]}', { id: 9, runAttempt: 1 });
+  assert.equal(parsed?.jobAttempt, 2);
+});
+
+test('a job queued or running for checkMinutes or more fails, naming its minutes and the limit (#1341)', () => {
+  const queued = { ...job('test', null, 'queued'), createdAt: at(0) };
+  const running = { ...job('test', null, 'in_progress'), createdAt: at(0), startedAt: at(10) };
+  const [late] = settleJobs([queued], [run('queued')], T0 + 31 * 60_000, 30);
+  assert.deepEqual([late?.status, late?.conclusion, late?.note, late?.limited], ['completed', 'failure', 'queued 31 min, past the 30 min limit (checkMinutes)', true]);
+  assert.equal(evaluate(['test'], [late!], [])[0]?.detail, 'failure, queued 31 min, past the 30 min limit (checkMinutes)');
+  assert.equal(settleJobs([running], [run('in_progress')], T0 + 31 * 60_000, 30)[0]?.status, 'in_progress', 'a running job counts from its start');
+  assert.equal(settleJobs([running], [run('in_progress')], T0 + 40 * 60_000, 30)[0]?.note, 'in_progress 30 min, past the 30 min limit (checkMinutes)');
+  assert.equal(settleJobs([queued], [run('queued')], T0 + 5 * 60_000, 5)[0]?.limited, true, 'the limit is the repository\'s');
+  assert.equal(settleJobs([queued], [run('queued')], undefined, 30)[0], queued, 'with no time now the job stays as listed');
+  assert.equal(settleJobs([job('test', null, 'queued')], [run('queued')], T0 + 99 * 60_000, 30)[0]?.status, 'queued', 'with no time to count from it stays too');
+});
+
+test('a check failed by the time limit is never re-run as flaky (#1341)', () => {
+  const [late] = settleJobs([{ ...job('test', null, 'in_progress'), startedAt: at(0) }], [run('in_progress')], T0 + 30 * 60_000, 30);
+  assert.equal(evaluate(['test'], [late!], [], null, ['test'])[0]?.state, 'failed');
+});
+
+test('readChecks settles the jobs it reads at the time given (#1341)', () => {
+  const gh = mock.fn<Gh>(args => {
+    const path = args[1] ?? '';
+    if (path.startsWith(`repos/${REPO}/actions/runs?head_sha=${SHA}`)) {
+      return JSON.stringify({ workflow_runs: [{ id: 10, workflow_id: 1, event: 'push', run_number: 1, run_attempt: 1, head_branch: 'dev', status: 'completed' }] });
+    }
+    if (path.startsWith(`repos/${REPO}/actions/runs/10/jobs`)) return JSON.stringify({ jobs: [{ name: 'gates', status: 'in_progress', conclusion: 'success' }, { name: 'test', status: 'in_progress', conclusion: null }] });
+    if (path === `repos/${REPO}/commits/${SHA}/status`) return '{"statuses":[]}';
+    throw new Error(`unexpected ${path}`);
+  });
+  assert.deepEqual(readChecks(gh, REPO, SHA, 'dev', { names: ['gates', 'test'], summary: null, flaky: [], conditional: [], checkMinutes: 30 }, T0).map(({ state }) => state), ['passed', 'failed']);
 });

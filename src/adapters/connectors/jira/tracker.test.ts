@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { stampCredit, type HostIssue, type JsonRecord } from '../../../plugin-api/index.ts';
+import { SEARCH_PAGE, stampCredit, type HostIssue, type HttpRequest, type JsonRecord, type SiteTrust } from '../../../plugin-api/index.ts';
 import { connectorDeps } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials } from '../../../testing/fake-credentials.ts';
 import { FakeHttp } from '../../../testing/fake-http.ts';
@@ -24,15 +24,38 @@ interface Kit {
   readonly http: FakeHttp;
 }
 
-/**
- * A tracker of site `acme`, its credential saved unless `saved` is false; `issueType` is the type the team's config
- * names, `site` the site it names, `people` the account ids it counts as the team's.
- */
-function kit(stamp: boolean = false, saved: boolean = true, issueType?: string, site?: string, people: readonly string[] = []): Kit {
+/** The public-project guard's read of project ENG, sent with no sign-in. */
+const GUARD = `${API}/project/ENG`;
+
+interface KitOptions {
+  readonly stamp?: boolean;
+  /** Whether the site's credential is saved; it is unless false. */
+  readonly saved?: boolean;
+  /** The issue type the team's config names. */
+  readonly issueType?: string;
+  /** The site the team's config names. */
+  readonly site?: string;
+  /** The account ids the team's config counts as its people. */
+  readonly people?: readonly string[];
+  /** The team's trust rule; left out, the Jira defaults alone. */
+  readonly trust?: SiteTrust;
+  /** The status the guard's unsigned read of ENG gets: 404 (closed) unless set, `failed` for no answer. */
+  readonly guard?: number | 'failed';
+}
+
+/** A tracker of site `acme`, set up as `options` say. */
+function kit(options: KitOptions = {}): Kit {
   const http = new FakeHttp();
-  const credentials = saved ? new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token') : new FakeCredentials();
+  const guard = options.guard ?? 404;
+  if (guard === 'failed') {
+    http.failsOn('GET', GUARD, 'acme could not be reached');
+  } else {
+    http.answers('GET', GUARD, guard);
+  }
+  const credentials = options.saved === false ? new FakeCredentials() : new FakeCredentials().saves(CREDENTIAL, 'someone@example.com:the-token');
   const client = new JiraClient(http, credentials, connectorDeps().scanner, () => Promise.resolve(), () => 0);
-  return { tracker: new JiraTracker(client, stamp, { site, issueType, people }), http };
+  const config = { site: options.site, issueType: options.issueType, people: options.people ?? [], ...(options.trust === undefined ? {} : { trust: options.trust }) };
+  return { tracker: new JiraTracker(client, options.stamp ?? false, config), http };
 }
 
 function parsedJson(text: string): unknown {
@@ -40,9 +63,14 @@ function parsedJson(text: string): unknown {
   return value;
 }
 
-/** Each request sent: its method, its path under the API root, and its body when it had one. */
+/** The requests sent signed in: every one but the public-project guard's, which a spec of its own asserts. */
+function signed(http: FakeHttp): HttpRequest[] {
+  return http.requests.filter((request) => request.headers?.['authorization'] !== undefined);
+}
+
+/** Each signed request sent: its method, its path under the API root, and its body when it had one. */
 function sent(http: FakeHttp): unknown[][] {
-  return http.requests.map((request) => {
+  return signed(http).map((request) => {
     const body = 'body' in request ? request.body : undefined;
     return [request.method, request.url.slice(API.length), ...(body === undefined ? [] : [parsedJson(body)])];
   });
@@ -56,6 +84,14 @@ function failed(reason: string): { kind: 'failed'; reason: string } {
 function jiraIssue(key: string, fields: JsonRecord = {}): JsonRecord {
   return { id: '10001', key, fields: { summary: 'A title', status: { statusCategory: { key: 'new' } }, ...fields } };
 }
+
+/** The line a list prints for project ENG when the guard's read of it was `given` what it names. */
+function openLine(given: string): string {
+  return `anyone may browse ENG: its read without a sign-in ${given}, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside`;
+}
+
+/** The trust rule's verdict on an issue with no reporter. */
+const ANONYMOUS = { trusted: false, why: 'the reporter is anonymous or hidden', failed: undefined } as const;
 
 /** The issue `jiraIssue` reads as, then `over`. */
 function hostIssue(number: number, over: Partial<HostIssue> = {}): HostIssue {
@@ -74,12 +110,14 @@ function hostIssue(number: number, over: Partial<HostIssue> = {}): HostIssue {
     lastEditedAt: undefined,
     authorAssociation: '',
     author: '',
+    authorName: '',
     authorKind: '',
     labelEvents: [],
     renamedAt: undefined,
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: ANONYMOUS,
     ...over,
   };
 }
@@ -118,7 +156,7 @@ describe('reaching a Jira project', () => {
 
   it('is unreachable for a repo that names no project, and for a site with no saved credential', async () => {
     assert.deepEqual(await kit().tracker.reach('acme', 'read'), { kind: 'unreachable', reason: NOT_A_PROJECT });
-    assert.deepEqual(await kit(false, false).tracker.reach(REPO, 'read'), {
+    assert.deepEqual(await kit({ saved: false }).tracker.reach(REPO, 'read'), {
       kind: 'unreachable',
       reason: `the test store holds no credential ${CREDENTIAL}: save the account's e-mail, a colon and its API token with save ${CREDENTIAL}`,
     });
@@ -127,14 +165,14 @@ describe('reaching a Jira project', () => {
 
 describe('listing a Jira project', () => {
   it('asks one search for the open issues and those closed since the day before, and reads each field', async () => {
-    const { tracker, http } = kit();
+    const { tracker, http } = kit({ guard: 200 });
     const issue = jiraIssue('ENG-12', {
       summary: 'Fix the login',
       description: doc('It fails.'),
       status: { statusCategory: { key: 'indeterminate' } },
       labels: ['bug', 'p1'],
       assignee: { accountId: 'a-assignee', accountType: 'atlassian' },
-      reporter: { accountId: 'a-reporter', accountType: 'atlassian' },
+      reporter: { accountId: 'a-reporter', accountType: 'atlassian', displayName: 'Dana Reporter' },
       updated: '2026-11-20T15:48:00.000+0200',
       created: '2026-11-18T09:00:00.000+0200',
       comment: {
@@ -159,6 +197,7 @@ describe('listing a Jira project', () => {
           assignees: ['a-assignee'],
           updatedAt: '2026-11-20T13:48:00.000Z',
           author: 'a-reporter',
+          authorName: 'Dana Reporter',
           authorKind: 'User',
           createdAt: '2026-11-18T07:00:00.000Z',
           comments: [
@@ -167,9 +206,14 @@ describe('listing a Jira project', () => {
             { at: '2026-11-19T10:00:00.000Z', login: 'a-app', authorAssociation: '', authorKind: 'Bot' },
             { at: '2026-11-19T11:00:00.000Z', login: '', authorAssociation: '', authorKind: '' },
           ],
+          ruled: {
+            trusted: false,
+            why: 'anyone may browse the project, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside',
+            failed: undefined,
+          },
         }),
       ],
-      notes: [],
+      notes: [openLine('was answered 200')],
     });
     assert.deepEqual(sent(http), [
       ['POST', '/search/jql', { jql: 'project = "ENG" AND (statusCategory != Done OR statusCategoryChangedDate >= "2026-11-09")', fields: LIST_FIELDS, maxResults: PAGE_SIZE }],
@@ -225,7 +269,7 @@ describe('listing a Jira project', () => {
     const { tracker, http } = kit();
     http.answers('POST', SEARCH, 200, page([], 'more'));
     assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [`the list reached ${MAX_PAGES * PAGE_SIZE} issues, so it may leave some out`] });
-    assert.equal(http.requests.length, MAX_PAGES);
+    assert.equal(signed(http).length, MAX_PAGES);
   });
 
   it('leaves out what does not read as an issue of the project, and says how many', async () => {
@@ -269,7 +313,7 @@ describe('listing a Jira project in an import scope (T5013)', () => {
   const TEAM = { all: false, assigned: 'team', labels: ['teamrig'] } as const;
 
   it("asks one search for the signed-in account's, the people's and the labelled issues, and names the people", async () => {
-    const { tracker, http } = kit(false, true, undefined, undefined, ['p-config']);
+    const { tracker, http } = kit({ people: ['p-config'] });
     http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')]));
     assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: ['p-asked'], held: [1] }), {
       kind: 'listed',
@@ -363,7 +407,7 @@ describe('listing a Jira project in an import scope (T5013)', () => {
       await badLabel.tracker.list(REPO, '2026-11-10', { scope: { ...TEAM, labels: ['a\nb'] }, people: [], held: [] }),
       failed('the label "a\\nb" cannot be searched in Jira: it holds a control character'),
     );
-    assert.equal(badLabel.http.requests.length, 1);
+    assert.equal(signed(badLabel.http).length, 1);
 
     const badSearch = kit();
     badSearch.http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 500);
@@ -379,6 +423,159 @@ describe('listing a Jira project in an import scope (T5013)', () => {
       http.answers('GET', MYSELF, 200, '{"accountId":"me"}').answers('POST', SEARCH, 200, page([])).answers('POST', BULK, status, body);
       assert.deepEqual(await tracker.list(REPO, '2026-11-10', { scope: TEAM, people: [], held: [1] }), failed(reason), `${status} ${body}`);
     }
+  });
+});
+
+describe('searching a Jira project (T4860)', () => {
+  const ALL = { words: 'login fails', state: 'all', kind: 'all' } as const;
+
+  it('asks one page of the project for issues whose text holds the words, and reads each one found', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-12', { summary: 'Login fails' }), jiraIssue('ENG-3', { status: CLOSED })]));
+    assert.deepEqual(await tracker.search.searchIssues(REPO, ALL), {
+      kind: 'found',
+      issues: [
+        { target: { repo: REPO, number: 12 }, title: 'Login fails', state: 'open', pull: false },
+        { target: { repo: REPO, number: 3 }, title: 'A title', state: 'closed', pull: false },
+      ],
+      more: false,
+    });
+    assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: 'project = "ENG" AND text ~ "login fails"', fields: ['summary', 'status'], maxResults: SEARCH_PAGE }]]);
+  });
+
+  it('quotes the words as one JQL string, so a quote or a backslash adds no clause', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([]));
+    await tracker.search.searchIssues(REPO, { ...ALL, words: 'a" OR project = "SECRET \\' });
+    assert.deepEqual(sent(http), [['POST', '/search/jql', { jql: 'project = "ENG" AND text ~ "a\\" OR project = \\"SECRET \\\\"', fields: ['summary', 'status'], maxResults: SEARCH_PAGE }]]);
+  });
+
+  it('adds the status category of a state', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([])).answers('POST', SEARCH, 200, page([]));
+    await tracker.search.searchIssues(REPO, { ...ALL, state: 'open', kind: 'issue' });
+    await tracker.search.searchIssues(REPO, { ...ALL, state: 'closed' });
+    assert.deepEqual(
+      sent(http).map((request) => request[2]),
+      [
+        { jql: 'project = "ENG" AND text ~ "login fails" AND statusCategory != Done', fields: ['summary', 'status'], maxResults: SEARCH_PAGE },
+        { jql: 'project = "ENG" AND text ~ "login fails" AND statusCategory = Done', fields: ['summary', 'status'], maxResults: SEARCH_PAGE },
+      ],
+    );
+  });
+
+  it('finds no pull request, since a Jira issue is never one, and sends nothing', async () => {
+    const { tracker, http } = kit();
+    assert.deepEqual(await tracker.search.searchIssues(REPO, { ...ALL, kind: 'pull' }), { kind: 'found', issues: [], more: false });
+    assert.deepEqual(sent(http), []);
+  });
+
+  it('says there is more when a page follows or an item did not read, leaving that item out', async () => {
+    const next = kit();
+    next.http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1')], 't1'));
+    assert.deepEqual(await next.tracker.search.searchIssues(REPO, ALL), { kind: 'found', issues: [{ target: { repo: REPO, number: 1 }, title: 'A title', state: 'open', pull: false }], more: true });
+    const odd = kit();
+    odd.http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1'), jiraIssue('OTHER-2'), { key: 'ENG-3' }, 'not an issue']));
+    assert.deepEqual(await odd.tracker.search.searchIssues(REPO, ALL), { kind: 'found', issues: [{ target: { repo: REPO, number: 1 }, title: 'A title', state: 'open', pull: false }], more: true });
+  });
+
+  it('fails on words with a control character, unsent, and on a failed or unreadable answer', async () => {
+    const control = kit();
+    assert.deepEqual(await control.tracker.search.searchIssues(REPO, { ...ALL, words: 'a\nb' }), failed('the words of a Jira search cannot hold a control character'));
+    assert.deepEqual(sent(control.http), []);
+    const broken = kit();
+    broken.http.answers('POST', SEARCH, 500).answers('POST', SEARCH, 200, '{}');
+    assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed('Jira answered 500'));
+    assert.deepEqual(await broken.tracker.search.searchIssues(REPO, ALL), failed(NOT_A_LIST));
+    assert.deepEqual(await kit().tracker.search.searchIssues('acme', ALL), failed(NOT_A_PROJECT));
+  });
+});
+
+describe("judging a listed Jira issue's trust (T5012)", () => {
+  const COLLEAGUE = { accountId: 'colleague', accountType: 'atlassian' };
+  const CUSTOMER = { accountId: 'customer-1', accountType: 'customer' };
+  const CHANGELOG = `${API}/issue/ENG-1/changelog?startAt=0&maxResults=100`;
+  const WRITTEN: SiteTrust = { inside: [{ kind: 'accountType', types: ['atlassian'] }], never: [{ kind: 'accounts', ids: ['banned'] }], edits: undefined, projects: new Map() };
+
+  const HELD_BACK = { trusted: false, why: 'anyone may browse the project, so the default inside is not applied; set connectors.jira.trust.projects.ENG.inside', failed: undefined } as const;
+
+  it('holds the default inside back on a project the guard finds open, with one line naming the key to set and no history read', async () => {
+    for (const [guard, given] of [
+      [200, 'was answered 200'],
+      [302, 'was answered 302'],
+      [429, 'was answered 429'],
+      [500, 'was answered 500'],
+      ['failed', 'got no answer'],
+    ] as const) {
+      const { tracker, http } = kit({ guard });
+      http.answers('POST', SEARCH, 200, page([jiraIssue('ENG-1', { reporter: COLLEAGUE })]));
+      const listed = await tracker.list(REPO, '2026-11-10');
+      assert.deepEqual(listed.kind === 'listed' ? [listed.issues.map((issue) => issue.ruled), listed.notes] : listed, [[HELD_BACK], [openLine(given)]], String(guard));
+      assert.deepEqual(sent(http).map(([method, path]) => `${method} ${String(path)}`), ['POST /search/jql'], String(guard));
+    }
+  });
+
+  it('applies the default inside on a project the unsigned read is turned away from (401, 403, 404), then reads the history', async () => {
+    for (const guard of [401, 403, 404]) {
+      const { tracker, http } = kit({ guard });
+      http
+        .answers('POST', SEARCH, 200, page([jiraIssue('ENG-1', { reporter: COLLEAGUE }), jiraIssue('ENG-2', { reporter: CUSTOMER })]))
+        .answers('GET', CHANGELOG, 200, JSON.stringify({ values: [], isLast: true }));
+      const listed = await tracker.list(REPO, '2026-11-10');
+      assert.deepEqual(listed.kind === 'listed' ? [listed.issues.map((issue) => issue.ruled), listed.notes] : listed, [
+        [
+          { trusted: true, why: 'the reporter matches inside (accountType atlassian)' },
+          { trusted: false, why: 'the reporter (customer account) matches no inside', failed: undefined },
+        ],
+        [],
+      ], String(guard));
+      assert.deepEqual(sent(http).map(([method, path]) => `${method} ${String(path)}`), ['POST /search/jql', 'GET /issue/ENG-1/changelog?startAt=0&maxResults=100'], String(guard));
+    }
+  });
+
+  it('sends the guard read with no sign-in, once a run however often the project is listed', async () => {
+    const { tracker, http } = kit();
+    http.answers('POST', SEARCH, 200, page([]));
+    await tracker.list(REPO, '2026-11-10');
+    await tracker.list(REPO, '2026-11-10');
+    assert.deepEqual(http.requests.filter((request) => request.url === GUARD), [{ method: 'GET', url: GUARD, headers: { accept: 'application/json' } }]);
+  });
+
+  it('makes no guard read when the team wrote an inside, for the site or the project', async () => {
+    const own: SiteTrust = { inside: undefined, never: [], edits: undefined, projects: new Map([['ENG', { inside: [{ kind: 'accounts', ids: ['colleague'] }], never: [], edits: 'any' }]]) };
+    for (const trust of [WRITTEN, own]) {
+      const { tracker, http } = kit({ trust });
+      http.answers('POST', SEARCH, 200, page([])).answers('GET', CHANGELOG, 200, JSON.stringify({ values: [], isLast: true }));
+      assert.deepEqual(await tracker.list(REPO, '2026-11-10'), { kind: 'listed', issues: [], notes: [] });
+      assert.deepEqual(http.requests.filter((request) => request.url === GUARD), []);
+    }
+  });
+
+  it("applies a written inside and never, reading the history of the inside reporters' issues only", async () => {
+    const { tracker, http } = kit({ trust: WRITTEN });
+    http
+      .answers('POST', SEARCH, 200, page([jiraIssue('ENG-1', { reporter: COLLEAGUE }), jiraIssue('ENG-2', { reporter: CUSTOMER }), jiraIssue('ENG-3', { reporter: { accountId: 'banned', accountType: 'atlassian' } })]))
+      .answers('GET', CHANGELOG, 200, JSON.stringify({ values: [{ author: COLLEAGUE, items: [{ field: 'summary', fieldId: 'summary' }] }], isLast: true }));
+    const listed = await tracker.list(REPO, '2026-11-10');
+    assert.deepEqual(listed.kind === 'listed' ? listed.issues.map((issue) => [issue.number, issue.author, issue.ruled]) : listed, [
+      [1, 'colleague', { trusted: true, why: 'the reporter matches inside (accountType atlassian)' }],
+      [2, 'customer-1', { trusted: false, why: 'the reporter (customer account) matches no inside', failed: undefined }],
+      [3, 'banned', { trusted: false, why: 'the reporter matches never (accounts banned)', failed: undefined }],
+    ]);
+    assert.deepEqual(sent(http).map(([method, path]) => `${method} ${String(path)}`), ['POST /search/jql', 'GET /issue/ENG-1/changelog?startAt=0&maxResults=100']);
+  });
+
+  it('judges a held issue read by key the same way', async () => {
+    const { tracker, http } = kit({ trust: WRITTEN });
+    http
+      .answers('GET', `${API}/myself`, 200, '{"accountId":"me"}')
+      .answers('POST', SEARCH, 200, page([]))
+      .answers('POST', `${API}/issue/bulkfetch`, 200, JSON.stringify({ issues: [jiraIssue('ENG-1', { reporter: COLLEAGUE })] }))
+      .answers('GET', CHANGELOG, 500);
+    const listed = await tracker.list(REPO, '2026-11-10', { scope: { all: false, assigned: 'team', labels: [] }, people: [], held: [1] });
+    const ruled = listed.kind === 'listed' ? listed.issues[0]?.ruled : undefined;
+    assert.equal(ruled?.trusted, false);
+    assert.match(ruled !== undefined && !ruled.trusted ? (ruled.failed ?? '') : '', /^the read of ENG-1's edit history failed: Jira answered 500/);
   });
 });
 
@@ -446,7 +643,7 @@ describe('writing text on a Jira issue', () => {
   });
 
   it('ends a comment and a description with the made-with footer when the stamp is on', async () => {
-    const { tracker, http } = kit(true);
+    const { tracker, http } = kit({ stamp: true });
     http.answers('POST', `${ISSUE}/comment`, 201, '{"id":"1"}').answers('PUT', ISSUE, 204);
     assert.deepEqual(await tracker.comment(TARGET, 'Done.'), { kind: 'done' });
     assert.deepEqual(await tracker.editBody(TARGET, 'The plan.'), { kind: 'done' });
@@ -460,7 +657,7 @@ describe('writing text on a Jira issue', () => {
 
   it('refuses an empty comment before any request, stamped or not', async () => {
     for (const stamp of [false, true]) {
-      const { tracker, http } = kit(stamp);
+      const { tracker, http } = kit({ stamp });
       assert.deepEqual(await tracker.comment(TARGET, ' \n\n'), failed('an empty comment is not posted'));
       assert.deepEqual(http.requests, []);
     }
@@ -708,7 +905,7 @@ describe("Jira's own id of an issue (T4754)", () => {
 });
 
 describe('a Jira issue as it is now (T4754)', () => {
-  const READ = `${ISSUE}?fields=description,status,labels,assignee`;
+  const READ = `${ISSUE}?fields=summary,description,status,labels,assignee`;
   const NOT_AN_ISSUE = failed("Jira's answer for ENG-12 did not read as an issue");
 
   it('reads an open issue with its labels, the account holding it and its description as text', async () => {
@@ -717,17 +914,17 @@ describe('a Jira issue as it is now (T4754)', () => {
     http.answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', fields)));
     assert.deepEqual(await tracker.thread(TARGET), {
       kind: 'read',
-      thread: { state: 'open', labels: ['bug', 'status:in-review'], assignees: ['712020:0a1b2c3d'], pull: false, body: 'What is wrong.' },
+      thread: { state: 'open', labels: ['bug', 'status:in-review'], assignees: ['712020:0a1b2c3d'], pull: false, body: 'What is wrong.', title: 'A title' },
     });
-    assert.deepEqual(sent(http), [['GET', '/issue/ENG-12?fields=description,status,labels,assignee']]);
+    assert.deepEqual(sent(http), [['GET', '/issue/ENG-12?fields=summary,description,status,labels,assignee']]);
   });
 
-  it('reads a closed issue by its status, and one nobody holds with no description', async () => {
+  it('reads a closed issue by its status, and one nobody holds with no description, leaving out a summary that is no text', async () => {
     const { tracker, http } = kit();
     http
       .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { status: CLOSED, labels: [], assignee: null, description: null })))
-      .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { labels: ['bug'], assignee: { displayName: 'No id' } })));
-    assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'closed', labels: [], assignees: [], pull: false, body: '' } });
+      .answers('GET', READ, 200, JSON.stringify(jiraIssue('ENG-12', { labels: ['bug'], assignee: { displayName: 'No id' }, summary: 7 })));
+    assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'closed', labels: [], assignees: [], pull: false, body: '', title: 'A title' } });
     assert.deepEqual(await tracker.thread(TARGET), { kind: 'read', thread: { state: 'open', labels: ['bug'], assignees: [], pull: false, body: '' } });
   });
 
@@ -888,7 +1085,7 @@ describe('opening a Jira issue (T4754)', () => {
     plain.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('POST', CREATE, 201, OPENED);
     assert.deepEqual(await plain.tracker.open(BARE), { kind: 'opened', target: { repo: REPO, number: 24 } });
     assert.deepEqual(sent(plain.http)[1], ['POST', '/issue', { fields: BARE_FIELDS }]);
-    const stamped = kit(true);
+    const stamped = kit({ stamp: true });
     stamped.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('POST', CREATE, 201, OPENED);
     await stamped.tracker.open(BARE);
     assert.deepEqual(sent(stamped.http)[1], ['POST', '/issue', { fields: { ...BARE_FIELDS, description: { type: 'doc', version: 1, content: [CREDIT_PARAGRAPH] } } }]);
@@ -921,7 +1118,7 @@ describe('opening a Jira issue (T4754)', () => {
   });
 
   it("opens the issue as the type the team's config names, and opens none when the project lacks it, naming those it has (T4766)", async () => {
-    const named = kit(false, true, 'epic');
+    const named = kit({ issueType: 'epic' });
     named.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('POST', CREATE, 201, OPENED);
     assert.deepEqual(await named.tracker.open(BARE), { kind: 'opened', target: { repo: REPO, number: 24 } });
     assert.deepEqual(sent(named.http), [
@@ -929,7 +1126,7 @@ describe('opening a Jira issue (T4754)', () => {
       ['POST', '/issue', { fields: { ...BARE_FIELDS, issuetype: { id: '10000' } } }],
     ]);
 
-    const lacking = kit(false, true, 'Bug');
+    const lacking = kit({ issueType: 'Bug' });
     lacking.http.answers('GET', TYPES, 200, PROJECT_TYPES).answers('GET', TYPES, 200, '{"issueTypes":[]}');
     assert.deepEqual(
       await lacking.tracker.open(BARE),
@@ -943,7 +1140,7 @@ describe('opening a Jira issue (T4754)', () => {
   });
 
   it("makes Jira's type names plain lines and lists at most LISTED_TYPES of them when the named type is missing", async () => {
-    const lacking = kit(false, true, 'Bug');
+    const lacking = kit({ issueType: 'Bug' });
     const many = Array.from({ length: LISTED_TYPES + 3 }, (_, at) => ({ id: `${20000 + at}`, name: at === 0 ? 'Ta\nsk\u0007' : `T${at}` }));
     lacking.http.answers('GET', TYPES, 200, JSON.stringify({ issueTypes: many }));
     const listed = ['Ta sk', ...Array.from({ length: LISTED_TYPES - 1 }, (_, at) => `T${at + 1}`)].join(', ');
@@ -985,7 +1182,7 @@ describe("the site the team's config names (T4912, security N1 of T4806)", () =>
   const OTHER_SITE = '"other/eng" is on the site other, but connectors.jira.site names acme: a project of another site is not reached';
 
   it('refuses every use of a project on another site, with no request sent', async () => {
-    const { tracker, http } = kit(false, true, undefined, 'acme');
+    const { tracker, http } = kit({ site: 'acme' });
     const target = { repo: OTHER, number: 12 };
     assert.deepEqual(await tracker.reach(OTHER, 'read'), { kind: 'unreachable', reason: OTHER_SITE });
     assert.deepEqual(await tracker.list(OTHER, '2026-11-01'), failed(OTHER_SITE));
@@ -1002,7 +1199,7 @@ describe("the site the team's config names (T4912, security N1 of T4806)", () =>
   });
 
   it('reaches a project on the named site as before', async () => {
-    const { tracker } = kit(false, true, undefined, 'acme');
+    const { tracker } = kit({ site: 'acme' });
     assert.deepEqual(await tracker.reach(REPO, 'read'), { kind: 'reached', access: `acme: read with the API token saved as ${CREDENTIAL}`, scope: 'acme' });
   });
 

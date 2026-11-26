@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { testTask } from '../testing/task.ts';
 import { cutTask, textHash } from './description-cut.ts';
+import { BLOCKER_FIELD } from './events.ts';
 import { foldEvents, type Task } from './fold.ts';
+import { BLOCKER_PRIORITY_ID } from './model.ts';
 import { readEvents } from './snapshot.ts';
 import { isTaskLine, parseTaskLine, taskLineRecord, TASK_LINE_TYPE } from './task-line.ts';
 
@@ -96,6 +98,20 @@ describe('task lines', () => {
 
   it('reads back a task with every optional part set', () => {
     assert.deepEqual(parseTaskLine(onDisk(richTask)), richTask);
+  });
+
+  it('reads back a blocker, written as p0 with its mark as an event line writes it (T5541)', () => {
+    const task = testTask({ id: 'T7', priority: BLOCKER_PRIORITY_ID });
+    const written = onDisk(task)['task'];
+    assert.ok(isRecord(written));
+    assert.equal(written['priority'], 0);
+    assert.equal(written[BLOCKER_FIELD], true);
+    assert.deepEqual(parseTaskLine(onDisk(task)), task);
+  });
+
+  it('reads back the time a task spent in progress (T5541)', () => {
+    const task = testTask({ id: 'T8', status: 'done', inProgressMs: 5_400_000 });
+    assert.deepEqual(parseTaskLine(onDisk(task)), task);
   });
 
   it('reads back a card with none of its optional parts', () => {

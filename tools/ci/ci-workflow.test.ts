@@ -60,14 +60,8 @@ const NOT_SHARD = "!contains(matrix.part, '/')";
 const CODE_CHECK = `\${{ needs.changes.outputs.kind == 'code' && ${NOT_SHARD} }}`;
 const NOT_DESIGN_CHECK = `\${{ needs.changes.outputs.kind != 'design' && ${NOT_SHARD} }}`;
 
-/** The `test` script of package.json, the line `npm test` runs. */
-function npmTestLine(): string {
-  const manifest: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
-  const scripts = typeof manifest === 'object' && manifest !== null && 'scripts' in manifest ? manifest.scripts : undefined;
-  const test = typeof scripts === 'object' && scripts !== null && 'test' in scripts ? scripts.test : undefined;
-  assert.ok(typeof test === 'string', 'package.json has a test script');
-  return test;
-}
+/** The step that runs npm test's suite a test file a core (tools/ci/suite.test.ts holds its suite equal to npm test's). */
+const SUITE = 'node tools/ci/suite-cli.ts';
 
 /** The test job's name: the part shows on a split OS's legs alone, so a one-leg OS keeps the name it had. */
 const LEG_NAME = "test (${{ matrix.os }}, node ${{ matrix.node }}${{ matrix.part != 'all' && format(', {0}', matrix.part) || '' }})";
@@ -215,8 +209,8 @@ describe('ci.yml', () => {
       { does: 'npm ci --ignore-scripts', when: NOT_DESIGN },
       { does: 'npm run typecheck', when: CODE_CHECK },
       { does: 'npm run build', when: NOT_DESIGN },
-      { does: 'npm test', when: WHOLE_SUITE },
-      { does: npmTestLine().replace(/^node --test /, 'node --test --test-shard=${{ matrix.part }} '), when: SHARD },
+      { does: SUITE, when: WHOLE_SUITE },
+      { does: `${SUITE} --shard \${{ matrix.part }}`, when: SHARD },
       { does: 'node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts', when: DOCS },
       { does: 'node tools/ci/dist-smoke-cli.ts', when: CODE_CHECK },
       { does: 'node tools/ci/fresh-install-cli.ts', when: CODE_CHECK },
@@ -244,7 +238,7 @@ describe('ci.yml', () => {
     assert.equal(nodeOf(test), '${{ matrix.node }}');
     assert.match(test, /^ {8}node: \[22\]$/m, 'the test legs run the Node the coverage gate runs');
     assert.match(test, /^ {8}os: \$\{\{ fromJSON\(needs\.changes\.outputs\.systems\) \}\}$/m);
-    assert.equal(stepsOf(test).find((step) => step.does === 'npm test')?.when, WHOLE_SUITE);
+    assert.equal(stepsOf(test).find((step) => step.does === SUITE)?.when, WHOLE_SUITE);
   });
 
   it('splits the Windows leg into two suite shards and a checks leg, one leg on every other OS (T5030)', () => {
@@ -272,13 +266,6 @@ describe('ci.yml', () => {
     assert.ok(!(legsOf(test, ['windows-latest']).get('windows-latest') ?? []).includes('all'), 'a whole-suite leg would run it twice');
   });
 
-  it("puts the shard flag before npm test's file patterns, as node ignores one after them (T5030)", () => {
-    const shard = stepsOf(jobs.get('test') ?? '').find((step) => step.when === SHARD)?.does ?? '';
-    const flag = shard.indexOf('--test-shard=');
-    assert.ok(flag > 0 && flag < shard.indexOf('"tools/**/*.test.ts"'), shard);
-    assert.equal(shard.replace(' --test-shard=${{ matrix.part }}', ''), npmTestLine(), 'the shards run the suite npm test runs');
-  });
-
   it('caches npm downloads in each job that installs, keyed on the lockfile by setup-node (T5027)', () => {
     for (const [id, job] of jobs) {
       const installs = job.includes('- run: npm ci');
@@ -295,7 +282,7 @@ describe('ci.yml', () => {
   });
 
   it('builds the plugin before each job runs the specs, which load the built dist (T4355)', () => {
-    for (const [id, specs] of [['coverage', '- run: node tools/ci/coverage-cli.ts'], ['test', '- run: npm test']] as const) {
+    for (const [id, specs] of [['coverage', '- run: node tools/ci/coverage-cli.ts'], ['test', `- run: ${SUITE}\n`]] as const) {
       const job = jobs.get(id) ?? '';
       const build = job.indexOf('- run: npm run build\n');
       assert.ok(build >= 0 && build < job.indexOf(specs), `job ${id} runs the specs before the build`);

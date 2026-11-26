@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
-import { ProgramOutputCapError, type Env, type ProgramRunner, type ProgramResult } from '../../../plugin-api/index.ts';
+import { KIT_MODE_ENV, ProgramOutputCapError, type Env, type ProgramRunner, type ProgramResult } from '../../../plugin-api/index.ts';
 import type { Transport, TransportAnswer } from './client.ts';
 import { ANSWER_CAP_BYTES, failed, quoted } from './wire.ts';
 
@@ -79,15 +79,24 @@ function answerOf(path: string, result: ProgramResult): TransportAnswer {
   return { kind: 'answered', output: result.stdout };
 }
 
+/** How a pinned run starts beyond its pin. */
+export interface PinnedRunOptions {
+  /**
+   * Starts the program with `KIT_MODE_ENV` set to this name, so it serves the kit's requests over the fake terminal
+   * of that name: only the conformance kit's run sets it, never a run that opens or wakes a real pane.
+   */
+  readonly kitWorld?: string;
+}
+
 /**
  * The transport to a pinned terminal program, run once per request line. Each run reads the program's file, checks
  * its sha256 against the pin, and runs a private copy of exactly those bytes, so the file cannot change between the
  * check and the start; a file that no longer matches is never run. The program gets its pinned arguments, the request
- * line on stdin and the short environment. Every failure is an answer, never a throw.
+ * line on stdin and the short environment, plus `KIT_MODE_ENV` in kit mode. Every failure is an answer, never a throw.
  */
-export function pinnedTransport(pin: ProgramPin, ports: PinnedRunPorts): Transport {
+export function pinnedTransport(pin: ProgramPin, ports: PinnedRunPorts, options: PinnedRunOptions = {}): Transport {
   const problem = pinProblem(pin);
-  const env = shortEnv(ports.env);
+  const env = options.kitWorld === undefined ? shortEnv(ports.env) : { ...shortEnv(ports.env), [KIT_MODE_ENV]: options.kitWorld };
   return async (line) => {
     if (problem !== undefined) {
       return failed(problem);

@@ -25,11 +25,20 @@ export function parseSessionRecord(text) {
     if (!isNonNegativeInteger(claudePid) || claudePid === 0 || hostSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
         return undefined;
     }
-    if (!('transcript' in record)) {
-        return { claudePid, hostSession, at };
+    const transcript = optionalText(record, 'transcript');
+    const host = optionalText(record, 'host');
+    if (transcript === null || host === null) {
+        return undefined;
     }
-    const transcript = stringField(record, 'transcript');
-    return transcript === undefined || transcript === '' ? undefined : { claudePid, hostSession, at, transcript };
+    return { claudePid, hostSession, at, ...(transcript === undefined ? {} : { transcript }), ...(host === undefined ? {} : { host }) };
+}
+/** An optional text field: undefined when absent, null when present but no non-empty string, which damages the record. */
+function optionalText(record, key) {
+    if (!(key in record)) {
+        return undefined;
+    }
+    const value = stringField(record, key);
+    return value === undefined || value === '' ? null : value;
 }
 export function formatSessionRecord(record) {
     return toJsonlLine(legacyHostSessionRecord({ [VERSION_FIELD]: SESSION_RECORD_FORMAT, ...record }, 'claudeSession'));

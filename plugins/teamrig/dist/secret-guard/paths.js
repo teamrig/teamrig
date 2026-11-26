@@ -76,7 +76,8 @@ export class SecretPaths {
      * path fits both them and a secret glob, and no later `!glob` keeps that path (`.env.l*` fits `.env.local`;
      * `b*.pem` fits `b.pem`), unless they only meet by coincidence (`fitsSecret`: `*.ts` and `.env.ts`). A last name
      * of wildcards alone (`dir/*`) is tried only against the globs that let it (see `CompiledGlob.wildcardAlone`), else
-     * every `grep x *` would name a `*.pem` it cannot see.
+     * every `grep x *` would name a `*.pem` it cannot see. A last name with any wildcard is never tried against a
+     * `NamedGlob`.
      */
     mayName(path, reading, source = FROM_DISK) {
         const normal = normalisePath(path);
@@ -84,8 +85,10 @@ export class SecretPaths {
             return this.decideFile(path, normal, source);
         }
         const word = new GlobAutomaton(globNodes(normal, { ...reading, ignoreCase: this.ignoreCase }), this.ignoreCase);
-        const onlyWildcards = /^(?:[*?]|\[[^\]/]+\])+$/.test(normal.slice(normal.lastIndexOf('/') + 1));
-        const walked = this.globs.map((glob) => ({ ...glob, tried: !glob.keep && (!onlyWildcards || glob.wildcardAlone) }));
+        const last = normal.slice(normal.lastIndexOf('/') + 1);
+        const onlyWildcards = /^(?:[*?]|\[[^\]/]+\])+$/.test(last);
+        const lastSpelled = !hasWildcard(last, reading.sets);
+        const walked = this.globs.map((glob) => ({ ...glob, tried: !glob.keep && (lastSpelled || !glob.namedOnly) && (!onlyWildcards || glob.wildcardAlone) }));
         const chars = telltaleCharacters([normal, ...this.globs.map(({ anchored }) => anchored)]);
         return fitsSecret(word, walked, characterClasses(chars, [word, ...this.globs.map(({ automaton }) => automaton)]), MAX_WALK_STATES);
     }
@@ -119,7 +122,8 @@ export class SecretPaths {
     }
 }
 /** `glob` anchored as the guard reads it: `~/` at home, an absolute glob where it says, any other at any depth. */
-function compileGlob(glob, home, ignoreCase) {
+function compileGlob(listed, home, ignoreCase) {
+    const glob = typeof listed === 'string' ? listed : listed.named;
     const keep = glob.startsWith('!');
     const body = (keep ? glob.slice(1) : glob).replaceAll('\\', '/');
     const options = { ignoreCase, dotfiles: true, sets: 'bash' };
@@ -132,6 +136,7 @@ function compileGlob(glob, home, ignoreCase) {
     return {
         source: glob,
         keep,
+        namedOnly: typeof listed !== 'string',
         anchored,
         pattern: globRegExp(anchored, options),
         automaton: new GlobAutomaton(globNodes(anchored, options), ignoreCase),

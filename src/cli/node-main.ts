@@ -4,6 +4,8 @@ import type { Writable } from 'node:stream';
 import { text } from 'node:stream/consumers';
 import { nodeTranscriptSource } from '../budget/discover.ts';
 import { HOST_PROGRAM_TIMEOUT_MS, loadHostPorts, loadShippedHosts } from '../composition/host-ports.ts';
+import { nodeTerminalPrograms } from '../composition/terminal-kit.ts';
+import { resolveKitHome } from '../core/home.ts';
 import { nodeFileBytes } from '../core/file-bytes.ts';
 import { nodeFiles } from '../core/files.ts';
 import { GIT_TREES } from '../delivery/git-tree.ts';
@@ -15,6 +17,7 @@ import { idleSleep, realSleep, systemClock } from '../core/lock.ts';
 import { NODE_PATH_PROBE } from '../core/path-probe.ts';
 import { storeWriter } from '../core/store-program.ts';
 import { NODE_STORE_FOLDERS } from '../plugin-store/node-folders.ts';
+import { nodeKitTree } from '../kit/kit-tree.ts';
 import { chatWebhook } from '../core/webhook.ts';
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from '../core/credentials.ts';
 import { nodeHttpClient } from '../core/http.ts';
@@ -132,6 +135,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     memory: nodeHostMemory(process.platform),
     cpu: nodeHostCpu(),
     run: nodeProgramRunner(CONNECTOR_RUN_TIMEOUT_MS, CONNECTOR_RUN_MAX_BYTES),
+    terminalPrograms: nodeTerminalPrograms(resolveKitHome(process.env, homedir()), process.pid),
     credentials: systemCredentials(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)),
     keys: {
       keeper: systemCredentialKeeper(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS), () =>
@@ -155,6 +159,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
       userPath: systemUserPath(process.platform, nodeProgramRunner(USER_PATH_TIMEOUT_MS), nodeFiles(realSleep), homedir()),
       markExecutable: nodeMarkExecutable(process.platform),
     },
+    kitTree: nodeKitTree(),
     mergeGit: GIT_MERGE,
     pulls: GIT_PULLS,
     changeGit: GIT_CHANGES,

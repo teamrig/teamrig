@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { withBooleanKey, withBooleanKeyInEach, type TomlEdit } from './config-toml.ts';
+import { withBooleanKey, withBooleanKeyInEach, withBooleanKeyWhereSet, type TomlEdit } from './config-toml.ts';
 
 function off(text: string): TomlEdit {
   return withBooleanKey(text, 'features', 'unified_exec_tty', false);
@@ -130,5 +130,34 @@ describe("Codex CLI's config.toml: a boolean key set in each named profile", () 
       assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
     }
     assert.deepEqual(profilesOff('[profiles.a]\nmodel_providers = { x = 1 }\n'), { ok: true, text: undefined });
+  });
+});
+
+function whereSetOff(text: string): TomlEdit {
+  return withBooleanKeyWhereSet(text, 'features', 'unified_exec_tty', false);
+}
+
+describe("a Codex profile file's boolean key, set only where it is already written", () => {
+  it('turns the key off under its table or as a root dotted key, keeping its indent and every other line', () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ['model = "m"\n[features]\n  unified_exec_tty = true # on\nweb_search = true\n', 'model = "m"\n[features]\n  unified_exec_tty = false\nweb_search = true\n'],
+      ['features.unified_exec_tty = true\n[other]\n', 'features.unified_exec_tty = false\n[other]\n'],
+      ['[features]\r\nunified_exec_tty = true\r\n', '[features]\r\nunified_exec_tty = false\r\n'],
+    ];
+    for (const [text, expected] of cases) {
+      assert.deepEqual(whereSetOff(text), { ok: true, text: expected }, text);
+    }
+  });
+
+  it('adds nothing where the key is not written, or already reads off, so the root setting stays the one in force', () => {
+    for (const text of ['', 'model = "m"\n', '[features]\nweb_search = true\n', '[features]\nunified_exec_tty = false\n', 'features = { web_search = true }\n']) {
+      assert.deepEqual(whereSetOff(text), { ok: true, text: undefined }, text);
+    }
+  });
+
+  it('refuses an inline features table that may hold the key', () => {
+    const answer = whereSetOff('features = { unified_exec_tty = true }\n');
+    assert.equal(answer.ok, false);
+    assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty.*set unified_exec_tty = false in it by hand/u);
   });
 });

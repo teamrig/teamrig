@@ -1,5 +1,5 @@
 import { isNonNegativeInteger, stringField } from "../core/guards.js";
-import { hostSessionValue } from "../core/host-session.js";
+import { hostSessionValue, isHostSessionId } from "../core/host-session.js";
 import { parseJsonl } from "../core/jsonl.js";
 import { SESSION_NAME } from "../register/model.js";
 export const MARK_VERSION = 1;
@@ -8,8 +8,6 @@ export const MARK_VERSION = 1;
  * on and written by none yet, so every tab reads it before the first one writes it.
  */
 export const MARK_NEXT_VERSION = 2;
-/** A Claude Code session id, as hook stdin and `$CLAUDE_CODE_SESSION_ID` carry it. */
-export const CLAUDE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export function parseMark(line) {
     if (line.version > MARK_NEXT_VERSION) {
         return { kind: 'newer' };
@@ -25,7 +23,7 @@ export function parseMark(line) {
         isNonNegativeInteger(count) &&
         at !== undefined &&
         !Number.isNaN(Date.parse(at)) &&
-        (hostSession === null || (typeof hostSession === 'string' && CLAUDE_SESSION_ID.test(hostSession))) &&
+        (hostSession === null || (typeof hostSession === 'string' && isHostSessionId(hostSession))) &&
         (lastLineHash === null || typeof lastLineHash === 'string');
     return valid ? { kind: 'mark', mark: { v: line.version, area, line: count, at, hostSession, lastLineHash } } : { kind: 'unreadable' };
 }

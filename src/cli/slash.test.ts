@@ -32,7 +32,7 @@ describe('/teamrig with nothing after it', () => {
     const rule = slashRule(COMMAND_TABLE, shippedSteps(), 'Claude Code');
     assert.deepEqual(result.stdout, [`${COMMAND_HELP.forCommand(undefined)}\n${rule}`]);
     assert.match(rule, /^In a Claude Code tab, \/teamrig <command> runs it there\./);
-    assert.match(rule, /Without --session, list, show, check, plan, verify, stats, report done, goal list, goal show, inbox status, rules, meeting list, decisions, read, schedule\nrun as this tab's session; a command that changes the team's files/);
+    assert.match(rule, /Without --session, list, show, check, plan, verify, stats, report done, goal list, goal show, inbox status, rules, meeting list, decisions, read, issue search, issue show, schedule\nrun as this tab's session; a command that changes the team's files/);
   });
 
   it('names the host and the step that runs a plugin command in its own words', () => {

@@ -71,10 +71,10 @@ describe('RestoreArchive', () => {
     );
   });
 
-  it('refuses an id that is not a Claude Code session id, so none reaches a path', async () => {
+  it('refuses an id that is not a host session id, so none reaches a path', async () => {
     const archive = new RestoreArchive(new MemoryFiles(), DIR);
-    await assert.rejects(archive.put(archived('../../etc/passwd', NOW)), /is not a Claude Code session id/);
-    await assert.rejects(archive.read('../../etc/passwd'), /is not a Claude Code session id/);
+    await assert.rejects(archive.put(archived('../../etc/passwd', NOW)), /is not a host session id/);
+    await assert.rejects(archive.read('../../etc/passwd'), /is not a host session id/);
   });
 
   it('purges the entries archived 7 days ago or earlier and keeps the younger ones', async () => {

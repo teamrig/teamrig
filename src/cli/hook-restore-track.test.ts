@@ -6,10 +6,12 @@ import type { Env } from '../core/home.ts';
 import { MS_PER_HOUR } from '../core/time.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
+import { installKitVersion, kitCurrentPath, kitVersionFolder, useKitVersion } from '../kit/kit-versions.ts';
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
-import { cliLauncherFolder, cliLaunchers } from '../restore/cli-launcher.ts';
+import { cliLauncherFolder, cliLaunchers, cliLauncherPath, KIT_LAUNCHER_FILE } from '../restore/cli-launcher.ts';
 import { cliOnPathNote } from '../restore/cli-on-path.ts';
+import { clientRootOf } from '../exec/client-integrity.ts';
 import { restoreLaunchers } from '../restore/install-plan.ts';
 import { RESTORE_CHECK_LAUNCHER_SCRIPT } from '../restore/launcher.ts';
 import { LAUNCHER_RECORD_FORMAT, launcherRecordPath } from '../restore/launcher-refresh.ts';
@@ -19,9 +21,15 @@ import { APP, CLAUDE_SESSION, CLI_PID, CliHarness, KIT, TEAM, USER_HOME, type Cl
 import { FakeUserPath, quietRestore } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { FakeWebhook } from '../testing/fake-webhook.ts';
+import type { Files } from '../core/files.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
-import { hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
+import { hostReadingLines, hostTelling, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
+import { quietHost } from '../testing/quiet-host.ts';
+import { InlineMutex } from '../testing/inline-mutex.ts';
+import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
+import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import { treeHarness } from '../testing/team-tree.ts';
 import { apiErrorLine, promptLine, transcript } from '../testing/transcript-lines.ts';
 
@@ -107,6 +115,19 @@ describe('hook restore-track', () => {
     await untold.run(['hook', 'restore-track'], { stdin, env: { ...LAUNCHED, CLAUDE_CODE_SESSION_KIND: 'bg' }, sessionProcesses, host: NO_SESSION_HOST });
     const bare = await entryOf(untold);
     assert.deepEqual([bare?.projectDir, bare?.entrypoint, bare?.sessionKind], [join(APP, 'sub'), undefined, undefined], 'the folder its payload names');
+  });
+
+  it('records the shipped host the session runs in, so a restore reopens it there, and leaves out the default one (T5059)', async () => {
+    const shippedHosts = { [DEFAULT_HOST]: shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(hostReadingLines({})) };
+    const stdin = payload('UserPromptSubmit');
+    const codex = new CliHarness({ ...TEAM, hosts: [DEFAULT_HOST, 'codex-cli'] });
+    await codex.run(['hook', 'restore-track', '--host', 'codex-cli'], { stdin, env: LAUNCHED, sessionProcesses: new FakeSessionProcesses(7000), shippedHosts });
+    assert.equal((await entryOf(codex))?.host, 'codex-cli');
+    const plain = new CliHarness({ ...TEAM, hosts: [DEFAULT_HOST, 'codex-cli'] });
+    await plain.run(['hook', 'restore-track'], { stdin, env: LAUNCHED, sessionProcesses: new FakeSessionProcesses(7000), shippedHosts });
+    const entry = await entryOf(plain);
+    assert.equal(entry?.state, 'working');
+    assert.equal('host' in entry, false);
   });
 
   it("leaves a session in a turn as it was at a compaction's start, which comes mid-turn", async () => {
@@ -478,8 +499,13 @@ describe('hook restore-track: the launcher refresh', () => {
   const OLDER_TEXT = '// an older launcher\n';
   const OLDER_RECORD = `${JSON.stringify({ v: LAUNCHER_RECORD_FORMAT, version: '0.0.1', at: '2030-01-01T10:00:00.000Z' })}\n`;
 
-  async function oldLauncherKit(config: JsonRecord = TEAM): Promise<CliHarness> {
+  /** The kit launcher the harness's running client ships, at the client root its script sits in. */
+  const KIT_LAUNCHER_TEXT = '// the kit launcher\n';
+  const BUILT_LAUNCHER = join(clientRootOf(quietHost('').self.script), KIT_LAUNCHER_FILE);
+
+  async function oldLauncherKit(config: JsonRecord = TEAM, built = true): Promise<CliHarness> {
     const kit = new CliHarness(config);
+    if (built) await kit.files.write(BUILT_LAUNCHER, KIT_LAUNCHER_TEXT);
     await kit.files.write(CHECK.path, OLDER_TEXT);
     await kit.files.write(RECORD, OLDER_RECORD);
     return kit;
@@ -487,17 +513,18 @@ describe('hook restore-track: the launcher refresh', () => {
 
   /**
    * Starts a session of `env` on `userPath`, a user PATH of no folders unless given; the PATH it leaves, whether a
-   * launcher was written and what the start printed.
+   * launcher was written and what the start printed. `files` is what the CLI sees, `kit.files` unless given.
    */
   async function startOnEmptyPath(
     kit: CliHarness,
     env: Env,
     userPath = new FakeUserPath(),
+    files: Files = kit.files,
   ): Promise<{ readonly path: readonly string[]; readonly launcher: boolean; readonly stdout: readonly string[] }> {
     const restore = quietRestore();
-    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32' });
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32', files });
     assert.deepEqual([result.code, result.stderr], [0, []]);
-    const launchers = cliLaunchers(KIT, 'win32');
+    const launchers = cliLaunchers(KIT, 'win32', KIT_LAUNCHER_TEXT);
     const written = await Promise.all(launchers.map(async (launcher) => (await kit.files.read(launcher.path)) !== undefined));
     return { path: userPath.folders, launcher: written.some(Boolean), stdout: result.stdout };
   }
@@ -507,6 +534,25 @@ describe('hook restore-track: the launcher refresh', () => {
       const { path, launcher } = await startOnEmptyPath(await oldLauncherKit(), env);
       assert.deepEqual({ path, launcher }, { path: [cliLauncherFolder(KIT)], launcher: true });
     }
+  });
+
+  it('writes the running client’s kit launcher as teamrig.mjs (T5278)', async () => {
+    const kit = await oldLauncherKit();
+    await startOnEmptyPath(kit, LAUNCHED);
+    assert.equal(await kit.files.read(cliLauncherPath(KIT)), KIT_LAUNCHER_TEXT);
+  });
+
+  it('puts nothing on the PATH from a client with no built kit launcher, and still refreshes the others (T5278)', async () => {
+    const kit = await oldLauncherKit(TEAM, false);
+    assert.deepEqual(await startOnEmptyPath(kit, LAUNCHED), { path: [], launcher: false, stdout: [] });
+    assert.equal(await kit.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT);
+  });
+
+  it('puts nothing on the PATH when the client’s kit launcher cannot be read, and still refreshes the others (T5278)', async () => {
+    const kit = await oldLauncherKit();
+    const files = new FaultyFiles(kit.files).fail('read', BUILT_LAUNCHER, systemError('EACCES'));
+    assert.deepEqual(await startOnEmptyPath(kit, LAUNCHED, new FakeUserPath(), files), { path: [], launcher: false, stdout: [] });
+    assert.equal(await kit.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT);
   });
 
   it('says once, to the person and the model, that the start put teamrig on the PATH; a later start says nothing (T5095)', async () => {
@@ -555,5 +601,53 @@ describe('hook restore-track: the launcher refresh', () => {
     assert.deepEqual([result.code, result.stdout, result.stderr], [0, [], []]);
     assert.deepEqual([await kit.files.read(CHECK.path), await kit.files.read(RECORD)], [OLDER_TEXT, OLDER_RECORD]);
     assert.equal((await entryOf(kit))?.state, 'ready');
+  });
+});
+
+describe('hook restore-track: the kit self-install (T5278)', () => {
+  const PLUGIN_ROOT = '/plugins/teamrig';
+  const SELF = { node: '/usr/bin/node', script: join(PLUGIN_ROOT, 'dist', 'cli', 'main.js'), execArgv: [] };
+
+  async function startFrom(kit: CliHarness, tree: MemoryKitTree, source = 'startup'): Promise<CliResult> {
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source }), env: LAUNCHED, self: SELF, kitTree: tree });
+    assert.deepEqual([result.code, result.stderr], [0, []]);
+    return result;
+  }
+
+  it('copies the running plugin into versions/<v>, names it current and logs it', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, tree);
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${KIT_VERSION}\n`);
+    assert.equal(await kit.files.read(join(kitVersionFolder(KIT, KIT_VERSION), 'dist', 'cli', 'main.js')), kitReleaseMain(KIT_VERSION));
+    assert.ok(((await kit.files.read(restoreLogPath(KIT))) ?? '').includes(` kit: none -> ${KIT_VERSION}: current\n`));
+    assert.equal((await entryOf(kit))?.state, 'ready', 'the entry is recorded beside the install');
+  });
+
+  it('copies nothing at the start a compaction makes, or from a plugin with no integrity list', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    await kit.files.write(SELF.script, kitReleaseMain(KIT_VERSION));
+    await startFrom(kit, tree);
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, tree, 'compact');
+    assert.deepEqual([tree.copies, await kit.files.read(kitCurrentPath(KIT))], [[], undefined]);
+  });
+
+  it('says at each start, to the person and the model, that a pinned install left a newer version unused', async () => {
+    const kit = new CliHarness();
+    const tree = new MemoryKitTree(kit.files);
+    const older = '0.1.0';
+    await writeKitRelease(kit.files, '/plugins/older', older);
+    await installKitVersion({ files: kit.files, tree, kitHome: KIT, from: '/plugins/older', version: older, source: { kind: 'claude-code-plugin' }, lock: new InlineMutex() });
+    await useKitVersion({ files: kit.files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: older });
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    for (let start = 0; start < 2; start += 1) {
+      const { stdout } = await startFrom(kit, tree);
+      assert.equal(stdout.length, 1, stdout.join('\n'));
+      assert.ok((stdout[0] ?? '').includes(`teamrig pinned at ${older}; ${KIT_VERSION} is installed`), stdout[0]);
+    }
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${older}\n`);
   });
 });

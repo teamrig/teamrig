@@ -104,6 +104,23 @@ Decide it by asking, in order:
 A task says its reach in its description, an approval request in its note, and a pull request in its `## Reach`
 section. A reviewer who reads a one-team or teamrig-development reach on what is really generic asks for it to move.
 
+### How it behaves for everyone
+Where a change lives is half the question; the other half is how it behaves for every user it reaches. Before you
+build a feature or a fix, weigh it in the bigger scope:
+
+- **Every AI CLI teamrig hosts**: Claude Code, Codex CLI, Antigravity and the next one. Name the behaviour in
+  host-neutral words, and put what differs per host behind its adapter, never in a host's own terms in core code.
+- **Every OS**: Windows, macOS and Linux, and each one's shells, paths and line endings.
+- **Every tracker and connector**: GitHub, Jira and the next one; what one provider needs ships with its connector.
+- **Every team shape**: one team, a tree of teams, sub-leads.
+- **Every size**, from one person to a large company: a default stays well scoped and never floods a big team, and
+  every limit a team may want to change is a config key.
+- **Defaults that streamline the work**: permissive and flexible by default; a risky option is an opt-in, offered
+  only after a security review.
+
+Only a truly specific change stays narrow, in the owner's words: if it is very specific and affects no one else, so
+be it. Say so in the pull request's `## Reach`, with the users and tools you weighed.
+
 ## Sign-off (DCO)
 Every commit must carry a `Signed-off-by:` line that matches the commit author, certifying the
 [Developer Certificate of Origin 1.1](https://developercertificate.org/). Add it with:
@@ -130,7 +147,9 @@ Every change ships tests, so the next change cannot break it unnoticed:
   the hook inputs and transcripts a real session sent, and its `expected/` folder pins what teamrig prints for each;
   `src/testing/recorded-pins.test.ts` fails when the code and the pins differ. A refactor leaves the pins as they are.
   A change meant to alter what a hook prints, or a core rule's wording (the session-start pins hold the rules text),
-  runs `node tools/record/pins-cli.ts` from the repository's root and commits the diff with the change.
+  runs `node tools/record/pins-cli.ts` from the repository's root and commits the diff with the change. Each
+  PreToolUse guard also has one refusal pinned, run from a recorded call through `hook.ts` (`GUARD_DENIES` in
+  `src/testing/recorded-pins.ts`, pinned in `expected/guard-denies.json`): a new guard adds its case there.
 - What every adapter of a port must do is a contract of the conformance kit (`src/conformance/`), not a spec of one
   adapter: `defineContract({ port, side, cases, liars })` in the port's own file, listed in `CONTRACTS` with one
   `entryOf(...)` line. A case is a value that fails by throwing and speaks only through its `{ port, world }`, and
@@ -139,6 +158,10 @@ Every change ships tests, so the next change cannot break it unnoticed:
   or says yes to everything), and the kit's spec fails a contract whose liar passes every case of a feature. An
   adapter's contract spec is one call, `describeContracts({ side, declaration, bound: [bind(...)] })` of
   `src/testing/contracts.ts`: its manifest picks the cases, and the spec fails when it binds less than it claims.
+  A connector binds the tracker contract over a fake of its tool that keeps what each call changes, as the tool does
+  (`src/testing/github-world.ts` behind `gh`, `src/testing/jira-world.ts` behind Jira's REST API), and builds its
+  tracker through its own `defineConnector` entry; a case a partial feature cannot pass is left out in `without`, with
+  the reason the manifest gives.
 
 `npm run check` runs every gate CI runs on the tree; the local gate also checks each pushed commit's sign-off and scrubs it,
 which the git hooks `npm run setup` sets do before each commit. Its coverage gate (`npm run coverage`) fails when:
@@ -200,7 +223,8 @@ review) and, on ubuntu alone, the build, the docs' specs, the pictures, the conf
 matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
 gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Windows, the
 slowest leg, runs as three: the suite in two shards (`test (windows-latest, node 22, 1/2)` and `2/2`) and every other
-step (`checks`). Each job still runs and skips only its steps,
+step (`checks`). The macOS leg and the Windows shards run npm test's suite through `tools/ci/suite-cli.ts`, a test file a
+core at once, as each runner's VM runs its job alone. Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the
@@ -394,6 +418,10 @@ as how teamrig works today.
   push, so one that is approved and green enters the merge queue with no click. It runs `main`'s copy of the file
   (`pull_request_target`), checks out no code, holds no secret and uses the job's own token, which is on no
   ruleset's bypass list: the review and every required check still hold, and a push after the approval dismisses it.
+- **A stuck check**: an awaited check queued or running for `checkMinutes` (in `tools/ship/repos.json`, 30 when not
+  listed) counts failed, its detail naming the minutes, and is never re-run as flaky; a job GitHub still lists running
+  after its run completed counts done with its conclusion, else failed. So a stuck check frees the ship slot; a long
+  runner queue counts too, so raise `checkMinutes` for a repository whose runners often queue that long.
 - **Review**: a code owner (`.github/CODEOWNERS`: the maintainer) reviews the code and approves the last push, and a
   new push dismisses an approval given before it. The reviewer holds it to
   [What a change is held to](#what-a-change-is-held-to) and declines a wrong direction. On a threshold, limit or trigger the reviewer asks "can this

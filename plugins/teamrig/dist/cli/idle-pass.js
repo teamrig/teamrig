@@ -76,7 +76,7 @@ export function byReopenOrder(a, b) {
  */
 async function wakeWeightOf(runtime, kit, config, roster, work, configured) {
     const { id } = work;
-    const rest = config.budget.enabled ? wakeRestOf(await budgetFactsOf(runtime, { kit, config, roster, id }, undefined), config.budget.quietHours, runtime.clock.now(), COLD_WAKE_W) : AWAKE;
+    const rest = config.budget.enabled ? wakeRestOf(await budgetFactsOf(runtime, { kit, config, roster, id }, undefined), config.budget, runtime.clock.now(), COLD_WAKE_W) : AWAKE;
     return { rest, maxPriority: effectivePriority(configured, rest, config.budget.quietHours), exemption: restExemptionOf(rest, configured, work.tasks, work.elsewhere) };
 }
 /**

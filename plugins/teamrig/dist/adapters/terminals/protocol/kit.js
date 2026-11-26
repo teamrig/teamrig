@@ -1,0 +1,122 @@
+import { isRecord, isStringArray } from "../../../plugin-api/index.js";
+import { quoted, replyOf, requestLine } from "./wire.js";
+/**
+ * The terminal world of an outside program in kit mode: each call is one of the kit's requests on the wire, and its
+ * answer is checked as outside data. A call that gets no answer the protocol has throws, so the case running it fails;
+ * a program serving no kit mode answers unserved, and every case that reads the world fails with that why.
+ */
+export function kitWorld(transport) {
+    let next = 0;
+    const call = async (method, params) => {
+        next += 1;
+        const id = next;
+        const answer = await transport(requestLine(id, method, params));
+        if (answer.kind !== 'answered') {
+            throw new Error(`${method}: ${answer.why}`);
+        }
+        const reply = replyOf(id, answer.output);
+        if (reply.kind !== 'result') {
+            throw new Error(`${method}: ${reply.why}`);
+        }
+        if (reply.result['kind'] === 'unserved') {
+            throw new Error(`${method}: the terminal serves no kit mode`);
+        }
+        if (reply.result['kind'] === 'failed') {
+            throw new Error(`${method}: the terminal failed: ${typeof reply.result['why'] === 'string' ? quoted(reply.result['why']) : 'no reason'}`);
+        }
+        return reply.result;
+    };
+    const wrong = (method) => new Error(`${method}: the terminal's answer is not one the kit has`);
+    return {
+        panes: async () => {
+            const { panes } = await call('kit.panes', {});
+            const read = Array.isArray(panes) ? panes.map(shownOf) : [undefined];
+            if (read.some((pane) => pane === undefined)) {
+                throw wrong('kit.panes');
+            }
+            return read.filter((pane) => pane !== undefined);
+        },
+        front: async () => {
+            const { pane } = await call('kit.front', {});
+            if (pane === null) {
+                return undefined;
+            }
+            if (typeof pane !== 'string' || pane === '') {
+                throw wrong('kit.front');
+            }
+            return pane;
+        },
+        put: async (pane, state) => {
+            if ((await call('kit.put', { pane, state }))['kind'] !== 'done') {
+                throw wrong('kit.put');
+            }
+        },
+        openByHand: async (title) => {
+            const { pane } = await call('kit.openByHand', { title });
+            if (typeof pane !== 'string' || pane === '') {
+                throw wrong('kit.openByHand');
+            }
+            return pane;
+        },
+        wakes: async (pane) => {
+            const { texts } = await call('kit.wakes', { pane });
+            if (!isStringArray(texts)) {
+                throw wrong('kit.wakes');
+            }
+            return texts;
+        },
+        restarts: async (pane) => {
+            const { resumes } = await call('kit.restarts', { pane });
+            if (!isBooleans(resumes)) {
+                throw wrong('kit.restarts');
+            }
+            return resumes;
+        },
+    };
+}
+/** Each kit request with the params of a world call, so a program cannot tell this check from a case. */
+const OUTSIDE_KIT_MODE = [
+    ['kit.panes', {}],
+    ['kit.front', {}],
+    ['kit.put', { pane: 'pane-1', state: 'busy' }],
+    ['kit.openByHand', { title: 'guest' }],
+    ['kit.wakes', { pane: 'pane-1' }],
+    ['kit.restarts', { pane: 'pane-1' }],
+];
+/**
+ * The kit requests a program started without kit mode answers with anything but unserved. A production host must
+ * serve none, so no caller can fake a pane's state in a terminal teamrig reads: an empty list is a pass.
+ */
+export async function kitLeaks(transport) {
+    const leaks = [];
+    for (const [index, [method, params]] of OUTSIDE_KIT_MODE.entries()) {
+        const id = index + 1;
+        const answer = await transport(requestLine(id, method, params));
+        if (answer.kind !== 'answered') {
+            leaks.push({ method, answer: answer.why });
+            continue;
+        }
+        const reply = replyOf(id, answer.output);
+        if (reply.kind !== 'result') {
+            leaks.push({ method, answer: reply.why });
+        }
+        else if (reply.result['kind'] !== 'unserved') {
+            leaks.push({ method, answer: quoted(JSON.stringify(reply.result)) });
+        }
+    }
+    return leaks;
+}
+/** One pane of a `kit.panes` answer, its window sent as null when it is in none teamrig named. */
+function shownOf(value) {
+    if (!isRecord(value)) {
+        return undefined;
+    }
+    const { pane, title, folder, argv, window } = value;
+    if (typeof pane !== 'string' || pane === '' || typeof title !== 'string' || typeof folder !== 'string' || !isStringArray(argv) || (window !== null && typeof window !== 'string')) {
+        return undefined;
+    }
+    return { pane, title, folder, argv, window: window ?? undefined };
+}
+function isBooleans(value) {
+    return Array.isArray(value) && value.every((item) => typeof item === 'boolean');
+}

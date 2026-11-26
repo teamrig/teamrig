@@ -6,6 +6,7 @@ import { restCapOf } from "../idle-pass.js";
 import { callerOf } from "../inputs.js";
 import { findTeam, openKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
+import { tabCapExcessOf, tabCapHoldOf } from "../tab-cap.js";
 import { sessionProjectOf } from "./setup.js";
 /**
  * `close <id|name> --session <lead> [--project <dir>] [--yes]`: (the lead only) ends an idle session's Claude Code
@@ -15,7 +16,8 @@ import { sessionProjectOf } from "./setup.js";
  * or a short day pauses it, p1 and p0 in the budget's quiet hours, p0 alone when they block, plus the work another session waits on unless a stop holds it: `restCapOf`) or a time wait of its own
  * ending soon, one quiet under `open.headroom.closeIdleMinutes`, one in a turn, at a tool call or waiting on a
  * decision it put to the person, one running background work or shells, and one whose last session is too big or old
- * to resume.
+ * to resume. A team past `open.headroom.maxTabs` lets its lowest-ranked sessions close with work they could start
+ * (`tabCapExcessOf`); every other check still holds them.
  * Without --yes it shows the close and ends nothing.
  */
 export async function close(args, runtime) {
@@ -33,12 +35,14 @@ export async function close(args, runtime) {
     const project = await sessionProjectOf(runtime, config, id, args.flags.get('project'), found.from);
     const facts = await idleFactsOf(runtime, kit, config, roster);
     const cap = await restCapOf(runtime, kit, config, roster, { id, tasks: facts.tasks, elsewhere: facts.elsewhere }, Number.POSITIVE_INFINITY);
-    const verdict = await idleVerdictOf(runtime, config, roster, facts, id, { ...cap, project });
+    const heldByCap = tabCapHoldOf(await tabCapExcessOf(runtime, kit, config, roster, facts), id);
+    const verdict = await idleVerdictOf(runtime, config, roster, facts, id, { ...cap, project, heldByCap });
     if (verdict.kind === 'keep') {
         throw new RefusedError(verdict.why);
     }
     const { closable } = verdict;
-    const what = `${name} (session ${id}): ${closableText(closable)}`;
+    const held = heldByCap === undefined ? '' : `, its work held: ${heldByCap}`;
+    const what = `${name} (session ${id}): ${closableText(closable)}${held}`;
     if (!args.switches.has('yes')) {
         runtime.out.stdout(`CLOSE ${what}; ${KIT_NAME} open ${name} resumes Claude Code session ${closable.record.hostSession}. Run again with --yes to close it`);
         return EXIT.ok;

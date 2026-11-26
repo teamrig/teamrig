@@ -11,15 +11,19 @@ import {
   checkedNextConfig,
   configFileJson,
   configLockOf,
+  findTeam,
   issueText,
   leadOnly,
+  openKit,
   openTeamKit,
   requireConfig,
   rosterOf,
+  type Kit,
   type LoadedConfig,
 } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { CONFIG_FORMAT_STEP, stepCommandOf } from '../../steps/pending.ts';
+import { loadTree } from '../tree.ts';
 
 /**
  * The config schema beside this CLI: the plugin's own copy for the installed CLI (`<plugin>/dist/cli/main.js`), the
@@ -31,15 +35,16 @@ export function configSchemaPathOf(script: string): string {
 }
 
 /**
- * `config get [<key>] [--json]`: every key of the team config the schema describes, or those at and under `<key>`,
- * with its value, its default and whether `config set` may change it; `--json` for a settings screen.
+ * `config get [<key>] [--json] [--team <id>]`: every key of the team config the schema describes, or those at and
+ * under `<key>`, with its value, its default and whether `config set` may change it; `--json` for a settings screen,
+ * `--team` for another team of the caller's tree (#1513), so the pane reads every team through teamrig.
  */
 export async function get(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const [key, extra] = args.positionals;
   if (extra !== undefined) {
     throw new UsageError(`unexpected "${extra}"`);
   }
-  const { load } = await openTeamKit(runtime);
+  const { load } = await readKitOf(runtime, args.flags.get('team'));
   if (load.status === 'missing') {
     throw new RefusedError(`no team config at ${load.path}`);
   }
@@ -63,6 +68,28 @@ export async function get(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCo
 export interface SchemaSettings {
   readonly schema: JsonRecord;
   readonly rows: readonly SettingRow[];
+}
+
+/**
+ * The kit `config get` reads: the caller's team's, else with `--team` that of another team of the caller's tree, above,
+ * below or beside it; a team outside the tree, or with no config here, is refused.
+ */
+async function readKitOf(runtime: CliRuntime, team: string | undefined): Promise<Kit> {
+  if (team === undefined) {
+    return openTeamKit(runtime);
+  }
+  const own = (await findTeam(runtime)).team;
+  if (team === own) {
+    return openKit(runtime, own);
+  }
+  const { tree } = await loadTree(runtime);
+  if (tree.leadOf(team) === undefined) {
+    throw new RefusedError(`no team ${team} with a config in this kit home`);
+  }
+  if (!tree.sameTree(own, team)) {
+    throw new RefusedError(`team ${team} is not in team ${own}'s tree: --team names a team above, below or beside yours`);
+  }
+  return openKit(runtime, team);
 }
 
 /**

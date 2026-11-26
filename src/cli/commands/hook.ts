@@ -21,6 +21,7 @@ import { showsLiveTasks } from '../../hooks/live-tasks.ts';
 import { requirementsNoteOnce } from '../../hooks/requirements-note.ts';
 import { helperOf } from '../../hooks/helper-start.ts';
 import { sessionStartContext, sessionStartReply, type CuttableNote, type SessionStartInput } from '../../hooks/session-start.ts';
+import { treeNoteOf } from '../../hooks/tree-note.ts';
 import { worktreeNoteOf } from '../../hooks/worktree-note.ts';
 import { stopModelNotices } from '../../hooks/stop-model.ts';
 import { leadStopLine, leadTallyOf } from '../../hooks/lead-boundary.ts';
@@ -56,6 +57,7 @@ import { loadTree } from '../tree.ts';
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle, type TitleRead } from './hook-bind.ts';
 import { helperGateReply, promptBudgetLine, stopBudgetLines } from './hook-budget.ts';
 import { ensureWatch } from './issue-watch.ts';
+import { turnEndIdlePass } from './hook-turn-end-pass.ts';
 import { leaderDigestText } from './hook-leader-digest.ts';
 import { closedSendHold } from './hook-closed-send.ts';
 import { coldSendHold } from './hook-cold-send.ts';
@@ -66,6 +68,8 @@ import { effortWritebackOf, type EffortWritebackOutcome } from './hook-effort-wr
 import { meetingHold } from './hook-meeting.ts';
 import { inheritedCrons, restartOrPark, restartTargetOf } from './hook-restart.ts';
 import { helperContextOf } from './hook-helper-start.ts';
+import { restrictionLine, restrictionOfEvent, restrictionStopLines } from './hook-restriction.ts';
+import { turnEndWeekReading } from './hook-turn-end-week.ts';
 import { promptSecretBlock } from './hook-prompt-secret.ts';
 import { guardLoadOf, hookTeam } from './hook-guard-load.ts';
 import {
@@ -474,7 +478,7 @@ const UNKNOWN_START: StartEvent = { session: undefined, cwd: undefined, transcri
 
 type TeamParts = Pick<
   SessionStartInput,
-  'teamRules' | 'keptRulesAbove' | 'renames' | 'titleNote' | 'refreshNote' | 'liveTasksNote' | 'modelNote' | 'verifyNote' | 'duplicateNote' | 'worktreeNote' | 'session' | 'sessionInEnv' | 'tree'
+  'teamRules' | 'keptRulesAbove' | 'renames' | 'titleNote' | 'refreshNote' | 'liveTasksNote' | 'modelNote' | 'verifyNote' | 'duplicateNote' | 'worktreeNote' | 'treeNote' | 'session' | 'sessionInEnv' | 'tree'
 > & {
   /** Why the start's Claude Code process could not be recorded; undefined when it was, or there was nothing to record. */
   readonly recordNote: string | undefined;
@@ -527,6 +531,7 @@ async function teamPartsOf(runtime: CliRuntime, kit: Kit, config: KitConfig, sta
     modelNote: modelNoteOf(modelsIfKnown(runtime), config, roster, id, start.model),
     verifyNote: await verifyStartNoteOf(runtime, kit.paths, id),
     worktreeNote: worktreeNoteOf(start.cwd, pathsIfKnown(runtime)),
+    treeNote: treeNoteOf(kitTree.tree, kit.paths.team, KIT_NAME),
     session,
     sessionInEnv: fromEnv !== undefined,
     tree: kitTree.tree.placeOf(kit.paths.team),
@@ -893,7 +898,8 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
   await ensureWatch(runtime, scope.kit, scope.config).catch(() => undefined);
   const hookless = await checkHooklessTabs(runtime, scope.kit, scope.config).catch((): readonly string[] => []);
   const lead = await leadStopLines(runtime, scope, event.transcript).catch((): readonly string[] => []);
-  const lines = [...effort.lines, ...notices, ...budget, ...verify, ...lead, ...hookless];
+  const restriction = await restrictionStopLines(runtime, scope.kit.paths, event, KIT_NAME);
+  const lines = [...effort.lines, ...notices, ...restriction, ...budget, ...verify, ...lead, ...hookless];
   const ask = await askBlockOf(runtime, scope, event.stopActive, decision).catch((): string | undefined => undefined);
   if (ask === undefined && decision.kind !== 'block') {
     // Only a turn that ends: a block sends the session on working, which its next tool's end records.
@@ -912,14 +918,16 @@ async function stopReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookR
  * writes an `/effort` the user typed in the session to its `launch` entry, logs it and tells its leader
  * (hook-effort-writeback.ts). It also tells the user, once each, when the session runs at another
  * effort than its `launch` entry or Claude Code switched its model after a safeguard stop, and once a
- * day when the date to verify one of its verifying tasks by has come. Under `hiring.policy` `automatic` it asks a
+ * day when the date to verify one of its verifying tasks by has come. In a host whose transcript tells the
+ * restriction a session runs under (hook-restriction.ts), it tells the user that once for each restriction. Under `hiring.policy` `automatic` it asks a
  * hired session whose last open task closed, once, to write its handover and retire; after a `set` to waiting it sends the
  * session, once, to its work it can start that does not come after the waiting task (keep-working.ts),
  * never in quiet hours or past its daily budget. When no `issue watch` holds the team's lease it
  * starts one hidden in the background (issue-watch.ts), and every 10 minutes it tells the lead of
  * a team tab that runs without its hooks (hook-hookless.ts). With tab status on, it also sets the
  * tab's title to the ready circle, or the working one while a helper runs, in any tab of the team (hook-tab-status.ts).
- * Each team session's reply is logged for the task pane (hook-turn-log.ts).
+ * Each team session's reply is logged for the task pane (hook-turn-log.ts). In a host with no tab mod, such as Codex
+ * CLI, it then runs the team's idle pass, which such a host's tabs would otherwise never run (hook-turn-end-pass.ts).
  * A turn with nothing to say reads only small files and the transcript's tail (and, at the first stop of a UTC day,
  * the register log; with tab status on, the longer tail where helpers start), and prints nothing but the tab's title.
  * It never blocks on an error, and ignores input that is not a hook payload (which would judge a boundary without
@@ -930,12 +938,18 @@ export async function stop(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const { event } = await readHookInput(runtime);
   const reply = event === undefined ? undefined : await stopReplyOf(runtime, event).catch((): HookReply | undefined => undefined);
   writeReply(runtime, 'stop', reply);
+  // After the reply, which neither step may hold up or cost: an error here leaves the next turn's end to try again.
+  if (event !== undefined) {
+    await turnEndWeekReading(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the plan's reading was not saved: ${errorMessage(error)}`));
+    await turnEndIdlePass(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the idle pass did not run: ${errorMessage(error)}`));
+  }
   return EXIT.ok;
 }
 
 /**
  * SessionStart: the core rules from the team config, who the session is (after a refresh, its handover; after a
- * refresh or a compaction, its live tasks), and the team's rules.md. It starts the team's `issue watch` when none runs. A compaction inside a helper fires it too,
+ * refresh or a compaction, its live tasks), the team's rules.md, and, in a host whose transcript tells it, the
+ * restriction the resumed session's last turn ran under (hook-restriction.ts). It starts the team's `issue watch` when none runs. A compaction inside a helper fires it too,
  * under the session's id: that start gets the helper's context (hook-helper-start.ts) and binds, renames and
  * refreshes nothing.
  */
@@ -975,11 +989,15 @@ export async function sessionStart(args: ParsedArgs, runtime: CliRuntime): Promi
           verifyNote: undefined,
           duplicateNote: undefined,
           worktreeNote: undefined,
+          treeNote: undefined,
           session: undefined,
           sessionInEnv: false,
           tree: undefined,
         };
-  const context = sessionStartContext({ team: found.team, load: kit.load, ...parts, command: KIT_NAME, platform: runtime.platform, clock: rulesClockOf(runtime) });
+  const rules = sessionStartContext({ team: found.team, load: kit.load, ...parts, command: KIT_NAME, platform: runtime.platform, clock: rulesClockOf(runtime) });
+  // A resumed or compacted session's transcript tells the restriction its last turn ran under; a new one's tells none yet.
+  const restriction = event === undefined ? undefined : await restrictionOfEvent(runtime, event);
+  const context = restriction === undefined ? rules : `${rules}\n${restrictionLine(restriction, KIT_NAME)}`;
   const requirementsNote = await requirementsNoteOnce({
     problems: await runtime.requirements.problems(),
     log: new JsonlHintLog(hookLogOf(runtime, kit.paths, 'bind-hints')),

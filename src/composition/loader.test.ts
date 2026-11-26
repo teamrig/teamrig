@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { API_VERSION } from '../plugin-api/index.ts';
+import { apiVersionNotice } from '../plugin-api/version.ts';
 import { HOST_PORT_NAMES } from '../ports/host/index.ts';
 import { hostDeps, terminalDeps } from '../testing/adapter-deps.ts';
 import { connectorDeclarationData, hostDeclarationData, terminalDeclarationData } from '../testing/manifests.ts';
@@ -8,7 +9,7 @@ import { TERMINAL_ADAPTERS } from './adapters.ts';
 import { importModule, loadConnector, loadHost, loadTerminal, readConnectorSteps, readDeclarations, readHostSteps, type Load, type ModuleImporter } from './loader.ts';
 
 const HOST_ENTRY = '../adapters/hosts/claude-code/index.ts';
-const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator'];
+const TERMINAL_IDS = ['tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'headless'];
 const TERMINAL_LIST = TERMINAL_IDS.join(', ');
 const terminalDeclarationFile = (id: string): string => `../adapters/terminals/${id}/declaration.ts`;
 /** The declaration module of each built-in terminal, by its specifier. */
@@ -70,6 +71,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
         ['gnome-terminal', 'loaded', 'GNOME Terminal'],
         ['konsole', 'loaded', 'Konsole'],
         ['x-terminal-emulator', 'loaded', 'x-terminal-emulator'],
+        ['headless', 'loaded', 'headless'],
       ],
     );
     assert.deepEqual(
@@ -100,8 +102,8 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     ]);
   });
 
-  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, and the rest still loads', async () => {
-    assert.equal(API_VERSION, '0.2.0');
+  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, or on 0.3.0 when it serves issue search, all loading on this teamrig, and the rest still loads', async () => {
+    assert.equal(apiVersionNotice('0.2.0', API_VERSION), undefined);
     const { hosts, connectors, terminals } = await readDeclarations();
     const loads = [...hosts, ...connectors, ...terminals];
     assert.deepEqual(
@@ -111,8 +113,8 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     const newer = loads.flatMap((load) => (load.kind === 'loaded' && (load.value.terms !== undefined || load.value.steps !== undefined) ? [[load.id, load.value.apiVersion]] : []));
     assert.deepEqual(newer, [
       ['claude-code', '0.2.0'],
-      ['github', '0.2.0'],
-      ['jira', '0.2.0'],
+      ['github', '0.3.0'],
+      ['jira', '0.3.0'],
     ]);
   });
 });
@@ -154,7 +156,7 @@ describe('reading the declarations', () => {
     });
     const { hosts, connectors, terminals } = await readDeclarations(importer);
     assert.deepEqual(hosts.map(noticesOf), [undefined, ['its declaration.ts did not load: Cannot find module ../adapters/hosts/codex-cli/declaration.ts'], undefined]);
-    assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined]);
+    assert.deepEqual(terminals.map(noticesOf), [undefined, undefined, undefined, undefined, ['it needs a name'], undefined, undefined]);
     assert.deepEqual(connectors.map(noticesOf), [
       ['its refPrefix must be a lower-case word ending in a colon'],
       ['its declaration.ts did not load: Cannot find module ../adapters/connectors/jira/declaration.ts'],

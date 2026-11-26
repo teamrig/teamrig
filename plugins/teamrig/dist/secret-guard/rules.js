@@ -5,11 +5,14 @@ import { DEFAULT_SECRET_PATHS, SecretPaths } from "./paths.js";
 import { PatternList } from "./pattern-list.js";
 import { readKeyText } from "./public-key.js";
 /**
- * The globs `host` names. A `!glob` among them is left out: a host adds secret files, and only a team's own `!glob`
- * keeps a file readable, so no host can open what the defaults or another host keeps.
+ * The globs `host` names, its `namedFiles` as `NamedGlob`s. A `!glob` among them is left out: a host adds secret
+ * files, and only a team's own `!glob` keeps a file readable, so no host can open what the defaults or another host
+ * keeps.
  */
 function hostGlobs(host) {
-    return host.secretFiles().filter((glob) => !glob.startsWith('!'));
+    const opening = (glob) => glob.startsWith('!');
+    const named = (host.namedFiles?.() ?? []).filter((glob) => !opening(glob)).map((glob) => ({ named: glob }));
+    return [...host.secretFiles().filter((glob) => !opening(glob)), ...named];
 }
 /**
  * The defaults, then the team's own globs, names and commands; file names ignore case on Windows and macOS hosts.

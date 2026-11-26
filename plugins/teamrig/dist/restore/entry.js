@@ -1,9 +1,8 @@
 import { isNonNegativeInteger, isRecord, stringField } from "../core/guards.js";
-import { hostSessionOf } from "../core/host-session.js";
+import { hostSessionOf, isHostSessionId } from "../core/host-session.js";
 import { ID_PATTERN } from "../core/ids.js";
 import { parseObject } from "../core/jsonl.js";
 import { MS_PER_MINUTE } from "../core/time.js";
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 const ACTIVITY_STATES = ['ready', 'working', 'error'];
 /** The ends a person or Claude Code chose; any other end (`other`) may be the shutdown closing the terminal. */
 export const INTENTIONAL_END_REASONS = new Set(['clear', 'resume', 'logout', 'prompt_input_exit']);
@@ -15,6 +14,10 @@ export const OTHER_END = 'other';
  * rare enough that most tool ends only read the entry.
  */
 export const TOOL_END_WRITE_MS = 5 * MS_PER_MINUTE;
+/** The entry's `host` field, left out for none. */
+function hostOf(host) {
+    return host === undefined ? {} : { host };
+}
 /** `entry` with its failed turn's state, left out when there is none. */
 function withApiError(entry, apiError) {
     return apiError === undefined ? entry : { ...entry, apiError };
@@ -56,6 +59,7 @@ export function applyEvent(existing, event, facts) {
         restoredAt: existing?.restoredAt,
         endedAt: undefined,
         endReason: undefined,
+        ...hostOf(facts.host ?? existing?.host),
     };
     const kept = existing?.apiError;
     switch (event.kind) {
@@ -97,6 +101,7 @@ export function entryRecord(entry) {
         restoredAt: isoOf(entry.restoredAt),
         endedAt: isoOf(entry.endedAt),
         endReason: entry.endReason,
+        host: entry.host,
         apiError: apiError === undefined ? undefined : { code: apiError.code, failedAt: isoOf(apiError.failedAt), retries: apiError.retries, retriedAt: isoOf(apiError.retriedAt) },
     };
 }
@@ -160,11 +165,12 @@ export function entryOfRecord(record) {
     const endedAt = instantField(record, 'endedAt');
     const team = idField(record, 'team');
     const session = idField(record, 'session');
+    const host = idField(record, 'host');
     const rawPid = record['pid'];
     const pid = rawPid === undefined ? undefined : isNonNegativeInteger(rawPid) ? rawPid : null;
     const restoreAttempts = record['restoreAttempts'];
     if (hostSession === undefined ||
-        !CLAUDE_SESSION_ID.test(hostSession) ||
+        !isHostSessionId(hostSession) ||
         projectDir === undefined ||
         state === undefined ||
         createdAt === undefined ||
@@ -175,6 +181,7 @@ export function entryOfRecord(record) {
         endedAt === null ||
         team === null ||
         session === null ||
+        host === null ||
         !isNonNegativeInteger(restoreAttempts) ||
         pid === null) {
         return undefined;
@@ -195,6 +202,7 @@ export function entryOfRecord(record) {
         restoredAt,
         endedAt,
         endReason: stringField(record, 'endReason'),
+        ...hostOf(host),
     };
     return withApiError(entry, apiErrorOf(record['apiError']));
 }

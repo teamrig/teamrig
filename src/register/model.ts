@@ -97,7 +97,18 @@ export function isTrackerRef(ref: string | null | undefined): ref is TrackerRefT
  */
 export const LOCAL_REF_PREFIX = 'local: ';
 
-/** Whether a task's ref points at its issue or says why it has none: the two refs `github.issueAtAdd` accepts. */
+/**
+ * The ref of a task whose public issue another session opens later (`add --issue-later`, T5457), then the reason: a
+ * session that may not open issues itself adds the task, and the holder of the role giving `issue migrate` opens its
+ * issue and links it. It is no local mark, so that holder may replace it, while a `local: ` ref stays its owner's or a
+ * leader's to lift (a security hole is kept off GitHub that way).
+ */
+export const ISSUE_LATER_REF_PREFIX = 'issue later: ';
+
+/**
+ * Whether a task's ref points at its issue or says why it stays local. An issue-later ref is neither: `check` flags
+ * NO-ISSUE on it until its issue is linked, and the migrate role's holder may link it.
+ */
 export function hasIssueOrReason(ref: string | null): boolean {
   return isIssueRef(ref) || (ref !== null && ref.startsWith(LOCAL_REF_PREFIX));
 }

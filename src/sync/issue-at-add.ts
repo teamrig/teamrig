@@ -1,15 +1,15 @@
 import type { GithubConfig } from '../config/types.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import type { IssueDraft } from '../issues/host.ts';
-import { isIssueRef, LOCAL_REF_PREFIX } from '../register/model.ts';
+import { ISSUE_LATER_REF_PREFIX, isIssueRef, LOCAL_REF_PREFIX } from '../register/model.ts';
 import type { Verdict } from '../register/policy.ts';
 import { issueLabels, priorityLabelOf, publicIssueText, type RowType } from './migrate.ts';
 
 /**
  * What `teamrig add` does about the new task's GitHub issue (T3132): open one with the public wording given, record
- * why the task stays local, or nothing. While `github.issueAtAdd` names a repository, an add must say one or the
- * other (or point `--ref` at an issue it has), so no task starts without its issue unless someone wrote why. Judged
- * before the task is written, so a refused add writes nothing.
+ * why the task stays local, record why its issue opens later (T5457), or nothing. While `github.issueAtAdd` names a
+ * repository, an add must say one of the three (or point `--ref` at an issue it has), so no task starts without its
+ * issue unless someone wrote why. Judged before the task is written, so a refused add writes nothing.
  */
 
 /** What an add asked about its issue, from its flags, and the task's own type and priority for the labels. */
@@ -22,16 +22,21 @@ export interface AddIssueAsk {
   readonly repo: string | undefined;
   /** `--local`: why the task gets no issue. */
   readonly local: string | undefined;
+  /** `--issue-later`: why the task's issue opens later, by the holder of the role giving `issue migrate`. */
+  readonly later: string | undefined;
   /** `--ref`: the task's own ref. */
   readonly ref: string | undefined;
   readonly type: RowType | undefined;
   readonly priority: number;
 }
 
-/** No issue, the local ref to write with the task, or the issue to open before it is written, its ref pointing there. */
+/**
+ * No issue, a reason ref to write with the task (kept local, or its issue opening later), or the issue to open before
+ * it is written, its ref pointing there.
+ */
 export type AddIssuePlan =
   | { readonly kind: 'none' }
-  | { readonly kind: 'local'; readonly ref: string }
+  | { readonly kind: 'local' | 'later'; readonly ref: string }
   | { readonly kind: 'open'; readonly draft: IssueDraft };
 
 /** The name a refusal gives the task, which has no id before it is written. */
@@ -40,8 +45,14 @@ const NEW_TASK = 'the new task';
 /** The plan for an add's issue under the team's GitHub settings, or why the add is refused. */
 export function addIssuePlan(ask: AddIssueAsk, github: Pick<GithubConfig, 'repos' | 'issueAtAdd'>, scanner: SecretScanner): Verdict<AddIssuePlan> {
   const asksIssue = ask.title !== undefined || ask.body !== undefined || ask.repo !== undefined;
+  if (ask.local !== undefined && ask.later !== undefined) {
+    return { ok: false, error: '--local keeps the task off GitHub and --issue-later opens its issue later; give one' };
+  }
   if (ask.local !== undefined) {
-    return localPlan(ask.local, asksIssue, ask.ref);
+    return reasonPlan(LOCAL, ask.local, asksIssue, ask.ref);
+  }
+  if (ask.later !== undefined) {
+    return reasonPlan(LATER, ask.later, asksIssue, ask.ref);
   }
   if (asksIssue) {
     return openPlan(ask, github, scanner);
@@ -49,24 +60,47 @@ export function addIssuePlan(ask: AddIssueAsk, github: Pick<GithubConfig, 'repos
   if (github.issueAtAdd !== undefined && !isIssueRef(ask.ref)) {
     return {
       ok: false,
-      error: `github.issueAtAdd is ${github.issueAtAdd}: give the task's public issue with --issue <title> --issue-body <text>, or why it stays local with --local <reason>`,
+      error:
+        `github.issueAtAdd is ${github.issueAtAdd}: give the task's public issue with --issue <title> --issue-body <text>, ` +
+        'why it stays local with --local <reason>, or why its issue opens later with --issue-later <reason>',
     };
   }
   return { ok: true, value: { kind: 'none' } };
 }
 
-function localPlan(reason: string, asksIssue: boolean, ref: string | undefined): Verdict<AddIssuePlan> {
+/** A flag whose one-line reason is written as the task's ref after its prefix, in place of an issue. */
+interface ReasonFlag {
+  readonly kind: 'local' | 'later';
+  readonly flag: string;
+  readonly prefix: string;
+  /** What the flag does, for the refusal of an issue given with it. */
+  readonly does: string;
+  /** What its reason says, for the refusal of an empty or multi-line one. */
+  readonly says: string;
+}
+
+const LOCAL: ReasonFlag = { kind: 'local', flag: '--local', prefix: LOCAL_REF_PREFIX, does: 'keeps the task off GitHub', says: 'why the task gets no issue' };
+const LATER: ReasonFlag = {
+  kind: 'later',
+  flag: '--issue-later',
+  prefix: ISSUE_LATER_REF_PREFIX,
+  does: "leaves the task's issue to the holder of the issue migrate role",
+  says: "why the task's issue opens later",
+};
+
+function reasonPlan(reasonFlag: ReasonFlag, reason: string, asksIssue: boolean, ref: string | undefined): Verdict<AddIssuePlan> {
+  const { kind, flag, prefix, does, says } = reasonFlag;
   if (asksIssue) {
-    return { ok: false, error: '--local keeps the task off GitHub, so it takes no --issue, --issue-body or --issue-repo' };
+    return { ok: false, error: `${flag} ${does}, so it takes no --issue, --issue-body or --issue-repo` };
   }
   if (ref !== undefined) {
-    return { ok: false, error: '--local writes the task\'s ref as the reason; give --local or --ref, not both' };
+    return { ok: false, error: `${flag} writes the task's ref as the reason; give ${flag} or --ref, not both` };
   }
   const shown = reason.trim();
   if (shown === '' || /[\r\n]/u.test(shown)) {
-    return { ok: false, error: '--local is one line saying why the task gets no issue' };
+    return { ok: false, error: `${flag} is one line saying ${says}` };
   }
-  return { ok: true, value: { kind: 'local', ref: `${LOCAL_REF_PREFIX}${shown}` } };
+  return { ok: true, value: { kind, ref: `${prefix}${shown}` } };
 }
 
 function openPlan(ask: AddIssueAsk, github: Pick<GithubConfig, 'repos' | 'issueAtAdd'>, scanner: SecretScanner): Verdict<AddIssuePlan> {

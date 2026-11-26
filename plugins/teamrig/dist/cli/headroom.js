@@ -19,8 +19,26 @@ export async function headroomOf(runtime, paths, config, ids) {
         runningMb: running.map((place) => place.treeMb),
         runningCommittedMb: running.flatMap((place) => (place.committedMb === undefined ? [] : [place.committedMb])),
         loading,
+        teamTabs: teamTabsOf(paths.team, running.map((place) => place.id), loading),
     };
     return headroomFor(room, tabFloorOf(config.open.headroom, config.delivery.queue), config.open.headroom);
+}
+/**
+ * The team's tabs open: its sessions running, plus the sessions of its tabs still loading that are not yet seen
+ * running (a tab's process is listed before its session records it), each session once.
+ */
+export function teamTabsOf(team, running, loading) {
+    const open = new Set(running);
+    for (const hold of loading) {
+        if (hold.team === team) {
+            open.add(hold.session);
+        }
+    }
+    return open.size;
+}
+/** The team's tabs open now ({@link teamTabsOf}), its sessions `running` and the host's live tab holds read. */
+export async function teamTabsNow(runtime, paths, config, running) {
+    return teamTabsOf(paths.team, running, await tabHoldsOf(runtime, paths, config).live());
 }
 function hostLockOf(paths, config) {
     return deliveryPlaces(config.delivery, paths).hostLock;

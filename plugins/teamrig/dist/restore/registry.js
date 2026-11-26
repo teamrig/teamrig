@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
+import { isHostSessionId } from "../core/host-session.js";
 import { formatEntry, parseEntry } from "./entry.js";
 const SUFFIX = '.json';
 /**
@@ -18,15 +18,15 @@ export function restoreLogPath(kitHome) {
  * file; any other is refused, so no id from a payload reaches a path.
  */
 export function sessionFileIn(dir, hostSession) {
-    if (!CLAUDE_SESSION_ID.test(hostSession)) {
-        throw new Error(`${JSON.stringify(hostSession)} is not a Claude Code session id`);
+    if (!isHostSessionId(hostSession)) {
+        throw new Error(`${JSON.stringify(hostSession)} is not a host session id`);
     }
     return join(dir, `${hostSession}${SUFFIX}`);
 }
 /** The session id a file of a restore folder is named for; undefined for a file of another name. */
 export function sessionOfFile(name) {
     const id = name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : '';
-    return CLAUDE_SESSION_ID.test(id) ? id : undefined;
+    return isHostSessionId(id) ? id : undefined;
 }
 /**
  * One entry file per Claude Code session (`<session id>.json`), each replaced whole (`Files.write` is

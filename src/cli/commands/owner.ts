@@ -2,6 +2,7 @@ import { formatAddress } from '../../core/address.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { LATER_FORMS, MAX_LATER_HOURS, namedLaterTime } from '../../core/later-time.ts';
 import { storedDeadline, storedText, typedTimeHint } from '../../core/time.ts';
+import { isCardDigest } from '../../register/card-digest.ts';
 import type { Task } from '../../register/fold.ts';
 import type { OwnerAnswer } from '../../register/policy.ts';
 import type { OwnerNextPreview } from '../../register/register.ts';
@@ -197,6 +198,15 @@ function answerOf(args: ParsedArgs): OwnerAnswer {
   return approve ? { kind: 'approve' } : { kind: 'decline' };
 }
 
+/** The digest `owner decide --read` was given (cardDigest), if any. */
+function readDigestOf(args: ParsedArgs): string | undefined {
+  const read = args.flags.get('read');
+  if (read !== undefined && !isCardDigest(read)) {
+    throw new UsageError(`--read takes the digest of the card that was read, 64 hex characters (cardDigest in teamrig's read entry), not "${read}"`);
+  }
+  return read;
+}
+
 /** `--until in-1h|tomorrow|monday|<time>`: when a card put off comes back, in the stored form of a deadline. */
 function untilOf(text: string, times: TypedTimes): string {
   const until = namedLaterTime(text, times.nowMs, times.zone) ?? storedDeadline(text, times.nowMs, times.zone);
@@ -207,18 +217,20 @@ function untilOf(text: string, times: TypedTimes): string {
 }
 
 /**
- * `owner decide <[team/]T<id>> --option <n>|--approve|--decline`: the owner answers a card from the pane's Decisions tab
- * (T4078). It is kept in the task's history as the owner's Decided, naming the option chosen or yes or no, which drops
+ * `owner decide <[team/]T<id>> --option <n>|--approve|--decline [--read <digest>]`: the owner answers a card from the
+ * pane's Decisions tab (T4078). It is kept in the task's history as the owner's Decided, naming the option chosen or yes or no, which drops
  * the task's waits on the owner, and wakes the task's session to go on from it. Refused on a task that waits on no
  * decision or approval of the owner, on an option the card lacks, on yes or no to a decision or an option to an
- * approval, and under CLAUDECODE.
+ * approval, on a `--read` digest the card no longer has, on a security-related card without its current verdict, and
+ * under CLAUDECODE.
  */
 export async function ownerDecide(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   refuseUnlessOwner(runtime, 'decide');
   const answer = answerOf(args);
+  const read = readDigestOf(args);
   const target = await targetOf(runtime, onePositional(args, '[team/]T<id>'), 'write');
   const { team, names } = target;
-  const written = await team.register.ownerDecide(target.id, answer);
+  const written = await team.register.ownerDecide(target.id, answer, read);
   const code = report(runtime, written, 'DECIDED', team, target.label);
   if (written.ok) {
     const { task } = written.value;

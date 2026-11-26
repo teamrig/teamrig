@@ -6,7 +6,9 @@ import { GITHUB_SOURCE, isImportSource } from "../../register/model.js";
 import { addedTasks } from "../../sync/auto.js";
 import { importedTasks, linkedRefs, planSync } from "../../sync/plan.js";
 import { capPlan, scopeIssues } from "../../sync/scope.js";
+import { formatReportersFile, insideReporters, parseReportersFile, reporterLines } from "../../sync/reporters.js";
 import { ACTIVE_STATUSES } from "../../register/model.js";
+import { plainLine } from "../../core/printable.js";
 import { applySteps } from "../../sync/sync.js";
 import { connectorOffBy, CONNECTOR_OFF } from "../connector-off.js";
 import { HostAdapterError, trackerPortsOf } from "../issue-hosts.js";
@@ -17,6 +19,13 @@ export function fileScopeStore(files, paths) {
     return {
         read: async (id) => parseScopeFile((await files.read(connectorState(paths, id).scope)) ?? ''),
         write: (id, places) => files.write(connectorState(paths, id).scope, formatScopeFile(places)),
+    };
+}
+/** The reporter store in each connector's state folder (connector-state.ts). */
+export function fileReporterStore(files, paths) {
+    return {
+        read: async (id) => parseReportersFile((await files.read(connectorState(paths, id).reporters)) ?? ''),
+        write: (id, seen) => files.write(connectorState(paths, id).reporters, formatReportersFile(seen)),
     };
 }
 /** The end of a run that reads no other tracker, as one given `--repo` does. */
@@ -68,9 +77,11 @@ export async function syncTrackers(run, say) {
         const planned = { adds: 0 };
         const taken = await run.scopes.read(id);
         const places = new Map(taken);
+        const seen = await run.reporters.read(id);
+        const reporters = new Set(seen);
         let wrote = 0;
         for (const target of ports.targets) {
-            const end = await syncTarget(run, { ports, tracker, rules, told, planned, places }, target, say);
+            const end = await syncTarget(run, { ports, tracker, rules, told, planned, places, seen, reporters }, target, say);
             ends.push(end.end);
             added.push(...end.added);
             failures.push(...end.failures);
@@ -79,6 +90,10 @@ export async function syncTrackers(run, say) {
         }
         if (write && formatScopeFile(places) !== formatScopeFile(taken)) {
             await run.scopes.write(id, places);
+        }
+        // Only a person's --yes takes a reporter, so an automatic run keeps marking a new one until someone has seen it.
+        if (run.kind === 'yes' && formatReportersFile(reporters) !== formatReportersFile(seen)) {
+            await run.reporters.write(id, reporters);
         }
         written += wrote;
         say(write
@@ -142,10 +157,16 @@ async function syncTarget(run, on, target, say) {
     on.planned.adds += plan.steps.filter((step) => step.kind === 'add').length;
     // The adds the scope hold kept back are told by its own line, so no CAPPED line counts them as well.
     const waiting = gate.held > 0 ? addsOf(planned) : 0;
+    // A ruled issue's TRUST line already says why it was kept out, so the LEFT OUT line names only the others.
+    const ruled = new Set(scoped.issues.filter((issue) => issue.ruled !== undefined).map((issue) => issue.number));
+    const inside = insideReporters(scoped.issues);
+    inside.forEach((reporter) => on.reporters.add(reporter.id));
     const leftOut = [
         ...scopeLines(target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
+        ...trustLines(target, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number })),
+        ...reporterLines(target, inside, on.seen),
         ...(waiting > 0 ? [`HELD ${target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : []),
-        ...leftOutLine(target, plan.leftOut.flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
+        ...leftOutLine(target, plan.leftOut.filter((number) => !ruled.has(number)).flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
     ];
     const scopeHolds = gate.tell ? [heldScopeLine(on.tracker.source, target, waiting, run.config.sync.maxNewPerSync)] : [];
     if (run.kind === 'preview') {
@@ -192,6 +213,30 @@ export function scopeLines(target, outside, capped) {
         ...(outside > 0 ? [`SCOPE ${target}: ${outside} issue(s) outside the import scope dropped; sync.scope widens it`] : []),
         ...(capped.held > 0 && capped.key !== undefined ? [`CAPPED ${target}: ${capped.held} more in scope, held for a later run; raise sync.${capped.key} or narrow sync.scope`] : []),
     ];
+}
+/**
+ * Why the tracker's own trust rule (sync/trust-rule.ts) let in or kept out each open issue of a place, one TRUST line
+ * per verdict and block, by ref only (the text is the issue's, never shown here), at most SHOWN_LEFT_OUT refs a line,
+ * then how many more; lines that let in come first. A verdict whose fact could not be read says so. An issue judged by
+ * its authors' ties (no `ruled`) gets no line: the LEFT OUT line tells those.
+ */
+export function trustLines(target, issues, refOf) {
+    const groups = new Map();
+    for (const issue of issues) {
+        const ref = refOf(issue);
+        if (issue.state !== 'open' || issue.ruled === undefined || ref === undefined) {
+            continue;
+        }
+        const { ruled } = issue;
+        const key = ruled.trusted ? `let in, ${plainLine(ruled.why)}` : `kept out, ${plainLine(ruled.why)}${ruled.failed === undefined ? '' : ` (${plainLine(ruled.failed)})`}`;
+        groups.set(key, [...(groups.get(key) ?? []), ref]);
+    }
+    return [...groups]
+        .sort(([a], [b]) => Number(b.startsWith('let in')) - Number(a.startsWith('let in')))
+        .map(([why, refs]) => {
+        const more = refs.length - SHOWN_LEFT_OUT;
+        return `TRUST ${target}: ${refs.length} ${why}: ${refs.slice(0, SHOWN_LEFT_OUT).join(' ')}${more > 0 ? ` and ${more} more` : ''}`;
+    });
 }
 /**
  * The line naming, by ref only, the open issues of a place the trust rule (sync/trust.ts) kept out: at most

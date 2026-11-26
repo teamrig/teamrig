@@ -14,7 +14,7 @@ function provedOnWindows(feature) {
     };
 }
 export const declaration = {
-    apiVersion: '0.2.0',
+    apiVersion: '0.3.0',
     id: 'github',
     name: 'GitHub',
     kinds: ['tracker', 'codehost'],

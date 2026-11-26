@@ -81,12 +81,12 @@ function holdWhyLine(why: string): string {
 }
 
 /**
- * Each Claude Code session's ask and its outcome (`<session>.ask`, `<session>.outcome`). The outcome is
+ * Each host session's ask and its outcome (`<session>.ask`, `<session>.outcome`). The outcome is
  * created once (`createExclusive`): the mod's claim writes `taken`, its hold (a helper, a draft, the person
  * or the band's count) `held`, the restart's withdraw `withdrawn`, and whichever comes later learns that it
  * lost, so a tab is never both cleared and ended, nor ended while it held the ask. A hold's reason goes in
  * `<session>.held` first, so the restart reads it once it sees `held`. Callers check the session id with
- * `isClaudeSessionId` first; an unsafe one throws.
+ * `isHostSessionId` (src/core/host-session.ts) first; an unsafe one throws.
  */
 export class ClearAsks {
   private readonly files: Files;
@@ -171,7 +171,7 @@ export class ClearAsks {
 
   private checked(path: string | undefined, hostSession: string): string {
     if (path === undefined) {
-      throw new Error(`"${hostSession}" is not a Claude Code session id`);
+      throw new Error(`"${hostSession}" is not a host session id`);
     }
     return path;
   }

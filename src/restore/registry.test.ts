@@ -56,8 +56,8 @@ describe('RestoreRegistry', () => {
     );
   });
 
-  it('refuses an id that is not a Claude Code session id, so none reaches a path', () => {
+  it('refuses an id that is not a host session id, so none reaches a path', () => {
     const registry = new RestoreRegistry(new MemoryFiles(), DIR);
-    assert.throws(() => registry.pathOf('../../etc/passwd'), /is not a Claude Code session id/);
+    assert.throws(() => registry.pathOf('../../etc/passwd'), /is not a host session id/);
   });
 });

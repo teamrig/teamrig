@@ -22,7 +22,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.rules-folder` | the rules folder of a project | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `rules.memory` | memory files kept between sessions | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
@@ -32,7 +32,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 
 ### context
 
@@ -46,21 +46,21 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
-| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `hooks.permission-refuse` | refusing a permission prompt when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no PermissionRequest hook |
 | `hooks.output-redact` | redacting a secret in tool output | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: PreToolUse overwrite redact-exec wrapper is not built yet |
 | `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: PreInvocation cannot take back a prompt that was already typed), unproved |
-| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 
 ### permissions
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: permissions port is not built yet |
+| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: pattern wildcards in read_file() and command(), subfolder globbing, ~ expansion in read_file(), and prefix allow rules), proved on [windows](proofs/antigravity-cli.md#permissionsdeny-lines); unproved on linux, macos |
 | `permissions.auto-mode-routes` | the push and deploy routes granted to auto mode | supported, proved on [windows](proofs/claude-code.md#permissionsauto-mode-routes); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no Claude Code auto-mode routes |
 
 ### sessions
@@ -71,7 +71,7 @@ The AI CLIs a session runs in.
 | `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab resume |
 | `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.wake` | waking an idle session | supported, proved on [windows](proofs/claude-code.md#sessionswake); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake mod |
-| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity --host-event hook routing is not built yet |
+| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `sessions.process` | finding the session's process | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no tab process tracking |
 | `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
 | `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
@@ -111,7 +111,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity hooks.json writer is not built yet |
+| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | unsupported: not built for Codex CLI yet | supported, proved on [windows](proofs/antigravity-cli.md#pluginhooks-file); unproved on linux, macos |
 | `plugin.hook-trust` | guards stay on across a teamrig update | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
 | `plugin.install-update` | installing and updating teamrig, and reading its version | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab plugin reload mod |
 | `plugin.cli-on-path` | `teamrig` on the path | supported, proved on [windows](proofs/claude-code.md#plugincli-on-path); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
@@ -149,8 +149,8 @@ The AI CLIs a session runs in.
 
 The outside tools holding a team's issues (the `tracker` rows) or its code and pull requests (the `codehost` rows).
 
-- GitHub (`github`), built on plugin API 0.2.0
-- Jira (`jira`), built on plugin API 0.2.0
+- GitHub (`github`), built on plugin API 0.3.0
+- Jira (`jira`), built on plugin API 0.3.0
 - Local (`local`), built on plugin API 0.1.0
 
 ### tracker
@@ -199,18 +199,19 @@ The programs whose panes the sessions run in.
 - GNOME Terminal (`gnome-terminal`), built on plugin API 0.1.0
 - Konsole (`konsole`), built on plugin API 0.1.0
 - x-terminal-emulator (`x-terminal-emulator`), built on plugin API 0.1.0
+- headless (`headless`), built on plugin API 0.1.0
 
 ### pane
 
-| Feature | What it does | tmux | Windows Terminal | macOS Terminal | GNOME Terminal | Konsole | x-terminal-emulator |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `pane.open` | opens a pane for a session and answers its own id of it | supported, unproved | supported, unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | supported, unproved |
-| `pane.window` | opens a pane in the window teamrig names, made when none of that name is open | unsupported: a pane opens in the tmux session teamrig runs in: teamrig names no other | supported, unproved | unsupported: every pane is a window of its own | unsupported: a pane opens in the window GNOME Terminal picks: teamrig names none | unsupported: a pane opens in the window Konsole picks: teamrig names none | unsupported: every pane is a window of its own |
-| `pane.focus` | brings a session's pane forward | supported, unproved | supported, unproved | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open |
-| `pane.close` | closes a session's pane | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open |
-| `pane.restart` | restarts a pane's command, resuming the conversation when asked | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open |
-| `pane.rename` | changes a pane's title | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open |
-| `pane.deliver` | delivers a wake only to an idle pane, with its token; else says what held it | unsupported: tmux cannot tell whether a pane is idle | unsupported: Windows Terminal cannot tell whether a pane is idle | unsupported: Terminal cannot tell whether a pane is idle | unsupported: GNOME Terminal cannot tell whether a pane is idle | unsupported: Konsole cannot tell whether a pane is idle | unsupported: the terminal cannot tell whether a pane is idle |
-| `pane.is-idle` | says whether a pane is idle, busy, asking, holding a draft or gone | unsupported: tmux cannot tell whether a pane is idle | unsupported: Windows Terminal cannot tell whether a pane is idle | unsupported: Terminal cannot tell whether a pane is idle | unsupported: GNOME Terminal cannot tell whether a pane is idle | unsupported: Konsole cannot tell whether a pane is idle | unsupported: the terminal cannot tell whether a pane is idle |
-| `pane.list` | lists every pane it has, each with its state and its identity label | unsupported: teamrig does not ask tmux for it yet | unsupported: teamrig does not ask Windows Terminal for its tabs yet | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open |
-| `pane.sees-draft` | sees a pane's unsent input, so a wake never lands on a person's text | unsupported: tmux does not tell a pane's unsent input from what it printed | unsupported: Windows Terminal cannot read a pane's input | unsupported: Terminal cannot read a pane's input | unsupported: GNOME Terminal cannot read a pane's input | unsupported: Konsole cannot read a pane's input | unsupported: the terminal cannot read a pane's input |
+| Feature | What it does | tmux | Windows Terminal | macOS Terminal | GNOME Terminal | Konsole | x-terminal-emulator | headless |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `pane.open` | opens a pane for a session and answers its own id of it | supported, unproved | supported, unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | supported, unproved | supported, unproved |
+| `pane.window` | opens a pane in the window teamrig names, made when none of that name is open | unsupported: a pane opens in the tmux session teamrig runs in: teamrig names no other | supported, unproved | unsupported: every pane is a window of its own | unsupported: a pane opens in the window GNOME Terminal picks: teamrig names none | unsupported: a pane opens in the window Konsole picks: teamrig names none | unsupported: every pane is a window of its own | unsupported: a headless session has no window |
+| `pane.focus` | brings a session's pane forward | supported, unproved | supported, unproved | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: a headless session has no window to bring forward: off Windows, watch it with tmux attach -t <its session> (tmux ls lists the teamrig- ones); on Windows, read its conversation in the pane |
+| `pane.close` | closes a session's pane | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: teamrig's launcher ends and restarts the session itself |
+| `pane.restart` | restarts a pane's command, resuming the conversation when asked | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: teamrig's launcher ends and restarts the session itself |
+| `pane.rename` | changes a pane's title | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: a headless session has no window |
+| `pane.deliver` | delivers a wake only to an idle pane, with its token; else says what held it | unsupported: tmux cannot tell whether a pane is idle | unsupported: Windows Terminal cannot tell whether a pane is idle | unsupported: Terminal cannot tell whether a pane is idle | unsupported: GNOME Terminal cannot tell whether a pane is idle | unsupported: Konsole cannot tell whether a pane is idle | unsupported: the terminal cannot tell whether a pane is idle | unsupported: a headless session cannot tell whether it is idle |
+| `pane.is-idle` | says whether a pane is idle, busy, asking, holding a draft or gone | unsupported: tmux cannot tell whether a pane is idle | unsupported: Windows Terminal cannot tell whether a pane is idle | unsupported: Terminal cannot tell whether a pane is idle | unsupported: GNOME Terminal cannot tell whether a pane is idle | unsupported: Konsole cannot tell whether a pane is idle | unsupported: the terminal cannot tell whether a pane is idle | unsupported: a headless session cannot tell whether it is idle |
+| `pane.list` | lists every pane it has, each with its state and its identity label | unsupported: teamrig does not ask tmux for it yet | unsupported: teamrig does not ask Windows Terminal for its tabs yet | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: teamrig does not list headless sessions through the terminal yet |
+| `pane.sees-draft` | sees a pane's unsent input, so a wake never lands on a person's text | unsupported: tmux does not tell a pane's unsent input from what it printed | unsupported: Windows Terminal cannot read a pane's input | unsupported: Terminal cannot read a pane's input | unsupported: GNOME Terminal cannot read a pane's input | unsupported: Konsole cannot read a pane's input | unsupported: the terminal cannot read a pane's input | unsupported: a headless session has no input anyone types into |

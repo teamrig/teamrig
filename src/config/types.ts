@@ -803,9 +803,9 @@ export interface GithubConfig {
   readonly watcher?: string;
   /**
    * The repository of `repos` a new task's issue opens in: while set, `teamrig add` opens the task's issue there with
-   * the public wording given (`--issue`, `--issue-body`), or records why the task stays local (`--local`), and adds no
-   * task with neither, so every task has its issue from the start. Unset, the default: an add opens an issue only when
-   * asked.
+   * the public wording given (`--issue`, `--issue-body`), records why the task stays local (`--local`) or why its issue
+   * opens later from the migrate role's holder (`--issue-later`), and adds no task with none of them, so every task has
+   * its issue from the start or says why not. Unset, the default: an add opens an issue only when asked.
    */
   readonly issueAtAdd?: string;
   /**
@@ -995,7 +995,7 @@ export interface BudgetLiftConfig {
  * leaves one unset takes the team above's, unless it names another account (src/cli/kit.ts openKit), so the teams of
  * a tree read one week alike without a copy that drifts.
  */
-export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
+export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'pinRateToLimit', 'homePartPct', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'] as const satisfies readonly (keyof BudgetConfig)[];
 
 /** The keys of ACCOUNT_BUDGET_KEYS as a team reads them, its own or the team above's. */
 export type AccountBudget = Pick<BudgetConfig, (typeof ACCOUNT_BUDGET_KEYS)[number]>;
@@ -1022,6 +1022,20 @@ export interface BudgetConfig {
   readonly accountLead?: string;
   /** The weekly limit in weighted tokens (W). Unset: the team above's (`AccountBudget`), else derived from the status line's weekly %. */
   readonly weeklyLimitW?: number;
+  /**
+   * Prices the week at `weeklyLimitW` ahead of the meter log's learned rate, and prices today's use and the week's
+   * used W at it too, never at the status line's points over this home's W. Set it when two homes (teamrig on two
+   * machines) share one Claude account: the status line counts both machines, the meter only this one, so a rate read
+   * from them comes out too low. Needs `weeklyLimitW`. Unset: the team above's (`AccountBudget`), else off.
+   */
+  readonly pinRateToLimit: boolean;
+  /**
+   * This home's fixed part of the account's week, in %, when two homes share one Claude account: the account's main
+   * lead sets it each week, and this home's day, its spare and the week left are read against that part, never
+   * against what the other home leaves. Below 100 needs `pinRateToLimit`. Unset: the team above's (`AccountBudget`),
+   * else 100, the whole week.
+   */
+  readonly homePartPct: number;
   /**
    * What one W of a subagent's transcript costs against the weekly limit, in W of a main session. The meter
    * multiplies each subagent call's W by it, so every W (and `weeklyLimitW`) is in main-session W. 1: alike.
@@ -1562,9 +1576,10 @@ export interface RushConfig {
 
 /**
  * Where `teamrig open` opens a session's tab: `auto` picks tmux inside tmux, else the platform's
- * terminal; `print` opens nothing and prints the command to run.
+ * terminal; `headless` runs the session with no window, an opt-in `auto` never picks (T5093); `print` opens nothing
+ * and prints the command to run.
  */
-export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'print'] as const;
+export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'headless', 'print'] as const;
 export type TerminalChoice = (typeof TERMINALS)[number];
 
 export function isTerminalChoice(value: unknown): value is TerminalChoice {
@@ -1578,7 +1593,10 @@ export function isTerminalChoice(value: unknown): value is TerminalChoice {
 export interface HeadroomConfig {
   /** The MB a new session is counted to need while no session runs to measure; else the median running session's tree. */
   readonly sessionMb: number;
-  /** The most of the host's commit limit, in %, its commit charge may reach with the new session counted. */
+  /**
+   * The most of the host's commit limit, in %, its commit charge may reach with the new session counted; on Windows the
+   * limit its page files can grow to.
+   */
   readonly commitMaxPct: number;
   /** How long, in minutes, a session stays quiet before `teamrig close` may end it. */
   readonly closeIdleMinutes: number;
@@ -1589,6 +1607,11 @@ export interface HeadroomConfig {
   readonly floorMb?: number;
   /** How long, in minutes, a tab just opened holds the MB it was counted at, while it loads and free memory does not show it yet. */
   readonly loadMinutes: number;
+  /**
+   * The most tabs the team keeps open, its lead's counted: at it `teamrig open`, `hire --yes`, restore and the idle
+   * pass's reopen refuse every session but the lead (src/sessions/headroom.ts). Unset: no cap.
+   */
+  readonly maxTabs?: number;
 }
 
 /**
@@ -1767,6 +1790,8 @@ export interface LaunchConfig {
   readonly effort?: EffortLevel;
   /** The session's project folder, an absolute path; unset, the team's (`TeamLink.project`). */
   readonly project?: string;
+  /** The terminal the session opens and reopens in, such as `headless` for one no one watches; unset, `open.terminal` (T5093). */
+  readonly terminal?: TerminalChoice;
 }
 
 /** Character budgets for the text Claude Code puts in every call's context; `doctor` flags a file over its budget. */
@@ -1798,6 +1823,21 @@ export interface TeamLink {
    * work unless their own `launch` entry names another. Unset, the folder holding the team's pointer file.
    */
   readonly project?: string;
+  /** Set when the team left a tree and became a root team (`teamrig team detach`, T5469); never beside a parent. */
+  readonly detached?: TeamDetached;
+}
+
+/**
+ * What a team keeps of the tree it left (T5469): its numbering goes on past every id the tree had issued, and the ids
+ * its tasks named in another register of the tree, whose status this home can no longer read, read as unknown.
+ */
+export interface TeamDetached {
+  /** The parent the team left. */
+  readonly from: string;
+  /** The lowest task number the team issues: one past the tree's highest at the detach. */
+  readonly firstId: number;
+  /** Task ids its waits and after lists named that another team's register held, as `T<n>`. */
+  readonly away: readonly string[];
 }
 
 /** The owner's daily meeting in the lead's tab (T2512). */

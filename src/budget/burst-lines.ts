@@ -22,7 +22,7 @@ export const MORE_BURST = `More: ${BURST_COMMAND}`;
 export interface SurplusHint {
   /** The team's part of the share of the week projected unused at the pace end, in % (`Surplus.sparePct`). */
   readonly sparePct: number;
-  /** All of it on the account, when other teams share it (`Surplus.accountSparePct`). */
+  /** All of it on the account, when other teams or homes share it (`Surplus.accountSparePct`). */
   readonly accountSparePct: number | undefined;
   readonly paceEnd: number;
   /** The reset that names the week, so the line shows once a week. */
@@ -39,6 +39,8 @@ export interface SurplusHintInput {
   readonly targetPct: number;
   /** The team and the other teams on its account, which split the spare (`surplusOf`). */
   readonly teams: TeamsOnAccount;
+  /** This home's fixed part of the account's week, in % (`budget.homePartPct`), which bounds the spare. */
+  readonly homePartPct: number;
   /** Whom the lead asks to approve a burst under `burst.policy` owner: the owner, or a child team's parent lead. */
   readonly ownerAsk: string;
 }
@@ -49,7 +51,7 @@ export function surplusHintOf(input: SurplusHintInput): SurplusHint | undefined 
   if (config.policy === 'off' || window === undefined) {
     return undefined;
   }
-  const surplus = surplusOf({ window, now: input.now, usedPct: input.usedPct, targetPct: input.targetPct, config, teams: input.teams });
+  const surplus = surplusOf({ window, now: input.now, usedPct: input.usedPct, targetPct: input.targetPct, config, teams: input.teams, homePartPct: input.homePartPct });
   return surplus === undefined || !surplus.worth
     ? undefined
     : {

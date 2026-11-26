@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { lstat, readdir, readFile, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { errorCode, errorMessage } from "../core/guards.js";
@@ -72,6 +72,9 @@ export const NODE_WORKTREE_FILES = {
     async removeEmptyFolder(path) {
         // rmdir with no recursive option: it fails on a folder that holds anything, so nothing in it can be lost.
         await rmdir(path);
+    },
+    async makeFolder(path) {
+        await mkdir(path, { recursive: true });
     },
     async canonical(path) {
         try {

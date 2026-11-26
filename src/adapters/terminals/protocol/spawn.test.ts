@@ -73,6 +73,16 @@ describe('pinnedTransport', () => {
     assert.deepEqual(recorded.runs, [{ program: join(tmpdir(), 'staged', PIN.sha256, 'terminal-host'), args: ['--serve'], env: { PATH: '/bin' }, input: LINE }]);
   });
 
+  it('adds the kit world to the short env only in kit mode, never one this process has of its own', async () => {
+    const recorded = portsOf({ env: { PATH: '/bin', TEAMRIG_KIT: 'from-the-caller' } });
+    await pinnedTransport(PIN, recorded.ports)(LINE);
+    await pinnedTransport(PIN, recorded.ports, { kitWorld: 'case-1' })(LINE);
+    assert.deepEqual(
+      recorded.runs.map((run) => run.env),
+      [{ PATH: '/bin' }, { PATH: '/bin', TEAMRIG_KIT: 'case-1' }],
+    );
+  });
+
   it('reads and checks the file again on every request', async () => {
     const recorded = portsOf();
     const transport = pinnedTransport(PIN, recorded.ports);

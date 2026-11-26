@@ -185,6 +185,18 @@ describe('parseConfig', () => {
     assert.deepEqual(config.launch, { alpha: { model: 'opus' }, bravo: {} });
   });
 
+  it("keeps a session's terminal, and refuses one teamrig has no terminal for (T5093)", () => {
+    const kept = parseConfig({ ...ROSTER, launch: { alpha: { terminal: 'headless' } } });
+    assert.deepEqual(kept.issues, []);
+    assert.deepEqual(kept.config.launch, { alpha: { terminal: 'headless' } });
+    const { config, issues } = parseConfig({ ...ROSTER, launch: { alpha: { effort: 'high', terminal: 'xterm' } } });
+    assert.deepEqual(
+      issues.map((issue) => `${issue.path}: ${issue.message}`),
+      ['launch.alpha.terminal: expected one of auto, tmux, windows-terminal, macos-terminal, gnome-terminal, konsole, x-terminal-emulator, headless, print (got "xterm")'],
+    );
+    assert.deepEqual(config.launch, { alpha: { effort: 'high' } });
+  });
+
   it('reports launch settings of strangers and wrong models and efforts, and leaves each out', () => {
     const { config, issues } = parseConfig({
       ...ROSTER,
@@ -2017,6 +2029,18 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, open: { headroom: 5 } }).issues), ['open.headroom']);
   });
 
+  it('reads the most tabs a team keeps open: unset is no cap, and 0, 1001 or a string is refused', () => {
+    assert.equal(DEFAULT_OPEN.headroom.maxTabs, undefined, 'a team that never set it keeps every tab it opens');
+    const set = parseConfig({ ...ROSTER, open: { headroom: { maxTabs: 6 } } });
+    assert.deepEqual(set.issues, []);
+    assert.equal(set.config.open.headroom.maxTabs, 6);
+    for (const maxTabs of [0, 1001, '6']) {
+      const bad = parseConfig({ ...ROSTER, open: { headroom: { maxTabs } } });
+      assert.deepEqual(paths(bad.issues), ['open.headroom.maxTabs'], `maxTabs ${String(maxTabs)}`);
+      assert.equal(bad.config.open.headroom.maxTabs, undefined);
+    }
+  });
+
   it('reads whether the idle pass runs and the sessions it keeps open, refusing a mode it does not know or a session not on the team', () => {
     // A team that sets nothing closes and reopens its idle sessions (T1409).
     // Only the tree's root lead is never closed unless set (T3387).
@@ -2184,6 +2208,34 @@ describe('parseConfig', () => {
     assert.deepEqual(bad.config.team, { id: 'web' });
   });
 
+  it('reads team.detached: the parent left, the first id and the away ids, with away empty when absent (T5469)', () => {
+    const full = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 5500, away: ['T12', 'T40'] } } });
+    assert.deepEqual(full.issues, []);
+    assert.deepEqual(full.config.team, { id: 'web', detached: { from: 'app', firstId: 5500, away: ['T12', 'T40'] } });
+    const bare = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 7 } } });
+    assert.deepEqual(bare.issues, []);
+    assert.deepEqual(bare.config.team, { id: 'web', detached: { from: 'app', firstId: 7, away: [] } });
+  });
+
+  it('refuses a team.detached beside a parent, or with no from, a bad first id or a bad away id (T5469)', () => {
+    const beside = parseConfig({ ...ROSTER, team: { id: 'web', parent: 'app', detached: { from: 'app', firstId: 9 } } });
+    assert.deepEqual(beside.issues, [{ path: 'team.detached', message: 'is set beside team.parent; a detached team is a root team: drop one of them' }]);
+    assert.deepEqual(beside.config.team, { id: 'web', parent: 'app' });
+    const noFrom = parseConfig({ ...ROSTER, team: { id: 'web', detached: { firstId: 9 } } });
+    assert.deepEqual(paths(noFrom.issues), ['team.detached.from']);
+    assert.deepEqual(noFrom.config.team, { id: 'web' });
+    const noFirst = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app' } } });
+    assert.deepEqual(noFirst.issues, [{ path: 'team.detached.firstId', message: 'is required' }]);
+    for (const firstId of [0, 1.5, '9']) {
+      assert.deepEqual(paths(parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId } } }).issues), ['team.detached.firstId'], String(firstId));
+    }
+    const badAway = parseConfig({ ...ROSTER, team: { id: 'web', detached: { from: 'app', firstId: 9, away: ['T0', 'x'] } } });
+    assert.deepEqual(paths(badAway.issues), ['team.detached.away[0]', 'team.detached.away[1]']);
+    assert.deepEqual(badAway.config.team, { id: 'web' });
+    const notObject = parseConfig({ ...ROSTER, team: { id: 'web', detached: 'app' } });
+    assert.deepEqual(paths(notObject.issues), ['team.detached']);
+  });
+
   it('ignores keys it does not know, including $schema', () => {
     const { issues } = parseConfig({ ...ROSTER, $schema: './config.schema.json', futureKey: { any: 1 } });
     assert.deepEqual(issues, []);
@@ -2199,6 +2251,8 @@ describe('parseConfig budget', () => {
         account: 'work',
         accountLead: 'app',
         weeklyLimitW: 680_000_000,
+        pinRateToLimit: true,
+        homePartPct: 60,
         subagentWeight: 2.15,
         modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
         extraWPerUsd: 120_000,
@@ -2227,6 +2281,8 @@ describe('parseConfig budget', () => {
       account: 'work',
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
+      pinRateToLimit: true,
+      homePartPct: 60,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2257,6 +2313,8 @@ describe('parseConfig budget', () => {
       account: 'work',
       accountLead: 'app',
       weeklyLimitW: 680_000_000,
+      pinRateToLimit: true,
+      homePartPct: 60,
       subagentWeight: 2.15,
       modelWeights: [{ model: 'claude-fable', weight: 4.4 }],
       extraWPerUsd: 120_000,
@@ -2280,6 +2338,19 @@ describe('parseConfig budget', () => {
       const { config, issues } = parseConfig({ ...ROSTER, budget: { weeklyLimitW: -1 } }, ABOVE);
       assert.deepEqual(paths(issues), ['budget.weeklyLimitW']);
       assert.equal(config.budget.weeklyLimitW, ABOVE.weeklyLimitW);
+    });
+
+    it("keeps the team above's pinned rate under a weekly limit of its own, and drops it with its own off (T5468)", () => {
+      assert.equal(parseConfig({ ...ROSTER, budget: { weeklyLimitW: 500_000_000 } }, ABOVE).config.budget.pinRateToLimit, true);
+      assert.equal(parseConfig({ ...ROSTER, budget: { pinRateToLimit: false } }, ABOVE).config.budget.pinRateToLimit, false);
+    });
+
+    it("keeps the team above's home part, and takes the whole week with its own pin off (T5468)", () => {
+      assert.equal(parseConfig({ ...ROSTER, budget: { targetPct: 90 } }, ABOVE).config.budget.homePartPct, 60);
+      assert.equal(parseConfig({ ...ROSTER, budget: { homePartPct: 40 } }, ABOVE).config.budget.homePartPct, 40);
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { pinRateToLimit: false } }, ABOVE);
+      assert.deepEqual(paths(issues), ['budget.homePartPct']);
+      assert.equal(config.budget.homePartPct, 100);
     });
 
     it('takes none of them when it names another account', () => {
@@ -2505,6 +2576,32 @@ describe('parseConfig budget', () => {
     assert.deepEqual(config.budget, { ...DEFAULT_BUDGET, sessions: { alpha: { share: 1 } }, warnAtPct: [80] });
     const overAction = issues.find((issue) => issue.path === 'budget.overAction');
     assert.equal(overAction?.message, 'expected one of warn, ask-lead, ask, block (got "stop")');
+  });
+
+  it('leaves the rate unpinned by default, and refuses a pin with no weekly limit or one not a boolean (T5468)', () => {
+    assert.equal(parseConfig(ROSTER).config.budget.pinRateToLimit, false);
+    for (const [pin, message] of [
+      [true, 'needs budget.weeklyLimitW, the rate it pins the week to'],
+      ['yes', 'expected true or false, got "yes"'],
+    ] as const) {
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { pinRateToLimit: pin } });
+      assert.deepEqual(issues.map((issue) => [issue.path, issue.message]), [['budget.pinRateToLimit', message]]);
+      assert.equal(config.budget.pinRateToLimit, false);
+    }
+  });
+
+  it('gives the home the whole week by default, and refuses a part out of range, not a number or with no pinned rate (T5468)', () => {
+    assert.equal(parseConfig(ROSTER).config.budget.homePartPct, 100);
+    const pinned = { weeklyLimitW: 680_000_000, pinRateToLimit: true };
+    assert.equal(parseConfig({ ...ROSTER, budget: { ...pinned, homePartPct: 60 } }).config.budget.homePartPct, 60);
+    for (const part of [0, 101, 'x']) {
+      const { config, issues } = parseConfig({ ...ROSTER, budget: { ...pinned, homePartPct: part } });
+      assert.deepEqual(paths(issues), ['budget.homePartPct']);
+      assert.equal(config.budget.homePartPct, 100);
+    }
+    const { config, issues } = parseConfig({ ...ROSTER, budget: { homePartPct: 60 } });
+    assert.deepEqual(issues, [{ path: 'budget.homePartPct', message: 'needs budget.pinRateToLimit, since the status line counts every home of the account' }]);
+    assert.equal(config.budget.homePartPct, 100);
   });
 
   it('refuses a target and reserve that pass 100% of the week', () => {

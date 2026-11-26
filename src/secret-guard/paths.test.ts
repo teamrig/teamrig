@@ -6,13 +6,18 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TempRepo } from '../../tools/lib/temp-repo.ts';
 import { testSecrets } from '../testing/host.ts';
-import { DEFAULT_SECRET_PATHS, normalisePath, SecretPaths, wordPath, type WordPlace, type WordReading } from './paths.ts';
+import { DEFAULT_SECRET_PATHS, normalisePath, SecretPaths, wordPath, type ListedGlob, type WordPlace, type WordReading } from './paths.ts';
 import { PUBLIC_KEY_MAX_BYTES, readKeyText } from './public-key.ts';
 
 const HOME = 'C:/u';
 const REPO = 'C:/work/app';
 /** The list a run on the shipped host reads (`secretRulesOf`): the defaults, the host's own secret files, then a team's globs. */
-const secrets = new SecretPaths([...DEFAULT_SECRET_PATHS, ...testSecrets().secretFiles(), 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'], HOME, true);
+const HOST_NAMED: readonly ListedGlob[] = (testSecrets().namedFiles?.() ?? []).map((named): ListedGlob => ({ named }));
+const secrets = new SecretPaths(
+  [...DEFAULT_SECRET_PATHS, ...testSecrets().secretFiles(), ...HOST_NAMED, 'k8s/secrets/secrets.yaml', '~/.teamrig/teams/*/tools/*/secrets/**'],
+  HOME,
+  true,
+);
 /** A bash word, whose wildcards never reach a leading dot, and a word whose wildcards do (PowerShell, a script's glob). */
 const BASH_WORD: WordReading = { dotfiles: false, sets: 'bash' };
 const ANY_WORD: WordReading = { dotfiles: true, sets: 'bash' };
@@ -97,19 +102,30 @@ describe('SecretPaths.listed', () => {
     assert.deepEqual(['/srv/cfg2/history.jsonl', '/srv/CFG*/history.jsonl', '/work/srv/cfg*/history.jsonl'].filter((path) => linux.listed(path)), []);
   });
 
-  it("lists the shipped host's login in a folder named like its own at any depth, and in no other folder", () => {
-    const listed = [`${HOME}/.claude-work/.credentials.json`, `${HOME}/.claude2/.credentials.json`, `${REPO}/.Claude-Old/.credentials.json`, 'D:/accounts/.claude.bak/.credentials.json'];
-    assert.deepEqual(listed.filter((path) => !secrets.listed(path)), []);
-    const readable = [
+  it("lists the shipped host's login in any folder, a path naming it outright (T4870), and none of its other files there", () => {
+    const listed = [
+      `${HOME}/.claude-work/.credentials.json`,
+      `${HOME}/.claude2/.credentials.json`,
+      `${REPO}/.Claude-Old/.credentials.json`,
+      'D:/accounts/.claude.bak/.credentials.json',
       `${REPO}/.credentials.json`,
       `${REPO}/vendor/agent/.credentials.json`,
       `${REPO}/claude-work/.credentials.json`,
-      `${HOME}/.claude-work/credentials.json`,
-      `${HOME}/.claude-work/history.jsonl`,
       `${HOME}/.claude-work/app/.credentials.json`,
     ];
+    assert.deepEqual(listed.filter((path) => !secrets.listed(path)), []);
+    const readable = [`${HOME}/.claude-work/credentials.json`, `${HOME}/.claude-work/history.jsonl`, `${REPO}/vendor/agent/credentials.json`];
     assert.deepEqual(readable.filter((path) => secrets.listed(path)), []);
-    assert.equal(new SecretPaths(testSecrets().secretFiles(), '/u', false).listed('/u/.Claude-work/.credentials.json'), false, 'a name in another case is another folder where case counts');
+    const searched = new SecretPaths(testSecrets().secretFiles(), '/u', false);
+    assert.equal(searched.listed('/u/.claude-work/.credentials.json'), true, 'the folder glob a search is read against');
+    assert.equal(searched.listed('/u/.Claude-work/.credentials.json'), false, 'a name in another case is another folder where case counts');
+  });
+
+  it('lists what a named glob names, and lets a later !glob keep it readable', () => {
+    const team = new SecretPaths([{ named: '**/login.json' }, '!**/fixtures/login.json'], '/u', false);
+    assert.equal(team.listed('/r/app/login.json'), true);
+    assert.equal(team.listed('/r/test/fixtures/login.json'), false);
+    assert.equal(team.listed('/r/app/login.jsonl'), false);
   });
 
   it('lets a later !glob keep a default readable, and reads Windows paths in any case', () => {
@@ -172,6 +188,22 @@ describe('SecretPaths.mayName', () => {
     assert.equal(secrets.mayName(`${HOME}/.claude?/.credentials.json`, BASH_WORD), true);
     assert.equal(secrets.mayName(`${REPO}/vendor/agent/*.json`, ANY_WORD), false);
     assert.equal(secrets.mayName(`${REPO}/src/*.json`, ANY_WORD), false);
+  });
+
+  it("counts a word that spells the login's name out as naming it in any folder, and none whose name has wildcards (T4870)", () => {
+    assert.equal(secrets.mayName(`${REPO}/vendor/agent/.credentials.json`, BASH_WORD), true);
+    assert.equal(secrets.mayName(`${REPO}/*/.credentials.json`, BASH_WORD), true);
+    assert.equal(secrets.mayName(`${REPO}/**/.credentials.json`, { dotfiles: true, sets: 'ripgrep' }), true);
+    assert.equal(secrets.mayName(`${REPO}/vendor/agent/.credentials.*`, ANY_WORD), false);
+    assert.equal(secrets.mayName(`${REPO}/vendor/agent/.cred*.json`, ANY_WORD), false);
+    assert.equal(secrets.mayName(`${REPO}/**/*.json`, { dotfiles: true, sets: 'ripgrep' }), true, 'its ** still walks into a .claude* folder the folder glob lists');
+  });
+
+  it('tries a word whose name has wildcards against a named glob never, and one whose name is spelled out always', () => {
+    const named = new SecretPaths([{ named: '**/login.json' }], '/u', false);
+    assert.equal(named.mayName('/r/*/login.json', BASH_WORD), true);
+    assert.equal(named.mayName('/r/app/log*.json', BASH_WORD), false);
+    assert.equal(new SecretPaths(['**/login.json'], '/u', false).mayName('/r/app/log*.json', BASH_WORD), true, 'the same glob listed plainly');
   });
 
   it('reads a ripgrep set as reaching a slash, and a negated one as fitting it (T2357)', () => {

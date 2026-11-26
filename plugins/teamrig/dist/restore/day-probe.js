@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { instantField, stringField } from "../core/guards.js";
+import { isHostSessionId } from "../core/host-session.js";
 import { parseObject, recordVersion, VERSION_FIELD } from "../core/jsonl.js";
 import { MS_PER_MINUTE } from "../core/time.js";
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 import { LOGIN_PROBE_STALE_MS } from "./login.js";
 /**
  * The day-start probe: of the tabs due for a day-start or burst moment, the first wakes alone, and the others wait
@@ -94,7 +94,7 @@ export function parseDayProbe(text) {
     const tab = stringField(record, 'tab');
     const at = instantField(record, 'at');
     const releasedAt = instantField(record, 'releasedAt');
-    if (moment === undefined || tab === undefined || !CLAUDE_SESSION_ID.test(tab) || at === undefined || (record['releasedAt'] !== undefined && releasedAt === undefined)) {
+    if (moment === undefined || tab === undefined || !isHostSessionId(tab) || at === undefined || (record['releasedAt'] !== undefined && releasedAt === undefined)) {
         return undefined;
     }
     return { moment, tab, at, releasedAt };

@@ -1,4 +1,4 @@
-import { kitLines, kitTag } from "../../automode/lines.js";
+import { autoModeFactsOf, kitLines, kitTag } from "../../automode/lines.js";
 import { homeRelative } from "../../core/paths.js";
 import { planAllowSync } from "../../permissions/allow-sync.js";
 import { readAllowRecord, sameRecord, withOwned, writeAllowRecord } from "../allow-record.js";
@@ -51,12 +51,7 @@ export async function uninstall(args, runtime) {
 async function factsOf(runtime) {
     const kit = await openTeamKit(runtime);
     const config = requireConfig(kit, runtime, 'read');
-    return {
-        team: kit.paths.team,
-        home: homeRelative(kit.paths.home, runtime.userHome),
-        lead: config.roles.lead,
-        pushGuard: config.pushGuard,
-    };
+    return autoModeFactsOf(kit.paths.team, homeRelative(kit.paths.home, runtime.userHome), config);
 }
 /** One line per rule or route a change takes out, then per one it puts in, each naming its setting. */
 function stepsOf(path, changes) {

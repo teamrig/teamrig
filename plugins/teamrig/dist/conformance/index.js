@@ -13,6 +13,7 @@ import { TRANSCRIPT_CONTRACT } from "./host/transcript.js";
 import { USAGE_CONTRACT } from "./host/usage.js";
 import { entryOf } from "./kit.js";
 import { TERMINAL_CONTRACT } from "./terminal/terminal.js";
+import { TRACKER_CONTRACT } from "./connector/tracker.js";
 export { bind, defineContract, osOf, runCases } from "./contract.js";
 export { choiceOf } from "./choice.js";
 export { entryOf, kitProblems } from "./kit.js";
@@ -25,6 +26,8 @@ export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions } from "./host
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin } from "./host/plugin.js";
 export { MODELS_CONTRACT, nothingModels, yesModels } from "./host/models.js";
 export { STEPS_CONTRACT, nothingSteps, yesSteps } from "./host/steps.js";
+export { TRACKER_CONTRACT } from "./connector/tracker.js";
+export { nothingTracker, referenceTracker, TRACKER_WRITES, yesTracker } from "./connector/reference.js";
 export { LAUNCHER_CONTRACT, nothingLauncher, yesLauncher } from "./host/launcher.js";
 /**
  * Every contract of the kit. A port's contract lives in its own file, under `host/`, `connector/` or `terminal/`,
@@ -41,4 +44,5 @@ export const CONTRACTS = [
     entryOf(MODELS_CONTRACT),
     entryOf(STEPS_CONTRACT),
     entryOf(LAUNCHER_CONTRACT),
+    entryOf(TRACKER_CONTRACT),
 ];

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { formatConfig } from '../config/load.ts';
 import type { Sleep } from '../core/lock.ts';
-import { CLI_PID, CliHarness, TEAM_HOME } from '../testing/cli-harness.ts';
+import { CLI_PID, CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import type { CliResult, RunOptions } from '../testing/cli-harness.ts';
 import { SUB_TEAMS, teamConfigOf, teamEventsOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
@@ -78,6 +78,24 @@ describe('one task numbering across a team tree (T1139)', () => {
     const ui = await kit.run(add('Icons', '--owner', 'pixel'), inTeam('ui'));
     assert.deepEqual([addedId(web), addedId(ui)], ['T1', 'T1']);
     assert.deepEqual(kit.clock.sleeps, []);
+  });
+
+  it('numbers a detached team alone from its first id, past the tree it left (T5469)', async () => {
+    const kit = new CliHarness({ ...TEAM, team: { id: 'app', detached: { from: 'corp', firstId: 5500, away: [] } } });
+    const ids = [addedId(await kit.run(add('One'))), addedId(await kit.run(add('Two')))];
+    assert.deepEqual(ids, ['T5500', 'T5501']);
+  });
+
+  it("numbers every team below a detached root from the root's first id, whichever team adds (T5469)", async () => {
+    const kit = await treeHarness({ team: { id: 'app', detached: { from: 'corp', firstId: 900, away: [] } } });
+    const ids: (string | undefined)[] = [];
+    for (const [argv, options] of [
+      [add('Web task', '--owner', 'front'), inTeam('web')],
+      [add('Root task'), {}],
+    ] satisfies [string[], RunOptions][]) {
+      ids.push(addedId(await kit.run(argv, options)));
+    }
+    assert.deepEqual(ids, ['T900', 'T901']);
   });
 
   it('makes a team whose parent has no config the root of the teams below it', async () => {

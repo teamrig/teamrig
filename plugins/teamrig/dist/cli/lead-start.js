@@ -32,6 +32,7 @@ export async function readLeadStart(runtime, kit, kitTree, config, renames) {
         verifyNote: undefined,
         duplicateNote: undefined,
         worktreeNote: undefined,
+        treeNote: undefined,
         session: lead,
         sessionInEnv: true,
         platform: runtime.platform,

@@ -21,7 +21,7 @@ import { admitBusyText, admitTab, dropTabHold } from "../headroom.js";
 import { cacheBinOf, childEnvOf, launcherOf, transcriptsFolderOf, transcriptsOf } from "../host.js";
 import { runsHostSession } from "../session-process.js";
 import { loadTree } from "../tree.js";
-import { claudeExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
+import { hostExit, hostSessionArg, effortFlag, encodedPromptFlag, homeArgs, homeRuntimeOf, hostProgramOf, openSessionTab, TERMINAL_LABELS, terminalFlag } from "./open.js";
 /** The title of the tab `restore check` opens for the restore. */
 export const RESTORE_TAB_TITLE = 'Restore Claude sessions';
 /** How long the restore's own tab stays once it reopened every session: the last one starts meanwhile. */
@@ -55,6 +55,10 @@ async function restoreTeamsOf(runtime, teams) {
             efforts: new Map(roster.ids.flatMap((id) => {
                 const { effort } = ownLaunchOf(config, id);
                 return effort === undefined ? [] : [[id, effort]];
+            })),
+            terminals: new Map(roster.ids.flatMap((id) => {
+                const { terminal } = ownLaunchOf(config, id);
+                return terminal === undefined ? [] : [[id, terminal]];
             })),
         });
     }
@@ -106,11 +110,13 @@ async function reopen(runtime, teams, tab, terminal) {
  * Opens the tab of one restored session. A session `launch` ran comes back through `launch` again, as its team
  * session, on its effort; any other resumes through `restore resume`, outside any team, as it ran before.
  * Every restored tab keeps the focus (T2510): the tabs come back one by one while the owner works in another.
+ * Either line names the host the session ran in (`--host`), so a Codex CLI session resumes in Codex (T5059).
  */
 async function openRestoredTab(runtime, tab, terminal) {
-    const { team } = tab;
+    const { team, host } = tab;
     if (team?.launched === true) {
-        const { outcome, argv } = await openSessionTab(runtime, {
+        // openSessionTab passes the run's host id on to `launch`: the session's own, not the restore's.
+        const { outcome, argv } = await openSessionTab(host === undefined ? runtime : { ...runtime, hostId: host }, {
             team: team.team,
             id: team.session,
             name: team.name,
@@ -133,6 +139,7 @@ async function openRestoredTab(runtime, tab, terminal) {
         '--project',
         tab.folder,
         ...homeArgs(runtime),
+        ...(host === undefined ? [] : ['--host', host]),
         ...(tab.effort === undefined ? [] : ['--effort', tab.effort]),
         ...(tab.prompt === undefined ? [] : ['--encoded-prompt', encodePrompt(tab.prompt)]),
     ];
@@ -299,9 +306,10 @@ export async function restoreResume(args, runtime) {
     const prompt = encoded === undefined ? undefined : encodedPromptFlag(encoded);
     const env = plainSessionEnv(runtime.env, args.flags.get('home'), runtime.platform, cacheBinOf(runtime), childEnvOf(runtime).session);
     const { command, prefix } = await hostProgramOf(runtime, env);
-    runtime.out.stdout(`Resuming Claude Code session ${hostSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
+    const launcher = launcherOf(runtime);
+    runtime.out.stdout(`Resuming ${launcher.programName} session ${hostSession} in ${project}${effort === undefined ? '' : ` at ${effort} effort`}`);
     // A session outside any team has no name, model or settings file of teamrig's: the host keeps its own.
     const start = { name: undefined, model: undefined, effort, resume: hostSession, settingsFile: undefined, prompt };
-    const claudeArgs = [...prefix, ...launcherOf(runtime).launchArgs(start)];
-    return claudeExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
+    const claudeArgs = [...prefix, ...launcher.launchArgs(start)];
+    return hostExit(runtime, command, await runtime.processes.run({ command, args: claudeArgs, cwd: project, env }));
 }

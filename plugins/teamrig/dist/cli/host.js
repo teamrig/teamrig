@@ -1,5 +1,6 @@
 import { posix, win32 } from 'node:path';
 import { isUnsupported, } from "../ports/host/index.js";
+import { DEFAULT_HOST } from "../composition/adapters.js";
 import { isEffortLevel } from "../config/types.js";
 import { RefusedError } from "./runtime.js";
 /**
@@ -100,19 +101,20 @@ export function pathsOf(runtime) {
 }
 /**
  * Who tells the secret guard the hosts' own secret files in this run: every host adapter teamrig ships with, then
- * the host the run works in, each glob once. A file is a secret for what it holds, whatever host runs the session,
+ * the host the run works in, each glob once, its `namedFiles` too. A file is a secret for what it holds, whatever host runs the session,
  * and a machine may hold the files of a host other than the running one: so the running host adds to the shipped
  * hosts' files and takes none away. It never refuses, as the guard answers on every host: one that tells none of
  * its secret files adds none.
  */
 export function secretFilesOf(runtime) {
     const seen = { env: runtime.env, platform: runtime.platform };
-    const named = sourcesOf(runtime).flatMap((source) => {
+    const told = sourcesOf(runtime).flatMap((source) => {
         const { secrets } = source(seen);
-        return isUnsupported(secrets) ? [] : secrets.secretFiles();
+        return isUnsupported(secrets) ? [] : [secrets];
     });
-    const once = [...new Set(named)];
-    return { secretFiles: () => once };
+    const listed = [...new Set(told.flatMap((secrets) => secrets.secretFiles()))];
+    const named = [...new Set(told.flatMap((secrets) => secrets.namedFiles?.() ?? []))];
+    return { secretFiles: () => listed, namedFiles: () => named };
 }
 /** What a host telling nothing of its sessions tells a run: no part of who it is. */
 const UNTOLD = { projectDir: undefined, startedAs: undefined, sessionKind: undefined, sessionId: undefined, forcedEffort: undefined };
@@ -159,6 +161,15 @@ export function launcherOf(runtime) {
 export function launcherIfTold(runtime) {
     const { launcher } = hostOf(runtime);
     return isUnsupported(launcher) ? undefined : launcher;
+}
+/**
+ * The id of the shipped host adapter this run works in, as `--host` takes it. The run's host is the very source
+ * `chooseHost` picked from the shipped hosts (src/cli/host-choice.ts); one that is none of them is the process's own
+ * host, which loads the default adapter (src/composition/host-ports.ts loadHostPorts).
+ */
+export function hostIdOf(runtime) {
+    const chosen = Object.entries(runtime.shippedHosts).find(([, shipped]) => shipped.ports === runtime.host);
+    return chosen === undefined ? DEFAULT_HOST : chosen[0];
 }
 /** The way to build the ports of every host adapter teamrig ships with, then the running host's. */
 function sourcesOf(runtime) {
@@ -250,6 +261,41 @@ export function userHooksOf(runtime, name) {
     const names = [...new Set(offered.map((port) => port.host))];
     const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
     throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
+}
+/**
+ * Every host whose lines in the person's hooks file run the kit launcher, from every host adapter teamrig ships with
+ * and the run's own host, once each by name: `kit uninstall` takes their lines out before the launcher goes.
+ */
+export function kitLauncherHooksOf(runtime) {
+    const seen = { env: runtime.env, platform: runtime.platform };
+    const byHost = new Map();
+    for (const source of sourcesOf(runtime)) {
+        const { userHooks } = source(seen);
+        if (isUnsupported(userHooks) || userHooks.kitLauncher === undefined || byHost.has(userHooks.host)) {
+            continue;
+        }
+        byHost.set(userHooks.host, { port: userHooks, lines: userHooks.kitLauncher });
+    }
+    return [...byHost.values()];
+}
+/**
+ * The person's own skills folder of the host named `name` (as `setup skills --host` takes it), from every host adapter
+ * teamrig ships with and the run's own host, as `userHooksOf` finds a hooks file. A name no host answers to refuses,
+ * naming those that keep one; a host whose plugin loads teamrig's skills keeps none.
+ */
+export function pluginSkillsOf(runtime, name) {
+    const seen = { env: runtime.env, platform: runtime.platform };
+    const offered = sourcesOf(runtime).flatMap((source) => {
+        const { pluginSkills } = source(seen);
+        return isUnsupported(pluginSkills) ? [] : [pluginSkills];
+    });
+    const found = offered.find((port) => port.host === name);
+    if (found !== undefined) {
+        return found;
+    }
+    const names = [...new Set(offered.map((port) => port.host))];
+    const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
+    throw new RefusedError(`no host named ${name} keeps a skills folder of yours teamrig copies its skills into (${known})`);
 }
 /**
  * The hooks files and config files teamrig writes into for the person of this run (`setup hooks`), from every host
@@ -393,6 +439,14 @@ export function stepsIfKnown(runtime) {
 export function hostNameIfKnown(runtime) {
     const { launcher } = hostOf(runtime);
     return isUnsupported(launcher) ? undefined : launcher.programName;
+}
+/**
+ * Whether the run's host wakes its sessions through its own program, as Codex CLI does: such a host has no tab mod
+ * running the wake check, and with it the team's idle pass, while its session sits idle (src/cli/host-wake.ts).
+ */
+export function wakesThroughProgram(runtime) {
+    const { launcher } = hostOf(runtime);
+    return !isUnsupported(launcher) && !isUnsupported(launcher.wake);
 }
 /** The run's host's name as people know it, from its launcher. A host with no launcher refuses with its own reason. */
 export function hostNameOf(runtime) {

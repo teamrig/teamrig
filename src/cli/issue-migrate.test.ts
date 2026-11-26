@@ -8,7 +8,7 @@ import { foldEvents, type Task } from '../register/fold.ts';
 import { readEvents } from '../register/snapshot.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
-import { FakeGh } from '../testing/fake-gh.ts';
+import { FakeGh, sentOf } from '../testing/fake-gh.ts';
 import { EXIT } from './runtime.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'] } };
@@ -87,10 +87,16 @@ describe('teamrig issue migrate', () => {
       "DONE opened 2 issue(s) and set each task's ref",
     ]);
     assert.deepEqual(
-      gh.ran.map((request) => request.args),
+      gh.ran.map(sentOf),
       [
-        ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Add a health check', '-f', `body=${withStampFooter('Why Add a health check.')}`, '-f', 'labels[]=enhancement', '-f', 'labels[]=p2'],
-        ['api', 'repos/acme/api/issues', '-X', 'POST', '-f', 'title=Login fails on retry', '-f', `body=${withStampFooter('Why Login fails on retry.')}`, '-f', 'labels[]=bug', '-f', 'labels[]=p1'],
+        {
+          args: ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'],
+          input: JSON.stringify({ title: 'Add a health check', body: withStampFooter('Why Add a health check.'), labels: ['enhancement', 'p2'] }),
+        },
+        {
+          args: ['api', 'repos/acme/api/issues', '-X', 'POST', '--input', '-'],
+          input: JSON.stringify({ title: 'Login fails on retry', body: withStampFooter('Why Login fails on retry.'), labels: ['bug', 'p1'] }),
+        },
       ],
     );
     const tasks = tasksOf(kit);
@@ -136,6 +142,25 @@ describe('teamrig issue migrate', () => {
     assert.deepEqual(result.stdout.slice(0, 2), ['SKIPPED T1: only the owner (alpha) or the lead (lead) changes T1', '1 issue(s) to open, 1 kept local, 1 skipped, 0 live task(s) with no row']);
     assert.equal(tasksOf(kit).get('T1')?.ref, 'local: security hole, private');
     assert.equal(tasksOf(kit).get('T2')?.ref, 'gh:acme/api#1');
+  });
+
+  it("lets the migrate role's holder link a task the lead added with --issue-later, never one added --local (T5457)", async () => {
+    const kit = new CliHarness({ ...GITHUB_TEAM, github: { repos: ['acme/web', 'acme/api'], issueAtAdd: 'acme/web' }, serviceRoles: { github: { holders: ['bravo'], commands: ['issue migrate'] } } });
+    const task = (title: string): string[] => ['add', '--title', title, '--description', 'private what and why', '--priority', 'p2', '--owner', 'alpha'];
+    for (const argv of [[...task('Private health check'), '--issue-later', 'the lead opens no issues; bravo opens it'], [...task('Private login bug'), '--local', 'security hole, private']]) {
+      const added = await kit.run(argv, AS_LEAD);
+      assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
+    }
+    await kit.files.write(ROWS, [issueRow('T1', 'acme/web', 'Add a health check'), issueRow('T2', 'acme/web', 'Login fails on retry'), ''].join('\n'));
+    const result = await kit.run(['issue', 'migrate', 'rows.jsonl', '--yes'], { env: { TEAMRIG_SESSION: 'bravo' }, gh: new FakeGh() });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout.slice(0, 3), [
+      'REPLACES T1: its ref issue later: the lead opens no issues; bravo opens it gives way to its issue',
+      'SKIPPED T2: only the owner (alpha) or the lead (lead) changes T2',
+      '1 issue(s) to open, 0 kept local, 1 skipped, 0 live task(s) with no row',
+    ]);
+    assert.equal(tasksOf(kit).get('T1')?.ref, 'gh:acme/web#1');
+    assert.equal(tasksOf(kit).get('T2')?.ref, 'local: security hole, private');
   });
 
   it('stops, opening nothing through the gh login, when the store holds the key but cannot read it', async () => {
@@ -189,7 +214,7 @@ describe('teamrig issue migrate', () => {
     const kit = await migratingTeam();
     const gh = new FakeGh();
     await expectRun(kit, ['issue', 'migrate', 'rows.jsonl', '--yes'], gh, EXIT.ok);
-    assert.ok(gh.ran.length > 0 && gh.ran.every((request) => isIssueCreate(request.args)));
+    assert.ok(gh.ran.length > 0 && gh.ran.every(isIssueCreate));
   });
 
   it('opens nothing while GitHub is off on the machine', async () => {

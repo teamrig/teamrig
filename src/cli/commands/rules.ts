@@ -42,6 +42,7 @@ export async function rules(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     verifyNote: undefined,
     duplicateNote: undefined,
     worktreeNote: undefined,
+    treeNote: undefined,
     session: flag ?? (inEnv ? fromEnv : undefined),
     sessionInEnv: inEnv,
     tree: kitTree.tree.placeOf(team),

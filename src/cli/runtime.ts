@@ -1,5 +1,6 @@
 import type { TranscriptSource } from '../budget/discover.ts';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
+import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
@@ -25,6 +26,7 @@ import type { HookRunner } from '../deploy/hooks.ts';
 import type { PackageRegistry } from '../package-guard/registry.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
+import type { KitTree } from '../kit/kit-tree.ts';
 import type { Processes } from '../open/processes.ts';
 import type { SessionProcesses } from '../open/session-processes.ts';
 import type { CommitLog } from '../push-guard/commit-size.ts';
@@ -90,6 +92,11 @@ export interface CliRuntime {
    */
   readonly host: HostSource;
   /**
+   * The id the run named with `--host`; undefined when it named none. A tab the run opens passes it on to `launch`,
+   * so a session started for one host runs in it, never in the default one (T5006).
+   */
+  readonly hostId?: string;
+  /**
    * Every host adapter teamrig ships with by id, the one the run works in among them: for the host a run names
    * (`--host`), and for what holds on a machine whatever host runs the session, the hosts' own secret files
    * (`secretFilesOf`, host.ts).
@@ -111,6 +118,8 @@ export interface CliRuntime {
   readonly starters: StarterWatch;
   /** Runs the command-line tool of a connector adapter, such as `gh`, each run held to the two connector limits of time and output (plugin-api/connector.ts). */
   readonly run: ProgramRunner;
+  /** How `teamrig conformance terminal` stages and runs the pinned terminal program it checks: the protocol's limits. */
+  readonly terminalPrograms: TerminalPrograms;
   /** The system's saved secrets, where `teamrig issue sync` finds each owner's read-only GitHub token; only ever read. */
   readonly credentials: CredentialStore;
   /** The writes to those secrets and the person's terminal, for `teamrig key` alone. */
@@ -130,6 +139,8 @@ export interface CliRuntime {
   readonly worktrees: WorktreePorts;
   /** The shutdown log and the countdown of the restore after a reboot. */
   readonly restore: RestorePorts;
+  /** The folder copies a session start's self-install into the kit home's `versions/` takes (kit/kit-versions.ts). */
+  readonly kitTree: KitTree;
   /** The working tree `teamrig queue --pre-push` checks: clean or changed, and HEAD's tree. */
   readonly trees: TreeState;
   /** The git steps `teamrig merge` takes. */

@@ -95,6 +95,8 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
     helper: helperOf(payload),
     call: callOf(payload, shape),
     prompt: stringField(payload, 'prompt'),
+    // No prompt Codex CLI submits of its own is known to reach the prompt hook.
+    hostPrompt: false,
     lastReply: stringField(payload, 'last_assistant_message'),
     stopActive: payload['stop_hook_active'] === true,
     source: stringField(payload, 'source'),

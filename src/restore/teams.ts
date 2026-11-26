@@ -14,6 +14,11 @@ export interface RestoreTeam {
   readonly areaBySession: ReadonlyMap<string, string>;
   /** The effort the config sets for each session (`launch.<id>.effort`); a session it leaves unset is not here. */
   readonly efforts: ReadonlyMap<string, EffortLevel>;
+  /**
+   * The terminal the config sets for each session (`launch.<id>.terminal`), such as `headless`; a session it leaves
+   * unset is not here and reopens in the team's `terminal` (T5093).
+   */
+  readonly terminals: ReadonlyMap<string, TerminalChoice>;
 }
 
 /** The team session a Claude Code session ran as. */
@@ -41,7 +46,7 @@ function sessionOf(team: RestoreTeam, session: string, launched: boolean): TeamS
   const name = team.names.get(session);
   return name === undefined
     ? undefined
-    : { team: team.team, session, name, isLead: session === team.lead, terminal: team.terminal, teamWindow: team.teamWindow, launched, effort: team.efforts.get(session) };
+    : { team: team.team, session, name, isLead: session === team.lead, terminal: team.terminals.get(session) ?? team.terminal, teamWindow: team.teamWindow, launched, effort: team.efforts.get(session) };
 }
 
 /**

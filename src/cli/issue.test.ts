@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { withStampFooter } from '../core/stamp.ts';
-import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueRead, isIssueUnassign, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
+import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueRead, isIssueSearch, isIssueUnassign, issueSearchArgs, isLabelAdd, isLabelFileRead, isLabelRead, isLabelRemove, isUserRead, labelCreateArgs } from '../adapters/connectors/github/gh.ts';
 import { areaLabelSpec } from '../issues/managed-labels.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
-import { FakeGh, ghIssue } from '../testing/fake-gh.ts';
+import { FakeGh, ghIssue, sentBody, sentOf } from '../testing/fake-gh.ts';
 import { rotateRegister } from '../testing/rotation.ts';
 import { EXIT } from './runtime.ts';
 
@@ -41,10 +41,14 @@ describe('teamrig issue reply (T3169)', () => {
     assert.equal(result.code, EXIT.ok, printed);
     // The lead maps to no login, so the push assigns the token's own user, as the repository push does (T4581).
     assert.match(printed, /SET acme\/web#922 T1 in-progress: add status:in progress, take off status:open, assign sync-bot$/mu);
-    const writes = gh.ran.map((request) => request.args).filter((args) => !isIssueRead(args) && !isLabelRead(args));
-    assert.ok(writes.some(isLabelAdd) && writes.some(isLabelRemove), printed);
-    assert.deepEqual(writes.at(-1), ['api', 'repos/acme/web/issues/922/comments', '-X', 'POST', '-f', `body=${withStampFooter('Picking this up.')}`]);
-    assert.ok(writes.slice(0, -1).every((args) => !isIssueComment(args)));
+    const writes = gh.ran.filter((request) => !isIssueRead(request.args) && !isLabelRead(request.args));
+    assert.ok(writes.some((request) => isLabelAdd(request.args)) && writes.some((request) => isLabelRemove(request.args)), printed);
+    const last = writes.at(-1);
+    assert.deepEqual(last === undefined ? undefined : sentOf(last), {
+      args: ['api', 'repos/acme/web/issues/922/comments', '-X', 'POST', '--input', '-'],
+      input: JSON.stringify({ body: withStampFooter('Picking this up.') }),
+    });
+    assert.ok(writes.slice(0, -1).every((request) => !isIssueComment(request)));
     const list = await kit.run(['list', '--session', 'lead'], AS_LEAD);
     assert.match(list.stdout.join('\n'), /T1 in-progress/u);
   });
@@ -54,8 +58,7 @@ describe('teamrig issue reply (T3169)', () => {
     const gh = stale();
     const result = await kit.run(['issue', 'reply', 'acme/web#922', '--body-file', 'reply.md'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    const comments = gh.ran.map((request) => request.args).filter(isIssueComment);
-    assert.deepEqual(comments.map((args) => args.at(-1)), ['body=Picking this up.']);
+    assert.deepEqual(gh.ran.filter(isIssueComment).map(sentBody), ['Picking this up.']);
   });
 
   it('writes nothing to the thread when the task may not be set, and nothing anywhere when no task holds the issue', async () => {
@@ -138,7 +141,7 @@ describe('teamrig issue close', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, ['ACCESS acme: writes with the token saved as teamrig-gh-acme', 'COMMENTED acme/web#612', 'CLOSED acme/web#612']);
     assert.equal(gh.ran.length, 2);
-    assert.ok(isIssueComment(gh.ran[0]?.args ?? []) && isIssueClose(gh.ran[1]?.args ?? []));
+    assert.ok(isIssueComment(gh.ran[0] ?? { args: [] }) && isIssueClose(gh.ran[1]?.args ?? []));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token']);
     assert.ok(![...result.stdout, ...result.stderr].some((line) => line.includes('acme-issues-token')));
   });
@@ -363,8 +366,8 @@ describe('teamrig issue edit', () => {
     const result = await kit.run(['issue', 'edit', 'Acme/Web#612', '--body-file', 'spec.md'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [LOGIN, `EDITED acme/web#612: its body is now ${BODY.length} characters`]);
-    assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/issues/612', '-X', 'PATCH', '-f', `body=${withStampFooter(BODY)}`]]);
-    assert.ok(isIssueBodyEdit(gh.ran[0]?.args ?? []));
+    assert.deepEqual(gh.ran.map(sentOf), [{ args: ['api', 'repos/acme/web/issues/612', '-X', 'PATCH', '--input', '-'], input: JSON.stringify({ body: withStampFooter(BODY) }) }]);
+    assert.ok(isIssueBodyEdit(gh.ran[0] ?? { args: [] }));
     assert.equal(kit.files.get(EVENTS_PATH), log);
   });
 
@@ -373,7 +376,7 @@ describe('teamrig issue edit', () => {
     await kit.files.write(SPEC, `\uFEFF${BODY}`);
     const gh = new FakeGh();
     await kit.run(['issue', 'edit', 'acme/web#7', '--body-file', SPEC], { ...AS_LEAD, gh });
-    assert.deepEqual(gh.ran.map((request) => request.args.at(-1)), [`body=${withStampFooter(BODY)}`]);
+    assert.deepEqual(gh.ran.map(sentBody), [withStampFooter(BODY)]);
   });
 
   it('refuses, running no gh, no file, a missing file, and a body that is empty, secret or names a task id', async () => {
@@ -509,5 +512,132 @@ describe('teamrig issue similar', () => {
     const bad = await kit.run(['issue', 'similar', 'web#7'], AS_LEAD);
     assert.equal(bad.code, EXIT.refused);
     assert.match([...bad.stdout, ...bad.stderr].join('\n'), /^REFUSED web#7 names no issue or pull request/u);
+  });
+});
+
+describe('teamrig issue search and issue show (T4860)', () => {
+  const READ_LOGIN = LOGIN.replace('writes with', 'read with');
+
+  it('search reads one page of the repository\'s search by its allowlisted call and prints each match', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 12, { title: 'Login fails after reset' }), ghIssue('acme/web', 13, { title: 'Dark mode' })]);
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'search', 'login', 'fails', '--repo', 'acme/web'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [READ_LOGIN, 'FOUND acme/web: 1 of the open issues matching "login fails"', '#12 open issue Login fails after reset']);
+    const searches = gh.ran.map((request) => request.args).filter(isIssueSearch);
+    assert.deepEqual(searches, [issueSearchArgs('acme/web', { words: 'login fails', state: 'open', kind: 'issue' })]);
+  });
+
+  it('search passes --state and --kind, and refuses a value they do not take, a repository not the team\'s or no words', async () => {
+    const gh = new FakeGh().holds('acme/web', []);
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'search', 'reset', '--repo', 'acme/web', '--state', 'all', '--kind', 'pull'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(gh.ran.map((request) => request.args).filter(isIssueSearch), [issueSearchArgs('acme/web', { words: 'reset', state: 'all', kind: 'pull' })]);
+    const refusals: ReadonlyArray<readonly [readonly string[], RegExp]> = [
+      [['issue', 'search', 'reset', '--repo', 'acme/web', '--state', 'merged'], /--state takes open, closed, all, not "merged"/u],
+      [['issue', 'search', 'reset', '--repo', 'acme/web', '--kind', 'pr'], /--kind takes issue, pull, all, not "pr"/u],
+      [['issue', 'search', 'reset', '--repo', 'other/app'], /other\/app is not one of the team's repositories/u],
+      [['issue', 'search', ' ', '--repo', 'acme/web'], /issue search needs the words to look for/u],
+    ];
+    for (const [argv, error] of refusals) {
+      const refused = await new CliHarness(GITHUB_TEAM).run([...argv], { ...AS_LEAD, gh: new FakeGh() });
+      assert.equal(refused.code, EXIT.refused, argv.join(' '));
+      assert.match([...refused.stdout, ...refused.stderr].join('\n'), error, argv.join(' '));
+    }
+  });
+
+  it('search fails with exit 1 when its words name another repository, sending no search', async () => {
+    const gh = new FakeGh().holds('acme/web', []);
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'search', 'login', 'repo:other/app', '--repo', 'acme/web'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stdout.join('\n'), /^FAILED acme\/web: a search stays in its repository/mu);
+    assert.deepEqual(gh.ran.filter((request) => request.args[1] === 'search/issues'), []);
+  });
+
+  it('show prints the item as GitHub holds it now, by its allowlisted read', async () => {
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7, { title: 'Login fails', body: 'Steps:\n1. reset', labels: ['type: bug'] })]);
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'show', 'acme/web#7'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [READ_LOGIN, 'SHOW acme/web#7: open issue', 'TITLE Login fails', 'LABELS "type: bug"', 'ASSIGNEES none', 'BODY', '  Steps:', '  1. reset']);
+    assert.ok(gh.ran.every((request) => isIssueRead(request.args)), JSON.stringify(gh.ran));
+  });
+
+  it('show exits 1 on an item GitHub does not hold', async () => {
+    const result = await new CliHarness(GITHUB_TEAM).run(['issue', 'show', 'acme/web#99'], { ...AS_LEAD, gh: new FakeGh().holds('acme/web', []) });
+    assert.equal(result.code, EXIT.failed);
+    assert.equal(result.stdout.at(-1), 'MISSING acme/web#99: the tracker shows no such issue or pull request to this access');
+  });
+
+  it('reads nothing while GitHub is off on the machine, and says so', async () => {
+    for (const argv of [['issue', 'search', 'login', '--repo', 'acme/web'], ['issue', 'show', 'acme/web#7']]) {
+      const gh = new FakeGh();
+      const result = await new CliHarness(GITHUB_TEAM).run(argv, { gh, env: { TEAMRIG_SESSION: 'lead', TEAMRIG_GITHUB: 'off' } });
+      assert.equal(result.code, EXIT.ok, argv.join(' '));
+      assert.match(result.stdout.join('\n'), /^OFF .*; nothing was read$/u);
+      assert.deepEqual(gh.ran, []);
+    }
+  });
+});
+
+describe('teamrig issue open (T4860)', () => {
+  const OPEN_LOGIN = LOGIN.replace('writes with', 'opens issues with');
+  const BODY = join(APP, 'issue.md');
+  const OPEN = ['issue', 'open', '--repo', 'acme/web', '--title', 'Login fails after a reset', '--body-file', 'issue.md'];
+
+  async function openKit(): Promise<CliHarness> {
+    const kit = new CliHarness(GITHUB_TEAM);
+    await kit.files.write(BODY, 'Steps: reset, then log in.');
+    return kit;
+  }
+
+  it('opens the issue with its labels once the repository has each, and adds no task', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh().holds('acme/web', []).hasLabels('acme/web', ['type: bug']);
+    const result = await kit.run([...OPEN, '--label', 'type: bug'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.deepEqual(result.stdout, [OPEN_LOGIN, 'OPENED acme/web#1: Login fails after a reset']);
+    assert.deepEqual(gh.ran.filter(isIssueCreate).map(sentOf), [
+      {
+        args: ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'],
+        input: JSON.stringify({ title: 'Login fails after a reset', body: withStampFooter('Steps: reset, then log in.'), labels: ['type: bug'] }),
+      },
+    ]);
+    assert.equal(kit.files.get(EVENTS_PATH) ?? '', '');
+  });
+
+  it('fails with exit 1 and opens nothing for a label the repository lacks', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh().holds('acme/web', []).hasLabels('acme/web', ['type: bug']);
+    const result = await kit.run([...OPEN, '--label', 'type: bgu'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.failed);
+    assert.match(result.stdout.at(-1) ?? '', /^FAILED acme\/web: it has no label "type: bgu"/u);
+    assert.deepEqual(gh.ran.filter(isIssueCreate), []);
+  });
+
+  it('refuses before any call a title or body no issue may carry, a bad label name, a repository not the team\'s or a positional', async () => {
+    const refusals: ReadonlyArray<readonly [readonly string[], string, RegExp]> = [
+      [['issue', 'open', '--repo', 'acme/web', '--title', ' ', '--body-file', 'issue.md'], 'Steps.', /the title is one line of 1 to 256 characters/u],
+      [OPEN, 'Fixed in T12.', /names the task id T12/u],
+      [OPEN, ' ', /the new issue: the body is empty/u],
+      [[...OPEN, '--label', 'bug\u0007'], 'Steps.', /--label: the label "bug\\u0007" holds a control character/u],
+      [['issue', 'open', '--repo', 'other/app', '--title', 'Login', '--body-file', 'issue.md'], 'Steps.', /other\/app is not one of the team's repositories/u],
+    ];
+    for (const [argv, body, error] of refusals) {
+      const kit = new CliHarness(GITHUB_TEAM);
+      await kit.files.write(BODY, body);
+      const gh = new FakeGh();
+      const refused = await kit.run([...argv], { ...AS_LEAD, gh });
+      assert.equal(refused.code, EXIT.refused, argv.join(' '));
+      assert.match([...refused.stdout, ...refused.stderr].join('\n'), error, argv.join(' '));
+      assert.deepEqual(gh.ran, [], argv.join(' '));
+    }
+  });
+
+  it('takes no positional: the issue it opens has no number yet', async () => {
+    const kit = await openKit();
+    const gh = new FakeGh();
+    const result = await kit.run([...OPEN, 'acme/web#7'], { ...AS_LEAD, gh });
+    assert.equal(result.code, EXIT.usage);
+    assert.match(result.stderr.join('\n'), /unexpected "acme\/web#7"/u);
+    assert.deepEqual(gh.ran, []);
   });
 });

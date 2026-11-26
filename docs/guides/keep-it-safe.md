@@ -125,7 +125,12 @@ never spells out would have to be built on purpose.
 It is a guard against mistakes, not a sandbox; protect the branch on your git host too. It does not see:
 
 - a push inside a script or program the command runs: `npm run deploy`, `./ship.sh`, `pwsh -File x.ps1`,
-  `source x.sh`, `python` or `node`, `make`, `find -exec`, `ssh host git push`;
+  `source x.sh`, `python` or `node`, `make`, `find -exec`. `ssh`, `sshpass`, `mosh`, `watch`, `tmux`, `screen`, a
+  terminal's `-e`, `parallel`, `at`, `crontab`, `make -f /dev/stdin` or `--eval`, `docker`/`podman`/`kubectl exec`,
+  `toolbox run`, `distrobox enter`, an ssh `-o ProxyCommand` or `LocalCommand`, expect's `spawn` and awk's
+  `system()` ask when the command they are handed pushes, read as the shell at the other end reads it; so does a
+  push written into a shell startup file or a folder of them (`~/.bashrc.d/`, `/etc/profile.d/`, fish's config),
+  a git or husky hook, a systemd user unit, `.envrc`, `PROMPT_COMMAND` or an alias;
 - a command line kept in a variable the line does not set as above, such as `bash -c "$CMD"`;
 - variables, functions or aliases your shell's startup files set (a readonly or integer variable, an `IFS`, a
   function named like a command), as with a function named `git`;

@@ -32,6 +32,16 @@ describe('parseSessionRecord', () => {
     assert.deepEqual(parseSessionRecord(formatSessionRecord(RECORD)), RECORD);
   });
 
+  it('reads the host a session runs in, and a record without it as the default host (T5059)', () => {
+    const codex: SessionRecord = { ...RECORD, host: 'codex-cli', transcript: 't.jsonl' };
+    assert.deepEqual(parseSessionRecord(formatSessionRecord(codex)), codex);
+    assert.equal(parseSessionRecord(formatSessionRecord(RECORD))?.host, undefined);
+    const line = (host: unknown): string => JSON.stringify({ v: 1, claudePid: 6900, claudeSession: 'claude-1', at: RECORD.at, host });
+    for (const bad of [7, '', null]) {
+      assert.equal(parseSessionRecord(line(bad)), undefined, String(bad));
+    }
+  });
+
   it('writes a record as the very line every installed teamrig reads (T4762)', () => {
     // The record's own keys are spread into the line, so a renamed property renames the key on disk: this line may
     // change only in the commit that raises the written format.

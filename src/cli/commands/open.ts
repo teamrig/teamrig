@@ -1,15 +1,15 @@
 import { resolve } from 'node:path';
-import { describeLaunch, launchModelProblem, launchOf } from '../../config/launch.ts';
+import { describeLaunch, launchModelProblem, launchOf, terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
 import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
+import { isHostSessionId } from '../../core/host-session.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
 import { samePath } from '../../core/paths.ts';
 import { HiringLog } from '../../hiring/log.ts';
 import { rehiredFrom, type RetireRecord } from '../../hiring/record.ts';
 import type { ResumeVerdict } from '../../hiring/rehire.ts';
-import { CLAUDE_SESSION_ID } from '../../inbox/marks.ts';
 import { findProgram, type HostProgram } from '../../open/host-program.ts';
 import type { FocusOutcome } from '../../open/focus.ts';
 import { sessionStartOf } from '../../open/session-start.ts';
@@ -23,6 +23,7 @@ import { noRoomText } from '../../sessions/headroom.ts';
 import { closedOf, SessionLog, type CloseRecord } from '../../sessions/log.ts';
 import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals.ts';
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
+import { WakePrompts } from '../../wake/prompts.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { admitBusyText, admitTab, dropTabHold } from '../headroom.ts';
 import { cacheBinOf, childEnvOf, launcherOf, launchHostOf } from '../host.ts';
@@ -44,6 +45,7 @@ export const TERMINAL_LABELS: Readonly<Record<Terminal, string>> = {
   'gnome-terminal': 'GNOME Terminal tab',
   konsole: 'Konsole tab',
   'x-terminal-emulator': 'terminal window',
+  headless: 'headless session, no window',
 };
 
 /** What bringing the running tab of session `name`, titled `title`, to the front prints. */
@@ -144,6 +146,7 @@ export async function openSessionTab(runtime: CliRuntime, tab: SessionTab): Prom
     '--project',
     tab.project,
     ...homeArgs(runtime),
+    ...(runtime.hostId === undefined ? [] : ['--host', runtime.hostId]),
     ...(tab.resume === undefined ? [] : ['--resume', tab.resume]),
     ...(tab.effort === undefined ? [] : ['--effort', tab.effort]),
     ...(tab.prompt === undefined ? ['--no-prompt'] : ['--encoded-prompt', encodePrompt(tab.prompt)]),
@@ -171,7 +174,7 @@ export async function open(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   const config = requireConfig(kit, runtime, 'read');
   const roster = await rosterOf(runtime, kit, config);
   const id = sessionIdOf(roster, address?.session ?? target);
-  const terminal = terminalFlag(args.flags.get('terminal')) ?? config.open.terminal;
+  const terminal = terminalFlag(args.flags.get('terminal')) ?? terminalOf(config, id);
   const project = await sessionProjectOf(runtime, config, id, args.flags.get('project'), found.from);
   const prompt = args.flags.get('prompt');
   const given = args.flags.get('project') !== undefined;
@@ -396,15 +399,15 @@ export function encodedPromptFlag(encoded: string): string {
   return checkedPrompt(prompt);
 }
 
-/** The Claude Code session id `launch --resume` names, checked so nothing but an id reaches Claude Code. */
+/** The host session id `launch --resume` names, checked so nothing but an id reaches the host. */
 function resumeFlag(value: string | undefined): string | undefined {
   return value === undefined ? undefined : hostSessionArg('--resume', value);
 }
 
-/** A Claude Code session id an argument names, checked so nothing but an id reaches Claude Code. */
+/** A host session id an argument names, checked so nothing but an id reaches the host. */
 export function hostSessionArg(name: string, value: string): string {
-  if (!CLAUDE_SESSION_ID.test(value)) {
-    throw new UsageError(`${name} "${value}" is not a Claude Code session id`);
+  if (!isHostSessionId(value)) {
+    throw new UsageError(`${name} "${value}" is not a host session id`);
   }
   return value;
 }
@@ -458,23 +461,23 @@ async function closeSince(runtime: CliRuntime, log: SessionLog, id: string, resu
  * Refused when it is not there, and with the host's own reason on a host that tells nothing of its sessions.
  */
 export async function hostProgramOf(runtime: CliRuntime, env: Env): Promise<HostProgram> {
-  const { program } = launcherOf(runtime);
+  const { program, programName } = launcherOf(runtime);
   const found = await findProgram({ env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, program);
   if (found.kind === 'missing') {
     const skipped = found.skipped.length === 0 ? '' : ` (skipped: ${found.skipped.join('; ')})`;
-    throw new RefusedError(`Claude Code (${program}) is not on PATH${skipped}; install it, then run this again`);
+    throw new RefusedError(`${programName} (${program}) is not on PATH${skipped}; install it, then run this again`);
   }
   return found.program;
 }
 
-/** The exit for how Claude Code ended, for a command that ran it on this terminal. */
-export function claudeExit(runtime: CliRuntime, command: string, result: RunOutcome): ExitCode {
+/** The exit for how the running host's program ended, named as people know it, for a command that ran it on this terminal. */
+export function hostExit(runtime: CliRuntime, command: string, result: RunOutcome): ExitCode {
   switch (result.kind) {
     case 'exited':
       if (result.code === 0) {
         return EXIT.ok;
       }
-      runtime.out.stderr(`FAILED Claude Code exited with code ${result.code}`);
+      runtime.out.stderr(`FAILED ${launcherOf(runtime).programName} exited with code ${result.code}`);
       return EXIT.failed;
     case 'missing':
       runtime.out.stderr(`FAILED ${command} is gone`);
@@ -531,11 +534,13 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   if (modelProblem !== undefined) {
     throw new RefusedError(`launch.${id}.model ${settings.model ?? ''}: ${modelProblem}; fix it in the team config, or \`${KIT_NAME} doctor\` lists each`);
   }
-  const resumed = resume === undefined ? '' : `, resuming Claude Code session ${resume}`;
+  const { programName } = launcher;
+  const resumed = resume === undefined ? '' : `, resuming ${programName} session ${resume}`;
   let listing = await launchListing(sessionRuntime, kit, config, roster, id);
-  runtime.out.stdout(`Starting Claude Code as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
+  runtime.out.stdout(`Starting ${programName} as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
   const store = new RefreshStore(runtime.files, kit.paths);
   const closes = new SessionLog(runtime.files, kit.paths.sessionLog);
+  const sent = new WakePrompts(runtime.files, kit.paths.wake);
   let first: string | undefined = prompt;
   let resuming = resume;
   for (;;) {
@@ -543,17 +548,22 @@ export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     // The host spells its own flags: this start only says what the session is to be.
     const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
     const args = [...prefix, ...launcher.launchArgs(start)];
+    // teamrig wrote this first prompt, not the person: kept like a wake's text, so the turn log marks it teamrig's and
+    // the UI does not follow it (T5388). A fresh start's tab id is unknown until Claude Code starts, so any tab matches.
+    if (first !== undefined) {
+      await sent.remember(id, { ...(resuming === undefined ? {} : { tab: resuming }), text: first });
+    }
     const startedAt = runtime.clock.now();
     const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
     if (!(await restartTaken(store, id))) {
       const close = await closeSince(runtime, closes, id, result, startedAt);
       if (close === undefined) {
-        return claudeExit(runtime, command, result);
+        return hostExit(runtime, command, result);
       }
-      runtime.out.stdout(`Claude Code was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
+      runtime.out.stdout(`${programName} was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
       return EXIT.ok;
     }
-    runtime.out.stdout(`Starting Claude Code again as ${name} with a fresh context: it reads its handover first`);
+    runtime.out.stdout(`Starting ${programName} again as ${name} with a fresh context: it reads its handover first`);
     first = refreshPrompt(team, id, store.handoverPath(id));
     resuming = undefined;
     // The restart ended a session that ran at another level than its config's (T2444): it starts again at the

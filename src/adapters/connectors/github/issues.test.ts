@@ -33,12 +33,14 @@ function readIssue(number: number, overrides: Partial<HostIssue> = {}): HostIssu
     lastEditedAt: undefined,
     authorAssociation: 'OWNER',
     author: 'maintainer',
+    authorName: '',
     authorKind: 'User',
     labelEvents: [],
     renamedAt: undefined,
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }
@@ -227,6 +229,27 @@ describe('listIssues', () => {
     assert.deepEqual(await listIssues(failing('GraphQL: Resource not accessible by personal access token (repository.issues)\n'), TOKEN, OPEN), {
       kind: 'failed',
       reason: 'the token saved as teamrig-gh-acme may not read the issues of acme/web: on GitHub, edit that token and set Issues to Read-only; its text stays the same, so nothing needs saving again',
+    });
+  });
+
+  it('says gh never reached GitHub, and that the token was not refused, when the network is off where it ran (#2281)', async () => {
+    const unreachable = 'gh did not reach GitHub (the network is off where it ran, as in a sandbox without it, or GitHub is down): the token saved as teamrig-gh-acme was not refused, so nothing needs saving again';
+    const network = [
+      'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n',
+      'Post "https://api.github.com/graphql": dial tcp 192.0.2.6:443: socket: operation not permitted\n',
+      'Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host\n',
+    ];
+    for (const stderr of network) {
+      const gh = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 1 }, stdout: '', stderr });
+      assert.deepEqual(await listIssues(gh, TOKEN, OPEN), { kind: 'failed', reason: unreachable }, stderr);
+    }
+  });
+
+  it("keeps gh's no-login exit a refused token, whatever else it printed", async () => {
+    const gh = new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 4 }, stdout: '', stderr: 'error connecting to api.github.com\n' });
+    assert.deepEqual(await listIssues(gh, TOKEN, OPEN), {
+      kind: 'failed',
+      reason: 'GitHub refused the token saved as teamrig-gh-acme (expired or revoked?): create a new one and save it again with: save teamrig-gh-acme',
     });
   });
 

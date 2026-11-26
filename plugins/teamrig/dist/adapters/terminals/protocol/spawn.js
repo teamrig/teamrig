@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
-import { ProgramOutputCapError } from "../../../plugin-api/index.js";
+import { KIT_MODE_ENV, ProgramOutputCapError } from "../../../plugin-api/index.js";
 import { ANSWER_CAP_BYTES, failed, quoted } from "./wire.js";
 /** How long one request may take: a terminal opens or lists in well under a second, so ten is a hung program. */
 export const PROTOCOL_TIME_LIMIT_MS = 10_000;
@@ -47,11 +47,11 @@ function answerOf(path, result) {
  * The transport to a pinned terminal program, run once per request line. Each run reads the program's file, checks
  * its sha256 against the pin, and runs a private copy of exactly those bytes, so the file cannot change between the
  * check and the start; a file that no longer matches is never run. The program gets its pinned arguments, the request
- * line on stdin and the short environment. Every failure is an answer, never a throw.
+ * line on stdin and the short environment, plus `KIT_MODE_ENV` in kit mode. Every failure is an answer, never a throw.
  */
-export function pinnedTransport(pin, ports) {
+export function pinnedTransport(pin, ports, options = {}) {
     const problem = pinProblem(pin);
-    const env = shortEnv(ports.env);
+    const env = options.kitWorld === undefined ? shortEnv(ports.env) : { ...shortEnv(ports.env), [KIT_MODE_ENV]: options.kitWorld };
     return async (line) => {
         if (problem !== undefined) {
             return failed(problem);

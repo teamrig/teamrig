@@ -128,7 +128,7 @@ export function isExpiringResetKind(value) {
  * leaves one unset takes the team above's, unless it names another account (src/cli/kit.ts openKit), so the teams of
  * a tree read one week alike without a copy that drifts.
  */
-export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'];
+export const ACCOUNT_BUDGET_KEYS = ['enabled', 'account', 'accountLead', 'weeklyLimitW', 'pinRateToLimit', 'homePartPct', 'subagentWeight', 'modelWeights', 'extraWPerUsd', 'reset', 'resets'];
 /** `refresh.autoRestart`: on or off for every session, or on for the team's lead only. */
 export const AUTO_RESTART_LEAD = 'lead';
 /**
@@ -153,9 +153,10 @@ export function isBurstPolicy(value) {
 }
 /**
  * Where `teamrig open` opens a session's tab: `auto` picks tmux inside tmux, else the platform's
- * terminal; `print` opens nothing and prints the command to run.
+ * terminal; `headless` runs the session with no window, an opt-in `auto` never picks (T5093); `print` opens nothing
+ * and prints the command to run.
  */
-export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'print'];
+export const TERMINALS = ['auto', 'tmux', 'windows-terminal', 'macos-terminal', 'gnome-terminal', 'konsole', 'x-terminal-emulator', 'headless', 'print'];
 export function isTerminalChoice(value) {
     return TERMINALS.some((terminal) => terminal === value);
 }

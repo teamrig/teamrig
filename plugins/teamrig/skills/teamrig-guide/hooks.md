@@ -7,7 +7,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 
 | Claude Code event | teamrig hook | What it does |
 | --- | --- | --- |
-| `SessionStart` (startup, resume, `/clear`, compact) | `hook session-start` | Injects the team rules and who you are, starts the team's `issue watch` when none runs, and records the session's Claude Code process (`state/sessions/<id>.json`); while the session runs in another Claude Code it keeps that record and tells this second one, and the user, to stop; a Claude Code of the same conversation is no second one and gets no stop: one the session started, a forked worker (`--fork-session --resume` of the recorded session or transcript, where a `/clear` may run) and the background job the tab handed its conversation to (`/bg`, `claude --bg`) |
+| `SessionStart` (startup, resume, `/clear`, compact) | `hook session-start` | Injects the team rules and who you are (and, where the AI CLI's transcript tells it, the restriction a resumed session's last turn ran under), starts the team's `issue watch` when none runs, and records the session's Claude Code process (`state/sessions/<id>.json`); while the session runs in another Claude Code it keeps that record and tells this second one, and the user, to stop; a Claude Code of the same conversation is no second one and gets no stop: one the session started, a forked worker (`--fork-session --resume` of the recorded session or transcript, where a `/clear` may run) and the background job the tab handed its conversation to (`/bg`, `claude --bg`) |
 | `SubagentStart` (each helper) | `hook subagent-start` | Gives the helper the team rules and whose helper it is ([A helper's start](#a-helpers-start)) |
 | `SessionStart` (`/clear`), in the background | `hook refresh-wake` | Wakes a session that `/clear` started from its context refresh, so it carries on without a prompt |
 | `UserPromptSubmit` (each prompt) | `hook inbox-reminder` | Stops a prompt that holds a secret and cleans it out of Claude Code's prompt history ([Each prompt](#each-prompt)); cancels a waiting automatic restart; shows new inbox lines; shows a leader the [register changes in its tree](#each-prompt-the-leader-digest) since its last prompt; binds a tab started by hand by its title; records a Claude Code rename; tells the model when its budget holds it |
@@ -37,7 +37,7 @@ Each hook line names the host it runs in with `--host <id>` after the hook's nam
 | The mod, every 15 s in each tab | `hook meeting-panel` | While the owner's daily meeting is open, shows its cards in a pane beside the chat of the team's lead that started it, and while a booked `M<n>` is started, its cards beside the chat of the session it meets, in sections (on the table, up next, decided), each with a one-line summary and a decided one with its decision ([the meeting's agenda panel](#the-mod-the-meetings-agenda-panel)) |
 | The mod, a minute after a tab starts and every 10 minutes, and when an install changes `installed_plugins.json` | `hook update-check`, `hook update-dismiss`, `hook update-apply` | Tells, in a band above the prompt, of a newer teamrig or teamrig-pane than the one installed, and runs the band's Update or Dismiss ([the update notice](#the-mod-the-update-notice)) |
 | `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, and a tab's first one once for the refresh, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
-| `Stop` (end of each turn) | `hook stop` | Sends the session back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit), once to [a hand step typed into its reply](#end-of-a-turn-a-hand-step-typed-into-the-reply), and after a task is set waiting, once to [its other work](#end-of-a-turn-keep-working-while-a-task-waits); asks for a handover when a context refresh is due, then starts the automatic restart; writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) to the session's `launch` entry; tells the user of another effort than `launch` asks, or of a model Claude Code switched to; shows the budget lines; names a verifying task whose verify-by day has come; starts the team's `issue watch` hidden in the background when none runs; every 10 minutes for the whole team, tells the lead of [a tab that runs without its hooks](#end-of-a-turn-hookless-tabs); with tab status on, sets the tab's ready circle, or the decision circle after a turn that asks the user to decide |
+| `Stop` (end of each turn) | `hook stop` | Sends the session back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit), once to [a hand step typed into its reply](#end-of-a-turn-a-hand-step-typed-into-the-reply), and after a task is set waiting, once to [its other work](#end-of-a-turn-keep-working-while-a-task-waits); asks for a handover when a context refresh is due, then starts the automatic restart; writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) to the session's `launch` entry; tells the user of another effort than `launch` asks, or of a model Claude Code switched to; shows the budget lines; names a verifying task whose verify-by day has come; in an AI CLI whose transcript tells the plan's use of the week, saves that reading as the session's snapshot, as `teamrig statusline` does from a status line; in an AI CLI whose transcript tells the restriction a session runs under (its approval, sandbox, network and profile), tells the user once for each restriction, never changing one; starts the team's `issue watch` hidden in the background when none runs; every 10 minutes for the whole team, tells the lead of [a tab that runs without its hooks](#end-of-a-turn-hookless-tabs); with tab status on, sets the tab's ready circle, or the decision circle after a turn that asks the user to decide |
 | `SubagentStop` (a helper about to hand back) | `hook subagent-stop` | Sends the helper back once to [a skill edit it dropped](#end-of-a-turn-or-a-helper-a-dropped-skill-edit) |
 | `SessionEnd` (a tab closes) | `hook effort-writeback` | Writes [an `/effort` the user typed](#end-of-a-turn-a-typed-effort-becomes-the-launch-effort) with no turn after it to the session's `launch` entry |
 | `SessionStart`, `UserPromptSubmit`, `Stop`, `StopFailure` and `SessionEnd`, in a team or not | `hook restore-track` | Records each Claude Code session on the machine, where it started and what it was doing, for the restore after a reboot ([the restore tracker](#every-session-the-restore-tracker)) |
@@ -356,7 +356,9 @@ space in both) and the command `teamrig queue` or `teamrig test` runs after its 
 before that `--` leaves where the command starts unread, so the guard asks), but it does not see a push inside a
 script or program the command runs, `gh pr merge`,
 git extensions, or pushes run outside Claude Code. It is a guard against mistakes, not a sandbox: protect the
-branch on your git host too.
+branch on your git host too. A program that runs a command where the guard cannot read it (`ssh`, `tmux`,
+`screen`, `watch`, `at`, `crontab`, `docker`/`kubectl exec`) asks when the command it is handed pushes, read as
+the shell there reads it; so does a push written into a startup file, a git hook or an alias.
 
 ## Before a shell command: the commit guard
 
@@ -552,7 +554,9 @@ nested shells, `cd`, pipes and substitutions) and refuses a call that would prin
   `~/.claude/.credentials.json`, `~/.claude/history.jsonl` (the prompt history), both also in the folder
   `CLAUDE_CONFIG_DIR` names by an absolute path, `**/.claude/settings.local.json`
   (its allow rules can hold a credential), `**/.claude*/.credentials.json` (the login in a folder named like
-  the host's own, a second account's `.claude-work`), `~/.bash_history`, `~/.zsh_history`, `**/PSReadLine/*_history.txt`, the
+  the host's own, a second account's `.claude-work`), `**/.credentials.json` where a call spells the file name out
+  (`vendor/agent/.credentials.json`, `*/.credentials.json`: a second profile in a folder of any name; a search of
+  `*.json` files is never read as naming it), `~/.bash_history`, `~/.zsh_history`, `**/PSReadLine/*_history.txt`, the
   key stores `**/*.pem`, `**/*.key`, `**/*.p12`, `**/*.pfx`, `**/*.jks` and `**/*.keystore`, the private keys
   `**/id_rsa`, `**/id_ecdsa` and `**/id_ed25519` (their `.pub` halves are not listed), and Terraform's state
   `**/*.tfstate` and `**/*.tfstate.backup` (it holds secrets in plain text); `.env.example`, `.env.sample` and
@@ -1215,11 +1219,15 @@ fence with no language or in the text), and nowhere a sha256 (a whole one, or `s
 as the card's run line `(sha256 7a0d9294, audited by security)` shows it), `hook stop` sends the session back once:
 
 ```text
-teamrig: your reply handed the human a shell block with no pinned sha256. Core rule 11: a step the human runs by hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat, and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line; write read-only on the line before such a block next time.
+teamrig: your reply handed the human a shell block with no pinned sha256. Core rule 11: a step the human runs by hand that changes anything or touches a secret reaches them only as a file the security reviewer audited, run by one line with its sha256 (skill hand-step). If it is such a step, tell the human now not to run it from chat, and hand it as an audited file. If it only reads (changes nothing, touches no secret), say so in one line; write read-only, or what a quoted block is the result of ("call 2 returned:"), on the line before such a block next time.
 ```
 
-A block or call line whose line before, or own line, says `read-only` is let by. A backticked short hex alone pins
-nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
+A block or call line whose line before, or own line, says `read-only` is let by, and so is one whose line before ends
+on a colon with a past-tense verb for what a call gave back (`returned`, `printed`, `came back`, `answered`,
+`replied`, `responded`), says no `will`, `once`, `after` or `you`, and hands nothing over on either line (no `run`,
+`paste`, `add`, `set`, `write`, `copy`, `apply`, `use`, `try`, `change` and the like). That is a quote of a tool's
+result, which a reply on a host whose transcript teamrig does not read (Codex CLI) shows the human when asked what a
+call returned; a noun such as `output` or `results` marks nothing. A backticked short hex alone pins nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
 dropped skill edit and before the rest of the turn's end. Outside a team, and in a tab that is no session of it, it
 says nothing.
 
@@ -1243,7 +1251,7 @@ share of the week [focus.allocation]), so the push never sends a session past th
 `leadBoundary` is on, is asked to hand code work to the session owning its area (`teamrig update <id> --owner
 <session>`) and work the rest. It asks at one stop only, never on a stop already sent back or while a context
 refresh is under way (the ask then waits for a later stop), and never in the budget's quiet hours or while its
-budget holds it or a short day pauses it (the day-start wake brings it back to its work). With nothing it can start, the turn ends as
+budget holds it (never under `budget.overAction` `warn`) or a short day pauses it (the day-start wake brings it back to its work). With nothing it can start, the turn ends as
 it would, and a turn that asks the user to decide shows [the decision circle](#every-event-tab-status). A hired
 session asked to write its handover is asked that first.
 
@@ -1524,7 +1532,8 @@ the time if the line is still unseen.
 ### The idle pass
 
 With `open.idle.mode` not `off` (`on`, the default, or `dry-run`), `hook wake-check` also runs the team's
-idle pass, right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
+idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by (Codex CLI's
+`codex queue`), `hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
 the team's and not this tab's wake; it needs `wake.enabled`. It runs at most once a minute across the team: the
 check that claims `state/idle-pass.lock` runs it, and no check waits for that lock. With nothing changed, an idle
 tab's mod asks every 10 minutes, so a quiet team's pass runs that often and its close comes up to 10 minutes past
@@ -1803,13 +1812,13 @@ lead, the delivery owner, the security reviewer, the tracker answerer and lifted
 burst's floor still holds a paused session up.
 Past its part while the team has room, a session is not held, and its line says so: `The team has room today: 2.0%
 of the week used, below its in-day pace of 4.0%, so nothing more happens.` Past its part once the team has no room,
-it is held: only p0 work wakes it or keeps its idle tab open, and it is escalated when `budget.escalate` is `session`, or, with
+it is held, unless `budget.overAction` is `warn`: only p0 work wakes it or keeps its idle tab open, and it is escalated when `budget.escalate` is `session`, or, with
 `session-and-fleet` (the default), only while the whole team is also ahead of its pace line. Then
 `budget.overAction` applies:
 
 | `overAction` | What happens |
 | --- | --- |
-| `warn` (default) | the lines only |
+| `warn` (default) | the lines only; nothing is held, so its wakes, its idle tab and the Stop hook's keep-working ask go on as with room left (a short day's pause still rests it) |
 | `ask-lead` | the session's leader (the lead, or its sub-lead) also gets one inbox line a day, naming the lift command |
 | `ask` | the leader's line, and each new helper launch is refused with its route (no teamrig hook asks a person) |
 | `block` | the leader's line, and new helper launches are refused |
@@ -1936,6 +1945,18 @@ starts, and each shortcut of that name that starts something else, for `teamrig 
 RESTORE-STRAY). So on Windows that start reads the logon entry and the shortcuts even where it changes nothing,
 once per version; when that read fails, the record stays as it was and the next start tries again.
 
+A session start also installs the teamrig it runs into the kit home, so a host whose hooks point there runs it
+next: it copies the plugin into `<home>/versions/<version>`, checks the copy against the plugin's integrity list,
+and names it current. It keeps the two versions before it for `teamrig kit use` to roll back to. A start that runs
+from the kit home already copies nothing, and one that finds another start copying (the `versions.lock` held) leaves
+it to that one. A start of an older version copies it and keeps it, but the newer current one stays, logged as `kit:
+<old> kept; current <current> is newer` and said at the start: ``teamrig <current> stays current; this plugin's <old>
+is older and kept; `teamrig kit use <old>` moves to it.`` Each change goes to `restore/restore.log` as `kit: <old> ->
+<new>: current`, or `kit: refused: <reason>` when the copy does not match its list. After `teamrig kit use <version>`
+pinned an older one, the start keeps the newer copy but moves nothing, logs `kit: <new> kept; current pinned at
+<old>`, and says so at every start: `teamrig pinned at <old>; <new> is installed; teamrig kit use --latest moves to
+it.`
+
 The first failure of an expiry in a team's tab also pages the owner, once per expiry: one line naming the tab and the
 time on its team's clock, posted to the chat webhook of the tab's team or the first team above it that names one,
 read from the file [alerts.pageWebhookFile] names (it wins: its first non-empty line, or the value of the key
@@ -2005,8 +2026,11 @@ turn as it was.
 
 The same prompt hook also keeps where the person last typed, for the dedicated UI to follow: each prompt the person
 sends in a team session's tab, with `turnLog` on or off, replaces `~/.teamrig/last-typed.json`, one file for every
-team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A wake teamrig
-submitted never moves it, and a failed write leaves the turn log and the prompt as they were.
+team on the host, with `{v: 1, team, session, tab, at}` (`tab` the AI CLI session typed in). A prompt teamrig
+submitted never moves it: a wake, or the first prompt `teamrig launch` passed to an AI CLI it started (a reopen,
+refresh, rehire or restore), and the turn log marks either `from: teamrig`. Nor does one the AI CLI submitted itself,
+such as its notice that a background task ended or another session's message. A failed write leaves the
+turn log and the prompt as they were.
 
 ## A guard that cannot answer
 

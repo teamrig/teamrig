@@ -293,6 +293,16 @@ describe('secretFilesOf', () => {
     assert.deepEqual(secretFilesOf({ host: bare, shippedHosts: { bare: shippedHost(bare), 'no-secrets': shippedHost(NO_SECRETS_HOST) }, env: {}, platform }).secretFiles(), []);
   });
 
+  it('gives the files every host counts only where a word names them outright, the running one after the shipped ones, each glob once (T4870)', () => {
+    const { shippedHosts, platform } = quietWorld();
+    const naming: HostSource = () => ({ ...BARE, secrets: { secretFiles: () => [], namedFiles: () => ['**/login.json', '**/.credentials.json'] } });
+    for (const [name, host] of RUNNING_HOSTS.slice(0, 4)) {
+      assert.deepEqual(secretFilesOf({ host, shippedHosts, env: {}, platform }).namedFiles?.(), ['**/.credentials.json'], name);
+    }
+    assert.deepEqual(secretFilesOf({ host: naming, shippedHosts, env: {}, platform }).namedFiles?.(), ['**/.credentials.json', '**/login.json']);
+    assert.deepEqual(secretFilesOf({ host: OWN_FILES_HOST, shippedHosts: {}, env: {}, platform }).namedFiles?.(), [], 'a host that names none');
+  });
+
   it("gives the files a shipped host keeps in a folder the run's environment moves, under a host telling none of its secret files too", () => {
     const { shippedHosts } = quietWorld();
     const env = { CLAUDE_CONFIG_DIR: '/cfg' };
@@ -375,7 +385,7 @@ describe('identityOf', () => {
       const identity = { ...UNTOLD, projectDir: given.env['AGENT_ROOT'], startedAs: 'desk', sessionId: given.env['AGENT_SESSION'] };
       const childEnv = { session: [], parked: [], login: [] };
       const variables = { marks: ['AGENT_RUN'], identity: ['AGENT_SESSION', 'AGENT_ROOT'] };
-      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined } };
+      return { ...BARE, launcher: { programName: 'Agent', program: 'agent-desk', launchArgs: () => [], variables, childEnv, identity: () => identity, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined, wake: unsupported('the agent wakes no session') } };
     };
     assert.deepEqual(identityOf({ host: telling, env: { AGENT_ROOT: PROJECT, CLAUDE_PROJECT_DIR: join('/', 'other') }, platform: 'darwin' }), {
       ...UNTOLD,

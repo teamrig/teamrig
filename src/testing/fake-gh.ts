@@ -1,5 +1,6 @@
 import { isRecord, recordField, stringField, type JsonRecord } from '../core/guards.ts';
 import {
+  isIssueSearch,
   isAssigneeRead,
   isIssueAssigneeRead,
   isCommentsRead,
@@ -14,6 +15,8 @@ import {
   isIssueComment,
   isIssueTypeSet,
   isIssueCreate,
+  issueCreateFields,
+  bodyFieldOf,
   isIssueRead,
   isJobLogRead,
   isLabelAdd,
@@ -38,6 +41,7 @@ import {
   LabelFileReads,
   labelFileRepoOf,
   WATCH_PATHS,
+  type GhCall,
   type GhRequest,
   type GhResult,
   type GhRunner,
@@ -136,7 +140,7 @@ function heldIssueRest(issue: JsonRecord, number: number): JsonRecord {
     return Array.isArray(nodes) ? nodes : [];
   };
   const body = stringField(issue, 'body') ?? '';
-  return { id: 1000 + number, number, state: (stringField(issue, 'state') ?? 'OPEN').toLowerCase(), labels: nodesOf('labels'), assignees: nodesOf('assignees'), body: body === '' ? null : body };
+  return { id: 1000 + number, number, title: stringField(issue, 'title') ?? '', state: (stringField(issue, 'state') ?? 'OPEN').toLowerCase(), labels: nodesOf('labels'), assignees: nodesOf('assignees'), body: body === '' ? null : body };
 }
 
 /** A timeline item: `actor`, an account of `kind`, put `label` on the issue at `at`. */
@@ -342,6 +346,16 @@ function fieldOf(args: readonly string[], key: string): string | undefined {
     }
   }
   return undefined;
+}
+
+/** What a run sent gh, its arguments and any stdin, without its environment: the shape a spec compares. */
+export function sentOf(request: GhRequest): GhCall {
+  return request.input === undefined ? { args: request.args } : { args: request.args, input: request.input };
+}
+
+/** The issue text a run sent on stdin (an issue's create, a comment or a body edit), or undefined for any other run. */
+export function sentBody(request: GhRequest | undefined): string | undefined {
+  return bodyFieldOf(request?.input) ?? issueCreateFields(request?.input)?.body;
 }
 
 /** The `owner/name` a page of an issue query reads, or empty when the command line names none. */
@@ -682,8 +696,8 @@ export class FakeGh implements GhRunner {
     if (isWatchProbe(request.args)) {
       return this.probe(request.args);
     }
-    if (isIssueCreate(request.args)) {
-      return this.create(request.args);
+    if (isIssueCreate(request)) {
+      return this.create(request);
     }
     if (isLabelRead(request.args)) {
       return this.labelRead(request.args[1] ?? '');
@@ -717,6 +731,9 @@ export class FakeGh implements GhRunner {
     if (isIssueRead(request.args)) {
       return this.issueRead(request.args[1] ?? '');
     }
+    if (isIssueSearch(request.args)) {
+      return this.issueSearch((request.args[5] ?? '').slice('q='.length));
+    }
     if (isMentionRead(request.args)) {
       return this.postRead(request.args[1] ?? '');
     }
@@ -734,7 +751,7 @@ export class FakeGh implements GhRunner {
       const run = this.runs.get(Number(runId));
       return this.canned.get(repo) ?? (run === undefined ? { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' } : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(run), stderr: '' });
     }
-    if (isIssueComment(request.args) || isIssueBodyEdit(request.args) || isIssueClose(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
+    if (isIssueComment(request) || isIssueBodyEdit(request) || isIssueClose(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };
     }
     if (isLinkAdd(request.args)) {
@@ -928,6 +945,30 @@ export class FakeGh implements GhRunner {
     return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(comments), stderr: '' };
   }
 
+  /**
+   * A search as GitHub's REST search answers it: HTTP 422 for a query naming neither `is:issue` nor `is:pr`, as GitHub
+   * refuses one; none for `is:pr`, since what the fake holds are issues; else the held issues of the query's repository
+   * whose title holds each of its quoted terms (case aside), each naming its repository, the other qualifiers ignored,
+   * so a test of a search needs only the issues it holds.
+   */
+  private issueSearch(q: string): GhResult {
+    const [scope = '', ...rest] = q.split(' ');
+    const repo = scope.slice('repo:'.length);
+    const canned = this.canned.get(repo);
+    if (canned !== undefined) {
+      return canned;
+    }
+    if (!rest.includes('is:issue') && !rest.includes('is:pr')) {
+      return { end: { kind: 'exited', code: 1 }, stdout: '', stderr: "gh: Query must include 'is:issue' or 'is:pull-request' (HTTP 422)\n" };
+    }
+    const terms = rest.filter((word) => !word.startsWith('is:')).map((term) => term.replaceAll('"', '').toLowerCase());
+    const held = rest.includes('is:pr') ? [] : (this.issues.get(repo) ?? []);
+    const items = held
+      .filter((issue) => terms.every((term) => (stringField(issue, 'title') ?? '').toLowerCase().includes(term)))
+      .map((issue) => ({ ...heldIssueRest(issue, Number(issue['number'])), repository_url: `https://api.github.com/repos/${repo}` }));
+    return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ total_count: items.length, incomplete_results: false, items }), stderr: '' };
+  }
+
   private issueRead(path: string): GhResult {
     const [, owner = '', name = '', , number = ''] = path.split('/');
     const canned = this.canned.get(`${owner}/${name}`);
@@ -944,16 +985,16 @@ export class FakeGh implements GhRunner {
    * An issue create as GitHub's REST API answers it: the new issue, numbered after the last one the repository
    * holds, is added to it open, so a later sync reads it back.
    */
-  private create(args: readonly string[]): GhResult {
-    const repo = (args[1] ?? '').slice('repos/'.length, -'/issues'.length);
+  private create(request: GhRequest): GhResult {
+    const repo = (request.args[1] ?? '').slice('repos/'.length, -'/issues'.length);
     const failure = this.createFailures.get(repo);
     if (failure !== undefined) {
       return failure;
     }
     const held = this.issues.get(repo) ?? [];
     const number = Math.max(0, ...held.map((issue) => (typeof issue['number'] === 'number' ? issue['number'] : 0))) + 1;
-    const labels = args.flatMap((arg, at) => (args[at - 1] === RAW_FIELD && arg.startsWith(LABEL_PREFIX) ? [arg.slice(LABEL_PREFIX.length)] : []));
-    this.issues.set(repo, [...held, ghIssue(repo, number, { title: fieldOf(args, 'title') ?? '', body: fieldOf(args, 'body') ?? '', labels })]);
+    const fields = issueCreateFields(request.input);
+    this.issues.set(repo, [...held, ghIssue(repo, number, { title: fields?.title ?? '', body: fields?.body ?? '', labels: [...(fields?.labels ?? [])] })]);
     return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify({ number, html_url: `https://github.com/${repo}/issues/${number}` }), stderr: '' };
   }
 
@@ -1008,9 +1049,6 @@ function issueNodeIs(node: JsonRecord, at: IssueAt): boolean {
 
 /** The issue path of a link write, the endpoint, and its typed id field. */
 const LINK_WRITE = /^repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/(sub_issues|dependencies\/blocked_by)$/;
-
-/** How a label field of an issue create starts. */
-const LABEL_PREFIX = 'labels[]=';
 
 /** A comment node of the issue queries' shape, as GitHub's REST API spells it. */
 function restCommentOfNode(comment: JsonRecord): JsonRecord {

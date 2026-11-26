@@ -32,6 +32,8 @@ export interface ConnectorState {
   readonly claims: string;
   /** The import scope of each place a person last took with `--yes`, and the wider one the lead was last told of (scope-hold.ts). */
   readonly scope: string;
+  /** The reporters whose issues the tracker's trust rule let in, as a person last took them with `--yes` (sync/reporters.ts). */
+  readonly reporters: string;
 }
 
 /**
@@ -56,5 +58,6 @@ export function connectorState(paths: TeamPaths, id: string): ConnectorState {
     follows: join(dir, 'follows.json'),
     claims: join(dir, 'claims.json'),
     scope: join(dir, 'scope.json'),
+    reporters: join(dir, 'reporters.json'),
   };
 }

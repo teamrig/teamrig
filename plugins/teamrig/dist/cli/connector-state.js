@@ -24,5 +24,6 @@ export function connectorState(paths, id) {
         follows: join(dir, 'follows.json'),
         claims: join(dir, 'claims.json'),
         scope: join(dir, 'scope.json'),
+        reporters: join(dir, 'reporters.json'),
     };
 }

@@ -9,6 +9,7 @@ import {
   type DeliverAnswer,
   type IdleAnswer,
   type JsonRecord,
+  type KitRequest,
   type ListAnswer,
   type ListedPane,
   type OpenAnswer,
@@ -28,8 +29,8 @@ import {
  * outside data: capped in size, checked field by field, its unknown fields ignored, its text kept to one printable line.
  */
 
-/** The method of the first request, whose answer lists what the program serves; the rest are the protocol's requests. */
-export type WireMethod = 'capabilities' | TerminalRequest;
+/** The method of the first request, whose answer lists what the program serves; then the protocol's requests, and the kit's. */
+export type WireMethod = 'capabilities' | TerminalRequest | KitRequest;
 
 /** The most bytes an answer may hold. A list of a few hundred panes fits many times over; more is not a terminal's answer. */
 export const ANSWER_CAP_BYTES = 1024 * 1024;

@@ -42,6 +42,7 @@ import { skillsToLint } from "../../skills/run-scripts.js";
 import { SKILL_FILE } from "../../skills/store.js";
 import { weekUseOnAccount } from "../account-teams.js";
 import { knownSettingsScope, readWideAllow } from "../allow-scope.js";
+import { autoModeStaleWarnings } from "../automode-stale-check.js";
 import { noPositionals, onePositional, requiredFlag, somePositionals, UsageError } from "../args.js";
 import { handStepPin, readRunFiles } from "../hand-step-file.js";
 import { KitTreeGoals } from "../tree-goals.js";
@@ -50,6 +51,7 @@ import { findTeam, openKit, pastOrPresentIdOf, projectFolder, sessionIdOf, teamZ
 import { checkLines, listLines, SHORT_TITLE_CHARS, waitingOnLines } from "../reports.js";
 import { fiveHourWarnings } from "../five-hour-check.js";
 import { transcriptsIfKept } from "../host.js";
+import { idleFactsOf } from "../idle-check.js";
 import { logSizeWarnings } from "../log-size-check.js";
 import { githubLateWarnings } from "../github-late-check.js";
 import { promptHoldWarnings } from "../prompt-hold-page.js";
@@ -63,6 +65,8 @@ import { secretHookWarnings } from "../secret-hook-check.js";
 import { stampHookWarnings } from "../stamp-hook-check.js";
 import { ownerBatchOf } from "../owner-batch.js";
 import { rollUp } from "../roll-up.js";
+import { tabCapExcessOf } from "../tab-cap.js";
+import { tabCapWarnings } from "../tab-cap-check.js";
 import { splitUnowned } from "../unowned.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { addIssuePlan } from "../../sync/issue-at-add.js";
@@ -205,7 +209,7 @@ async function addHere(args, runtime, caller) {
         throw new RefusedError(issue.error);
     }
     const by = sessionIdOf(team.roster, caller);
-    const ids = addInputIds(team, issue.value.kind === 'local' ? { ...input, ref: issue.value.ref } : input);
+    const ids = addInputIds(team, issue.value.kind === 'local' || issue.value.kind === 'later' ? { ...input, ref: issue.value.ref } : input);
     const end = issue.value.kind === 'open'
         ? await addWithIssue((line) => runtime.out.stdout(line), team.register, await addIssueHost(runtime, scanner, team.config.github.stamp, team.config.connectors), by, ids, issue.value.draft)
         : { kind: 'written', verdict: await team.register.add(by, ids), ref: undefined };
@@ -1037,7 +1041,7 @@ function withOverLimit(sections, fit) {
  * starts the restore and starts a file gone or something install did not set up (RESTORE-DEAD, RESTORE-STRAY,
  * src/cli/launcher-record-check.ts), each of its tabs held on a permission prompt (PROMPT-HELD,
  * src/cli/prompt-hold-page.ts), each file of its state or inbox near the task pane's read limit (LOG-SIZE,
- * src/cli/log-size-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
+ * src/cli/log-size-check.ts), a team past its tab cap (OVER-CAP, src/cli/tab-cap-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
  * src/cli/restart-stalled-check.ts) are the unowned
  * warnings, which go to the lead (src/cli/unowned.ts, T951).
  */
@@ -1101,10 +1105,15 @@ export async function checkReport(args, runtime) {
     const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
     const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
     const logs = await logSizeWarnings(runtime.files, own.paths);
+    const overCap = await tabCapWarnings(own.team, own.config.open.headroom.maxTabs, async () => {
+        const kit = await openKit(runtime, own.team);
+        return tabCapExcessOf(runtime, kit, own.config, own.roster, await idleFactsOf(runtime, kit, own.config, own.roster));
+    }, (id) => own.roster.nameOf(id) ?? id);
     const sessionRuns = (pid) => runsHostSession(runtime, pid);
     const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
+    const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
     const lead = own.config.roles.lead;
-    return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...stalled], lead, decisions };
+    return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
 }
 /**
  * The batch of the owner's decisions a root team's lead asks next, over its register and every register under it; none

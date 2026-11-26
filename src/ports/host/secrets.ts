@@ -12,4 +12,12 @@ export interface HostSecrets {
    * keeps every shipped host's whatever host runs, and leaves out a `!glob` named here.
    */
   secretFiles(): readonly string[];
+  /**
+   * The host's own secret files whose name is too common in searches to read their wildcards as reaching it, globs
+   * read as `secretFiles` are: the guard counts one only for a word or a tool's path whose file name is spelled out
+   * (`vendor/agent/.credentials.json`, `*\/.credentials.json`), never a search's `*.json`. A host that names none
+   * leaves it out. `secretFiles` keeps the narrower glob a search's wildcards are read against
+   * (`**\/.claude*\/.credentials.json`).
+   */
+  namedFiles?(): readonly string[];
 }

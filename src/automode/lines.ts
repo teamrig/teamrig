@@ -1,4 +1,4 @@
-import type { PushGuardConfig, PushToProtected } from '../config/types.ts';
+import type { KitConfig, PushGuardConfig, PushToProtected } from '../config/types.ts';
 
 /**
  * The lines teamrig adds to Claude Code's `autoMode.environment` setting: what auto mode's classifier should take as
@@ -17,6 +17,25 @@ export interface AutoModeFacts {
   readonly lead: string;
   /** Only the keys the lines name: the protected branches and how a push to one goes. */
   readonly pushGuard: Pick<PushGuardConfig, 'protectedBranches' | 'pushToProtected'>;
+  /** The team's GitHub repositories (`github.repos`, `owner/name`), the only ones its pull request, issue and CI commands write on. */
+  readonly githubRepos: readonly string[];
+  /** The names of the repositories `teamrig merge` merges in (`delivery.repos`). */
+  readonly deliveryRepos: readonly string[];
+}
+
+/**
+ * The facts of a team from its config, the one place `automode install` and the check for stale lines both take them
+ * from, so the check compares the installed lines with exactly what an install would write.
+ */
+export function autoModeFactsOf(team: string, home: string, config: Pick<KitConfig, 'roles' | 'pushGuard' | 'github' | 'delivery'>): AutoModeFacts {
+  return {
+    team,
+    home,
+    lead: config.roles.lead,
+    pushGuard: config.pushGuard,
+    githubRepos: config.github.repos,
+    deliveryRepos: Object.keys(config.delivery.repos),
+  };
 }
 
 /**
@@ -71,6 +90,7 @@ const KIT_LINES: readonly KitLine[] = [
   { subject: 'who removes a worktree', fill: worktreeLine },
   { subject: "rebasing one's own branch", fill: rebaseLine },
   { subject: "editing a clean tracked file in one's own worktree", fill: cleanFilesLine },
+  { subject: "delivering one's own work", fill: deliveryLine },
 ];
 
 /** What the `automode install` help names each line by, in the lines' order; a spec holds the help to every one. */
@@ -168,4 +188,51 @@ function cleanFilesLine(): string {
     "an untracked or ignored file, another session's worktree, a repo's main checkout, or agent config and gates " +
     'even when tracked (`.claude/`, `CLAUDE.md`, `.husky/`, git hooks).'
   );
+}
+
+/**
+ * The owner's grant of 11-24 (T5338): every session lands its own work through teamrig's delivery commands with no
+ * hand-written grant. Each team used to write that grant itself, with a session list and repository names that went
+ * stale (a new hire, an organization move); here it names the whole team and takes the repositories from the config,
+ * so a re-run of `automode install` follows a change. It states only the checks each command makes before it writes,
+ * so it clears nothing those checks refuse, nor a raw gh or git write on the same repositories.
+ *
+ * Security's verdict on its wording (T5370) set three limits. Each check reads the caller from the `--session` the call
+ * itself gives, so the line covers a call only under the calling session's own id. `issue migrate --yes` posts each
+ * row's text publicly and the secret scan catches only secret shapes, so it is covered only for a row file the session
+ * read in full with its preview, and a private security finding never goes in one. The saved key is named only for
+ * the commands that use it: `teamrig merge` pushes with git's own credentials.
+ */
+function deliveryLine({ team, lead, pushGuard, githubRepos, deliveryRepos }: AutoModeFacts): string {
+  const github = listOf(githubRepos, 'github.repos');
+  return (
+    `Delivery: every session of team ${team} may land its own work with teamrig's delivery commands, run under its ` +
+    "own session id only: a call whose `--session` or session environment names any other session, the lead's " +
+    'included, is not covered. Each command checks who may before it writes: `teamrig merge` merges the branch ' +
+    `checked out in a worktree of ${listOf(deliveryRepos, 'delivery.repos')} into its default branch and ` +
+    `${mergeGate(pushGuard.pushToProtected)}; \`teamrig pr approve\` and \`teamrig pr merge\` act on a pull request of ` +
+    `${github} only when one task holds it, the caller owns that task and the caller's leader approved it with a note ` +
+    `naming the pull request's full head (the lead, session ${lead}, needs one only from the lead of a team above), ` +
+    `and pr merge only once its checks passed; \`teamrig issue migrate <file> --yes\` opens public issues, which ` +
+    `anyone can read, in ${github} only for tasks whose ref the register lets the caller set, and it is covered only ` +
+    "for a row file the session wrote or read in full and whose preview (`--out`) it read; a task holding a private " +
+    'security finding stays local and never goes in a row; `teamrig ci rerun` starts again only a failed, cancelled ' +
+    `or timed-out push, pull request, merge queue or schedule run of ${github}, before its third attempt. ` +
+    '`teamrig pr approve`, `teamrig pr merge`, `teamrig issue migrate` and `teamrig ci rerun` write with the key saved ' +
+    "for the repository's owner, never this machine's gh login; `teamrig merge` pushes with git's own credentials. " +
+    'This covers nothing those checks refuse, nor a raw gh or git write on these repositories.'
+  );
+}
+
+/** What `teamrig merge` checks before it pushes, by how a normal push to a protected branch goes. */
+function mergeGate(mode: PushToProtected): string {
+  return mode === 'gated'
+    ? 'pushes only a change that holds the self-merge gates (a live task of its own, a test record that passed on the ' +
+        "rebased tree, commit sizes, a test changed with the source), holding one that misses a gate for a leader's approval"
+    : 'pushes as the protected-branches line says';
+}
+
+/** A list of the config's names, or a note that the key names none, so a line never reads as granting every repository. */
+function listOf(names: readonly string[], key: string): string {
+  return names.length === 0 ? `no repository (${key} is empty)` : names.join(', ');
 }

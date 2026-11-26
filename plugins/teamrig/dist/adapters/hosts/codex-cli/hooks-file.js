@@ -169,8 +169,26 @@ function withoutHost(words, what) {
     }
     return kept;
 }
-function commandLines(sourceWords, pluginRoot, what) {
-    const words = [...withoutHost(sourceWords, what).map((word) => word.replaceAll(PLUGIN_ROOT, pluginRoot)), HOST_FLAG, CODEX_CLI_HOST];
+/**
+ * The source's `<program> ${CLAUDE_PLUGIN_ROOT}/<entry script> <words>` as the launcher's line: the program, the
+ * launcher, its entry and event words, then the CLI's. A source line naming any other script, or the plugin folder
+ * anywhere else, is refused: a line holding the plugin folder would name one version's cache folder, which every
+ * update moves, and Codex would run it after that folder is gone or changed.
+ */
+function launcherWords(sourceWords, launcher, event, what) {
+    const [program, script, ...rest] = withoutHost(sourceWords, what);
+    const below = script?.startsWith(`${PLUGIN_ROOT}/`) === true ? script.slice(PLUGIN_ROOT.length + 1) : undefined;
+    const entry = below === undefined ? undefined : launcher.entries.get(below);
+    if (program === undefined || entry === undefined) {
+        throw new UnknownSource(`${what} runs ${script ?? 'no script'}, which is no entry script the kit launcher runs`);
+    }
+    if (rest.some((word) => word.includes(PLUGIN_ROOT))) {
+        throw new UnknownSource(`${what} names ${PLUGIN_ROOT} past its script, which a launcher line never holds`);
+    }
+    return [program, launcher.path, launcher.entryFlag, entry, launcher.eventFlag, event, ...rest, HOST_FLAG, CODEX_CLI_HOST];
+}
+function commandLines(sourceWords, launcher, event, what) {
+    const words = launcherWords(sourceWords, launcher, event, what);
     for (const word of words) {
         checkWord(word, what);
     }
@@ -184,7 +202,7 @@ function commandLines(sourceWords, pluginRoot, what) {
 function skippedHandler(event, group, handler, reason) {
     return { event, ...(group.matcher === undefined ? {} : { matcher: group.matcher }), words: handler.words, reason };
 }
-function rewriteEvent(event, source, pluginRoot) {
+function rewriteEvent(event, source, launcher) {
     const groups = [];
     const skipped = [];
     const limit = CONTEXT_EVENTS.includes(event) ? NO_CONTEXT_LIMIT : {};
@@ -198,7 +216,7 @@ function rewriteEvent(event, source, pluginRoot) {
             }
             const what = `${event} group ${groupIndex + 1}, handler ${handlerIndex + 1}`;
             const timeout = cap === undefined ? handler.timeout : Math.min(handler.timeout, cap);
-            hooks.push({ type: 'command', ...commandLines(handler.words, pluginRoot, what), timeout, ...limit });
+            hooks.push({ type: 'command', ...commandLines(handler.words, launcher, event, what), timeout, ...limit });
         });
         if (hooks.length > 0) {
             groups.push({ ...(group.matcher === undefined ? {} : { matcher: group.matcher }), hooks });
@@ -217,7 +235,7 @@ function rewrite(events, options) {
             }
             continue;
         }
-        const rewritten = rewriteEvent(name, source, options.pluginRoot);
+        const rewritten = rewriteEvent(name, source, options.launcher);
         skipped.push(...rewritten.skipped);
         if (rewritten.groups.length > 0) {
             hooks[name] = rewritten.groups;
@@ -227,13 +245,13 @@ function rewrite(events, options) {
     return { ok: true, file, skipped };
 }
 /**
- * Rewrites teamrig's parsed hooks file for Codex: the events both have, one command line per shell with the plugin's
- * real path in it, each handler's own timeout, and the context limit off where the team rules and the inbox arrive.
+ * Rewrites teamrig's parsed hooks file for Codex: the events both have, one command line per shell running the kit
+ * launcher, each handler's own timeout, and the context limit off where the team rules and the inbox arrive.
  */
 export function codexHooksFile(source, options) {
-    // A relative path would be read from the folder the hook starts in, which is the project's, not the plugin's.
-    if (!ABSOLUTE_PATH.test(options.pluginRoot)) {
-        return { ok: false, reason: 'the plugin root is not an absolute path' };
+    // A relative path would be read from the folder the hook starts in, which is the project's, not the kit's.
+    if (!ABSOLUTE_PATH.test(options.launcher.path)) {
+        return { ok: false, reason: 'the kit launcher path is not an absolute path' };
     }
     try {
         return rewrite(readSource(source), options);

@@ -1,6 +1,8 @@
 import { errorMessage } from "../../core/guards.js";
 import { KIT_NAME } from "../../core/home.js";
+import { DEFAULT_HOST } from "../../composition/adapters.js";
 import { SessionRecordStore } from "../../sessions/record.js";
+import { hostIdOf } from "../host.js";
 import { isLiveRunOwn, liveRunOf } from "../live-run.js";
 const RECORDED = { failure: undefined, duplicate: undefined };
 /**
@@ -20,8 +22,15 @@ export async function recordSessionStart(runtime, kit, ids, id, hostSession, tra
             // Its own tree, a fork of its conversation or the background job it handed it to is no second one.
             return { failure: undefined, duplicate: (await isLiveRunOwn(runtime, live, claudePid)) ? undefined : duplicateText(id, claudePid, live) };
         }
-        const started = { claudePid, hostSession, at: new Date(runtime.clock.now()).toISOString() };
-        const record = transcript === undefined ? started : { ...started, transcript };
+        const host = hostIdOf(runtime);
+        const record = {
+            claudePid,
+            hostSession,
+            at: new Date(runtime.clock.now()).toISOString(),
+            ...(transcript === undefined ? {} : { transcript }),
+            // The default host is left out, so a record reads the same to a teamrig that keeps no host.
+            ...(host === DEFAULT_HOST ? {} : { host }),
+        };
         await new SessionRecordStore(runtime.files, kit.paths).write(id, record);
         return RECORDED;
     }

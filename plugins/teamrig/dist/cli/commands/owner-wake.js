@@ -1,3 +1,4 @@
+import { terminalOf } from "../../config/launch.js";
 import { splitAddress } from "../../core/address.js";
 import { KIT_NAME } from "../../core/home.js";
 import { WAKE_TICK_MS } from "../../mod/wake-hand.js";
@@ -43,7 +44,7 @@ export async function ownerWake(args, runtime) {
     const project = await sessionProjectOf(runtime, config, id, args.flags.get('project'), found.from);
     const record = await runningRecordOf(runtime, kit.paths, roster.ids, id);
     if (record === undefined) {
-        const terminal = terminalFlag(args.flags.get('terminal')) ?? config.open.terminal;
+        const terminal = terminalFlag(args.flags.get('terminal')) ?? terminalOf(config, id);
         return printOpenResult(runtime, await openSession(runtime, kit, config, roster, { team, id, project, terminal, asked: false, focus: await tabFocusOf(runtime) }));
     }
     if (!config.wake.enabled) {

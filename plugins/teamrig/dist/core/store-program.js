@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path';
-import { envVariable, pathList } from "./path-search.js";
+import { envVariable, programFolders } from "./path-search.js";
 /** The tool each store saves and removes a secret with: the one that asks for the key, so it is never run by bare name. */
 export const STORE_WRITERS = { win32: 'cmdkey.exe', darwin: 'security', linux: 'secret-tool' };
 /** macOS ships `security` here, in the sealed system volume. */
@@ -33,8 +33,7 @@ async function candidate(deps) {
         case 'darwin':
             return isFile(deps, MACOS_SECURITY);
         default: {
-            const folders = pathList(envVariable(deps.env, 'PATH', deps.platform), ':').filter((folder) => posix.isAbsolute(folder));
-            for (const folder of folders) {
+            for (const folder of programFolders(deps.env, deps.platform)) {
                 const found = await isFile(deps, posix.join(folder, STORE_WRITERS.linux));
                 if (found.kind === 'found')
                     return found;

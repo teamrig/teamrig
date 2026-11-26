@@ -145,6 +145,15 @@ describe('turn log hooks', () => {
     assert.deepEqual(await store.read(), { team: 'app', session: 'bravo', tab: OTHER_TAB, at: '2030-01-08T10:00:00.000Z' });
   });
 
+  it("leaves the person's session for a prompt Claude Code submitted itself, a background task's notice (T5388)", async () => {
+    const kit = new CliHarness(TEAM);
+    const store = new LastTypedStore(kit.files, KIT);
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: 'go on' }), env: ALPHA });
+    const notice = '<task-notification>\n<summary>Background command done</summary>\n</task-notification>';
+    await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: notice, session_id: OTHER_TAB }), env: { TEAMRIG_SESSION: 'bravo' } });
+    assert.equal((await store.read())?.session, 'alpha');
+  });
+
   it('marks no session for a tab that is no team session, or an empty prompt', async () => {
     const kit = new CliHarness(TEAM);
     await kit.run(['hook', 'inbox-reminder'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }) });

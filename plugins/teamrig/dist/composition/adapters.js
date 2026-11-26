@@ -21,4 +21,5 @@ export const TERMINAL_ADAPTERS = {
     'gnome-terminal': '../adapters/terminals/gnome-terminal',
     konsole: '../adapters/terminals/konsole',
     'x-terminal-emulator': '../adapters/terminals/x-terminal-emulator',
+    headless: '../adapters/terminals/headless',
 };

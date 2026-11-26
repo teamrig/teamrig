@@ -1,3 +1,4 @@
+import { commitCeilingMb } from "../delivery/memory.js";
 import { tabsText } from "../delivery/memory-gate.js";
 import { KIT_NAME } from "../core/home.js";
 import { median } from "../core/quantile.js";
@@ -28,7 +29,7 @@ function sumOf(values) {
  * against the commit charge (a session commits about twice what it holds resident). The tabs still loading hold
  * their MB of both, since the host shows neither yet. Free memory less those holds must stay over `floor` with it,
  * and the commit charge with the holds at most `commitMaxPct` of the limit; a host that gives no commit charge is
- * checked on free memory only.
+ * checked on free memory only. A team at `maxTabs` open tabs has no room for one more, whatever the host holds.
  */
 export function headroomFor(room, floor, config) {
     const needMb = medianOf(room.runningMb) ?? config.sessionMb;
@@ -43,11 +44,26 @@ export function headroomFor(room, floor, config) {
     }
     const { commit } = room;
     const committed = commit === undefined ? 0 : commit.usedMb + heldCommittedMb + needCommittedMb;
-    if (commit !== undefined && committed * 100 > config.commitMaxPct * commit.limitMb) {
+    if (commit !== undefined && committed * 100 > config.commitMaxPct * commitCeilingMb(commit)) {
         const held = room.loading.length === 0 ? '' : ` and the ${loading} still loading`;
-        short.push(`with it${held} the commit charge would be ${committed} MB, over ${config.commitMaxPct}% of its ${commit.limitMb} MB limit (open.headroom.commitMaxPct)`);
+        short.push(`with it${held} the commit charge would be ${committed} MB, over ${config.commitMaxPct}% of ${ceilingText(commit)} (open.headroom.commitMaxPct)`);
+    }
+    const cap = tabCapShort(room.teamTabs, config.maxTabs);
+    if (cap !== undefined) {
+        short.push(cap);
     }
     return { needMb, needCommittedMb, short };
+}
+/** The limit a refusal judges against: `its 100000 MB limit`, or `the 130000 MB its 114000 MB limit can grow to with the page files`. */
+function ceilingText(commit) {
+    return commit.reachMb === undefined ? `its ${commit.limitMb} MB limit` : `the ${commit.reachMb} MB its ${commit.limitMb} MB limit can grow to with the page files`;
+}
+/** Why a team with `open` tabs has no room for one more under `maxTabs`; undefined under the cap or with none set. */
+export function tabCapShort(open, maxTabs) {
+    if (maxTabs === undefined || open < maxTabs) {
+        return undefined;
+    }
+    return `the team has ${tabsText(open)} open, at its cap of ${maxTabs} (open.headroom.maxTabs)`;
 }
 /** Why `what` (`open web`, `hire web`) is refused: the host's room and how to make some. */
 export function noRoomText(what, headroom) {

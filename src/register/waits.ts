@@ -127,26 +127,38 @@ export interface WaitContext {
    * register holds it, which a write never names unless a compaction retired it: finished.
    */
   statusOf(id: string): TaskStatus | undefined;
+  /**
+   * The ids of a tree the team left that its tasks named (`team.detached`, T5469): no register here holds them, yet
+   * they are not retired, so their status is unknown: never finished.
+   */
+  readonly away: ReadonlySet<string>;
 }
 
 /**
  * The tasks the other registers of a team tree hold, by id (one numbering across the tree, T1139), as a read of one
- * register asks them for an id it lacks; a register outside a tree has none.
+ * register asks them for an id it lacks; a register outside a tree has none. `away` as on {@link WaitContext}.
  */
-export type StatusesElsewhere = ReadonlyMap<string, { readonly task: { readonly status: TaskStatus } }>;
+export interface StatusesElsewhere extends ReadonlyMap<string, { readonly task: { readonly status: TaskStatus } }> {
+  readonly away?: ReadonlySet<string>;
+}
+
+const NO_AWAY: ReadonlySet<string> = new Set();
 
 /**
  * The context of one register read at `now`, in the team's `zone`; an id the read lacks reads its status from
  * `elsewhere`. The read wins an id both hold, which only a register numbered before its tree was can have.
  */
 export function waitContext(tasks: ReadonlyMap<string, { readonly status: TaskStatus }>, now: Date, zone: TimeZone, elsewhere: StatusesElsewhere = new Map()): WaitContext {
-  return { now: now.getTime(), zone, statusOf: (id) => (tasks.get(id) ?? elsewhere.get(id)?.task)?.status };
+  return { now: now.getTime(), zone, statusOf: (id) => (tasks.get(id) ?? elsewhere.get(id)?.task)?.status, away: elsewhere.away ?? NO_AWAY };
 }
 
-/** True when the task is done or dropped, or retired from every register, which only a finished task is. */
+/**
+ * True when the task is done or dropped, or retired from every register, which only a finished task is; an id of a
+ * tree the team left reads unknown, so a wait on it stays until its owner drops the wait (T5469).
+ */
 export function isFinished(id: string, context: WaitContext): boolean {
   const status = context.statusOf(id);
-  return status === undefined || status === 'done' || status === 'dropped';
+  return status === undefined ? !context.away.has(id) : status === 'done' || status === 'dropped';
 }
 
 /** A task reason once its task finished, a time once it passed; a decision or an approval never: its owner says. */

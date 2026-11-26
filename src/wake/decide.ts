@@ -3,7 +3,7 @@ import { MEASURED_DAYS, type MeasuredTurns } from '../budget/turn-average.ts';
 import { isHeld, isTeamHeld, quietSpanOf, sessionQuietSpan, type BudgetFacts } from '../budget/warn.ts';
 import { DEFAULT_MESSAGES } from '../config/defaults.ts';
 import { NOW_PRIORITY } from '../config/priorities.ts';
-import type { QuietHours } from '../config/types.ts';
+import type { BudgetConfig, QuietHours } from '../config/types.ts';
 import { KIT_NAME } from '../core/home.ts';
 import { parseDeadline } from '../core/time.ts';
 import type { TimeZone } from '../core/zone.ts';
@@ -346,24 +346,29 @@ function isPausedNow(facts: BudgetFacts): boolean {
   return facts.paused && facts.burst === undefined;
 }
 
+/** What `wakeRestOf` reads of `budget`: its quiet hours, and what a session past its daily budget meets. */
+export type WakeBudget = Pick<BudgetConfig, 'quietHours' | 'overAction'>;
+
 /**
  * Where the session stands against its budget at `now`: held (past its daily budget, its lift's while lifted, while
- * the team has no room today or a leader's cut holds it; its team held for the day: `isTeamHeld`; or paused:
- * {@link isPausedNow}), and in quiet hours unless
+ * the team has no room today or a leader's cut holds it; its team held for the day: `isTeamHeld`; none of these
+ * while `budget.overAction` is `warn`; or paused: {@link isPausedNow}), and in quiet hours unless
  * its lift exempts it. The turn a wake would start counts as spent (`turnW`, in W), so a session with less left than
  * that turn is held before it, not after (T1322). With no facts (the week's use is not known yet) it is never held,
  * and quiet hours go by the clock alone.
  */
-export function wakeRestOf(facts: BudgetFacts | undefined, quietHours: QuietHours | undefined, now: number, turnW: number): WakeRest {
+export function wakeRestOf(facts: BudgetFacts | undefined, budget: WakeBudget, now: number, turnW: number): WakeRest {
   if (facts === undefined) {
-    return { held: false, quiet: quietSpanOf(quietHours, now) !== undefined };
+    return { held: false, quiet: quietSpanOf(budget.quietHours, now) !== undefined };
   }
   const turnPct = facts.todayWPerPct > 0 ? turnW / facts.todayWPerPct : 0;
   const paused = isPausedNow(facts);
+  // Under `warn` the budget holds nothing, as its past-budget line tells the session; a short day's pause still rests it.
+  const holds = budget.overAction !== 'warn';
   // A team held for the day wakes for p0 alone, so it never yields to a waited-on task the way a cap does.
-  const teamHeld = isTeamHeld(facts, turnPct);
-  const held = paused || isHeld(facts, turnPct) || teamHeld;
-  return { held, quiet: sessionQuietSpan(facts, quietHours) !== undefined, yields: held && !paused && !teamHeld && facts.cut?.stop !== true };
+  const teamHeld = holds && isTeamHeld(facts, turnPct);
+  const held = paused || (holds && isHeld(facts, turnPct)) || teamHeld;
+  return { held, quiet: sessionQuietSpan(facts, budget.quietHours) !== undefined, yields: held && !paused && !teamHeld && facts.cut?.stop !== true };
 }
 
 /**

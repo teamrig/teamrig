@@ -5,6 +5,10 @@ import { treeOf, wholeNumberLines } from "./processes.js";
 const MB = 2 ** 20;
 /** Bytes a process list may print: a host with thousands of processes stays far under it. */
 const LIST_MAX_BUFFER = 16 * MB;
+/** The limit a commit charge is judged against: the most it can grow to, else the limit now. */
+export function commitCeilingMb(charge) {
+    return charge.reachMb ?? charge.limitMb;
+}
 /** How many of the programs holding the most memory a refusal names. */
 export const TOP_HOLDERS = 3;
 /** A timer that does not keep the process alive. */
@@ -88,6 +92,65 @@ export function parseWindowsCommit(text) {
     }
     return { usedMb: Math.round((limitKb - freeKb) / 1024), limitMb: Math.round(limitKb / 1024) };
 }
+/** A `page,<allocated>,<max | auto>,<volume free>,<volume size>` line, in MB; undefined when it is not one. */
+function pageFileRowOf(line) {
+    const [label, allocated, max, free, size, ...rest] = line.trim().split(',');
+    if (label !== 'page' || allocated === undefined || max === undefined || free === undefined || size === undefined || rest.length > 0) {
+        return undefined;
+    }
+    const numbers = [allocated, free, size, ...(max === 'auto' ? [] : [max])].map(Number);
+    const [allocatedMb, volumeFreeMb, volumeMb, maxMb] = numbers;
+    if (!numbers.every(Number.isSafeInteger) || numbers.some((value) => value < 0) || allocatedMb === undefined || volumeFreeMb === undefined || volumeMb === undefined) {
+        return undefined;
+    }
+    return { allocatedMb, maxMb, volumeFreeMb, volumeMb };
+}
+/** The floor of a system-managed page file's maximum, in MB. */
+const AUTO_PAGE_FILE_MIN_MB = 4096;
+/**
+ * The MB a page file can still grow by: up to its maximum, as far as its volume's free space reaches. A system-managed
+ * one's maximum is Microsoft's rule: three times the RAM or 4 GB, whichever is more, at most an eighth of its volume.
+ */
+function pageFileGrowthMb(row, ramMb) {
+    const maxMb = row.maxMb ?? Math.min(Math.max(3 * ramMb, AUTO_PAGE_FILE_MIN_MB), Math.floor(row.volumeMb / 8));
+    return Math.max(0, Math.min(maxMb, row.allocatedMb + row.volumeFreeMb) - row.allocatedMb);
+}
+/**
+ * The Windows commit report: Win32_OperatingSystem's `<total>,<free>` line (`parseWindowsCommit`), then a `page,…`
+ * line per page file. The page files' room to grow sets `reachMb`; a damaged page line leaves it out, so the gate falls
+ * back to the limit now rather than count room that may not be there.
+ */
+export function parseWindowsCommitReport(text, ramMb) {
+    const [first, ...pages] = text.split(/\r?\n/).filter((line) => line.trim() !== '');
+    const charge = first === undefined ? undefined : parseWindowsCommit(first);
+    if (charge === undefined) {
+        return undefined;
+    }
+    let growthMb = 0;
+    for (const line of pages) {
+        const row = pageFileRowOf(line);
+        if (row === undefined) {
+            return charge;
+        }
+        growthMb += pageFileGrowthMb(row, ramMb);
+    }
+    return growthMb > 0 ? { ...charge, reachMb: charge.limitMb + growthMb } : charge;
+}
+/**
+ * The PowerShell that prints the Windows commit report. A page file's maximum is `auto` when Windows manages every
+ * page file or its setting's MaximumSize is 0, and its allocated size when no setting names it (it cannot grow);
+ * PowerShell's `-eq` matches names case-blind, as Win32_PageFileUsage says `C:\` where the setting says `c:\`.
+ */
+export const WINDOWS_COMMIT_SCRIPT = [
+    "$os = Get-CimInstance Win32_OperatingSystem; '{0},{1}' -f $os.TotalVirtualMemorySize,$os.FreeVirtualMemory",
+    '$auto = (Get-CimInstance Win32_ComputerSystem).AutomaticManagedPagefile',
+    '$settings = @(Get-CimInstance Win32_PageFileSetting)',
+    'Get-CimInstance Win32_PageFileUsage | ForEach-Object {',
+    '$name = $_.Name; $setting = @($settings | Where-Object { $_.Name -eq $name })[0]',
+    "$max = if ($auto -or ($setting -and $setting.MaximumSize -eq 0)) { 'auto' } elseif ($setting) { $setting.MaximumSize } else { $_.AllocatedBaseSize }",
+    `$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($name.Substring(0,2))'"`,
+    "'page,{0},{1},{2},{3}' -f $_.AllocatedBaseSize,$max,[math]::Floor($disk.FreeSpace / 1MB),[math]::Floor($disk.Size / 1MB) }",
+].join('; ');
 /** `/proc/meminfo`'s Committed_AS (used) and CommitLimit, in kB; undefined unless both are there and the limit is not 0. */
 export function parseMeminfoCommit(text) {
     const kbOf = (key) => {
@@ -179,12 +242,14 @@ function outputOf(file, args) {
         execFile(file, args, { windowsHide: true, maxBuffer: LIST_MAX_BUFFER }, (error, stdout) => resolve(error === null ? stdout : undefined));
     });
 }
-/** The commit charge: Win32_OperatingSystem on Windows, `/proc/meminfo` on Linux under strict overcommit, nothing elsewhere. */
+/**
+ * The commit charge: Win32_OperatingSystem and the page files' room to grow on Windows, `/proc/meminfo` on Linux
+ * under strict overcommit (whose limit does not grow), nothing elsewhere.
+ */
 async function commitOf(platform) {
     if (platform === 'win32') {
-        const script = "Get-CimInstance Win32_OperatingSystem | ForEach-Object { '{0},{1}' -f $_.TotalVirtualMemorySize,$_.FreeVirtualMemory }";
-        const text = await outputOf('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
-        return text === undefined ? undefined : parseWindowsCommit(text);
+        const text = await outputOf('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_COMMIT_SCRIPT]);
+        return text === undefined ? undefined : parseWindowsCommitReport(text, Math.round(totalmem() / MB));
     }
     if (platform !== 'linux') {
         return undefined;

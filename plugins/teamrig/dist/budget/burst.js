@@ -27,19 +27,20 @@ export function isBurst(record) {
 }
 /**
  * The week's surplus: the use so far, plus the week's mean rate so far (its use over the time since its
- * start) until the pace end, against the target, and the team's part of what that leaves. The mean counts
- * nights and quiet days alike, so it projects the account's own rhythm; undefined at the week's very start,
- * which has no rate yet.
+ * start) until the pace end, against the target, and the team's part of what that leaves in this home's part of the
+ * week. The mean counts nights and quiet days alike, so it projects the account's own rhythm; undefined at the week's
+ * very start, which has no rate yet.
  */
 export function surplusOf(input) {
-    const { window, now, usedPct, targetPct, config, teams } = input;
+    const { window, now, usedPct, targetPct, config, teams, homePartPct } = input;
     const elapsed = now - window.start;
     if (elapsed <= 0) {
         return undefined;
     }
     const projectedPct = usedPct + (usedPct / elapsed) * Math.max(0, window.paceEnd - now);
     const accountSparePct = Math.max(0, targetPct - projectedPct);
-    const sparePct = teamShareOf(accountSparePct, teams.split, teams.others);
+    // Another home of the account holds the rest of its spare, so no two homes plan a burst with the same points.
+    const sparePct = teamShareOf((accountSparePct * homePartPct) / 100, teams.split, teams.others);
     const opensAt = window.reset - config.surplusHours * MS_PER_HOUR;
     const open = now >= opensAt && now < window.paceEnd;
     return {
@@ -48,7 +49,7 @@ export function surplusOf(input) {
         paceEnd: window.paceEnd,
         projectedPct,
         sparePct,
-        accountSparePct: teams.others.length === 0 ? undefined : accountSparePct,
+        accountSparePct: teams.others.length === 0 && homePartPct >= 100 ? undefined : accountSparePct,
         open,
         worth: open && sparePct >= config.minSparePct,
     };
@@ -90,7 +91,7 @@ function capsProblem(request, config) {
 function endOf(request, context, window, usedPct) {
     const { now } = request;
     if (request.kind === 'surplus') {
-        const surplus = surplusOf({ window, now, usedPct, targetPct: context.targetPct, config: context.config, teams: context.teams });
+        const surplus = surplusOf({ window, now, usedPct, targetPct: context.targetPct, config: context.config, teams: context.teams, homePartPct: context.homePartPct });
         if (surplus === undefined || !surplus.open) {
             const from = context.zone.weekdayMinute(new Date(window.reset - context.config.surplusHours * MS_PER_HOUR));
             return { problem: `a surplus burst starts only from ${from} (burst.surplusHours ${context.config.surplusHours} before the reset) until the pace end` };

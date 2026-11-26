@@ -18,8 +18,8 @@ export class NotGhError extends Error {
 
 /**
  * `gh` as a program runner: a request for `gh` goes to it, in the request's environment, an empty one when it sets
- * none; a request for any other program rejects with NotGhError, so a spec sees an adapter that runs anything else.
+ * none, and with its input as stdin; a request for any other program rejects with NotGhError, so a spec sees an adapter that runs anything else.
  */
 export function programOverGh(gh: GhRunner): ProgramRunner {
-  return (request) => (request.program === GH_PROGRAM ? gh.run({ args: request.args, env: request.env ?? {} }) : Promise.reject(new NotGhError(request.program)));
+  return (request) => (request.program === GH_PROGRAM ? gh.run({ args: request.args, ...(request.input === undefined ? {} : { input: request.input }), env: request.env ?? {} }) : Promise.reject(new NotGhError(request.program)));
 }

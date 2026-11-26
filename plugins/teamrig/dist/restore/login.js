@@ -1,9 +1,9 @@
 import { join } from 'node:path';
 import { instantField, isRecord, stringField } from "../core/guards.js";
 import { KIT_NAME } from "../core/home.js";
+import { isHostSessionId } from "../core/host-session.js";
 import { parseObject, recordVersion, VERSION_FIELD } from "../core/jsonl.js";
 import { MS_PER_DAY, MS_PER_MINUTE } from "../core/time.js";
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 /**
  * The Claude login as the fleet saw it last: when it expired, which tabs a turn that ended on `Login expired` left
  * stuck, and which of them were retried since. The login is the account's, shared by every team and tab of the kit
@@ -190,7 +190,7 @@ export function formatLoginMarker(marker) {
 function instantsRecord(byTab) {
     return Object.fromEntries([...byTab].map(([tab, at]) => [tab, isoOf(at)]));
 }
-/** A map of tabs to instants (the stuck tabs, their retries); undefined when a key is not a Claude session id or a time not an instant. */
+/** A map of tabs to instants (the stuck tabs, their retries); undefined when a key is not a host session id or a time not an instant. */
 function instantsByTabOf(value) {
     if (!isRecord(value)) {
         return undefined;
@@ -198,21 +198,21 @@ function instantsByTabOf(value) {
     const byTab = new Map();
     for (const tab of Object.keys(value)) {
         const at = instantField(value, tab);
-        if (!CLAUDE_SESSION_ID.test(tab) || at === undefined) {
+        if (!isHostSessionId(tab) || at === undefined) {
             return undefined;
         }
         byTab.set(tab, at);
     }
     return byTab;
 }
-/** The probe a file holds; undefined when its tab is not a Claude session id or its time not an instant. */
+/** The probe a file holds; undefined when its tab is not a host session id or its time not an instant. */
 function probeOf(value) {
     if (!isRecord(value)) {
         return undefined;
     }
     const tab = stringField(value, 'tab');
     const at = instantField(value, 'at');
-    return tab === undefined || !CLAUDE_SESSION_ID.test(tab) || at === undefined ? undefined : { tab, at };
+    return tab === undefined || !isHostSessionId(tab) || at === undefined ? undefined : { tab, at };
 }
 /** True when an optional field is in the record but does not read as its value. */
 function damagedOptional(record, key, value) {

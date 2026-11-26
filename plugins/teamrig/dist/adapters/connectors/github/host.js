@@ -1,8 +1,9 @@
 import { exitText, isLogin, isRecord, LABEL_FILE, MAX_COMMENT, parseLabelFile, plainLine, targetText, withStampFooter, } from "../../../plugin-api/index.js";
-import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyArgs, issueCloseArgs, issueCommentArgs, issueCreateArgs, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
+import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyCall, issueCloseArgs, issueCommentCall, issueCreateCall, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueSearchArgs, searchTerms, widensSearch, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
 import { probeAnswerOf } from "./probe.js";
-import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, runRead, startFailureText } from "./issues.js";
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, runRead, startFailureText, unreachableText } from "./issues.js";
 import { readFields } from "./fields.js";
+import { searchIn } from "./search.js";
 import { failedLogExcerpt } from "./job-log.js";
 import { listLinks } from "./links.js";
 import { readPosts } from "./posts.js";
@@ -198,7 +199,7 @@ export class GitHubIssueHost {
         }
         let result;
         try {
-            result = await this.gh.run({ args: issueCreateArgs({ ...draft, body: this.stamped(draft.body) }), env: access.env });
+            result = await this.gh.run({ ...issueCreateCall({ ...draft, body: this.stamped(draft.body) }), env: access.env });
         }
         catch (error) {
             return { kind: 'failed', reason: startFailureText(error) };
@@ -214,13 +215,13 @@ export class GitHubIssueHost {
         return number === undefined ? { kind: 'failed', reason: `gh printed no issue number: ${look}` } : { kind: 'opened', target: { repo: draft.repo, number } };
     }
     comment(target, body) {
-        return this.write(target, issueCommentArgs(target, this.stamped(body)), 'comment on');
+        return this.write(target, issueCommentCall(target, this.stamped(body)), 'comment on');
     }
     editBody(target, body) {
-        return this.write(target, issueBodyArgs(target, this.stamped(body)), 'edit the body of');
+        return this.write(target, issueBodyCall(target, this.stamped(body)), 'edit the body of');
     }
     close(target, reason, duplicateId) {
-        return this.write(target, issueCloseArgs(target, reason, duplicateId), 'close');
+        return this.write(target, { args: issueCloseArgs(target, reason, duplicateId) }, 'close');
     }
     /**
      * Reads the one issue for its `id`: found with it, missing when GitHub answers Not Found (no such issue, or one the
@@ -435,12 +436,12 @@ export class GitHubIssueHost {
         return { kind: 'done' };
     }
     addLabels(target, labels) {
-        return this.write(target, issueLabelAddArgs(target, labels), 'label');
+        return this.write(target, { args: issueLabelAddArgs(target, labels) }, 'label');
     }
     /** Takes the label off; Not Found here means the issue does not carry it (or is not there), which the reason says. */
     removeLabel(target, label) {
         const shown = JSON.stringify(label);
-        return this.write(target, issueLabelRemoveArgs(target, label), `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
+        return this.write(target, { args: issueLabelRemoveArgs(target, label) }, `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
     }
     /** Every issue of the repository with its links, read with the same access as a list. */
     async links(repo) {
@@ -448,13 +449,13 @@ export class GitHubIssueHost {
         return access instanceof NoAccessError ? { kind: 'failed', reason: access.message } : listLinks(this.gh, access, repo);
     }
     addSubIssue(parent, childId) {
-        return this.write(parent, subIssueAddArgs(parent, childId), 'add a sub-issue to');
+        return this.write(parent, { args: subIssueAddArgs(parent, childId) }, 'add a sub-issue to');
     }
     addBlockedBy(target, blockerId) {
-        return this.write(target, blockedByAddArgs(target, blockerId), 'add a blocker to');
+        return this.write(target, { args: blockedByAddArgs(target, blockerId) }, 'add a blocker to');
     }
     assign(target, logins) {
-        return this.write(target, issueAssignArgs(target, logins), 'assign');
+        return this.write(target, { args: issueAssignArgs(target, logins) }, 'assign');
     }
     /**
      * Probes each of WATCH_PATHS with the tag `marks` holds for it (gh.ts isWatchProbe), each mark keyed by its path.
@@ -471,9 +472,47 @@ export class GitHubIssueHost {
             const access = await this.tokens.accessFor(repo);
             return access instanceof NoAccessError ? { kind: 'failed', reason: access.message } : readFields(this.gh, access, repo);
         },
-        setField: (target, field, value) => this.write(target, fieldValueSetArgs(target, field.id, value), `set the field ${JSON.stringify(field.name)} of`),
-        setType: (target, type) => this.write(target, issueTypeSetArgs(target, type), 'set the type of'),
+        setField: (target, field, value) => this.write(target, { args: fieldValueSetArgs(target, field.id, value) }, `set the field ${JSON.stringify(field.name)} of`),
+        setType: (target, type) => this.write(target, { args: issueTypeSetArgs(target, type) }, 'set the type of'),
     };
+    /**
+     * A search of one repository: one page of GitHub's issue search per kind through its allowlisted read (gh.ts
+     * isIssueSearch), with the repository's own access. GitHub searches one kind at a time, so both kinds are the
+     * issues' page then the pull requests', and the first failure fails the whole. The words go as quoted terms
+     * (gh.ts searchTerms), so GitHub reads none as its own syntax; words naming another repository, owner or user, or
+     * holding nothing but double quotes, are refused unsent.
+     */
+    search = {
+        searchIssues: async (repo, query) => {
+            if (widensSearch(query.words)) {
+                return { kind: 'failed', reason: 'a search stays in its repository: its words may not name a repo:, org:, user: or owner: qualifier' };
+            }
+            if (searchTerms(query.words) === '') {
+                return { kind: 'failed', reason: 'the words hold nothing to look for once their double quotes are dropped' };
+            }
+            const kinds = query.kind === 'all' ? ['issue', 'pull'] : [query.kind];
+            const issues = [];
+            let more = false;
+            for (const kind of kinds) {
+                const page = await this.searchPage(repo, { ...query, kind });
+                if (page.kind === 'failed') {
+                    return page;
+                }
+                issues.push(...page.issues);
+                more ||= page.more;
+            }
+            return { kind: 'found', issues, more };
+        },
+    };
+    /** One page of one kind's search of `repo` (search). */
+    async searchPage(repo, query) {
+        const read = await this.read(repo, issueSearchArgs(repo, query), `the issues of ${repo}`);
+        if (read.kind !== 'found') {
+            return read.kind === 'missing' ? { kind: 'failed', reason: `GitHub shows no repository ${repo} to search, or the access may not see it` } : read;
+        }
+        const page = searchIn(repo, read.stdout);
+        return page === undefined ? { kind: 'failed', reason: `gh printed no search answer for ${repo}` } : { kind: 'found', ...page };
+    }
     async watch(repo, marks) {
         const access = await this.tokens.accessFor(repo);
         if (access instanceof NoAccessError) {
@@ -511,7 +550,7 @@ export class GitHubIssueHost {
         }
     }
     unassign(target, login) {
-        return this.write(target, issueUnassignArgs(target, login), `take ${login} off the assignees of`);
+        return this.write(target, { args: issueUnassignArgs(target, login) }, `take ${login} off the assignees of`);
     }
     /**
      * Reads where one pull request stands (pull-stand.ts), for `pr approve` and `pr merge` (T4817): read, missing when
@@ -566,7 +605,7 @@ export class GitHubIssueHost {
     }
     /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */
     approvePull(target, head) {
-        return this.write(target, pullApproveArgs(target, head), 'approve');
+        return this.write(target, { args: pullApproveArgs(target, head) }, 'approve');
     }
     /**
      * Lands the pull request as `pull` read it, pinned to its head: enqueued where the repository has a merge queue,
@@ -575,18 +614,18 @@ export class GitHubIssueHost {
     async landPull(target, pull) {
         const queue = pull.mergeQueue;
         const args = queue ? pullEnqueueArgs(pull.id, pull.head) : pullMergeArgs(target, pull.head);
-        const end = await this.write(target, args, queue ? 'add to the merge queue' : 'merge');
+        const end = await this.write(target, { args }, queue ? 'add to the merge queue' : 'merge');
         return end.kind === 'failed' ? end : { kind: queue ? 'enqueued' : 'merged' };
     }
     /** One write; `missing`, when given, says what a Not Found means for it in place of the issue not being there. */
-    async write(target, args, what, missing) {
+    async write(target, call, what, missing) {
         const access = await this.tokens.accessFor(target.repo);
         if (access instanceof NoAccessError) {
             return { kind: 'failed', reason: access.message };
         }
         let result;
         try {
-            result = await this.gh.run({ args, env: access.env });
+            result = await this.gh.run({ ...call, env: access.env });
         }
         catch (error) {
             return { kind: 'failed', reason: startFailureText(error) };
@@ -613,6 +652,8 @@ export function writeFailureText(target, what, code, stderr, access) {
     const shown = targetText(target);
     const token = `the token saved as ${access.credential}`;
     switch (ghFailureKind(code, stderr)) {
+        case 'unreachable':
+            return unreachableText(token);
         case 'no-login':
             return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
         case 'no-permission':
@@ -628,6 +669,8 @@ export function rerunFailureText(repo, runId, code, stderr, access) {
     const shown = `run ${String(runId)} of ${repo}`;
     const token = `the token saved as ${access.credential}`;
     switch (ghFailureKind(code, stderr)) {
+        case 'unreachable':
+            return unreachableText(token);
         case 'no-login':
             return `GitHub refused ${token} (expired or revoked?): create a new one and save it again with: ${access.save}`;
         case 'no-permission':
@@ -655,7 +698,7 @@ export function loginIn(stdout) {
 }
 /**
  * An issue or pull request as GitHub's REST API prints it (`state` open or closed, `labels` of names, `assignees` of
- * logins, a `pull_request` field on a pull request only, `body` null when empty), else undefined.
+ * logins, a `pull_request` field on a pull request only, `body` null when empty, its `title`), else undefined.
  */
 export function threadIn(stdout) {
     let parsed;
@@ -668,14 +711,14 @@ export function threadIn(stdout) {
     if (!isRecord(parsed)) {
         return undefined;
     }
-    const { state, labels, assignees, body } = parsed;
+    const { state, labels, assignees, body, title } = parsed;
     const names = namesIn(labels, 'name');
     const logins = namesIn(assignees, 'login');
     if ((state !== 'open' && state !== 'closed') || names === undefined || logins === undefined || (body !== null && body !== undefined && typeof body !== 'string')) {
         return undefined;
     }
     const pull = parsed['pull_request'];
-    return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '' };
+    return { state, labels: names, assignees: logins, pull: pull !== undefined && pull !== null, body: body ?? '', ...(typeof title === 'string' ? { title } : {}) };
 }
 /** The string `key` of each record of a REST list, or undefined when it is no list or one item has none. */
 function namesIn(list, key) {

@@ -283,7 +283,7 @@ async function reopenItem(deps, facts, item, items) {
     const others = item.team?.isLead === true ? leadSummaryOf(item, items) : undefined;
     const prompt = item.mode === 'idle' ? undefined : continuePrompt(endFactsOf(current, facts.shutdown), item.lost, others);
     await deps.registry.write({ ...current, transcriptPath: item.transcript ?? current.transcriptPath, restoreAttempts: current.restoreAttempts + 1, restoredAt: deps.clock.now() });
-    const outcome = await reopenWithRoom(deps, item, { hostSession: id, title: item.label, folder, team: item.team, effort: item.effort?.level, prompt });
+    const outcome = await reopenWithRoom(deps, item, { hostSession: id, title: item.label, folder, team: item.team, effort: item.effort?.level, prompt, ...(current.host === undefined ? {} : { host: current.host }) });
     if (outcome.kind === 'no-room') {
         await deps.registry.write(current);
         deps.print(`HELD ${item.label}: ${outcome.why}. Run "teamrig restore run" to reopen it once the host has room.`);

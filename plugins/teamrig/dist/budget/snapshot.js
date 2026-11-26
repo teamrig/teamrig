@@ -2,8 +2,8 @@ import { isAbsolute, join } from 'node:path';
 import { isRecord, stringField } from "../core/guards.js";
 import { parseObject } from "../core/jsonl.js";
 import { isTemporaryName } from "../core/files.js";
+import { isHostSessionId } from "../core/host-session.js";
 import { MS_PER_DAY, MS_PER_HOUR } from "../core/time.js";
-import { CLAUDE_SESSION_ID } from "../inbox/marks.js";
 import { coloured, meetingLabel, otherTabLabel } from "../meeting/status-line.js";
 const MS_PER_SECOND = 1000;
 function finite(value) {
@@ -37,7 +37,7 @@ function rateLimitsOf(value) {
 export function snapshotOfStatus(source, input, now) {
     const reading = source.statusLine.parse(input);
     const sessionId = reading?.sessionId;
-    if (reading === undefined || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+    if (reading === undefined || sessionId === undefined || !isHostSessionId(sessionId)) {
         return undefined;
     }
     const ts = new Date(now).toISOString();
@@ -56,6 +56,32 @@ export function snapshotOfStatus(source, input, now) {
         costUsd: reading.costUsd ?? null,
         contextUsedPct: reading.contextUsedPct ?? null,
         contextInputTokens: reading.contextInputTokens ?? null,
+    };
+}
+/**
+ * The snapshot of the plan's reading a session's transcript told (`UsageMeter.transcriptWeekReading`, on a host with
+ * no status input, as Codex CLI), taken at `now`. The host dated the reading itself, so `rateLimitsSince` is that
+ * time, not `now`: a turn's end may read it long after. Undefined for a session id that is not a valid one, as it
+ * becomes the snapshot's file name.
+ */
+export function snapshotOfTranscript(session, reading, now) {
+    if (!isHostSessionId(session.sessionId)) {
+        return undefined;
+    }
+    return {
+        ts: new Date(now).toISOString(),
+        sessionId: session.sessionId,
+        cwd: session.cwd,
+        agentName: null,
+        model: session.model ?? null,
+        effort: session.effort ?? null,
+        hostVersion: null,
+        rateLimits: reading.limits,
+        rateLimitsSince: new Date(Math.min(reading.at, now)).toISOString(),
+        rateLimitsAfter: null,
+        costUsd: null,
+        contextUsedPct: null,
+        contextInputTokens: null,
     };
 }
 /**
@@ -95,7 +121,7 @@ export function parseSnapshot(text) {
     }
     const ts = stringField(stored, 'ts');
     const sessionId = stringField(stored, 'session_id');
-    if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+    if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !isHostSessionId(sessionId)) {
         return undefined;
     }
     const rateLimits = rateLimitsOf(stored['rate_limits']);

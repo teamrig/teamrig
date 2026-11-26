@@ -44,11 +44,12 @@ describe('matchesKit', () => {
       assert.equal(await matches(KIT_SHAPES.register, line), false, line);
     }
     assert.equal(await matches(KIT_SHAPES.register, 'teamrig add --session tr-x --title x --local private'), true);
+    assert.equal(await matches(KIT_SHAPES.register, 'teamrig add --session tr-x --title x --issue-later soon'), true);
   });
 
-  it('refuses every add flag that posts, which is each one but --local', () => {
+  it('refuses every add flag that posts, which is each one but --local and --issue-later (T5457)', () => {
     assert.deepEqual(
-      ADD_ISSUE_FLAGS.filter((flag) => flag !== 'local'),
+      ADD_ISSUE_FLAGS.filter((flag) => flag !== 'local' && flag !== 'issue-later'),
       [...REGISTER_POSTING_FLAGS],
     );
   });

@@ -4,10 +4,10 @@ import { isRecord, stringField, type JsonRecord } from '../core/guards.ts';
 import { parseObject } from '../core/jsonl.ts';
 import { isTemporaryName, type Files } from '../core/files.ts';
 import type { TeamPaths } from '../core/home.ts';
+import { isHostSessionId } from '../core/host-session.ts';
 import { MS_PER_DAY, MS_PER_HOUR } from '../core/time.ts';
-import { CLAUDE_SESSION_ID } from '../inbox/marks.ts';
 import { coloured, meetingLabel, otherTabLabel, type StatusLineMeeting } from '../meeting/status-line.ts';
-import type { RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/host/index.ts';
+import type { DatedRateLimits, RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/host/index.ts';
 
 /**
  * Status line snapshots: what Claude Code's status line input says about one session, saved as
@@ -16,7 +16,7 @@ import type { RateLimits, RateWindow, StatusLine, UsageMeter } from '../ports/ho
  * own status line"). The format, one JSON object, its keys in snake_case:
  *
  * - `ts`: when it was written, ISO 8601 UTC;
- * - `session_id`: the Claude Code session id, also the file name;
+ * - `session_id`: the host session id, also the file name;
  * - `cwd`: the session's folder;
  * - `agent_name`, `model`: the agent's name and the model's display name, or null;
  * - `effort`, `host_version`: the session's effort level and the version of the host's program, or null or absent;
@@ -108,7 +108,7 @@ export interface StatusSource {
 export function snapshotOfStatus(source: StatusSource, input: string, now: number): StatusSnapshot | undefined {
   const reading = source.statusLine.parse(input);
   const sessionId = reading?.sessionId;
-  if (reading === undefined || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+  if (reading === undefined || sessionId === undefined || !isHostSessionId(sessionId)) {
     return undefined;
   }
   const ts = new Date(now).toISOString();
@@ -127,6 +127,41 @@ export function snapshotOfStatus(source: StatusSource, input: string, now: numbe
     costUsd: reading.costUsd ?? null,
     contextUsedPct: reading.contextUsedPct ?? null,
     contextInputTokens: reading.contextInputTokens ?? null,
+  };
+}
+
+/** What a turn's end knows of a session whose transcript told the plan's reading: its id, folder, model and effort. */
+export interface TranscriptSession {
+  readonly sessionId: string;
+  readonly cwd: string;
+  readonly model: string | undefined;
+  readonly effort: string | undefined;
+}
+
+/**
+ * The snapshot of the plan's reading a session's transcript told (`UsageMeter.transcriptWeekReading`, on a host with
+ * no status input, as Codex CLI), taken at `now`. The host dated the reading itself, so `rateLimitsSince` is that
+ * time, not `now`: a turn's end may read it long after. Undefined for a session id that is not a valid one, as it
+ * becomes the snapshot's file name.
+ */
+export function snapshotOfTranscript(session: TranscriptSession, reading: DatedRateLimits, now: number): StatusSnapshot | undefined {
+  if (!isHostSessionId(session.sessionId)) {
+    return undefined;
+  }
+  return {
+    ts: new Date(now).toISOString(),
+    sessionId: session.sessionId,
+    cwd: session.cwd,
+    agentName: null,
+    model: session.model ?? null,
+    effort: session.effort ?? null,
+    hostVersion: null,
+    rateLimits: reading.limits,
+    rateLimitsSince: new Date(Math.min(reading.at, now)).toISOString(),
+    rateLimitsAfter: null,
+    costUsd: null,
+    contextUsedPct: null,
+    contextInputTokens: null,
   };
 }
 
@@ -170,7 +205,7 @@ export function parseSnapshot(text: string): StatusSnapshot | undefined {
   }
   const ts = stringField(stored, 'ts');
   const sessionId = stringField(stored, 'session_id');
-  if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !CLAUDE_SESSION_ID.test(sessionId)) {
+  if (ts === undefined || Number.isNaN(Date.parse(ts)) || sessionId === undefined || !isHostSessionId(sessionId)) {
     return undefined;
   }
   const rateLimits = rateLimitsOf(stored['rate_limits']);

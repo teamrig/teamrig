@@ -39,6 +39,16 @@ export interface WorktreeGit {
   commitsNotOn(dir: string, branch: string, base: string): number | undefined;
   /** How many commits of the HEAD checked out at `top` have no equal change on `base`, counted as `commitsNotOn` counts them. */
   headCommitsNotOn(top: string, base: string): number | undefined;
+  /**
+   * How many commits of `branch` (merges left out) have no equal change on `base` and a subject no commit of `base` has:
+   * 0 when each one `commitsNotOn` counts landed under its own subject, as a rebase merge that changed its patch leaves
+   * it (T5506). A subject proves less than a patch, so the caller keeps a copy of such a branch before deleting it.
+   */
+  subjectsNotOn(dir: string, branch: string, base: string): number | undefined;
+  /** The full id of the commit `branch` points at. */
+  tipOf(dir: string, branch: string): string | undefined;
+  /** `git bundle create` of the commits of `branch` not on `base` into `file`, run in `mainDir`, so the branch can be fetched back from it. */
+  bundle(mainDir: string, branch: string, base: string, file: string): GitOutcome;
   /** `git worktree remove` of the worktree at `top`, run in `mainDir`; never forced. */
   removeWorktree(mainDir: string, top: string): GitOutcome;
   /** Deletes `branch`, run in `mainDir`; the caller has checked that every commit of it is on its base. */
@@ -152,6 +162,12 @@ export function worktreeGit(run: GitRunner): WorktreeGit {
     return cherry === undefined ? undefined : cherry.split('\n').filter((line) => line.startsWith('+')).length;
   };
 
+  /** The subjects `git log` prints for `range`, merges left out, one per commit; undefined when git cannot tell. */
+  const subjects = (dir: string, range: readonly string[]): string[] | undefined => {
+    const text = query(dir, ['log', '--no-merges', '--format=%s', ...range]);
+    return text?.replaceAll('\r\n', '\n').split('\n').filter((line) => line !== '');
+  };
+
   return {
     topOf: (dir) => queryLine(dir, ['rev-parse', '--show-toplevel']),
     worktrees(dir) {
@@ -174,6 +190,24 @@ export function worktreeGit(run: GitRunner): WorktreeGit {
     commitsNotOn: (dir, branch, base) => refCommitsNotOn(dir, `${BRANCH_REF}${branch}`, base),
     // Run in the worktree's own folder, `HEAD` is that worktree's, not the main checkout's.
     headCommitsNotOn: (top, base) => refCommitsNotOn(top, 'HEAD', base),
+    subjectsNotOn(dir, branch, base) {
+      const ref = `${BRANCH_REF}${branch}`;
+      if (refCommitsNotOn(dir, ref, base) === undefined) {
+        return undefined;
+      }
+      // `--cherry-pick --right-only` keeps the branch's commits with no equal patch on base, as `git cherry` marks `+`;
+      // a rebased copy of one sits on base past where the two parted, so only `ref..base` is searched for its subject.
+      const own = subjects(dir, ['--cherry-pick', '--right-only', `${base}...${ref}`]);
+      const landed = subjects(dir, [`${ref}..${base}`]);
+      if (own === undefined || landed === undefined) {
+        return undefined;
+      }
+      const onBase = new Set(landed);
+      return own.filter((subject) => !onBase.has(subject)).length;
+    },
+    tipOf: (dir, branch) => queryLine(dir, ['rev-parse', '--verify', '-q', `${BRANCH_REF}${branch}^{commit}`]),
+    // The file is an absolute path and the caller refuses a base that starts with `-`, so neither reads as an option.
+    bundle: (mainDir, branch, base, file) => outcome(run(mainDir, ['bundle', 'create', '--quiet', file, `${BRANCH_REF}${branch}`, `^${base}`], ADD_TIMEOUT_MS), 'git bundle create'),
     removeWorktree: (mainDir, top) => outcome(run(mainDir, ['worktree', 'remove', top], REMOVE_TIMEOUT_MS), 'git worktree remove'),
     // A branch name never starts with `-` (git refuses one), so it cannot read as an option.
     deleteBranch: (mainDir, branch) => outcome(run(mainDir, ['branch', '-D', branch]), 'git branch -D'),

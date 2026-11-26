@@ -40,7 +40,10 @@ While the plugin is enabled, its `bin/` folder is on the PATH of Claude Code's B
 multi-line `--description`, reaches teamrig whole from all three, although cmd.exe alone would cut it at the break
 ([the refusal when it cannot](errors.md#usage-errors-exit-64)). For your own terminals, outside Claude Code, the first
 session start after an install or update writes `teamrig.mjs`, `teamrig` and on Windows `teamrig.cmd` to `~/.teamrig/bin`,
-which find the installed plugin on each run, and adds that folder at the end of your user PATH, so a program you put
+which run the kit home's current version (the one `teamrig kit versions` marks `current`) once its files match the
+list it was installed with, and refuse with `teamrig files changed: <paths>` (or `no teamrig installed`, `install
+record changed`, `teamrig files moved`) when they do not: a hook it runs is then blocked, except the ones that only
+add context, so `teamrig kit use <version>` from a session's own shell, naming a kept version, sets it right. The start also adds that folder at the end of your user PATH, so a program you put
 there first keeps its place: on Windows the `Path` value of
 `HKCU\Environment`, elsewhere a marked block in `~/.profile`, and in `~/.bash_profile`, `~/.bashrc` and `~/.zshrc`
 where they exist (`~/.zshrc` always on macOS). A terminal opened before that keeps its old PATH: open a new one. The
@@ -60,6 +63,9 @@ entry you removed stays removed; `teamrig doctor` names the folder when it is no
 | Linux | `gnome-terminal`, then `konsole`, then `x-terminal-emulator` | the first one found |
 
 When none works, or with `--terminal print`, `open` prints the command to run in a new terminal and exits 3.
+`--terminal headless`, an opt-in `auto` never picks, runs the session with no window: on Windows under the
+`conhost.exe --headless` Windows ships, started by `cmd start`; elsewhere in a detached tmux session (tmux 3.0 or
+later), `teamrig-<title>`.
 With [open.teamWindow] on, each tab of the team's sessions (`open`, a meeting start, a refresh restart, the idle
 pass's reopen, a restore after a reboot) opens in a Windows Terminal window of the team's own, `teamrig-<team>`, made
 when none is open, so each team's tabs stay apart; the other terminals open as before.

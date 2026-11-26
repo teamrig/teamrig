@@ -63,8 +63,8 @@ metered, and no line wakes a session: each session reads its own inbox.
    <name>`: no hook shows the lines.
 7. Optional, from an installed plugin: `teamrig setup hooks --host codex` previews putting teamrig's hooks into
    `~/.codex/hooks.json` beside your own, and `--yes` writes them. Then open `/hooks` in Codex and trust them.
-   **Every teamrig update changes them**: run the command again and trust them again in `/hooks` after each update,
-   until slice 3's launcher does it. They are not yet proved to guard anything on Codex, so step 7 counts for none of
+   Each one runs teamrig's kit launcher (`~/.teamrig/bin/teamrig.mjs`), which names no version, so a teamrig update
+   leaves them and their trust as they are (T5278). They are not yet proved to guard anything on Codex, so step 7 counts for none of
    the guards below.
 
 Missing on this route, all named again below: the guards (pushes, packages, secrets, database writes, privileged
@@ -116,6 +116,7 @@ named.
 | Read-only commands run without a prompt | PreToolUse bare `allow` | a bare `allow` is unsupported and fails open (`hooks/src/events/pre_tool_use.rs`) | nearest: `allow` prefix rules in `~/.codex/rules/` built from the read-only list, and the workspace-write sandbox |
 | Refusing a question to the person when asks are off | PreToolUse on `AskUserQuestion` | `request_user_input`, off with `[tools.experimental_request_user_input] enabled = false` | with change, and stronger: the tool is never offered |
 | Refusing permission prompts when asks are off | PermissionRequest `behavior` | the same shape; `approval_policy = "never"` | works |
+| Telling the restriction a session runs under | hook `permission_mode` | hook `permission_mode` is only `bypassPermissions` (approval `never`) or `default`, nothing of the sandbox (`core/src/hook_runtime.rs`); each rollout `turn_context` holds `approval_policy`, the legacy `sandbox_policy` (always written) and `active_permission_profile.id` | with change (T5089): read from the rollout tail's newest `turn_context`; `bypassPermissions` read as approval `never`, never sandbox-off; teamrig changes no setting |
 | Redacting a secret in tool output | PostToolUse `updatedToolOutput` | no output rewrite (`updatedMCPToolOutput` "not supported yet") | cannot redact: the result is blocked whole; Codex's session file still keeps the raw output, up to 64 KiB (`rollout/src/policy.rs`) |
 | A secret pasted in a prompt | UserPromptSubmit block, `suppressOriginalPrompt` | UserPromptSubmit block, run before the prompt is written (`core/src/hook_runtime.rs`) | with change: drop `suppressOriginalPrompt` |
 | `permissions.deny` lines, their doctor checks and trim | `settings.json` | execpolicy `prefix_rule(..., decision = forbidden \| prompt \| allow)`, `codex execpolicy check`; rules see only commands run outside the sandbox | with change: a rules writer and its own doctor |
@@ -126,9 +127,9 @@ named.
 | teamrig feature | Claude Code | Codex 0.170.0 | On Codex |
 | --- | --- | --- | --- |
 | Open a tab on its model and effort | `claude --model --effort --name` | `codex --model M -c model_reasoning_effort=E`, `--profile` | with change: a launch line per host |
-| Resume, restore after a reboot | `claude --resume <id>`, Claude transcripts | `codex resume <id>`, rollouts under `$CODEX_HOME/sessions/` | with change |
+| Resume, restore after a reboot | `claude --resume <id>`, Claude transcripts | `codex resume <id>`, rollouts under `$CODEX_HOME/sessions/` | with change: a restore entry keeps the host, so `restore run` reopens a Codex session with `--host codex-cli` |
 | The session's own id in the CLI | `CLAUDE_CODE_SESSION_ID` | `CODEX_THREAD_ID` in every shell, `session_id` in hook input | with change: the thread id mapped to the session's name; `TEAMRIG_SESSION` until then |
-| Waking an idle session | the mod submits a prompt | `codex queue --thread <id> --message <text>` to the local app-server (`cli/src/queue_cmd.rs`) | with change, unproven live |
+| Waking an idle session | the mod submits a prompt | `codex queue --thread <id> --message <text>` to the local app-server (`cli/src/queue_cmd.rs`) | with change, unproven live: with no mod to run the wake check, a turn's Stop hook runs the idle pass |
 | Turn end | Stop hook | Stop hook, and `notify` | works |
 | One-shot runs | interactive only | `codex exec`, `--json` events, `codex exec resume` | works, not used by teamrig yet |
 | In-tab `/clear`, `/reload-plugins`, mid-turn refresh, `/teamrig`, bands, toasts | the mod | no mod API | cannot; refresh restarts the session with its first prompt |
@@ -156,7 +157,7 @@ named.
 | Finding transcripts | `~/.claude/projects/<project>/` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` | with change: a discoverer that maps a rollout to its project by its `cwd` |
 | Per-call usage and W | input, cache writes, cache reads, output | `token_count` `info`: `total_token_usage` and `last_token_usage` (input, cached input, output, reasoning; no cache-write split), `model_context_window` | with change: a Codex weight set; W is per host |
 | Model and effort share | per line | `model`, `model_reasoning_effort` in the turn context | with change |
-| The week reading | the status line's `rate_limits` | `token_count.rate_limits`: a primary and a secondary window, each with `used_percent`, `window_minutes` and `resets_at`; the week is the one with `window_minutes` = 10080 | with change: one reading per account, never added across chats, since every chat repeats the same account-wide snapshot |
+| The week reading | the status line's `rate_limits` | `token_count.rate_limits`: a primary and a secondary window, each with `used_percent`, `window_minutes` and `resets_at`; the week is the one with `window_minutes` = 10080 | with change: one reading per account, never added across chats, since every chat repeats the same account-wide snapshot; each turn's Stop hook reads the newest one from its rollout's tail (the hook input's `transcript_path`) and saves it as the session's snapshot, where `budget` and the pace line read it |
 | teamrig's status-line text | the status-line command | Codex's footer takes built-in items only | cannot; shown elsewhere |
 | Five-hour forecast | the five-hour window | none on Pro | with change: the week alone |
 | Helper weight | fitted on Claude Code | not known | with change: fitted again on Codex |

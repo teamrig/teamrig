@@ -1,3 +1,4 @@
+import { terminalOf } from "../../config/launch.js";
 import { stringField } from "../../core/guards.js";
 import { sessionDisplay } from "../../core/ids.js";
 import { LockBusyError } from "../../core/lock.js";
@@ -138,6 +139,6 @@ export async function needsYouFocus(args, runtime) {
         return answer(runtime, { kind: 'refused', why: `the owner's meeting is open and ${target}'s ask is no p0 task's` });
     }
     const title = tabOf(scope, target);
-    const outcome = await focusTab(runtime, scope.config.open.terminal, title);
+    const outcome = await focusTab(runtime, terminalOf(scope.config, target), title);
     return answer(runtime, { kind: outcome.kind, text: focusText(outcome, title) });
 }

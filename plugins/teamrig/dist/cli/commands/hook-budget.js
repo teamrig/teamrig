@@ -116,7 +116,7 @@ export async function budgetFactsOf(runtime, scope, transcript) {
     const split = budgetSplitOf({ team: kit.paths.team, ids: roster.ids, sessions: budget.sessions, leads: config.leads, work: work.weights, asks: work.awaited, pausable: pausableOf(config, kit.paths.team, roster.ids), lifts, now, usedPct: week.usedPct });
     const others = await otherTeamsOnAccount(runtime, { team: kit.paths.team, config, usageDir: kit.paths.usage }, now, week.usedPct);
     const teams = { split, others };
-    const summary = teamWeekSummaryOf({ account: account.account, window: week.window, usedPct: week.usedPct, wPerPct: week.usedWPerPct, targetPct: budget.targetPct, states: [...byId.values()], teams, limits: week.limits, now });
+    const summary = teamWeekSummaryOf({ account: account.account, window: week.window, usedPct: week.usedPct, wPerPct: week.usedWPerPct, targetPct: budget.targetPct, homePartPct: budget.homePartPct, states: [...byId.values()], teams, limits: week.limits, now });
     if (summary !== undefined) {
         await keepTeamWeek(files, kit.paths.teamWeek, summary);
     }
@@ -159,6 +159,7 @@ export async function budgetFactsOf(runtime, scope, transcript) {
             targetPct: budget.targetPct,
             // The week's spare, not a short day's cut: the teams unfunded.
             teams,
+            homePartPct: budget.homePartPct,
             ownerAsk: ownerAsk(config),
         })
         : undefined;

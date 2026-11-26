@@ -17,12 +17,14 @@ export function testHostIssue(number: number, overrides: Partial<HostIssue> = {}
     lastEditedAt: undefined,
     authorAssociation: 'OWNER',
     author: 'maintainer',
+    authorName: '',
     authorKind: 'User',
     labelEvents: [],
     renamedAt: undefined,
     createdAt: undefined,
     comments: [],
     linkedPulls: 0,
+    ruled: undefined,
     ...overrides,
   };
 }

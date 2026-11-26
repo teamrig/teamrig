@@ -2,10 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { formatConfig } from '../config/load.ts';
 import { CONFIG_MIGRATIONS, type ConfigFormat } from '../config/migrate.ts';
 import { CONFIG_VERSION } from '../config/types.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { CliHarness, CONFIG_PATH, TEAM } from '../testing/cli-harness.ts';
+import { SUB_TEAMS, teamConfigOf, treeHarness } from '../testing/team-tree.ts';
 import { configSchemaPathOf, schemaSettingsOf, type SchemaSettings } from './commands/config.ts';
 import { loadedConfig, openTeamKit } from './kit.ts';
 import type { SelfLocation } from './runtime.ts';
@@ -21,12 +23,12 @@ async function teamWithSchema(config: JsonRecord | string = CURRENT_TEAM): Promi
   return kit;
 }
 
-/** The rows of `config get --json`, each checked to be an object. */
-function rowsOf(stdout: readonly string[]): readonly JsonRecord[] {
-  assert.equal(stdout.length, 1);
+/** The rows of `config get --json` read from `file`, each checked to be an object. */
+function rowsOf(stdout: readonly string[], file = CONFIG_PATH): readonly JsonRecord[] {
+  assert.equal(stdout.length, 1, stdout.join('\n'));
   const parsed: unknown = JSON.parse(stdout[0] ?? '');
   assert.ok(isRecord(parsed));
-  assert.equal(parsed['file'], CONFIG_PATH);
+  assert.equal(parsed['file'], file);
   const rows = parsed['rows'];
   assert.ok(Array.isArray(rows));
   return rows.filter(isRecord);
@@ -105,6 +107,50 @@ describe('config get', () => {
     assert.equal(noSchema.code, EXIT.refused);
     assert.match(noSchema.stdout[0] ?? '', /no config schema at .*config\.schema\.json; reinstall teamrig$/);
   });
+
+  it("reads another team of the caller's tree with --team, above, below or beside it (#1513)", async () => {
+    const kit = await treeHarness({ messages: { maxLines: 30 } });
+    await kit.files.write(configSchemaPathOf(SELF.script), SCHEMA_TEXT);
+    await kit.files.write(teamConfigOf('ui'), formatConfig({ ...SUB_TEAMS['ui'], messages: { maxLines: 7 } }));
+    const asks: [Record<string, string>, string, unknown][] = [
+      [{}, 'ui', 7],
+      [{}, 'web', 10],
+      [{ TEAMRIG_TEAM: 'ui' }, 'app', 30],
+      [{ TEAMRIG_TEAM: 'ui' }, 'ops', 10],
+      [{ TEAMRIG_TEAM: 'ui' }, 'ui', 7],
+    ];
+    for (const [env, team, maxLines] of asks) {
+      const result = await kit.run(['config', 'get', 'messages.maxLines', '--json', '--team', team], { self: SELF, env });
+      assert.equal(result.code, EXIT.ok, `${team}: ${result.stdout.join('\n')}`);
+      assert.equal(rowsOf(result.stdout, team === 'app' ? CONFIG_PATH : teamConfigOf(team))[0]?.['value'], maxLines, team);
+    }
+  });
+
+  it("reads a key under a map entry of the --team team's own file, not the caller's (#1513)", async () => {
+    const kit = await treeHarness({ delivery: { repos: { example: { mainCheckout: 'repo', shipTool: 'tools/app-ship' } } } });
+    await kit.files.write(configSchemaPathOf(SELF.script), SCHEMA_TEXT);
+    const repos = { example: { mainCheckout: 'repo', shipTool: 'tools/ui-ship' } };
+    await kit.files.write(teamConfigOf('ui'), formatConfig({ ...SUB_TEAMS['ui'], delivery: { repos } }));
+    const ui = await kit.run(['config', 'get', 'delivery.repos.example.shipTool', '--team', 'ui'], { self: SELF });
+    assert.equal(ui.code, EXIT.ok, ui.stdout.join('\n'));
+    assert.deepEqual(ui.stdout, ['delivery.repos.example.shipTool "tools/ui-ship"  (read-only: owner gate: permissions)']);
+    const web = await kit.run(['config', 'get', 'delivery.repos.example.shipTool', '--team', 'web'], { self: SELF });
+    assert.equal(web.code, EXIT.refused);
+    assert.match(web.stdout[0] ?? '', /the config has no key delivery\.repos\.example\.shipTool; teamrig config get lists them$/);
+  });
+
+  it('refuses --team for a team outside the caller\'s tree, or one with no config (#1513)', async () => {
+    const kit = await treeHarness();
+    await kit.files.write(configSchemaPathOf(SELF.script), SCHEMA_TEXT);
+    await kit.files.write(teamConfigOf('other'), formatConfig({ configVersion: 1, team: { id: 'other' }, sessions: ['boss'], roles: { lead: 'boss' } }));
+    const outside = await kit.run(['config', 'get', '--json', '--team', 'other'], { self: SELF });
+    assert.equal(outside.code, EXIT.refused);
+    assert.match(outside.stdout[0] ?? '', /team other is not in team app's tree: --team names a team above, below or beside yours$/);
+    const missing = await kit.run(['config', 'get', '--json', '--team', 'nope'], { self: SELF });
+    assert.equal(missing.code, EXIT.refused);
+    assert.match(missing.stdout[0] ?? '', /no team nope with a config in this kit home$/);
+  });
+
 });
 
 describe('schemaSettingsOf', () => {

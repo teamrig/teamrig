@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { GitError, type Git } from '../lib/git.ts';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { parseChannels } from './channels.ts';
@@ -47,13 +47,14 @@ describe('promote', () => {
   const run = (over: Partial<Promotion> = {}) => promote(git, promotion(over), (line) => lines.push(line));
   const hotfix = (tag: string): Hotfix => ({ tag, sha: releases.get(tag) ?? '' });
 
-  beforeEach(() => {
-    repo = new TempRepo('promote').init();
+  // The repo and its bare origin, made once with git and copied per test (T5032); the shas are the same in a copy.
+  let template: TempRepo;
+
+  before(() => {
+    repo = new TempRepo('promote-template').init();
     origin = join(repo.outside, 'origin.git');
     repo.git('init', '-q', '--bare', origin);
     repo.git('remote', 'add', 'origin', origin);
-    git = gitIn(repo);
-    lines.length = 0;
     stable = commitAt(undefined, 'v1.0.0', '08:00:00');
     releases = new Map();
     let last = stable;
@@ -66,9 +67,20 @@ describe('promote', () => {
     repo.git('push', '-q', 'origin', `${stable}:refs/heads/release`, `${last}:refs/heads/preview`, '--tags');
     // The tags were made here; the promote job reads them from the remote, as a fresh checkout does.
     for (const tag of ['v1.0.0', ...releases.keys()]) repo.git('tag', '-d', tag);
+    template = repo;
+  });
+
+  beforeEach(() => {
+    repo = new TempRepo('promote').copyFrom(template);
+    origin = join(repo.outside, 'origin.git');
+    repo.git('remote', 'set-url', 'origin', origin);
+    git = gitIn(repo);
+    lines.length = 0;
   });
 
   afterEach(() => repo.remove());
+
+  after(() => template.remove());
 
   it('moves stable to the newest preview release soaked by its last move, a fast-forward without force', async () => {
     const result = await run();

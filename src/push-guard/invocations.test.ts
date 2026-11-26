@@ -274,8 +274,12 @@ describe('findGitInvocations: scripts and shells', () => {
     const held = '!:it holds a quoted command substitution that pushes, which bash runs if an expansion reads it again';
     const stdinShell = 'g:a shell reads its commands from stdin';
     // A push held in any word is a doubt: perl runs backticks in its code as shell commands.
-    for (const line of ["perl -e 'print `git push`'", "read 'a[$(git push)]'", "PS4='$(git push)'", "PS4='$(git push)' bash -xc true", "echo '$(git push)' > x.sh", "sed -i 's/x/$(git push)/' run.sh"]) {
+    for (const line of ["perl -e 'print `git push`'", "read 'a[$(git push)]'", "echo '$(git push)' > x.sh", "sed -i 's/x/$(git push)/' run.sh"]) {
       expectDoubt(line, held);
+    }
+    // PS4 is also a variable a shell runs as commands later, which is a doubt of its own.
+    for (const line of ["PS4='$(git push)'", "PS4='$(git push)' bash -xc true"]) {
+      assert.deepEqual(doubts(line), ['!:it sets a variable a shell runs as commands later to a push', held], line);
     }
     // With no redirection the push doubt is the only one: no gated doubt comes from the held text.
     expectDoubt("echo '$(git push)'", held);

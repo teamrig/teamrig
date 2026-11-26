@@ -26,12 +26,13 @@ function logOf(runtime, scope) {
  * The prompt of a UserPromptSubmit, told the person's from teamrig's: the wake teamrig answered that tab with is taken
  * once, so the same text typed again is the person's. Undefined for no tab or an empty prompt.
  */
-export async function sentPromptOf(runtime, wake, id, { session, prompt }) {
+export async function sentPromptOf(runtime, wake, id, { session, prompt, hostPrompt }) {
     if (session === undefined || prompt === undefined || prompt.trim() === '') {
         return undefined;
     }
-    const woke = await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt });
-    return { tab: session, text: prompt, woke };
+    // The host's own prompt is never teamrig's wake, so it leaves the kept wake for the prompt that is.
+    const woke = !hostPrompt && (await new WakePrompts(runtime.files, wake).take(id, { tab: session, text: prompt }));
+    return { tab: session, text: prompt, woke, byHost: hostPrompt };
 }
 /** UserPromptSubmit: the prompt the person sent, or the wake teamrig submitted in that tab, marked `from: teamrig`; nothing with the log off. */
 export async function logPrompt(runtime, scope, sent) {
@@ -41,9 +42,12 @@ export async function logPrompt(runtime, scope, sent) {
     const said = { kind: 'prompt', claude: sent.tab, text: sent.text, ...(sent.woke ? { from: 'teamrig' } : {}) };
     await logOf(runtime, scope).append(scope.id, entryOf(runtime, scope, said));
 }
-/** UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101). */
+/**
+ * UserPromptSubmit: a prompt the person typed marks its session the one they last typed in, for a UI to follow (T5101);
+ * one teamrig or the host submitted does not (T5388).
+ */
 export async function noteLastTyped(runtime, paths, id, sent) {
-    if (sent.woke) {
+    if (sent.woke || sent.byHost) {
         return;
     }
     const at = new Date(runtime.clock.now()).toISOString();

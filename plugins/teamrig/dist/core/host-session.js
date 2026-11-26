@@ -6,6 +6,19 @@
  */
 export const HOST_SESSION_FIELD = 'hostSession';
 /**
+ * A host session id as the shared stores take it, whichever host gave it: a letter or digit, then letters, digits, `_`
+ * or `-`, at most 128 in all. Each host adapter checks its own id shape where it reads the host's input (a Claude Code
+ * or Codex id is a UUID); the stores hold the ids of every host a team runs, so they check only what keeps an id safe
+ * where it goes: a file name (no dot, slash or device name) and an argument (no leading `-`).
+ */
+const HOST_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+/** Names Windows keeps for devices in every folder, whatever the extension: `nul.json` is no file there. */
+const DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+/** Whether `value` is a host session id the stores take: see {@link HOST_SESSION_ID}. */
+export function isHostSessionId(value) {
+    return HOST_SESSION_ID.test(value) && !DEVICE_NAME.test(value);
+}
+/**
  * The record's host session as stored, unchecked: `HOST_SESSION_FIELD` when the record has it, null included, else
  * the store's old field. A reader that keeps a null or checks the id's shape starts here.
  */

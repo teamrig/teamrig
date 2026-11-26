@@ -23,13 +23,25 @@ export function pathList(value, delimiter) {
     });
 }
 /**
+ * PATH's folders a search for a program teamrig starts reads, in order: the fully qualified ones alone (`/usr/bin`,
+ * `C:\Git\cmd`, `\\server\share\bin`). A relative folder (`.`, `bin`), and on Windows one rooted only on the current
+ * drive (`\tools`) or relative to a drive's current folder (`C:tools`), names a folder under wherever the run stands,
+ * so a search through it could start a file the working tree holds rather than the installed program.
+ */
+export function programFolders(env, platform) {
+    const windows = platform === 'win32';
+    const folders = pathList(envVariable(env, 'PATH', platform), windows ? ';' : ':');
+    return folders.filter((folder) => (windows ? win32.parse(folder).root.length > 1 && win32.isAbsolute(folder) : posix.isAbsolute(folder)));
+}
+/**
  * The file Node.js starts for `execFile(name)`, found as it searches PATH: on Windows `<name>.com`, then
  * `<name>.exe`, in each folder (or `windowsExtensions` in that order, as `WINDOWS_COMMAND_EXTENSIONS` for what a shell
- * runs); elsewhere `<name>` in each folder. It only looks, starting nothing; undefined when no folder has it.
+ * runs); elsewhere `<name>` in each folder. Only `programFolders` are searched. It only looks, starting nothing;
+ * undefined when no folder has it.
  */
 export async function findProgram(name, deps, windowsExtensions = WINDOWS_PROGRAM_EXTENSIONS) {
     const windows = deps.platform === 'win32';
-    const folders = pathList(envVariable(deps.env, 'PATH', deps.platform), windows ? ';' : ':');
+    const folders = programFolders(deps.env, deps.platform);
     const candidates = folders.flatMap((folder) => windows ? windowsExtensions.map((extension) => win32.join(folder, `${name}${extension}`)) : [posix.join(folder, name)]);
     for (const path of candidates) {
         if ((await deps.probe.kind(path)) === 'file') {

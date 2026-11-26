@@ -100,7 +100,7 @@ async function teamSurplusOf(runtime: CliRuntime, kit: Kit, config: KitConfig, r
     return undefined;
   }
   const teams = await teamsOf(runtime, kit, config, roster, now, usedPct);
-  return surplusOf({ window, now, usedPct, targetPct: config.budget.targetPct, config: config.burst, teams });
+  return surplusOf({ window, now, usedPct, targetPct: config.budget.targetPct, config: config.burst, teams, homePartPct: config.budget.homePartPct });
 }
 
 /** The surplus line: the team's part of the spare, and whether a surplus burst may start now. */
@@ -266,6 +266,7 @@ export async function start(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
       usedPct: week.usedPct,
       window: week.window,
       targetPct: config.budget.targetPct,
+      homePartPct: config.budget.homePartPct,
       config: config.burst,
       active: activeBurst(records, now, week.usedPct),
       zone,

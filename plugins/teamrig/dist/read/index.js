@@ -11,6 +11,8 @@ export { foldEvents, taskNumber } from "../register/fold.js";
 export { ACTIVE_STATUSES, isTaskStatus, priorityText, SESSION_NAME, TASK_STATUSES } from "../register/model.js";
 export { assemble, historyPlan, layoutPaths, MissingSegmentError, readHistory, readSnapshotText, readWorkingSet, segmentName, workingSetPlan, ARCHIVE_DIR, SNAPSHOT_FILE, } from "../register/layout.js";
 export { LAYOUT_VERSION } from "../register/marker.js";
+// The digest of what a card asks (#1517), so a pane binds `owner decide --read` to the card it showed.
+export { cardDigest, isCardDigest } from "../register/card-digest.js";
 export { readEvents, readRegister, snapshotOf } from "../register/snapshot.js";
 export { loopFix, needPath, needsOf, pathText, planOrder, TaskTree, } from "../register/tree.js";
 // A task's WSJF rank (T2076): what builds a tree's ranking and what scores a row, so a reader ranks as the CLI does;

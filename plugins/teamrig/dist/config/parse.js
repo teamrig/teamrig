@@ -8,7 +8,7 @@ import { isRecord } from "../core/guards.js";
 import { isReservedName, NAME_PATTERN, NAME_RULE, RESERVED_NAMES } from "../core/ids.js";
 import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from "../core/time.js";
 import { TimeZone } from "../core/zone.js";
-import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_STATUSES, WORK_CLASS_NAME } from "../register/model.js";
+import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME } from "../register/model.js";
 import { isItemType, ITEM_TYPES } from "../register/events.js";
 import { branchPatternProblem, isBranchType } from "../worktree/branch-name.js";
 import { KEEP_RULE_PATTERN } from "../permissions/allow-rules.js";
@@ -17,11 +17,11 @@ import { PREFIX_PATTERN } from "../readonly-shell/rules.js";
 import { CORE_RULE_KEYS, isCoreRuleKey } from "../rules/keys.js";
 import { isNeedKind, NEED_KINDS } from "../tabs/need-kind.js";
 import { DEFAULT_ALERTS, DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_COMMITS, DEFAULT_CONTEXT_FILES, DEFAULT_FREEZES, DEFAULT_DECISIONS, DEFAULT_DELIVERY_WAIT, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_PASS_ENV, DEFAULT_GITHUB, DEFAULT_SYNC, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_EXEC, DEFAULT_CHANGES, DEFAULT_LOCK, DEFAULT_LEAD_BOUNDARY, DEFAULT_TURN_LOG, DEFAULT_NEEDS_YOU, DEFAULT_MEETING_NOTICES, DEFAULT_LOOPS, DEFAULT_MERGE_REMOTE, DEFAULT_MESSAGES, DEFAULT_HEADROOM, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_OWNER_GATES, DEFAULT_SECURITY_GATES, DEFAULT_HOSTS, DEFAULT_COMMIT_GUARD, DEFAULT_DB_WRITE_GUARD, DEFAULT_SECRET_GUARD, DEFAULT_PACKAGE_GUARD, DEFAULT_PERMISSIONS, DEFAULT_PROMPTS, DEFAULT_PUSH_GUARD, DEFAULT_READONLY_SHELL, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_SCALE_OUT, DEFAULT_SESSION_SHARE, DEFAULT_SKILLS, DEFAULT_STATUS_LINE, DEFAULT_FOCUS, DEFAULT_STEPS, DEFAULT_TESTS, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_BRANCHES, DEFAULT_MEETING, QUEUE_TTL_MARGIN_MINUTES, DEFAULT_UI, } from "./defaults.js";
-import { isEffort, isModel } from "./launch.js";
+import { isEffort, isModel, isTerminalName } from "./launch.js";
 import { APPLY_FLAG_PATTERN, BUDGET_ACCOUNT_MAX_LENGTH, CLIENT_RECEIVER_PATTERN, CONNECTOR_LIMITS, CONFIG_LIMITS, DB_PROGRAM_NAME_PATTERN, DB_WRITE_ENTRYPOINT_LIMITS, DB_WRITE_NAME_LIMITS, GITHUB_LABEL_MAX_LENGTH, ISSUE_FIELD_NAME_MAX_LENGTH, MEETING_COLOUR_PATTERN, MEETING_HELD_TEXT_MAX_LENGTH, NODE_MODULE_PATTERN, REVIEW_PATH_LIMITS, RULE_CONFLICT_LIMITS, SERVICE_ROLE_LIMITS, } from "./limits.js";
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from "./migrate.js";
 import { ConfigReader, describe, isValidRegex, shortLine } from "./reader.js";
-import { AUTO_RESTART_LEAD, AD_HOC_RUNNERS, PACKAGE_INSTALLS, BURST_POLICIES, CONFLICT_WINNERS, DB_CLIENT_VOCABULARIES, DB_PROGRAM_SHAPES, DB_WRITES, ESCALATIONS, GOALS_MODES, isDbClientVocabulary, isDbProgramShape, isDbWrites, HIRING_POLICIES, isAdHocRunners, isPackageInstalls, isBurstPolicy, isCommitGate, isConflictWinner, isEffortLevel, isEscalation, isGoalsMode, isHiringPolicy, isOverAction, isHookAsks, isIdleLeaderKeep, isIdleMode, isOtherAreaListing, isPushToProtected, isReviewClass, isReviewPathMode, isRouteAllow, isSecretReads, isSecretWrites, isSkipHooks, isTerminalChoice, isExpiringResetKind, isResetKind, isReviewMode, isVerifyGate, isWeekday, RESET_KINDS, HOOK_ASKS, IDLE_LEADER_KEEPS, IDLE_MODES, OTHER_AREA_LISTINGS, OVER_ACTIONS, PUSH_TO_PROTECTED, REVIEW_CLASSES, REVIEW_PATH_MODES, ROUTE_ALLOWS, SECRET_READS, SECRET_WRITES, SKIP_HOOKS, TERMINALS, REVIEW_MODES, VERIFY_GATES, WEEKDAYS, isWipMode, WIP_MODES, UI_MODES, isUiMode, } from "./types.js";
+import { AUTO_RESTART_LEAD, AD_HOC_RUNNERS, PACKAGE_INSTALLS, BURST_POLICIES, CONFLICT_WINNERS, DB_CLIENT_VOCABULARIES, DB_PROGRAM_SHAPES, DB_WRITES, ESCALATIONS, GOALS_MODES, isDbClientVocabulary, isDbProgramShape, isDbWrites, HIRING_POLICIES, isAdHocRunners, isPackageInstalls, isBurstPolicy, isCommitGate, isConflictWinner, isEffortLevel, isEscalation, isGoalsMode, isHiringPolicy, isOverAction, isHookAsks, isIdleLeaderKeep, isIdleMode, isOtherAreaListing, isPushToProtected, isReviewClass, isReviewPathMode, isRouteAllow, isSecretReads, isSecretWrites, isSkipHooks, isTerminalChoice, isExpiringResetKind, isResetKind, isReviewMode, isVerifyGate, isWeekday, RESET_KINDS, HOOK_ASKS, IDLE_LEADER_KEEPS, IDLE_MODES, OTHER_AREA_LISTINGS, OVER_ACTIONS, PUSH_TO_PROTECTED, REVIEW_CLASSES, REVIEW_PATH_MODES, ROUTE_ALLOWS, SECRET_READS, SECRET_WRITES, SKIP_HOOKS, REVIEW_MODES, VERIFY_GATES, WEEKDAYS, isWipMode, WIP_MODES, UI_MODES, isUiMode, } from "./types.js";
 const isSessionName = (name) => SESSION_NAME.test(name) ? undefined : 'expected a lowercase name: a letter, then letters, digits or -, at most 32';
 /** A role a team may leave to a team above it (ANCESTOR_ROLES): one of its sessions, or `<team>/<id>` (T1143). */
 const isRoleHolder = (holder) => SESSION_NAME.test(holder) || ADDRESS_PATTERN.test(holder) ? undefined : 'expected a session id of the team, or <team>/<id> of a team above it';
@@ -231,10 +231,12 @@ function readLaunch(read, raw, sessions) {
         const model = read.optionalString(entry, 'model', path, isModel);
         const effort = read.optionalString(entry, 'effort', path, isEffort);
         const project = read.optionalString(entry, 'project', path, isAbsoluteFolder);
+        const terminal = read.optionalString(entry, 'terminal', path, isTerminalName);
         launch[id] = {
             ...(model === undefined ? {} : { model }),
             ...(isEffortLevel(effort) ? { effort } : {}),
             ...(project === undefined ? {} : { project }),
+            ...(isTerminalChoice(terminal) ? { terminal } : {}),
         };
     }
     return launch;
@@ -256,12 +258,32 @@ function readTeam(read, raw) {
     if (id === '') {
         return undefined;
     }
-    const where = project === undefined ? {} : { project };
+    const detached = readDetached(read, section);
+    const where = { ...(project === undefined ? {} : { project }), ...(detached === undefined || parent !== undefined ? {} : { detached }) };
+    if (detached !== undefined && parent !== undefined) {
+        read.report('team.detached', 'is set beside team.parent; a detached team is a root team: drop one of them');
+    }
     if (parent === id) {
         read.report('team.parent', 'is the team itself; a root team has no parent');
         return { id, ...where };
     }
     return { id, ...(parent === undefined ? {} : { parent }), ...where };
+}
+/** `team.detached` (T5469): the parent left, the first id the team issues, and the ids of the tree it waited on. */
+function readDetached(read, team) {
+    const value = team['detached'];
+    const section = read.section(team, 'detached', 'team');
+    if (!isRecord(value)) {
+        return undefined;
+    }
+    const issues = read.issues.length;
+    const from = read.requiredString(section, 'from', 'team.detached', isSessionName);
+    const firstId = read.optionalInteger(section, 'firstId', 'team.detached', { min: 1 });
+    if (section['firstId'] === undefined) {
+        read.report('team.detached.firstId', 'is required');
+    }
+    const away = read.stringList(section, 'away', 'team.detached', [], (id) => (TASK_ID.test(id) ? undefined : 'expected a task id such as T12'), CONFIG_LIMITS.detachedAway.maxItems);
+    return read.issues.length > issues || firstId === undefined ? undefined : { from, firstId, away };
 }
 /**
  * Validates a migrated config object against the current format; `above` is the team above's budget keys of the
@@ -1125,6 +1147,16 @@ function parseBudget(read, raw, sessions, above) {
     const account = stated ?? inherited?.account;
     const accountLead = read.optionalString(raw, 'accountLead', path, isSessionName) ?? inherited?.accountLead;
     const weeklyLimitW = read.optionalInteger(raw, 'weeklyLimitW', path, CONFIG_LIMITS.weeklyLimitW) ?? inherited?.weeklyLimitW;
+    const pinned = read.boolean(raw, 'pinRateToLimit', path, inherited?.pinRateToLimit ?? defaults.pinRateToLimit);
+    if (pinned && weeklyLimitW === undefined) {
+        read.report(`${path}.pinRateToLimit`, 'needs budget.weeklyLimitW, the rate it pins the week to');
+    }
+    const pinRateToLimit = pinned && weeklyLimitW !== undefined;
+    const part = read.number(raw, 'homePartPct', path, inherited?.homePartPct ?? defaults.homePartPct, CONFIG_LIMITS.budgetHomePartPct);
+    if (part < 100 && !pinRateToLimit) {
+        read.report(`${path}.homePartPct`, 'needs budget.pinRateToLimit, since the status line counts every home of the account');
+    }
+    const homePartPct = pinRateToLimit ? part : 100;
     const extraWPerUsd = read.optionalInteger(raw, 'extraWPerUsd', path, CONFIG_LIMITS.extraWPerUsd) ?? inherited?.extraWPerUsd;
     const reset = parseBudgetReset(read, raw) ?? inherited?.reset;
     const resets = raw['resets'] === undefined ? (inherited?.resets ?? defaults.resets) : parseResetStocks(read, raw, defaults.resets);
@@ -1141,6 +1173,8 @@ function parseBudget(read, raw, sessions, above) {
         ...(account === undefined ? {} : { account }),
         ...(accountLead === undefined ? {} : { accountLead }),
         ...(weeklyLimitW === undefined ? {} : { weeklyLimitW }),
+        pinRateToLimit,
+        homePartPct,
         subagentWeight: read.number(raw, 'subagentWeight', path, inherited?.subagentWeight ?? defaults.subagentWeight, CONFIG_LIMITS.subagentWeight),
         modelWeights,
         ...(extraWPerUsd === undefined ? {} : { extraWPerUsd }),
@@ -1469,7 +1503,7 @@ function parseOtherAreas(read, raw, path) {
     return isOtherAreaListing(listing) ? listing : DEFAULT_SKILLS.otherAreas;
 }
 function parseOpen(read, raw, sessions) {
-    const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, (value) => isTerminalChoice(value) ? undefined : `expected one of ${TERMINALS.join(', ')}`);
+    const terminal = read.string(raw, 'terminal', 'open', DEFAULT_OPEN.terminal, isTerminalName);
     return {
         terminal: isTerminalChoice(terminal) ? terminal : DEFAULT_OPEN.terminal,
         teamWindow: read.boolean(raw, 'teamWindow', 'open', DEFAULT_OPEN.teamWindow),
@@ -1501,12 +1535,14 @@ function parseIdle(read, raw, sessions) {
 function parseHeadroom(read, raw) {
     const path = 'open.headroom';
     const floorMb = read.optionalInteger(raw, 'floorMb', path, CONFIG_LIMITS.headroomFloorMb);
+    const maxTabs = read.optionalInteger(raw, 'maxTabs', path, CONFIG_LIMITS.headroomMaxTabs);
     return {
         sessionMb: read.integer(raw, 'sessionMb', path, DEFAULT_HEADROOM.sessionMb, CONFIG_LIMITS.headroomSessionMb),
         commitMaxPct: read.integer(raw, 'commitMaxPct', path, DEFAULT_HEADROOM.commitMaxPct, CONFIG_LIMITS.headroomCommitMaxPct),
         closeIdleMinutes: read.integer(raw, 'closeIdleMinutes', path, DEFAULT_HEADROOM.closeIdleMinutes, CONFIG_LIMITS.headroomCloseIdleMinutes),
         ...(floorMb === undefined ? {} : { floorMb }),
         loadMinutes: read.integer(raw, 'loadMinutes', path, DEFAULT_HEADROOM.loadMinutes, CONFIG_LIMITS.headroomLoadMinutes),
+        ...(maxTabs === undefined ? {} : { maxTabs }),
     };
 }
 function parseStatusLine(read, raw) {

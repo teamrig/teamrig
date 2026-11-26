@@ -350,14 +350,15 @@ describe('runRestart', () => {
     assert.equal(await world.store.restart('alpha'), undefined);
   });
 
-  it('refuses to end a process that is not Claude Code, and counts Node.js running its script as Claude Code', async () => {
+  it('refuses to end a process that is not Claude Code, Node.js running a script under a .claude folder too (T4891 N1)', async () => {
     const notepad: ProcessInfo = { ...CLAUDE, name: 'notepad.exe', commandLine: 'notepad' };
     const other = await new World({ running: [notepad] }).arm();
     assert.deepEqual(await runRestart(other.deps, PLAN), { kind: 'failed', why: 'process 4100 is notepad.exe, not Claude Code' });
     assert.deepEqual(other.processes.ends, []);
-    const node: ProcessInfo = { ...CLAUDE, name: 'node.exe', commandLine: 'node C:\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js' };
+    const node: ProcessInfo = { ...CLAUDE, name: 'node.exe', commandLine: 'node C:\\Users\\me\\.claude\\hooks\\notify.mjs' };
     const script = await new World({ running: [node] }).arm();
-    assert.equal((await runRestart(script.deps, PLAN)).kind, 'restarted');
+    assert.deepEqual(await runRestart(script.deps, PLAN), { kind: 'failed', why: 'process 4100 is node.exe, not Claude Code' });
+    assert.deepEqual(script.processes.ends, []);
   });
 
   it("ends the program the hosts call a session's, whatever its name, and none that no host does", async () => {

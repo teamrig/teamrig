@@ -6,7 +6,7 @@ import { testConfig } from '../testing/config.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { LogNumbers, OWN_NUMBERS, TreeNumbering, type NumberSource, type TaskNumbering } from './numbering.ts';
+import { LogNumbers, OWN_NUMBERS, ownNumbersFrom, TreeNumbering, type NumberSource, type TaskNumbering } from './numbering.ts';
 import { RegisterPolicy } from './policy.ts';
 import { NO_GOAL_RECORDS, NOTHING_ELSEWHERE, Register } from './register.ts';
 import { JsonlEventLog } from './store.ts';
@@ -69,6 +69,14 @@ describe('OWN_NUMBERS', () => {
   });
 });
 
+describe('ownNumbersFrom', () => {
+  it('lets a team that left a tree number from past the ids the tree had issued (T5469)', async () => {
+    const files = new MemoryFiles();
+    const web = registerOn(files, 'web/events.jsonl', ownNumbersFrom(5500));
+    assert.deepEqual([await addedId(web, 'One'), await addedId(web, 'Two')], ['T5500', 'T5501']);
+  });
+});
+
 describe('TreeNumbering', () => {
   it('issues the highest next number of the other registers, read and written under the tree lock', async () => {
     const mutex = new HeldMutex();
@@ -85,6 +93,13 @@ describe('TreeNumbering', () => {
 
   it('issues 1 with no other register to read', async () => {
     assert.equal(await new TreeNumbering(new HeldMutex(), []).issue(async (floor) => floor), 1);
+  });
+
+  it('issues its first number while every other register is below it, then the highest next (T5469)', async () => {
+    const mutex = new HeldMutex();
+    const below = new TreeNumbering(mutex, [new FixedNumber(4, mutex)], 300);
+    const above = new TreeNumbering(mutex, [new FixedNumber(412, mutex)], 300);
+    assert.deepEqual([await below.issue(async (floor) => floor), await above.issue(async (floor) => floor)], [300, 412]);
   });
 
   it('gives two registers sharing it ids that never meet', async () => {

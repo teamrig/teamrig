@@ -8,6 +8,7 @@ import { testTask } from '../testing/task.ts';
 import { foldEvents, type RegisterState, type Task } from './fold.ts';
 import type { DecisionCard } from './card.ts';
 import { cutTask } from './description-cut.ts';
+import { cardDigest } from './card-digest.ts';
 import { NO_SLICED_GOALS } from './focus.ts';
 import { BLOCKER_WHY, CARD_USAGE, DESCRIPTION_NEEDED, GITHUB_ACTOR, normaliseTitle, PROOF_WAITS_USAGE, RegisterPolicy, type AddInput, type AskInput, type AuditSubject, type ImportInput, type StatusContext, type StatusInput, type Verdict } from './policy.ts';
 import type { ProblemReview } from './review.ts';
@@ -2192,5 +2193,63 @@ describe('RegisterPolicy: a blocker (T4329)', () => {
     assert.equal(error(policy.setStatus(other, 'alpha', { status: 'in-progress' }, context)), refusal);
     assert.equal(error(policy.setStatus(other, 'alpha', { status: 'in-progress', oneCommit: true }, context)), refusal);
     assert.equal(error(policy.setStatus(other, 'alpha', { status: 'in-progress' }, { ...CTX, state: stateOf({ ...open, status: 'done' }, other) })), 'allowed');
+  });
+});
+
+describe('RegisterPolicy.ownerDecide: a security card needs its current verdict (#1517)', () => {
+  const policy = new RegisterPolicy(testConfig({ roles: { lead: 'lead', securityReviewer: 'bravo' } }));
+  const verdictOn = (card: DecisionCard): NonNullable<Task['securityVerdict']> => ({
+    text: 'Pass: read only',
+    read: { question: card.question, options: card.options, recommend: card.recommend },
+    by: 'bravo',
+    at: '2030-01-08T09:00:00.000Z',
+  });
+  const onOwner = (card: DecisionCard | null, securityVerdict: Task['securityVerdict'] = null): Task => ({ ...testTask({ status: 'waiting', waits: OWNER_DECISION, card }), securityVerdict });
+  const decide = (task: Task) => policy.ownerDecide(task, { kind: 'option', option: 1 });
+  const audit = 'its session has the card read (the security reviewer (bravo), with teamrig audit T1 --verdict "<what the review found>")';
+  const GATED: DecisionCard = { ...TEST_CARD, gate: 'permissions' };
+  const MARKED: DecisionCard = { ...TEST_OWNER_CARD, security: true };
+  const edited = (card: DecisionCard): DecisionCard => ({ ...card, recommend: 'Pro, the bigger launch' });
+
+  it('refuses a card on a security gate and a card marked --security while the task holds no verdict', () => {
+    assert.equal(error(decide(onOwner(GATED))), `T1's card asks owner about permissions, a security gate [securityGates], and has no security verdict: owner answers it only with one (core rule 9); ${audit}`);
+    assert.equal(error(decide(onOwner(MARKED))), `T1's card is marked --security and has no security verdict: owner answers it only with one (core rule 9); ${audit}`);
+  });
+
+  it('refuses each when the card changed on the owner after the verdict', () => {
+    const stale = `the security verdict bravo gave on T1's card read another question, options or recommendation: owner answers it only after a new verdict (core rule 9); ${audit}`;
+    assert.equal(error(decide(onOwner(edited(GATED), verdictOn(GATED)))), stale);
+    assert.equal(error(decide(onOwner(edited(MARKED), verdictOn(MARKED)))), stale);
+  });
+
+  it('answers each with its current verdict, and a card that needs none, as before', () => {
+    assert.equal(error(decide(onOwner(GATED, verdictOn(GATED)))), 'allowed');
+    assert.equal(error(decide(onOwner(MARKED, verdictOn(MARKED)))), 'allowed');
+    assert.equal(error(decide(onOwner(TEST_OWNER_CARD))), 'allowed', 'budget is no security gate by default');
+    assert.equal(error(decide(onOwner({ ...GATED, byDefault: 'Pro ships on the due date' }, verdictOn(GATED)))), 'allowed', 'the default is no part the verdict read');
+  });
+});
+
+describe('RegisterPolicy.ownerDecide: --read binds the answer to the card read (#1517)', () => {
+  const policy = new RegisterPolicy(testConfig());
+  const onOwner = (card: DecisionCard | null): Task => testTask({ status: 'waiting', waits: OWNER_DECISION, card });
+  const decide = (task: Task, read: string, option = 1) => policy.ownerDecide(task, { kind: 'option', option }, read);
+  const edited: DecisionCard = { ...TEST_OWNER_CARD, recommend: 'Pro, the bigger launch' };
+
+  it('takes --read only while the card still has that digest, in either case', () => {
+    const task = onOwner(TEST_OWNER_CARD);
+    assert.equal(error(decide(task, cardDigest(TEST_OWNER_CARD))), 'allowed');
+    assert.equal(error(decide(task, cardDigest(TEST_OWNER_CARD).toUpperCase())), 'allowed');
+    const before = cardDigest(edited);
+    assert.equal(
+      error(decide(task, before)),
+      `--read ${before.slice(0, 8)} is not T1's card as it stands (now ${cardDigest(TEST_OWNER_CARD).slice(0, 8)}): its question, options or recommendation changed since it was read; read the card again and answer that`,
+    );
+    assert.equal(error(decide(onOwner(null), before)), 'T1 has no card, so --read matches nothing: answer it without --read');
+  });
+
+  it('checks --read before the option number, so an edited card is named as such and not as a missing option', () => {
+    const grown: DecisionCard = { ...TEST_OWNER_CARD, options: [...TEST_OWNER_CARD.options, 'Team at 99 dollars a month'] };
+    assert.match(error(decide(onOwner(TEST_OWNER_CARD), cardDigest(grown), 3)), /^--read [0-9a-f]{8} is not T1's card as it stands/);
   });
 });

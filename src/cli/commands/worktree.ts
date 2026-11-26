@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { gitKeys } from '../../composition/git-keys.ts';
 import { wireCredentialHelper } from '../../worktree/credential-helper.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
@@ -154,8 +154,10 @@ function placeOf(runtime: CliRuntime, mainCheckout: string, config: DeliveryRepo
  * worktree. Each link in it, such as a `node_modules` junction to the main checkout's, is unlinked and seen gone before
  * `git worktree remove` runs, which on Windows would follow the link and empty its target. Anything unsafe is REFUSED,
  * exit 2, before a change: the main checkout, a dirty tree, a real `node_modules` folder, for `--delete-branch` a
- * branch with a commit not on its base, and in a team another session's worktree (`callerRefusal`). A step that fails
- * partway is FAILED, naming what was already done.
+ * branch with a commit not on its base, and in a team another session's worktree (`callerRefusal`). In a team, a
+ * branch whose commits are on its base by subject alone, as a rebase merge that changed a patch leaves it, is saved as a
+ * git bundle in the state archive's `branches` folder, then deleted (T5506). A step that fails partway is FAILED,
+ * naming what was already done.
  */
 export async function remove(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const path = resolve(runtime.cwd, onePositional(args, 'path'));
@@ -165,7 +167,10 @@ export async function remove(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     throw new UsageError('--base names the branch to check against for --delete-branch: give both, or neither');
   }
   const team = await teamAt(runtime);
-  const decision = await planRemoval({ path, cwd: runtime.cwd, deleteBranch, base, worktreeFolders: worktreeFolders(runtime, team) }, runtime.worktrees);
+  const request = { path, cwd: runtime.cwd, deleteBranch, base, worktreeFolders: worktreeFolders(runtime, team) };
+  // A branch on its base by subject alone is saved to the team's state archive, never deleted, before it goes (T5506).
+  const branchArchive = team === undefined ? {} : { branchArchive: join(team.kit.paths.archive, 'branches') };
+  const decision = await planRemoval({ ...request, ...branchArchive }, runtime.worktrees);
   if (decision.kind === 'refused') {
     throw new RefusedError(decision.reason);
   }

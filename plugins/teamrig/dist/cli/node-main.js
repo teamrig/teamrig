@@ -3,6 +3,8 @@ import { homedir } from 'node:os';
 import { text } from 'node:stream/consumers';
 import { nodeTranscriptSource } from "../budget/discover.js";
 import { HOST_PROGRAM_TIMEOUT_MS, loadHostPorts, loadShippedHosts } from "../composition/host-ports.js";
+import { nodeTerminalPrograms } from "../composition/terminal-kit.js";
+import { resolveKitHome } from "../core/home.js";
 import { nodeFileBytes } from "../core/file-bytes.js";
 import { nodeFiles } from "../core/files.js";
 import { GIT_TREES } from "../delivery/git-tree.js";
@@ -14,6 +16,7 @@ import { idleSleep, realSleep, systemClock } from "../core/lock.js";
 import { NODE_PATH_PROBE } from "../core/path-probe.js";
 import { storeWriter } from "../core/store-program.js";
 import { NODE_STORE_FOLDERS } from "../plugin-store/node-folders.js";
+import { nodeKitTree } from "../kit/kit-tree.js";
 import { chatWebhook } from "../core/webhook.js";
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from "../core/credentials.js";
 import { nodeHttpClient } from "../core/http.js";
@@ -115,6 +118,7 @@ export async function runWithNode(argv, entry) {
         memory: nodeHostMemory(process.platform),
         cpu: nodeHostCpu(),
         run: nodeProgramRunner(CONNECTOR_RUN_TIMEOUT_MS, CONNECTOR_RUN_MAX_BYTES),
+        terminalPrograms: nodeTerminalPrograms(resolveKitHome(process.env, homedir()), process.pid),
         credentials: systemCredentials(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS)),
         keys: {
             keeper: systemCredentialKeeper(process.platform, nodeProgramRunner(CREDENTIAL_TIMEOUT_MS), () => storeWriter({ env: process.env, platform: process.platform, probe: NODE_PATH_PROBE, cwd: process.cwd() })),
@@ -136,6 +140,7 @@ export async function runWithNode(argv, entry) {
             userPath: systemUserPath(process.platform, nodeProgramRunner(USER_PATH_TIMEOUT_MS), nodeFiles(realSleep), homedir()),
             markExecutable: nodeMarkExecutable(process.platform),
         },
+        kitTree: nodeKitTree(),
         mergeGit: GIT_MERGE,
         pulls: GIT_PULLS,
         changeGit: GIT_CHANGES,

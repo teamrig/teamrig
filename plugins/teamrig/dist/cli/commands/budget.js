@@ -5,9 +5,7 @@ import { sessionNameOn } from "../holder-team.js";
 import { wakeReleased } from "../release-wake.js";
 import { formatAddress, splitAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
-import { resolveKitHome } from "../../core/home.js";
 import { PlainLogFile } from "../../core/log-file.js";
-import { resolveTeam } from "../../core/team.js";
 import { formatUtcDay, MS_PER_DAY, parseUtcDay, typedDeadline, typedTimeHint } from "../../core/time.js";
 import { transcriptTitleOf } from "../../budget/attribute.js";
 import { activeBurst, burstFloorOf, withBurst } from "../../budget/burst.js";
@@ -25,13 +23,12 @@ import { budgetSplitOf, crossLiftPlaceOf, dailyBudgetOf, groupPartsOf, liftPlace
 import { fundForDay, isPaused, pausableOf } from "../../budget/pause.js";
 import { nextPeriod, sightOf } from "../../budget/period.js";
 import { burnLines, loopLines, missLines, missMatrixLines, recountLines, sessionLines, sumDays, sumUsage, taskLines, todayLines, weekLine, } from "../../budget/report.js";
-import { datedSnapshot, defaultSnapshotDir, effortOfStatus, formatSnapshot, parseSnapshot, pruneSnapshots, snapshotDirOf, snapshotOfStatus, statusLineText, } from "../../budget/snapshot.js";
-import { foldIntoFiveHourSummary, readFolderFiveHour } from "../../budget/five-hour-summary.js";
+import { effortOfStatus, snapshotDirOf, snapshotOfStatus, statusLineText, } from "../../budget/snapshot.js";
+import { readFolderFiveHour } from "../../budget/five-hour-summary.js";
 import { CURSOR_DAYS_KEPT, DAYS_KEPT, EMPTY_USAGE, MemoryUsageStore, UsageStore } from "../../budget/store.js";
 import { attributedW, taskUseOf } from "../../budget/task-use.js";
 import { readTeamWeek } from "../../budget/team-week-file.js";
 import { teamWeekOf } from "../../budget/team-week.js";
-import { foldIntoWeekSummary } from "../../budget/week-summary.js";
 import { readWeek, wSince } from "../../budget/week.js";
 import { NO_WORK, queuedWork, readTasks, readWork } from "../../budget/work.js";
 import { JsonlMarkLog } from "../../inbox/store.js";
@@ -43,8 +40,9 @@ import { hostNameIfKnown, hostOf, transcriptsFolderIfKnown, transcriptsOf, usage
 import { isUnsupported } from "../../ports/host/index.js";
 import { callerOf } from "../inputs.js";
 import { rushLine, rushSegment } from "../../budget/rush.js";
-import { leadOnly, openKit, openTeamKit, requireConfig, rosterOf, sessionIdOf, teamFolders, teamZone } from "../kit.js";
+import { leadOnly, openTeamKit, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
 import { statusLineMeetingFor } from "../statusline-meeting.js";
+import { saveSnapshot, snapshotDirOfTeam, teamAt } from "./snapshot-save.js";
 import { EXIT, RefusedError } from "../runtime.js";
 import { peerUsageOf } from "../stored-week.js";
 import { loadTree } from "../tree.js";
@@ -509,7 +507,7 @@ export async function cut(args, runtime) {
         throw new RefusedError(decision.reason);
     }
     await new CutLog(runtime.files, kit.paths.cuts).append(decision.cut);
-    runtime.out.stdout(`CUT ${cutText(decision.cut, nameOf(id), zone)}`);
+    runtime.out.stdout(`CUT ${cutText(decision.cut, nameOf(id), zone, config.budget.overAction)}`);
     return EXIT.ok;
 }
 /** A dollar flag: `--add` above 0, `--spent` 0 or more; undefined when it is not given. */
@@ -584,18 +582,13 @@ export async function extra(args, runtime) {
 }
 /** The status line setup of the team the session works in; outside a team, or with its config unreadable, the kit's default folder and display. */
 async function statusLineSetup(runtime, cwd) {
-    const fallback = { snapshotDir: defaultSnapshotDir(resolveKitHome(runtime.env, runtime.userHome)), show: DEFAULT_STATUS_LINE, paceSource: undefined, team: undefined };
-    const found = await resolveTeam(runtime.files, runtime.env, teamFolders(runtime, [cwd === '' ? undefined : cwd, runtime.cwd]));
-    if (found.kind !== 'team') {
-        return fallback;
+    const team = await teamAt(runtime, cwd);
+    const snapshotDir = snapshotDirOfTeam(runtime, team);
+    if (team === undefined) {
+        return { snapshotDir, show: DEFAULT_STATUS_LINE, paceSource: undefined, team: undefined };
     }
-    const kit = await openKit(runtime, found.team);
-    if (kit.load.status !== 'loaded') {
-        return fallback;
-    }
-    const { config } = kit.load;
-    const { budget, statusLine } = config;
-    return { snapshotDir: snapshotDirOf(budget, kit.paths), show: statusLine, paceSource: { budget, teamWeekPath: kit.paths.teamWeek }, team: { kit, config } };
+    const { budget, statusLine } = team.config;
+    return { snapshotDir, show: statusLine, paceSource: { budget, teamWeekPath: team.kit.paths.teamWeek }, team };
 }
 /** The open meeting's mark for the tab of `hostSession`; a failed read is told on stderr, never breaking the status bar. */
 async function meetingMarkOf(runtime, team, hostSession) {
@@ -662,33 +655,6 @@ function rushSegmentOf(runtime, team) {
     return rush === undefined || team === undefined ? undefined : rushSegment(rush, teamZone(team.config, runtime));
 }
 /**
- * Folds the saved snapshot into the folder's summaries (`foldIntoWeekSummary`, `foldIntoFiveHourSummary`); a failure is
- * told on stderr, never breaking the status bar or the other fold.
- */
-async function foldQuietly(runtime, dir, snapshot) {
-    try {
-        await foldIntoWeekSummary(runtime.files, dir, snapshot, runtime.clock.now());
-    }
-    catch (error) {
-        runtime.out.stderr(`teamrig statusline: the week summary was not updated: ${errorMessage(error)}`);
-    }
-    try {
-        await foldIntoFiveHourSummary(runtime.files, dir, snapshot);
-    }
-    catch (error) {
-        runtime.out.stderr(`teamrig statusline: the five-hour summary was not updated: ${errorMessage(error)}`);
-    }
-}
-/** Prunes the snapshot folder's old snapshots and left temporaries (`pruneSnapshots`); a failure is told on stderr, never breaking the status bar. */
-async function pruneQuietly(runtime, dir) {
-    try {
-        await pruneSnapshots(runtime.files, dir, runtime.clock.now());
-    }
-    catch (error) {
-        runtime.out.stderr(`teamrig statusline: old snapshots were not pruned: ${errorMessage(error)}`);
-    }
-}
-/**
  * `statusline`: Claude Code's status line. It saves the status input's reading (the plan's use of the
  * week and its reset) as a snapshot for `budget`, dated by the session's previous snapshot (when the
  * session began to show it, and when it last showed another), folds it into the folder's week summary (the
@@ -727,12 +693,7 @@ export async function statusline(args, runtime) {
     try {
         const setup = await statusLineSetup(runtime, snapshot.cwd);
         shown = setup;
-        const path = join(setup.snapshotDir, `${snapshot.sessionId}.json`);
-        const previous = await runtime.files.read(path);
-        const dated = datedSnapshot(snapshot, previous === undefined ? undefined : parseSnapshot(previous));
-        await runtime.files.write(path, formatSnapshot(dated));
-        await foldQuietly(runtime, setup.snapshotDir, dated);
-        await pruneQuietly(runtime, setup.snapshotDir);
+        const dated = await saveSnapshot(runtime, setup.snapshotDir, snapshot, 'teamrig statusline');
     }
     catch (error) {
         runtime.out.stderr(`teamrig statusline: the snapshot was not saved: ${errorMessage(error)}`);

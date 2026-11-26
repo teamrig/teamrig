@@ -258,7 +258,9 @@ function pastLines(report, teamUsedPct) {
     }
     const stopped = sessions.filter((session) => session.stopped && !isPast(session.w, session.budgetPct, week)).map((session) => session.name);
     if (stopped.length > 0) {
-        lines.push(`Stopped by a leader, held whatever their use: ${stopped.join(', ')}.`);
+        // Under warn a leader's stop holds nothing either (wake/decide.ts), so the line says so.
+        const how = report.overAction === 'warn' ? 'only warned under budget.overAction warn' : 'held whatever their use';
+        lines.push(`Stopped by a leader, ${how}: ${stopped.join(', ')}.`);
     }
     return lines;
 }

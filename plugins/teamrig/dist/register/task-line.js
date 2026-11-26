@@ -1,7 +1,7 @@
 import { isNonNegativeInteger, isRecord } from "../core/guards.js";
 import { parseCard } from "./card.js";
 import { parseDescriptionCut } from "./description-cut.js";
-import { isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase } from "./events.js";
+import { diskPriority, isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase } from "./events.js";
 import { parseAuditPin } from "./hand-step.js";
 import { isTaskStatus, TASK_ID } from "./model.js";
 import { parseReview } from "./review.js";
@@ -17,9 +17,13 @@ import { parseWaits } from "./waits.js";
  */
 /** The `type` of a task line. */
 export const TASK_LINE_TYPE = 'task';
-/** The record a task line holds, under the layout version `v` the snapshot it sits in was written at. */
+/**
+ * The record a task line holds, under the layout version `v` the snapshot it sits in was written at. Its priority is
+ * written as an event line writes it (a blocker as p0 with its mark), since parseTaskLine reads it with the same
+ * field parser (T5541).
+ */
 export function taskLineRecord(v, task) {
-    return { v, type: TASK_LINE_TYPE, task };
+    return { v, type: TASK_LINE_TYPE, task: diskPriority(task) };
 }
 /** True for a record a task line holds, whatever it says of its task. */
 export function isTaskLine(record) {

@@ -3,6 +3,7 @@ import { LeadTree } from "../../config/lead-tree.js";
 import { formatAddress } from "../../core/address.js";
 import { errorMessage } from "../../core/guards.js";
 import { KIT_NAME } from "../../core/home.js";
+import { isHostSessionId } from "../../core/host-session.js";
 import { NAME_RULE } from "../../core/ids.js";
 import { PlainLogFile } from "../../core/log-file.js";
 import { SecretScanner } from "../../core/secrets.js";
@@ -10,7 +11,7 @@ import { priorityText } from "../../register/model.js";
 import { groupIds, parseTo, taskGroupOf, treeLeadsOf } from "../../inbox/groups.js";
 import { formatRead, formatStatus, inboxLineOf, inboxStatus, lineOnClock, postLines, readInbox } from "../../inbox/inbox.js";
 import { lineHash } from "../../inbox/line-hash.js";
-import { boundElsewhereOf, CLAUDE_SESSION_ID, RECEIVER_TABS, tabsOf } from "../../inbox/marks.js";
+import { boundElsewhereOf, RECEIVER_TABS, tabsOf } from "../../inbox/marks.js";
 import { reachOf } from "../../inbox/reach.js";
 import { actorsOf, blockerNamedIn } from "../../inbox/blocker-named.js";
 import { routeReminderOf } from "../../inbox/route.js";
@@ -22,6 +23,7 @@ import { refuseUnlessPerson, runBy, untoldRefusal } from "../agent-run.js";
 import { noPositionals, requiredFlag, UsageError } from "../args.js";
 import { closedByTeamrig, closedTimedWakeLine, closedWakeLine, wakeClosedSession } from "../closed-wake.js";
 import { hookLogOf } from "../hook-logs.js";
+import { wakeHostedSessions } from "../hosted-wake.js";
 import { identityOf, transcriptsFolderIfKnown } from "../host.js";
 import { callerOf, instantOf, sessionRef } from "../inputs.js";
 import { findTeam, openKit, openTeamKit, pastOrPresentIdOf, requireConfig, rosterOf, sessionIdOf, teamZone } from "../kit.js";
@@ -40,7 +42,7 @@ export function inboxDepsOf(runtime, paths) {
 /** The host's session running the command, as its host tells it, so the reminder hook can follow it; null outside one. */
 function hostSessionOf(runtime) {
     const id = identityOf(runtime).sessionId;
-    return id !== undefined && CLAUDE_SESSION_ID.test(id) ? id : null;
+    return id !== undefined && isHostSessionId(id) ? id : null;
 }
 /** Why a tool call's `inbox read` may not make its tab, the `bound` session, the `area` session: `mark` is the variable that says an agent runs it. */
 export function rebindRefusal(bound, area, mark) {
@@ -366,6 +368,7 @@ async function postWakes(runtime, own, recipients, text, now, when) {
             closedLines.push(closedLine);
             continue;
         }
+        failed.push(...(await hostedWakeOf(runtime, recipient, when)));
         const last = await lastWriteOf(runtime.transcripts, projects, tabsOf(await marksOf(recipient), recipient.id, RECEIVER_TABS));
         const measured = await readMeasuredTurns(runtime, recipient.paths, recipient.id, recipient.config.sessions, now);
         const cost = wakeCost(last === undefined ? undefined : wakeAt - last, recipient.config.messages.coldAfterMinutes, wPerPct, measured);
@@ -388,6 +391,18 @@ async function closedWakeLineOf(runtime, recipient, when) {
     const kit = await openKit(runtime, recipient.team);
     const roster = await rosterOf(runtime, kit, recipient.config);
     return closedWakeLine(await wakeClosedSession(runtime, recipient, recipient.config, roster, recipient.id), recipient.label, recipient.id);
+}
+/**
+ * A `--wake now` recipient in a host with no tab mod, such as Codex CLI, takes its ask now through its host's program
+ * (src/cli/hosted-wake.ts), not at the next idle pass; a `--wake-by` ask waits for the pass, as it is not due yet. A
+ * WARN line for a wake that failed.
+ */
+async function hostedWakeOf(runtime, recipient, when) {
+    if (when.kind === 'by') {
+        return [];
+    }
+    const kit = await openKit(runtime, recipient.team);
+    return wakeHostedSessions(runtime, kit, recipient.config, await rosterOf(runtime, kit, recipient.config), [recipient.id]);
 }
 /** The wake `--wake now` or `--wake-by <time>` asks; undefined with neither. A `--wake-by` time not after now is refused. */
 function wakeWhenOf(wake, wakeBy, now, zone) {

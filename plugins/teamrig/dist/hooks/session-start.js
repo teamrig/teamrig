@@ -146,6 +146,9 @@ export function sessionStartContext(input) {
     if (input.worktreeNote !== undefined) {
         notes.push(input.worktreeNote);
     }
+    if (input.treeNote !== undefined) {
+        notes.push(input.treeNote);
+    }
     if (load.newerVersion !== undefined) {
         notes.push(`The team config is version ${load.newerVersion}, from a newer ${KIT_NAME}: these rules are read best-effort.`);
     }

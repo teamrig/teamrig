@@ -18,9 +18,11 @@ import {
   revisionText,
   tasksBody,
   unchangedAnswer,
+  UnknownCursorError,
   type DocumentName,
   type InterfaceVersion,
   type RevisionParts,
+  type TasksPage,
 } from '../../interface/index.ts';
 import { DOCUMENT_CONNECTORS } from '../../composition/document-connectors.ts';
 import type { Roster } from '../../config/roster.ts';
@@ -61,6 +63,8 @@ export interface ReadRequest {
   readonly task: string | undefined;
   /** The range of calendar days `stats` counts over. */
   readonly range: StatsRange;
+  /** The one page of `tasks` asked (`--max-bytes`, `--after`); null serves every task in one answer. */
+  readonly page: TasksPage | null;
   /** The revision the reader already holds of a document, for each it named with `--unless`. */
   readonly unless: ReadonlyMap<DocumentName, string>;
   readonly speaks: InterfaceVersion | undefined;
@@ -147,13 +151,38 @@ export function scopeFlagsOf(args: ParsedArgs, env: Env): ScopeFlags {
 }
 
 /** What one document is asked of: the flags only a run naming that document takes, at their defaults when not given. */
-export type DocumentFlags = Pick<ReadRequest, 'task' | 'range'>;
+export type DocumentFlags = Pick<ReadRequest, 'task' | 'range' | 'page'>;
 
 export function documentFlagsOf(args: ParsedArgs, documents: readonly DocumentName[]): DocumentFlags {
   return {
     task: taskOf(args.flags.get('task'), documents),
     range: statsRangeOf(args.flags.get('range'), documents),
+    page: pageOf(args.flags.get('max-bytes'), args.flags.get('after'), documents),
   };
+}
+
+/**
+ * `--max-bytes` and `--after`: one page of `tasks`, for a reader whose run output is capped. `--max-bytes` asks for
+ * the page and `--after` continues it from the `next` the page before answered, so `--after` alone is refused, and
+ * both are refused on a run that does not ask for `tasks`, as `--task` is without `history`.
+ */
+function pageOf(maxBytes: string | undefined, after: string | undefined, documents: readonly DocumentName[]): TasksPage | null {
+  if (maxBytes === undefined) {
+    if (after !== undefined) {
+      throw new UsageError('--after continues a page of tasks: give it with --max-bytes');
+    }
+    return null;
+  }
+  if (!documents.includes('tasks')) {
+    throw new UsageError('--max-bytes pages tasks, and this run does not ask for tasks');
+  }
+  if (!/^[1-9]\d{0,9}$/.test(maxBytes)) {
+    throw new UsageError(`--max-bytes takes a whole number of bytes, such as 1000000; got "${maxBytes}"`);
+  }
+  if (after !== undefined && !TASK_ID.test(after)) {
+    throw new UsageError(`--after takes a task id, such as T12; got "${after}"`);
+  }
+  return { after: after ?? null, maxBytes: Number(maxBytes) };
 }
 
 /**
@@ -348,6 +377,7 @@ async function scopeOf(request: ReadRequest, runtime: CliRuntime, own: string): 
     sinceHours: request.sinceHours,
     task: request.task ?? null,
     range: request.range,
+    page: request.page,
     warnings: configProblemsOf(kit.paths, load),
   };
 }
@@ -365,7 +395,8 @@ export function revisionOf(parts: RevisionParts): string {
  * `tasks`: the register's working set. It reads the config (the owner's marker, the secret shapes, the sessions),
  * the renames (a session's name), the register's snapshot and its events after it. The archive's segments count by
  * name, so one that went missing and came back changes the revision as it changes the answer: a segment is written
- * once, and a folder's own stamp does not move with its entries on every file system.
+ * once, and a folder's own stamp does not move with its entries on every file system. A page asked is no part of
+ * the revision: every page carries the whole set's, so a reader paging through knows the set moved between pages.
  */
 function tasksSource(scope: ReadScope): DocumentSource {
   const { runtime, kit, config, roster } = scope;
@@ -386,15 +417,23 @@ function tasksSource(scope: ReadScope): DocumentSource {
     },
     async build() {
       const register = await workingSetOf(runtime, kit.paths, layout);
-      const body = tasksBody({
-        tasks: register.tasks.values(),
-        retired: register.retired,
-        owner: scope.owner,
-        shapes: new SecretScanner(config.register.secretPatterns),
-        connectors: DOCUMENT_CONNECTORS,
-        names: { owner: config.register.ownerSource, connectors: DOCUMENT_CONNECTORS, nameOf: (session) => roster.nameOf(session) },
-      });
-      return { body, problems: register.problems };
+      try {
+        const body = tasksBody({
+          tasks: register.tasks.values(),
+          retired: register.retired,
+          owner: scope.owner,
+          shapes: new SecretScanner(config.register.secretPatterns),
+          connectors: DOCUMENT_CONNECTORS,
+          names: { owner: config.register.ownerSource, connectors: DOCUMENT_CONNECTORS, nameOf: (session) => roster.nameOf(session) },
+          page: scope.page,
+        });
+        return { body, problems: register.problems };
+      } catch (error) {
+        if (error instanceof UnknownCursorError) {
+          throw new RefusedError(error.message);
+        }
+        throw error;
+      }
     },
   };
 }

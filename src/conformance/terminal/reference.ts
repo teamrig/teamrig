@@ -4,12 +4,14 @@ import {
   type PaneAnswer,
   type PaneIdentity,
   type PaneState,
+  type ShownPane,
   type TerminalFailure,
   type TerminalPort,
   type TerminalRequest,
+  type TerminalWorld,
   type Unserved,
 } from '../../plugin-api/index.ts';
-import type { ShownPane, TerminalSubject, TerminalWorld } from './terminal.ts';
+import type { TerminalSubject } from './terminal.ts';
 
 /** How a reference terminal departs from one that serves every request honestly. */
 export interface ReferenceOptions {

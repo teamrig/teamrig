@@ -1,9 +1,12 @@
 /**
  * The host's sessions as the core starts, finds and names them. So far the port tells the program's name, who the
  * host says a run is, what a child inherits of a session, which process runs one and what its command line says (a
- * fork, a background job), where a session ran, and the program and arguments that start or resume one; a wake joins
- * it as it moves out of the core.
+ * fork, a background job), where a session ran, the program and arguments that start or resume one, and how the host
+ * hands a running session a prompt from outside its tab (a wake).
  */
+
+import type { ProgramResult } from '../../core/program-runner.ts';
+import type { Unsupported } from './unsupported.ts';
 
 /**
  * What the host tells a run about the session that started it. A host tells it its own way (Claude Code in the
@@ -145,10 +148,67 @@ export interface SessionLauncher {
    * record kept them; undefined when they say nothing of it. The restore reopens only a `tab`.
    */
   sessionPlaceOf(told: Pick<SessionIdentity, 'startedAs' | 'sessionKind'>): SessionPlace | undefined;
+  /**
+   * How the host's own program hands a running session a prompt as its next turn, from outside the session's tab:
+   * unsupported where the host has no such command, as Claude Code, whose tab's mod submits a wake itself.
+   */
+  readonly wake: SessionWake | Unsupported;
+  /**
+   * The restriction the session runs under, as the newest turn the tail of its transcript records tells it, for a
+   * host whose hook input does not say it in full (Codex CLI's rollout `turn_context`, whose hook input names only
+   * whether approval prompts run). Undefined is an answer: the tail records no turn, or one of a shape the reader
+   * does not know. A host whose hook input already tells it leaves the method out. teamrig only reports it, and
+   * never changes the host's setting.
+   */
+  readonly restrictionReading?: (tail: string) => SessionRestriction | undefined;
 }
+
+/**
+ * A wake through the host's own program: teamrig finds `program` on PATH as for a start, runs it with `args`, through
+ * no shell, and reads the run's end with `outcome`.
+ */
+export interface SessionWake {
+  /**
+   * The arguments, to follow the program, that hand the host's session `session` (the id `identity` told) the prompt
+   * `text`. Each is handed to the program as it is.
+   */
+  args(session: string, text: string): readonly string[];
+  /** What the run's end and output say came of the wake. */
+  outcome(result: ProgramResult): WakeDelivery;
+}
+
+/**
+ * What came of a wake: the host took the prompt (`delivered`), runs no session of that id to take it (`no-session`:
+ * the session ended, so a wake waits for its next start), or failed, the reason in words a human reads.
+ */
+export type WakeDelivery =
+  | { readonly kind: 'delivered' }
+  | { readonly kind: 'no-session' }
+  | { readonly kind: 'failed'; readonly reason: string };
 
 /**
  * Where a session of the host ran: a terminal `tab` the person works in, a `background` job of the host, or
  * `elsewhere`, such as a run the host's SDK or its print mode started.
  */
 export type SessionPlace = 'tab' | 'background' | 'elsewhere';
+
+/**
+ * Where a session's commands may write: only where the host lets them read (`read-only`), its workspace too
+ * (`workspace-write`), anywhere, with no sandbox of the host (`none`), or as a sandbox outside the host decides
+ * (`external`).
+ */
+export type SandboxKind = 'read-only' | 'workspace-write' | 'none' | 'external';
+
+/** The restriction a host's session runs under, in the host's own words where teamrig has none. */
+export interface SessionRestriction {
+  /**
+   * When the host asks the person before a step, in its own word, such as Codex CLI's `never`, `on-request`,
+   * `untrusted` or `granular`. `never` means no prompts, never that the sandbox is off: that is `sandbox`.
+   */
+  readonly approval: string;
+  readonly sandbox: SandboxKind;
+  /** Whether its commands reach the network; undefined when the host does not say. */
+  readonly network: boolean | undefined;
+  /** The host's name of the permission profile the restriction comes from; undefined when it names none. */
+  readonly profile: string | undefined;
+}

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { Files } from '../core/files.ts';
-import { isNonNegativeInteger, stringField } from '../core/guards.ts';
+import { isNonNegativeInteger, stringField, type JsonRecord } from '../core/guards.ts';
 import type { TeamPaths } from '../core/home.ts';
 import { hostSessionOf, legacyHostSessionRecord } from '../core/host-session.ts';
 import { parseObject, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
@@ -30,6 +30,12 @@ export interface SessionRecord {
    * the hook kept it (the session's next start adds it).
    */
   readonly transcript?: string;
+  /**
+   * The shipped host adapter the session runs in (its id, as `--host` takes it), so a wake or a restore reaches the
+   * session through that host's own program (T5059). Absent for a session of the default host, and in a record
+   * written before the hook kept it: both read as the default host.
+   */
+  readonly host?: string;
 }
 
 /** A record file's content; undefined when it is damaged or from a format this code does not read. */
@@ -48,11 +54,21 @@ export function parseSessionRecord(text: string): SessionRecord | undefined {
   if (!isNonNegativeInteger(claudePid) || claudePid === 0 || hostSession === undefined || at === undefined || Number.isNaN(Date.parse(at))) {
     return undefined;
   }
-  if (!('transcript' in record)) {
-    return { claudePid, hostSession, at };
+  const transcript = optionalText(record, 'transcript');
+  const host = optionalText(record, 'host');
+  if (transcript === null || host === null) {
+    return undefined;
   }
-  const transcript = stringField(record, 'transcript');
-  return transcript === undefined || transcript === '' ? undefined : { claudePid, hostSession, at, transcript };
+  return { claudePid, hostSession, at, ...(transcript === undefined ? {} : { transcript }), ...(host === undefined ? {} : { host }) };
+}
+
+/** An optional text field: undefined when absent, null when present but no non-empty string, which damages the record. */
+function optionalText(record: JsonRecord, key: string): string | undefined | null {
+  if (!(key in record)) {
+    return undefined;
+  }
+  const value = stringField(record, key);
+  return value === undefined || value === '' ? null : value;
 }
 
 export function formatSessionRecord(record: SessionRecord): string {

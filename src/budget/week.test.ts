@@ -166,6 +166,35 @@ describe('readWeek', () => {
     assert.deepEqual([metered.wPerPct, metered.usedPct], [20, 75]);
   });
 
+  it('pins the rate to budget.weeklyLimitW over the learned one, and prices today and the used W at it (T5468)', () => {
+    const budget: BudgetConfig = { ...DEFAULT_BUDGET, weeklyLimitW: 3_000, pinRateToLimit: true };
+    // Unpinned, the readings price today at 500 W over 15.5 points and the used W at 1,500 W over 58%.
+    const readings = [meterReading(40, 900), meterReading(45, 1_100), meterReading(57, 1_480)];
+    const week = readWeek({ readings, calibration: LEARNED, budget, now: NOW, statusUse: STATUS, period: PERIOD, states: COVERED });
+    assert.deepEqual([week.wPerPct, week.rateFrom, week.todayWPerPct, week.usedWPerPct, week.usedPct], [30, 'limit', 30, 30, 57]);
+    const unpinned = readWeek({ readings, calibration: LEARNED, budget: { ...budget, pinRateToLimit: false }, now: NOW, statusUse: STATUS, period: PERIOD, states: COVERED });
+    assert.deepEqual([unpinned.wPerPct, round(unpinned.todayWPerPct), round(unpinned.usedWPerPct)], [20, round(500 / 15.5), round(1_500 / 58)]);
+  });
+
+  it("reads a home's day against its fixed part of the week from its own W, never the status line's points (T5468)", () => {
+    const budget: BudgetConfig = { ...DEFAULT_BUDGET, weeklyLimitW: 3_000, pinRateToLimit: true, homePartPct: 80 };
+    const week = readWeek({ readings: [], calibration: LEARNED, budget, now: NOW, statusUse: STATUS, period: PERIOD, states: COVERED });
+    // The account is at 57%; this home's 1,500 W are 50% at 30 W per percent, of its 79.6% (80% of the target).
+    assert.equal(week.usedPct, 57, 'the week stays the account\'s');
+    assert.equal(round(week.allowancePct), round((29.6 * 24) / 132));
+    assert.equal(round(week.teamDay?.usedPct), round(500 / 30));
+    assert.equal(round(week.plannedPct), round(((99.5 * 24) / 167) * 0.8));
+    const whole = readWeek({ readings: [], calibration: LEARNED, budget: { ...budget, homePartPct: 100 }, now: NOW, statusUse: STATUS, period: PERIOD, states: COVERED });
+    assert.equal(round(whole.allowancePct), round((42.5 * 24) / 132), 'the whole week is the account\'s day');
+  });
+
+  it("takes the account's use times the home's part while its stores miss the week's start (T5468)", () => {
+    const budget: BudgetConfig = { ...DEFAULT_BUDGET, weeklyLimitW: 3_000, pinRateToLimit: true, homePartPct: 80 };
+    const week = readWeek({ readings: [], calibration: NONE, budget, now: NOW, statusUse: STATUS, period: PERIOD, states: [state({ '2026-10-15': 500 })] });
+    // 57% × 0.8 = 45.6% of the 79.6% this home holds.
+    assert.equal(round(week.allowancePct), round((34 * 24) / 132));
+  });
+
   it("reads today's use from the status line between the meter log's readings, not at the week's rate", () => {
     // 1,000 W at today's start sit between 40% at 900 W and 45% at 1,100 W: 42.5%. The 1,500 W now are 20 W past
     // 57% at 1,480 W: 58% at 20 W per percent. Today is 15.5 points, where its 500 W at the week's rate read 25.
@@ -410,11 +439,16 @@ describe('meteredOf', () => {
 
 describe('rateOf', () => {
   it('takes the learned rate first, then budget.weeklyLimitW, then the estimate', () => {
-    const limit = { weeklyLimitW: 100_000 };
+    const limit = { weeklyLimitW: 100_000, pinRateToLimit: false };
     assert.deepEqual(rateOf(LEARNED, limit, 7), { wPerPct: 20, from: 'learned' });
     assert.deepEqual(rateOf(NONE, limit, 7), { wPerPct: 1_000, from: 'limit' });
-    assert.deepEqual(rateOf(NONE, {}, 7), { wPerPct: 7, from: 'estimate' });
-    assert.equal(rateOf(NONE, {}, undefined), undefined);
+    assert.deepEqual(rateOf(NONE, { pinRateToLimit: false }, 7), { wPerPct: 7, from: 'estimate' });
+    assert.equal(rateOf(NONE, { pinRateToLimit: false }, undefined), undefined);
+  });
+
+  it('takes budget.weeklyLimitW over the learned rate when budget.pinRateToLimit is set (T5468)', () => {
+    assert.deepEqual(rateOf(LEARNED, { weeklyLimitW: 100_000, pinRateToLimit: true }, 7), { wPerPct: 1_000, from: 'limit' });
+    assert.deepEqual(rateOf(LEARNED, { pinRateToLimit: true }, 7), { wPerPct: 20, from: 'learned' });
   });
 });
 

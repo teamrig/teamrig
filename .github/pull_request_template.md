@@ -7,7 +7,7 @@
 <!-- The reason: the bug it fixes or what it makes possible. -->
 
 ## Reach
-<!-- All users (the plugin: a command, a config key, a hook, a plugin skill), teamrig development (dev skills, tools/, CI) or one team, and why: see CONTRIBUTING.md, Where a change lives. -->
+<!-- All users (the plugin: a command, a config key, a hook, a plugin skill), teamrig development (dev skills, tools/, CI) or one team, and why: see CONTRIBUTING.md, Where a change lives. Then which users and tools you weighed (AI CLIs, OSes, trackers, team shapes and sizes) and how it behaves for each: see How it behaves for everyone. -->
 
 ## Changes
 <!-- The parts it touches, one line each. -->

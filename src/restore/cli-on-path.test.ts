@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeExecutables, FakeUserPath } from '../testing/fake-restore.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { CLI_LAUNCHER_SCRIPT, CMD_SHIM_SCRIPT, cliLauncherFolder, cliLauncherPath, cmdShimPath, SH_SHIM_SCRIPT, shShimPath } from './cli-launcher.ts';
+import { CMD_SHIM_SCRIPT, cliLauncherFolder, cliLauncherPath, cmdShimPath, SH_SHIM_SCRIPT, shShimPath } from './cli-launcher.ts';
 import { cliOnPathSteps, nodeMarkExecutable, type CliOnPath } from './cli-on-path.ts';
 
 const KIT = join('/', 'srv', 'pat', '.teamrig');
 const BIN = cliLauncherFolder(KIT);
+/** The running client's kit launcher, as cli-launcher.ts KIT_LAUNCHER_FILE holds it. */
+const LAUNCHER = '// the kit launcher\n';
 
 interface World {
   readonly files: MemoryFiles;
@@ -22,7 +24,7 @@ function worldOf(platform: NodeJS.Platform, files: Readonly<Record<string, strin
   const memory = new MemoryFiles(files);
   const userPath = new FakeUserPath(folders);
   const executables = new FakeExecutables();
-  return { files: memory, userPath, executables, cli: { files: memory, kitHome: KIT, platform, userPath, markExecutable: executables.mark } };
+  return { files: memory, userPath, executables, cli: { files: memory, kitHome: KIT, launcherText: LAUNCHER, platform, userPath, markExecutable: executables.mark } };
 }
 
 async function takeAll(steps: ReadonlyArray<{ readonly act: () => Promise<void> }>): Promise<void> {
@@ -40,7 +42,7 @@ describe('cliOnPathSteps (T5095)', () => {
     assert.deepEqual(steps.map((step) => step.line), [`WRITE ${cliLauncherPath(KIT)}`, `WRITE ${shShimPath(KIT)}`, PATH_LINE]);
     assert.deepEqual([files.get(cliLauncherPath(KIT)), userPath.folders], [undefined, []]);
     await takeAll(steps);
-    assert.deepEqual([files.get(cliLauncherPath(KIT)), files.get(shShimPath(KIT)), files.get(cmdShimPath(KIT))], [CLI_LAUNCHER_SCRIPT, SH_SHIM_SCRIPT, undefined]);
+    assert.deepEqual([files.get(cliLauncherPath(KIT)), files.get(shShimPath(KIT)), files.get(cmdShimPath(KIT))], [LAUNCHER, SH_SHIM_SCRIPT, undefined]);
     assert.deepEqual([userPath.folders, executables.marked], [[BIN], [shShimPath(KIT)]]);
   });
 
@@ -53,7 +55,7 @@ describe('cliOnPathSteps (T5095)', () => {
   });
 
   it('takes no step when every launcher is current and the PATH holds the folder', async () => {
-    const current = { [cliLauncherPath(KIT)]: CLI_LAUNCHER_SCRIPT, [shShimPath(KIT)]: SH_SHIM_SCRIPT };
+    const current = { [cliLauncherPath(KIT)]: LAUNCHER, [shShimPath(KIT)]: SH_SHIM_SCRIPT };
     assert.deepEqual(await cliOnPathSteps(worldOf('linux', current, [BIN]).cli), []);
   });
 
@@ -62,11 +64,11 @@ describe('cliOnPathSteps (T5095)', () => {
     const steps = await cliOnPathSteps(cli);
     assert.deepEqual(steps.map((step) => step.line), [`WRITE ${cliLauncherPath(KIT)}`]);
     await takeAll(steps);
-    assert.equal(files.get(cliLauncherPath(KIT)), CLI_LAUNCHER_SCRIPT);
+    assert.equal(files.get(cliLauncherPath(KIT)), LAUNCHER);
   });
 
   it('adds the folder to a PATH that lacks it though the launchers are current', async () => {
-    const { userPath, cli } = worldOf('linux', { [cliLauncherPath(KIT)]: CLI_LAUNCHER_SCRIPT, [shShimPath(KIT)]: SH_SHIM_SCRIPT });
+    const { userPath, cli } = worldOf('linux', { [cliLauncherPath(KIT)]: LAUNCHER, [shShimPath(KIT)]: SH_SHIM_SCRIPT });
     const steps = await cliOnPathSteps(cli);
     assert.deepEqual(steps.map((step) => step.line), [PATH_LINE]);
     await takeAll(steps);
@@ -74,7 +76,7 @@ describe('cliOnPathSteps (T5095)', () => {
   });
 
   it('fails the PATH step with the error the PATH gave', async () => {
-    const { userPath, cli } = worldOf('linux', { [cliLauncherPath(KIT)]: CLI_LAUNCHER_SCRIPT, [shShimPath(KIT)]: SH_SHIM_SCRIPT });
+    const { userPath, cli } = worldOf('linux', { [cliLauncherPath(KIT)]: LAUNCHER, [shShimPath(KIT)]: SH_SHIM_SCRIPT });
     userPath.failWith = 'registry access denied';
     const [step] = await cliOnPathSteps(cli);
     assert.ok(step !== undefined);

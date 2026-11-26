@@ -97,7 +97,9 @@ A read returns a versioned JSON document built from parsed data, never a file's 
 `plan`, 1.2: `goals`, 1.3: `history`, 1.4: `stats`; 1.5 added a field, `plan`'s `ownerCards`; 1.6 added the
 task fields the pane folded itself, `tasks`' `card`, `descriptionCut`, `sizeBase`, `prepares`, `noGoal`, `startedAt`
 and `waitsAt`; 1.8 added `tasks`' `retired`, the count of finished tasks left to the archive, and each `sessions`
-team's `week`; 1.9: `steps`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
+team's `week`; 1.9: `steps`; 1.10 added paging, `tasks` read a page of `--max-bytes` at a time with `--after`,
+each page's `next` naming the task the next one starts after, so a reader with a capped run reads a large register
+whole); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
 the design above left open is settled this way:
 
 - **One line a document.** Each document asked is one JSON object on one line of stdout, in the order asked, and
@@ -295,8 +297,9 @@ terminal a **host**: a program teamrig runs, speaking a small protocol, in the m
 teamrig ships a conformance kit with the interface:
 
 - **For hosts**: a test runner that drives a host through scripted cases and checks each answer against the protocol.
-- **For tools**: a fake teamrig that serves read documents and events from a scripted team and records the acts it
-  gets.
+- **For tools**: a scripted team that the real `read` and `events` serve, so no fake can drift from them:
+  `teamrig conformance client` writes a script's team into a private kit home and runs its register and inbox steps
+  there on a fixed clock, with every outward port shut. Recording the acts a tool sends comes with the owner's acts.
 - **One kit with the harness's contract suites.** The same suite runs an adapter inside teamrig directly and an outside
   program through the protocol, so a built-in terminal, an in-repo adapter and an outside host are held to the same
   cases.
@@ -306,7 +309,14 @@ teamrig ships a conformance kit with the interface:
   without its proof; an act with a forged identity field refused or ignored; an owner proof that is replayed, expired
   or made for another command or commit refused; a read of `inbox` that leaves the unread state as it was; outside
   text never in an event frame; unknown fields ignored.
-- teamrig's own CI runs the kit against its built-in hosts at each change; a host's CI runs it against the host.
+- teamrig's own CI runs the kit against its built-in hosts at each change; a host's CI runs it against the host, with
+  `teamrig conformance terminal`.
+- **A host's kit mode.** A case reads what the terminal really did and scripts what a person at it does, through six
+  `kit.*` requests a host serves only when started with `TEAMRIG_KIT` set, over a fake terminal of its own. The
+  variable's value names that fake: the host runs once per request, so it keeps each named one between runs, and the
+  kit gives each case a new name. Without the variable every `kit.*` request answers unserved, which the kit checks
+  last, so no caller can fake a production host's pane states. The requests are in
+  [the host guide](../guides/build-a-terminal-host.md#kit-mode-a-fake-terminal-of-your-own).
 
 ## Order of work
 

@@ -28,6 +28,7 @@ import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../r
 import type { RestoreEntry } from '../restore/entry.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../restore/registry.ts';
 import { HOLDING_BUDGET, holdAlpha, meterDearDay, meterToday } from '../testing/budget-hold.ts';
+import { DEFAULT_HOST } from '../composition/adapters.ts';
 import { APP, AUTO_RESTART_TEAM, CliHarness, EVENTS_PATH, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
@@ -36,8 +37,10 @@ import { MemoryTranscripts } from '../testing/memory-transcripts.ts';
 import { steplessHost } from '../testing/shipped-steps.ts';
 import { testPaths } from '../testing/host.ts';
 import { teamConfigOf, teamHomeOf, teamInboxOf } from '../testing/team-tree.ts';
+import { recordingRunner, WAKING_HOST, WAKING_PROGRAM, wakingHosts } from '../testing/waking-host.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
+import type { ProgramRequest } from '../core/program-runner.ts';
 
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
 const OTHER_TAB = '0123abcd-0000-4000-8000-0000000000b9';
@@ -156,7 +159,7 @@ describe('hook wake-check', () => {
     assert.deepEqual(answerOf(await check(kit)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'never twice for one task');
   });
 
-  it('keeps no wake prompt with turnLog off', async () => {
+  it('keeps the wake prompt with turnLog off too, so the last-typed mark a UI follows does not move to it (T5388)', async () => {
     const kit = await teamWithAlphaTab({ ...TEAM, turnLog: { enabled: false } });
     await check(kit);
     await hand(kit, 'Fix the login', 'p1');
@@ -164,7 +167,7 @@ describe('hook wake-check', () => {
     kit.clock.advance(120 * SECOND);
     const woke = answerOf(await check(kit));
     assert.ok(isRecord(woke) && woke['kind'] === 'wake', 'it woke');
-    assert.equal(await keptPrompt(kit), undefined);
+    assert.deepEqual(await keptPrompt(kit), { tab: ALPHA_TAB, text: woke['text'] });
   });
 
   it('never wakes for less urgent work by default, and wakes for p2 when wake.priority is 2, costed cold with no transcript', async () => {
@@ -918,6 +921,107 @@ describe('hook wake-check runs the idle pass', () => {
     kit.clock.advance(MINUTE);
     await passCheck(kit, { processes });
     assert.equal(processes.hidden.length, 2, 'started again once the hold ran out and its step still asks for it');
+  });
+
+  it("wakes a running session of a host with no tab mod through the host's program, once for an urgent line (T5059)", async () => {
+    const kit = await idleTeam();
+    const thread = '0199aaaa-0000-7000-8000-0000000000c2';
+    const sessions = new FakeSessionProcesses();
+    sessions.add({ pid: 4200, parentPid: 1, name: 'codex.exe', commandLine: 'codex' });
+    await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 4200, hostSession: thread, at: new Date(kit.clock.now()).toISOString(), host: WAKING_HOST });
+    const runs: ProgramRequest[] = [];
+    const hostedCheck = (): Promise<CliResult> =>
+      kit.run(['hook', 'wake-check'], {
+        stdin: payload(),
+        env: { PATH: '/bin' },
+        processes: new FakeProcesses(),
+        probe: new FakePathProbe({ folders: [APP], files: [WAKING_PROGRAM] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts(),
+        sessionProcesses: sessions,
+        program: recordingRunner(runs),
+      });
+    await hostedCheck();
+    assert.equal(runs.length, 0, 'nothing posted for bravo yet');
+    await new WakeAsks(kit.files, ASKS).post('bravo', { from: 'lead', text: 'the api is ready', at: kit.clock.now() });
+    kit.clock.advance(2 * MINUTE);
+    await hostedCheck();
+    assert.deepEqual(
+      runs.map(({ program, args }) => [program, ...args.slice(0, 2)]),
+      [[WAKING_PROGRAM, 'wake', thread]],
+    );
+    assert.match(runs[0]?.args[2] ?? '', /lead: the api is ready/);
+    kit.clock.advance(MINUTE);
+    await hostedCheck();
+    assert.equal(runs.length, 1, 'the next pass wakes it no second time for the same line');
+  });
+
+  it('warns on stderr, on a due pass, of a wake the host of a session with no tab mod failed (T5059)', async () => {
+    const kit = await idleTeam();
+    const sessions = new FakeSessionProcesses();
+    sessions.add({ pid: 4200, parentPid: 1, name: 'codex.exe', commandLine: 'codex' });
+    await new SessionRecordStore(kit.files, { sessions: join(STATE, 'sessions') }).write('bravo', { claudePid: 4200, hostSession: '0199aaaa-0000-7000-8000-0000000000c4', at: new Date(kit.clock.now()).toISOString(), host: WAKING_HOST });
+    const hostedCheck = (): Promise<CliResult> =>
+      kit.run(['hook', 'wake-check'], {
+        stdin: payload(),
+        env: { PATH: '/bin' },
+        processes: new FakeProcesses(),
+        probe: new FakePathProbe({ folders: [APP], files: [WAKING_PROGRAM] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts({ kind: 'failed', reason: 'codex queue exited 2' }),
+        sessionProcesses: sessions,
+        program: recordingRunner([]),
+      });
+    await hostedCheck();
+    await new WakeAsks(kit.files, ASKS).post('bravo', { from: 'lead', text: 'the api is ready', at: kit.clock.now() });
+    kit.clock.advance(2 * MINUTE);
+    const result = await hostedCheck();
+    assert.deepEqual(result.stderr, ['WARN teamrig could not wake bravo through its host: codex queue exited 2']);
+  });
+
+  it('runs at the turn end of a session of a host with no tab mod, and never at a Claude Code turn end (T5059)', async () => {
+    // A team whose every session runs in Codex has no tab mod to run the wake check, so no other caller runs its pass.
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST] });
+    const turnEnd = (host: readonly string[]): Promise<CliResult> =>
+      kit.run(['hook', 'stop', ...host], {
+        stdin: payload(),
+        probe: new FakePathProbe({ folders: [APP] }),
+        memory: new FakeHostMemory().lists([], COMMIT),
+        shippedHosts: wakingHosts(),
+      });
+    assert.equal((await turnEnd([])).code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), [], 'a Claude Code tab leaves the pass to its mod');
+    assert.equal((await turnEnd(['--host', WAKING_HOST])).code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), [pass(kit.clock.now(), [AWAY_LEAD, AWAY_ALPHA, CLOSED_BRAVO])]);
+    kit.clock.advance(30 * SECOND);
+    await turnEnd(['--host', WAKING_HOST]);
+    assert.equal((await logLines(kit, PASS_LOG)).length, 1, 'still once a minute across the team');
+  });
+
+  it('says on stderr that the idle pass did not run when it fails at a turn end of a host with no tab mod, and the turn still ends (T5059)', async () => {
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST] });
+    const files = new FaultyFiles(kit.files).fail('write', PASS_STATE, systemError('EACCES', 'EACCES: permission denied'));
+    const result = await kit.run(['hook', 'stop', '--host', WAKING_HOST], {
+      stdin: payload(),
+      files,
+      probe: new FakePathProbe({ folders: [APP] }),
+      memory: new FakeHostMemory().lists([], COMMIT),
+      shippedHosts: wakingHosts(),
+    });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.stderr, ['teamrig hook stop: the idle pass did not run: EACCES: permission denied']);
+  });
+
+  it('runs at no turn end of a host with no tab mod while wake.enabled is false (T5059)', async () => {
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST], wake: { enabled: false } });
+    const result = await kit.run(['hook', 'stop', '--host', WAKING_HOST], {
+      stdin: payload(),
+      probe: new FakePathProbe({ folders: [APP] }),
+      memory: new FakeHostMemory().lists([], COMMIT),
+      shippedHosts: wakingHosts(),
+    });
+    assert.equal(result.code, 0);
+    assert.deepEqual(await logLines(kit, PASS_LOG), []);
   });
 
   it("in mode on starts no reopen for a session a wake's reopen is pending on (#1584)", async () => {

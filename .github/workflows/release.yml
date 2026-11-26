@@ -5,11 +5,12 @@ on:
   # new commits only once per preview slot: on the first push or hourly run that finds its head older than the slot's
   # start, or on a run by hand (tools/release/pull-update.ts, T5186, T5330). An update rewrites its head and starts its
   # ci over, so on a busy main an update on every push kept the release from ever finishing a ci run; the hourly run
-  # moves it on a quiet main, and a push moves it when GitHub drops or delays that run.
+  # moves it on a quiet main, and a push moves it when GitHub drops or delays that run. Its minute, 13, sits away from
+  # :00, :05, :15 and :30, where GitHub drops and delays most scheduled runs (T5449), and before release-slot's 19.
   push:
     branches: [main]
   schedule:
-    - cron: '1 * * * *'
+    - cron: '13 * * * *'
   workflow_dispatch:
     inputs:
       main-as-is:

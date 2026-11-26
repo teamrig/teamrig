@@ -2,7 +2,7 @@ function sessionOf(team, session, launched) {
     const name = team.names.get(session);
     return name === undefined
         ? undefined
-        : { team: team.team, session, name, isLead: session === team.lead, terminal: team.terminal, teamWindow: team.teamWindow, launched, effort: team.efforts.get(session) };
+        : { team: team.team, session, name, isLead: session === team.lead, terminal: team.terminals.get(session) ?? team.terminal, teamWindow: team.teamWindow, launched, effort: team.efforts.get(session) };
 }
 /**
  * The team session an entry belongs to: the team and session its variables name, when that team still has

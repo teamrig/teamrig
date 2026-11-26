@@ -183,6 +183,16 @@ sequenceDiagram
   writes then follow it.
 - `teamrig open <session>` opens a tab in tmux (when run inside tmux), Windows Terminal, macOS Terminal, GNOME
   Terminal, Konsole or x-terminal-emulator, in that order; `open.terminal` in the config or `--terminal` picks one.
+  `headless` runs the session with no window at all, an opt-in for sessions no one watches (`conhost --headless` on
+  Windows, a detached tmux session elsewhere). `launch.<id>.terminal` picks it for one session, so it opens and
+  comes back headless on every reopen (a refresh restart, the idle pass, a meeting, a restore after a reboot) while
+  the rest of the team keeps its tabs. A headless session is woken like one in a tab: its inbox lines and the wake
+  pass reach it through its own hooks. To watch it, off Windows run `tmux attach -t <its session>` (`tmux ls` lists
+  the `teamrig-` ones; detach again with Ctrl+B D); on Windows read its conversation in the pane's Conversations
+  view. `meeting start` and the needs-you band's Focus cannot bring it forward and say how to watch it instead. To
+  take one back into a tab, end it (`teamrig close <session> --yes` once it has been quiet
+  `open.headroom.closeIdleMinutes`, 60 by default; sooner, or a stalled one, with `tmux kill-session -t <its
+  session>`, or on Windows by ending its process), then run `teamrig open <session> --terminal <a tab terminal>`.
   With `open.teamWindow: true`, each tab of the team's sessions opens in a Windows Terminal window of the team's
   own (`teamrig-<team>`), apart from other teams' tabs, a restore after a reboot included.
   It refuses any session but the lead when the host has no room for one more (`hire --yes` then hires it home):

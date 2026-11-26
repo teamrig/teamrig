@@ -48,6 +48,10 @@ export class TreeTasks {
         }
       }
     }
+    const away = this.kitTree.teams.get(team)?.config.team?.detached?.away ?? [];
+    if (away.length > 0) {
+      return Object.assign(tasks, { away: new Set(away) });
+    }
     return tasks.size === 0 ? NO_TASKS_ELSEWHERE : tasks;
   }
 

@@ -50,6 +50,23 @@ settings lack, for you to paste: teamrig never writes your permissions.
 - **Updates:** see [Updating the plugin](docs/how-it-works.md#updating-the-plugin). Open tabs reload it by themselves
   once idle.
 
+### An AI CLI with no teamrig plugin
+
+Any other AI CLI installs teamrig from one file. Download
+[install-teamrig.ts](https://raw.githubusercontent.com/teamrig/teamrig/release/src/install/install-teamrig.ts) and
+run it with the hosts to connect:
+
+```sh
+cd ~
+node Downloads/install-teamrig.ts --host codex --yes
+```
+
+Run it from your home folder, not the downloads folder: on Windows it refuses a folder holding a git program. It clones the release under `~/.teamrig/install/teamrig`
+(a later run clones afresh and keeps the old install beside it, to delete once the new one works), writes each host's
+hooks file through `teamrig setup hooks` once `teamrig kit install` has copied it into the kit home those hooks run from,
+and prints the folder to put on your PATH; it edits no shell profile.
+Without `--yes` it only previews the hooks it would write. It needs git and Node.js 22.18 or later.
+
 ### Requirements
 
 Claude Code 2.1.139 or later and Node.js 22.18 or later. teamrig checks for anything else when you set up a team and
@@ -202,7 +219,8 @@ helper it is. Everything runs on your machine, with no account and no cloud bill
 - **Status line:** `teamrig statusline install` shows the model and its effort level, the folder, the branch, and
   the week's use beside where its pace line stands.
 - **Auto mode knows the team:** `teamrig automode install` adds the team's protected branches, task commands, build
-  wrappers and own-branch rebases to Claude Code's auto-mode facts, so auto mode stops asking about them.
+  wrappers, own-branch rebases and delivery commands to Claude Code's auto-mode facts, so auto mode stops asking
+  about them.
 - **A model per session:** each session starts on its own model and effort, and you're told when one runs on another.
   An `/effort` you type in a session's tab becomes its effort in the config, so a restore or restart keeps it.
 - **GitHub issues in the task list:** `teamrig issue sync` reads your repositories' open issues every 15 minutes, one way
@@ -230,7 +248,7 @@ helper it is. Everything runs on your machine, with no account and no cloud bill
 | [Grow the team](docs/guides/grow-the-team.md) | Setting up a team with a tab per session, session names, hires and their retire, child teams under the lead |
 | [Ship from many sessions](docs/guides/ship-from-many-sessions.md) | The host lock for builds and test runs, merging a branch, deploying it, clean measurements beside deploys |
 | [Make it improve itself](docs/guides/improve-itself.md) | Lessons kept as skills and team rules, the skills scorecard, settling local rules that say otherwise, a lean setup |
-| [Build your own terminal host](docs/guides/build-a-terminal-host.md) | Plugging any terminal or editor in by a small program that speaks the terminal protocol, and the rules it keeps |
+| [Build your own terminal host](docs/guides/build-a-terminal-host.md) | Plugging any terminal or editor in by a small program that speaks the terminal protocol, the rules it keeps, and the kit that tests it |
 | [Everything teamrig does](docs/features.md) | Every feature, and whether it works today |
 | [Every command](docs/commands.md) | Each command with its flags, as `teamrig help` prints it |
 | [Every config key](docs/configuration.md) | Each key of the team config with its type, default and meaning, drawn from the schema |

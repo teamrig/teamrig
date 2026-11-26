@@ -68,6 +68,8 @@ export const CONFIG_LIMITS = {
     maxFailureChars: { min: 500, max: 50_000 },
     stepBackupDays: { min: 1, max: 365 },
     githubRepos: { maxItems: 20, maxLength: 140 },
+    /** Only the ids a detached team's waits named: a team rarely waits on more than a few of another team's tasks. */
+    detachedAway: { maxItems: 1000 },
     issueTypeNames: { maxItems: 5, maxLength: 100 },
     closedDays: { min: 1, max: 365 },
     githubProbeSeconds: { min: 0, max: 3600 },
@@ -78,6 +80,7 @@ export const CONFIG_LIMITS = {
     syncMaxOpen: { min: 0, max: 5000 },
     syncMaxNewPerSync: { min: 0, max: 1000 },
     budgetTargetPct: { min: 1, max: 100 },
+    budgetHomePartPct: { min: 1, max: 100 },
     budgetReservePct: { min: 0, max: 50 },
     /** 0 turns the floor off; past 50 one team's floor would leave a second less than its own (T2215). */
     shareFloorPct: { min: 0, max: 50 },
@@ -128,6 +131,7 @@ export const CONFIG_LIMITS = {
     headroomCloseIdleMinutes: { min: 15, max: 10_080 },
     headroomFloorMb: { min: 0, max: 1_048_576 },
     headroomLoadMinutes: { min: 1, max: 60 },
+    headroomMaxTabs: { min: 1, max: 1_000 },
     idleReopenUnreadLines: { min: 0, max: 1_000 },
     deliveryPollSeconds: { min: 1, max: 600 },
     deliveryWaitMaxMinutes: { min: 0, max: 1440 },

@@ -56,7 +56,7 @@ function walk(lines, header, key) {
     });
 }
 function scan(lines, table, key) {
-    const found = { header: undefined, rootDotted: undefined, firstHeader: undefined, key: undefined, inline: false };
+    const found = { header: undefined, rootDotted: undefined, firstHeader: undefined, key: undefined, inline: undefined };
     const target = `${table}.${key}`;
     walk(lines, (index, current) => {
         found.firstHeader ??= index;
@@ -66,7 +66,7 @@ function scan(lines, table, key) {
         if (path === target)
             found.key ??= { line, indent, written, value };
         if (current === '' && path === table && value.trimStart().startsWith('{'))
-            found.inline = true;
+            found.inline ??= value;
         if (current === '' && path.startsWith(`${table}.`))
             found.rootDotted ??= line;
     });
@@ -105,6 +105,29 @@ export function withBooleanKeyInEach(text, prefix, rest, value) {
     }
     return { ok: true, text: changed ? edited.join(eol) : undefined };
 }
+/**
+ * `text` with `table.key` set to `value` only where a line already sets it otherwise; the key is never added, every
+ * other line is kept. For a file layered over another that holds the root setting, such as a Codex
+ * `<name>.config.toml` profile over `config.toml`: a profile that sets nothing keeps the root's value. An inline
+ * `table = { ... }` that may hold the key is refused, as its keys cannot be edited line by line.
+ */
+export function withBooleanKeyWhereSet(text, table, key, value) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const lines = text.split(/\r?\n/u);
+    const found = scan(lines, table, key);
+    const word = String(value);
+    if (found.key !== undefined) {
+        if (reads(found.key.value, word))
+            return { ok: true, text: undefined };
+        const edited = [...lines];
+        edited[found.key.line] = `${found.key.indent}${found.key.written} = ${word}`;
+        return { ok: true, text: edited.join(eol) };
+    }
+    if (found.inline?.includes(key) === true) {
+        return { ok: false, problem: `it sets ${table} as an inline table that may hold ${key}, which teamrig cannot edit line by line: write it as a [${table}] table, or set ${key} = ${word} in it by hand` };
+    }
+    return { ok: true, text: undefined };
+}
 /** `text` with `table.key` set to `value`, every other line kept. */
 export function withBooleanKey(text, table, key, value) {
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
@@ -118,7 +141,7 @@ export function withBooleanKey(text, table, key, value) {
         edited[found.key.line] = `${found.key.indent}${found.key.written} = ${word}`;
         return { ok: true, text: edited.join(eol) };
     }
-    if (found.inline) {
+    if (found.inline !== undefined) {
         return { ok: false, problem: `it sets ${table} as an inline table, which teamrig cannot add ${key} to line by line: set ${table}.${key} = ${word} in it by hand` };
     }
     const edited = [...lines];

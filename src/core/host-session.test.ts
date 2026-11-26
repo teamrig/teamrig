@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { HOST_SESSION_FIELD, hostSessionOf, hostSessionValue, legacyHostSessionRecord } from './host-session.ts';
+import { HOST_SESSION_FIELD, hostSessionOf, hostSessionValue, isHostSessionId, legacyHostSessionRecord } from './host-session.ts';
 
 const TAB = '0a1b2c3d-1111-2222-3333-444455556666';
 const OTHER_TAB = '9f8e7d6c-1111-2222-3333-444455556666';
@@ -27,6 +27,26 @@ describe('hostSessionOf', () => {
     assert.equal(hostSessionOf({}, 'claudeSession'), undefined);
     assert.equal(hostSessionOf({ hostSession: 7 }, 'claudeSession'), undefined);
     assert.equal(hostSessionOf({ claudeSession: null }, 'claudeSession'), undefined);
+  });
+});
+
+describe('isHostSessionId', () => {
+  it('takes a UUID, as Claude Code and Codex give, and an id of another host that is no UUID', () => {
+    assert.equal(isHostSessionId(TAB), true);
+    assert.equal(isHostSessionId('session-1'), true);
+    assert.equal(isHostSessionId('A_b-9'), true);
+    assert.equal(isHostSessionId('a'.repeat(128)), true);
+  });
+
+  it('refuses an id unsafe as a file name or an argument', () => {
+    for (const unsafe of ['', '-resume', '_x', '../x', 'a/b', 'a\\b', 'a.b', 'a b', 'a\nb', 'a'.repeat(129), 'nul', 'CON', 'com1', 'Lpt9']) {
+      assert.equal(isHostSessionId(unsafe), false, JSON.stringify(unsafe));
+    }
+  });
+
+  it('takes a name that only starts like a device name', () => {
+    assert.equal(isHostSessionId('console'), true);
+    assert.equal(isHostSessionId('com10'), true);
   });
 });
 

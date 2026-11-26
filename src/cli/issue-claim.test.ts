@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
-import { isCommentsRead, isIssueAssign, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueUnassign, isLabelAdd, isLabelCreate, isLabelRemove, isLinkAdd } from '../adapters/connectors/github/gh.ts';
+import { type GhCall, isCommentsRead, isIssueAssign, isIssueBodyEdit, isIssueClose, isIssueComment, isIssueCreate, isIssueUnassign, isLabelAdd, isLabelCreate, isLabelRemove, isLinkAdd } from '../adapters/connectors/github/gh.ts';
 import { CLAIM_DAYS, CLAIM_READS, CLAIMS_PER_DAY, formatClaims, parseClaims } from '../issues/claim.ts';
 import { minuteOf, pushHourText } from '../issues/push-hour.ts';
 import { PUSH_WRITES_PER_HOUR } from '../issues/status-push.ts';
@@ -24,10 +24,16 @@ function team(statusPush: boolean, probeSeconds = 300): JsonRecord {
   return { ...TEAM, github: { repos: [REPO], owners: { octocat: 'bravo' }, statusPush, probeSeconds } };
 }
 
-/** The GitHub writes a run made: assigns, unassigns, comments and label writes, as command lines. */
-function writes(gh: FakeGh, kind: (args: readonly string[]) => boolean): string[] {
-  return gh.ran.filter((request) => kind(request.args)).map((request) => request.args.join(' '));
+/** The GitHub runs of one kind a run made, as command lines, each followed by the stdin it sent, if any. */
+function writes(gh: FakeGh, kind: (call: GhCall) => boolean): string[] {
+  return gh.ran.filter(kind).map((request) => (request.input === undefined ? request.args.join(' ') : `${request.args.join(' ')} ${request.input}`));
 }
+
+/** An args-only checker, taken as one over a whole call. */
+const onArgs =
+  (check: (args: readonly string[]) => boolean) =>
+  (call: GhCall): boolean =>
+    check(call.args);
 
 async function autoSync(kit: CliHarness, gh: FakeGh): Promise<readonly string[]> {
   const result = await kit.run(['issue', 'sync', '--auto'], { gh });
@@ -42,11 +48,22 @@ async function leaveInHour(kit: CliHarness, left: number): Promise<void> {
   await kit.files.write(PUSH_HOUR, pushHourText([{ minute: minuteOf(kit.clock.now()), writes: PUSH_WRITES_PER_HOUR - left }]));
 }
 
-const WRITES = [isIssueAssign, isIssueUnassign, isIssueComment, isLabelAdd, isLabelRemove, isLabelCreate, isIssueClose, isIssueBodyEdit, isIssueCreate, isLinkAdd];
+const WRITES: ReadonlyArray<(call: GhCall) => boolean> = [
+  onArgs(isIssueAssign),
+  onArgs(isIssueUnassign),
+  isIssueComment,
+  onArgs(isLabelAdd),
+  onArgs(isLabelRemove),
+  onArgs(isLabelCreate),
+  onArgs(isIssueClose),
+  isIssueBodyEdit,
+  isIssueCreate,
+  onArgs(isLinkAdd),
+];
 
 /** Whether a request writes to GitHub. */
-function isWrite(args: readonly string[]): boolean {
-  return WRITES.some((kind) => kind(args));
+function isWrite(call: GhCall): boolean {
+  return WRITES.some((kind) => kind(call));
 }
 
 describe('claims in the automatic sync (T3021)', () => {
@@ -59,16 +76,16 @@ describe('claims in the automatic sync (T3021)', () => {
     kit.clock.advance(HOUR);
     const first = free([old]);
     await autoSync(kit, first);
-    assert.deepEqual(writes(first, isIssueAssign), [], 'a comment from before the first pass claims nothing');
+    assert.deepEqual(writes(first, onArgs(isIssueAssign)), [], 'a comment from before the first pass claims nothing');
     assert.deepEqual(parseClaims(kit.files.get(CLAIMS) ?? '').checked.get(REPO), kit.clock.now());
 
     kit.clock.advance(HOUR);
     const second = free([old, commentNode(at(kit), 'NONE', 'User', { login: 'bob', body: "I'll take this one" })]);
     const out = await autoSync(kit, second);
-    assert.deepEqual(writes(second, isIssueAssign), [`api repos/${REPO}/issues/8/assignees -X POST -f assignees[]=bob`]);
+    assert.deepEqual(writes(second, onArgs(isIssueAssign)), [`api repos/${REPO}/issues/8/assignees -X POST -f assignees[]=bob`]);
     assert.ok(out.includes(`CLAIMED ${REPO}#8: bob took it by a comment and is assigned for ${CLAIM_DAYS} days, or until a linked pull request lands`), out.join('\n'));
     assert.ok(out.includes(`LABELED ${REPO}#8: "status:claimed"`) && out.includes(`UNLABELED ${REPO}#8: "status:open"`), out.join('\n'));
-    assert.deepEqual(writes(second, isIssueComment), [`api repos/${REPO}/issues/8/comments -X POST -f body=${withStampFooter(CLAIM_REPLY)}`]);
+    assert.deepEqual(writes(second, isIssueComment), [`api repos/${REPO}/issues/8/comments -X POST --input - ${JSON.stringify({ body: withStampFooter(CLAIM_REPLY) })}`]);
     assert.deepEqual(
       parseClaims(kit.files.get(CLAIMS) ?? '').claims.map(({ number, login }) => ({ number, login })),
       [{ number: 8, login: 'bob' }],
@@ -86,9 +103,9 @@ describe('claims in the automatic sync (T3021)', () => {
     await leaveInHour(kit, left);
     const gh = free([commentNode(at(kit), 'NONE', 'User', { login: 'bob', body: '/take' })]);
     const out = await autoSync(kit, gh);
-    assert.deepEqual(writes(gh, isIssueAssign), [`api repos/${REPO}/issues/8/assignees -X POST -f assignees[]=bob`], out.join('\n'));
+    assert.deepEqual(writes(gh, onArgs(isIssueAssign)), [`api repos/${REPO}/issues/8/assignees -X POST -f assignees[]=bob`], out.join('\n'));
     assert.ok(out.includes(`LABELED ${REPO}#8: "status:claimed"`) && out.includes(`UNLABELED ${REPO}#8: "status:open"`), out.join('\n'));
-    assert.ok(gh.ran.filter((request) => isWrite(request.args)).length <= claimBudget(left), 'the run sends no more than one claim');
+    assert.ok(gh.ran.filter((request) => isWrite(request)).length <= claimBudget(left), 'the run sends no more than one claim');
   });
 
   it('gives the claims one whole claim when the run budget is smaller, and nothing when there is none', () => {
@@ -109,10 +126,10 @@ describe('claims in the automatic sync (T3021)', () => {
       ])
       .hasLabels(REPO, ['status:open', 'status:claimed']);
     const out = await autoSync(kit, gh);
-    assert.deepEqual(writes(gh, isIssueUnassign), [`api repos/${REPO}/issues/8/assignees -X DELETE -f assignees[]=ada`]);
+    assert.deepEqual(writes(gh, onArgs(isIssueUnassign)), [`api repos/${REPO}/issues/8/assignees -X DELETE -f assignees[]=ada`]);
     assert.ok(out.includes(`RELEASED ${REPO}#8: ada's claim ran ${CLAIM_DAYS} days with no linked pull request; the assignee is taken off`), out.join('\n'));
     assert.ok(out.includes(`LABELED ${REPO}#8: "status:open"`) && out.includes(`UNLABELED ${REPO}#8: "status:claimed"`), out.join('\n'));
-    assert.ok(writes(gh, isIssueComment).includes(`api repos/${REPO}/issues/8/comments -X POST -f body=${withStampFooter(RELEASE_REPLY)}`));
+    assert.ok(writes(gh, isIssueComment).includes(`api repos/${REPO}/issues/8/comments -X POST --input - ${JSON.stringify({ body: withStampFooter(RELEASE_REPLY) })}`));
     assert.deepEqual(
       parseClaims(kit.files.get(CLAIMS) ?? '').claims.map(({ number, login }) => ({ number, login })),
       [{ number: 9, login: 'cy' }],
@@ -139,7 +156,7 @@ describe('claims in the automatic sync (T3021)', () => {
     kit.clock.advance(HOUR);
     const gh = new FakeGh().holds(REPO, [ghIssue(REPO, 8, { title: 'Add search', authorAssociation: 'MEMBER', comments: [commentNode(at(kit), 'NONE', 'User', { login: 'bob', body: '/take' })] })]);
     await autoSync(kit, gh);
-    assert.deepEqual(writes(gh, isIssueAssign), []);
+    assert.deepEqual(writes(gh, onArgs(isIssueAssign)), []);
     assert.equal(kit.files.get(CLAIMS), undefined);
   });
 
@@ -170,7 +187,7 @@ describe('claims in the automatic sync (T3021)', () => {
 
     const first = free(0);
     const out = await autoSync(kit, first);
-    assert.equal(writes(first, isIssueAssign).length, fits);
+    assert.equal(writes(first, onArgs(isIssueAssign)).length, fits);
     assert.ok(out.includes(`HELD ${REPO}#${String(fits + 1)}: user${String(fits)}'s claim waits for the next run, as this run's ${String(budget)} write(s) are spent`), out.join('\n'));
     assert.ok(writes(first, isWrite).length <= budget, writes(first, isWrite).join('\n'));
 
@@ -178,7 +195,7 @@ describe('claims in the automatic sync (T3021)', () => {
     kit.clock.advance(HOUR + MINUTE);
     const second = free(fits);
     await autoSync(kit, second);
-    assert.deepEqual(writes(second, isIssueAssign), [`api repos/${REPO}/issues/${String(fits + 1)}/assignees -X POST -f assignees[]=user${String(fits)}`]);
+    assert.deepEqual(writes(second, onArgs(isIssueAssign)), [`api repos/${REPO}/issues/${String(fits + 1)}/assignees -X POST -f assignees[]=user${String(fits)}`]);
   });
 
   it('makes no claim on an outsider issue no one accepted', async () => {
@@ -187,7 +204,7 @@ describe('claims in the automatic sync (T3021)', () => {
     kit.clock.advance(HOUR);
     const gh = new FakeGh().holds(REPO, [ghIssue(REPO, 8, { title: 'Add search', authorAssociation: 'NONE', comments: [commentNode(at(kit), 'NONE', 'User', { login: 'bob', body: '/take' })] })]);
     await autoSync(kit, gh);
-    assert.deepEqual(writes(gh, isIssueAssign), []);
+    assert.deepEqual(writes(gh, onArgs(isIssueAssign)), []);
     assert.deepEqual(parseClaims(kit.files.get(CLAIMS) ?? '').claims, []);
   });
 
@@ -207,15 +224,15 @@ describe('claims in the automatic sync (T3021)', () => {
 
     const first = new FakeGh().holds(REPO, issues);
     const out = await autoSync(kit, first);
-    assert.equal(writes(first, isCommentsRead).length, CLAIM_READS);
-    assert.deepEqual(writes(first, isIssueAssign), []);
+    assert.equal(writes(first, onArgs(isCommentsRead)).length, CLAIM_READS);
+    assert.deepEqual(writes(first, onArgs(isIssueAssign)), []);
     assert.ok(out.includes(`HELD ${REPO}: 2 issue(s) with new comments wait for the next run, as a run reads at most ${String(CLAIM_READS)} for claims`), out.join('\n'));
 
     kit.clock.advance(HOUR);
     const second = new FakeGh().holds(REPO, issues);
     await autoSync(kit, second);
-    assert.deepEqual(writes(second, isCommentsRead), [CLAIM_READS + 1, CLAIM_READS + 2].map((number) => `api repos/${REPO}/issues/${String(number)}/comments -X GET -f since=${takes} -f per_page=30`));
-    assert.equal(writes(second, isIssueAssign).length, 2);
+    assert.deepEqual(writes(second, onArgs(isCommentsRead)), [CLAIM_READS + 1, CLAIM_READS + 2].map((number) => `api repos/${REPO}/issues/${String(number)}/comments -X GET -f since=${takes} -f per_page=30`));
+    assert.equal(writes(second, onArgs(isIssueAssign)).length, 2);
   });
 
   it('reads again on the next run the comments of an issue whose read failed', async () => {
@@ -225,7 +242,7 @@ describe('claims in the automatic sync (T3021)', () => {
     const issues = [ghIssue(REPO, 7, { title: 'Add search', authorAssociation: 'MEMBER', comments: [commentNode(at(kit), 'NONE', 'User', { login: 'bob', body: '/take' })] })];
     const first = new FakeGh().holds(REPO, issues).answersCommentsRead({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: HTTP 502\n' });
     const out = await autoSync(kit, first);
-    assert.deepEqual(writes(first, isIssueAssign), []);
+    assert.deepEqual(writes(first, onArgs(isIssueAssign)), []);
     assert.ok(
       out.some((line) => line.startsWith(`FAILED ${REPO}#7: reading its new comments for a claim: `) && line.endsWith('; read again on the next run')),
       out.join('\n'),
@@ -234,6 +251,6 @@ describe('claims in the automatic sync (T3021)', () => {
     kit.clock.advance(HOUR);
     const second = new FakeGh().holds(REPO, issues);
     await autoSync(kit, second);
-    assert.deepEqual(writes(second, isIssueAssign), [`api repos/${REPO}/issues/7/assignees -X POST -f assignees[]=bob`]);
+    assert.deepEqual(writes(second, onArgs(isIssueAssign)), [`api repos/${REPO}/issues/7/assignees -X POST -f assignees[]=bob`]);
   });
 });

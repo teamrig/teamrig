@@ -169,6 +169,8 @@ export const DEFAULT_COMMITS = {
  */
 export const DEFAULT_BUDGET = {
     enabled: false,
+    pinRateToLimit: false,
+    homePartPct: 100,
     subagentWeight: 1,
     modelWeights: [],
     resets: [],

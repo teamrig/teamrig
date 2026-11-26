@@ -75,6 +75,7 @@ const CONTEXT: BurstContext = {
   profile: EVEN,
   sessionsTodayPct: 0,
   teams: ALONE,
+  homePartPct: 100,
   ownerAsk: 'the owner',
 };
 const DUE = Date.parse('2030-01-08T20:00:00Z');
@@ -117,7 +118,7 @@ function end(burstAt: number, at: number): BurstEnd {
 }
 
 describe('surplusOf', () => {
-  const input = { window: WINDOW, now: NOW, usedPct: 60, targetPct: 99.5, config: DEFAULT_BURST, teams: ALONE };
+  const input = { window: WINDOW, now: NOW, usedPct: 60, targetPct: 99.5, config: DEFAULT_BURST, teams: ALONE, homePartPct: 100 };
 
   it("projects the week's mean rate so far to the pace end and measures what the target leaves", () => {
     const surplus = surplusOf(input);
@@ -165,6 +166,16 @@ describe('surplusOf', () => {
     assert.ok(tight?.accountSparePct !== undefined && tight.accountSparePct > 5 && tight.sparePct < 5);
     assert.equal(tight.worth, false);
     assert.equal(surplusOf({ ...input, usedPct: 84 })?.worth, true);
+  });
+
+  it("spares a home only its fixed part of the account's spare, and names the account's (T5468)", () => {
+    const alone = surplusOf(input);
+    const home = surplusOf({ ...input, homePartPct: 40 });
+    assert.ok(alone !== undefined && home !== undefined);
+    assert.equal(home.accountSparePct, alone.sparePct);
+    assert.ok(Math.abs(home.sparePct - alone.sparePct * 0.4) < 1e-9);
+    const shared = surplusOf({ ...input, homePartPct: 40, teams: SHARED });
+    assert.ok(shared !== undefined && Math.abs(shared.sparePct - alone.sparePct * 0.2) < 1e-9, 'half of the home\'s part');
   });
 });
 

@@ -1,13 +1,22 @@
 import { terminalPortOf } from '../composition/terminal-ports.ts';
 import type { TerminalChoice } from '../config/types.ts';
+import type { TerminalDeclaration } from '../plugin-api/index.ts';
 import { candidatesOf, type OpenTabDeps } from './open-tab.ts';
 import type { Terminal } from './terminals.ts';
 
 /**
  * Bringing a running session's tab to the front (T1358 `meeting start`). The tab is the one titled with the session
  * (`[<team>] <name>`, sessionDisplay), which is the pane id the built-in terminals answer `open` with. Each terminal's
- * port does the focus; a terminal whose port serves no focus cannot select a tab by its title.
+ * port does the focus. A terminal whose port serves no focus is named with its own `pane.focus` notice, which says why
+ * (and, for headless, how to watch the session instead); one whose row claims a focus it did not serve is only named
+ * among those that cannot select a tab by its title.
  */
+
+/** What a terminal's own declaration says in place of a focus; undefined for one whose row claims it. */
+function unservedNotice(declaration: TerminalDeclaration): string | undefined {
+  const focus = declaration.manifest['pane.focus'];
+  return focus.kind === 'unsupported' ? focus.notice : undefined;
+}
 
 /** The tab brought to the front, the tab selected behind another app's window, or none, with why. */
 export type FocusOutcome =
@@ -35,9 +44,15 @@ export async function focusTab(deps: OpenTabDeps, choice: TerminalChoice, title:
       case 'gone':
         reasons.push(`${terminal} has no tab titled ${title}`);
         break;
-      case 'unserved':
-        titleless.push(terminal);
+      case 'unserved': {
+        const notice = unservedNotice(reach.declaration);
+        if (notice === undefined) {
+          titleless.push(terminal);
+        } else {
+          reasons.push(`${terminal}: ${notice}`);
+        }
         break;
+      }
       case 'failed':
         reasons.push(`${terminal}: ${answer.why}`);
         break;

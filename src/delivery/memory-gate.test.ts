@@ -81,6 +81,15 @@ describe('MemoryGate.look', () => {
     assert.equal((await gate.look(2048, 0)).kind, 'room', '27392 + 2048 = 29440 MB is 92% of 32000 MB exactly');
   });
 
+  it('judges the commit charge against the limit the page files can grow to, and waits at that grown limit (T5622)', async () => {
+    const memory = new CountingMemory().lists([], { usedMb: 101_908, limitMb: 114_053, reachMb: 130_437 });
+    memory.free = 30_000;
+    const { gate } = gateOf(memory);
+    assert.deepEqual(await gate.look(7000, 0), { kind: 'room', freeMb: 30_000 }, '108908 MB passes 92% of the limit now but not of 130437 MB');
+    memory.lists([], { usedMb: 113_003, limitMb: 114_053, reachMb: 130_437 });
+    assert.deepEqual(await gate.look(7000, 0), { kind: 'commit', usedMb: 113_003, limitMb: 114_053, reachMb: 130_437, maxPct: 92, reserveMb: 7000 }, '120003 MB passes 92% of 130437 MB (120002)');
+  });
+
   it('checks free memory only on a host that gives no commit charge', async () => {
     const memory = new CountingMemory();
     memory.free = 16000;
@@ -142,6 +151,13 @@ describe('shortText', () => {
     assert.equal(
       shortText({ kind: 'commit', usedMb: 30000, limitMb: 32000, maxPct: 92, reserveMb: 2048 }, 0),
       'host commit charge: 30000 of 32000 MB, 2048 MB more for this step would pass 92% (open.headroom.commitMaxPct)',
+    );
+  });
+
+  it('names the limit the page files can grow to beside the limit now (T5622)', () => {
+    assert.equal(
+      shortText({ kind: 'commit', usedMb: 113_000, limitMb: 114_053, reachMb: 130_437, maxPct: 92, reserveMb: 7000 }, 0),
+      'host commit charge: 113000 of 114053 MB (130437 MB the page files can grow to), 7000 MB more for this step would pass 92% (open.headroom.commitMaxPct)',
     );
   });
 

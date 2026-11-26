@@ -20,6 +20,7 @@ import { usageMeter } from "./usage.js";
  */
 /** Claude Code runs teamrig's hooks from the installed plugin itself, so no hooks file of the person's needs them. */
 const PLUGIN_HOOKS = unsupported("Claude Code runs teamrig's hooks from its plugin");
+const PLUGIN_SKILLS = unsupported("Claude Code loads teamrig's skills from its plugin");
 export default defineHost({
     declaration,
     create: (deps) => {
@@ -38,6 +39,7 @@ export default defineHost({
             models: hostModels,
             steps: hostSteps,
             userHooks: PLUGIN_HOOKS,
+            pluginSkills: PLUGIN_SKILLS,
         };
     },
 });

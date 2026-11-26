@@ -377,8 +377,8 @@ export class Register {
    * The owner's answer to a card from the pane (T4078): a Decided naming the option chosen, or yes or no, written as in
    * ownerNote.
    */
-  ownerDecide(id: string, answer: OwnerAnswer): Promise<Verdict<WriteResult>> {
-    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.ownerEvent(task, this.deps.policy.ownerDecide(task, answer)))));
+  ownerDecide(id: string, answer: OwnerAnswer, read?: string): Promise<Verdict<WriteResult>> {
+    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.ownerEvent(task, this.deps.policy.ownerDecide(task, answer, read)))));
   }
 
   /** The owner's Later from the pane (T4078): the card put off to `until` (stored form), written as in ownerNote. */

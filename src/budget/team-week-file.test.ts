@@ -30,6 +30,7 @@ function input(extra: Partial<TeamWeekInput> = {}): TeamWeekInput {
     usedPct: 30,
     wPerPct: 10_000_000,
     targetPct: 99.5,
+    homePartPct: 100,
     states: [used({ '2030-01-08': 50_000_000 }), used({ '2030-01-07': 100_000_000 })],
     teams: { split: splitOf('app', ['lead', 'alpha', 'bravo']), others: [] },
     limits: [],
@@ -61,6 +62,12 @@ describe('teamWeekSummaryOf', () => {
     const summary = teamWeekSummaryOf(input({ targetPct: 98, teams: { split: splitOf('app', ['lead', 'alpha', 'bravo']), others: [splitOf('web', ['lead'])] } }));
     assert.equal(summary?.usedPct, 15);
     assert.equal(summary?.plannedPct, 15 + 51, "three sessions of four on the account: three quarters of the 68% left");
+  });
+
+  it("plans the team only this home's fixed part of what the account has left (T5468)", () => {
+    const summary = teamWeekSummaryOf(input({ targetPct: 98, homePartPct: 50 }));
+    assert.equal(summary?.usedPct, 15);
+    assert.equal(summary?.plannedPct, 15 + 34, "half of the 68% left");
   });
 
   it('counts no W from before the week began', () => {

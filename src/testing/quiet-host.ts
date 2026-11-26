@@ -24,6 +24,7 @@ export type HostWorld = Pick<
   | 'transcripts'
   | 'requirements'
   | 'restore'
+  | 'kitTree'
   | 'idleSleep'
 >;
 
@@ -53,6 +54,13 @@ export function quietHost(stdin: string): HostWorld {
     transcripts: new MemoryTranscripts(),
     requirements: { problems: async () => [] },
     restore: quietRestore(),
+    // The quiet client at /opt/teamrig has no integrity list, so a session start never reaches a copy.
+    kitTree: {
+      copyFolder: async () => {
+        throw new Error('a quiet run copies no folder');
+      },
+      removeFolder: async () => undefined,
+    },
     idleSleep: () => new Promise<void>(() => undefined),
   };
 }

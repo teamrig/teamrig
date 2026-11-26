@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { unsupported } from "../../plugin-api/index.js";
 import { defineContract } from "../contract.js";
 /** Every part told, each a value no liar's fixed answer holds. */
 const TOLD = { projectDir: '/work/app', startedAs: 'terminal', sessionKind: 'background', sessionId: 'session-7f3a', forcedEffort: 'high' };
@@ -82,12 +83,15 @@ const CASES = [
     },
     {
         id: 'launcher.launch-args',
-        title: 'starts a session on the model, at the effort, resumed and prompted as asked, and passes nothing it was not asked',
+        title: 'starts a session on the model, at the effort, resumed, on the settings file and prompted as asked, and passes nothing it was not asked',
         features: ['sessions.open', 'sessions.resume'],
         run: ({ port }) => {
             const { launchArgs } = port({});
             const full = launchArgs(FULL);
-            for (const part of ['model', 'effort', 'resume']) {
+            // The settings file carries the session's skill listing ([skills.otherAreas]): a host that dropped it would
+            // start every session seeing every area's skills, so the kit holds each host to it rather than trusting its
+            // launchArgs (T4980).
+            for (const part of ['model', 'effort', 'resume', 'settingsFile']) {
                 assert.ok(full.includes(FULL[part] ?? ''), `the ${part} ${FULL[part]} is not one argument of ${JSON.stringify(full)}`);
             }
             assert.ok(full.includes(FULL.prompt ?? ''), 'the prompt is not handed whole, as one argument');
@@ -160,11 +164,13 @@ const WORLD = {
 };
 const VARIABLES = { marks: [], identity: [] };
 const CHILD_ENV = { session: [], parked: [], login: [] };
+/** The liars claim no wake: the contract holds what a launcher tells of a run, and a wake is checked by its own specs. */
+const NO_WAKE = unsupported('the liar wakes no session');
 /** A liar that claims the port and does nothing: no name, no argument, no part of who a run is, no process its own. */
 export function nothingLauncher() {
     return {
         world: WORLD,
-        port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined }),
+        port: () => ({ programName: '', program: '', launchArgs: () => [], variables: VARIABLES, childEnv: CHILD_ENV, identity: () => NONE, isSessionProcess: () => false, isForkOf: () => false, backgroundJobSession: () => undefined, sessionPlaceOf: () => undefined, wake: NO_WAKE }),
     };
 }
 /** A liar that says yes to all: one fixed run whatever the host tells, one fixed start, every process its own. */
@@ -183,6 +189,7 @@ export function yesLauncher() {
             isForkOf: () => true,
             backgroundJobSession: () => 'yes',
             sessionPlaceOf: () => 'tab',
+            wake: NO_WAKE,
         }),
     };
 }

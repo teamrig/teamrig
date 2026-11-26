@@ -121,7 +121,35 @@ export interface TasksBody {
    * owner asked: they are in no `tasks` row, so a count of done tasks from the rows leaves them out. 0 when none is.
    */
   readonly retired: number;
+  /**
+   * Since 1.10: on a paged read, the id of the last task this page serves while more remain, which the next page is
+   * asked after (`--after`); null on the last page and on a read that asks for no page.
+   */
+  readonly next: string | null;
   readonly cuts: readonly Cut[];
+}
+
+/**
+ * One page of the `tasks` document: the tasks served after `after` (from the first when null), as many as fit in
+ * `maxBytes` of their JSON, and always at least one, so a page always moves on.
+ */
+export interface TasksPage {
+  readonly after: string | null;
+  readonly maxBytes: number;
+}
+
+/** Measures a page's JSON with the web's encoder: the interface imports no Node built-in, so any reader can run it. */
+const UTF8 = new TextEncoder();
+
+/** A page asked after a task the document does not serve: the set changed under the reader, or the id is wrong. */
+export class UnknownCursorError extends Error {
+  readonly after: string;
+
+  constructor(after: string) {
+    super(`--after ${after} names no task this tasks document serves: read it again from the first page`);
+    this.name = 'UnknownCursorError';
+    this.after = after;
+  }
 }
 
 /** What the `tasks` document is built from. */
@@ -135,21 +163,52 @@ export interface TasksInput {
   readonly shapes: SecretShapes;
   readonly connectors: readonly Connector[];
   readonly names: SourceNames;
+  /** The one page to serve; null serves every task in one answer. */
+  readonly page: TasksPage | null;
 }
 
 /**
- * The `tasks` document's body. It makes its own `ServedText`, so `cuts` lists this document's cuts and no other's;
- * a task left out by `owner` is never scanned, so it adds no cut.
+ * The `tasks` document's body. Each task is scanned with its own `ServedText`, so `cuts` lists the cuts of the
+ * tasks served and no other's: a task left out by `owner`, or outside the page asked, adds no cut. A page is
+ * measured in the UTF-8 bytes of its tasks' JSON with the commas between them, so a reader whose run output is
+ * capped asks for pages that fit under its cap with room for the rest of the answer.
+ * @throws UnknownCursorError when the page's `after` names no task served.
  */
 export function tasksBody(input: TasksInput): TasksBody {
-  const served = new ServedText(input.shapes);
+  const owned = [...input.tasks].filter((task) => input.owner === null || task.owner === input.owner);
+  const from = firstServedIndex(owned, input.page?.after ?? null);
   const tasks: ServedTask[] = [];
-  for (const task of input.tasks) {
-    if (input.owner === null || task.owner === input.owner) {
-      tasks.push(servedTask(task, served, input));
+  const cuts: Cut[] = [];
+  let bytes = 0;
+  for (const [index, task] of owned.entries()) {
+    if (index < from) {
+      continue;
     }
+    const served = new ServedText(input.shapes);
+    const built = servedTask(task, served, input);
+    const last = tasks.at(-1);
+    if (input.page !== null) {
+      bytes += UTF8.encode(JSON.stringify(built)).byteLength + (last === undefined ? 0 : 1);
+      if (last !== undefined && bytes > input.page.maxBytes) {
+        return { tasks, retired: input.retired, next: last.id, cuts };
+      }
+    }
+    tasks.push(built);
+    cuts.push(...served.cuts);
   }
-  return { tasks, retired: input.retired, cuts: served.cuts };
+  return { tasks, retired: input.retired, next: null, cuts };
+}
+
+/** Where a page starts among the tasks served: just past `after`, or the first when null. */
+function firstServedIndex(owned: readonly Task[], after: string | null): number {
+  if (after === null) {
+    return 0;
+  }
+  const at = owned.findIndex((task) => task.id === after);
+  if (at === -1) {
+    throw new UnknownCursorError(after);
+  }
+  return at + 1;
 }
 
 function servedTask(task: Task, served: ServedText, input: Pick<TasksInput, 'connectors' | 'names'>): ServedTask {

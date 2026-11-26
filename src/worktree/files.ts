@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { lstat, readdir, readFile, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, readlink, rename, rmdir, symlink, unlink } from 'node:fs/promises';
 import { realpathSync, type Dirent } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { errorCode, errorMessage } from '../core/guards.ts';
@@ -64,6 +64,8 @@ export interface WorktreeFiles {
   makeLink(path: string, target: string): Promise<void>;
   /** Removes the folder at `path` when it is empty; one that holds anything is refused by the system (ENOTEMPTY), never emptied. */
   removeEmptyFolder(path: string): Promise<void>;
+  /** Makes the folder at `path` and any folder above it that is missing; one already there is kept as it is. */
+  makeFolder(path: string): Promise<void>;
   /** The one spelling of an existing path (its case, separators and links resolved), to compare two spellings; undefined when nothing is there. */
   canonical(path: string): Promise<string | undefined>;
   /** The working folder of every other running program, so a worktree one runs in is not removed partway (#797). */
@@ -135,6 +137,9 @@ export const NODE_WORKTREE_FILES: WorktreeFiles = {
   async removeEmptyFolder(path) {
     // rmdir with no recursive option: it fails on a folder that holds anything, so nothing in it can be lost.
     await rmdir(path);
+  },
+  async makeFolder(path) {
+    await mkdir(path, { recursive: true });
   },
   async canonical(path) {
     try {

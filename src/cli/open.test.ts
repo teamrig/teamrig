@@ -1,14 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
+import { loadShippedHosts } from '../composition/host-ports.ts';
 import { formatConfig } from '../config/load.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
 import type { SessionStart } from '../ports/host/index.ts';
+import { hostDeps } from '../testing/adapter-deps.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
-import { hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
+import { hostCalled, hostNaming, hostRunning, hostStarting, NO_MARK_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost, TEST_PROGRAM } from '../testing/host.ts';
 import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import type { RestartRequest } from '../refresh/state.ts';
@@ -20,6 +22,7 @@ import { APP, CLAUDE_SESSION, CliHarness, CONFIG_PATH, KIT, SKILLS_DIR, TEAM, TE
 import { teamConfigOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 import { CLOSE_LOG_WAIT_MS } from './commands/open.ts';
 import { EXIT } from './runtime.ts';
+import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
 
 const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
@@ -64,6 +67,14 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started, [
       { command: 'wt.exe', args: ['-w', '0', 'new-tab', '--title', '[app] alpha', '-d', APP, '--', ...launchArgv()], cwd: APP, mode: 'exit' },
     ]);
+  });
+
+  it('passes the host the run named with --host on to the launch line, so the session starts in that host (T5006)', async () => {
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    const result = await openAlpha(processes, { platform: 'win32', shippedHosts: { 'antigravity-cli': shippedHost(SHIPPED_HOST) } }, ['--host', 'antigravity-cli']);
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    const [home, prompt] = [launchArgv().slice(0, 10), launchArgv().slice(10)];
+    assert.deepEqual(processes.started[0]?.args.slice(8), [...home, '--host', 'antigravity-cli', ...prompt]);
   });
 
   it("opens the tab in the team's own Windows Terminal window when open.teamWindow is on (T1427)", async () => {
@@ -148,6 +159,22 @@ describe('teamrig open', () => {
     assert.equal(lead.code, EXIT.ok, lead.stdout.join('\n'));
     assert.equal(processes.started.length, 1);
     assert.deepEqual(await kit.files.list(TAB_HOLDS), ['id-1.json'], "the lead's tab is held all the same");
+  });
+
+  it("refuses a session once the team's open tabs reach open.headroom.maxTabs, and opens the lead whatever the cap (T5479)", async () => {
+    const kit = new CliHarness({ ...TEAM, open: { headroom: { maxTabs: 2 } } });
+    await recordStart(kit, 4100);
+    const host = claudeRuns(4100);
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    const lead = await kit.run(['open', 'lead'], { probe: FOLDERS, processes, platform: 'win32', ...host });
+    assert.equal(lead.code, EXIT.ok, lead.stdout.join('\n'));
+    const refused = await kit.run(['open', 'bravo'], { probe: FOLDERS, processes, platform: 'win32', ...host });
+    assert.equal(refused.code, EXIT.refused);
+    assert.deepEqual(refused.stdout, [
+      'REFUSED no room on the host to open app-bravo (session bravo), counted at 400 MB resident and 1200 MB committed: the team has 2 tabs open, ' +
+        'at its cap of 2 (open.headroom.maxTabs). Close a session first: teamrig sessions lists what each one holds',
+    ]);
+    assert.equal(processes.started.length, 1, "alpha running and the lead's tab still loading fill the cap");
   });
 
   it('holds the room an opened tab was counted at while it loads, so a second open right after it is refused (T2199)', async () => {
@@ -283,6 +310,19 @@ describe('teamrig open', () => {
     const flagged = await kit.run(['open', 'alpha', '--terminal', 'konsole'], { probe: FOLDERS, processes });
     assert.deepEqual(flagged.stdout, [`OPENED app-alpha (session alpha) in a new Konsole tab in ${APP}, on the default model and effort`]);
     assert.deepEqual(processes.started.map((request) => request.command), ['konsole']);
+  });
+
+  it("takes the session's own launch terminal over the team's, and the flag over both (T5093)", async () => {
+    const kit = new CliHarness({ ...TEAM, open: { terminal: 'konsole' }, launch: { alpha: { terminal: 'print' } } });
+    const processes = new FakeProcesses().onStart('konsole', { kind: 'started', end: 'exited' });
+    const own = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes });
+    assert.equal(own.code, EXIT.printed);
+    assert.equal(processes.started.length, 0);
+    const others = await kit.run(['open', 'bravo'], { probe: FOLDERS, processes });
+    assert.equal(others.code, EXIT.ok);
+    const flagged = await kit.run(['open', 'alpha', '--terminal', 'konsole'], { probe: FOLDERS, processes });
+    assert.equal(flagged.code, EXIT.ok);
+    assert.deepEqual(processes.started.map((request) => request.command), ['konsole', 'konsole']);
   });
 
   it('carries a hostile prompt and project folder as data, never as shell text', async () => {
@@ -571,6 +611,37 @@ describe('teamrig launch', () => {
     assert.deepEqual(processes.ran[1]?.args, ['--name', 'app-alpha', '--', refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha'))]);
   });
 
+  /** Claude Code whose every start records the first prompt teamrig kept for the turn log, the first one restarted. */
+  class KeptPrompts extends RestartedOnce {
+    readonly kept: (WakePrompt | undefined)[] = [];
+    private readonly prompts: WakePrompts;
+
+    constructor(kit: CliHarness) {
+      super(kit, ENDING);
+      this.prompts = new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake'));
+    }
+
+    override async run(request: RunRequest): Promise<RunOutcome> {
+      this.kept.push(await this.prompts.read('alpha'));
+      return super.run(request);
+    }
+  }
+
+  it("keeps each first prompt it passes as teamrig's, for the resumed tab or any tab of a fresh start (T5388)", async () => {
+    const kit = new CliHarness(TEAM);
+    const processes = new KeptPrompts(kit);
+    const result = await kit.run([...LAUNCH, '--resume', CLAUDE_SESSION, '--encoded-prompt', encodePrompt('Go on')], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } });
+    assert.equal(result.code, EXIT.ok, result.stderr.join('\n'));
+    assert.deepEqual(processes.kept, [{ tab: CLAUDE_SESSION, text: 'Go on' }, { text: refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha')) }]);
+  });
+
+  it('keeps no first prompt for a start with none', async () => {
+    const kit = new CliHarness(TEAM);
+    const processes = new FakeProcesses();
+    assert.equal((await kit.run([...LAUNCH, '--no-prompt'], { probe: ON_PATH, processes, env: { PATH: '/usr/local/bin' } })).code, EXIT.ok);
+    assert.equal(await new WakePrompts(kit.files, join(TEAM_HOME, 'state', 'wake')).read('alpha'), undefined);
+  });
+
   it('ends with Claude Code when no restart ended it for launch', async () => {
     const unsupervised: RestartRequest = { ...ENDING, supervised: false };
     const pending: RestartRequest = { ...ENDING, phase: 'pending' };
@@ -786,6 +857,37 @@ describe('teamrig launch', () => {
     assert.deepEqual([untold.code, untold.stdout, none.ran], [EXIT.refused, ['REFUSED no session of the host is told'], []]);
   });
 
+  it('names the running host as people know it in every line, never Claude Code on another host (T5006)', async () => {
+    const desk = '/usr/local/bin/agent-desk';
+    const probe = new FakePathProbe({ folders: [APP], files: [desk] });
+    const host = hostCalled(TEST_PROGRAM, 'agent-desk');
+    const failed = await launch(new FakeProcesses().onRun(desk, { kind: 'exited', code: 7 }), ['--no-prompt', '--resume', CLAUDE_SESSION], { probe, host });
+    assert.deepEqual([failed.code, failed.stdout, failed.stderr], [
+      EXIT.failed,
+      [`Starting ${TEST_PROGRAM} as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming ${TEST_PROGRAM} session ${CLAUDE_SESSION}`],
+      [`FAILED ${TEST_PROGRAM} exited with code 7`],
+    ]);
+    const missing = await launch(new FakeProcesses(), [], { host });
+    assert.deepEqual(missing.stdout, [`REFUSED ${TEST_PROGRAM} (agent-desk) is not on PATH; install it, then run this again`]);
+  });
+
+  it('starts a Codex CLI session in its own tab when the run names --host codex-cli: codex resumes its thread with the first prompt (T5059)', async () => {
+    const codex = '/usr/local/bin/codex';
+    // Codex names a thread by a UUID, as Claude Code does a session.
+    const CODEX_THREAD = '019a2b3c-0000-7000-8000-00000000000c';
+    const probe = new FakePathProbe({ folders: [APP], files: [codex] });
+    const shippedHosts = await loadShippedHosts(hostDeps().run);
+    const processes = new FakeProcesses();
+    const argv = [...LAUNCH, '--host', 'codex-cli', '--resume', CODEX_THREAD, '--encoded-prompt', encodePrompt('Go on')];
+    const result = await new CliHarness({ ...TEAM, hosts: ['claude-code', 'codex-cli'] }).run(argv, { probe, processes, env: { PATH: '/usr/local/bin' }, shippedHosts });
+    assert.deepEqual([result.code, result.stdout, result.stderr], [
+      EXIT.ok,
+      [`Starting Codex CLI as app-alpha (session alpha of team app) in ${APP}, on the default model and effort, resuming Codex CLI session ${CODEX_THREAD}`],
+      [],
+    ]);
+    assert.deepEqual(processes.ran.map((run) => [run.command, run.args]), [[codex, ['resume', CODEX_THREAD, '-c', 'features.unified_exec_tty=false', '--', 'Go on']]]);
+  });
+
   it('starts with the arguments the running host spells, telling it what the session is to be and no flag of its own', async () => {
     const seen: SessionStart[] = [];
     const host = hostStarting('agent-desk', (start) => {
@@ -815,7 +917,7 @@ describe('teamrig launch', () => {
       [['launch', 'alpha', '--team', 'app'], '--project is required'],
       [[...LAUNCH, '--encoded-prompt', 'a+b'], '--encoded-prompt is not a prompt that teamrig open wrote'],
       [[...LAUNCH, '--encoded-prompt', encodePrompt('-p')], '--prompt: the prompt cannot start with -'],
-      [[...LAUNCH, '--resume', 'c1'], '--resume "c1" is not a Claude Code session id'],
+      [[...LAUNCH, '--resume', 'c.1'], '--resume "c.1" is not a host session id'],
       [[...LAUNCH, '--effort', 'turbo'], '--effort "turbo" is not an effort level'],
       [[...LAUNCH, '--no-prompt', '--encoded-prompt', encodePrompt('Go on')], '--no-prompt and --encoded-prompt cannot go together'],
     ] as const) {
