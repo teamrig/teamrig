@@ -7,15 +7,16 @@ import { writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import { installRunningKit, kitSelfInstallLogLine, kitSelfInstallNote } from './kit-self-install.ts';
-import { kitCurrentPath, kitVersionFolder, useKitVersion } from './kit-versions.ts';
+import { kitCurrentPath, kitVersionFolder, readKitCurrent, useKitVersion, type KitSource } from './kit-versions.ts';
 
 const KIT = '/home/user/.teamrig';
 const PLUGIN = '/home/user/.claude/plugins/cache/teamrig/teamrig';
+const FROM_PLUGIN: KitSource = { kind: 'claude-code-plugin' };
 
 describe('installRunningKit', () => {
   let files: MemoryFiles;
   let tree: MemoryKitTree;
-  const selfInstall = (clientRoot: string, version: string) => installRunningKit({ files, tree, kitHome: KIT, clientRoot, version, lock: new InlineMutex() });
+  const selfInstall = (clientRoot: string, version: string) => installRunningKit({ files, tree, kitHome: KIT, clientRoot, version, source: FROM_PLUGIN, lock: new InlineMutex() });
 
   beforeEach(async () => {
     files = new MemoryFiles();
@@ -30,6 +31,12 @@ describe('installRunningKit', () => {
     assert.equal(files.get(kitCurrentPath(KIT)), '0.508.0\n');
     assert.equal(kitSelfInstallLogLine(outcome), 'kit: none -> 0.508.0: current');
     assert.equal(kitSelfInstallNote(outcome), undefined);
+  });
+
+  it('records where the client came from, so a release clone is told from a plugin', async () => {
+    const source: KitSource = { kind: 'github-release', tag: 'v0.508.0', commit: 'a'.repeat(40) };
+    await installRunningKit({ files, tree, kitHome: KIT, clientRoot: join(PLUGIN, '0.508.0'), version: '0.508.0', source, lock: new InlineMutex() });
+    assert.deepEqual((await readKitCurrent(files, KIT))?.source, source);
   });
 
   it('copies nothing for a client running from the kit versions folder', async () => {
@@ -66,7 +73,7 @@ describe('installRunningKit', () => {
   });
 
   it('gives no note and no log line for a start that finds another start copying', async () => {
-    const outcome = await installRunningKit({ files, tree, kitHome: KIT, clientRoot: join(PLUGIN, '0.508.0'), version: '0.508.0', lock: new BusyMutex() });
+    const outcome = await installRunningKit({ files, tree, kitHome: KIT, clientRoot: join(PLUGIN, '0.508.0'), version: '0.508.0', source: FROM_PLUGIN, lock: new BusyMutex() });
     assert.deepEqual([outcome, kitSelfInstallNote(outcome), kitSelfInstallLogLine(outcome)], [{ kind: 'busy' }, undefined, undefined]);
     assert.deepEqual([tree.copies.length, files.get(kitCurrentPath(KIT))], [0, undefined]);
   });

@@ -258,6 +258,7 @@ async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: 
     kitHome,
     clientRoot: clientRootOf(runtime.self.script),
     version: KIT_VERSION,
+    source: { kind: 'claude-code-plugin' },
     lock: fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_INSTALL_LOCK),
   });
   const line = kitSelfInstallLogLine(outcome);

@@ -1,7 +1,7 @@
 import { isAbsolute, join, relative } from 'node:path';
 import type { LockTimings, Mutex } from '../core/lock.ts';
 import { CLIENT_MANIFEST } from '../exec/client-integrity.ts';
-import { installKitVersion, kitVersionsFolder, type KitInstallOutcome, type KitPorts } from './kit-versions.ts';
+import { installKitVersion, kitVersionsFolder, type KitInstallOutcome, type KitPorts, type KitSource } from './kit-versions.ts';
 
 /**
  * The kit home's install lock as a session start takes it: never waited on, since a start that finds it held leaves
@@ -20,11 +20,13 @@ export function kitInstallLockPath(kitHome: string): string {
   return join(kitHome, 'versions.lock');
 }
 
-/** The running client's own copy into the kit home: the folder it runs from and the version it is. */
+/** The running client's own copy into the kit home: the folder it runs from, the version it is and where it came from. */
 export interface KitSelfInstall extends KitPorts {
   /** The running client's root, the plugin folder holding its `dist/`; never a path an argument or the environment gave. */
   readonly clientRoot: string;
   readonly version: string;
+  /** How the client reached the machine: a host's plugin cache (a session start), or a release clone (`teamrig kit install`). */
+  readonly source: KitSource;
   readonly lock: Mutex;
 }
 
@@ -41,8 +43,8 @@ function isWithin(folder: string, path: string): boolean {
 }
 
 /**
- * At a session start, copies the running client into `versions/<version>` and names it current (kit-versions.ts), so
- * a host whose hooks run from the kit home runs this version next. It copies only the client's own root, which is why
+ * Copies the running client into `versions/<version>` and names it current (kit-versions.ts), so a host whose hooks
+ * run from the kit home runs this version next: at a session start, and by `teamrig kit install`. It copies only the client's own root, which is why
  * it runs with no exec guard. A client running from the kit's versions folder copies nothing: it is installed already.
  */
 export async function installRunningKit(install: KitSelfInstall): Promise<KitSelfInstallOutcome> {
@@ -53,7 +55,7 @@ export async function installRunningKit(install: KitSelfInstall): Promise<KitSel
   if ((await files.read(join(clientRoot, CLIENT_MANIFEST))) === undefined) {
     return { kind: 'skipped', why: 'no-integrity-list' };
   }
-  return installKitVersion({ ...install, from: clientRoot, source: { kind: 'claude-code-plugin' } });
+  return installKitVersion({ ...install, from: clientRoot });
 }
 
 /**
