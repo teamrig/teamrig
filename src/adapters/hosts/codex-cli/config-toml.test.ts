@@ -174,4 +174,24 @@ describe("a Codex profile file's boolean key, set only where it is already writt
     assert.equal(answer.ok, false);
     assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
   });
+
+  it('reads an inline table as open past a nested close, a quoted brace, a commented one or an open string (T5362)', () => {
+    for (const text of [
+      'features = { a = { b = 1 },\n  unified_exec_tty = true,\n}\n',
+      'features = { a = "}",\n  unified_exec_tty = true,\n}\n',
+      "features = { a = '}',\n  unified_exec_tty = true,\n}\n",
+      'features = { a = 1, # }\n  unified_exec_tty = true,\n}\n',
+      'features = { a = "open,\n  unified_exec_tty = true,\n}\n',
+    ]) {
+      const answer = whereSetOff(text);
+      assert.equal(answer.ok, false, text);
+      assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
+    }
+  });
+
+  it('passes an inline table closed on its line that does not name the key, nested or holding quoted braces (T5362)', () => {
+    for (const text of ['features = { a = { b = 1 } }\n', 'features = { a = "{", b = \'{\' } # {\n', 'features = { a = "\\"{" }\n']) {
+      assert.deepEqual(whereSetOff(text), { ok: true, text: undefined }, text);
+    }
+  });
 });

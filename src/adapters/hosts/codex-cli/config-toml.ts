@@ -114,7 +114,40 @@ function scan(lines: readonly string[], table: string, key: string): Found {
  * or it does not close there (TOML 1.1 lets an inline table span lines), so the key may sit on a line after it.
  */
 function inlineMayHold(value: string, key: string): boolean {
-  return value.includes(key) || !value.includes('}');
+  return value.includes(key) || !closesOnLine(value);
+}
+
+/**
+ * Whether the inline table `value` opens closes on its own line: every `{` met by a `}`, counting neither braces in a
+ * quoted string nor those in a trailing comment. A string left open on the line reads as not closed, so a line it
+ * cannot read fails closed.
+ */
+function closesOnLine(value: string): boolean {
+  let depth = 0;
+  for (let at = 0; at < value.length; at += 1) {
+    const char = value[at];
+    if (char === '#') break;
+    if (char === '"' || char === "'") {
+      const end = stringEnd(value, at);
+      if (end === undefined) return false;
+      at = end;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+    }
+  }
+  return depth <= 0;
+}
+
+/** The index of the quote closing the string `value` opens at `start`, or undefined when it does not close there. */
+function stringEnd(value: string, start: number): number | undefined {
+  const quote = value[start];
+  for (let at = start + 1; at < value.length; at += 1) {
+    if (quote === '"' && value[at] === '\\') at += 1;
+    else if (value[at] === quote) return at;
+  }
+  return undefined;
 }
 
 /** Whether `value`, a key line's text after `=`, reads as the boolean `word`. */
