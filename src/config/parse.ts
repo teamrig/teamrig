@@ -1887,14 +1887,16 @@ function parseExec(read: ConfigReader, raw: JsonRecord): ExecConfig {
 }
 
 /**
- * `ui`: a bad path is dropped, so `teamrig ui` starts the released UI rather than a file nobody named; a bad mode
- * keeps the default, the UI in the terminal it is run in.
+ * Why `ui.path` is no longer read (T5129): `teamrig ui` starts only the released UI, held to its pin, so no config key
+ * makes it run a script of its own; the configuration page says the same.
  */
+export const UI_PATH_DROPPED = 'teamrig ui starts only the released UI; run a UI build of your own with npm run ui:dev in teamrig-pane';
+
+/** `ui`: a bad mode keeps the default, the UI in the terminal it is run in; `path`, which it replaced, is reported until deleted. */
 function parseUi(read: ConfigReader, raw: JsonRecord): UiConfig {
+  read.dropped(raw, 'path', 'ui', UI_PATH_DROPPED);
   const named = read.string(raw, 'mode', 'ui', DEFAULT_UI.mode, oneOf(UI_MODES));
-  const mode = isUiMode(named) ? named : DEFAULT_UI.mode;
-  const path = read.optionalString(raw, 'path', 'ui', isAbsoluteFile);
-  return path === undefined ? { mode } : { mode, path };
+  return { mode: isUiMode(named) ? named : DEFAULT_UI.mode };
 }
 
 /** A pin's key id: the name the adapter gives the key, one word, so a challenge names it plainly. */

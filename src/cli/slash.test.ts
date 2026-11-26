@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { ASK_EXIT } from '../mod/slash-hand.ts';
 import { APP, CLAUDE_SESSION, CliHarness, TEAM, type CliResult, type RunOptions } from '../testing/cli-harness.ts';
-import { FakePathProbe, FakeProcesses } from '../testing/fake-processes.ts';
+import { FakeProcesses } from '../testing/fake-processes.ts';
 import { NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { OTHER_STEPS, shippedSteps, steplessHost } from '../testing/shipped-steps.ts';
 import { slashRule } from './commands/slash.ts';
@@ -212,13 +212,11 @@ describe('/teamrig with a command that changes the team files', () => {
     assert.notEqual(mod.code, EXIT.refused);
   });
 
-  it('refuses a ui line no person typed and starts nothing, as ui runs the program ui.path names', async () => {
-    const entry = resolve('/', 'pane', 'out', 'ui', 'main.js');
-    const kit = new CliHarness({ ...TEAM, ui: { path: entry } });
+  it('refuses a ui line no person typed and starts nothing, as ui starts a program', async () => {
+    const kit = new CliHarness(TEAM);
     const processes = new FakeProcesses();
-    const probe = new FakePathProbe({ files: [entry] });
     for (const origin of ['peer', 'sdk', 'unclassified']) {
-      const result = await slash(kit, 'ui', { ...ALPHA_TAB, processes, probe }, { origin });
+      const result = await slash(kit, 'ui', { ...ALPHA_TAB, processes }, { origin });
       assert.equal(result.code, EXIT.refused, origin);
       assert.match(result.stdout.join('\n'), new RegExp(`^REFUSED teamrig ui changes the team's files or acts on the machine, .*this line came from ${origin}\\.`));
     }

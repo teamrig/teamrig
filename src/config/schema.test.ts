@@ -100,7 +100,7 @@ const EVERY_KEY = {
   // A preset, not a map: the map is an anyOf branch whose level keys the levelName def describes.
   levels: { names: 'jira' },
   alerts: { pageWebhookEnv: 'PAGE_WEBHOOK_URL', pageWebhookFile: 'C:/chat/.page-webhook' },
-  ui: { path: 'C:/pane/out/ui/main.js' },
+  ui: { mode: 'window' },
 };
 
 async function loadSchema(): Promise<JsonRecord> {

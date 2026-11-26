@@ -613,14 +613,9 @@ export function isUiMode(value: unknown): value is UiMode {
   return UI_MODES.some((mode) => mode === value);
 }
 
-/** The dedicated UI `teamrig ui` starts (T4761). */
+/** The dedicated UI `teamrig ui` starts (T4761): always the released UI this teamrig pins (T5129). */
 export interface UiConfig {
   readonly mode: UiMode;
-  /**
-   * The absolute path of a UI entry script to start in place of the released UI: a build of one's own, for work on
-   * the UI itself. Absent: the released UI.
-   */
-  readonly path?: string;
 }
 
 /**

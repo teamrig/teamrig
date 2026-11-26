@@ -1977,7 +1977,7 @@
       }
     },
     "ui": {
-      "description": "The dedicated UI that teamrig ui starts.",
+      "description": "The dedicated UI that teamrig ui starts: always the released UI this teamrig pins. path, which named a UI build of your own, is reported until deleted; work on the UI runs with npm run ui:dev in teamrig-pane.",
       "type": "object",
       "properties": {
         "mode": {
@@ -1985,11 +1985,6 @@
           "type": "string",
           "enum": ["terminal", "window", "both"],
           "default": "terminal"
-        },
-        "path": {
-          "description": "The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI.",
-          "type": "string",
-          "pattern": "^(?:[A-Za-z]:)?[\\\\/][^\\r\\n]*$"
         }
       }
     },

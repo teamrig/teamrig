@@ -5,7 +5,7 @@ import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECO
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
-import { parseConfig } from './parse.ts';
+import { parseConfig, UI_PATH_DROPPED } from './parse.ts';
 import { CONFIG_VERSION, type AccountBudget, type BudgetConfig } from './types.ts';
 import type { ConfigIssue } from './reader.ts';
 import { shortRsaPublicKey } from '../testing/short-rsa-key.ts';
@@ -351,17 +351,13 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, turnLog: { keepHours: 169 } }).issues), ['turnLog.keepHours']);
   });
 
-  it('reads ui.path as an absolute file, absent by default, and drops one that is not (T4761)', () => {
+  it('flags ui.path a file still holds, as teamrig ui starts only the released UI, and reads the rest of ui (T5129)', () => {
     assert.deepEqual(parseConfig(ROSTER).config.ui, { mode: 'terminal' });
-    for (const path of ['D:\\pane\\out\\ui\\main.js', '/srv/pane/out/ui/main.js']) {
-      const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
-      assert.deepEqual(config.ui, { mode: 'terminal', path });
-      assert.deepEqual(issues, []);
-    }
-    for (const path of ['out/ui/main.js', 'C:out', '/a\n/b', 'https://example.com/main.js', 7]) {
-      const { config, issues } = parseConfig({ ...ROSTER, ui: { path } });
+    for (const path of ['D:\\pane\\out\\ui\\main.js', 'out/ui/main.js', 7]) {
+      const { config, issues } = parseConfig({ ...ROSTER, ui: { path, mode: 'window' } });
       assert.deepEqual(paths(issues), ['ui.path'], String(path));
-      assert.deepEqual(config.ui, { mode: 'terminal' }, String(path));
+      assert.equal(issues[0]?.message, `is no longer read: ${UI_PATH_DROPPED}; delete it`);
+      assert.deepEqual(config.ui, { mode: 'window' }, String(path));
     }
   });
 

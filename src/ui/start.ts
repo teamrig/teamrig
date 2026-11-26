@@ -32,8 +32,7 @@ export interface UiStart {
  * The variables a released UI gets of the caller's (T4838 N1): where programs and the home folder are, the terminal's
  * kind and colours, the locale, and the teamrig ones the CLI it calls back reads to find the kit, team and session.
  * Those are named one by one, not by their prefix, so a TEAMRIG_-named secret a person or another tool sets stays
- * behind (T4850 N1). SYSTEMROOT is there as Node.js on Windows needs it for its crypto and network calls. A UI build
- * of the person's own (`ui.path`) keeps the whole environment, as it is theirs.
+ * behind (T4850 N1). SYSTEMROOT is there as Node.js on Windows needs it for its crypto and network calls.
  */
 const RELEASED_NAMES: ReadonlySet<string> = new Set([
   'PATH',
