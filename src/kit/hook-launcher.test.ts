@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { kitCurrentPath, kitVersionFolder } from './kit-versions.ts';
 import { ENTRY_FLAG, EVENT_FLAG, LAUNCHER_ENTRIES } from './launcher.ts';
-import { hookLauncher, hookLauncherProblem } from './hook-launcher.ts';
+import { hookLauncher, hookLauncherProblem, syncKitLauncher } from './hook-launcher.ts';
 import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../restore/cli-launcher.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { seedKitHome } from '../testing/kit-home.ts';
+import { SEEDED_LAUNCHER_TEXT, seedKitHome } from '../testing/kit-home.ts';
 
 const KIT_HOME = join('/', 'srv', 'ada', '.teamrig');
 const VERSION = '0.510.0';
@@ -65,5 +65,40 @@ describe('hookLauncherProblem', () => {
     const files = await seeded();
     await files.write(cliLauncherPath(KIT_HOME), '// an older launcher\n');
     assert.match((await hookLauncherProblem(files, KIT_HOME)) ?? '', /^the kit launcher .*teamrig\.mjs is not the one teamrig 0\.510\.0 ships: start one/u);
+  });
+});
+
+describe('syncKitLauncher', () => {
+  it('writes the launcher the current version ships when the one on PATH is missing, so a hook line can run', async () => {
+    const files = await seeded();
+    files.removeAll(cliLauncherPath(KIT_HOME));
+    assert.deepEqual(await syncKitLauncher(files, KIT_HOME), { kind: 'written', path: cliLauncherPath(KIT_HOME), version: VERSION });
+    assert.equal(files.get(cliLauncherPath(KIT_HOME)), SEEDED_LAUNCHER_TEXT);
+    assert.equal(await hookLauncherProblem(files, KIT_HOME), undefined);
+  });
+
+  it('replaces a launcher on PATH that another version shipped', async () => {
+    const files = await seeded();
+    await files.write(cliLauncherPath(KIT_HOME), '// an older launcher\n');
+    assert.equal((await syncKitLauncher(files, KIT_HOME)).kind, 'written');
+    assert.equal(files.get(cliLauncherPath(KIT_HOME)), SEEDED_LAUNCHER_TEXT);
+  });
+
+  it('leaves a launcher that is already the current one as it is', async () => {
+    assert.equal((await syncKitLauncher(await seeded(), KIT_HOME)).kind, 'unchanged');
+  });
+
+  it('writes nothing for a kit home with no current version', async () => {
+    const files = new MemoryFiles();
+    assert.deepEqual(await syncKitLauncher(files, KIT_HOME), { kind: 'missing', why: `no teamrig version is current in the kit home ${KIT_HOME}` });
+    assert.equal(files.get(cliLauncherPath(KIT_HOME)), undefined);
+  });
+
+  it('writes nothing when the current version ships no launcher', async () => {
+    const files = await seeded();
+    files.removeAll(join(kitVersionFolder(KIT_HOME, VERSION), KIT_LAUNCHER_FILE));
+    files.removeAll(cliLauncherPath(KIT_HOME));
+    assert.equal((await syncKitLauncher(files, KIT_HOME)).kind, 'missing');
+    assert.equal(files.get(cliLauncherPath(KIT_HOME)), undefined);
   });
 });
