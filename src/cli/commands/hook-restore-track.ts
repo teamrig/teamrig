@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { ENV, resolveKitHome } from '../../core/home.ts';
 import { ID_PATTERN } from '../../core/ids.ts';
 import { KIT_VERSION } from '../../core/version.ts';
@@ -8,6 +9,7 @@ import type { HookEvent } from '../../ports/host/index.ts';
 import { dayProbePath, dayProbeReleaseLine, type DayProbeReply } from '../../restore/day-probe.ts';
 import { DayProbeStore } from '../../restore/day-probe-store.ts';
 import { apiGaveUpLine, apiRetriesSpentOn } from '../../restore/api-error.ts';
+import { KIT_LAUNCHER_FILE } from '../../restore/cli-launcher.ts';
 import { cliOnPathNote, cliOnPathSteps } from '../../restore/cli-on-path.ts';
 import { applyEvent, type TrackEvent, type TrackFacts } from '../../restore/entry.ts';
 import { LAUNCHER_REFRESH_LOCK, launcherRecordPath, refreshLaunchers } from '../../restore/launcher-refresh.ts';
@@ -219,9 +221,13 @@ async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: Cli
   const { files, restore, platform } = runtime;
   const added: string[] = [];
   const userPath = addRecorded(restore.userPath, added);
-  const cliOnPath = (await putsCliOnPath(runtime, facts.team))
-    ? [() => cliOnPathSteps({ files, kitHome, platform, userPath, markExecutable: restore.markExecutable })]
-    : [];
+  // A client with no built kit launcher (a run from the source tree) puts nothing on the PATH: the PATH must never
+  // name a folder whose `teamrig.mjs` is missing, or an older one this client did not ship.
+  const launcherText = await files.read(join(clientRootOf(runtime.self.script), KIT_LAUNCHER_FILE)).catch(() => undefined);
+  const cliOnPath =
+    launcherText !== undefined && (await putsCliOnPath(runtime, facts.team))
+      ? [() => cliOnPathSteps({ files, kitHome, launcherText, platform, userPath, markExecutable: restore.markExecutable })]
+      : [];
   await refreshLaunchers({
     machine: { files, kitHome, node: runtime.self.node, userHome: runtime.userHome, logon: restore.logon, shortcuts: restore.shortcuts },
     others: [

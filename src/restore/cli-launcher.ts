@@ -1,14 +1,13 @@
 import { join } from 'node:path';
-import { FIND_TEAMRIG_CLI } from '../core/launcher-script.ts';
 import type { Launcher } from './install-plan.ts';
 
 /**
  * The `teamrig` launchers a session start writes to the kit home's bin folder, which it also puts on the user's PATH
  * (cli-on-path.ts), so `teamrig` runs from any terminal, not only from an AI CLI's own shell, where the plugin's bin
  * folder is on the PATH. The folder never moves while the plugin folder changes with every version, so the launchers
- * name no plugin folder: `teamrig.mjs` finds the installed plugin's CLI on each run (FIND_TEAMRIG_CLI) and runs it in
- * its own Node process, so the CLI's parent is the shell that ran the launcher, as through the plugin's own shims. The
- * shims beside it, `teamrig.cmd` for cmd and PowerShell and `teamrig` for sh shells, run it as the plugin's shims run
+ * name no version: `teamrig.mjs` is the kit launcher (src/kit/launcher.ts), which checks the kit home's current version
+ * and runs its CLI in its own Node process, so the CLI's parent is the shell that ran the launcher, as through the
+ * plugin's own shims. The shims beside it, `teamrig.cmd` for cmd and PowerShell and `teamrig` for sh shells, run it as the plugin's shims run
  * the CLI (plugins/teamrig/bin).
  */
 
@@ -33,25 +32,10 @@ export function shShimPath(kitHome: string): string {
 }
 
 /**
- * Finds the installed plugin's CLI and runs it in this process: the CLI reads its words from `process.argv` after the
- * script, which are this launcher's own. It exits 1 when no teamrig plugin is installed.
+ * Where a built client holds the kit launcher, which a session start copies as it is to `teamrig.mjs`: the build
+ * compiles src/kit/launcher.ts there and lists it in the client's integrity list.
  */
-export const CLI_LAUNCHER_SCRIPT = String.raw`// Written by teamrig at a session start, and kept up to date with each plugin version.
-// The teamrig CLI from any terminal: the teamrig.cmd and teamrig shims beside it run this file.
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-${FIND_TEAMRIG_CLI}
-
-const main = teamrigCli();
-if (main === undefined) {
-  process.stderr.write('teamrig: not found: no installed teamrig plugin; install it, then run this again\n');
-  process.exit(1);
-}
-await import(pathToFileURL(main).href);
-`;
+export const KIT_LAUNCHER_FILE = 'dist/kit/launcher.js';
 
 /**
  * The cmd shim, as the plugin's own (plugins/teamrig/bin/teamrig.cmd): cmd ends `%*` at a line break, so it also hands
@@ -97,11 +81,12 @@ ${SH_SHELL_WALK}exec node "$(dirname "$0")/teamrig.mjs" "$@"
 
 /**
  * The launchers a session start keeps on the kit home's bin folder for `platform`, each written when missing too:
- * the Node launcher and the sh shim everywhere, and on Windows the cmd shim.
+ * the kit launcher (`launcherText`, the running client's KIT_LAUNCHER_FILE) and the sh shim everywhere, and on
+ * Windows the cmd shim.
  */
-export function cliLaunchers(kitHome: string, platform: NodeJS.Platform): Launcher[] {
+export function cliLaunchers(kitHome: string, platform: NodeJS.Platform, launcherText: string): Launcher[] {
   const launchers: Launcher[] = [
-    { path: cliLauncherPath(kitHome), text: CLI_LAUNCHER_SCRIPT, create: true },
+    { path: cliLauncherPath(kitHome), text: launcherText, create: true },
     { path: shShimPath(kitHome), text: SH_SHIM_SCRIPT, create: true },
   ];
   return platform === 'win32' ? [...launchers, { path: cmdShimPath(kitHome), text: CMD_SHIM_SCRIPT, create: true }] : launchers;

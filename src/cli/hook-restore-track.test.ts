@@ -9,8 +9,9 @@ import type { ChatWebhook } from '../core/webhook.ts';
 import { installKitVersion, kitCurrentPath, kitVersionFolder, useKitVersion } from '../kit/kit-versions.ts';
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
-import { cliLauncherFolder, cliLaunchers } from '../restore/cli-launcher.ts';
+import { cliLauncherFolder, cliLaunchers, cliLauncherPath, KIT_LAUNCHER_FILE } from '../restore/cli-launcher.ts';
 import { cliOnPathNote } from '../restore/cli-on-path.ts';
+import { clientRootOf } from '../exec/client-integrity.ts';
 import { restoreLaunchers } from '../restore/install-plan.ts';
 import { RESTORE_CHECK_LAUNCHER_SCRIPT } from '../restore/launcher.ts';
 import { LAUNCHER_RECORD_FORMAT, launcherRecordPath } from '../restore/launcher-refresh.ts';
@@ -24,6 +25,7 @@ import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import { DEFAULT_HOST } from '../composition/adapters.ts';
 import { hostReadingLines, hostTelling, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
+import { quietHost } from '../testing/quiet-host.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
@@ -496,8 +498,13 @@ describe('hook restore-track: the launcher refresh', () => {
   const OLDER_TEXT = '// an older launcher\n';
   const OLDER_RECORD = `${JSON.stringify({ v: LAUNCHER_RECORD_FORMAT, version: '0.0.1', at: '2030-01-01T10:00:00.000Z' })}\n`;
 
-  async function oldLauncherKit(config: JsonRecord = TEAM): Promise<CliHarness> {
+  /** The kit launcher the harness's running client ships, at the client root its script sits in. */
+  const KIT_LAUNCHER_TEXT = '// the kit launcher\n';
+  const BUILT_LAUNCHER = join(clientRootOf(quietHost('').self.script), KIT_LAUNCHER_FILE);
+
+  async function oldLauncherKit(config: JsonRecord = TEAM, built = true): Promise<CliHarness> {
     const kit = new CliHarness(config);
+    if (built) await kit.files.write(BUILT_LAUNCHER, KIT_LAUNCHER_TEXT);
     await kit.files.write(CHECK.path, OLDER_TEXT);
     await kit.files.write(RECORD, OLDER_RECORD);
     return kit;
@@ -515,7 +522,7 @@ describe('hook restore-track: the launcher refresh', () => {
     const restore = quietRestore();
     const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32' });
     assert.deepEqual([result.code, result.stderr], [0, []]);
-    const launchers = cliLaunchers(KIT, 'win32');
+    const launchers = cliLaunchers(KIT, 'win32', KIT_LAUNCHER_TEXT);
     const written = await Promise.all(launchers.map(async (launcher) => (await kit.files.read(launcher.path)) !== undefined));
     return { path: userPath.folders, launcher: written.some(Boolean), stdout: result.stdout };
   }
@@ -525,6 +532,18 @@ describe('hook restore-track: the launcher refresh', () => {
       const { path, launcher } = await startOnEmptyPath(await oldLauncherKit(), env);
       assert.deepEqual({ path, launcher }, { path: [cliLauncherFolder(KIT)], launcher: true });
     }
+  });
+
+  it('writes the running client’s kit launcher as teamrig.mjs (T5278)', async () => {
+    const kit = await oldLauncherKit();
+    await startOnEmptyPath(kit, LAUNCHED);
+    assert.equal(await kit.files.read(cliLauncherPath(KIT)), KIT_LAUNCHER_TEXT);
+  });
+
+  it('puts nothing on the PATH from a client with no built kit launcher, and still refreshes the others (T5278)', async () => {
+    const kit = await oldLauncherKit(TEAM, false);
+    assert.deepEqual(await startOnEmptyPath(kit, LAUNCHED), { path: [], launcher: false, stdout: [] });
+    assert.equal(await kit.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT);
   });
 
   it('says once, to the person and the model, that the start put teamrig on the PATH; a later start says nothing (T5095)', async () => {

@@ -16,6 +16,8 @@ export function nodeMarkExecutable(platform: NodeJS.Platform): MarkExecutable {
 export interface CliOnPath {
   readonly files: Files;
   readonly kitHome: string;
+  /** The running client's kit launcher text, which `teamrig.mjs` is kept equal to (cli-launcher.ts KIT_LAUNCHER_FILE). */
+  readonly launcherText: string;
   readonly platform: NodeJS.Platform;
   readonly userPath: UserPath;
   readonly markExecutable: MarkExecutable;
@@ -47,10 +49,10 @@ export function cliOnPathNote(folder: string, where: string): string {
  * already keep their PATH: only ones opened after the step find `teamrig`.
  */
 export async function cliOnPathSteps(cli: CliOnPath): Promise<MachineStep[]> {
-  const { files, kitHome, platform, userPath, markExecutable } = cli;
+  const { files, kitHome, launcherText, platform, userPath, markExecutable } = cli;
   const shim = shShimPath(kitHome);
   const perLauncher = await Promise.all(
-    cliLaunchers(kitHome, platform).map(async (launcher) => {
+    cliLaunchers(kitHome, platform, launcherText).map(async (launcher) => {
       const written = await launcherStep(files, launcher, 'refresh');
       return launcher.path === shim ? written.map((step) => markedStep(step, shim, markExecutable)) : written;
     }),
