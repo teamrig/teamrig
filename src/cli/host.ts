@@ -322,6 +322,19 @@ export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 
   throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
 }
 
+/**
+ * The id of the shipped host adapter whose hooks file `setup hooks --host <name>` writes, as its lines name it in
+ * `--host <id>` and a team's `hosts` lists it; undefined for a name only the running, unshipped host keeps.
+ */
+export function userHooksHostId(runtime: Pick<CliRuntime, 'shippedHosts' | 'env' | 'platform'>, name: string): string | undefined {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const found = Object.entries(runtime.shippedHosts).find(([, shipped]) => {
+    const { userHooks } = shipped.ports(seen);
+    return !isUnsupported(userHooks) && userHooks.host === name;
+  });
+  return found?.[0];
+}
+
 /** A hooks file of the person's whose host's lines run the kit launcher, with how teamrig's lines come out of it. */
 export interface KitLauncherHooks {
   readonly port: HostUserHooks;

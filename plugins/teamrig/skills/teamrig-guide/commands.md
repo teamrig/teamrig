@@ -5980,7 +5980,9 @@ earlier handlers are replaced, so running it again rewrites the ones an older re
 run teamrig's kit launcher (the first one above does), `~/.teamrig/bin/teamrig.mjs`, which names no version and checks
 the current one before it runs it, a teamrig update leaves the lines as they are; until the kit home holds an intact
 current version and that launcher (a teamrig session's start or `teamrig kit install` copies both), `--yes` is refused
-with nothing written, and a preview notes why. It reads the hooks from
+with nothing written, and a preview notes why. Each line names its host (`--host codex-cli`), and a hook run naming a
+host the team's `hosts` does not list is refused, so `--yes` is refused the same way while the team the run is for
+does not list it, naming the host to add; a run with no team, as a first install, has no list to check. It reads the hooks from
 the installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
