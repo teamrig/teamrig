@@ -441,7 +441,7 @@ test('with the switch on, a run without --merge still proves the tree with the w
 test('with --merge, clears the merge of the branch at its head and fingerprints its change before anything changes (T2788)', async () => {
   const { deps, events, logs } = fake();
   assert.equal(await shipCommits({ ...ARGS, merge: true, approved: '5efae2e91' }, CHUNKS, deps), 0);
-  assert.deepEqual(events.slice(0, 6), [
+  assert.deepEqual(events.slice(0, 7), [
     'git rev-parse --abbrev-ref HEAD',
     'git rev-parse HEAD',
     `clear t827-ship-tool ${HEAD_SHA} 5efae2e91`,
@@ -466,7 +466,7 @@ const rebased = (headWork: readonly WorkCommit[]): FakeOptions => ({
 test('with --merge on a rebase of the approved head, the same work commits patch for patch clear the approved head, no new approval (T2913)', async () => {
   const { deps, events, logs } = fake(rebased([workOf(HEAD_SHA, 'ship: a', 'pa'), workOf('8888888888', 'docs: a', 'pd')]));
   assert.equal(await shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, deps), 0);
-  assert.deepEqual(events.slice(0, 9), [
+  assert.deepEqual(events.slice(0, 10), [
     'git rev-parse --abbrev-ref HEAD',
     'git rev-parse HEAD',
     'git rev-parse --verify --quiet 61854f9e1^{commit}',
