@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { mock, test } from 'node:test';
-import type { MergeClearance } from './approval.ts';
+import type { MergeClearance } from '../../src/cli/approval-clearance.ts';
 import type { Gh } from './github.ts';
 import type { Credential } from './keychain.ts';
 import { type OpenPullArgs, type OpenPullDeps, openPullCommand, parseOpenPullArgs, realOpenPullDeps, runOpenPull } from './open-pull.ts';

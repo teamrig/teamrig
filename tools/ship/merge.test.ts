@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { mock, test } from 'node:test';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
-import type { MergeClearance } from './approval.ts';
+import type { MergeClearance } from '../../src/cli/approval-clearance.ts';
 import type { CatchUp } from './catch-up.ts';
 import type { Gh, RequiredChecks } from './github.ts';
 import type { Credential } from './keychain.ts';

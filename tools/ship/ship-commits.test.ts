@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { WorkCommit } from '../../src/merge/work-commits.ts';
-import type { MergeClearance } from './approval.ts';
+import type { MergeClearance } from '../../src/cli/approval-clearance.ts';
 import type { GateVerdict } from './local-gate.ts';
 import type { MainMove, MergeExit } from './merge.ts';
 import { DIST, leaveForReview, parseNumstat, raisePathsOf, SHIP_ATTEMPTS, shipCommits, weighDist, type ShipDeps } from './ship-commits.ts';

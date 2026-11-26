@@ -8,20 +8,18 @@ import { shippedHostGlobs } from './host-globs.ts';
 import { TempRepo } from '../lib/temp-repo.ts';
 import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
 import { DEFAULT_SENSITIVE_PATHS } from '../../src/config/defaults.ts';
+import { sensitivePathsOf } from '../../src/cli/approval-clearance.ts';
 import {
   changedPathsOf,
   changePatch,
-  clearanceText,
   clearMerge,
   clearMergeFrom,
   clearTaskMerge,
   clearTaskMergeFrom,
   mergeClearance,
   originRepoChanges,
-  overlapsOf,
   type ChangeReads,
   type MergeReads,
-  sensitivePathsOf,
   shipWritesOf,
   type StandingOf,
   type TabCallerOf,
@@ -288,22 +286,6 @@ describe('mergeClearance: the answerer approves a low-risk change alone (owner o
   });
 });
 
-describe('overlapsOf: the files a head shares with other sessions\' open branches (T3448)', () => {
-  it('groups them by owner in branch order, each task and path once, and drops a branch sharing none', () => {
-    const branches = [
-      { task: 'T2', owner: 'bravo', paths: ['src/a.ts', 'src/z.ts'] },
-      { task: 'T3', owner: 'charlie', paths: ['src/b.ts'] },
-      { task: 'T5', owner: 'bravo', paths: ['src/a.ts', 'src/c.ts'] },
-      { task: 'T6', owner: 'delta', paths: ['src/y.ts'] },
-    ];
-    assert.deepEqual(overlapsOf(['src/a.ts', 'src/b.ts', 'src/c.ts'], branches), [
-      { owner: 'bravo', tasks: ['T2', 'T5'], paths: ['src/a.ts', 'src/c.ts'] },
-      { owner: 'charlie', tasks: ['T3'], paths: ['src/b.ts'] },
-    ]);
-    assert.deepEqual(overlapsOf([], branches), []);
-  });
-});
-
 describe('taskBranchesOf: the local and origin branches named for a task', () => {
   it('reads both ref folders, keeping only a branch named for a task', () => {
     const asked: (readonly string[])[] = [];
@@ -348,27 +330,11 @@ describe("originRepoChanges: the clearance's repo reads, by the profile of the r
   });
 });
 
-describe('sensitivePathsOf: the paths no low-risk glob covers, or a sensitive one does, read as the review gate reads them', () => {
-  it('matches a slash-less glob on a name at any depth, a slashed one from the root, case and dotfiles alike', () => {
-    const sensitive = ['*guard*', 'tools/**', '.github/**'];
-    const paths = ['src/Push-Guard.ts', 'src/push-guard/a.ts', 'lib/tools/x.ts', 'tools/x.ts', '.github/CODEOWNERS', 'src/a.ts'];
-    assert.deepEqual(sensitivePathsOf(paths, { lowRisk: ['*'], sensitive }), ['src/Push-Guard.ts', 'tools/x.ts', '.github/CODEOWNERS'], 'a folder name needs a **/ glob');
-    assert.deepEqual(sensitivePathsOf(['tools/x.ts'], { lowRisk: ['*'], sensitive: [] }), []);
-  });
-
-  it('holds every path no low-risk glob covers, whatever the sensitive globs leave out', () => {
-    const lowRisk = ['docs/**', '*.test.ts'];
-    const paths = ['docs/a.md', 'DOCS/b.md', 'src/a.test.ts', 'src/a.ts', 'lib/docs/c.md', 'new-folder/x.ts'];
-    assert.deepEqual(sensitivePathsOf(paths, { lowRisk, sensitive: [] }), ['src/a.ts', 'lib/docs/c.md', 'new-folder/x.ts']);
-    assert.deepEqual(sensitivePathsOf(paths, { lowRisk: [], sensitive: [] }), paths, 'no low-risk glob: all of them');
-  });
-});
-
 describe("sensitivePathsOf: the security verdict's paths stay sensitive under the default lists (T3448)", () => {
   /** Every path the verdict found merging on the answerer's approval alone: the gate's own code, exec and secret code, and agent instructions. */
   const VERDICT = [
     ...['src/config/defaults.ts', 'src/config/parse.ts', 'src/config/roster.ts', 'src/register/approval.ts', 'src/register/policy.ts', 'src/register/review.ts'],
-    ...['src/register/hand-step.ts', 'src/cli/ship-approval.ts', 'src/worktree/owner.ts', 'src/exec/runner.ts', 'src/exec/client-integrity.ts', 'src/exec/redact.ts'],
+    ...['src/register/hand-step.ts', 'src/cli/ship-approval.ts', 'src/cli/approval-clearance.ts','src/worktree/owner.ts', 'src/exec/runner.ts', 'src/exec/client-integrity.ts', 'src/exec/redact.ts'],
     ...['src/cli/commands/exec.ts', 'src/core/secrets.ts', 'src/core/secret-key.ts', 'src/core/secret-patterns.ts', 'src/core/secret-shapes.ts'],
     ...['src/cli/commands/secret-rotation.ts', 'src/cli/commands/secrets.ts', 'src/cli/commands/audit.ts', 'src/cli/commands/owner.ts'],
     ...['src/cli/commands/hand-step-file.ts', 'src/cli/commands/allow-scope.ts', 'src/readonly-shell/lines.ts', 'src/automode/write.ts', 'src/skills/grants.ts'],
@@ -509,14 +475,6 @@ describe('clearMerge', () => {
     };
     assert.deepEqual(await clearMerge(caller, reads, 't1-cli', HEAD, HEAD), { kind: 'low-risk', by: 'alpha', paths: 1 });
     assert.deepEqual(heads, [HEAD]);
-  });
-});
-
-describe('clearanceText: how the merge log names its clearance', () => {
-  it('names the lead, the approver, or the answerer and the paths it counted', () => {
-    assert.equal(clearanceText({ kind: 'self' }), "the caller's own, a root team's lead");
-    assert.equal(clearanceText({ kind: 'approved', by: 'lead' }), 'approved by lead');
-    assert.equal(clearanceText({ kind: 'low-risk', by: 'gh', paths: 4 }), 'low-risk, approved by gh, the answerer: 4 changed path(s), none sensitive');
   });
 });
 

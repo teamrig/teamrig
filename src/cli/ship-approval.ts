@@ -67,10 +67,19 @@ export async function mergeStandingOf(reader: KitReader, team: string, callerTex
     approvers: await approversOf(reader, team, config, caller),
     answerer: githubWatcher(config),
     lowRisk: config.pushGuard.lowRiskPaths,
-    sensitive: [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.pushGuard.sensitivePaths, ...hostGlobs],
+    sensitive: sensitiveGlobsOf(config, hostGlobs),
     securityReviewer: config.roles.securityReviewer,
     open: new Map([...state.tasks.values()].filter((task) => UNSHIPPED.includes(task.status)).map((task) => [task.id, task.owner])),
   };
+}
+
+/**
+ * The globs a change must touch none of to be low-risk (MergeStanding.sensitive, T3448): the generic review paths, then
+ * `pushGuard.reviewPaths`, then `pushGuard.sensitivePaths`, then `hostGlobs`, the hosts' repository globs
+ * (`repoGlobsOf`). Shared by the ship tool's merge and `teamrig pr`'s answerer route.
+ */
+export function sensitiveGlobsOf(config: KitConfig, hostGlobs: readonly string[]): readonly string[] {
+  return [...[...GENERIC_REVIEW_PATHS, ...config.pushGuard.reviewPaths].map((entry) => entry.glob), ...config.pushGuard.sensitivePaths, ...hostGlobs];
 }
 
 /**
