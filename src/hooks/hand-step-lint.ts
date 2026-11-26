@@ -26,31 +26,48 @@ const PINNED = /\b[0-9a-f]{64}\b|sha256[^\n]{0,20}\b[0-9a-f]{8,}\b/iu;
 /** The word a reply writes before a block that only reads (changes nothing, touches no secret), which the lint lets by. */
 const READ_ONLY = /\bread-only\b/iu;
 /**
- * The words a lead-in line uses for what a tool call or command gave back ("call 2 returned:", "it printed:"), which
- * make the block after it a quote of that result, not a step to run (T5359). A Codex CLI turn has no transcript
- * teamrig reads, so the reply's own words are all the lint sees, and a reply asked to report what a call returned
- * quotes its JSON in a fence.
+ * The past-tense verbs a lead-in uses for what a tool call or command already gave back ("call 2 returned:", "it
+ * printed:"), which make the block after it a quote of that result, not a step to run (T5359). A Codex CLI turn has
+ * no transcript teamrig reads, so the reply's own words are all the lint sees, and a reply asked to report what a
+ * call returned quotes its JSON in a fence. Nouns such as "output" or "results" are no marker: "the output changes
+ * once you apply:" hands a step over.
  */
-const QUOTED_RESULT = /\b(?:returned|printed|outputs?|results?|came back|answered|replied|responded)\b/iu;
-/** The words a lead-in line uses to hand a block to the human, which no quoting word overrules. */
-const HANDS_OVER = /\b(?:run|paste|add|put|set|write|copy|type|replace|save|insert|append|edit|enter|execute)\b/iu;
+const QUOTED_RESULT = /\b(?:returned|printed|came back|answered|replied|responded)\b/iu;
+/** A lead-in quotes a result only when it ends on a colon, as "call 2 returned:" does (markdown emphasis after it). */
+const ENDS_ON_COLON = /:[*_]*\s*$/u;
+/** Words that turn a lead-in to what is still to come or to what the human does, so it quotes nothing. */
+const NOT_A_QUOTE = /\b(?:will|once|after|you)\b/iu;
+/** The words a lead-in or the block's own line uses to hand a block to the human, which no quoting word overrules. */
+const HANDS_OVER =
+  /\b(?:run|paste|add|put|set|write|copy|type|replace|save|insert|append|edit|enter|execute|apply|use|try|changes?)\b/iu;
 
 /** The last line of `text` before `index` that holds more than blanks, and the line `index` starts on. */
-function linesAround(text: string, index: number): string {
+function linesAround(text: string, index: number): { readonly before: string; readonly own: string } {
   const lineStart = text.lastIndexOf('\n', index - 1) + 1;
   const lineEnd = text.indexOf('\n', index);
   const own = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
   const before = text.slice(0, lineStart).split('\n').reverse().find((line) => line.trim() !== '') ?? '';
-  return `${before}\n${own}`;
+  return { before, own };
+}
+
+/** Whether the lead-in `before` quotes what a call already returned and neither it nor `own` hands anything over. */
+function quotesAResult(before: string, own: string): boolean {
+  return (
+    ENDS_ON_COLON.test(before) &&
+    QUOTED_RESULT.test(before) &&
+    !NOT_A_QUOTE.test(before) &&
+    !HANDS_OVER.test(before) &&
+    !HANDS_OVER.test(own)
+  );
 }
 
 /**
- * Whether the reply marked the block or line at `index` as no step to run, on the line before it or its own line:
- * read-only, or a quote of what a call returned that hands nothing over.
+ * Whether the reply marked the block or line at `index` as no step to run: read-only on the line before it or its
+ * own line, or a lead-in quoting what a call returned that hands nothing over.
  */
 function markedNotToRun(text: string, index: number): boolean {
-  const lines = linesAround(text, index);
-  return READ_ONLY.test(lines) || (QUOTED_RESULT.test(lines) && !HANDS_OVER.test(lines));
+  const { before, own } = linesAround(text, index);
+  return READ_ONLY.test(before) || READ_ONLY.test(own) || quotesAResult(before, own);
 }
 
 /** The shape of a fenced block of language `lang`, or undefined for code the human does not run (TypeScript, a log). */

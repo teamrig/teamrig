@@ -39,12 +39,30 @@ describe('handStepsOf', () => {
     const result = '{ "exit_code": 0, "output": "hi", "session_id": null }';
     assert.deepEqual(handStepsOf(`Call 1 (\`cmd /c echo hi\`) returned:\n${block('json', result)}`), []);
     assert.deepEqual(handStepsOf(`**Call 2** printed nothing; the tool's result:\n\n${block('json', result)}`), []);
-    for (const lead of ['It came back with:', 'The output:', 'write_stdin answered:', 'Results:']) {
+    for (const lead of ['It came back with:', 'write_stdin answered:', '**Call 3 replied:**']) {
       assert.deepEqual(handStepsOf(`${lead}\n${block('console', 'StdinClosed')}`), [], lead);
     }
     assert.deepEqual(handStepsOf(`Paste the result into settings.json:\n${block('json', '{ "a": 1 }')}`), ['json']);
-    assert.deepEqual(handStepsOf(`Run this and send me its output:\n${block('powershell', 'Remove-Item x')}`), ['shell']);
     assert.deepEqual(handStepsOf(`Call 1 returned:\n${block('json', result)}\nNow add this:\n${block('json', '{ "a": 1 }')}`), ['json']);
+  });
+
+  it('flags a block whose lead-in only names an output, looks ahead, speaks to the human or hands it over (T5359)', () => {
+    const cases: ReadonlyArray<readonly [string, string, string]> = [
+      ['The output changes once you apply:', 'powershell', 'Set-Item Env:X 1'],
+      ['Results improve after this:', 'json', '{ "a": 1 }'],
+      ['The output:', 'powershell', 'Set-Item Env:X 1'],
+      ['Results:', 'json', '{ "a": 1 }'],
+      ['Call 1 returned this, so apply:', 'json', '{ "a": 1 }'],
+      ['It printed the fix; use it:', 'powershell', 'Set-Item Env:X 1'],
+      ['Once it returned:', 'json', '{ "a": 1 }'],
+      ['Call 1 returned what you will paste:', 'json', '{ "a": 1 }'],
+      ['Call 1 returned', 'json', '{ "a": 1 }'],
+      ['Try what it printed:', 'powershell', 'Set-Item Env:X 1'],
+    ];
+    for (const [lead, lang, body] of cases) {
+      assert.deepEqual(handStepsOf(`${lead}\n${block(lang, body)}`), [lang === 'json' ? 'json' : 'shell'], lead);
+    }
+    assert.deepEqual(handStepsOf(`Run this and send me its output:\n${block('powershell', 'Remove-Item x')}`), ['shell']);
     assert.deepEqual(handStepsOf(`Run it; the output follows:\n  ${CALL}`), ['call']);
   });
 });
