@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { DEFAULT_HOST } from '../../composition/adapters.ts';
 import { describeLaunch, launchModelProblem, launchOf, terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
@@ -21,6 +22,7 @@ import type { RunOutcome } from '../../open/processes.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { noRoomText } from '../../sessions/headroom.ts';
 import { closedOf, SessionLog, type CloseRecord } from '../../sessions/log.ts';
+import { SessionRecordStore } from '../../sessions/record.ts';
 import { teamWindowOf, type TabFocus, type Terminal } from '../../open/terminals.ts';
 import { urgentFirstPrompt, type WakeAsk } from '../../wake/asks.ts';
 import { WakePrompts } from '../../wake/prompts.ts';
@@ -213,6 +215,26 @@ export interface OpenRequest {
   readonly projectGiven?: boolean;
 }
 
+/**
+ * The run that opens session `id`: on the host its record of its last start names (T5061), so a Codex CLI session
+ * opened from the UI, a meet or an owner wake starts, resumes and is checked in Codex CLI, not in the caller's host
+ * (a bare command takes the first of the team's `hosts`). A record naming no host is the default host's. A run that
+ * names `--host` keeps it, as a person chose it; a session never started, or of a host teamrig does not ship, keeps
+ * the caller's.
+ */
+async function ownHostRun(caller: CliRuntime, kit: Kit, id: string): Promise<CliRuntime> {
+  if (caller.hostId !== undefined) {
+    return caller;
+  }
+  const record = await new SessionRecordStore(caller.files, kit.paths).read(id);
+  if (record === undefined) {
+    return caller;
+  }
+  const hostId = record.host ?? DEFAULT_HOST;
+  const shipped = caller.shippedHosts[hostId];
+  return shipped === undefined ? caller : { ...caller, host: shipped.ports, hostId };
+}
+
 /** A tab that opened, with its OPENED line, or no terminal, with why and the command line to run instead, in `folder`. */
 export type OpenResult =
   | { readonly kind: 'opened'; readonly line: string }
@@ -225,9 +247,11 @@ export type OpenResult =
  * team count it before free memory shows it), and a closed one's reopen logged once its tab opened (fresh on its
  * handover while its refresh is ready, T2354). A home close
  * (a hire that never ran, T1364) opens as a new hire does, its reopen logged too.
+ * It runs on the session's own host (ownHostRun), whichever host the caller works in.
  */
-export async function openSession(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, request: OpenRequest): Promise<OpenResult> {
+export async function openSession(caller: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, request: OpenRequest): Promise<OpenResult> {
   const { team, id, project, terminal, asked, focus } = request;
+  const runtime = await ownHostRun(caller, kit, id);
   const name = roster.nameOf(id) ?? id;
   await refuseLiveRun(runtime, kit, roster, id, name);
   const from = rehiredFrom((await new HiringLog(runtime.files, kit.paths.hires).read()).records, id);

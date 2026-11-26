@@ -4299,7 +4299,9 @@ ASKED 1 decision(s) Mon 10-19 14:10 UTC: T7; the next batch Mon 10-19 19:03 UTC 
 ### teamrig open
 
 Opens a new terminal tab in the session's project folder running Claude Code as that session
-(`teamrig open <id|name>`, or `<team>/<id>` for another team of the same tree). The tab is titled with the session's
+(`teamrig open <id|name>`, or `<team>/<id>` for another team of the same tree). It starts in the host the session last
+started in, a Codex CLI session in Codex CLI, unless `--host` names one; `meet`, `owner wake` and the UI open it the
+same way. The tab is titled with the session's
 team and name, `[shop] web`; Claude Code's own session name stays `shop-web`, the address SendMessage takes. The tab gets `$TEAMRIG_SESSION` and
 `$TEAMRIG_TEAM`, the session's model and effort from the config's `launch`, and a first prompt that reads its inbox
 and list. A rehired session's first prompt reads the handover its retire left first.

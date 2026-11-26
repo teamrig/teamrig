@@ -27,7 +27,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       or approval; --dry-run prints the plan, with what crosses the new border, and writes nothing
   team tree                    the tree of teams this team is in, with each team's lead and sessions
   open <id|name|team/id> [--prompt "<first prompt>"] [--terminal <name>] [--project <dir>] [--resume]
-      a new terminal tab running Claude Code as that session (team/id: another team of the tree);
+      a new terminal tab running that session (team/id: another team of the tree) in the host it last
+      started in, a Codex CLI session in Codex CLI, unless --host names one;
       it takes no --session, as the session it opens is its argument; --terminal print opens no tab
       and prints the command to run, as open does when no terminal it tries opens (exit 3);
       a rehired session reads the handover it left first, or,

@@ -77,6 +77,37 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started[0]?.args.slice(8), [...home, '--host', 'antigravity-cli', ...prompt]);
   });
 
+  describe("the session's own host (T5061)", () => {
+    const BOTH = { 'claude-code': shippedHost(SHIPPED_HOST), 'antigravity-cli': shippedHost(SHIPPED_HOST) };
+    const HOME_ARGS = launchArgv().slice(0, 10);
+
+    /** `open alpha` after alpha last started in `host` (no host: a record the default host wrote), its launch line. */
+    async function openAfterStartIn(host: string | undefined, hosts: readonly string[], extra: readonly string[] = []): Promise<readonly string[]> {
+      const kit = new CliHarness({ ...TEAM, hosts: [...hosts] });
+      const record = { claudePid: 4242, hostSession: 'c0', at: '2030-01-08T09:00:00.000Z' };
+      await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', host === undefined ? record : { ...record, host });
+      const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+      const result = await kit.run(['open', 'alpha', ...extra], { probe: FOLDERS, processes, platform: 'win32', shippedHosts: BOTH });
+      assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+      return processes.started[0]?.args.slice(8, 20) ?? [];
+    }
+
+    it('starts a session in the host its record names when the run names none, as the UI, meet and owner wake run', async () => {
+      const line = await openAfterStartIn('antigravity-cli', ['claude-code', 'antigravity-cli']);
+      assert.deepEqual(line.slice(0, 12), [...HOME_ARGS, '--host', 'antigravity-cli']);
+    });
+
+    it("starts a session whose record names no host in the default host, not the first of the team's hosts", async () => {
+      const line = await openAfterStartIn(undefined, ['antigravity-cli', 'claude-code']);
+      assert.deepEqual(line.slice(0, 12), [...HOME_ARGS, '--host', 'claude-code']);
+    });
+
+    it('keeps the host a run names with --host over the one the record names', async () => {
+      const line = await openAfterStartIn('antigravity-cli', ['claude-code', 'antigravity-cli'], ['--host', 'claude-code']);
+      assert.deepEqual(line.slice(0, 12), [...HOME_ARGS, '--host', 'claude-code']);
+    });
+  });
+
   it("opens the tab in the team's own Windows Terminal window when open.teamWindow is on (T1427)", async () => {
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
     const result = await new CliHarness({ ...TEAM, open: { teamWindow: true } }).run(['open', 'alpha'], { probe: FOLDERS, processes, platform: 'win32' });
