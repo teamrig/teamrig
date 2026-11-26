@@ -5470,16 +5470,14 @@ since one there could never take a key; in `both` whose window opened, the windo
 line comes only once the UI in that window or split has started (it marks `ui/started.json` under the kit home): a
 terminal can take the window and run nothing in it, so with no UI started there within 20 s the run prints `FAILED
 <where> opened, but no UI started in it within 20 s; run teamrig ui --mode terminal in a terminal to see why` and
-exits 1, starting no second UI here. It runs the entry script [ui.path] names (a UI build of your own), with your whole environment.
-Without the key it runs the released UI this teamrig pins: the first start fetches its archive over https into
+exits 1, starting no second UI here. It runs only the released UI this teamrig pins: the first start fetches its archive over https into
 `ui/<version>-<sha256>` under the kit home, refusing one whose sha256 is not the pinned one, and each start holds every
 installed file to the pin again, refusing a folder changed since; remove that folder to fetch it again. The released UI
 gets only PATH, HOME, USERPROFILE, SYSTEMROOT, TERM, COLORTERM, LANG, LANGUAGE, TEAMRIG_HOME, TEAMRIG_TEAM,
-TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.86.0's UI. It is refused when
-[ui.path] names no file. As it starts a program,
-`/teamrig ui` runs only when you type it in the tab, never from a session's line; and [ui.path] is the owner's key,
-which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
-[ui.path] at a working tree a session edits: its edits would run in your terminal unchecked.
+TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pane 0.86.0's UI. No config key names
+another script: to run a UI build of your own, run `npm run ui:dev` in a teamrig-pane checkout. A `ui.path` left in
+the team config is reported until deleted. As it starts a program, `/teamrig ui` runs only when you type it in the
+tab, never from a session's line.
 
 While the UI runs in a terminal, the run that started it also runs every team's idle pass, as a tab's wake check does
 ([open.idle]): a host with no wake check between turns, such as Codex CLI, would otherwise leave the pass unrun until

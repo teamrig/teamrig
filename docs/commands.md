@@ -483,10 +483,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
       own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
       Terminal window, else in a window; one that cannot open falls back and says so; OPENED only once
-      the UI in it starts, else FAILED after 20 s; it runs the entry script ui.path names, else
-      the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
-      at each start and given only a few variables; refused while neither is there, ui.path names no
-      file or the release speaks an interface version this teamrig does not serve
+      the UI in it starts, else FAILED after 20 s; it runs only the released UI this teamrig pins,
+      fetched once into the kit home's ui folder, held to its sha256 at each start and given only a few
+      variables; refused while no UI is pinned or the release speaks an interface version this teamrig
+      does not serve
   page test                    posts one page marked TEST through the team's page webhook, as an expired login's
       page goes; prints which team's alerts key paged, or why none went and fails, never the URL
   compact [--dry-run] [--from-history]   archives the task list's log and rewrites its snapshot, so reads
