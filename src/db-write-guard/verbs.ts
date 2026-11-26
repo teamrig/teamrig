@@ -101,9 +101,150 @@ export function luaWritesIn(script: string): string[] {
   return namesOf(script, LUA_CALL, (command) => command.toUpperCase()).filter(isKeyValueWrite);
 }
 
-/** The SQL writes a statement list names, upper case: `DROP` in `DROP TABLE t`. */
+/**
+ * The SQL writes a statement list names, upper case: `DROP` in `DROP TABLE t`.
+ *
+ * Comments and psql echo text are dropped first, so prose that mentions a write names none (#2536). Where the
+ * dialects disagree on what a comment is, a write any reading finds counts: a comment is skipped only when every
+ * reading agrees it is one.
+ */
 export function sqlWritesIn(sql: string): string[] {
-  return namesOf(sql, SQL_WRITE, (keyword) => keyword.toUpperCase());
+  const first = new Map<string, number>();
+  for (const reading of sqlReadings(sql)) {
+    for (const match of reading.matchAll(SQL_WRITE)) {
+      const keyword = match[1];
+      if (keyword === undefined) continue;
+      const name = keyword.toUpperCase();
+      const at = match.index ?? 0;
+      // The order the words were first met in, so a report reads like the statement list.
+      if (!first.has(name) || at < first.get(name)!) first.set(name, at);
+    }
+  }
+  return [...first.entries()].sort((a, b) => a[1] - b[1]).map(([name]) => name);
+}
+
+/** The psql meta-commands whose text is prose for the reader, never SQL the server runs. */
+const PSQL_ECHO = /^\\(?:echo|qecho|warn)(?![A-Za-z])/;
+
+/**
+ * The SQL readings `sql` allows, with the spans the server never runs blanked: `--` comments, block comments and
+ * the text of psql's `\echo`, `\qecho` and `\warn`.
+ *
+ * Two things differ by server, so each is read both ways and the caller counts a write any reading finds, which
+ * skips a span only where every reading agrees it is not code:
+ *
+ * - a backslash escapes the quote that follows it in a `'...'` literal only with `standard_conforming_strings`
+ *   off;
+ * - a block comment nests in PostgreSQL, and ends at the first closing marker in MySQL and SQLite.
+ *
+ * What the server does run stays as it is: string literals, whose text a trailing meta-command may run as SQL;
+ * dollar-quoted bodies; quoted identifiers; and MySQL's executable comments, which MySQL runs.
+ */
+function sqlReadings(sql: string): string[] {
+  const readings: string[] = [];
+  for (const backslashEscapes of [false, true]) {
+    for (const nested of [true, false]) {
+      readings.push(blankNonCode(sql, backslashEscapes, nested));
+    }
+  }
+  return readings;
+}
+
+/** `sql` with every span the server does not run replaced by spaces, keeping each newline in place. */
+function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): string {
+  const out = sql.split('');
+  const blank = (from: number, to: number) => {
+    for (let i = from; i < to && i < out.length; i++) if (out[i] !== '\n') out[i] = ' ';
+  };
+  let i = 0;
+  while (i < sql.length) {
+    const two = sql.slice(i, i + 2);
+    if (two === '--') {
+      const end = sql.indexOf('\n', i);
+      const stop = end === -1 ? sql.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (two === '/*' && sql[i + 2] !== '!') {
+      // MySQL executes /*! ... */; every other block comment is prose. Nesting is read per dialect.
+      let depth = 1;
+      let j = i + 2;
+      while (j < sql.length && depth > 0) {
+        if (nested && sql.startsWith('/*', j)) {
+          depth++;
+          j += 2;
+        } else if (sql.startsWith('*/', j)) {
+          depth--;
+          j += 2;
+        } else {
+          j++;
+        }
+      }
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    if (sql[i] === "'") {
+      // A literal the server runs: its text may hold a write (`\gexec`), so it stays.
+      let j = i + 1;
+      while (j < sql.length) {
+        if (backslashEscapes && sql[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (sql[j] === "'") {
+          if (sql[j + 1] === "'") {
+            j += 2;
+            continue;
+          }
+          j++;
+          break;
+        }
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    if (sql[i] === '"') {
+      // A quoted identifier: an identifier, so a `--` inside it starts nothing.
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === '"') {
+          if (sql[j + 1] === '"') {
+            j += 2;
+            continue;
+          }
+          j++;
+          break;
+        }
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    if (sql[i] === '$') {
+      const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i));
+      if (tag) {
+        const close = sql.indexOf(tag[0], i + tag[0].length);
+        i = close === -1 ? sql.length : close + tag[0].length;
+        continue;
+      }
+    }
+    if (sql[i] === '\\') {
+      const meta = PSQL_ECHO.exec(sql.slice(i));
+      if (meta) {
+        // Its text runs to the next backslash: `\gexec` after it, or a doubled `\\`, ends it.
+        const next = sql.indexOf('\\', i + meta[0].length);
+        const stop = next === -1 ? sql.length : next;
+        blank(i, stop);
+        i = stop;
+        continue;
+      }
+    }
+    i++;
+  }
+  return out.join('');
 }
 
 /** The vocabularies of the team's clients Node code loads: a module by its name, or a `module/sub` path under it. */

@@ -212,4 +212,21 @@ describe('sqlWritesIn', () => {
     assert.deepEqual(sqlWritesIn('REPLACE INTO t VALUES (1); MERGE INTO u USING v ON (1=1)'), ['REPLACE', 'MERGE']);
     assert.deepEqual(sqlWritesIn("SELECT replace(name, 'a', 'b'), created_at, updated FROM t ORDER BY updated_at"), []);
   });
+
+  // #2536: the guard reads prose as SQL unless comments and psql's echo text are skipped first.
+  it('names no write for one that only appears in a comment or an echo line', () => {
+    assert.deepEqual(sqlWritesIn('-- report after a cut listing create\nSELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('/* DROP TABLE x */ SELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('\\echo == 1 create issued, not confirmed\nSELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('\\qecho DROP TABLE x\n'), []);
+    assert.deepEqual(sqlWritesIn('\\warn truncate later\n'), []);
+  });
+
+  it('keeps reading what the server really runs', () => {
+    assert.deepEqual(sqlWritesIn("SELECT 'DROP TABLE x' \\gexec"), ['DROP']);
+    assert.deepEqual(sqlWritesIn('DO $$ BEGIN UPDATE t SET a = 1; END $$'), ['UPDATE']);
+    assert.deepEqual(sqlWritesIn('\\echo hi \\\\ DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/*! DROP TABLE x */'), ['DROP']);
+    assert.deepEqual(sqlWritesIn("SELECT '-- x', 'DROP TABLE y' \\gexec"), ['DROP']);
+  });
 });
