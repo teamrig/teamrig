@@ -3779,7 +3779,7 @@ Prints how the tool your team uses does one step a skill names, when no teamrig 
 tracker files a child issue under its parent, where the code host takes a private security report. A skill says
 "run `teamrig skills step <id>` and follow it", so it stays the same whichever host and tools a team runs. The steps
 are `tracker.link-child`, `codehost.private-report`, `codehost.fetch-outside-change`, `host.rename`,
-`host.slim-setup` and `host.denial-sources`. A host step prints the running host's text; a connector step prints
+`host.slim-setup`, `host.denial-sources`, `host.hooks-file` and `host.skills-folder`. A host step prints the running host's text; a connector step prints
 the text of each connector the team config uses, or only the one `--for` names. When none in use serves the step it
 prints the step's neutral line and the tools that would serve it. Only the tools teamrig ships print a text.
 Refused (exit 64): an id that is no step, `--for` on a host step, or a ref no connector's prefix starts.
@@ -4648,7 +4648,7 @@ another Claude Code, as `open` does.
 What a restore after a reboot would do now. The `hook restore-track` hook records every Claude Code session on the
 machine, in a team or not, in `<home>/restore/sessions/`; after a shutdown or reboot killed them, `restore run`
 reopens each one the shutdown interrupted, in its folder (the worktree it went into, where Claude Code files its
-transcript) and in the AI CLI it ran in (a Codex CLI session in Codex CLI, its line naming `--host`), at the effort its team config sets (`launch.<id>.effort`), else at the one its last turn ran at. A
+transcript) and in the AI CLI it ran in (a session of another AI CLI in that CLI, its line naming `--host`), at the effort its team config sets (`launch.<id>.effort`), else at the one its last turn ran at. A
 session that ended on purpose (`/exit`, `/clear`, `teamrig close` or the idle
 pass), still runs, was active since logon, was not a terminal session (`claude -p`, a background job
 Claude Code resumes itself), was continued in another session, has no transcript left, is too old or failed to resume
@@ -6009,9 +6009,9 @@ UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 
 ### teamrig setup hooks
 
-Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
-`hooks.json` in `$CODEX_HOME` (default `~/.codex`); for `--host antigravity-cli`, Antigravity CLI's `hooks.json` in
-`~/.gemini/config`. Your own handlers stay as they are, in their order; teamrig's
+Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks; `teamrig skills step
+host.hooks-file` prints where the running host keeps that file, the settings beside it the hooks need, and how the
+host comes to trust them. Your own handlers stay as they are, in their order; teamrig's
 earlier handlers are replaced, so running it again rewrites the ones an older release wrote. Where the host's handlers
 run teamrig's kit launcher (the first one above does), `~/.teamrig/bin/teamrig.mjs`, which names no version and checks
 the current one before it runs it, a teamrig update leaves the lines as they are; until the kit home holds an intact
@@ -6023,19 +6023,12 @@ the installed plugin, so it is refused from a source checkout (`setup hooks runs
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
 `SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
-file already holds the same handlers, one `UNCHANGED` line. A second line does the same for the one setting the hooks
-need in Codex's `config.toml` beside it, `[features] unified_exec_tty = false`: Codex runs no hook on a line typed
-into an interactive shell, so teamrig turns those shells off (its own launcher passes the same setting). Codex applies
-a profile's features after the root ones, so the same key is turned off in each `[profiles.<name>.features]` that
-turns it on; a profile that sets nothing gets nothing. A profile file beside it, `<name>.config.toml` (chosen with
-`codex -p <name>`), is layered over `config.toml` the same way, so each one that turns the key on gets its own line
-and its own backup, `codex-<name>.config.toml.bak`; a profile entry that is no plain file is reported `SKIPPED` and
-left as it is. Every other line stays, the old `config.toml` is kept as `codex-config.bak` in `backups`, and a
-`features = { ... }` inline table, at the root or in a profile, that may hold the key is refused with nothing written:
-set `unified_exec_tty = false` in it by hand. It never trusts a handler
-for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
-every write; a teamrig update writes nothing, so the trust holds. Its `--yes` changes a permission, the owner's to make, so it is
-refused where an agent runs it; the preview stays open.
+file already holds the same handlers, one `UNCHANGED` line. Where the host's hooks need a setting in a config file
+beside them, one more line per file does the same for that setting: every other line of the file stays, the old file
+is kept in `backups`, and a file whose setting teamrig cannot change safely is refused with nothing written. It never
+trusts a handler for you: where the host runs a new or changed hook only once you trust it, a `NOTE` line says how,
+after every write; a teamrig update writes nothing, so the trust holds. Its `--yes` changes a permission, the owner's
+to make, so it is refused where an agent runs it; the preview stays open.
 
 On a host with no teamrig plugin, the person installs teamrig with the one file `install-teamrig.ts` from the release
 branch (`node install-teamrig.ts --host <name> --yes`, README "An AI CLI with no teamrig plugin"): it clones the
@@ -6045,31 +6038,29 @@ holds teamrig, with a `NOTE` naming why `--yes` would be refused; `--yes` is ref
 
 Flags:
 
-- `--host <name>`: required: the host whose hooks file it writes (`codex` or `antigravity-cli`).
+- `--host <name>`: required: the host whose hooks file it writes; a name no host keeps such a file under is refused,
+  naming the ones that do.
 - `--yes`: write the file, keeping the old one in the kit's `backups` folder first; without it, only count.
 
 Example:
 
 ```sh
-teamrig setup hooks --host codex
+teamrig setup hooks --host <name>
 ```
 
 Output:
 
 ```text
-PREVIEW nothing written (add --yes to write) /home/me/.codex/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
-PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [features] unified_exec_tty = false, and the same in each [profiles.<name>.features] that turns it on
-PREVIEW nothing written (add --yes to write) /home/me/.codex/fast.config.toml: sets [features] unified_exec_tty = false where the profile sets it
-  SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
-  NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
+PREVIEW nothing written (add --yes to write) /home/me/<host home>/hooks.json: inserted 42, unchanged 0, changed 0, removed 0
+  SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event the host lacks
   NOTE They run teamrig through its kit launcher, which names no version: a teamrig update leaves them as they are, so the trust holds.
 ```
 
 ### teamrig setup skills
 
 Copies teamrig's skills into your own skills folder of a host that loads no plugin's skills, so its sessions read the
-guide, the team setup and every other teamrig skill: for `--host codex`, Codex CLI's `skills/teamrig` in
-`$CODEX_HOME` (default `~/.codex`), which Codex reads in every project. The folder is teamrig's alone: the copy leaves
+guide, the team setup and every other teamrig skill; `teamrig skills step host.skills-folder` prints the running
+host's folder and when the host reads it. The folder is teamrig's alone: the copy leaves
 it holding exactly the installed plugin's skills, so running it again after a teamrig update rewrites the changed
 ones and drops those the plugin no longer ships. It copies from the installed plugin, so it is refused from a source
 checkout (`setup skills runs from the installed plugin's dist/cli/main.js`). It prints `PREVIEW nothing written (add
@@ -6079,20 +6070,21 @@ the kit's `backups` folder, and a `NOTE` line says to start a new session, which
 
 Flags:
 
-- `--host <name>`: required: the host whose skills folder it writes (`codex`).
+- `--host <name>`: required: the host whose skills folder it writes; a name no host keeps such a folder under is
+  refused, naming the ones that do.
 - `--yes`: copy the skills, moving the old folder into the kit's `backups` folder first; without it, only count.
 
 Example:
 
 ```sh
-teamrig setup skills --host codex --yes
+teamrig setup skills --host <name> --yes
 ```
 
 Output:
 
 ```text
-WROTE /home/me/.codex/skills/teamrig: inserted 15, unchanged 0, changed 0, removed 0
-  NOTE Codex reads its skills when a session starts: start a new Codex session to load the new ones
+WROTE /home/me/<host home>/skills/teamrig: inserted 15, unchanged 0, changed 0, removed 0
+  NOTE The host reads its skills when a session starts: start a new session to load the new ones
 ```
 
 ### teamrig commits check
@@ -8869,7 +8861,7 @@ hook payload; otherwise a JSON permission decision `deny` with the reason naming
 
 Before a Write, Edit, MultiEdit, NotebookEdit, Bash or PowerShell call, refuses one that would write teamrig's own
 install in the kit home (its `versions`, `bin`, `current`, `current.json` and `installs.json`) or the hook files of a
-host teamrig ships with (Codex CLI's `hooks.json` and `config.toml`): a file tool whose path reaches one by any
+host teamrig ships with (the files `teamrig skills step host.hooks-file` names): a file tool whose path reaches one by any
 spelling, or a shell line naming one at all. The kit's `teams/` and the Read tool stay open. See
 [Hooks and permissions](hooks.md#before-a-write-or-a-shell-command-the-install-guard).
 

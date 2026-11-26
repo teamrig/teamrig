@@ -113,6 +113,8 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     const newer = loads.flatMap((load) => (load.kind === 'loaded' && (load.value.terms !== undefined || load.value.steps !== undefined) ? [[load.id, load.value.apiVersion]] : []));
     assert.deepEqual(newer, [
       ['claude-code', '0.2.0'],
+      ['codex-cli', '0.2.0'],
+      ['antigravity-cli', '0.2.0'],
       ['github', '0.7.0'],
       ['jira', '0.3.0'],
     ]);
@@ -225,8 +227,8 @@ describe('reading the steps each adapter serves', () => {
     const served = [...hosts, ...connectors].map((load) => [load.id, load.kind === 'loaded' ? [...load.value.texts.keys()] : load.notices]);
     assert.deepEqual(served, [
       ['claude-code', ['host.rename', 'host.slim-setup', 'host.denial-sources']],
-      ['codex-cli', []],
-      ['antigravity-cli', []],
+      ['codex-cli', ['host.hooks-file', 'host.skills-folder']],
+      ['antigravity-cli', ['host.hooks-file']],
       ['github', ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change']],
       ['jira', []],
       ['local', []],

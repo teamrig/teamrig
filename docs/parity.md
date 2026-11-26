@@ -15,8 +15,8 @@ A cell reads:
 The AI CLIs a session runs in.
 
 - Claude Code (`claude-code`), built on plugin API 0.2.0
-- Codex CLI (`codex-cli`), built on plugin API 0.1.0
-- Antigravity CLI (`antigravity-cli`), built on plugin API 0.1.0
+- Codex CLI (`codex-cli`), built on plugin API 0.2.0
+- Antigravity CLI (`antigravity-cli`), built on plugin API 0.2.0
 
 ### rules
 

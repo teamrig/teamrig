@@ -33,10 +33,11 @@ function partial(missing: string): Support {
 }
 
 export const declaration: HostDeclaration = {
-  apiVersion: '0.1.0',
+  apiVersion: '0.2.0',
   id: 'codex-cli',
   name: 'Codex CLI',
   sessionVariables: SESSION_VARIABLES,
+  steps: ['host.hooks-file', 'host.skills-folder'],
   manifest: {
     'rules.session-start': provedOnWindows('rules.session-start'),
     'rules.instruction-files': NOT_BUILT,

@@ -35,7 +35,7 @@ describe('the step registry', () => {
 
   it("lists one side's steps in registry order, and none for a side that serves none", () => {
     assert.deepEqual(stepsOf('connector'), ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change']);
-    assert.deepEqual(stepsOf('host'), ['host.rename', 'host.slim-setup', 'host.denial-sources']);
+    assert.deepEqual(stepsOf('host'), ['host.rename', 'host.slim-setup', 'host.denial-sources', 'host.hooks-file', 'host.skills-folder']);
     assert.deepEqual(stepsOf('terminal'), []);
   });
 });

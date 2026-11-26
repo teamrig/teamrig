@@ -932,8 +932,8 @@ tool: while sessions and the runner share one account, it stops a slip, not a de
 ## Before a write or a shell command: the install guard
 
 Every session's guards run from teamrig's own install in the kit home (`versions`, `bin`, `current`, `current.json`
-and `installs.json`), and a host other than Claude Code starts them from its hook files (Codex CLI's `hooks.json` and
-`config.toml`). A session that rewrote either would turn every guard off for the whole team. Before Claude runs a
+and `installs.json`), and a host other than Claude Code starts them from its hook files (`teamrig skills step
+host.hooks-file` names them). A session that rewrote one would turn every guard off for the whole team. Before Claude runs a
 Write, Edit, MultiEdit or NotebookEdit call, `hook install-guard` refuses one whose file reaches a guarded place by any
 spelling (an 8.3 short name, trailing dots, a Git Bash drive, a link); before a Bash or PowerShell call, one whose line
 names a guarded place at all, its reads too, since a shell line's writes cannot be told from its reads. The kit's
@@ -1227,7 +1227,7 @@ A block or call line whose line before, or own line, says `read-only` is let by,
 on a colon with a past-tense verb for what a call gave back (`returned`, `printed`, `came back`, `answered`,
 `replied`, `responded`), says no `will`, `once`, `after` or `you`, and hands nothing over on either line (no `run`,
 `paste`, `add`, `set`, `write`, `copy`, `apply`, `use`, `try`, `change` and the like). That is a quote of a tool's
-result, which a reply on a host whose transcript teamrig does not read (Codex CLI) shows the human when asked what a
+result, which a reply on a host whose transcript teamrig does not read shows the human when asked what a
 call returned; a noun such as `output` or `results` marks nothing. A backticked short hex alone pins nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
 dropped skill edit and before the rest of the turn's end. Outside a team, and in a tab that is no session of it, it
 says nothing.
@@ -1533,8 +1533,8 @@ the time if the line is still unseen.
 ### The idle pass
 
 With `open.idle.mode` not `off` (`on`, the default, or `dry-run`), `hook wake-check` also runs the team's
-idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by (Codex CLI's
-`codex queue`), `hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
+idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by
+`hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
 the team's and not this tab's wake; it needs `wake.enabled`. It runs at most once a minute across the team: the
 check that claims `state/idle-pass.lock` runs it, and no check waits for that lock. With nothing changed, an idle
 tab's mod asks every 10 minutes, so a quiet team's pass runs that often and its close comes up to 10 minutes past

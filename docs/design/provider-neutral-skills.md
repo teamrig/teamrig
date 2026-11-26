@@ -69,7 +69,7 @@ host whose adapter serves them.
 - **The registry.** A closed list of step ids beside the feature registry (`src/features/steps.ts`), each with its
   side (host or connector), one line of what it covers and a neutral fallback: `tracker.link-child`,
   `codehost.private-report`, `codehost.fetch-outside-change`, `host.rename`, `host.slim-setup`,
-  `host.denial-sources`. A new id is one line, like a feature row.
+  `host.denial-sources`, `host.hooks-file`, `host.skills-folder`. A new id is one line, like a feature row.
 - **The text.** Each adapter folder holds `step-texts.ts`, a record of one text per step it serves, keyed by step id,
   in the same plain style as a skill: the build is `tsc` alone and copies no Markdown into `dist`, so a text ships as
   a module the loader imports like the declaration. Its declaration lists those ids (`steps: [...]`). The loader
