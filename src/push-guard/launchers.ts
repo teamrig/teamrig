@@ -669,25 +669,27 @@ class LaunchReader {
     if (shell === undefined) {
       return { kind: 'opaque', reason: 'the shell redact-exec runs is only known when it runs', gated: true, command: { program: head, args } };
     }
-    if (end === -1) {
-      if (subcommand.text !== 'redact-exec') {
-        return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
-      }
+    if (subcommand.text === 'redact-exec') {
       const encoded = flagValue(args, '--encoded-command');
-      if (encoded === undefined) {
-        return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
+      if (encoded !== undefined) {
+        const decoded = decodePrompt(encoded.text);
+        if (decoded === undefined) {
+          return { kind: 'opaque', reason: 'the encoded command redact-exec runs cannot be decoded', gated: true, command: { program: head, args } };
+        }
+        this.runner = true;
+        return this.script({ text: decoded, dynamic: false }, shell, false);
       }
-      const decoded = decodePrompt(encoded.text);
-      if (decoded === undefined) {
-        return { kind: 'opaque', reason: 'the encoded command redact-exec runs cannot be decoded', gated: true, command: { program: head, args } };
-      }
-      this.runner = true;
-      return this.script({ text: decoded, dynamic: false }, shell, false);
+    }
+    if (end === -1) {
+      return { kind: 'program', program: head, args, env: this.env, chdirs: this.chdirs, stdinArgs: this.stdinArgs, runner: this.runner, captured: this.captured };
     }
     const words = args.slice(end + 1);
     const [only] = words;
     if (only === undefined) {
       return NOTHING;
+    }
+    if (subcommand.text === 'redact-exec' && flagValue(args, '--shell') !== undefined && words.length > 1) {
+      return { kind: 'opaque', reason: 'redact-exec with --shell takes the command as one quoted word', gated: true, command: { program: head, args } };
     }
     this.runner = true;
     if (words.length === 1) {

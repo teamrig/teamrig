@@ -129,6 +129,13 @@ describe('teamrig redact-exec', () => {
     const both = await harness.run(['redact-exec', '--encoded-command', encoded, '--', 'echo', 'hi']);
     assert.equal(both.code, 64);
 
+    const bareDash = await harness.run(['redact-exec', '--encoded-command', encoded, '--']);
+    assert.equal(bareDash.code, 64);
+
+    const multiWordWithShell = await harness.run(['redact-exec', '--shell', 'powershell', '--', 'echo', 'hi'], { platform: 'win32' });
+    assert.equal(multiWordWithShell.code, 64);
+    assert.ok(multiWordWithShell.stderr.join('\n').includes('pass the command as one quoted word'));
+
     const emptyEncoded = await harness.run(['redact-exec', '--encoded-command', encodePrompt('   ')]);
     assert.equal(emptyEncoded.code, 64);
   });
@@ -155,6 +162,11 @@ describe('teamrig redact-exec', () => {
     const encodedPush = encodePrompt('git push --force origin main');
     const pushRes = await harness.run(['hook', 'push-guard'], { stdin: bashHookStdin(`teamrig redact-exec --encoded-command ${encodedPush}`) });
     assert.equal(decisionOf(pushRes), 'deny');
+
+    const encodedBareDash = await harness.run(['hook', 'push-guard'], {
+      stdin: bashHookStdin(`teamrig redact-exec --encoded-command ${encodedPush} --`),
+    });
+    assert.equal(decisionOf(encodedBareDash), 'deny');
 
     const secretRes = await harness.run(['hook', 'secret-guard'], { stdin: bashHookStdin('teamrig redact-exec -- cat .env') });
     assert.equal(decisionOf(secretRes), 'deny');
@@ -207,6 +219,22 @@ describe('teamrig redact-exec', () => {
       stdin: bashHookStdin('teamrig redact-exec --shell bash -- "echo a; git push --force origin main"'),
     });
     assert.equal(decisionOf(bashPush), 'deny');
+
+    const psMulti = await harness.run(['hook', 'push-guard'], {
+      stdin: bashHookStdin('teamrig redact-exec --shell powershell -- git push --force origin main'),
+    });
+    assert.equal(decisionOf(psMulti), 'deny');
+
+    const bashMulti = await harness.run(['hook', 'push-guard'], {
+      stdin: bashHookStdin('teamrig redact-exec --shell bash -- git push --force origin main'),
+    });
+    assert.equal(decisionOf(bashMulti), 'deny');
+
+    const execMulti = await harness.run(['hook', 'exec-guard'], {
+      env: { TEAMRIG_SESSION: 'alpha' },
+      stdin: bashHookStdin('teamrig redact-exec --shell powershell -- echo ok'),
+    });
+    assert.equal(decisionOf(execMulti), 'deny');
 
     const afterDash = await harness.run(['hook', 'exec-guard'], {
       env: { TEAMRIG_SESSION: 'alpha' },

@@ -48,12 +48,15 @@ function shellFlagOf(args: ParsedArgs): string | undefined {
   return SHELL_PROGRAMS[value];
 }
 
-function commandOf(args: ParsedArgs, platform: NodeJS.Platform): string {
+function commandOf(args: ParsedArgs, platform: NodeJS.Platform, shell: string | undefined): string {
   const encoded = args.flags.get('encoded-command');
   if (encoded === undefined) {
+    if (shell !== undefined && args.rest.length > 1) {
+      throw new UsageError('pass the command as one quoted word');
+    }
     return commandLine(shellWordsOf(args, platform), platform);
   }
-  if (args.rest.length > 0) {
+  if (args.rest.length > 0 || args.restMarker) {
     throw new UsageError('--encoded-command and -- <command ...> cannot go together');
   }
   const decoded = decodePrompt(encoded);
@@ -87,6 +90,7 @@ function rotationEventOf(runtime: CliRuntime): HookEvent {
     helper: undefined,
     call: undefined,
     prompt: undefined,
+    hostPrompt: false,
     lastReply: undefined,
     stopActive: false,
     source: undefined,
@@ -106,8 +110,8 @@ function rotationEventOf(runtime: CliRuntime): HookEvent {
  */
 export async function redactExec(args: ParsedArgs, runtime: CliRuntime): Promise<ProcessExit> {
   noPositionals(args);
-  const command = commandOf(args, runtime.platform);
   const shell = shellFlagOf(args);
+  const command = commandOf(args, runtime.platform, shell);
   const session = sessionOf(args, runtime);
   const guard = await guardLoadOf(runtime.cwd, runtime);
   const result = await runtime.shell.run({ command, cwd: runtime.cwd, env: runtime.env, ...(shell === undefined ? {} : { shell }) });
