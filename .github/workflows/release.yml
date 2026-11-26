@@ -121,7 +121,10 @@ jobs:
     # Signs a build provenance attestation of the built dist/integrity.json, which holds the sha256 of every dist file:
     # `teamrig kit update` checks it with `gh attestation verify` before it installs a release (T5278 C3), so a
     # release is one this workflow built from main, not only one a tag names. A job of its own, so the OIDC token and
-    # the attestation write reach one pinned action and never the build's npm tree.
+    # the attestation write reach one pinned action and never the build's npm tree. The subject is named by the
+    # release's tag, teamrig-v<version>.integrity.json, which kit update requires: the run's source commit is main's
+    # head when the run started, which a later push or the hourly run makes another commit than the release's, so the
+    # name is what ties the attestation to the tag, and an older release's list under a newer tag is refused.
     needs: build
     if: ${{ always() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
@@ -135,9 +138,14 @@ jobs:
         with:
           name: dist
           path: dist
+      # The build's version-cli.ts took the version from plugin.json as a plain x.y.z; it reaches the shell only as
+      # an environment value.
+      - run: cp dist/integrity.json "teamrig-v$VERSION.integrity.json"
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/integrity.json
+          subject-path: teamrig-v${{ needs.build.outputs.version }}.integrity.json
 
   publish:
     name: publish to the preview branch
