@@ -6,7 +6,7 @@ What each tool teamrig runs on supports, feature by feature, as its adapter decl
 
 A cell reads:
 
-- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.
+- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved on` names the systems with no such record yet, and `built, not proven live` says the adapter builds it but no live run is recorded anywhere yet, not that the feature fails.
 - **partial**: part of it runs. The cell says what is missing, then where the rest is proved.
 - **unsupported**: it does not run on this tool. The cell says why.
 
@@ -22,128 +22,128 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `rules.rules-folder` | the rules folder of a project | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `rules.memory` | memory files kept between sessions | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
-| `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `rules.rules-folder` | the rules folder of a project | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `rules.memory` | memory files kept between sessions | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
+| `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, built, not proven live | partial (missing: the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled), built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ### inbox
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#inboxprompt-line); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
 
 ### context
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `context.compact-hold` | holding a compaction while a handover is written | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no PreCompact hook |
+| `context.compact-hold` | holding a compaction while a handover is written | supported, built, not proven live | partial (missing: the hold never fires: it needs the transcripts and usage ports), built, not proven live | unsupported: Antigravity has no PreCompact hook |
 | `context.size` | the context size and its refresh thresholds | supported, proved on [windows](proofs/claude-code.md#contextsize); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: transcript context sizing is not built yet |
-| `context.refresh` | how the CLI starts fresh (clear, compaction or a new process), with the handover read after | supported, proved on [windows](proofs/claude-code.md#contextrefresh); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab /clear mod |
+| `context.refresh` | how the CLI starts fresh (clear, compaction or a new process), with the handover read after | supported, proved on [windows](proofs/claude-code.md#contextrefresh); unproved on linux, macos | partial (missing: no size trigger (context.size) and no in-tab clear), built, not proven live | unsupported: Antigravity has no in-tab /clear mod |
 
 ### hooks
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `hooks.permission-refuse` | refusing a permission prompt when asks are off | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no PermissionRequest hook |
-| `hooks.output-redact` | redacting a secret in tool output | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: PreToolUse overwrite redact-exec wrapper is not built yet |
-| `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: PreInvocation cannot take back a prompt that was already typed), unproved |
-| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hookspretool-guard); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hooksfile-guard); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, built, not proven live | partial (missing: the owner's typed in-tab review runs only in Claude Code), built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | partial (missing: a read-only line skips the prompt only when asks are refused), built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `hooks.permission-refuse` | refusing a permission prompt when asks are off | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity has no PermissionRequest hook |
+| `hooks.output-redact` | redacting a secret in tool output | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: PreToolUse overwrite redact-exec wrapper is not built yet |
+| `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, built, not proven live | supported, built, not proven live | partial (missing: PreInvocation cannot take back a prompt that was already typed), built, not proven live |
+| `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | partial (missing: Codex has no tool-failure hook; only the missing-command hint runs), built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ### permissions
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: pattern wildcards in read_file() and command(), subfolder globbing, ~ expansion in read_file(), and prefix allow rules), proved on [windows](proofs/antigravity-cli.md#permissionsdeny-lines); unproved on linux, macos |
+| `permissions.deny-lines` | the permission deny lines, their doctor checks and trim | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: pattern wildcards in read_file() and command(), subfolder globbing, ~ expansion in read_file(), and prefix allow rules), proved on [windows](proofs/antigravity-cli.md#permissionsdeny-lines); unproved on linux, macos |
 | `permissions.auto-mode-routes` | the push and deploy routes granted to auto mode | supported, proved on [windows](proofs/claude-code.md#permissionsauto-mode-routes); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no Claude Code auto-mode routes |
 
 ### sessions
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab launching |
-| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab resume |
-| `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | partial (missing: no session name, settings file or model check), built, not proven live | unsupported: Antigravity has no terminal tab launching |
+| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | partial (missing: restore after a reboot needs the paths port), built, not proven live | unsupported: Antigravity has no terminal tab resume |
+| `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
 | `sessions.wake` | waking an idle session | supported, proved on [windows](proofs/claude-code.md#sessionswake); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake mod |
-| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `sessions.process` | finding the session's process | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no tab process tracking |
-| `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
-| `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
-| `sessions.effort-writeback` | a typed effort level written back to the session | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no effort level hook field |
+| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | partial (missing: the turn-end checks that read a transcript need the transcripts port), built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `sessions.process` | finding the session's process | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity has no tab process tracking |
+| `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
+| `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
+| `sessions.effort-writeback` | a typed effort level written back to the session | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no effort level hook field |
 
 ### tabs
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
 | `tabs.title-status` | tab titles and status circles | supported, proved on [windows](proofs/claude-code.md#tabstitle-status); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab title sequences |
-| `tabs.waiting-state` | the tab's waiting-on-a-decision state | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab waiting circles |
-| `tabs.memory` | what one tab's processes hold in memory, and the notice of a step killed for memory | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab memory tracking |
+| `tabs.waiting-state` | the tab's waiting-on-a-decision state | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no terminal tab waiting circles |
+| `tabs.memory` | what one tab's processes hold in memory, and the notice of a step killed for memory | supported, built, not proven live | partial (missing: the killed-step notice reads only Claude Code's reaper), built, not proven live | unsupported: Antigravity has no terminal tab memory tracking |
 
 ### wake
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `wake.api-retry` | sending a turn again after an API error | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no StopFailure hook |
-| `wake.cost` | what a wake turn costs, from the CLI's prompt-cache lifetime and the measured turns | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake cost tracking |
+| `wake.api-retry` | sending a turn again after an API error | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no StopFailure hook |
+| `wake.cost` | what a wake turn costs, from the CLI's prompt-cache lifetime and the measured turns | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake cost tracking |
 
 ### skills
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `skills.plugin` | the plugin skills | supported, proved on [windows](proofs/claude-code.md#skillsplugin); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `skills.team` | team and session skills | supported, proved on [windows](proofs/claude-code.md#skillsteam); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `skills.session-listing` | a session's own skill listing | supported, proved on [windows](proofs/claude-code.md#skillssession-listing); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `skills.plugin` | the plugin skills | supported, proved on [windows](proofs/claude-code.md#skillsplugin); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `skills.team` | team and session skills | supported, proved on [windows](proofs/claude-code.md#skillsteam); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `skills.session-listing` | a session's own skill listing | supported, proved on [windows](proofs/claude-code.md#skillssession-listing); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 
 ### helpers
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `helpers.start-rules` | helpers, and the rules at their start | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `helpers.agent-types` | teamrig's agent types | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `helpers.start-rules` | helpers, and the rules at their start | supported, built, not proven live | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `helpers.agent-types` | teamrig's agent types | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 
 ### plugin
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | unsupported: not built for Codex CLI yet | supported, proved on [windows](proofs/antigravity-cli.md#pluginhooks-file); unproved on linux, macos |
-| `plugin.hook-trust` | guards stay on across a teamrig update | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `plugin.install-update` | installing and updating teamrig, and reading its version | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab plugin reload mod |
-| `plugin.cli-on-path` | `teamrig` on the path | supported, proved on [windows](proofs/claude-code.md#plugincli-on-path); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `plugin.hooks-file` | teamrig's hooks file loads as shipped | supported, proved on [windows](proofs/claude-code.md#pluginhooks-file); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#pluginhooks-file); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#pluginhooks-file); unproved on linux, macos |
+| `plugin.hook-trust` | guards stay on across a teamrig update | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `plugin.install-update` | installing and updating teamrig, and reading its version | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab plugin reload mod |
+| `plugin.cli-on-path` | `teamrig` on the path | supported, proved on [windows](proofs/claude-code.md#plugincli-on-path); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 
 ### budget
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `budget.transcripts` | finding the transcripts | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
-| `budget.usage` | the usage and weighted cost of each call | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.model-share` | the share of each model and effort level | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.week-reading` | the week reading and the pace line | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.five-hour` | the five-hour forecast | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.status-line` | teamrig's status-line text | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `budget.helper-weight` | the weight of a helper | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.pools` | a budget pool per CLI and account, never added to another | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.windows` | the usage windows beside the week, each with its share used and its reset | supported, unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
+| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.model-share` | the share of each model and effort level | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.week-reading` | the week reading and the pace line | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.five-hour` | the five-hour forecast | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.status-line` | teamrig's status-line text | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `budget.helper-weight` | the weight of a helper | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.pools` | a budget pool per CLI and account, never added to another | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.windows` | the usage windows beside the week, each with its share used and its reset | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.tuning` | model and effort tuned from the user's own results, on evidence only | unsupported: tuning from a user's own results is not built yet | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no model tuning |
 
 ### errors
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `errors.kinds` | a failed turn told apart by kind: rate limit, overload, auth, context too long, other | partial (missing: a rule of its own for a rate-limit hit and for a context too long), unproved | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no StopFailure error kinds |
+| `errors.kinds` | a failed turn told apart by kind: rate limit, overload, auth, context too long, other | partial (missing: a rule of its own for a rate-limit hit and for a context too long), built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no StopFailure error kinds |
 
 ### os
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `os.windows-sessions` | native Windows sessions and Windows Terminal tabs | supported, proved on [windows](proofs/claude-code.md#oswindows-sessions); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `os.windows-hooks` | hooks on Windows | supported, proved on [windows](proofs/claude-code.md#oswindows-hooks); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
-| `os.linux` | sessions and hooks on Linux and macOS | supported, unproved | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), unproved |
+| `os.windows-sessions` | native Windows sessions and Windows Terminal tabs | supported, proved on [windows](proofs/claude-code.md#oswindows-sessions); unproved on linux, macos | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `os.windows-hooks` | hooks on Windows | supported, proved on [windows](proofs/claude-code.md#oswindows-hooks); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#oswindows-hooks); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `os.linux` | sessions and hooks on Linux and macOS | supported, built, not proven live | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ## Connectors
 
@@ -157,25 +157,25 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 
 | Feature | What it does | GitHub | Jira | Local |
 | --- | --- | --- | --- | --- |
-| `tracker.issue-import` | a task per open issue, kept in step with it (`issue sync`) | supported, proved on [windows](proofs/github.md#trackerissue-import); unproved on linux, macos | partial (missing: a description's formatting, and the reporter's tie to the project), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.accept-label` | an outsider's issue is taken once one of the team's people labels it accepted | supported, unproved | unsupported: the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.watch` | a look for changes every few seconds, a sync only after one (`issue watch`) | supported, proved on [windows](proofs/github.md#trackerwatch); unproved on linux, macos | partial (missing: a free look for a change), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.issue-open` | opening a task's issue with its labels (`add --issue`, `issue migrate`) | supported, unproved | partial (missing: Markdown, and a type chosen for one issue), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.comment` | a comment on an issue (`issue reply`) | supported, unproved | partial (missing: Markdown), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.edit-body` | rewriting an issue's body (`issue edit-body`) | supported, unproved | partial (missing: Markdown), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.close` | closing an issue as completed, not planned or duplicate (`issue close`) | supported, unproved | partial (missing: a link from a duplicate to its original, and a reason the project's workflow has no name for), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.labels` | adding, removing and making labels (`issue label`) | supported, unproved | partial (missing: a label made with a colour and a description, and a name holding a space), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.status-push` | a status label per active task, its owner as assignee (`issue push`) | supported, unproved | partial (missing: a second assignee), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.assign` | assigning and unassigning people (`issue assign`) | supported, unproved | partial (missing: a second assignee), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.claims` | a commenter's take line assigns them, and an idle claim is taken off | supported, unproved | unsupported: a claim line takes only an issue that carries the accept label, and the Jira connector does not read who put a label on an issue yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.clocks` | the response clock: threads waiting on an answer from the team | supported, proved on [windows](proofs/github.md#trackerclocks); unproved on linux, macos | partial (missing: a commenter's tie to the project), unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.issue-import` | a task per open issue, kept in step with it (`issue sync`) | supported, proved on [windows](proofs/github.md#trackerissue-import); unproved on linux, macos | partial (missing: a description's formatting, and the reporter's tie to the project), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.accept-label` | an outsider's issue is taken once one of the team's people labels it accepted | supported, built, not proven live | unsupported: the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.watch` | a look for changes every few seconds, a sync only after one (`issue watch`) | supported, proved on [windows](proofs/github.md#trackerwatch); unproved on linux, macos | partial (missing: a free look for a change), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.issue-open` | opening a task's issue with its labels (`add --issue`, `issue migrate`) | supported, built, not proven live | partial (missing: Markdown, and a type chosen for one issue), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.comment` | a comment on an issue (`issue reply`) | supported, built, not proven live | partial (missing: Markdown), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.edit-body` | rewriting an issue's body (`issue edit-body`) | supported, built, not proven live | partial (missing: Markdown), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.close` | closing an issue as completed, not planned or duplicate (`issue close`) | supported, built, not proven live | partial (missing: a link from a duplicate to its original, and a reason the project's workflow has no name for), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.labels` | adding, removing and making labels (`issue label`) | supported, built, not proven live | partial (missing: a label made with a colour and a description, and a name holding a space), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.status-push` | a status label per active task, its owner as assignee (`issue push`) | supported, built, not proven live | partial (missing: a second assignee), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.assign` | assigning and unassigning people (`issue assign`) | supported, built, not proven live | partial (missing: a second assignee), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.claims` | a commenter's take line assigns them, and an idle claim is taken off | supported, built, not proven live | unsupported: a claim line takes only an issue that carries the accept label, and the Jira connector does not read who put a label on an issue yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.clocks` | the response clock: threads waiting on an answer from the team | supported, proved on [windows](proofs/github.md#trackerclocks); unproved on linux, macos | partial (missing: a commenter's tie to the project), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.mentions` | a post naming one of the team's people wakes their session | supported, proved on [windows](proofs/github.md#trackermentions); unproved on linux, macos | unsupported: the Jira connector does not read comments for a mention yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.follow` | a session hears the changes on an item it follows (`follow`) | supported, unproved | supported, unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.links` | parent and blocker links between issues (`issue links`) | supported, unproved | unsupported: the Jira connector does not read or write issue links yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.fields` | a task's priority and type written to issue fields | supported, unproved | unsupported: the Jira connector does not write an issue's priority or type yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.similar` | finding imported issues alike (`issue similar`) | supported, unproved | supported, unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.security-alert` | a security-labelled issue pages the lead | supported, unproved | supported, unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `tracker.stamp` | posted text ends with the made-with-teamrig footer | supported, unproved | supported, unproved | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.follow` | a session hears the changes on an item it follows (`follow`) | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.links` | parent and blocker links between issues (`issue links`) | supported, built, not proven live | unsupported: the Jira connector does not read or write issue links yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.fields` | a task's priority and type written to issue fields | supported, built, not proven live | unsupported: the Jira connector does not write an issue's priority or type yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.similar` | finding imported issues alike (`issue similar`) | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.security-alert` | a security-labelled issue pages the lead | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.stamp` | posted text ends with the made-with-teamrig footer | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.hidden-mark` | a mark on an issue that its readers do not see | unsupported: GitHub shows every mark on an issue to its readers: a mark there is a label or a comment | unsupported: the Jira connector keeps no hidden mark on an issue yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 
 ### codehost
@@ -184,10 +184,10 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 | --- | --- | --- | --- | --- |
 | `codehost.pull-news` | opened, merged, conflicting, failing and reviewed pull requests reach their session | supported, proved on [windows](proofs/github.md#codehostpull-news); unproved on linux, macos | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `codehost.ci-excerpt` | the end of a failed CI job's log | supported, proved on [windows](proofs/github.md#codehostci-excerpt); unproved on linux, macos | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `codehost.pr-conflicts` | the files a pull request conflicts on (`pr conflicts`) | supported, unproved | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `codehost.pr-land` | approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`) | supported, unproved | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `codehost.review-posts` | review comments and reviews in the mention scan | supported, unproved | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
-| `codehost.linked-pulls` | how many open pull requests close an issue | supported, unproved | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.pr-conflicts` | the files a pull request conflicts on (`pr conflicts`) | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.pr-land` | approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`) | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.review-posts` | review comments and reviews in the mention scan | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.linked-pulls` | how many open pull requests close an issue | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 
 ## Terminals
 
@@ -205,9 +205,9 @@ The programs whose panes the sessions run in.
 
 | Feature | What it does | tmux | Windows Terminal | macOS Terminal | GNOME Terminal | Konsole | x-terminal-emulator | headless |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `pane.open` | opens a pane for a session and answers its own id of it | supported, unproved | supported, unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | partial (missing: an id of the pane it opened), unproved | supported, unproved | supported, unproved |
-| `pane.window` | opens a pane in the window teamrig names, made when none of that name is open | unsupported: a pane opens in the tmux session teamrig runs in: teamrig names no other | supported, unproved | unsupported: every pane is a window of its own | unsupported: a pane opens in the window GNOME Terminal picks: teamrig names none | unsupported: a pane opens in the window Konsole picks: teamrig names none | unsupported: every pane is a window of its own | unsupported: a headless session has no window |
-| `pane.focus` | brings a session's pane forward | supported, unproved | supported, unproved | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: a headless session has no window to bring forward: off Windows, watch it with tmux attach -t <its session> (tmux ls lists the teamrig- ones); on Windows, read its conversation in the pane |
+| `pane.open` | opens a pane for a session and answers its own id of it | supported, built, not proven live | supported, built, not proven live | partial (missing: an id of the pane it opened), built, not proven live | partial (missing: an id of the pane it opened), built, not proven live | partial (missing: an id of the pane it opened), built, not proven live | supported, built, not proven live | supported, built, not proven live |
+| `pane.window` | opens a pane in the window teamrig names, made when none of that name is open | unsupported: a pane opens in the tmux session teamrig runs in: teamrig names no other | supported, built, not proven live | unsupported: every pane is a window of its own | unsupported: a pane opens in the window GNOME Terminal picks: teamrig names none | unsupported: a pane opens in the window Konsole picks: teamrig names none | unsupported: every pane is a window of its own | unsupported: a headless session has no window |
+| `pane.focus` | brings a session's pane forward | supported, built, not proven live | supported, built, not proven live | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: a headless session has no window to bring forward: off Windows, watch it with tmux attach -t <its session> (tmux ls lists the teamrig- ones); on Windows, read its conversation in the pane |
 | `pane.close` | closes a session's pane | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: teamrig's launcher ends and restarts the session itself |
 | `pane.restart` | restarts a pane's command, resuming the conversation when asked | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: teamrig's launcher ends and restarts the session itself |
 | `pane.rename` | changes a pane's title | unsupported: teamrig does not ask tmux for it yet | unsupported: Windows Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Terminal for it yet | unsupported: GNOME Terminal has no call for it on a tab already open | unsupported: teamrig does not ask Konsole for it yet | unsupported: the terminal has no call for it on a window already open | unsupported: a headless session has no window |
