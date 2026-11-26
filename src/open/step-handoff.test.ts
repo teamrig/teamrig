@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { handoffPipeOf, nodeStepHandoff, STEP_HANDOFF_VAR } from './step-handoff.ts';
 
@@ -17,6 +20,19 @@ describe('step handoff', () => {
     const handoff = nodeStepHandoff({ [STEP_HANDOFF_VAR]: '3' }, (pipe, text) => writes.push({ pipe, text }));
     assert.deepEqual(await handoff.give(RUN), { kind: 'given' });
     assert.deepEqual(writes.map((write) => ({ pipe: write.pipe, run: JSON.parse(write.text) })), [{ pipe: 3, run: RUN }]);
+  });
+
+  it('writes the plan to the real open file the pipe number names, by default', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'step-handoff-'));
+    const path = join(dir, 'pipe');
+    const pipe = openSync(path, 'w');
+    try {
+      assert.deepEqual(await nodeStepHandoff({ [STEP_HANDOFF_VAR]: String(pipe) }).give(RUN), { kind: 'given' });
+    } finally {
+      closeSync(pipe);
+    }
+    assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), RUN);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it('writes nothing when no launcher started the step', async () => {
