@@ -238,7 +238,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("keeps only the release stamps whose version file the profile names, so a repo with no src/core/version.ts has none (T5320)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(teamrigShipWritesOf(regenerated).releaseStamps, TEAMRIG_RELEASE_STAMPS);
     assert.deepEqual(teamrigShipWritesOf(['dist/', 'plugins/teamrig-pane/.claude-plugin/plugin.json', TEAMRIG_RELEASE_MANIFEST.path]).releaseStamps, []);
   });

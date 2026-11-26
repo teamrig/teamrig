@@ -188,7 +188,7 @@ describe('runCli: help, version and usage errors', () => {
     assert.equal(kit.files.get(EVENTS_PATH), undefined);
   });
 
-  it("open's help names --terminal print and says open takes no --session (GeneralA6/teamrig#1307)", async () => {
+  it("open's help names --terminal print and says open takes no --session (teamrig/teamrig#1307)", async () => {
     const open = (await new CliHarness().run(['open', '--help'])).stdout.join('\n');
     assert.match(open, /it takes no --session/);
     assert.match(open, /--terminal print opens no tab\s+and prints the command to run/);

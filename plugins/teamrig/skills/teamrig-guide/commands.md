@@ -6280,7 +6280,7 @@ Output:
 ```text
 PREVIEW nothing written (add --yes to write): the preview channel -> the stable channel
   CHANGE <settings file>: the marketplace teamrig's own entry follows its default branch
-  RUN claude plugin marketplace add GeneralA6/teamrig
+  RUN claude plugin marketplace add teamrig/teamrig
   RUN claude plugin update teamrig@teamrig
 ```
 
@@ -6310,7 +6310,7 @@ Output:
 ```text
 DONE teamrig follows the preview channel; a new session runs it; the old settings file is at /home/me/.teamrig/backups/claude-settings.json
   CHANGE <settings file>: the marketplace teamrig's own entry follows preview
-  RUN claude plugin marketplace add GeneralA6/teamrig#preview
+  RUN claude plugin marketplace add teamrig/teamrig#preview
   RUN claude plugin update teamrig@teamrig
 ```
 
