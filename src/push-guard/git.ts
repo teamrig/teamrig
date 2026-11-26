@@ -3,11 +3,15 @@ import { runGit as runKitGit, type GitRun } from '../core/git-run.ts';
 import { COMMIT_LOG_FORMAT, parseCommitLog, type CommitLog } from './commit-size.ts';
 import type { ConfigValue } from './invocations.ts';
 import type { RepoState } from './push.ts';
+import { scaledLimitMs } from '../core/time-limit.ts';
+
+/** The limit on one state read (branch, head, push target, a config value), stretched by `$TEAMRIG_TIME_SCALE`. */
+const STATE_READ_TIMEOUT_MS = 5_000;
 
 /** One git run's stdout; any failure (no repository, an unknown ref, no git on PATH) reads as undefined. */
 function runGit(dir: string, args: readonly string[]): string | undefined {
   try {
-    return execFileSync('git', args, { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5_000, maxBuffer: 16 * 1024 * 1024 });
+    return execFileSync('git', args, { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: scaledLimitMs(STATE_READ_TIMEOUT_MS), maxBuffer: 16 * 1024 * 1024 });
   } catch {
     return undefined;
   }
@@ -22,7 +26,7 @@ function readGit(dir: string, args: readonly string[]): string | undefined {
 /** One config value as git in `dir` reads it: git exits 1 for a key that is not set, and fails otherwise for no git or no folder. */
 function readConfig(dir: string, key: string): ConfigValue {
   try {
-    const value = execFileSync('git', ['config', '--get', key], { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5_000 });
+    const value = execFileSync('git', ['config', '--get', key], { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: scaledLimitMs(STATE_READ_TIMEOUT_MS) });
     return { kind: 'set', value: value.replace(/\r?\n$/, '') };
   } catch (error) {
     return error instanceof Error && 'status' in error && error.status === 1 ? { kind: 'unset' } : { kind: 'unreadable' };
