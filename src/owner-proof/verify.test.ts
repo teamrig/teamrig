@@ -2,19 +2,8 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { PROOF_DOMAIN, challengeDigest, type OwnerProofChallenge } from './challenge.ts';
-import {
-  ISSUED_AT_SKEW_MS,
-  SIGNATURE_ALGORITHMS,
-  actDigest,
-  isSignatureAlgorithm,
-  pinKeyProblem,
-  verifyProof,
-  type ActBinding,
-  type NonceState,
-  type PinnedKey,
-  type ProofCheck,
-  type SignatureAlgorithm,
-} from './verify.ts';
+import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
+import { ISSUED_AT_SKEW_MS, actDigest, pinKeyProblem, verifyProof, type ActBinding, type NonceState, type ProofCheck } from './verify.ts';
 
 interface TestKey {
   readonly pin: PinnedKey;
@@ -167,12 +156,5 @@ describe('pinKeyProblem', () => {
     assert.equal(pinKeyProblem(rsa.pin.publicKeyPem, 'ed25519'), 'expected a public key of the ed25519 kind');
     const p384 = pem(generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey);
     assert.equal(pinKeyProblem(p384, 'ecdsa-p256-sha256'), 'expected a public key of the ecdsa-p256-sha256 kind');
-  });
-});
-
-describe('isSignatureAlgorithm', () => {
-  it('takes each listed algorithm and refuses anything else', () => {
-    for (const algorithm of SIGNATURE_ALGORITHMS) assert.equal(isSignatureAlgorithm(algorithm), true);
-    for (const other of ['rsa', 'ecdsa-p384-sha384', 7, undefined]) assert.equal(isSignatureAlgorithm(other), false);
   });
 });

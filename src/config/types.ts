@@ -9,7 +9,7 @@ import type { ChangeSourceId } from '../changes/ids.ts';
 import type { ImportScope } from '../sync/scope.ts';
 import type { LevelNamesSetting } from '../register/level-names.ts';
 import type { OwnerProofAdapterId } from '../owner-proof/port.ts';
-import type { PinnedKey } from '../owner-proof/verify.ts';
+import type { PinnedKey } from '../owner-proof/pin.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 10;

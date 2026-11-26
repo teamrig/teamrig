@@ -1,4 +1,4 @@
-import type { PinnedKey } from './verify.ts';
+import type { PinnedKey } from './pin.ts';
 
 /**
  * The owner's proof adapters, one per operating system's gesture-held key (T4758 plan): Windows Hello, a Secure

@@ -77,7 +77,8 @@ import {
   DEFAULT_OWNER,
 } from './defaults.ts';
 import { OWNER_PROOF_ADAPTERS, isOwnerProofAdapterId } from '../owner-proof/port.ts';
-import { SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem, type PinnedKey } from '../owner-proof/verify.ts';
+import { SIGNATURE_ALGORITHMS, isSignatureAlgorithm, type PinnedKey } from '../owner-proof/pin.ts';
+import { pinKeyProblem } from '../owner-proof/verify.ts';
 import { isEffort, isModel, isTerminalName } from './launch.ts';
 import {
   APPLY_FLAG_PATTERN,

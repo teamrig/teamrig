@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { PROOF_DOMAIN, challengeHex, type OwnerProofChallenge } from '../owner-proof/challenge.ts';
 import type { OwnerProofAdapter } from '../owner-proof/port.ts';
-import { actDigest, verifyProof, type PinnedKey } from '../owner-proof/verify.ts';
+import type { PinnedKey } from '../owner-proof/pin.ts';
+import { actDigest, verifyProof } from '../owner-proof/verify.ts';
 import { ownerProofWorld, type OwnerProofWorld } from './fake-owner-proof.ts';
 
 /** Makes the adapter under test over a world whose owner gesture and readiness a case sets. */
