@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { resolveKitHome } from '../../src/core/home.ts';
+import { withCheckTimeScale } from '../../src/core/time-limit.ts';
 import { isRecord } from '../lib/guards.ts';
 
 /** The test files, as `npm test` runs them. */
@@ -293,7 +294,10 @@ export function suiteEnv(env: NodeJS.ProcessEnv, tempDir?: string): NodeJS.Proce
   // removes it only when the run ends normally: a suite that is killed (a timeout, the idle stop, Ctrl-C) leaves it,
   // and on a small RAM-backed /tmp a few dozen of those fill the user's quota (#1585). The run's own temporary folder
   // takes it, and every temporary file the tests make, so the gate removes them all when the run ends.
-  return tempDir === undefined ? kept : { ...kept, TMPDIR: tempDir, TMP: tempDir, TEMP: tempDir };
+  // The specs run real git and node children under the kit's own limits; the check's time scale stretches those, so a
+  // loaded host slows a spec without failing it (T5545).
+  const scaled = withCheckTimeScale(kept);
+  return tempDir === undefined ? scaled : { ...scaled, TMPDIR: tempDir, TMP: tempDir, TEMP: tempDir };
 }
 
 /**

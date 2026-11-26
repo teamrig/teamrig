@@ -143,6 +143,9 @@ Every change ships tests, so the next change cannot break it unnoticed:
 - A change to a threshold, limit or trigger (a count, a timeout, a restart or retry limit, a wake condition) gets a
   spec of the trigger firing in the real flow, with whatever resets its count on the way (a compaction, a `/clear`,
   a restart): a unit test of the comparison alone passes even when the real flow resets the count before it fires.
+- A wall-clock limit on a real child program (git, node, a built hook) goes through `scaledLimitMs` in
+  `src/core/time-limit.ts`. The check sets `TEAMRIG_TIME_SCALE=4` for the specs and the dist smoke, so a loaded host
+  slows a spec without failing it; outside the check nothing sets it, and every limit stays as written.
 - A recorded Claude Code session (`src/testing/recorded/claude-code/`, recorded with `node tools/record/cli.ts`) holds
   the hook inputs and transcripts a real session sent, and its `expected/` folder pins what teamrig prints for each;
   `src/testing/recorded-pins.test.ts` fails when the code and the pins differ. A refactor leaves the pins as they are.
