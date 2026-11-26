@@ -53,6 +53,22 @@ export interface HostConfigFileSet {
 }
 
 /**
+ * The kit launcher a host's hook line may run in place of a plugin folder (T5278 design D): `<kit home>/bin/teamrig.mjs`,
+ * which checks the current kit version before it runs a line of it. A line naming it holds no version, so the host's
+ * trust in it outlives every update. The core gives its path and the words it reads; an adapter only writes them.
+ */
+export interface HookLauncher {
+  /** The launcher's absolute path. */
+  readonly path: string;
+  /** The flag naming the entry script, read and taken off by the launcher before the CLI's words. */
+  readonly entryFlag: string;
+  /** The flag naming the host event, which sets the exit a failed check ends with. */
+  readonly eventFlag: string;
+  /** The launcher's word for each entry script, by the script's path below the plugin root (`dist/cli/main.js`). */
+  readonly entries: ReadonlyMap<string, string>;
+}
+
+/**
  * The person's own hooks file of a host that loads no plugin's hooks: teamrig's handlers go in beside the person's
  * own, which stay as they are. The core reads and writes the file and keeps the old one; this port only says where
  * the file is and how its content changes.
@@ -65,9 +81,15 @@ export interface HostUserHooks {
   /**
    * Merges teamrig's hooks file (`source`, as the plugin ships it, parsed) into the person's (`current`, empty when
    * there is none), with the plugin installed at `pluginRoot`: teamrig's earlier handlers are replaced, the person's
-   * kept.
+   * kept. A host whose lines run the kit launcher (`runsKitLauncher`) writes `launcher` in place of the plugin
+   * folder, and refuses when it is not given; a host that runs from the plugin folder leaves it unread.
    */
-  merge(current: JsonRecord, source: unknown, pluginRoot: string): UserHooksAnswer;
+  merge(current: JsonRecord, source: unknown, pluginRoot: string, launcher?: HookLauncher): UserHooksAnswer;
+  /**
+   * True when the host's lines run the kit launcher, so `setup hooks` refuses until the kit home can run them; left
+   * out for a host whose lines name the plugin folder, so an adapter written before this field stays as it was.
+   */
+  readonly runsKitLauncher?: true;
   /** What the person must do after a write before the host runs the new handlers, one line each. */
   readonly afterWrite: readonly string[];
   /** The settings the hooks need in the host's config files, written with them; empty when they need none. */

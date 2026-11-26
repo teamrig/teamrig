@@ -71,6 +71,7 @@ export {
   type ConfigLinesAnswer,
   type HostConfigFileSet,
   type HostConfigLines,
+  type HookLauncher,
   type HostUserHooks,
   type SkippedUserHook,
   type UserHooksAnswer,

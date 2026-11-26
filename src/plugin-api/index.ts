@@ -122,6 +122,7 @@ export {
   type HostSteps,
   type HostPorts,
   type HostSecrets,
+  type HookLauncher,
   type HostUserHooks,
   type InputEntry,
   type InputOrigin,
