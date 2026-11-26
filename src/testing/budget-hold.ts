@@ -70,6 +70,14 @@ export async function holdAlpha(kit: CliHarness, alphaTab: string, leadTab: stri
 }
 
 /**
+ * Brings the week past the week's stop (T5393) at the harness clock: the status line has the week 99.6% used, past
+ * the default `budget.targetPct` of 99.5, so only blocker work goes on until the reset.
+ */
+export async function stopTheWeek(kit: CliHarness): Promise<void> {
+  ok(await kit.run(['statusline'], { stdin: statusOf(STATUS_TAB, 99.6) }));
+}
+
+/**
  * Puts `w` W on `task` in the stored usage of `session` today, under `dir` (the team's usage by default), with the week
  * known from a status line at 30%. It writes the store as a stop hook would, so a spec of a reader of it needs no transcript.
  */

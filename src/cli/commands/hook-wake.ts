@@ -49,6 +49,8 @@ import { startDailyRollup } from '../rollup-start.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readMeasuredTurns, readTodayWPerPct } from '../stored-week.ts';
 import { teamRegister } from '../team-register.ts';
+import { mayWeekStopHold } from '../../budget/team-week-file.ts';
+import { BLOCKER_PRIORITY_ID } from '../../register/model.ts';
 import { budgetFactsOf } from './hook-budget.ts';
 import { inboxDepsOf } from './inbox.ts';
 import { runIdlePass } from './hook-idle-pass.ts';
@@ -186,7 +188,11 @@ async function restCappedDecision(runtime: CliRuntime, scope: WakeTarget, input:
   const decision = decideWake(input);
   const due = dueIdsOf(decision.verdict);
   const dueTasks = [...input.tasks.values()].filter((task) => due.has(task.id));
-  if (!config.budget.enabled || dueTasks.every((task) => task.priority <= HELD_PRIORITY)) {
+  if (!config.budget.enabled || dueTasks.every((task) => task.priority <= BLOCKER_PRIORITY_ID)) {
+    return decision;
+  }
+  // Only the week's stop cuts a p0 (T5393): its one-file check spares a p0 wake the full reading.
+  if (dueTasks.every((task) => task.priority <= HELD_PRIORITY) && !(await mayWeekStopHold(runtime.files, scope.kit.paths.teamWeek, config.budget.targetPct, input.now))) {
     return decision;
   }
   const facts = await budgetFactsOf(runtime, { kit: scope.kit, config, roster: scope.roster, id: scope.id }, undefined);

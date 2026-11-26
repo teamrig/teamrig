@@ -27,7 +27,7 @@ import { formatLoginMarker, LOGIN_PROBE_STALE_MS, LOGIN_RETRY_GAP_MS, loginMarke
 import { dayProbePath, formatDayProbe, parseDayProbe, type DayProbe } from '../restore/day-probe.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../restore/registry.ts';
-import { HOLDING_BUDGET, holdAlpha, meterDearDay, meterToday } from '../testing/budget-hold.ts';
+import { HOLDING_BUDGET, holdAlpha, meterDearDay, meterToday, stopTheWeek } from '../testing/budget-hold.ts';
 import { DEFAULT_HOST } from '../composition/adapters.ts';
 import { APP, AUTO_RESTART_TEAM, CliHarness, EVENTS_PATH, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
@@ -259,6 +259,23 @@ describe('hook wake-check', () => {
     assert.equal((await check(kit)).stdout[0]?.includes('"kind":"wake","ids":["T2"]'), true);
     kit.clock.advance(24 * 60 * MINUTE);
     assert.equal((await check(kit)).stdout[0]?.includes('"kind":"wake","ids":["T1"]'), true, "a new day's budget ends the hold");
+  });
+
+  it("wakes for blocker work alone under the week's stop, a p0 waiting for the reset (T5393)", async () => {
+    const kit = await teamWithAlphaTab({ ...TEAM, wake: { batchSeconds: 0 }, budget: { enabled: true, weeklyLimitW: 1_000_000_000, overAction: 'warn' } });
+    await stopTheWeek(kit);
+    await check(kit);
+    await hand(kit, 'Stop the outage', 'p0');
+    assert.deepEqual(answerOf(await check(kit)), { kind: 'wait', watch: watchOf(), recheckAt: null }, 'the week stop holds a p0, even with overAction warn');
+    await hand(kit, 'Unblock the release', 'blocker');
+    assert.equal((await check(kit)).stdout[0]?.includes('"kind":"wake","ids":["T2"]'), true);
+  });
+
+  it('wakes for p0 below the week stop, under an overAction warn that holds nothing else (T5393)', async () => {
+    const kit = await teamWithAlphaTab({ ...TEAM, wake: { batchSeconds: 0 }, budget: { enabled: true, weeklyLimitW: 1_000_000_000, overAction: 'warn' } });
+    await check(kit);
+    await hand(kit, 'Stop the outage', 'p0');
+    assert.equal((await check(kit)).stdout[0]?.includes('"kind":"wake","ids":["T1"]'), true);
   });
 
   it("holds a session whose daily budget the wake's own turn would pass, though it spent nothing today (T1322)", async () => {

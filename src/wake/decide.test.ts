@@ -483,6 +483,16 @@ describe('wakeRestOf', () => {
     assert.deepEqual(wakeRestOf(facts({ budgetPct: 2, paused: true, burst }), BLOCK, NOW, 0), { held: false, quiet: false, yields: false });
     assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 2.5, budgetPct: 2, paused: true, burst }), BLOCK, NOW, 0), { held: true, quiet: false, yields: true });
   });
+
+  it("holds every session under the week's stop, under warn and with a lift too, and never yields (T5393)", () => {
+    const weekStop = { linePct: 99.5, resetAt: NOW + 60 * MINUTE };
+    const lift = { session: 'alpha', group: false, partPct: 40, stopPct: 97, endsAt: NOW + 60 * MINUTE, reserve: false, quietHoursExempt: true, reason: 'incident', by: 'lead', at: NOW - MINUTE };
+    const stopped = { held: true, quiet: false, yields: false, weekStopped: true };
+    assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 0, weekUsedPct: 99.5, weekStop }), BLOCK, NOW, 0), stopped);
+    assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 0, weekUsedPct: 99.5, weekStop }), { overAction: 'warn' }, NOW, 0), stopped);
+    assert.deepEqual(wakeRestOf(facts({ usedTodayPct: 0, weekUsedPct: 99.5, weekStop, lift, isLead: true }), BLOCK, NOW, 0), stopped);
+    assert.deepEqual(wakeRestOf(facts({ weekUsedPct: 99.5, weekStop }), QUIET_BLOCK, NOW, 0), { ...stopped, quiet: true });
+  });
 });
 
 describe('effectivePriority', () => {
@@ -493,6 +503,12 @@ describe('effectivePriority', () => {
     assert.equal(effectivePriority(1, { held: true, quiet: false }, asking), 0);
     assert.equal(effectivePriority(3, { held: false, quiet: true }, asking), 1);
     assert.equal(effectivePriority(3, { held: true, quiet: true }, asking), 0);
+  });
+
+  it("wakes for blockers alone under the week's stop, a p0 included in what waits (T5393)", () => {
+    assert.equal(effectivePriority(3, { held: true, quiet: false, weekStopped: true }, undefined), BLOCKER_PRIORITY_ID);
+    assert.equal(effectivePriority(3, { held: true, quiet: true, weekStopped: true }, undefined), BLOCKER_PRIORITY_ID);
+    assert.equal(effectivePriority(3, { held: true, quiet: false, weekStopped: false }, undefined), 0);
   });
 
   it('wakes for p0 alone in quiet hours that block, and leaves the day outside them as configured (T2504)', () => {

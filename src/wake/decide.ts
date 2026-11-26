@@ -45,7 +45,7 @@ export const WAKE_TITLE_MAX = 80;
 
 /**
  * The least urgent priority a session its budget holds still wakes for: p0, the only work the budget stop lets go on
- * (`queuedWork`'s urgent, src/budget/work.ts).
+ * (`queuedWork`'s urgent, src/budget/work.ts). Under the week's stop only blockers wake it (`effectivePriority`).
  */
 export const HELD_PRIORITY = NOW_PRIORITY.id;
 
@@ -335,6 +335,11 @@ export interface WakeRest {
    * (`restExemptionOf`, T4948); a stop or a short day's pause holds it whatever waits. Absent: false.
    */
   readonly yields?: boolean;
+  /**
+   * True while the week's stop holds it (`BudgetFacts.weekStop`, T5393): it wakes for blocker tasks alone, p0s
+   * included in what waits. Absent: false.
+   */
+  readonly weekStopped?: boolean;
 }
 
 /**
@@ -354,12 +359,16 @@ export type WakeBudget = Pick<BudgetConfig, 'quietHours' | 'overAction'>;
  * the team has no room today or a leader's cut holds it; its team held for the day: `isTeamHeld`; none of these
  * while `budget.overAction` is `warn`; or paused: {@link isPausedNow}), and in quiet hours unless
  * its lift exempts it. The turn a wake would start counts as spent (`turnW`, in W), so a session with less left than
- * that turn is held before it, not after (T1322). With no facts (the week's use is not known yet) it is never held,
- * and quiet hours go by the clock alone.
+ * that turn is held before it, not after (T1322). The week's stop holds it under every `overAction`, `warn` too, and
+ * never yields (T5393). With no facts (the week's use is not known yet) it is never held, and quiet hours go by the
+ * clock alone.
  */
 export function wakeRestOf(facts: BudgetFacts | undefined, budget: WakeBudget, now: number, turnW: number): WakeRest {
   if (facts === undefined) {
     return { held: false, quiet: quietSpanOf(budget.quietHours, now) !== undefined };
+  }
+  if (facts.weekStop !== undefined) {
+    return { held: true, quiet: sessionQuietSpan(facts, budget.quietHours) !== undefined, yields: false, weekStopped: true };
   }
   const turnPct = facts.todayWPerPct > 0 ? turnW / facts.todayWPerPct : 0;
   const paused = isPausedNow(facts);
@@ -372,10 +381,13 @@ export function wakeRestOf(facts: BudgetFacts | undefined, budget: WakeBudget, n
 }
 
 /**
- * The least urgent priority that wakes the session now: p0 only while its budget holds or pauses it, in quiet hours
- * the cap `quietHours` sets ({@link quietPriorityOf}).
+ * The least urgent priority that wakes the session now: blockers only under the week's stop, p0 only while its budget
+ * holds or pauses it, in quiet hours the cap `quietHours` sets ({@link quietPriorityOf}).
  */
 export function effectivePriority(configured: number, rest: WakeRest, quietHours: QuietHours | undefined): number {
+  if (rest.weekStopped === true) {
+    return Math.min(configured, BLOCKER_PRIORITY_ID);
+  }
   if (rest.held) {
     return Math.min(configured, HELD_PRIORITY);
   }
