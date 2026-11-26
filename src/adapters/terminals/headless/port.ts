@@ -85,6 +85,7 @@ export function headlessPort(deps: TerminalDeps): TerminalPort {
   return {
     capabilities: async () => ({ requests: ['open'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
     open: async (request: PaneOpen): Promise<OpenAnswer> => (deps.platform === 'win32' ? openOnWindows(deps, request) : openWithTmux(deps, request)),
+    split: async () => UNSERVED,
     focus: async () => UNSERVED,
     close: async () => UNSERVED,
     restart: async () => UNSERVED,

@@ -18,6 +18,7 @@ export const declaration: TerminalDeclaration = {
   name: 'x-terminal-emulator',
   manifest: {
     'pane.open': SUPPORTED,
+    'pane.split': NO_CALL,
     'pane.window': { kind: 'unsupported', notice: 'every pane is a window of its own' },
     'pane.focus': NO_CALL,
     'pane.close': NO_CALL,

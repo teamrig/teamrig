@@ -74,6 +74,7 @@ Each request's `params` and the `result` it answers. Any request may also answer
 | Request | `params` | `result` |
 | --- | --- | --- |
 | `open` | `title`, `folder`, `argv` (the command as a list, never read by a shell), `window` (a named window, or `null`), `focus` (`take` or `keep`), `identity` (strings only), `wakeToken` | `{"kind":"opened","pane":"<your id>"}` |
+| `split` | `title`, `folder`, `argv`, `focus`, `identity`, `wakeToken`: as `open`, with no `window`, since the pane opens beside the one the person works in | `{"kind":"split"}`: no pane id, since a split pane is not one a host can find again |
 | `focus` | `pane` | `{"kind":"done"}`, or `{"kind":"gone"}` when the pane ended |
 | `close` | `pane` | `done` or `gone` |
 | `restart` | `pane`, `resume` (true: carry the conversation on) | `done` or `gone` |

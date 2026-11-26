@@ -42,6 +42,7 @@ export function tmuxPort(deps: TerminalDeps): TerminalPort {
           return { kind: 'failed', why: outcome.error };
       }
     },
+    split: async () => UNSERVED,
     close: async () => UNSERVED,
     restart: async () => UNSERVED,
     rename: async () => UNSERVED,

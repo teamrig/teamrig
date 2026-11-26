@@ -7,6 +7,7 @@ import type { TerminalGroup } from '../feature.ts';
  */
 export const PANE_FEATURES = {
   'pane.open': { doc: 'opens a pane for a session and answers its own id of it', byDefault: 'on' },
+  'pane.split': { doc: 'splits the pane the person works in to show a pane beside it, in its own window', byDefault: 'on' },
   'pane.window': { doc: 'opens a pane in the window teamrig names, made when none of that name is open', byDefault: 'on' },
   'pane.focus': { doc: "brings a session's pane forward", byDefault: 'on' },
   'pane.close': { doc: "closes a session's pane", byDefault: 'on' },

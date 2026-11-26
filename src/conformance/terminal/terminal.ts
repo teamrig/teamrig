@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { TERMINAL_REQUESTS, type PaneIdentity, type PaneOpen, type TerminalPort, type TerminalRequest, type TerminalWorld, type Wake } from '../../plugin-api/index.ts';
+import { TERMINAL_REQUESTS, type PaneIdentity, type PaneOpen, type PaneSplit, type TerminalPort, type TerminalRequest, type TerminalWorld, type Wake } from '../../plugin-api/index.ts';
 import { defineContract, type Contract, type ContractCase, type Subject } from '../contract.ts';
 import { nothingTerminal, yesTerminal } from './reference.ts';
 
@@ -11,6 +11,10 @@ const WAKE: Wake = { token: 'token-of-worker', text: 'teamrig: new work is in yo
 
 function paneOf(over: Partial<PaneOpen> = {}): PaneOpen {
   return { title: 'worker', folder: '/work/repo', argv: ['claude', '--resume'], window: undefined, focus: 'take', identity: IDENTITY, wakeToken: WAKE.token, ...over };
+}
+
+function splitOf(over: Partial<PaneSplit> = {}): PaneSplit {
+  return { title: 'board', folder: '/work/repo', argv: ['teamrig', 'ui'], focus: 'keep', identity: {}, wakeToken: 'token-of-board', ...over };
 }
 
 /** Opens a pane and answers the terminal's id of it; what the terminal did for it is `open-shows-the-pane`'s to check. */
@@ -25,6 +29,8 @@ async function opened({ port }: TerminalSubject, over: Partial<PaneOpen> = {}): 
 /** One request on a pane, whichever it is, for the cases that hold every request to the same rule. */
 function ask(port: TerminalPort, request: Exclude<TerminalRequest, 'open'>, pane: string): Promise<{ readonly kind: string }> {
   switch (request) {
+    case 'split':
+      return port.split(splitOf());
     case 'focus':
       return port.focus(pane);
     case 'close':
@@ -50,6 +56,22 @@ const OPEN_SHOWS_THE_PANE: TerminalCase = {
     const pane = await opened(subject);
     assert.notEqual(pane, '');
     assert.deepEqual(await subject.world.panes(), [{ pane, title: 'worker', folder: '/work/repo', argv: ['claude', '--resume'], window: undefined }]);
+  },
+};
+
+const SPLIT_SHOWS_THE_PANE: TerminalCase = {
+  id: 'terminal.split-shows-the-pane',
+  title: 'splits to show a pane with the title, folder and command it is given, the focus kept where it was',
+  features: ['pane.split'],
+  run: async (subject) => {
+    const pane = await opened(subject);
+    assert.deepEqual(await subject.port.split(splitOf()), { kind: 'split' });
+    const shown = await subject.world.panes();
+    assert.deepEqual(
+      shown.filter((each) => each.pane !== pane).map(({ title, folder, argv, window }) => ({ title, folder, argv, window })),
+      [{ title: 'board', folder: '/work/repo', argv: ['teamrig', 'ui'], window: undefined }],
+    );
+    assert.equal(await subject.world.front(), pane);
   },
 };
 
@@ -301,6 +323,7 @@ export const TERMINAL_CONTRACT: Contract<TerminalPort, TerminalWorld, 'terminal'
     OPEN_SHOWS_THE_PANE,
     OPEN_IDS_DIFFER,
     SAYS_WHAT_IT_SERVES,
+    SPLIT_SHOWS_THE_PANE,
     OPEN_IN_THE_NAMED_WINDOW,
     FOCUS_BRINGS_FORWARD,
     FOCUS_OF_A_GONE_PANE,

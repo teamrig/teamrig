@@ -20,6 +20,7 @@ export const declaration: TerminalDeclaration = {
       notice: 'the tab opens with no title from teamrig, so teamrig cannot find it again',
       proofs: [],
     },
+    'pane.split': { kind: 'unsupported', notice: 'GNOME Terminal has no call to split a tab' },
     'pane.window': { kind: 'unsupported', notice: 'a pane opens in the window GNOME Terminal picks: teamrig names none' },
     'pane.focus': NO_CALL,
     'pane.close': NO_CALL,

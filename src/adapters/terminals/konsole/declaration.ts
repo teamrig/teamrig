@@ -20,6 +20,7 @@ export const declaration: TerminalDeclaration = {
       notice: 'the tab opens with no title from teamrig, so teamrig cannot find it again',
       proofs: [],
     },
+    'pane.split': NOT_ASKED,
     'pane.window': { kind: 'unsupported', notice: 'a pane opens in the window Konsole picks: teamrig names none' },
     'pane.focus': NOT_ASKED,
     'pane.close': NOT_ASKED,

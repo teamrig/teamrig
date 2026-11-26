@@ -18,6 +18,7 @@ export const declaration: TerminalDeclaration = {
   name: 'Windows Terminal',
   manifest: {
     'pane.open': SUPPORTED,
+    'pane.split': { kind: 'unsupported', notice: 'teamrig does not ask Windows Terminal to split yet' },
     'pane.window': SUPPORTED,
     'pane.focus': SUPPORTED,
     'pane.close': NO_CALL,

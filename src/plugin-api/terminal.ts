@@ -5,7 +5,7 @@
  */
 
 /** The protocol's requests, by the names they have on the wire. */
-export const TERMINAL_REQUESTS = ['open', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list'] as const;
+export const TERMINAL_REQUESTS = ['open', 'split', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list'] as const;
 export type TerminalRequest = (typeof TERMINAL_REQUESTS)[number];
 
 export function isTerminalRequest(value: unknown): value is TerminalRequest {
@@ -57,6 +57,12 @@ export interface PaneOpen {
   readonly wakeToken: string;
 }
 
+/**
+ * The pane to show beside the one the person works in, in that pane's own window: an open with no window to name, as
+ * a split is of the window teamrig runs in.
+ */
+export type PaneSplit = Omit<PaneOpen, 'window'>;
+
 /** The request is none the terminal serves; its capabilities did not list it. */
 export interface Unserved {
   readonly kind: 'unserved';
@@ -70,6 +76,12 @@ export interface TerminalFailure {
 
 /** `pane` is the terminal's own id of the pane: the same across the terminal's restart, sent back on every later request. */
 export type OpenAnswer = { readonly kind: 'opened'; readonly pane: string } | Unserved | TerminalFailure;
+
+/**
+ * A split answers no pane id: a split pane is no tab or window the terminal can find again by a name, so no later
+ * request is sent for it.
+ */
+export type SplitAnswer = { readonly kind: 'split' } | Unserved | TerminalFailure;
 
 /**
  * What a request on one pane answers: done, or the pane is no longer there. `focus` alone may answer `selected`: the
@@ -105,6 +117,8 @@ export type ListAnswer = { readonly kind: 'listed'; readonly panes: readonly Lis
 export interface TerminalPort {
   readonly capabilities: () => Promise<TerminalCapabilities>;
   readonly open: (request: PaneOpen) => Promise<OpenAnswer>;
+  /** Splits the pane the person works in and runs the request's command in the new half, side by side. */
+  readonly split: (request: PaneSplit) => Promise<SplitAnswer>;
   /** Brings the pane forward. */
   readonly focus: (pane: string) => Promise<PaneAnswer>;
   readonly close: (pane: string) => Promise<PaneAnswer>;

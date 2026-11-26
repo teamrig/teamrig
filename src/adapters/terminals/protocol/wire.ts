@@ -16,6 +16,8 @@ import {
   type PaneAnswer,
   type PaneIdentity,
   type PaneOpen,
+  type PaneSplit,
+  type SplitAnswer,
   type TerminalCapabilities,
   type TerminalFailure,
   type TerminalRequest,
@@ -57,6 +59,10 @@ export function requestLine(id: number, method: WireMethod, params: JsonRecord):
 
 export function openParams(request: PaneOpen): JsonRecord {
   return { ...request, window: request['window'] ?? null };
+}
+
+export function splitParams(request: PaneSplit): JsonRecord {
+  return { ...request };
 }
 
 export function deliverParams(pane: string, wake: Wake): JsonRecord {
@@ -145,6 +151,13 @@ export function openAnswerOf(result: JsonRecord): OpenAnswer {
     return { kind: 'opened', pane: result['pane'] };
   }
   return commonAnswer(result) ?? mismatch('open');
+}
+
+export function splitAnswerOf(result: JsonRecord): SplitAnswer {
+  if (result['kind'] === 'split') {
+    return { kind: 'split' };
+  }
+  return commonAnswer(result) ?? mismatch('split');
 }
 
 export function paneAnswerOf(method: WireMethod, result: JsonRecord): PaneAnswer {

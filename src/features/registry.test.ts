@@ -78,7 +78,7 @@ describe('the feature registry', () => {
   it('holds a terminal row for each request of the terminal protocol, one for a named window and one for what a terminal sees of a draft', () => {
     assert.deepEqual(
       featuresOf('terminal').map((row) => row.id),
-      ['pane.open', 'pane.window', 'pane.focus', 'pane.close', 'pane.restart', 'pane.rename', 'pane.deliver', 'pane.is-idle', 'pane.list', 'pane.sees-draft'],
+      ['pane.open', 'pane.split', 'pane.window', 'pane.focus', 'pane.close', 'pane.restart', 'pane.rename', 'pane.deliver', 'pane.is-idle', 'pane.list', 'pane.sees-draft'],
     );
     for (const row of featuresOf('terminal')) {
       assert.equal(row.group, 'pane', row.id);

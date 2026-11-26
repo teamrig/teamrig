@@ -16,6 +16,7 @@ const DELIVER_CASES = ['deliver-reaches-an-idle-pane', 'deliver-held-in-a-busy-p
 
 /** The cases that catch a terminal answering one request as done without doing it. */
 const CAUGHT: Readonly<Record<Exclude<TerminalRequest, 'open'>, readonly string[]>> = {
+  split: ['split-shows-the-pane'],
   focus: ['focus-brings-forward', 'focus-of-a-gone-pane'],
   close: ['close-ends-the-pane'],
   restart: ['restart-reruns-the-command'],
