@@ -416,7 +416,9 @@ as how teamrig works today.
   checks pass, in place of its own merge call, and waits for the queue to land it. The queue orders the landings,
   so the merge takes no landing turn. A pull request already queued is waited on, not queued again. One the queue
   lets go unmerged stops the merge with GitHub's reason and the failed merge group run's jobs; one still queued at
-  the timeout stays queued, and a merge run again waits on it.
+  the timeout stays queued, and a merge run again waits on it. teamrig keeps it off: its main review ruleset wants an
+  approval by someone other than the last pusher, which only the direct merge's bypass meets, and GitHub's queue
+  honours no bypass.
 - **Auto-merge on at open**: the `auto-merge` workflow (`.github/workflows/auto-merge.yml`) switches GitHub's
   auto-merge on for each pull request into `main` that is not a draft, at open, reopen, ready for review and each
   push, so one that is approved and green enters the merge queue with no click. It runs `main`'s copy of the file
