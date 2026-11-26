@@ -1215,6 +1215,18 @@ describe('teamrig queue --detached-run (T2227)', () => {
     assert.deepEqual([start?.cwd, start?.gitTop, start?.head, start?.dirty], [APP, '/work', 'c0ffee12345', true]);
   });
 
+  it("names and records the folder a one-word line's leading cd moves to, not the one it was queued from (T5550)", async () => {
+    const { kit, steps } = harness();
+    const trees = new FakeTrees();
+    trees.ran = { kind: 'git', top: '/wt', head: 'c0ffee12345', dirty: false };
+    const moving = [...DETACHED_BUILD.slice(0, DETACHED_BUILD.indexOf('--') + 1), 'cd /wt && npm run build'];
+    const result = await kit.run(moving, { steps: steps.ends(0), trees, platform: 'linux' });
+    assert.equal(result.stdout[0], '# folder: /wt\n# git: /wt at c0ffee12345, clean');
+    assert.deepEqual(trees.ranLooks, ['/wt', '/wt'], 'the start and the step both read the tree moved to');
+    const start = parseQueuedStep(ledgerOf(kit)[0]);
+    assert.deepEqual([start?.cwd, start?.gitTop], ['/wt', '/wt']);
+  });
+
   it("says nothing more of an unchanged tree, and a step that runs in the caller's shell prints no header", async () => {
     const { kit, steps } = harness();
     const trees = new FakeTrees();

@@ -6818,7 +6818,8 @@ reboot, get a new one from the next `teamrig start` of any session of the team o
 outlives the shell, so it watches no shell; it waits for memory and the lock like any step, and its output and the
 queue's own lines go to
 `<delivery dir>/detached/<id>.log`. That log starts with the tree the run was started on, in the two lines a
-`teamrig test` log starts with (`# folder:`, `# git:`); a tree that changed by the time its step starts gets a line,
+`teamrig test` log starts with (`# folder:`, `# git:`), the folder a one-word line's leading `cd`, `chdir` or `pushd
+... &&` moves to as there, which the ledger records too; a tree that changed by the time its step starts gets a line,
 `the tree changed while it waited; it runs on <top level> at <commit>, clean|with uncommitted changes`. Its session's inbox gets `queue <id> started: <what>; log <path>` when it takes its
 turn, and a line that wakes the session, `queue <id> ended: <what>: <last line>; log <path>`, when it ends (`DONE exit
 0`, `FAILED exit <n>`, `TIMED OUT ...`) or is refused (`REFUSED ...`). The run keeps a record,
@@ -7912,7 +7913,10 @@ model little. The whole output goes to a numbered log, `test-<session>-<n>.log` 
 every line it printed; each session keeps its newest 20. The log starts with the tree the command ran on, so a log
 cited as proof names the head it ran on: `# folder: <folder>`, then `# git: <top level> at <commit>, clean` (or `with
 uncommitted changes`, counting untracked files; `no commit yet` before the first commit), or `# git: none, it ran
-outside a git repository`, where the command still runs; then `$ <command>`. When the command ends but a process it
+outside a git repository`, where the command still runs; then `$ <command>`. A command given as one word that starts
+by moving (`cd /d <dir> && ...`, `chdir` or `pushd` in cmd.exe, `cd <dir> && ...` in a POSIX shell) names the folder
+it moves to, so a step started from a main checkout that moves into a worktree names the worktree; a folder the shell
+would expand (`%VAR%`, `$HOME`, `~`) keeps the one it was started in. When the command ends but a process it
 started still holds its output open 2 s later, the run stops reading, and the log says so on its own line ("a process
 the command started still held its output open after the command ended, so the run stopped reading it") before the
 command's end. Then one `PASS` or `FAIL` line with
