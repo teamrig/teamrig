@@ -54,6 +54,7 @@ const tabStatusCommand = () => import('./commands/hook-tab-status.ts');
 const toolEndCommand = () => import('./commands/hook-tool-end.ts');
 const readonlyAllowCommand = () => import('./commands/hook-readonly-allow.ts');
 const pickerGuardCommand = () => import('./commands/hook-picker-guard.ts');
+const guardSetCommand = () => import('./commands/hook-guard-set.ts');
 const promptRefuseCommand = () => import('./commands/hook-prompt-refuse.ts');
 const routeAllowCommand = () => import('./commands/hook-route-allow.ts');
 const missingCliCommand = () => import('./commands/hook-missing-cli.ts');
@@ -380,6 +381,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   job: { effect: 'write', flags: ['session', 'what', 'targets', 'at'], load: async () => (await jobCommands()).job },
   'job end': { effect: 'write', flags: ['session', 'id', 'at'], load: async () => (await jobCommands()).jobEnd },
   'deploy-status': { effect: 'read', flags: [], load: async () => (await deployStatusCommand()).deployStatus },
+  'hook guards': { effect: 'internal', flags: [], load: async () => (await guardSetCommand()).guardSet },
   'hook push-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).pushGuard },
   'hook package-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).packageGuard },
   'hook secret-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).secretGuard },
@@ -1390,7 +1392,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
-  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
+  hook guards <guard> ... | hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

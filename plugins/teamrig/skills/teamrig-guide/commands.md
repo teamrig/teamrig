@@ -8820,6 +8820,26 @@ INBOX web, new in /home/you/.teamrig/teams/shop/state/inbox/web.md (each line is
 - 2026-10-15 08:58 lead: api error codes are in docs/errors.md
 ```
 
+### teamrig hook guards
+
+Before a tool call, runs the guards it names on the call in one process and prints their one answer: a refusal when
+any guard refuses, with every refusing guard's reason, else an allow when any allows, with every guard's notes. The
+plugin's hooks run each tool's guards this way, so a call starts one guard process, not one per guard. It names only
+`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `install-guard`
+and `service-role-guard`, each once; any other name is a usage error. A guard that throws refuses the call, naming it.
+See [Hooks and permissions](hooks.md#a-guard-that-cannot-answer).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook guards push-guard secret-guard < pre-tool-use.json
+```
+
+Output: nothing when no guard has a word about the call; otherwise one JSON reply, its permission decision `deny`
+or `allow`.
+
 ### teamrig hook push-guard
 
 Before a Bash or PowerShell command, refuses a push to a protected branch with the route to take (or, under
