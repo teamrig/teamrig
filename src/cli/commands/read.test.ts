@@ -16,6 +16,7 @@ import { formatSessionRecord } from '../../sessions/record.ts';
 import { formatTabNeed } from '../../tabs/need.ts';
 import { INTERFACE_MAJOR, INTERFACE_MINOR, INTERFACE_VERSION } from '../../interface/index.ts';
 import { CliHarness, CONFIG_PATH, EVENTS_PATH, TEAM, TEAM_HOME, type CliResult } from '../../testing/cli-harness.ts';
+import { hostCalled, SHIPPED_HOST, shippedHost } from '../../testing/host.ts';
 import { rotateRegister } from '../../testing/rotation.ts';
 import { normalisePath } from '../../testing/memory-files.ts';
 import { answersOf, problemsOf, rowsOf, served } from '../../testing/read-answers.ts';
@@ -520,6 +521,19 @@ describe('teamrig read sessions', () => {
     assert.deepEqual(
       [gone['name'], gone['active'], gone['host'], gone['retire']],
       ['app-gone', false, null, { at: new Date(at).toISOString(), by: 'lead', reason: 'The job is done', heir: 'alpha' }],
+    );
+  });
+
+  it("serves each session's host from its last start: the one its record names, else the default host (T5061)", async () => {
+    const kit = await treeHarness();
+    const start = { claudePid: 7, hostSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' };
+    await kit.files.write(startRecordOf('ui', 'pixel'), formatSessionRecord({ ...start, host: 'codex-cli' }));
+    await kit.files.write(startRecordOf('web', 'front'), formatSessionRecord({ ...start, host: 'gone-cli' }));
+    const shippedHosts = { 'claude-code': shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(hostCalled('Codex CLI', 'codex')) };
+    const answer = served(await kit.run(READ_SESSIONS, { ...AS_UI, shippedHosts }));
+    assert.deepEqual(
+      [sessionOf(answer, 'ui', 'pixel')['host'], sessionOf(answer, 'web', 'front')['host'], sessionOf(answer, 'web', 'back')['host']],
+      [{ id: 'codex-cli', name: 'Codex CLI' }, { id: 'gone-cli', name: 'gone-cli' }, { id: 'claude-code', name: 'Claude Code' }],
     );
   });
 
