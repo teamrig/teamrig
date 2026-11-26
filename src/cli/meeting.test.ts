@@ -184,6 +184,15 @@ describe('runCli: the daily meeting', () => {
     assert.deepEqual(linux.hidden, []);
   });
 
+  // T5716: the spotlight read the team's open.terminal, so a headless lead's meeting ran the overlay for no window.
+  it('starts no spotlight while the lead runs headless, though the team opens in Windows Terminal', async () => {
+    const processes = new FakeProcesses();
+    const started = await (await teamBeforeTheMeeting({ ...SPOTLIT_TEAM, launch: { lead: { terminal: 'headless' } } })).run(['meeting', 'start', '--session', 'lead'], { platform: 'win32', processes });
+    assert.equal(started.code, EXIT.ok, started.stderr.join('\n'));
+    assert.ok(!started.stdout.some((line) => line.startsWith('SPOTLIGHT')), started.stdout.join('\n'));
+    assert.deepEqual(processes.hidden, []);
+  });
+
   it('prints the agenda before the first meeting, during one, after its end and after it lapsed', async () => {
     const kit = await teamBeforeTheMeeting();
     const first = await kit.run(['meeting', 'agenda', '--session', 'lead']);

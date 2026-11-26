@@ -116,7 +116,7 @@ describe('startSpotlight', () => {
   for (const terminal of ['print', 'tmux'] as const) {
     it(`starts nothing when open.terminal ${terminal} leaves Windows Terminal out`, async () => {
       const deps = depsOn('win32');
-      assert.deepEqual(await startSpotlight(deps, ON, terminal, TARGET, 'work'), { kind: 'unsupported', why: `it needs Windows Terminal, and open.terminal is ${terminal}` });
+      assert.deepEqual(await startSpotlight(deps, ON, terminal, TARGET, 'work'), { kind: 'unsupported', why: `it needs Windows Terminal, and the session met opens in ${terminal}` });
       assert.deepEqual(deps.processes.hidden, []);
       assert.deepEqual(deps.files.paths(), []);
     });

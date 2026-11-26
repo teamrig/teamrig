@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { resetSummaryLine } from '../../budget/resets.ts';
+import { terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { deliveryPlaces } from '../../delivery/places.ts';
@@ -301,7 +302,7 @@ export async function meetingStart(args: ParsedArgs, runtime: CliRuntime): Promi
     holderFile: spotlightHolderPath(mk.kit.paths.kitHome),
   };
   const { spotlight } = mk.config.meeting;
-  const line = spotlightLine(await startSpotlight(runtime, spotlight, mk.config.open.terminal, spotlit, runtime.cwd), spotlit, spotlight.dim);
+  const line = spotlightLine(await startSpotlight(runtime, spotlight, terminalOf(mk.config, mk.lead), spotlit, runtime.cwd), spotlit, spotlight.dim);
   if (line !== undefined) {
     runtime.out.stdout(line);
   }
