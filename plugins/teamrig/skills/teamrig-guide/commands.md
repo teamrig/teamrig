@@ -5872,8 +5872,11 @@ UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
 `hooks.json` in `$CODEX_HOME` (default `~/.codex`); for `--host antigravity-cli`, Antigravity CLI's `hooks.json` in
 `~/.gemini/config`. Your own handlers stay as they are, in their order; teamrig's
-earlier handlers are replaced, so running it again after a teamrig update rewrites them. Each handler points at the
-installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
+earlier handlers are replaced, so running it again rewrites the ones an older release wrote. A Codex handler runs
+teamrig's kit launcher, `~/.teamrig/bin/teamrig.mjs`, which names no version and checks the current one before it
+runs it, so a teamrig update leaves the lines as they are; until the kit home holds an intact current version and that
+launcher (one teamrig session's start copies both), the run is refused with nothing written. It reads the hooks from
+the installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
 `SKIPPED` line per teamrig handler the host has no event or field for, and `NOTE` lines on what to do next; when the
@@ -5888,7 +5891,7 @@ left as it is. Every other line stays, the old `config.toml` is kept as `codex-c
 `features = { ... }` inline table, at the root or in a profile, that may hold the key is refused with nothing written:
 set `unified_exec_tty = false` in it by hand. It never trusts a handler
 for you: Codex runs a new or changed hook only once you trust it in `/hooks`, so trust teamrig's hooks there after
-every write, which means after every teamrig update. Its `--yes` changes a permission, the owner's to make, so it is
+every write; a teamrig update writes nothing, so the trust holds. Its `--yes` changes a permission, the owner's to make, so it is
 refused where an agent runs it; the preview stays open.
 
 On a host with no teamrig plugin, the person installs teamrig with the one file `install-teamrig.ts` from the release
@@ -5914,7 +5917,7 @@ PREVIEW nothing written (add --yes to write) /home/me/.codex/config.toml: sets [
 PREVIEW nothing written (add --yes to write) /home/me/.codex/fast.config.toml: sets [features] unified_exec_tty = false where the profile sets it
   SKIPPED StopFailure: node ${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js hook tab-status: event Codex lacks
   NOTE Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig's hooks.
-  NOTE Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.
+  NOTE They run teamrig through its kit launcher, which names no version: a teamrig update leaves them as they are, so the trust holds.
 ```
 
 ### teamrig setup skills

@@ -63,8 +63,8 @@ metered, and no line wakes a session: each session reads its own inbox.
    <name>`: no hook shows the lines.
 7. Optional, from an installed plugin: `teamrig setup hooks --host codex` previews putting teamrig's hooks into
    `~/.codex/hooks.json` beside your own, and `--yes` writes them. Then open `/hooks` in Codex and trust them.
-   **Every teamrig update changes them**: run the command again and trust them again in `/hooks` after each update,
-   until slice 3's launcher does it. They are not yet proved to guard anything on Codex, so step 7 counts for none of
+   Each one runs teamrig's kit launcher (`~/.teamrig/bin/teamrig.mjs`), which names no version, so a teamrig update
+   leaves them and their trust as they are (T5278). They are not yet proved to guard anything on Codex, so step 7 counts for none of
    the guards below.
 
 Missing on this route, all named again below: the guards (pushes, packages, secrets, database writes, privileged
