@@ -17,7 +17,7 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(declaration.sessionVariables, { marks: ['CODEX_THREAD_ID'], identity: [] });
   });
 
-  it('claims the rows its built ports serve, none with a proof yet (T5559)', () => {
+  it('claims the rows its built ports serve, a proof only on the six the live Windows run proved (T5559)', () => {
     const claimed = (kind: string): readonly string[] => featuresOf('host').filter((row) => declaration.manifest[row.id].kind === kind).map((row) => row.id);
     assert.deepEqual(claimed('supported'), [
       'rules.session-start',
@@ -38,9 +38,15 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(
       featuresOf('host').flatMap((row) => {
         const support = declaration.manifest[row.id];
-        return support.kind === 'unsupported' ? [] : support.proofs;
+        return support.kind === 'unsupported' ? [] : support.proofs.map((proof) => ({ row: row.id, ...proof }));
       }),
-      [],
+      ['rules.session-start', 'inbox.prompt-line', 'hooks.pretool-guard', 'hooks.file-guard', 'plugin.hooks-file', 'os.windows-hooks'].map((row) => ({
+        row,
+        os: 'windows',
+        toolVersion: '0.171.0-alpha.13',
+        date: '2026-11-24',
+        evidence: `proofs/codex-cli.md#${row.replaceAll('.', '')}`,
+      })),
     );
   });
 

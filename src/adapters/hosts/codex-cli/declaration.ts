@@ -9,6 +9,17 @@ import { SESSION_VARIABLES } from './session-variables.ts';
 const NOT_BUILT: Support = { kind: 'unsupported', notice: 'not built for Codex CLI yet' };
 const BUILT: Support = { kind: 'supported', proofs: [] };
 
+/**
+ * A row proved by the live Windows run of 2026-11-24 on Codex CLI 0.171.0-alpha.13, its record under the feature id's
+ * heading in docs/proofs/codex-cli.md (a heading's anchor drops the id's dot).
+ */
+function provedOnWindows(feature: string): Support {
+  return {
+    kind: 'supported',
+    proofs: [{ os: 'windows', toolVersion: '0.171.0-alpha.13', date: '2026-11-24', evidence: `proofs/codex-cli.md#${feature.replaceAll('.', '')}` }],
+  };
+}
+
 function partial(missing: string): Support {
   return { kind: 'partial', missing, notice: `built for Codex CLI in part: ${missing}`, proofs: [] };
 }
@@ -19,17 +30,17 @@ export const declaration: HostDeclaration = {
   name: 'Codex CLI',
   sessionVariables: SESSION_VARIABLES,
   manifest: {
-    'rules.session-start': BUILT,
+    'rules.session-start': provedOnWindows('rules.session-start'),
     'rules.instruction-files': NOT_BUILT,
     'rules.rules-folder': NOT_BUILT,
     'rules.memory': NOT_BUILT,
     'rules.start-size': partial('the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled'),
-    'inbox.prompt-line': BUILT,
+    'inbox.prompt-line': provedOnWindows('inbox.prompt-line'),
     'context.compact-hold': partial('the hold never fires: it needs the transcripts and usage ports'),
     'context.size': NOT_BUILT,
     'context.refresh': partial('no size trigger (context.size) and no in-tab clear'),
-    'hooks.pretool-guard': BUILT,
-    'hooks.file-guard': BUILT,
+    'hooks.pretool-guard': provedOnWindows('hooks.pretool-guard'),
+    'hooks.file-guard': provedOnWindows('hooks.file-guard'),
     'hooks.exec-review': partial("the owner's typed in-tab review runs only in Claude Code"),
     'hooks.readonly-allow': partial('a read-only line skips the prompt only when asks are refused'),
     'hooks.ask-refuse': NOT_BUILT,
@@ -58,7 +69,7 @@ export const declaration: HostDeclaration = {
     'skills.session-listing': NOT_BUILT,
     'helpers.start-rules': BUILT,
     'helpers.agent-types': NOT_BUILT,
-    'plugin.hooks-file': BUILT,
+    'plugin.hooks-file': provedOnWindows('plugin.hooks-file'),
     'plugin.hook-trust': NOT_BUILT,
     'plugin.install-update': NOT_BUILT,
     'plugin.cli-on-path': NOT_BUILT,
@@ -74,7 +85,7 @@ export const declaration: HostDeclaration = {
     'budget.tuning': NOT_BUILT,
     'errors.kinds': NOT_BUILT,
     'os.windows-sessions': BUILT,
-    'os.windows-hooks': BUILT,
+    'os.windows-hooks': provedOnWindows('os.windows-hooks'),
     'os.linux': BUILT,
   },
 };
