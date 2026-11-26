@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { beforeEach, describe, it } from 'node:test';
 import { settingsWriteRefusal } from '../../core/settings-writers.ts';
+import { KIT_VERSION } from '../../core/version.ts';
+import { hookLauncherProblem } from '../../kit/hook-launcher.ts';
 import { kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import { KIT_LOCK_BUSY, kitCurrentPath, kitVersionFolder, readKitCurrent } from '../../kit/kit-versions.ts';
 import { CliHarness, KIT, type RunOptions } from '../../testing/cli-harness.ts';
 import { holderLetsGo, holdFileLock } from '../../testing/held-file-lock.ts';
-import { writeKeptKitVersion } from '../../testing/kit-release.ts';
+import { writeKeptKitVersion, writeKitRelease } from '../../testing/kit-release.ts';
+import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../../restore/cli-launcher.ts';
 import { MemoryKitTree } from '../../testing/memory-kit-tree.ts';
 import { EXIT } from '../runtime.ts';
 
@@ -199,6 +202,93 @@ describe('teamrig kit', () => {
       const result = await kit.run(['kit', 'prune', '--yes'], options);
       assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED teamrig kit prune: ${KIT_LOCK_BUSY}`]]);
       assert.ok(kit.files.get(join(kitVersionFolder(KIT, '0.505.0'), '.claude-plugin', 'plugin.json')) !== undefined);
+    });
+  });
+
+  describe('kit install', () => {
+    /** The running teamrig: a release clone with this version's built client and its kit launcher. */
+    const CLONE = join('/', 'srv', 'install', 'teamrig', 'plugins', 'teamrig');
+    const SELF = { self: { node: '/usr/bin/node', script: join(CLONE, 'dist', 'cli', 'main.js'), execArgv: [] } };
+    const LAUNCHER = '// the kit launcher of this release\n';
+    const COMMIT = 'c'.repeat(40);
+    const release = ['--tag', `v${KIT_VERSION}`, '--commit', COMMIT];
+
+    beforeEach(async () => {
+      await writeKitRelease(kit.files, CLONE, KIT_VERSION);
+      await kit.files.write(join(CLONE, KIT_LAUNCHER_FILE), LAUNCHER);
+      options = { ...options, ...SELF };
+    });
+
+    it('shows the copy and writes nothing without --yes', async () => {
+      const result = await kit.run(['kit', 'install', ...release], options);
+      assert.equal(result.code, EXIT.ok);
+      assert.match(result.stdout.join('\n'), new RegExp(`^PREVIEW nothing written .*github-release v${KIT_VERSION} ${COMMIT}.*current no version -> ${KIT_VERSION}`, 'u'));
+      assert.deepEqual([kit.files.get(kitCurrentPath(KIT)), kit.files.get(cliLauncherPath(KIT))], [undefined, undefined]);
+    });
+
+    it('copies the clone in as the named release, names it current and writes the kit launcher a hook line runs', async () => {
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.deepEqual(result.stdout, [
+        `WROTE current ${KIT_VERSION}: teamrig ${KIT_VERSION} (github-release v${KIT_VERSION} ${COMMIT})`,
+        `WROTE ${cliLauncherPath(KIT)}: the kit launcher of teamrig ${KIT_VERSION}`,
+      ]);
+      assert.deepEqual((await readKitCurrent(kit.files, KIT))?.source, { kind: 'github-release', tag: `v${KIT_VERSION}`, commit: COMMIT });
+      assert.equal(kit.files.get(cliLauncherPath(KIT)), LAUNCHER);
+      assert.equal(await hookLauncherProblem(kit.files, KIT), undefined);
+    });
+
+    it('changes nothing on a second run', async () => {
+      await kit.run(['kit', 'install', ...release, '--yes'], options);
+      const again = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.deepEqual(
+        [again.code, again.stdout],
+        [EXIT.ok, [`UNCHANGED current ${KIT_VERSION} is installed already`, `UNCHANGED ${cliLauncherPath(KIT)}: the kit launcher of teamrig ${KIT_VERSION}`]],
+      );
+    });
+
+    it('keeps a pinned current, naming the pin, and writes the launcher the pinned version ships', async () => {
+      await keptWith('0.507.0');
+      await kit.files.write(join(kitVersionFolder(KIT, '0.507.0'), KIT_LAUNCHER_FILE), '// 0.507.0 launcher\n');
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.match(result.stdout[0] ?? '', /^NOTE teamrig pinned at 0\.507\.0; /u);
+      assert.equal(kit.files.get(kitCurrentPath(KIT)), '0.507.0\n');
+      assert.equal(kit.files.get(cliLauncherPath(KIT)), '// 0.507.0 launcher\n');
+    });
+
+    it('fails naming the launcher when the current version ships none', async () => {
+      await keptWith('0.507.0');
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.equal(result.code, EXIT.failed);
+      assert.match(result.stdout.at(-1) ?? '', /^NOTE the kit launcher is not written: teamrig 0\.507\.0 in the kit home ships no /u);
+    });
+
+    it('refuses a client with no integrity list, writing nothing', async () => {
+      const source = join('/', 'srv', 'src', 'teamrig', 'plugins', 'teamrig');
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], { ...options, self: { node: '/usr/bin/node', script: join(source, 'dist', 'cli', 'main.js'), execArgv: [] } });
+      assert.equal(result.code, EXIT.refused);
+      assert.match(result.stdout[0] ?? '', /^REFUSED teamrig kit install: .* holds no integrity list/u);
+      assert.equal(kit.files.get(kitCurrentPath(KIT)), undefined);
+    });
+
+    it('refuses a tag that is not this teamrig version and a commit that is not 40 hex characters', async () => {
+      const wrongTag = await kit.run(['kit', 'install', '--tag', 'v0.400.0', '--commit', COMMIT, '--yes'], options);
+      const shortCommit = await kit.run(['kit', 'install', '--tag', `v${KIT_VERSION}`, '--commit', 'abc123', '--yes'], options);
+      const noCommit = await kit.run(['kit', 'install', '--tag', `v${KIT_VERSION}`], options);
+      assert.deepEqual([wrongTag.code, shortCommit.code, noCommit.code], [EXIT.usage, EXIT.usage, EXIT.usage]);
+      assert.equal(kit.files.get(kitCurrentPath(KIT)), undefined);
+    });
+
+    it('refuses its write where Claude Code runs it', async () => {
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], { ...options, env: { CLAUDECODE: '1' } });
+      assert.deepEqual(result.stdout, [`REFUSED ${settingsWriteRefusal('kit install', 'CLAUDECODE')}`]);
+    });
+
+    it('refuses, writing nothing, while another process holds the install lock past the wait', async () => {
+      await holdFileLock(kit, LOCK);
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED teamrig kit install: ${KIT_LOCK_BUSY}`]]);
     });
   });
 });

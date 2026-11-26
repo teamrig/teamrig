@@ -237,6 +237,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'kit versions': { effect: 'read', flags: [], load: async () => (await kitCommands()).kitVersions },
   'kit use': { effect: 'write', flags: [], switches: ['latest', 'yes'], load: async () => (await kitCommands()).kitUse },
   'kit prune': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitPrune },
+  'kit install': { effect: 'write', flags: ['tag', 'commit'], switches: ['yes'], load: async () => (await kitCommands()).kitInstall },
   restart: { effect: 'internal', flags: ['team', 'at', 'project'], load: async () => (await restartCommands()).restart },
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
   'idle-open': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleOpen },
@@ -513,6 +514,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   kit prune [--yes]            removes the kept versions past the rollback window (all but the current one,
       the newest newer one and the two before it) and what stopped installs left; without --yes it names
       them and removes nothing; one a running process holds stays for the next prune (exit 1)
+  kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
+      branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
+      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
+      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the

@@ -179,6 +179,7 @@ const EXPECTED = {
   'key remove': 'internal',
   'key check': 'read',
   'kit prune': 'write',
+  'kit install': 'write',
   'kit use': 'write',
   'kit versions': 'read',
   'hook push-guard': 'internal',

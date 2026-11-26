@@ -1,7 +1,10 @@
 import { resolveKitHome } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
 import type { Mutex } from '../../core/lock.ts';
-import { KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
+import { KIT_VERSION } from '../../core/version.ts';
+import { clientRootOf } from '../../exec/client-integrity.ts';
+import { syncKitLauncher } from '../../kit/hook-launcher.ts';
+import { installRunningKit, KIT_COMMAND_LOCK, kitInstallLockPath, kitSelfInstallNote } from '../../kit/kit-self-install.ts';
 import {
   damagedPreviewWhy,
   KIT_LOCK_BUSY,
@@ -12,10 +15,12 @@ import {
   pruneKitVersions,
   readKitCurrent,
   useKitVersion,
+  kitVersionFolder,
   type KitCurrent,
+  type KitSource,
   type KitUseTarget,
 } from '../../kit/kit-versions.ts';
-import { noPositionals, UsageError, type ParsedArgs } from '../args.ts';
+import { noPositionals, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { fileLockOf, type FileLockRuntime } from '../file-locks.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 
@@ -39,8 +44,7 @@ function commandLockOf(runtime: KitRuntime, kitHome: string): Mutex {
 }
 
 /** How a record names where its version came from. */
-function sourceText(current: KitCurrent): string {
-  const { source } = current;
+function sourceText({ source }: Pick<KitCurrent, 'source'>): string {
   return source.kind === 'github-release' ? `github-release ${source.tag} ${source.commit}` : source.kind;
 }
 
@@ -146,5 +150,85 @@ export async function kitPrune(args: ParsedArgs, runtime: KitRuntime): Promise<E
     runtime.out.stdout(`NOTE left for the next prune, a running process holds a file: ${outcome.failed.join(', ')}`);
     return EXIT.failed;
   }
+  return EXIT.ok;
+}
+
+/** A release's commit as git names it: 40 lowercase hex characters. */
+const COMMIT = /^[0-9a-f]{40}$/u;
+
+type KitInstallRuntime = KitRuntime & Pick<CliRuntime, 'self'>;
+
+/** The release `kit install` records: `--tag`, which must name this client's own version, and its 40-hex `--commit`. */
+function releaseSourceOf(args: ParsedArgs): KitSource {
+  const tag = requiredFlag(args.flags, 'tag');
+  const commit = requiredFlag(args.flags, 'commit');
+  if (tag !== `v${KIT_VERSION}`) {
+    throw new UsageError(`teamrig kit install: --tag ${tag} is not this teamrig's release tag v${KIT_VERSION}`);
+  }
+  if (!COMMIT.test(commit)) {
+    throw new UsageError(`teamrig kit install: --commit ${commit} is not a 40-character git commit`);
+  }
+  return { kind: 'github-release', tag, commit };
+}
+
+/**
+ * `teamrig kit install --tag <tag> --commit <sha> [--yes]`: copies the running teamrig, a clone of the release branch,
+ * into the kit home's `versions/` as the release `--tag` at `--commit` names, makes it current unless a pin or a newer
+ * version holds `current`, and writes the kit launcher hook lines run (`<kit home>/bin/teamrig.mjs`). It is the install
+ * a session start does for a host whose plugin runs teamrig, for a host with none; the teamrig install script runs it
+ * before `teamrig setup hooks`. Without `--yes` it shows the install and writes nothing. Its write is a settings
+ * writer's (src/core/settings-writers.ts): it moves the code every host's guards run, so only the person runs it.
+ */
+export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): Promise<ExitCode> {
+  noPositionals(args);
+  const source = releaseSourceOf(args);
+  const kitHome = kitHomeOf(runtime);
+  const clientRoot = clientRootOf(runtime.self.script);
+  const release = `teamrig ${KIT_VERSION} (${sourceText({ source })})`;
+  if (!args.switches.has(WRITE_SWITCH)) {
+    const current = await readKitCurrent(runtime.files, kitHome);
+    runtime.out.stdout(
+      `PREVIEW nothing written (add --${WRITE_SWITCH} to write): copy ${release} from ${clientRoot} to ${kitVersionFolder(kitHome, KIT_VERSION)}; ` +
+        `current ${current?.version ?? 'no version'} -> ${KIT_VERSION} unless a pin or a newer version holds it`,
+    );
+    return EXIT.ok;
+  }
+  const outcome = await installRunningKit({
+    files: runtime.files,
+    tree: runtime.kitTree,
+    kitHome,
+    clientRoot,
+    version: KIT_VERSION,
+    source,
+    lock: commandLockOf(runtime, kitHome),
+  });
+  switch (outcome.kind) {
+    case 'skipped':
+      if (outcome.why === 'no-integrity-list') {
+        throw new RefusedError(`teamrig kit install: ${clientRoot} holds no integrity list, so it is no built release; nothing written`);
+      }
+      runtime.out.stdout(`UNCHANGED ${release} runs from the kit home already`);
+      break;
+    case 'busy':
+      throw new RefusedError(`teamrig kit install: ${KIT_LOCK_BUSY}`);
+    case 'refused':
+      throw new RefusedError(`teamrig kit install: ${outcome.why}`);
+    case 'installed':
+      runtime.out.stdout(`WROTE current ${outcome.version}${outcome.previous === undefined ? '' : ` (was ${outcome.previous})`}: ${release}`);
+      break;
+    case 'current':
+      runtime.out.stdout(`UNCHANGED current ${outcome.version} is installed already`);
+      break;
+    case 'pinned':
+    case 'older':
+      runtime.out.stdout(`NOTE ${kitSelfInstallNote(outcome) ?? ''}`);
+      break;
+  }
+  const launcher = await syncKitLauncher(runtime.files, kitHome);
+  if (launcher.kind === 'missing') {
+    runtime.out.stdout(`NOTE the kit launcher is not written: ${launcher.why}`);
+    return EXIT.failed;
+  }
+  runtime.out.stdout(`${launcher.kind === 'written' ? 'WROTE' : 'UNCHANGED'} ${launcher.path}: the kit launcher of teamrig ${launcher.version}`);
   return EXIT.ok;
 }
