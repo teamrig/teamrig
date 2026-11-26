@@ -222,8 +222,8 @@ async function openUiWindow(runtime: CliRuntime, config: KitConfig, kit: Kit, st
 }
 
 /**
- * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, the focus left
- * on the session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
+ * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, asking the
+ * terminal to leave the focus on the session's pane (tmux does; Windows Terminal moves it to the split): terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
  * tool, whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
  */
 async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session: string | undefined): Promise<Placed> {
