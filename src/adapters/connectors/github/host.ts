@@ -105,7 +105,7 @@ import { pullStandIn } from './pull-stand.ts';
 import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX, commitIn, compareIn } from './pull-work.ts';
 import { listPulls, PULL_LIMIT } from './pulls.ts';
 import { PULL_PAGE_SIZE } from './queries.ts';
-import { rerunRefusal, runStateOf } from './run-state.ts';
+import { type RunState, rerunRefusal, runStateOf } from './run-state.ts';
 import { NoAccessError, type RepoAccess, type RepoTokens } from './tokens.ts';
 
 /** A failed job's log read, as a failure line words it: the Actions permission lets a token read it. */
@@ -273,9 +273,32 @@ export class GitHubIssueHost implements IssueHost {
       return { kind: 'failed', reason: `gh was stopped (${result.end.signal}) on its way to re-run run ${String(runId)} of ${repo}: look on GitHub before a rerun` };
     }
     if (result.end.code !== 0) {
-      return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access)) };
+      const reason = this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access));
+      return ghFailureKind(result.end.code, result.stderr) === undefined ? this.rerunAfterOddFailure(repo, runId, state, access, reason) : { kind: 'failed', reason };
     }
     return { kind: 'done', workflow: state.workflow, event: state.event, attempt: state.attempt + 1 };
+  }
+
+  /**
+   * gh failed the re-run call with no known refusal, such as `unexpected end of JSON input` when GitHub answers an
+   * error with an empty body and gh hides its status (T5610): the run is read again, so a re-run GitHub started all
+   * the same is done, and one it did not start says so, safe to run again since the read refuses a second re-run.
+   */
+  private async rerunAfterOddFailure(repo: string, runId: number, before: RunState, access: RepoAccess, reason: string): Promise<HostRerun> {
+    let read: GhResult;
+    try {
+      read = await this.gh.run({ args: runReadArgs(repo, runId), env: access.env });
+    } catch {
+      return { kind: 'failed', reason: `${reason}; the run could not be read after it: look on GitHub before a rerun` };
+    }
+    const after = read.end.kind === 'exited' && read.end.code === 0 ? runStateOf(read.stdout) : undefined;
+    if (after === undefined) {
+      return { kind: 'failed', reason: `${reason}; the run could not be read after it: look on GitHub before a rerun` };
+    }
+    if (after.attempt > before.attempt) {
+      return { kind: 'done', workflow: after.workflow, event: after.event, attempt: after.attempt };
+    }
+    return { kind: 'failed', reason: `${reason}; the run reads attempt ${String(after.attempt)} still, so nothing was re-run: run it again` };
   }
 
   /** The posts of `repo` changed since `since` (posts.ts), as the owner's saved token reads them. */

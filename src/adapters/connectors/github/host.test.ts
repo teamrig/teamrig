@@ -326,6 +326,18 @@ describe('GitHubIssueHost.rerunRun', () => {
     assert.equal(odd.startsWith('gh api to re-run run 7 of acme/web') && odd.includes('already running') && !odd.includes('tok_abcdefgh'), true, odd);
   });
 
+  it('reads the run again after an odd gh failure, so a re-run GitHub started is done and one it did not start says so (T5610)', async () => {
+    const emptyBody = failing(1, 'unexpected end of JSON input\n');
+    const started = new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(emptyBody).startsRerunAnyway();
+    assert.deepEqual(await hostWith(started, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7), { kind: 'done', workflow: 'ci.yml', event: 'push', attempt: 2 });
+    assert.deepEqual(started.ran.map((request) => request.args[1]), ['repos/acme/web/actions/runs/7', 'repos/acme/web/actions/runs/7/rerun-failed-jobs', 'repos/acme/web/actions/runs/7']);
+    const none = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(emptyBody), new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+    assert.deepEqual(none, { kind: 'failed', reason: 'gh api to re-run run 7 of acme/web exited with code 1: unexpected end of JSON input; the run reads attempt 1 still, so nothing was re-run: run it again' });
+    const known = new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(failing(1, 'HTTP 403: Resource not accessible by personal access token\n'));
+    await hostWith(known, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+    assert.equal(known.ran.length, 2, 'a known refusal reads nothing after it');
+  });
+
   it('says to look on GitHub after a signal, and fails with no saved token, running nothing', async () => {
     const stopped = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite({ end: { kind: 'signal', signal: 'SIGTERM' }, stdout: '', stderr: '' })).rerunRun('acme/web', 7);
     assert.deepEqual(stopped, { kind: 'failed', reason: 'gh was stopped (SIGTERM) on its way to re-run run 7 of acme/web: look on GitHub before a rerun' });
