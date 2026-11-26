@@ -19,8 +19,6 @@ Each session is a tab in the terminal you already have (PowerShell, bash or zsh)
 IDE, no desktop app, no server and no account: in our test, Windows Terminal with twelve session tabs used about
 250 MB of memory.
 
-> **Pre-release.** Nothing is stable yet and there is no release.
-
 ## Get started
 
 Install teamrig, and teamrig-pane to keep your tasks beside the conversation:
