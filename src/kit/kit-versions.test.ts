@@ -136,6 +136,38 @@ describe('kit versions', () => {
       assert.equal(tree.copies.length, 2);
     });
 
+    describe('a kept file changed under an intact list and source record', () => {
+      const damage = (version: string): Promise<void> => files.write(join(kitVersionFolder(KIT, version), 'dist', 'cli', 'main.js'), 'damaged\n');
+      const whole = (version: string): string | undefined => files.get(join(kitVersionFolder(KIT, version), 'dist', 'cli', 'main.js'));
+
+      it('copies the version in use again at the next start', async () => {
+        await install('0.508.0');
+        await damage('0.508.0');
+        assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
+        assert.equal(whole('0.508.0'), kitReleaseMain('0.508.0'));
+        assert.equal(tree.copies.length, 2);
+      });
+
+      it('copies a version kept beside a pin again, the pin left in place', async () => {
+        await install('0.508.0');
+        await install('0.509.0');
+        await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' });
+        await damage('0.509.0');
+        assert.deepEqual(await install('0.509.0'), { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' });
+        assert.equal(whole('0.509.0'), kitReleaseMain('0.509.0'));
+        assert.equal((await readKitCurrent(files, KIT))?.version, '0.508.0');
+      });
+
+      it('copies an older kept version again, current left on the newer one', async () => {
+        await install('0.509.0');
+        await install('0.508.0');
+        await damage('0.508.0');
+        assert.deepEqual(await install('0.508.0'), { kind: 'older', version: '0.508.0', current: '0.509.0' });
+        assert.equal(whole('0.508.0'), kitReleaseMain('0.508.0'));
+        assert.equal((await readKitCurrent(files, KIT))?.version, '0.509.0');
+      });
+    });
+
     it('replaces a damaged kept version by moves, leaving no aside copy behind', async () => {
       await install('0.508.0');
       await files.write(join(kitVersionFolder(KIT, '0.508.0'), CLIENT_MANIFEST), '{}\n');
@@ -275,12 +307,10 @@ describe('kit versions', () => {
       assert.equal((await readKitCurrent(files, KIT))?.version, '0.509.0');
     });
 
-    it('gets a damaged version in use whose list is intact copied again by the next start, once kit use drops its record (T5522)', async () => {
+    it('gets a damaged version in use whose list is intact copied again by the next start after kit use drops its record (T5522)', async () => {
       await install('0.508.0');
       const main = join(kitVersionFolder(KIT, '0.508.0'), 'dist', 'cli', 'main.js');
       await files.write(main, 'stale\n');
-      assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });
-      assert.equal(tree.copies.length, 1);
       assert.equal((await useKitVersion({ files, kitHome: KIT, lock: new InlineMutex() }, { kind: 'version', version: '0.508.0' })).kind, 'refused');
       assert.equal(files.get(join(KIT, 'versions', '0.508.0.source.json')), undefined);
       assert.deepEqual(await install('0.508.0'), { kind: 'current', version: '0.508.0' });

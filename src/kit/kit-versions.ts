@@ -272,11 +272,12 @@ export async function installKitVersion(install: KitInstall): Promise<KitInstall
 }
 
 /**
- * What an install that changes nothing returns, read without the lock and without hashing the kept files: the kept
- * copy's integrity list and its source record match the running client's list, and `current` names this version
- * with that list hash, or a pin or a newer version holds it. Undefined when anything differs, so the install goes
- * under the lock, which verifies every file. A session start of a pinned or older plugin so never waits on another
- * start's copy, nor re-hashes about 6 MB inside the hook's time limit.
+ * What an install that changes nothing returns, read without the lock: the kept copy's integrity list and its source
+ * record match the running client's list, every kept file matches that list, and `current` names this version with
+ * that list hash, or a pin or a newer version holds it. Undefined when anything differs, so the install goes under the
+ * lock, which copies a damaged version again by moves. A session start of a pinned or older plugin so never waits on
+ * another start's copy, and a damaged kept copy (current, pinned or older) is whole again after the next start: the
+ * launcher refuses a damaged current, so no other step would ever repair it.
  */
 async function settledWithoutLock(install: KitInstall, wanted: Version): Promise<KitInstallOutcome | undefined> {
   const { files, kitHome, version } = install;
@@ -285,8 +286,12 @@ async function settledWithoutLock(install: KitInstall, wanted: Version): Promise
   if (state.kind !== 'current' || running === undefined) {
     return undefined;
   }
-  const kept = await listHashOf(files, kitVersionFolder(kitHome, version));
+  const folder = kitVersionFolder(kitHome, version);
+  const kept = await listHashOf(files, folder);
   if (kept !== running || (await readKeptSource(files, kitHome, version))?.listHash !== running) {
+    return undefined;
+  }
+  if ((await checkClient(folder, files)).kind !== 'intact') {
     return undefined;
   }
   const { current } = state;
@@ -395,8 +400,8 @@ async function movedCurrent(files: Files, kitHome: string, before: KitCurrent | 
 }
 
 /**
- * How a refusal of `teamrig kit use` names the way to a whole copy: an install copies a version again once its source
- * record is gone, since it verifies every file only then (settledWithoutLock never hashes the kept files).
+ * How a refusal of `teamrig kit use` names the way to a whole copy: the next install of that version finds its files
+ * off their list, or its source record gone, and copies it again.
  */
 const RECOPY = 'the next session start of the teamrig plugin at that version copies it again';
 
