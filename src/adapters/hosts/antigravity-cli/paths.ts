@@ -1,13 +1,9 @@
 import { posix, win32 } from 'node:path';
 import type { HostDeps, HostPaths } from '../../../plugin-api/index.ts';
 
-function unsupportedPath(what: string): never {
-  throw new Error(`unsupported: Antigravity has no verified ${what} path`);
-}
-
 /**
- * Antigravity's verified folders and files on `platform`. Unverified paths throw rather than guessing a path teamrig
- * might write to or guard.
+ * Antigravity's verified folders and files on `platform`. An unverified place answers undefined rather than a guess
+ * teamrig might write to or guard, and each caller goes on without it.
  */
 export function hostPaths(platform: HostDeps['platform']): HostPaths {
   const path = platform === 'win32' ? win32 : posix;
@@ -17,7 +13,7 @@ export function hostPaths(platform: HostDeps['platform']): HostPaths {
     home,
     userSettings: (userHome) => path.join(userHome, '.gemini', 'antigravity-cli', 'settings.json'),
     folderSettings: () => [],
-    worktrees: () => unsupportedPath('worktrees'),
+    worktrees: () => undefined,
     worktreeRepo: () => undefined,
     userInstructions: (userHome) => path.join(userHome, '.gemini', 'GEMINI.md'),
     folderInstructions: (folder) => [path.join(folder, 'AGENTS.md'), path.join(folder, 'GEMINI.md')],
@@ -25,17 +21,17 @@ export function hostPaths(platform: HostDeps['platform']): HostPaths {
     projectRules: (project) => path.join(project, '.agents', 'rules'),
     skills: (userHome) => path.join(home(userHome), 'skills'),
     projectSkills: (project) => path.join(project, '.agents', 'skills'),
-    userAgents: () => unsupportedPath('userAgents'),
+    userAgents: () => undefined,
     projectAgents: (project) => path.join(project, '.agents', 'agents'),
-    memoryFolder: () => unsupportedPath('memoryFolder'),
-    memoryIndex: () => unsupportedPath('memoryIndex'),
-    memoryFolders: () => unsupportedPath('memoryFolders'),
-    scratchpads: () => unsupportedPath('scratchpads'),
-    scratchpadOf: () => unsupportedPath('scratchpadOf'),
-    planFile: () => unsupportedPath('planFile'),
-    shellSnapshots: () => unsupportedPath('shellSnapshots'),
-    transcriptsFolder: () => unsupportedPath('transcriptsFolder'),
-    pluginsFolder: () => unsupportedPath('pluginsFolder'),
+    memoryFolder: () => undefined,
+    memoryIndex: () => undefined,
+    memoryFolders: () => undefined,
+    scratchpads: () => undefined,
+    scratchpadOf: () => undefined,
+    planFile: () => undefined,
+    shellSnapshots: () => undefined,
+    transcriptsFolder: () => undefined,
+    pluginsFolder: () => undefined,
     loginFile: () => undefined,
   };
 }
