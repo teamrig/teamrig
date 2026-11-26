@@ -32,6 +32,7 @@ import { GIT_PULLS } from '../sync/pull-conflicts.ts';
 import { GIT_MERGE } from '../merge/git.ts';
 import { nodeProcesses } from '../open/processes.ts';
 import { nodeSessionProcesses } from '../open/session-processes.ts';
+import { nodeStepHandoff } from '../open/step-handoff.ts';
 import { httpPackageRegistry } from '../package-guard/registry.ts';
 import { GIT_CLI, GIT_COMMIT_LOG } from '../push-guard/git.ts';
 import { GIT_CHANGES } from '../changes/git.ts';
@@ -130,6 +131,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     host,
     shippedHosts,
     processes: nodeProcesses(),
+    stepHandoff: nodeStepHandoff(process.env),
     sessionProcesses,
     starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, isSessionProcess, nodeEvery),
     folderSignals: nodeFolderSignals,

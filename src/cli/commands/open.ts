@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { DEFAULT_HOST } from '../../composition/adapters.ts';
 import { describeLaunch, launchModelProblem, launchOf, terminalOf } from '../../config/launch.ts';
 import type { Roster } from '../../config/roster.ts';
-import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type TerminalChoice } from '../../config/types.ts';
+import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type LaunchConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
 import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
 import { isHostSessionId } from '../../core/host-session.ts';
@@ -18,7 +18,8 @@ import { openTab, type OpenOutcome } from '../../open/open-tab.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../../open/prompt.ts';
 import { shellCommand } from '../../open/quote.ts';
 import { sessionCredentialFree, sessionEnv } from '../../open/session-env.ts';
-import type { RunOutcome } from '../../open/processes.ts';
+import type { RunOutcome, RunRequest } from '../../open/processes.ts';
+import type { SessionLauncher } from '../../ports/host/index.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { noRoomText } from '../../sessions/headroom.ts';
 import { closedOf, SessionLog, type CloseRecord } from '../../sessions/log.ts';
@@ -32,7 +33,7 @@ import { cacheBinOf, childEnvOf, launcherOf, launchHostOf } from '../host.ts';
 import { findTeam, openKit, reloadTeamConfig, requireConfig, rosterOf, sessionIdOf, teamZone, type Kit } from '../kit.ts';
 import { liveRunOf, liveRunText } from '../live-run.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { launchListing } from '../skill-listing.ts';
+import { launchListing, type LaunchListing } from '../skill-listing.ts';
 import { tabFocusOf } from '../tab-focus.ts';
 import { loadTree } from '../tree.ts';
 import { noteResumedTab } from '../wake-opened.ts';
@@ -512,8 +513,199 @@ export function hostExit(runtime: CliRuntime, command: string, result: RunOutcom
   }
 }
 
+
+/** What every start of a session's host program in its tab shares: who it is, where, and how its host starts. */
+interface LaunchContext {
+  readonly runtime: CliRuntime;
+  readonly sessionRuntime: CliRuntime;
+  readonly id: string;
+  readonly team: string;
+  readonly name: string;
+  readonly project: string;
+  readonly kit: Kit;
+  readonly config: KitConfig;
+  readonly roster: Roster;
+  /** The variables the host program starts with: the session's, without the credentials it must not see. */
+  readonly hostEnv: Env;
+  readonly command: string;
+  readonly prefix: readonly string[];
+  readonly launcher: SessionLauncher;
+  readonly leadDefault: LaunchConfig;
+  readonly store: RefreshStore;
+  readonly closes: SessionLog;
+  readonly sent: WakePrompts;
+}
+
+/** One start of the host program: its settings, first prompt and the host session it resumes. */
+interface LaunchStart {
+  readonly settings: LaunchConfig;
+  readonly first: string | undefined;
+  readonly resuming: string | undefined;
+  readonly listing: LaunchListing;
+}
+
+/** Reads what every start of session `id` shares, refusing a folder, team or session that is not there. */
+async function launchContextOf(args: ParsedArgs, runtime: CliRuntime, id: string, team: string): Promise<LaunchContext> {
+  const project = requiredFlag(args.flags, 'project');
+  if ((await runtime.probe.kind(project)) !== 'folder') {
+    throw new RefusedError(`the project folder ${project} does not exist`);
+  }
+  const inherited = childEnvOf(runtime);
+  const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform, cacheBinOf(runtime), inherited.session), [ENV.launched]: id };
+  const sessionRuntime: CliRuntime = { ...runtime, env };
+  const kit = await openKit(sessionRuntime, team);
+  const config = requireConfig(kit, sessionRuntime, 'read');
+  const hostEnv = sessionCredentialFree(env, config.delivery.passEnv, inherited.login);
+  const roster = await rosterOf(sessionRuntime, kit, config);
+  if (!roster.ids.includes(id)) {
+    throw new RefusedError(`${id} is not a session of team ${team}`);
+  }
+  const { command, prefix } = await hostProgramOf(runtime, hostEnv);
+  return {
+    runtime,
+    sessionRuntime,
+    id,
+    team,
+    name: roster.nameOf(id) ?? id,
+    project,
+    kit,
+    config,
+    roster,
+    hostEnv,
+    command,
+    prefix,
+    launcher: launcherOf(runtime),
+    leadDefault: launchHostOf(runtime).leadDefault,
+    store: new RefreshStore(runtime.files, kit.paths),
+    closes: new SessionLog(runtime.files, kit.paths.sessionLog),
+    sent: new WakePrompts(runtime.files, kit.paths.wake),
+  };
+}
+
+/** What the first start takes from the line: its prompt, the host session it resumes and its effort override. */
+interface FirstStartFlags {
+  readonly prompt: string | undefined;
+  readonly resume: string | undefined;
+  readonly effort: ReturnType<typeof effortFlag>;
+}
+
+/** Reads the first start's flags, before anything is opened, so a bad line is a usage error. */
+function firstStartFlagsOf(args: ParsedArgs, team: string, id: string): FirstStartFlags {
+  return { prompt: launchPrompt(args, team, id), resume: resumeFlag(args.flags.get('resume')), effort: effortFlag(args.flags.get('effort')) };
+}
+
+/** The first start: the flags' prompt, resume and effort, its Starting line printed. */
+async function firstStartOf(ctx: LaunchContext, flags: FirstStartFlags): Promise<LaunchStart> {
+  const { runtime, id, team } = ctx;
+  const { prompt, resume, effort } = flags;
+  const configured = launchOf(ctx.config, id, ctx.leadDefault);
+  const settings = effort === undefined ? configured : { ...configured, effort };
+  // The config takes any model name, so a model this host does not run (another provider's) is refused here, before
+  // the host starts and fails on it.
+  const modelProblem = launchModelProblem(settings, launchHostOf(runtime));
+  if (modelProblem !== undefined) {
+    throw new RefusedError(`launch.${id}.model ${settings.model ?? ''}: ${modelProblem}; fix it in the team config, or \`${KIT_NAME} doctor\` lists each`);
+  }
+  const { programName } = ctx.launcher;
+  const resumed = resume === undefined ? '' : `, resuming ${programName} session ${resume}`;
+  const listing = await launchListing(ctx.sessionRuntime, ctx.kit, ctx.config, ctx.roster, id);
+  runtime.out.stdout(`Starting ${programName} as ${ctx.name} (session ${id} of team ${team}) in ${ctx.project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
+  return { settings, first: prompt, resuming: resume, listing };
+}
+
 /**
- * `launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>]`:
+ * The start after the automatic restart ended the host program: fresh, sent to its handover, at the config's level as
+ * it is now, which a typed /effort may have changed (T2444), and with the skills listed as they are now.
+ */
+async function restartOf(ctx: LaunchContext): Promise<LaunchStart> {
+  const { runtime, id, team } = ctx;
+  runtime.out.stdout(`Starting ${ctx.launcher.programName} again as ${ctx.name} with a fresh context: it reads its handover first`);
+  const reload = await reloadTeamConfig(ctx.sessionRuntime, ctx.kit);
+  const settings = launchOf(reload.status === 'loaded' ? reload.config : ctx.config, id, ctx.leadDefault);
+  const listing = await launchListing(ctx.sessionRuntime, ctx.kit, ctx.config, ctx.roster, id);
+  return { settings, first: refreshPrompt(team, id, ctx.store.handoverPath(id)), resuming: undefined, listing };
+}
+
+/** The program a start runs, refused while the session runs in another host program. */
+async function runOf(ctx: LaunchContext, start: LaunchStart): Promise<RunRequest> {
+  const { id } = ctx;
+  await refuseLiveRun(ctx.runtime, ctx.kit, ctx.roster, id, ctx.name);
+  // The host spells its own flags: this start only says what the session is to be.
+  const session = sessionStartOf(start.settings, { name: ctx.name, resume: start.resuming, settingsFile: start.listing.settingsFile, prompt: start.first });
+  // teamrig wrote this first prompt, not the person: kept like a wake's text, so the turn log marks it teamrig's and
+  // the UI does not follow it (T5388). A fresh start's tab id is unknown until Claude Code starts, so any tab matches.
+  if (start.first !== undefined) {
+    await ctx.sent.remember(id, { ...(start.resuming === undefined ? {} : { tab: start.resuming }), text: start.first });
+  }
+  return { command: ctx.command, args: [...ctx.prefix, ...ctx.launcher.launchArgs(session)], cwd: ctx.project, env: ctx.hostEnv };
+}
+
+/** What follows the host program's end, which started at `startedAt`: a restart, or the tab's exit, a close said. */
+async function afterRunOf(ctx: LaunchContext, result: RunOutcome, startedAt: number): Promise<'restart' | ExitCode> {
+  const { runtime, id } = ctx;
+  if (await restartTaken(ctx.store, id)) {
+    return 'restart';
+  }
+  const close = await closeSince(runtime, ctx.closes, id, result, startedAt);
+  if (close === undefined) {
+    return hostExit(runtime, ctx.command, result);
+  }
+  runtime.out.stdout(`${ctx.launcher.programName} was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
+  return EXIT.ok;
+}
+
+/** How `--ended` says the host program ended: `exited:<code>`, `missing`, or `failed:<why>`. */
+export function endedFlag(value: string): RunOutcome {
+  const exited = /^exited:(-?\d+)$/.exec(value);
+  if (exited?.[1] !== undefined) {
+    return { kind: 'exited', code: Number(exited[1]) };
+  }
+  if (value === 'missing') {
+    return { kind: 'missing' };
+  }
+  if (value.startsWith('failed:')) {
+    return { kind: 'failed', error: value.slice('failed:'.length) };
+  }
+  throw new UsageError(`--ended "${value}" is not exited:<code>, missing or failed:<why>`);
+}
+
+/** When the host program `--ended` names started, in milliseconds since 1970. */
+function startedAtFlag(value: string | undefined): number {
+  if (value === undefined || !/^\d+$/.test(value)) {
+    throw new UsageError('--ended needs --started-at <milliseconds since 1970>');
+  }
+  return Number(value);
+}
+
+/**
+ * One step of the session launcher (src/open/session-launcher.ts), which stays in the tab while this process exits:
+ * the first start's plan, or, with `--ended`, what follows the host program's end: a restart's plan, or the tab's exit.
+ */
+async function launchStep(ctx: LaunchContext, flags: FirstStartFlags, ended: { readonly result: RunOutcome; readonly startedAt: number } | undefined): Promise<ExitCode> {
+  let start: LaunchStart;
+  if (ended === undefined) {
+    start = await firstStartOf(ctx, flags);
+  } else {
+    const after = await afterRunOf(ctx, ended.result, ended.startedAt);
+    if (after !== 'restart') {
+      return after;
+    }
+    start = await restartOf(ctx);
+  }
+  const given = await ctx.runtime.stepHandoff.give(await runOf(ctx, start));
+  switch (given.kind) {
+    case 'given':
+      return EXIT.ok;
+    case 'none':
+      throw new RefusedError(`launch --step runs only under the session launcher; run ${KIT_NAME} open ${ctx.id}`);
+    case 'failed':
+      ctx.runtime.out.stderr(`FAILED the session launcher did not take the start: ${given.error}`);
+      return EXIT.failed;
+  }
+}
+
+/**
+ * `launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>] [--step [--ended <how> --started-at <ms>]]`:
  * what a tab that `open` started runs. It sets the session's variables and starts Claude Code under the
  * session's name, on its model and effort from the team config's `launch`, with its first prompt,
  * its input and output on this terminal, listing other areas' skills as `skills.otherAreas` says. `$TEAMRIG_LAUNCHED` tells the Stop hook that launch runs it:
@@ -525,76 +717,31 @@ export function hostExit(runtime: CliRuntime, command: string, result: RunOutcom
  * When `teamrig close` or the idle pass ended Claude Code, launch says so and exits 0, so the tab closes: a tab left
  * open on the error offers to run this line again, starting a stale launch beside the session's next one. A start or
  * restart while the session runs in another Claude Code is refused.
+ * With `--step`, the session launcher runs it once per start and runs Claude Code itself, so the whole CLI is not
+ * held in memory for the session's life and each restart runs the newest install (T5757): see `launchStep`.
  */
 export async function launch(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   const id = idFlag('session', onePositional(args, 'id'));
   const team = idFlag('--team', requiredFlag(args.flags, 'team'));
-  const project = requiredFlag(args.flags, 'project');
-  if ((await runtime.probe.kind(project)) !== 'folder') {
-    throw new RefusedError(`the project folder ${project} does not exist`);
+  const step = args.switches.has('step');
+  if (!step && (args.flags.has('ended') || args.flags.has('started-at'))) {
+    throw new UsageError('--ended and --started-at go only with --step');
   }
-  const prompt = launchPrompt(args, team, id);
-  const resume = resumeFlag(args.flags.get('resume'));
-  const effort = effortFlag(args.flags.get('effort'));
-  const inherited = childEnvOf(runtime);
-  const env = { ...sessionEnv(runtime.env, { id, team, home: args.flags.get('home') }, runtime.platform, cacheBinOf(runtime), inherited.session), [ENV.launched]: id };
-  const sessionRuntime: CliRuntime = { ...runtime, env };
-  const kit = await openKit(sessionRuntime, team);
-  const config = requireConfig(kit, sessionRuntime, 'read');
-  const claudeEnv = sessionCredentialFree(env, config.delivery.passEnv, inherited.login);
-  const roster = await rosterOf(sessionRuntime, kit, config);
-  if (!roster.ids.includes(id)) {
-    throw new RefusedError(`${id} is not a session of team ${team}`);
+  const flags = firstStartFlagsOf(args, team, id);
+  const endedValue = args.flags.get('ended');
+  const ended = endedValue === undefined ? undefined : { result: endedFlag(endedValue), startedAt: startedAtFlag(args.flags.get('started-at')) };
+  const ctx = await launchContextOf(args, runtime, id, team);
+  if (step) {
+    return launchStep(ctx, flags, ended);
   }
-  const { command, prefix } = await hostProgramOf(runtime, claudeEnv);
-  const launcher = launcherOf(runtime);
-  const name = roster.nameOf(id) ?? id;
-  const host = launchHostOf(runtime);
-  const { leadDefault } = host;
-  let settings = effort === undefined ? launchOf(config, id, leadDefault) : { ...launchOf(config, id, leadDefault), effort };
-  // The config takes any model name, so a model this host does not run (another provider's) is refused here, before
-  // the host starts and fails on it.
-  const modelProblem = launchModelProblem(settings, host);
-  if (modelProblem !== undefined) {
-    throw new RefusedError(`launch.${id}.model ${settings.model ?? ''}: ${modelProblem}; fix it in the team config, or \`${KIT_NAME} doctor\` lists each`);
-  }
-  const { programName } = launcher;
-  const resumed = resume === undefined ? '' : `, resuming ${programName} session ${resume}`;
-  let listing = await launchListing(sessionRuntime, kit, config, roster, id);
-  runtime.out.stdout(`Starting ${programName} as ${name} (session ${id} of team ${team}) in ${project}, on ${describeLaunch(settings)}${resumed}${listing.note}`);
-  const store = new RefreshStore(runtime.files, kit.paths);
-  const closes = new SessionLog(runtime.files, kit.paths.sessionLog);
-  const sent = new WakePrompts(runtime.files, kit.paths.wake);
-  let first: string | undefined = prompt;
-  let resuming = resume;
+  let start = await firstStartOf(ctx, flags);
   for (;;) {
-    await refuseLiveRun(runtime, kit, roster, id, name);
-    // The host spells its own flags: this start only says what the session is to be.
-    const start = sessionStartOf(settings, { name, resume: resuming, settingsFile: listing.settingsFile, prompt: first });
-    const args = [...prefix, ...launcher.launchArgs(start)];
-    // teamrig wrote this first prompt, not the person: kept like a wake's text, so the turn log marks it teamrig's and
-    // the UI does not follow it (T5388). A fresh start's tab id is unknown until Claude Code starts, so any tab matches.
-    if (first !== undefined) {
-      await sent.remember(id, { ...(resuming === undefined ? {} : { tab: resuming }), text: first });
-    }
+    const run = await runOf(ctx, start);
     const startedAt = runtime.clock.now();
-    const result = await runtime.processes.run({ command, args, cwd: project, env: claudeEnv });
-    if (!(await restartTaken(store, id))) {
-      const close = await closeSince(runtime, closes, id, result, startedAt);
-      if (close === undefined) {
-        return hostExit(runtime, command, result);
-      }
-      runtime.out.stdout(`${programName} was closed by ${close.by} after ${close.idleMinutes} min idle (${close.freedMb} MB freed): \`${KIT_NAME} open ${id}\` resumes it`);
-      return EXIT.ok;
+    const after = await afterRunOf(ctx, await runtime.processes.run(run), startedAt);
+    if (after !== 'restart') {
+      return after;
     }
-    runtime.out.stdout(`Starting ${programName} again as ${name} with a fresh context: it reads its handover first`);
-    first = refreshPrompt(team, id, store.handoverPath(id));
-    resuming = undefined;
-    // The restart ended a session that ran at another level than its config's (T2444): it starts again at the
-    // config's level as it is now, which a typed /effort may have changed, and no longer at --effort's.
-    const reload = await reloadTeamConfig(sessionRuntime, kit);
-    settings = launchOf(reload.status === 'loaded' ? reload.config : config, id, leadDefault);
-    // A skill added or a Used by line changed since the last start is listed as it is now.
-    listing = await launchListing(sessionRuntime, kit, config, roster, id);
+    start = await restartOf(ctx);
   }
 }

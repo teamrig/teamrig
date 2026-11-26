@@ -31,6 +31,7 @@ import type { KitTree } from '../kit/kit-tree.ts';
 import type { InstallMark } from '../kit/install-mark.ts';
 import type { Processes } from '../open/processes.ts';
 import type { SessionProcesses } from '../open/session-processes.ts';
+import type { StepHandoff } from '../open/step-handoff.ts';
 import type { CommitLog } from '../push-guard/commit-size.ts';
 import type { ChangeGit } from '../changes/source.ts';
 import type { RepoState } from '../push-guard/push.ts';
@@ -106,6 +107,8 @@ export interface CliRuntime {
   readonly shippedHosts: ShippedHosts;
   /** Terminal launchers and Claude Code, for `teamrig open` and `teamrig launch`. */
   readonly processes: Processes;
+  /** The session launcher that started a `launch --step`, which runs the program the step hands it (T5757). */
+  readonly stepHandoff: StepHandoff;
   /** The running session's Claude Code process and its tab, which the automatic context refresh ends. */
   readonly sessionProcesses: SessionProcesses;
   /** The shell `teamrig test` runs its command line in. */
