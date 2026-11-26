@@ -68,6 +68,16 @@ export interface HookLauncher {
   readonly entries: ReadonlyMap<string, string>;
 }
 
+/** A host's lines that run the kit launcher: what `kit uninstall` does to them before the launcher goes. */
+export interface KitLauncherLines {
+  /**
+   * The person's hooks file (`current`) with every one of teamrig's handlers taken out, whether its line runs
+   * `launcher` or names a plugin folder, the person's own kept as they are; the plan's file is undefined when it
+   * holds none, and its counts give each one taken out as removed.
+   */
+  remove(current: JsonRecord, launcher: HookLauncher): UserHooksAnswer;
+}
+
 /**
  * The person's own hooks file of a host that loads no plugin's hooks: teamrig's handlers go in beside the person's
  * own, which stay as they are. The core reads and writes the file and keeps the old one; this port only says where
@@ -81,15 +91,16 @@ export interface HostUserHooks {
   /**
    * Merges teamrig's hooks file (`source`, as the plugin ships it, parsed) into the person's (`current`, empty when
    * there is none), with the plugin installed at `pluginRoot`: teamrig's earlier handlers are replaced, the person's
-   * kept. A host whose lines run the kit launcher (`runsKitLauncher`) writes `launcher` in place of the plugin
-   * folder, and refuses when it is not given; a host that runs from the plugin folder leaves it unread.
+   * kept. A host whose lines run the kit launcher (`kitLauncher`) writes `launcher` in place of the plugin folder,
+   * and refuses when it is not given; a host that runs from the plugin folder leaves it unread.
    */
   merge(current: JsonRecord, source: unknown, pluginRoot: string, launcher?: HookLauncher): UserHooksAnswer;
   /**
-   * True when the host's lines run the kit launcher, so `setup hooks` refuses until the kit home can run them; left
-   * out for a host whose lines name the plugin folder, so an adapter written before this field stays as it was.
+   * Set when the host's lines run the kit launcher, so `setup hooks` refuses until the kit home can run them and
+   * `kit uninstall` takes them out before it removes the launcher; left out for a host whose lines name the plugin
+   * folder, so an adapter written before this field stays as it was.
    */
-  readonly runsKitLauncher?: true;
+  readonly kitLauncher?: KitLauncherLines;
   /** What the person must do after a write before the host runs the new handlers, one line each. */
   readonly afterWrite: readonly string[];
   /** The settings the hooks need in the host's config files, written with them; empty when they need none. */

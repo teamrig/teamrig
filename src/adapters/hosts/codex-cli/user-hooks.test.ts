@@ -77,7 +77,7 @@ describe('codexUserHooks.merge', () => {
   });
 
   it('says the kit launcher runs its lines, so setup hooks checks the kit home first', () => {
-    assert.equal(port.runsKitLauncher, true);
+    assert.ok(port.kitLauncher);
   });
 
   it('leaves a merged file as it is on a second run: all unchanged and no file to write', () => {
@@ -190,6 +190,43 @@ describe('codexUserHooks.merge', () => {
 
   it('refuses a plugin hooks file it cannot rewrite', () => {
     assert.match(problemOf({}, { hooks: { Stop: [{ hooks: [{ type: 'prompt' }] }] } }), /cannot be written for Codex/u);
+  });
+});
+
+/** What `kit uninstall` would write to `current`, the remove's answer held to be a plan. */
+function removalOf(current: JsonRecord): UserHooksPlan {
+  assert.ok(port.kitLauncher, 'the Codex port runs the kit launcher');
+  const answer = port.kitLauncher.remove(current, launcherAt(KIT_LAUNCHER));
+  assert.equal(answer.ok, true, answer.ok ? '' : answer.problem);
+  return answer.ok ? answer.value : { file: undefined, counts: { inserted: 0, unchanged: 0, changed: 0, removed: 0 }, skipped: [] };
+}
+
+describe('codexUserHooks.kitLauncher.remove', () => {
+  it("takes out every teamrig handler a merge wrote, keeps the person's own, and drops an event left empty", () => {
+    const installed = written(planOf({ description: 'mine', hooks: { SessionStart: [{ hooks: [PERSONS_HANDLER] }] } }, SHIPPED));
+    const plan = removalOf(installed);
+    assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 0, removed: 3 });
+    assert.deepEqual(plan.skipped, []);
+    assert.deepEqual(written(plan), { description: 'mine', hooks: { SessionStart: [{ hooks: [PERSONS_HANDLER] }] } });
+  });
+
+  it('takes out the lines an older release wrote with its plugin folder too', () => {
+    const current: JsonRecord = { hooks: { Stop: [{ hooks: [PERSONS_HANDLER, folderHandler('/opt/cache/teamrig/0.500.0', 'main.js', 'stop')] }] } };
+    const plan = removalOf(current);
+    assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 0, removed: 1 });
+    assert.deepEqual(written(plan), { hooks: { Stop: [{ hooks: [PERSONS_HANDLER] }] } });
+  });
+
+  it('leaves a file holding none of teamrig as it is, an empty list the person wrote included', () => {
+    const plan = removalOf({ hooks: { SessionStart: [{ hooks: [PERSONS_HANDLER] }], Stop: [] } });
+    assert.equal(plan.file, undefined);
+    assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 0, removed: 0 });
+  });
+
+  it('refuses a file Codex itself would refuse, naming what is wrong', () => {
+    assert.ok(port.kitLauncher);
+    const answer = port.kitLauncher.remove({ hooks: { Stop: 'none' } }, launcherAt(KIT_LAUNCHER));
+    assert.deepEqual(answer, { ok: false, problem: 'the Codex hooks file is not one teamrig can take its handlers out of: its Stop entry is not a list' });
   });
 });
 

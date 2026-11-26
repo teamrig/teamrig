@@ -73,6 +73,7 @@ export {
   type HostConfigLines,
   type HookLauncher,
   type HostUserHooks,
+  type KitLauncherLines,
   type SkippedUserHook,
   type UserHooksAnswer,
   type UserHooksCounts,

@@ -127,6 +127,7 @@ export {
   type InputEntry,
   type InputOrigin,
   type InstallReach,
+  type KitLauncherLines,
   type MarketplaceRef,
   type MarketplaceSource,
   type MessageCall,

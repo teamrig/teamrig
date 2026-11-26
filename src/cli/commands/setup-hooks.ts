@@ -14,7 +14,7 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
  * `setup hooks --host <name> [--yes]`: puts teamrig's hooks into the person's own hooks file of a host that loads no
  * plugin's hooks (its adapter names the file), beside the person's own handlers, which stay. teamrig's earlier
  * handlers are replaced, so the same command rewrites lines an older release wrote. A host whose lines run the kit
- * launcher (`runsKitLauncher`, Codex) gets lines naming `<kit home>/bin/teamrig.mjs` and no version, so an update
+ * launcher (`kitLauncher`, Codex) gets lines naming `<kit home>/bin/teamrig.mjs` and no version, so an update
  * leaves them as they are; the run is refused before any write until the kit home holds an intact current version and
  * its launcher. Without --yes it only counts what would be inserted, unchanged, changed and removed; with it, the old
  * file is kept in the kit's backups folder first. It never writes the host's trust in a handler: the person gives that
@@ -40,7 +40,7 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const target = port.file(runtime.userHome);
   const current = await readUserSettings(runtime, target);
   const write = args.switches.has('yes');
-  const kit = await launcherOf(runtime, port.runsKitLauncher === true);
+  const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
   if (write && kit.problem !== undefined) {
     throw new RefusedError(`${kit.problem}; nothing written`);
   }
@@ -86,8 +86,8 @@ interface KitLauncherState {
  * preview still shows the lines, so an install that fills the kit home next (the install script previews first) can
  * show its whole plan.
  */
-async function launcherOf(runtime: CliRuntime, runsKitLauncher: boolean): Promise<KitLauncherState> {
-  if (!runsKitLauncher) {
+async function launcherOf(runtime: CliRuntime, runsLauncher: boolean): Promise<KitLauncherState> {
+  if (!runsLauncher) {
     return {};
   }
   const kitHome = resolveKitHome(runtime.env, runtime.userHome);

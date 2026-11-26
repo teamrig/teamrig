@@ -173,6 +173,16 @@ function merged(current: JsonRecord, source: unknown, launcher: HookLauncher): U
   const built = codexHooksFile(source, { launcher });
   if (!built.ok) return { ok: false, problem: `teamrig's hooks file cannot be written for Codex: ${built.reason}` };
   const ours = new Map<string, Groups>(Object.entries(built.file.hooks).map(([event, groups]) => [event, groups.map((group) => ({ ...group }))]));
+  return rewritten(current, events, ours, launcher, built.skipped.map(skippedUserHookLine));
+}
+
+/** The person's file with teamrig's handlers taken out and none put back: what `kit uninstall` writes. */
+function removed(current: JsonRecord, launcher: HookLauncher): UserHooksAnswer {
+  return rewritten(current, eventsOf(current), new Map(), launcher, []);
+}
+
+/** The person's groups of each event, then `ours`, with the counts from teamrig's handlers before to `ours`. */
+function rewritten(current: JsonRecord, events: ReadonlyMap<string, Groups>, ours: ReadonlyMap<string, Groups>, launcher: HookLauncher, skipped: readonly string[]): UserHooksAnswer {
   const hooks: Record<string, Groups> = {};
   for (const event of new Set([...events.keys(), ...ours.keys()])) {
     const groups = [...personsGroups(event, events.get(event) ?? [], launcher), ...(ours.get(event) ?? [])];
@@ -181,7 +191,17 @@ function merged(current: JsonRecord, source: unknown, launcher: HookLauncher): U
   }
   const counts = userHooksCounts(allOf(events, launcher), allOf(ours, launcher));
   const same = counts.inserted + counts.changed + counts.removed === 0;
-  return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped: built.skipped.map(skippedUserHookLine) } };
+  return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped } };
+}
+
+/** The answer of an edit of the person's file, or what in the file stops it. */
+function readable(what: string, edit: () => UserHooksAnswer): UserHooksAnswer {
+  try {
+    return edit();
+  } catch (error) {
+    if (error instanceof BadFile) return { ok: false, problem: `the Codex hooks file is not one teamrig can ${what}: ${error.message}` };
+    throw error;
+  }
 }
 
 /**
@@ -240,14 +260,9 @@ export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platfor
     // The plugin folder is never written: a Codex line runs the kit launcher, so a run that names none is refused.
     merge: (current, source, _pluginRoot, launcher) => {
       if (launcher === undefined) return { ok: false, problem: "teamrig's Codex hooks run from the kit launcher, and this run names none" };
-      try {
-        return merged(current, source, launcher);
-      } catch (error) {
-        if (error instanceof BadFile) return { ok: false, problem: `the Codex hooks file is not one teamrig can merge into: ${error.message}` };
-        throw error;
-      }
+      return readable('merge into', () => merged(current, source, launcher));
     },
-    runsKitLauncher: true,
+    kitLauncher: { remove: (current, launcher) => readable('take its handlers out of', () => removed(current, launcher)) },
     afterWrite: AFTER_WRITE,
   };
 }
