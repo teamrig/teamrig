@@ -3,10 +3,11 @@
  *
  * Codex 0.170.0 loads no plugin's hooks, so teamrig's must sit in the person's file beside their own
  * (`codex-rs/hooks/src/engine/discovery.rs`, tag rust-v0.170.0). A handler there has no field to tag it with
- * (`HookHandlerConfig` in `codex-rs/protocol/src/hooks.rs`), so teamrig's are told by their command: `node`, a
- * script ending `/dist/cli/main.js` or `/dist/cli/guard-main.js`, then `hook`, as `codexHooksFile` writes it. Each
- * merge takes those out and puts the current ones in, so an update replaces its own handlers and never touches the
- * person's.
+ * (`HookHandlerConfig` in `codex-rs/protocol/src/hooks.rs`), so teamrig's are told by their command: `node` and the
+ * kit launcher with its entry and event words, as `codexHooksFile` writes it, or, as releases before the launcher
+ * wrote it, `node` and an entry script below a plugin folder; then `hook`. Both forms of one handler have one key, so
+ * the move from a plugin folder to the launcher counts as a change. Each merge takes those out and puts the current
+ * ones in, so it never touches the person's.
  *
  * Codex runs a person's handler only once its definition's hash is trusted in `[hooks.state]` of `config.toml`, and
  * skips a changed one silently. This module never writes that trust: the person gives it in Codex's `/hooks`.
@@ -17,6 +18,7 @@ import {
   isRecord,
   skippedUserHookLine,
   userHooksCounts,
+  type HookLauncher,
   type HostDeps,
   type HostUserHooks,
   type JsonRecord,
@@ -32,13 +34,11 @@ const CONFIG_FILE = 'config.toml';
 /** The top-level keys Codex reads in a hooks file; it refuses a file holding any other. */
 const FILE_KEYS: readonly string[] = ['description', 'hooks'];
 
-/** The scripts of teamrig's hook commands, as the plugin's hooks file names them below the plugin root. */
-const TEAMRIG_SCRIPT = /\/dist\/cli\/(?:main|guard-main)\.js$/u;
 const POSIX_PLAIN = /[A-Za-z0-9_@%+=:,./-]/u;
 
 const AFTER_WRITE: readonly string[] = [
   'Codex runs a new or changed hook only once you trust it: open /hooks in Codex and trust teamrig\'s hooks.',
-  'Each teamrig update changes them: run this command again after every update, then trust them again in /hooks.',
+  'They run teamrig through its kit launcher, which names no version: a teamrig update leaves them as they are, so the trust holds.',
 ];
 
 class BadFile extends Error { }
@@ -80,14 +80,42 @@ function posixWords(line: string): readonly string[] | undefined {
   return words;
 }
 
-/** The handler's identity when it is teamrig's: its event, matcher, script and words; undefined for the person's own. */
-function teamrigKey(event: string, matcher: unknown, handler: unknown): string | undefined {
+/** A path's last part, by either separator: a Windows line names the launcher with backslashes. */
+function lastPart(path: string): string {
+  return path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
+}
+
+interface TeamrigLine {
+  /** The launcher's word for the entry script the line runs. */
+  readonly entry: string;
+  /** The CLI's words, from `hook` on. */
+  readonly rest: readonly string[];
+}
+
+/**
+ * The entry and the CLI's words of a line's words past `node`: `<launcher> <entry flag> <entry> <event flag> <event>
+ * <words>` in the launcher form, `<folder>/<entry script> <words>` in the plugin-folder form; undefined for any other.
+ */
+function teamrigLine(words: readonly string[], launcher: HookLauncher): TeamrigLine | undefined {
+  const [script, ...after] = words;
+  if (script === undefined) return undefined;
+  if (lastPart(script) === lastPart(launcher.path)) {
+    const [entryFlag, entry, eventFlag, event, ...rest] = after;
+    const known = entry !== undefined && [...launcher.entries.values()].includes(entry);
+    return entryFlag === launcher.entryFlag && eventFlag === launcher.eventFlag && event !== undefined && known ? { entry, rest } : undefined;
+  }
+  const below = [...launcher.entries].find(([path]) => script.endsWith(`/${path}`));
+  return below === undefined ? undefined : { entry: below[1], rest: after };
+}
+
+/** The handler's identity when it is teamrig's: its event, matcher, entry and words; undefined for the person's own. */
+function teamrigKey(event: string, matcher: unknown, handler: unknown, launcher: HookLauncher): string | undefined {
   if (!isRecord(handler) || typeof handler['command'] !== 'string') return undefined;
   const words = posixWords(handler['command']);
-  const script = words?.[1];
-  if (words === undefined || script === undefined || words[0] !== 'node' || !TEAMRIG_SCRIPT.test(script) || words[2] !== 'hook') return undefined;
-  const scriptName = script.slice(script.lastIndexOf('/') + 1);
-  return JSON.stringify([event, typeof matcher === 'string' ? matcher : null, scriptName, ...words.slice(2)]);
+  if (words === undefined || words[0] !== 'node') return undefined;
+  const line = teamrigLine(words.slice(1), launcher);
+  if (line === undefined || line.rest[0] !== 'hook') return undefined;
+  return JSON.stringify([event, typeof matcher === 'string' ? matcher : null, line.entry, ...line.rest]);
 }
 
 function groupsOf(value: unknown, event: string): Groups {
@@ -112,11 +140,11 @@ function handlersOf(group: JsonRecord): readonly unknown[] {
 }
 
 /** Each of teamrig's handlers in these groups, by its key (a repeat gets its count), as JSON text. */
-function teamrigHandlers(event: string, groups: Groups): ReadonlyMap<string, string> {
+function teamrigHandlers(event: string, groups: Groups, launcher: HookLauncher): ReadonlyMap<string, string> {
   const found = new Map<string, string>();
   for (const group of groups) {
     for (const handler of handlersOf(group)) {
-      const key = teamrigKey(event, group['matcher'], handler);
+      const key = teamrigKey(event, group['matcher'], handler, launcher);
       if (key === undefined) continue;
       let counted = key;
       for (let repeat = 2; found.has(counted); repeat += 1) counted = `${key}#${repeat}`;
@@ -127,31 +155,31 @@ function teamrigHandlers(event: string, groups: Groups): ReadonlyMap<string, str
 }
 
 /** The person's own groups: teamrig's handlers taken out, and a group that held only those gone with them. */
-function personsGroups(event: string, groups: Groups): Groups {
+function personsGroups(event: string, groups: Groups, launcher: HookLauncher): Groups {
   return groups.flatMap((group) => {
     const handlers = handlersOf(group);
-    const kept = handlers.filter((handler) => teamrigKey(event, group['matcher'], handler) === undefined);
+    const kept = handlers.filter((handler) => teamrigKey(event, group['matcher'], handler, launcher) === undefined);
     if (kept.length === handlers.length) return [group];
     return kept.length === 0 ? [] : [{ ...group, hooks: kept }];
   });
 }
 
-function allOf(events: ReadonlyMap<string, Groups>): ReadonlyMap<string, string> {
-  return new Map([...events].flatMap(([event, groups]) => [...teamrigHandlers(event, groups)]));
+function allOf(events: ReadonlyMap<string, Groups>, launcher: HookLauncher): ReadonlyMap<string, string> {
+  return new Map([...events].flatMap(([event, groups]) => [...teamrigHandlers(event, groups, launcher)]));
 }
 
-function merged(current: JsonRecord, source: unknown, pluginRoot: string): UserHooksAnswer {
+function merged(current: JsonRecord, source: unknown, launcher: HookLauncher): UserHooksAnswer {
   const events = eventsOf(current);
-  const built = codexHooksFile(source, { pluginRoot });
+  const built = codexHooksFile(source, { launcher });
   if (!built.ok) return { ok: false, problem: `teamrig's hooks file cannot be written for Codex: ${built.reason}` };
   const ours = new Map<string, Groups>(Object.entries(built.file.hooks).map(([event, groups]) => [event, groups.map((group) => ({ ...group }))]));
   const hooks: Record<string, Groups> = {};
   for (const event of new Set([...events.keys(), ...ours.keys()])) {
-    const groups = [...personsGroups(event, events.get(event) ?? []), ...(ours.get(event) ?? [])];
+    const groups = [...personsGroups(event, events.get(event) ?? [], launcher), ...(ours.get(event) ?? [])];
     // An empty list the person wrote stays; one left empty by taking teamrig's handlers out goes.
     if (groups.length > 0 || events.get(event)?.length === 0) hooks[event] = groups;
   }
-  const counts = userHooksCounts(allOf(events), allOf(ours));
+  const counts = userHooksCounts(allOf(events, launcher), allOf(ours, launcher));
   const same = counts.inserted + counts.changed + counts.removed === 0;
   return { ok: true, value: { file: same ? undefined : { ...current, hooks }, counts, skipped: built.skipped.map(skippedUserHookLine) } };
 }
@@ -209,14 +237,17 @@ export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platfor
         },
       },
     ],
-    merge: (current, source, pluginRoot) => {
+    // The plugin folder is never written: a Codex line runs the kit launcher, so a run that names none is refused.
+    merge: (current, source, _pluginRoot, launcher) => {
+      if (launcher === undefined) return { ok: false, problem: "teamrig's Codex hooks run from the kit launcher, and this run names none" };
       try {
-        return merged(current, source, pluginRoot);
+        return merged(current, source, launcher);
       } catch (error) {
         if (error instanceof BadFile) return { ok: false, problem: `the Codex hooks file is not one teamrig can merge into: ${error.message}` };
         throw error;
       }
     },
+    runsKitLauncher: true,
     afterWrite: AFTER_WRITE,
   };
 }

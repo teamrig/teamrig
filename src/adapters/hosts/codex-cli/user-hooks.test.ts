@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { JsonRecord, UserHooksPlan } from '../../../plugin-api/index.ts';
+import type { HookLauncher, JsonRecord, UserHooksPlan } from '../../../plugin-api/index.ts';
 import { codexUserHooks } from './user-hooks.ts';
 
 const ROOT = '/opt/teamrig/plugin';
-const OLD_ROOT = '/opt/teamrig/old-plugin';
-const WINDOWS_ROOT = 'D:\\Program Files\\teamrig plugin';
+const KIT_LAUNCHER = '/srv/ada/.teamrig/bin/teamrig.mjs';
+const WINDOWS_KIT_LAUNCHER = 'D:\\People\\ada b\\.teamrig\\bin\\teamrig.mjs';
+
+/** The launcher as the kit gives it (src/kit/hook-launcher.ts), at `path`. */
+function launcherAt(path: string): HookLauncher {
+  return {
+    path,
+    entryFlag: '--launcher-entry',
+    eventFlag: '--launcher-event',
+    entries: new Map([
+      ['dist/cli/main.js', 'main'],
+      ['dist/cli/guard-main.js', 'guard-main'],
+    ]),
+  };
+}
 
 const port = codexUserHooks({}, 'linux');
 
@@ -21,14 +34,14 @@ function source(handlers: Readonly<Record<string, readonly string[]>>): unknown 
   };
 }
 
-function planOf(current: JsonRecord, from: unknown, root = ROOT): UserHooksPlan {
-  const answer = port.merge(current, from, root);
+function planOf(current: JsonRecord, from: unknown, launcherPath = KIT_LAUNCHER): UserHooksPlan {
+  const answer = port.merge(current, from, ROOT, launcherAt(launcherPath));
   assert.equal(answer.ok, true, answer.ok ? '' : answer.problem);
   return answer.ok ? answer.value : { file: undefined, counts: { inserted: 0, unchanged: 0, changed: 0, removed: 0 }, skipped: [] };
 }
 
 function problemOf(current: JsonRecord, from: unknown): string {
-  const answer = port.merge(current, from, ROOT);
+  const answer = port.merge(current, from, ROOT, launcherAt(KIT_LAUNCHER));
   assert.equal(answer.ok, false);
   return answer.ok ? '' : answer.problem;
 }
@@ -38,17 +51,33 @@ function written(plan: UserHooksPlan): JsonRecord {
   return plan.file;
 }
 
+/** A handler as releases before the kit launcher wrote it: `node <plugin folder>/dist/cli/<script> hook <name>`. */
+function folderHandler(folder: string, script: string, name: string): JsonRecord {
+  return { type: 'command', command: `node ${folder}/dist/cli/${script} hook ${name} --host codex-cli`, timeout: 15 };
+}
+
 const PERSONS_HANDLER = { type: 'command', command: 'echo started', timeout: 5 };
 const SHIPPED = source({ SessionStart: ['session-start', 'tab-status'], Stop: ['stop'] });
 
 describe('codexUserHooks.merge', () => {
-  it("puts teamrig's handlers into an empty file and counts each as inserted", () => {
+  it("puts teamrig's handlers into an empty file, running the kit launcher, and counts each as inserted", () => {
     const plan = planOf({}, SHIPPED);
     assert.deepEqual(plan.counts, { inserted: 3, unchanged: 0, changed: 0, removed: 0 });
     assert.deepEqual(plan.skipped, []);
     const file = written(plan);
     assert.deepEqual(Object.keys(file), ['hooks']);
-    assert.match(JSON.stringify(file), /node \/opt\/teamrig\/plugin\/dist\/cli\/main\.js hook session-start/u);
+    const text = JSON.stringify(file);
+    assert.match(text, /node \/srv\/ada\/\.teamrig\/bin\/teamrig\.mjs --launcher-entry main --launcher-event SessionStart hook session-start --host codex-cli/u);
+    assert.doesNotMatch(text, /plugin|dist\/cli/u);
+  });
+
+  it('refuses a run that names no kit launcher, so it never writes a plugin folder', () => {
+    const answer = port.merge({}, SHIPPED, ROOT);
+    assert.deepEqual(answer, { ok: false, problem: "teamrig's Codex hooks run from the kit launcher, and this run names none" });
+  });
+
+  it('says the kit launcher runs its lines, so setup hooks checks the kit home first', () => {
+    assert.equal(port.runsKitLauncher, true);
   });
 
   it('leaves a merged file as it is on a second run: all unchanged and no file to write', () => {
@@ -71,12 +100,36 @@ describe('codexUserHooks.merge', () => {
     assert.equal(sessionStart.length, 2);
   });
 
-  it('counts a handler written for another plugin root as changed and rewrites it', () => {
-    const old = written(planOf({}, SHIPPED, OLD_ROOT));
+  it('counts a handler an older release wrote below a plugin folder as changed, and rewrites it to the launcher', () => {
+    const old: JsonRecord = {
+      hooks: {
+        SessionStart: [{ hooks: [folderHandler('/opt/cache/teamrig/0.500.0', 'main.js', 'session-start'), folderHandler('/opt/cache/teamrig/0.500.0', 'main.js', 'tab-status')] }],
+        Stop: [{ hooks: [PERSONS_HANDLER, folderHandler('/opt/cache/teamrig/0.500.0', 'main.js', 'stop')] }],
+      },
+    };
     const plan = planOf(old, SHIPPED);
     assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 3, removed: 0 });
-    const text = JSON.stringify(written(plan));
-    assert.doesNotMatch(text, /old-plugin/u);
+    const file = written(plan);
+    const text = JSON.stringify(file);
+    assert.doesNotMatch(text, /0\.500\.0|dist\/cli/u);
+    const hooks = file['hooks'];
+    assert.ok(hooks !== null && typeof hooks === 'object');
+    const stop: unknown = Reflect.get(hooks, 'Stop');
+    assert.ok(Array.isArray(stop));
+    assert.deepEqual(stop[0], { hooks: [PERSONS_HANDLER] });
+  });
+
+  it('counts a handler an older release wrote for another entry script as removed, not changed', () => {
+    const old: JsonRecord = { hooks: { Stop: [{ hooks: [folderHandler('/opt/cache/teamrig/0.500.0', 'guard-main.js', 'stop')] }] } };
+    const plan = planOf(old, source({ Stop: ['stop'] }));
+    assert.deepEqual(plan.counts, { inserted: 1, unchanged: 0, changed: 0, removed: 1 });
+  });
+
+  it('counts a handler written for another kit launcher path as changed and rewrites it', () => {
+    const old = written(planOf({}, SHIPPED, '/srv/old-home/.teamrig/bin/teamrig.mjs'));
+    const plan = planOf(old, SHIPPED);
+    assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 3, removed: 0 });
+    assert.doesNotMatch(JSON.stringify(written(plan)), /old-home/u);
   });
 
   it('takes out a handler teamrig no longer ships, and drops a group that held only teamrig handlers', () => {
@@ -109,15 +162,19 @@ describe('codexUserHooks.merge', () => {
     assert.deepEqual(Reflect.get(hooks, 'Stop'), []);
   });
 
-  it('recognises its handlers under a quoted Windows plugin root', () => {
-    const first = written(planOf({}, SHIPPED, WINDOWS_ROOT));
-    const again = planOf(first, SHIPPED, WINDOWS_ROOT);
+  it('recognises its handlers under a quoted Windows kit launcher path', () => {
+    const first = written(planOf({}, SHIPPED, WINDOWS_KIT_LAUNCHER));
+    const again = planOf(first, SHIPPED, WINDOWS_KIT_LAUNCHER);
     assert.deepEqual(again.counts, { inserted: 0, unchanged: 3, changed: 0, removed: 0 });
   });
 
   it('never takes a handler whose command only looks like teamrig for its own', () => {
-    const lookalike = { type: 'command', command: 'node /opt/other/dist/cli/main.js serve', timeout: 5 };
-    const plan = planOf({ hooks: { Stop: [{ hooks: [lookalike] }] } }, source({}));
+    const lookalikes = [
+      { type: 'command', command: 'node /opt/other/dist/cli/main.js serve', timeout: 5 },
+      { type: 'command', command: 'node /opt/other/bin/teamrig.mjs --launcher-entry other --launcher-event Stop hook stop', timeout: 5 },
+      { type: 'command', command: 'node /opt/other/bin/teamrig.mjs hook stop', timeout: 5 },
+    ];
+    const plan = planOf({ hooks: { Stop: [{ hooks: lookalikes }] } }, source({}));
     assert.deepEqual(plan.counts, { inserted: 0, unchanged: 0, changed: 0, removed: 0 });
     assert.equal(plan.file, undefined);
   });
@@ -146,8 +203,10 @@ describe('codexUserHooks.file', () => {
     assert.equal(codexUserHooks({ CODEX_HOME: '/srv/codex' }, 'linux').file('/srv/people/ada'), '/srv/codex/hooks.json');
   });
 
-  it('tells the person to trust the hooks again after every update', () => {
-    assert.ok(port.afterWrite.some((line) => /\/hooks/u.test(line) && /every update/u.test(line)));
+  it('tells the person to trust the hooks once, and that an update leaves the trust as it is', () => {
+    assert.ok(port.afterWrite.some((line) => /\/hooks/u.test(line)));
+    assert.ok(port.afterWrite.some((line) => /kit launcher/u.test(line) && /update leaves them/u.test(line)));
+    assert.ok(!port.afterWrite.some((line) => /every update/u.test(line)));
   });
 });
 

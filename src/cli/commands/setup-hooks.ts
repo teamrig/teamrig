@@ -1,7 +1,8 @@
 import { join, posix, win32 } from 'node:path';
 import { formatConfig, writeConfigWithBackup, writeTextWithBackup } from '../../config/load.ts';
 import { errorMessage, type JsonRecord } from '../../core/guards.ts';
-import type { ConfigLinesAnswer, HostConfigFileSet, HostConfigLines } from '../../ports/host/index.ts';
+import type { ConfigLinesAnswer, HookLauncher, HostConfigFileSet, HostConfigLines } from '../../ports/host/index.ts';
+import { hookLauncher, hookLauncherProblem } from '../../kit/hook-launcher.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { noPositionals, requiredFlag, type ParsedArgs } from '../args.ts';
 import { readUserSettings } from '../user-settings.ts';
@@ -12,9 +13,12 @@ import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.t
 /**
  * `setup hooks --host <name> [--yes]`: puts teamrig's hooks into the person's own hooks file of a host that loads no
  * plugin's hooks (its adapter names the file), beside the person's own handlers, which stay. teamrig's earlier
- * handlers are replaced, so the same command after an update rewrites them. Without --yes it only counts what would be
- * inserted, unchanged, changed and removed; with it, the old file is kept in the kit's backups folder first. It never
- * writes the host's trust in a handler: the person gives that in the host, after every write. A setting the hooks need
+ * handlers are replaced, so the same command rewrites lines an older release wrote. A host whose lines run the kit
+ * launcher (`runsKitLauncher`, Codex) gets lines naming `<kit home>/bin/teamrig.mjs` and no version, so an update
+ * leaves them as they are; the run is refused before any write until the kit home holds an intact current version and
+ * its launcher. Without --yes it only counts what would be inserted, unchanged, changed and removed; with it, the old
+ * file is kept in the kit's backups folder first. It never writes the host's trust in a handler: the person gives that
+ * in the host, after every write. A setting the hooks need
  * in the host's own config file (the adapter's `configLines`, such as a host's interactive shells off) is set the
  * same way, every other line kept, the old file backed up; any file it cannot edit refuses the run before a write.
  * A set of config files the host layers over its main one (the adapter's `configFileSets`, such as Codex's
@@ -35,7 +39,7 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
   const target = port.file(runtime.userHome);
   const current = await readUserSettings(runtime, target);
-  const answer = port.merge(current.json, source, pluginRoot);
+  const answer = port.merge(current.json, source, pluginRoot, await launcherOf(runtime, port.runsKitLauncher === true));
   if (!answer.ok) {
     throw new RefusedError(`${answer.problem}; nothing written`);
   }
@@ -61,6 +65,22 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
   }
   return EXIT.ok;
+}
+
+/**
+ * The kit launcher a host's lines run, for a host whose lines run it; undefined for one whose lines name the plugin
+ * folder. Refused before any write while the kit home cannot run a line: the launcher would block every guard event.
+ */
+async function launcherOf(runtime: CliRuntime, runsKitLauncher: boolean): Promise<HookLauncher | undefined> {
+  if (!runsKitLauncher) {
+    return undefined;
+  }
+  const kitHome = resolveKitHome(runtime.env, runtime.userHome);
+  const problem = await hookLauncherProblem(runtime.files, kitHome);
+  if (problem !== undefined) {
+    throw new RefusedError(`${problem}; nothing written`);
+  }
+  return hookLauncher(kitHome);
 }
 
 async function pluginHooks(runtime: CliRuntime, file: string): Promise<unknown> {

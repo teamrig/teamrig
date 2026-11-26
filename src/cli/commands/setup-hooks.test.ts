@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it } from 'node:test';
 import { loadShippedHosts, type HostSource } from '../../composition/host-ports.ts';
 import { isRecord } from '../../core/guards.ts';
 import { isUnsupported } from '../../ports/host/index.ts';
 import { hostDeps } from '../../testing/adapter-deps.ts';
 import { CliHarness, type RunOptions } from '../../testing/cli-harness.ts';
+import { seedKitHome } from '../../testing/kit-home.ts';
+import { cliLauncherPath } from '../../restore/cli-launcher.ts';
+import { kitCurrentPath } from '../../kit/kit-versions.ts';
 import { EXIT } from '../runtime.ts';
 
 const PLUGIN_HOOKS_TEXT = readFileSync(new URL('../../../plugins/teamrig/hooks/hooks.json', import.meta.url), 'utf8');
@@ -18,6 +22,9 @@ const CODEX_CONFIG = '/srv/codex/config.toml';
 const CODEX_PROFILE = '/srv/codex/fast.config.toml';
 const QUIET_PROFILE = '/srv/codex/quiet.config.toml';
 const PROFILE_SETTING = '[features] unified_exec_tty = false where the profile sets it';
+/** An absolute kit home on every OS, as the launcher path a Codex line names must be. */
+const KIT_HOME = resolve('/', 'kit-home');
+const KIT_VERSION = '0.510.0';
 const PERSONS: unknown = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo done', timeout: 5 }] }] } };
 
 const shipped = Object.values(await loadShippedHosts(hostDeps().run)).map((entry) => entry.ports);
@@ -28,12 +35,13 @@ const codex: HostSource | undefined = shipped.find((source) => {
 
 function options(over: RunOptions = {}): RunOptions {
   assert.ok(codex, 'no shipped host keeps a hooks file of the person');
-  return { shippedHosts: { 'codex-cli': { ports: codex, sessionVariables: { marks: [], identity: [] } } }, env: { CODEX_HOME }, ...over };
+  return { shippedHosts: { 'codex-cli': { ports: codex, sessionVariables: { marks: [], identity: [] } } }, env: { CODEX_HOME, TEAMRIG_HOME: KIT_HOME }, ...over };
 }
 
 async function kitWithPlugin(): Promise<CliHarness> {
   const kit = new CliHarness();
   await kit.files.write(PLUGIN_HOOKS, PLUGIN_HOOKS_TEXT);
+  await seedKitHome(kit.files, KIT_HOME, KIT_VERSION);
   return kit;
 }
 
@@ -63,10 +71,10 @@ describe('teamrig setup hooks --host codex', () => {
     const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     assert.match(result.stdout[0] ?? '', /^WROTE \/srv\/codex\/hooks\.json: inserted [1-9]\d*, .*; the old file is at .*codex-hooks\.json$/u);
-    assert.ok(result.stdout.some((line) => /NOTE .*every update/u.test(line)));
+    assert.ok(result.stdout.some((line) => /NOTE .*kit launcher.*update leaves them/u.test(line)));
     const commands = handlerCommands(kit.files.get(CODEX_HOOKS));
     assert.ok(commands.includes('echo done'));
-    assert.ok(commands.some((command) => command.startsWith('node /opt/teamrig/dist/cli/')));
+    assert.ok(commands.some((command) => command.startsWith('node ') && command.includes('teamrig.mjs') && command.includes(' --launcher-entry main --launcher-event ')));
 
     const again = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
     assert.match(again.stdout[0] ?? '', /^UNCHANGED \/srv\/codex\/hooks\.json: teamrig's hooks are already in it \(inserted 0, unchanged [1-9]\d*, changed 0, removed 0\)$/u);
@@ -195,6 +203,44 @@ describe('teamrig setup hooks --host codex', () => {
     const result = await kit.run(['setup', 'hooks'], options());
     assert.notEqual(result.code, EXIT.ok);
   });
+
+  it('never writes a plugin folder or a version into a Codex line, so a teamrig update leaves the trusted lines as they are', async () => {
+    const kit = await kitWithPlugin();
+    await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    const teamrig = handlerCommands(kit.files.get(CODEX_HOOKS));
+    assert.ok(teamrig.length > 0);
+    for (const command of teamrig) {
+      assert.doesNotMatch(command, /\/opt\/teamrig|dist\/cli|versions|0\.510\.0/u);
+    }
+  });
+
+  it('rewrites the lines an older release wrote below a plugin folder, counting them as changed', async () => {
+    const kit = await kitWithPlugin();
+    const old = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node /srv/cache/teamrig/0.500.0/dist/cli/main.js hook stop --host codex-cli', timeout: 15 }] }] } };
+    await kit.files.write(CODEX_HOOKS, JSON.stringify(old));
+    const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.match(result.stdout[0] ?? '', /^WROTE \/srv\/codex\/hooks\.json: inserted \d+, unchanged 0, changed [1-9]\d*, removed 0; /u);
+    assert.doesNotMatch(kit.files.get(CODEX_HOOKS) ?? '', /0\.500\.0/u);
+  });
+
+  const unready: ReadonlyArray<readonly [string, (kit: CliHarness) => Promise<void>, RegExp]> = [
+    ['no teamrig version is current', async (kit) => kit.files.removeAll(kitCurrentPath(KIT_HOME)), /^REFUSED no teamrig version is current in the kit home /u],
+    ['the kit launcher is missing', async (kit) => kit.files.removeAll(cliLauncherPath(KIT_HOME)), /^REFUSED the kit launcher .*teamrig\.mjs is missing: /u],
+    ["the kit launcher is not the current version's", async (kit) => kit.files.write(cliLauncherPath(KIT_HOME), '// older\n'), /^REFUSED the kit launcher .* is not the one teamrig 0\.510\.0 ships: /u],
+  ];
+  for (const [what, damage, refusal] of unready) {
+    it(`refuses before any write while ${what}, as the launcher would block every guarded call`, async () => {
+      const kit = await kitWithPlugin();
+      await damage(kit);
+      const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
+      assert.equal(result.code, EXIT.refused);
+      assert.match(result.stdout[0] ?? '', refusal);
+      assert.match(result.stdout[0] ?? '', /start one teamrig session, .*; nothing written$/u);
+      assert.equal(kit.files.get(CODEX_HOOKS), undefined);
+      assert.equal(kit.files.get(CODEX_CONFIG), undefined);
+    });
+  }
 });
 
 describe('teamrig setup hooks --host antigravity-cli', () => {
@@ -220,6 +266,13 @@ describe('teamrig setup hooks --host antigravity-cli', () => {
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
     assert.match(result.stdout[0] ?? '', /^PREVIEW nothing written \(add --yes to write\) \/srv\/ada\/\.gemini\/config\/hooks\.json: inserted [1-9]\d*, unchanged 0, changed 0, removed 0$/u);
     assert.equal(kit.files.get(AGY_HOOKS), undefined);
+  });
+
+  it('needs no kit home, as its lines name the plugin folder and not the kit launcher', async () => {
+    const kit = new CliHarness();
+    await kit.files.write(PLUGIN_HOOKS, PLUGIN_HOOKS_TEXT);
+    const result = await kit.run(['setup', 'hooks', '--host', 'antigravity-cli'], agyOptions());
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
   });
 
   it("writes the teamrig group beside the person's groups, keeps a backup, and prints UNCHANGED on a re-run", async () => {

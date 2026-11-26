@@ -1,26 +1,42 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import type { HookLauncher } from '../../../plugin-api/index.ts';
 import { isSharedHookEvent, SHARED_HOOK_EVENTS } from './events.ts';
 import { codexHooksFile, type CodexHookHandler, type CodexHooksFile, type SkippedHandler } from './hooks-file.ts';
 
-const POSIX_ROOT = '/opt/teamrig/plugin';
-const WINDOWS_ROOT = 'C:\\Program Files\\teamrig plugin';
+const POSIX_LAUNCHER = '/srv/a/.teamrig/bin/teamrig.mjs';
+const WINDOWS_LAUNCHER = 'D:\\kit\\a b\\.teamrig\\bin\\teamrig.mjs';
+const MAIN = '${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js';
+/** The words every line of a Stop handler running the main entry starts with. */
+const STOP_LINE = `node ${POSIX_LAUNCHER} --launcher-entry main --launcher-event Stop`;
 const TEAMRIG_HOOKS_TEXT = readFileSync(new URL('../../../../plugins/teamrig/hooks/hooks.json', import.meta.url), 'utf8');
+
+function launcherAt(path: string): HookLauncher {
+  return {
+    path,
+    entryFlag: '--launcher-entry',
+    eventFlag: '--launcher-event',
+    entries: new Map([
+      ['dist/cli/main.js', 'main'],
+      ['dist/cli/guard-main.js', 'guard-main'],
+    ]),
+  };
+}
 
 interface Rewritten {
   readonly file: CodexHooksFile;
   readonly skipped: readonly SkippedHandler[];
 }
 
-function rewritten(source: unknown, pluginRoot = POSIX_ROOT): Rewritten {
-  const result = codexHooksFile(source, { pluginRoot });
+function rewritten(source: unknown, launcherPath = POSIX_LAUNCHER): Rewritten {
+  const result = codexHooksFile(source, { launcher: launcherAt(launcherPath) });
   assert.equal(result.ok, true, result.ok ? '' : result.reason);
   return result.ok ? { file: result.file, skipped: result.skipped } : { file: { hooks: {} }, skipped: [] };
 }
 
-function reasonOf(source: unknown, pluginRoot = POSIX_ROOT): string {
-  const result = codexHooksFile(source, { pluginRoot });
+function reasonOf(source: unknown, launcherPath = POSIX_LAUNCHER): string {
+  const result = codexHooksFile(source, { launcher: launcherAt(launcherPath) });
   assert.equal(result.ok, false);
   return result.ok ? '' : result.reason;
 }
@@ -29,13 +45,18 @@ function handlersOf(file: CodexHooksFile): readonly CodexHookHandler[] {
   return Object.values(file.hooks).flatMap((groups) => groups.flatMap((group) => group.hooks));
 }
 
-/** A hooks file with one Stop handler, the given fields laid over teamrig's usual ones. */
+/** A hooks file with one Stop handler running the main entry, the given fields laid over teamrig's usual ones. */
 function fileWith(handler: Readonly<Record<string, unknown>>, event = 'Stop'): unknown {
-  return { hooks: { [event]: [{ hooks: [{ type: 'command', command: 'node', ...handler }] }] } };
+  return { hooks: { [event]: [{ hooks: [{ type: 'command', command: 'node', args: [MAIN], ...handler }] }] } };
 }
 
-function onlyHandler(source: unknown, pluginRoot = POSIX_ROOT): CodexHookHandler {
-  const handlers = handlersOf(rewritten(source, pluginRoot).file);
+/** A hooks file with one Stop handler running the main entry with `words` after it. */
+function fileWithWords(words: readonly string[], event = 'Stop'): unknown {
+  return fileWith({ args: [MAIN, ...words] }, event);
+}
+
+function onlyHandler(source: unknown, launcherPath = POSIX_LAUNCHER): CodexHookHandler {
+  const handlers = handlersOf(rewritten(source, launcherPath).file);
   assert.equal(handlers.length, 1);
   const [handler] = handlers;
   assert.ok(handler);
@@ -98,11 +119,26 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
     ]);
   });
 
-  it("runs each hook by the plugin's real path, with no variable left for a shell to fill", () => {
-    for (const handler of handlers) {
-      assert.match(handler.command, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host codex-cli$/u);
-      assert.equal(handler.commandWindows, handler.command);
+  it('runs each hook through the kit launcher, naming its entry and its event, with no plugin folder or variable left', () => {
+    for (const [event, groups] of Object.entries(file.hooks)) {
+      for (const handler of groups.flatMap((group) => group.hooks)) {
+        const line = new RegExp(`^node /srv/a/\\.teamrig/bin/teamrig\\.mjs --launcher-entry (?:guard-)?main --launcher-event ${event} hook [a-z-]+ --host codex-cli$`, 'u');
+        assert.match(handler.command, line);
+        assert.equal(handler.commandWindows, handler.command);
+      }
     }
+  });
+
+  it('never names a plugin folder, so no update changes a line Codex trusts (T5278)', () => {
+    const text = JSON.stringify(file);
+    assert.doesNotMatch(text, /dist\/cli|CLAUDE_PLUGIN_ROOT|plugins\//u);
+    assert.deepEqual(rewritten(source).file, file);
+  });
+
+  it('runs the guard entry for the handlers whose source names guard-main.js', () => {
+    const guards = TEAMRIG_HOOKS_TEXT.match(/dist\/cli\/guard-main\.js/gu)?.length ?? 0;
+    assert.ok(guards > 0);
+    assert.equal(handlers.filter((handler) => handler.command.includes('--launcher-entry guard-main ')).length, guards);
   });
 
   it("keeps each handler's own timeout, but the 3 seconds Codex gives a SessionEnd handler", () => {
@@ -125,50 +161,51 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 });
 
 describe('a Codex hook command line', () => {
-  it('quotes a path with a space for each shell', () => {
-    const handler = onlyHandler(fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', 'hook', 'stop'] }), WINDOWS_ROOT);
-    assert.equal(handler.command, "node 'C:\\Program Files\\teamrig plugin/dist/cli/main.js' hook stop --host codex-cli");
-    assert.equal(handler.commandWindows, 'node "C:\\Program Files\\teamrig plugin/dist/cli/main.js" hook stop --host codex-cli');
+  it('quotes a launcher path with a space for each shell', () => {
+    const handler = onlyHandler(fileWithWords(['hook', 'stop']), WINDOWS_LAUNCHER);
+    const rest = '--launcher-entry main --launcher-event Stop hook stop --host codex-cli';
+    assert.equal(handler.command, `node 'D:\\kit\\a b\\.teamrig\\bin\\teamrig.mjs' ${rest}`);
+    assert.equal(handler.commandWindows, `node "D:\\kit\\a b\\.teamrig\\bin\\teamrig.mjs" ${rest}`);
   });
 
   it('doubles the backslashes before a closing cmd quote, so the quote still closes', () => {
-    const handler = onlyHandler(fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}\\'] }), 'C:\\team rig\\');
-    assert.equal(handler.commandWindows, 'node "C:\\team rig\\\\\\\\" --host codex-cli');
-    assert.equal(handler.command, "node 'C:\\team rig\\\\' --host codex-cli");
+    const handler = onlyHandler(fileWithWords(['C:\\team rig\\']));
+    assert.equal(handler.commandWindows, `${STOP_LINE} "C:\\team rig\\\\" --host codex-cli`);
+    assert.equal(handler.command, `${STOP_LINE} 'C:\\team rig\\' --host codex-cli`);
   });
 
   it('carries a single quote through both shells', () => {
-    const handler = onlyHandler(fileWith({ args: ["it's"] }));
-    assert.equal(handler.command, "node 'it'\\''s' --host codex-cli");
-    assert.equal(handler.commandWindows, 'node "it\'s" --host codex-cli');
+    const handler = onlyHandler(fileWithWords(["it's"]));
+    assert.equal(handler.command, `${STOP_LINE} 'it'\\''s' --host codex-cli`);
+    assert.equal(handler.commandWindows, `${STOP_LINE} "it's" --host codex-cli`);
   });
 
   it('quotes a word cmd would split or run, which a POSIX shell takes plain', () => {
-    const handler = onlyHandler(fileWith({ args: ['a=b,c', 'x&y'] }));
-    assert.equal(handler.command, "node a=b,c 'x&y' --host codex-cli");
-    assert.equal(handler.commandWindows, 'node "a=b,c" "x&y" --host codex-cli');
+    const handler = onlyHandler(fileWithWords(['a=b,c', 'x&y']));
+    assert.equal(handler.command, `${STOP_LINE} a=b,c 'x&y' --host codex-cli`);
+    assert.equal(handler.commandWindows, `${STOP_LINE} "a=b,c" "x&y" --host codex-cli`);
   });
 
-  it('fills the plugin root wherever a word names it', () => {
-    const handler = onlyHandler(fileWith({ args: ['--root=${CLAUDE_PLUGIN_ROOT}', '${CLAUDE_PLUGIN_ROOT}/a:${CLAUDE_PLUGIN_ROOT}/b'] }));
-    assert.equal(handler.command, 'node --root=/opt/teamrig/plugin /opt/teamrig/plugin/a:/opt/teamrig/plugin/b --host codex-cli');
+  it('names the event the handler is under, which sets the exit a failed check ends with', () => {
+    const handler = onlyHandler(fileWithWords(['hook', 'pre'], 'PreToolUse'));
+    assert.equal(handler.command, `node ${POSIX_LAUNCHER} --launcher-entry main --launcher-event PreToolUse hook pre --host codex-cli`);
   });
 
   it('names the Codex host in place of the host the source line names, wherever the pair sits', () => {
-    const handler = onlyHandler(fileWith({ args: ['main.js', 'hook', '--host', 'claude-code', 'stop'] }));
-    assert.equal(handler.command, 'node main.js hook stop --host codex-cli');
-    assert.equal(onlyHandler(fileWith({ args: ['--host', 'antigravity-cli'] })).command, 'node --host codex-cli');
+    const handler = onlyHandler(fileWithWords(['hook', '--host', 'claude-code', 'stop']));
+    assert.equal(handler.command, `${STOP_LINE} hook stop --host codex-cli`);
+    assert.equal(onlyHandler(fileWith({ args: ['--host', 'antigravity-cli', MAIN] })).command, `${STOP_LINE} --host codex-cli`);
   });
 
-  it('runs a handler with no args as its command and the Codex host alone', () => {
+  it('runs a handler naming only its entry script as the launcher and the Codex host alone', () => {
     const handler = onlyHandler(fileWith({}));
-    assert.deepEqual(handler, { type: 'command', command: 'node --host codex-cli', commandWindows: 'node --host codex-cli', timeout: 15 });
+    assert.deepEqual(handler, { type: 'command', command: `${STOP_LINE} --host codex-cli`, commandWindows: `${STOP_LINE} --host codex-cli`, timeout: 15 });
   });
 });
 
 describe('a Codex hooks file', () => {
   it('carries a description only when one is given', () => {
-    const given = codexHooksFile({ description: 'the Claude Code one', hooks: {} }, { pluginRoot: POSIX_ROOT, description: 'teamrig on Codex' });
+    const given = codexHooksFile({ description: 'the Claude Code one', hooks: {} }, { launcher: launcherAt(POSIX_LAUNCHER), description: 'teamrig on Codex' });
     assert.deepEqual(given, { ok: true, file: { description: 'teamrig on Codex', hooks: {} }, skipped: [] });
     assert.deepEqual(rewritten({ description: 'the Claude Code one', modules: ['./register.ts'], hooks: {} }).file, { hooks: {} });
   });
@@ -185,7 +222,7 @@ describe('a Codex hooks file', () => {
   });
 
   it('keeps a matcher as it is', () => {
-    const source = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: 'node' }] }] } };
+    const source = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: 'node', args: [MAIN] }] }] } };
     assert.deepEqual(rewritten(source).file.hooks.PreToolUse?.map((group) => group.matcher), ['Bash|PowerShell']);
   });
 
@@ -206,7 +243,7 @@ describe('a Codex hooks file', () => {
   });
 
   it('keeps a handler whose asyncRewake is false', () => {
-    assert.equal(onlyHandler(fileWith({ asyncRewake: false })).command, 'node --host codex-cli');
+    assert.equal(onlyHandler(fileWith({ asyncRewake: false })).command, `${STOP_LINE} --host codex-cli`);
   });
 
   it('does not check the words of a handler it skips', () => {
@@ -236,13 +273,17 @@ describe('a hooks file the rewrite does not know in full is refused whole', () =
     ['a timeout in a string', fileWith({ timeout: '15' }), /a timeout that is not a whole number/u],
     ['an asyncRewake that is not a boolean', fileWith({ asyncRewake: 'yes' }), /an asyncRewake that is not true or false/u],
     ['an empty command', fileWith({ command: '' }), /holds an empty word/u],
-    ['an empty argument', fileWith({ args: [''] }), /holds an empty word/u],
-    ['a variable Codex does not fill', fileWith({ args: ['${CLAUDE_PROJECT_DIR}/x'] }), /a variable other than \$\{CLAUDE_PLUGIN_ROOT\}/u],
-    ['a line break in a word', fileWith({ args: ['a\nb'] }), /holds a line break/u],
-    ['a percent sign in a word', fileWith({ args: ['%PATH%'] }), /a cmd line cannot carry as text/u],
-    ['a double quote in a word', fileWith({ args: ['say "hi"'] }), /a cmd line cannot carry as text/u],
-    ['an exclamation mark in a word', fileWith({ args: ['now!'] }), /a cmd line cannot carry as text/u],
+    ['an empty argument', fileWithWords(['']), /holds an empty word/u],
+    ['a variable Codex does not fill', fileWithWords(['${CLAUDE_PROJECT_DIR}/x']), /a variable other than \$\{CLAUDE_PLUGIN_ROOT\}/u],
+    ['a line break in a word', fileWithWords(['a\nb']), /holds a line break/u],
+    ['a percent sign in a word', fileWithWords(['%PATH%']), /a cmd line cannot carry as text/u],
+    ['a double quote in a word', fileWithWords(['say "hi"']), /a cmd line cannot carry as text/u],
+    ['an exclamation mark in a word', fileWithWords(['now!']), /a cmd line cannot carry as text/u],
     ['a program name that needs quotes', fileWith({ command: 'my node' }), /starts with a program name that needs quotes on cmd/u],
+    ['a handler naming no script', fileWith({ args: [] }), /runs no script, which is no entry script the kit launcher runs/u],
+    ['a script that is no entry of the launcher', fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/other.js'] }), /runs \$\{CLAUDE_PLUGIN_ROOT\}\/dist\/cli\/other\.js, which is no entry/u],
+    ['an entry script outside the plugin folder', fileWith({ args: ['/opt/old/dist/cli/main.js'] }), /runs \/opt\/old\/dist\/cli\/main\.js, which is no entry/u],
+    ['the plugin folder past the script', fileWithWords(['--root=${CLAUDE_PLUGIN_ROOT}']), /names \$\{CLAUDE_PLUGIN_ROOT\} past its script, which a launcher line never holds/u],
     ['a --host flag naming no host', fileWith({ args: ['hook', 'stop', '--host'] }), /ends with --host and names no host/u],
   ];
 
@@ -253,24 +294,24 @@ describe('a hooks file the rewrite does not know in full is refused whole', () =
   }
 
   it('names the group and handler at fault by their place in the file', () => {
-    const good = { type: 'command', command: 'node' };
-    const source = { hooks: { PreToolUse: [{ hooks: [good] }, { hooks: [good, { ...good, args: ['a\rb'] }] }] } };
+    const good = { type: 'command', command: 'node', args: [MAIN] };
+    const source = { hooks: { PreToolUse: [{ hooks: [good] }, { hooks: [good, { ...good, args: [MAIN, 'a\rb'] }] }] } };
     assert.match(reasonOf(source), /^PreToolUse group 2, handler 2 holds a line break/u);
   });
 
-  it('refuses a plugin root a shell cannot carry', () => {
-    assert.match(reasonOf(fileWith({ args: ['${CLAUDE_PLUGIN_ROOT}/x'] }), '/opt/100%/plugin'), /a cmd line cannot carry as text/u);
+  it('refuses a launcher path a shell cannot carry', () => {
+    assert.match(reasonOf(fileWith({}), '/opt/100%/bin/teamrig.mjs'), /a cmd line cannot carry as text/u);
   });
 
-  for (const root of ['', 'plugins/teamrig', './plugin', 'C:plugin']) {
-    it(`refuses the plugin root "${root}", which is not absolute`, () => {
-      assert.equal(reasonOf({ hooks: {} }, root), 'the plugin root is not an absolute path');
+  for (const path of ['', 'bin/teamrig.mjs', './teamrig.mjs', 'C:teamrig.mjs']) {
+    it(`refuses the launcher path "${path}", which is not absolute`, () => {
+      assert.equal(reasonOf({ hooks: {} }, path), 'the kit launcher path is not an absolute path');
     });
   }
 
-  for (const root of ['/opt/plugin', 'C:\\plugin', 'c:/plugin', '\\\\host\\share\\plugin']) {
-    it(`takes the absolute plugin root ${root}`, () => {
-      assert.deepEqual(rewritten({ hooks: {} }, root), { file: { hooks: {} }, skipped: [] });
+  for (const path of ['/opt/bin/teamrig.mjs', 'C:\\kit\\bin\\teamrig.mjs', 'c:/kit/bin/teamrig.mjs', '\\\\host\\share\\teamrig.mjs']) {
+    it(`takes the absolute launcher path ${path}`, () => {
+      assert.deepEqual(rewritten({ hooks: {} }, path), { file: { hooks: {} }, skipped: [] });
     });
   }
 });

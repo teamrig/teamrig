@@ -8,7 +8,7 @@ import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../restore/cli-launcher.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { seedKitHome } from '../testing/kit-home.ts';
 
-const KIT_HOME = join('/', 'home', 'ada', '.teamrig');
+const KIT_HOME = join('/', 'srv', 'ada', '.teamrig');
 const VERSION = '0.510.0';
 
 async function seeded(): Promise<MemoryFiles> {
