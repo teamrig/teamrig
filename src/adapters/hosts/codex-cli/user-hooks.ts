@@ -250,6 +250,7 @@ export function codexUserHooks(env: HostDeps['env'], platform: HostDeps['platfor
       {
         folder: codexHome,
         holds: isProfileFile,
+        suffix: PROFILE_FILE_END,
         setting: `[${NO_TTY.table}] ${NO_TTY.key} = false where the profile sets it`,
         merge: (current) => {
           const edit = withBooleanKeyWhereSet(current, NO_TTY.table, NO_TTY.key, false);

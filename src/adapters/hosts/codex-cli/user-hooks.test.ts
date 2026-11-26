@@ -315,6 +315,10 @@ describe("Codex CLI's <name>.config.toml profiles (Codex 0.171)", () => {
     assert.equal(onlySet({ CODEX_HOME: '/srv/codex' }).folder('/srv/people/ada'), '/srv/codex');
   });
 
+  it('names .config.toml as the end each one has, for the install guard', () => {
+    assert.equal(onlySet().suffix, '.config.toml');
+  });
+
   it('holds each <name>.config.toml, never config.toml itself or another file', () => {
     assert.deepEqual(['fast.config.toml', 'a.b.config.toml', 'config.toml', '.config.toml', 'hooks.json', 'fast.toml', 'fast.config.toml.bak'].filter((name) => onlySet().holds(name)), ['fast.config.toml', 'a.b.config.toml']);
   });

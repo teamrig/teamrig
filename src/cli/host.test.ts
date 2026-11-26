@@ -347,8 +347,32 @@ describe('hookFilePlacesOf', () => {
 
   it("gives one place per folder of a shipped host's hooks and config files, naming the host once", () => {
     assert.deepEqual(hookFilePlacesOf({ host: codex, shippedHosts, env: {}, platform: 'linux', userHome: '/srv/u' }), [
-      { folder: '/srv/u/.codex', entries: ['hooks.json', 'config.toml'], what: 'the hook files of codex', writer: '`teamrig setup hooks` writes them' },
+      {
+        folder: '/srv/u/.codex',
+        entries: ['hooks.json', 'config.toml'],
+        suffixes: ['.config.toml'],
+        what: 'the hook files of codex',
+        writer: '`teamrig setup hooks` writes them',
+      },
     ]);
+  });
+
+  it("keeps a config file set's folder as its own place when no other file is in it", () => {
+    const moved: HostSource = (given) => {
+      const userHooks = codexUserHooks(given.env, given.platform);
+      return {
+        ...BARE,
+        userHooks: { ...userHooks, configFileSets: (userHooks.configFileSets ?? []).map((set) => ({ ...set, folder: () => '/srv/profiles' })) },
+      };
+    };
+    const places = hookFilePlacesOf({ host: moved, shippedHosts: { codex: shippedHost(moved) }, env: {}, platform: 'linux', userHome: '/srv/u' });
+    assert.deepEqual(
+      places.map(({ folder, entries, suffixes }) => ({ folder, entries, suffixes })),
+      [
+        { folder: '/srv/u/.codex', entries: ['hooks.json', 'config.toml'], suffixes: undefined },
+        { folder: '/srv/profiles', entries: [], suffixes: ['.config.toml'] },
+      ],
+    );
   });
 
   it("follows the folder the run's environment moves the host to, in the platform's own spelling", () => {
