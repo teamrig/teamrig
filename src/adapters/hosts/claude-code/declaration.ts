@@ -8,9 +8,13 @@ import { SESSION_VARIABLES } from './session-variables.ts';
  */
 const SUPPORTED: Support = { kind: 'supported', proofs: [] };
 
-/** The live Windows runs recorded in docs/proofs/claude-code.md: the scan of 2026-11-20 and its re-run of 2026-11-23. */
+/**
+ * The live Windows runs recorded in docs/proofs/claude-code.md: the scan of 2026-11-20, its re-run of 2026-11-23 and
+ * one session's refresh and wakes of 2026-11-26.
+ */
 const SCAN: { readonly toolVersion: string; readonly date: string } = { toolVersion: '2.1.329', date: '2026-11-20' };
 const RESCAN: { readonly toolVersion: string; readonly date: string } = { toolVersion: '2.1.330', date: '2026-11-23' };
+const REFRESH_RUN: { readonly toolVersion: string; readonly date: string } = { toolVersion: '2.1.332', date: '2026-11-26' };
 
 /**
  * A feature proved on Windows, its record under the feature id's heading in docs/proofs/claude-code.md (a heading's
@@ -49,8 +53,8 @@ export const declaration: HostDeclaration = {
     'rules.session-start': provedOnWindows('rules.session-start', RESCAN),
     'rules.instruction-files': provedOnWindows('rules.instruction-files', SCAN),
     'rules.rules-folder': SUPPORTED,
-    'rules.memory': SUPPORTED,
-    'rules.start-size': SUPPORTED,
+    'rules.memory': provedOnWindows('rules.memory', REFRESH_RUN),
+    'rules.start-size': provedOnWindows('rules.start-size', REFRESH_RUN),
     'inbox.prompt-line': provedOnWindows('inbox.prompt-line', SCAN),
     'context.compact-hold': SUPPORTED,
     'context.size': provedOnWindows('context.size', SCAN),
@@ -79,7 +83,7 @@ export const declaration: HostDeclaration = {
     'tabs.waiting-state': SUPPORTED,
     'tabs.memory': SUPPORTED,
     'wake.api-retry': SUPPORTED,
-    'wake.cost': SUPPORTED,
+    'wake.cost': provedOnWindows('wake.cost', REFRESH_RUN),
     'skills.plugin': provedOnWindows('skills.plugin', RESCAN),
     'skills.team': provedOnWindows('skills.team', RESCAN),
     'skills.session-listing': provedOnWindows('skills.session-listing', RESCAN),
@@ -92,9 +96,9 @@ export const declaration: HostDeclaration = {
     'budget.transcripts': SUPPORTED,
     'budget.usage': SUPPORTED,
     'budget.model-share': SUPPORTED,
-    'budget.week-reading': SUPPORTED,
+    'budget.week-reading': provedOnWindows('budget.week-reading', REFRESH_RUN),
     'budget.five-hour': SUPPORTED,
-    'budget.status-line': SUPPORTED,
+    'budget.status-line': provedOnWindows('budget.status-line', REFRESH_RUN),
     'budget.helper-weight': SUPPORTED,
     'budget.pools': SUPPORTED,
     'budget.windows': SUPPORTED,

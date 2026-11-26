@@ -25,8 +25,8 @@ The AI CLIs a session runs in.
 | `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
 | `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 | `rules.rules-folder` | the rules folder of a project | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
-| `rules.memory` | memory files kept between sessions | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
-| `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, built, not proven live | partial (missing: the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled), built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `rules.memory` | memory files kept between sessions | supported, proved on [windows](proofs/claude-code.md#rulesmemory); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
+| `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, proved on [windows](proofs/claude-code.md#rulesstart-size); unproved on linux, macos | partial (missing: the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled), built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ### inbox
 
@@ -90,7 +90,7 @@ The AI CLIs a session runs in.
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
 | `wake.api-retry` | sending a turn again after an API error | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no StopFailure hook |
-| `wake.cost` | what a wake turn costs, from the CLI's prompt-cache lifetime and the measured turns | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake cost tracking |
+| `wake.cost` | what a wake turn costs, from the CLI's prompt-cache lifetime and the measured turns | supported, proved on [windows](proofs/claude-code.md#wakecost); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake cost tracking |
 
 ### skills
 
@@ -123,9 +123,9 @@ The AI CLIs a session runs in.
 | `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
 | `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity usage meter is not built yet |
 | `budget.model-share` | the share of each model and effort level | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.week-reading` | the week reading and the pace line | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.week-reading` | the week reading and the pace line | supported, proved on [windows](proofs/claude-code.md#budgetweek-reading); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.five-hour` | the five-hour forecast | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
-| `budget.status-line` | teamrig's status-line text | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `budget.status-line` | teamrig's status-line text | supported, proved on [windows](proofs/claude-code.md#budgetstatus-line); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 | `budget.helper-weight` | the weight of a helper | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.pools` | a budget pool per CLI and account, never added to another | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.windows` | the usage windows beside the week, each with its share used and its reset | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |

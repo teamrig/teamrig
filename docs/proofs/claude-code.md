@@ -8,7 +8,8 @@ built, not proven live on the page.
 
 The 2026-11-20 records come from a scan of that day's 121 session transcripts of one team on Windows 11, Claude Code
 2.1.329, teamrig 0.496.0. The 2026-11-23 records come from one session's own run that day, Claude Code 2.1.330,
-teamrig 0.504.0.
+teamrig 0.504.0. The 2026-11-26 records come from one session's overnight wakes and its start after a context
+refresh that morning, Claude Code 2.1.332, teamrig 0.509.0.
 
 ## rules.session-start
 
@@ -22,6 +23,20 @@ teamrig 0.504.0.
 - Windows 11, Claude Code 2.1.329, 2026-11-20.
 - Ran: every session turn of the day.
 - Seen: the transcripts' `instructions` records list the user's and the project's `CLAUDE.md` files read for the turn.
+
+## rules.memory
+
+- Windows 11, Claude Code 2.1.332, 2026-11-26.
+- Ran: a session started fresh after a context refresh.
+- Seen: the memory index its earlier sessions of the project wrote was loaded into its first turn, one line per
+  memory file, and the session read the files it named.
+
+## rules.start-size
+
+- Windows 11, Claude Code 2.1.332, 2026-11-26.
+- Ran: the same start, in a team under a higher team whose rules file is longer than the room the start had left.
+- Seen: the start note named that rules file with its size against the room left (2,249 characters against 1,763)
+  and told the session to read it, rather than inlining it past the limit.
 
 ## inbox.prompt-line
 
@@ -110,6 +125,13 @@ teamrig 0.504.0.
 - Ran: the `SessionStart` hook `tab-status` 118 times, and the `PostToolUse` hook `tool-end` 5,696 times.
 - Seen: each answered with the terminal sequence setting the tab's title and status circle.
 
+## wake.cost
+
+- Windows 11, Claude Code 2.1.332, 2026-11-26.
+- Ran: 5 plugin wakes of one idle session, from 00:39 to 08:31 on the team's clock.
+- Seen: each wake prompt named what it costs (about 1.59M to 1.62M W), the average of the 7 days' 133 to 144
+  notification turns it came from, and its share of the week (0.15% to 0.16%).
+
 ## skills.plugin
 
 - Windows 11, Claude Code 2.1.330, 2026-11-23.
@@ -139,6 +161,20 @@ teamrig 0.504.0.
 - Windows 11, Claude Code 2.1.330, 2026-11-23.
 - Ran: `teamrig` commands from a session's PowerShell and Bash calls.
 - Seen: each ran the installed plugin's CLI with no path given.
+
+## budget.week-reading
+
+- Windows 11, Claude Code 2.1.332, 2026-11-26.
+- Ran: the start after a context refresh.
+- Seen: the start note's week line gave the week's use (26.0%) and the pace line (14.8%, so 11.2 points ahead), the
+  reset time, and when the last 24 hours' rise reaches 100%.
+
+## budget.status-line
+
+- Windows 11, Claude Code 2.1.332, 2026-11-26.
+- Ran: teamrig's status-line command, installed as Claude Code's `statusLine`.
+- Seen: the start note marked its week reading as read from the status line at 08:37, the mark it gives only when the
+  status line wrote a reading (else `metered`).
 
 ## os.windows-sessions
 
