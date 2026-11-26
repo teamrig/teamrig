@@ -11,6 +11,7 @@ import { passOf, PRE_PUSH_MAX_WAIT_MS, recordPass, type CheckedTree, type CleanT
 import { isStepKind, kindOfCommand, processRequest, STEP_KINDS, takesShipSlot, taskOfLabel, type LineRequest, type ProcessRequest, type StepKind } from '../../delivery/process-request.ts';
 import { recordRefusal, runRecorded, type RefusalMark, type StepOwner } from '../../delivery/recorded-step.ts';
 import { treeFieldsOf, treeHeader, treeText, type RunTree } from '../../delivery/run-tree.ts';
+import { smallReserveOf } from '../../delivery/memory-gate.ts';
 import { stepNeedOf, type NeedAsk } from '../../delivery/step-need.ts';
 import { causeOfLockWait, WaitLog } from '../../delivery/wait-log.ts';
 import { queueCutoffReason, minutesText } from '../../delivery/schedule.ts';
@@ -191,10 +192,12 @@ function exclusiveOf(args: ParsedArgs, small: boolean): boolean {
 
 /**
  * What the step asks of the host (`stepNeedOf`): its need learned from its own past runs in the ledger, or its
- * `--memory-mb`, else the config's default, so a step known to need more waits for that much room.
+ * `--memory-mb`, else the config's default, so a step known to need more waits for that much room. A small step's
+ * default is scaled to the host (`smallReserveOf`), so a small host runs it; a learned or declared need never is.
  */
 async function needOf(runtime: CliRuntime, ledger: string, ask: NeedAsk, config: QueueConfig): Promise<StepNeed> {
-  return stepNeedOf(parseLedger((await runtime.files.read(ledger)) ?? ''), ask, config);
+  const defaults = { smallReserveMb: smallReserveOf(config.smallReserveMb, runtime.memory.totalMb()), heavyReserveMb: config.heavyReserveMb };
+  return stepNeedOf(parseLedger((await runtime.files.read(ledger)) ?? ''), ask, defaults);
 }
 
 /**

@@ -744,6 +744,26 @@ describe('teamrig queue --small', () => {
     assert.equal(stdout[0], `2030-01-08 10:00:02 UTC sharing the host: 2375 MB held for it (${ROOMY_FREE_MB} MB free, 0 other small steps)`);
   });
 
+  it('runs on an 8 GB host: holds a seventh of its RAM when that is under smallReserveMb, past a floor of an eighth (T5676)', async () => {
+    const { kit, steps } = harness();
+    const memory = new FakeHostMemory(3038);
+    memory.total = 7168;
+    steps.ends(0, MINUTE);
+    const result = await kit.run(SPECS, { steps, memory });
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout[0], '2030-01-08 10:00:02 UTC sharing the host: 1024 MB held for it (3038 MB free, 0 other small steps)', '896 kept free + 1024 = 1920 of the 3038 MB free');
+  });
+
+  it('holds a learned need in full on a small host: only the default reserve scales (T5676)', async () => {
+    const { kit, steps } = harness();
+    await kit.files.append(LEDGER, `${ranBefore('alpha', 'specs', 1900)}\n`);
+    const memory = new FakeHostMemory(6000);
+    memory.total = 7168;
+    steps.ends(0, MINUTE);
+    const { stdout } = await kit.run(SPECS, { steps, memory });
+    assert.equal(stdout[0], '2030-01-08 10:00:02 UTC sharing the host: 2375 MB held for it (6000 MB free, 0 other small steps)');
+  });
+
   it('joins a small step sharing the host while the memory allows it', async () => {
     const { kit, steps } = harness({ ...TEAM, delivery: { queue: { smallReserveMb: 1000, memoryFloorMb: 4000 } } });
     await kit.files.append(`${SHARED}/other.json`, sharedBy());
