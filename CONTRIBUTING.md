@@ -172,7 +172,9 @@ Every change ships tests, so the next change cannot break it unnoticed:
   A connector binds the tracker contract over a fake of its tool that keeps what each call changes, as the tool does
   (`src/testing/github-world.ts` behind `gh`, `src/testing/jira-world.ts` behind Jira's REST API), and builds its
   tracker through its own `defineConnector` entry; a case a partial feature cannot pass is left out in `without`, with
-  the reason the manifest gives.
+  the reason the manifest gives. A tracker's reads (`tracker.issue-read`, `tracker.search`) are a contract of their
+  own, `tracker-reads`, bound apart from the writes over the same fake's `readsWorld()`, whose cases file issues by
+  hand in any state; `readsPortOf` (`src/testing/reads-port.ts`) gives the port of a tracker that has a search.
 
 `npm run check` runs every gate CI runs on the tree; the local gate also checks each pushed commit's sign-off and scrubs it,
 which the git hooks `npm run setup` sets do before each commit. Its coverage gate (`npm run coverage`) fails when:
