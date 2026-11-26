@@ -1968,9 +1968,18 @@ other change is refused. A refusal writes nothing and says which gate failed: a 
 approval. With the code host's connector off on this machine it prints an `OFF` line and writes nothing. Exit 1
 when the code host failed, 2 when refused, else 0.
 
+The answerer (the session the outside-change section names) needs no leader's approval on its own task, at the PR's live head only (no carry over a rebase): it reads every path the
+head's commits change over the base and clears a head whose paths all match [pushGuard.lowRiskPaths] (docs text and
+pictures by default) and none of [pushGuard.sensitivePaths], a generic review path, a `pushGuard.reviewPaths` entry
+or a host's own instruction or settings files. A sensitive head needs the security reviewer's approval of the task
+naming the full 40-hex head; the refusal names whom to ask. A head the code host cannot show whole, with no commit,
+an empty commit or a merge commit is refused. A `CLEARED` line says how it cleared before the write. Another
+session's open branch overlapping the PR is not read here: that costs its owner a rebase, not a safety gate.
+
 Flags:
 
-- `--head <sha>`: the head the leader's approval names, all 40 hex digits, even after a rebase moved the PR's head.
+- `--head <sha>`: the head the leader's approval names, all 40 hex digits, even after a rebase moved the PR's head;
+  for the answerer's own clearance, the PR's live head.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 
@@ -1993,6 +2002,13 @@ CARRIED acme/web#12 at 7c41a90: it carries the approved d00d5eed1's 2 commits, p
 APPROVED acme/web#12 at 7c41a90
 ```
 
+The answerer, on a PR that changes only docs text:
+
+```text
+CLEARED acme/web#12 at d00d5ee: low-risk, approved by answerer, the answerer: 1 changed path(s), none sensitive
+APPROVED acme/web#12 at d00d5ee
+```
+
 ### teamrig pr merge
 
 Lands one PR of the team's repositories with the gates of `teamrig pr approve`, also refused while it conflicts with
@@ -2005,7 +2021,8 @@ else 0.
 Flags:
 
 - `--head <sha>`: the head the leader's approval names, all 40 hex digits; a head rebased onto a newer base with the
-  same commits carries it, as in `teamrig pr approve`.
+  same commits carries it, as in `teamrig pr approve`. The answerer's own clearance of a low-risk head works as in
+  `teamrig pr approve`, at the live head only.
 - `--check`: prints what it would do once every gate passes, and writes nothing.
 - `--session <id|name>`: the caller, who must own the task.
 

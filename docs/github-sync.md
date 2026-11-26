@@ -539,6 +539,15 @@ request rebased onto a newer base after the approval keeps it when its commits a
 number, order and patch, and a `CARRIED` line says so; a head with any other change, a merge commit, or commits
 GitHub cannot show whole needs its own approval.
 
+The answerer (`github.watcher`, else the intake role's holder, else the lead) needs no leader's approval on its own
+task when the pull request is low-risk: at its live head (no carry over a rebase), both commands read every path the
+head's commits change and clear it alone when each matches `pushGuard.lowRiskPaths` (docs text and pictures by
+default) and none is sensitive (`pushGuard.sensitivePaths`, a generic review path, a `pushGuard.reviewPaths` entry or
+a host's own instruction or settings files), printing a `CLEARED` line. A sensitive head needs the security
+reviewer's approval naming the full head, and the refusal says whom to ask; a head GitHub cannot show whole, or with
+an empty or merge commit, is refused. Unlike teamrig's own ship merge, no session's open branch is read for an
+overlap: an outside pull request that touches one costs that session a rebase, not a safety gate.
+
 ```sh
 teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef --check   # every gate, nothing written
 teamrig pr approve acme/web#12 --head d00d5eed1234567890abcdef1234567890abcdef

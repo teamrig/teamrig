@@ -66,7 +66,9 @@ page you point them to.
    leader's approval with a note naming the full 40-hex head, then `teamrig pr approve <owner/name#n> --head <sha>` and
    `teamrig pr merge <owner/name#n> --head <sha>` (`--check` first to see every gate pass); a rebase onto a
    newer base with the same commits keeps the approval (`--head` stays the approved head), any other push needs a new
-   one. Its author keeps the credit as the commits' author.
+   one. The answerer skips the leader's approval on a low-risk head, as in step 6: `--head` is then the live head,
+   and the commands read its paths and refuse a sensitive one, naming the security reviewer to ask. Its author keeps
+   the credit as the commits' author.
    Otherwise land it with credit by hand: cherry-pick its source commits (`git cherry-pick -s <sha>` keeps the author), leave out its
    version and dist commits, which the release workflow makes, and land the rest with `dev-ship-change` and the plan
    `{ "chunks": [] }`, which lands the picked commits as they are; a chunk naming them would commit them again under
