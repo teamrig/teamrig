@@ -5299,9 +5299,9 @@ leaves the log over 512 KiB archives it the same way, the first time too, and pr
 `NOTE the task list's log is archived as segment N; ...`, naming the switch that turns this off:
 `register.autoArchive: false` in the team's `config.json`. With it off, only `teamrig compact` archives.
 
-It also moves the hooks' records over 7 days old, from `state/inbox-shown.jsonl`, `state/bind-hints.jsonl` and
-`state/prompt-answers.jsonl`, to `state/archive/inbox-shown-YYYYMMDD.jsonl`, `state/archive/bind-hints-YYYYMMDD.jsonl`
-and `state/archive/prompt-answers-YYYYMMDD.jsonl` (the run's UTC day), never deleted. Those logs' own writes do the
+It also moves the hooks' records over 7 days old, from `state/inbox-shown.jsonl`, `state/bind-hints.jsonl`,
+`state/prompt-answers.jsonl` and `state/hand-trace.jsonl`, to `state/archive/<log>-YYYYMMDD.jsonl` (the run's UTC
+day), never deleted. Those logs' own writes do the
 same once their oldest record is over 8 days old, so a run by hand is rarely needed. Only the oldest lines move, up to
 the first record of the last 7 days.
 
@@ -5333,6 +5333,7 @@ TAIL events.jsonl starts again with the rotation marker (67 B)
 AGED inbox-shown: 120 line(s) older than 7 days to archive/inbox-shown-20301020.jsonl, 283 kept
 AGED bind-hints: no line older than 7 days, 7 kept
 AGED prompt-answers: 12 line(s) older than 7 days to archive/prompt-answers-20301020.jsonl, 40 kept
+AGED hand-trace: no line older than 7 days, 3 kept
 DRY RUN: nothing was written; teamrig compact writes the above
 ```
 
@@ -9182,7 +9183,9 @@ Output: nothing, exit 0.
 
 Run by the plugin's mod when one of its hands' ticks (the context clear, reload, wake, meeting, meeting panel, update and
 needs-you hands) threw, or was still unsettled at the hand's next tick past its limit (60 s; an update's past its
-install timeout). Appends one line to `<team>/state/hand-trace.jsonl`: `{"v", "at", "session", "tab", "hand", "kind"}`
+install timeout). Appends one line to `<team>/state/hand-trace.jsonl`, whose records over 7 days old move to
+`state/archive/hand-trace-YYYYMMDD.jsonl` as `teamrig compact` and the other hook logs' writes move theirs:
+`{"v", "at", "session", "tab", "hand", "kind"}`
 with `"error"` (its first 300 characters) for `threw` or `"ms"` for `stalled`. The mod traces each hand and kind at
 most once per 10 minutes. A tab that is no team session, or a payload naming no hand or kind, logs nothing. Stdin:
 `{"session_id", "cwd", "hand", "kind", "error" | "ms"}`.
@@ -9195,7 +9198,7 @@ Example:
 teamrig hook hand-trace < trace.json
 ```
 
-Output: nothing, exit 0.
+Output: nothing, exit 0. An append that fails prints one line naming the file and why to stderr, and still exits 0.
 
 ### teamrig hook meeting-due
 

@@ -16,6 +16,7 @@ const PATHS: LogSizePaths = {
   inboxShown: join(STATE, 'inbox-shown.jsonl'),
   bindHints: join(STATE, 'bind-hints.jsonl'),
   promptAnswers: join(STATE, 'prompt-answers.jsonl'),
+  handTraceLog: join(STATE, 'hand-trace.jsonl'),
 };
 
 /** A text of `bytes` bytes. */

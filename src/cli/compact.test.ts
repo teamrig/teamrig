@@ -62,10 +62,12 @@ const NO_AGED = [
   'AGED inbox-shown: no line older than 7 days, 0 kept',
   'AGED bind-hints: no line older than 7 days, 0 kept',
   'AGED prompt-answers: no line older than 7 days, 0 kept',
+  'AGED hand-trace: no line older than 7 days, 0 kept',
 ];
 const SHOWN_PATH = join(TEAM_HOME, 'state', 'inbox-shown.jsonl');
 const HINTS_PATH = join(TEAM_HOME, 'state', 'bind-hints.jsonl');
 const ANSWERS_PATH = join(TEAM_HOME, 'state', 'prompt-answers.jsonl');
+const TRACE_PATH = join(TEAM_HOME, 'state', 'hand-trace.jsonl');
 
 describe('teamrig compact', () => {
   it('prints what it would write on a dry run, and writes nothing', async () => {
@@ -160,24 +162,28 @@ describe('teamrig compact', () => {
     await kit.files.write(SHOWN_PATH, shownOld + shownNew);
     await kit.files.write(HINTS_PATH, hintOld);
     await kit.files.write(ANSWERS_PATH, answerOld);
+    const traceOld = toJsonlLine({ v: 1, at: '2029-12-30T09:00:00.000Z', session: 'alpha', tab: 'tab-1', hand: 'wake', kind: 'stalled', ms: 61_000 });
+    await kit.files.write(TRACE_PATH, traceOld);
     const aged = [
       'AGED inbox-shown: 1 line(s) older than 7 days to archive/inbox-shown-20300108.jsonl, 1 kept',
       'AGED bind-hints: 1 line(s) older than 7 days to archive/bind-hints-20300108.jsonl, 0 kept',
       'AGED prompt-answers: 1 line(s) older than 7 days to archive/prompt-answers-20300108.jsonl, 0 kept',
+      'AGED hand-trace: 1 line(s) older than 7 days to archive/hand-trace-20300108.jsonl, 0 kept',
     ];
     const before = contents(kit);
     const dry = await kit.run(['compact', '--dry-run'], AS_ALPHA);
-    assert.deepEqual(dry.stdout.slice(-4), [...aged, 'DRY RUN: nothing was written; teamrig compact writes the above']);
+    assert.deepEqual(dry.stdout.slice(-5), [...aged, 'DRY RUN: nothing was written; teamrig compact writes the above']);
     assert.deepEqual(contents(kit), before);
 
     const done = await kit.run(['compact'], AS_ALPHA);
-    assert.deepEqual([done.code, done.stdout.slice(-4)], [EXIT.ok, [...aged, 'DONE the hook records over 7 days old are archived; the register had nothing to rotate']]);
+    assert.deepEqual([done.code, done.stdout.slice(-5)], [EXIT.ok, [...aged, 'DONE the hook records over 7 days old are archived; the register had nothing to rotate']]);
     assert.deepEqual(
       [kit.files.get(SHOWN_PATH), kit.files.get(join(TEAM_HOME, 'state', 'archive', 'inbox-shown-20300108.jsonl'))],
       [shownNew, shownOld],
     );
     assert.deepEqual([kit.files.get(HINTS_PATH), kit.files.get(join(TEAM_HOME, 'state', 'archive', 'bind-hints-20300108.jsonl'))], ['', hintOld]);
     assert.deepEqual([kit.files.get(ANSWERS_PATH), kit.files.get(join(TEAM_HOME, 'state', 'archive', 'prompt-answers-20300108.jsonl'))], ['', answerOld]);
+    assert.deepEqual([kit.files.get(TRACE_PATH), kit.files.get(join(TEAM_HOME, 'state', 'archive', 'hand-trace-20300108.jsonl'))], ['', traceOld]);
   });
 });
 

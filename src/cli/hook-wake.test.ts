@@ -1229,6 +1229,27 @@ describe('hook hand-trace', () => {
       { v: 1, at, session: 'alpha', tab: ALPHA_TAB, hand: 'wake', kind: 'stalled', ms: 61_000 },
     ]);
   });
+
+  it('moves its records over a week old to the archive once its oldest is over 8 days old (#1818)', async () => {
+    const kit = await teamWithAlphaTab();
+    const log = join(TEAM_HOME, 'state', 'hand-trace.jsonl');
+    const old = `${JSON.stringify({ v: 1, at: '2029-12-30T09:00:00.000Z', session: 'alpha', tab: ALPHA_TAB, hand: 'wake', kind: 'stalled', ms: 61_000 })}\n`;
+    await kit.files.write(log, old);
+    await kit.run(['hook', 'hand-trace'], { stdin: payload({ hand: 'clear', kind: 'threw', error: 'boom' }) });
+    assert.equal(kit.files.get(join(TEAM_HOME, 'state', 'archive', 'hand-trace-20300108.jsonl')), old);
+    assert.deepEqual(await logLines(kit, log), [{ v: 1, at: new Date(kit.clock.now()).toISOString(), session: 'alpha', tab: ALPHA_TAB, hand: 'clear', kind: 'threw', error: 'boom' }]);
+  });
+
+  it('exits 0 when the append fails, naming the file and why on stderr (#1820)', async () => {
+    const kit = await teamWithAlphaTab();
+    const log = join(TEAM_HOME, 'state', 'hand-trace.jsonl');
+    const files = new FaultyFiles(kit.files).fail('append', log, systemError('ENOSPC'));
+    const traced = await kit.run(['hook', 'hand-trace'], { stdin: payload({ hand: 'clear', kind: 'threw', error: 'boom' }), files });
+    assert.equal(traced.code, 0);
+    assert.deepEqual(traced.stdout, []);
+    assert.equal(traced.stderr.length, 1);
+    assert.match(traced.stderr[0] ?? '', /^teamrig hook hand-trace: could not append to .*hand-trace\.jsonl: .*ENOSPC/);
+  });
 });
 
 const MARKER = loginMarkerPath(KIT);

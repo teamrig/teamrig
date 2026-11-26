@@ -13,7 +13,7 @@ export const PANE_READ_LIMIT_BYTES = 4 * MIB;
 export const LOG_SIZE_WARN_BYTES = (PANE_READ_LIMIT_BYTES * 3) / 4;
 
 /** The folders LOG-SIZE reads, and the files in them `teamrig compact` shrinks. */
-export type LogSizePaths = Pick<TeamPaths, 'state' | 'inbox' | 'events' | 'inboxShown' | 'bindHints' | 'promptAnswers'>;
+export type LogSizePaths = Pick<TeamPaths, 'state' | 'inbox' | 'events' | 'inboxShown' | 'bindHints' | 'promptAnswers' | 'handTraceLog'>;
 
 function mib(bytes: number): string {
   return (bytes / MIB).toFixed(1);
@@ -33,7 +33,7 @@ function remedyOf(path: string, paths: LogSizePaths): string {
   if (path === register.tail) {
     return 'teamrig compact archives it whole and folds it into the snapshot';
   }
-  if (path === paths.inboxShown || path === paths.bindHints || path === paths.promptAnswers) {
+  if (path === paths.inboxShown || path === paths.bindHints || path === paths.promptAnswers || path === paths.handTraceLog) {
     return 'teamrig compact moves its records older than a week to the archive';
   }
   return 'no teamrig command trims it yet, so archive or trim it by hand';
