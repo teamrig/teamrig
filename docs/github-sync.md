@@ -231,9 +231,14 @@ reaches its owner within about a minute while an idle repository costs nothing.
   its failure still reaches the lead.
 - The watch stops 10 minutes after the team's last session closed; the next session to start brings it back.
 - It also stops after 24 hours, and the next hook starts a fresh one, so it never runs old code for long.
-- One runs per team: it holds `state/github-watch.json` with its process id and kit version, and a second one
+- One runs per team: it holds `state/connectors/github/watch.json` with its process id and kit version, and a second one
   started by mistake stops at once. After an update, the first hook of the new kit takes the lease over and starts
   the new code; the old watch stops at its next round.
+- Everything GitHub remembers between runs (the sync's state, the watch's lease, the answer clocks, claims, follows,
+  the push count and the CI log ends) lives in `state/connectors/github/`, like any connector's. A teamrig before
+  that kept them straight in `state/` as `github-*.json` and `github-ci/`; the first GitHub command or hook of a newer
+  one moves them there, and a file already in the new folder wins. A tab still on the older teamrig keeps writing the
+  old paths until it restarts.
 
 - Each session with new tasks gets one inbox line, for example
   `github: GitHub sync added 1 task(s) for you: T42 gh:acme/web#7 "Fix the login redirect"`.
@@ -282,7 +287,7 @@ while it lasts; the first run on a repository only notes what is there.
   ([A pull request in conflict](#a-pull-request-in-conflict)).
 - When the checks of a session's own pull request start failing, the run reads the end of each failed job's log
   (`gh run view --job <id> --log-failed`, at most 5 jobs a run) and writes it to
-  `~/.teamrig/teams/<team>/state/github-ci/<owner>-<name>-<number>.md`, one file per pull request, the newest
+  `~/.teamrig/teams/<team>/state/connectors/github/ci/<owner>-<name>-<number>.md`, one file per pull request, the newest
   failure replacing the last: per job its name, its failed step and the last 20 lines, secrets redacted, fenced as
   data. The inbox line names each job, its step and that file, for example
   `checks failing ("test" at "Run tests"; log end in .../acme-web-20.md)`. An outsider's or a fork's red checks get no
@@ -384,7 +389,7 @@ submitted; a draft waits on nobody until it is marked ready for review. The targ
 - `teamrig stats` shows the W your GitHub-linked tasks used on its `GITHUB` line. That number stays in teamrig:
   nothing is posted to GitHub.
 
-The clocks live in `state/github-clocks.json` in the team's folder. Reading them costs no GitHub call: `check` reads
+The clocks live in `state/connectors/github/clocks.json` in the team's folder. Reading them costs no GitHub call: `check` reads
 what the last sync kept.
 
 `"probeSeconds": 0` turns the automatic sync off, and stops a running watch at its next round. `TEAMRIG_GITHUB=off`
@@ -612,7 +617,7 @@ PREVIEW nothing was written; a push would send 7 write(s) now, at most 40 a run,
   `github.repos` order; the rest waits for the next run.
 - **On its own, once you turn it on.** With `"statusPush": true` in the team config's `github` block, the
   [automatic sync](#then-it-runs-on-its-own) sends the push after each import, so no session runs it. Each run then
-  counts its writes over the rolling hour in `state/github-push-hour.json`, so a backlog drains 40 a run until the
+  counts its writes over the rolling hour in `state/connectors/github/push-hour.json`, so a backlog drains 40 a run until the
   hour has sent 250, half GitHub's 500 an hour, and each run past that sends only what the hour has left, with a
   `NOTE` saying so. A run reserves its limit in the count before it sends and settles it to the writes it sent, so
   two runs never both spend the same writes and a run that stops half way counts high, never low. A count that
@@ -634,7 +639,7 @@ commenter, swaps `status:open` for `status:claimed`, and replies once with the r
   sync takes that assignee off, puts `status:open` back and says so on the issue. A linked pull request keeps the
   claim.
 - **Only its own claims.** The sync takes off only an assignee it made by a claim, kept in
-  `state/github-claims.json`; an assignee a person set is never taken off, and a claim handed to someone else or
+  `state/connectors/github/claims.json`; an assignee a person set is never taken off, and a claim handed to someone else or
   closed is forgotten.
 - **People, outside the repository, one at a time.** Apps, organizations and the repository's own members and
   collaborators do not claim by comment (a member assigns); one login holds one claim per repository.

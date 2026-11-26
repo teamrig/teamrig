@@ -1428,7 +1428,7 @@ Flags:
   it also wakes the session for a conflict, failing checks or changes requested on its own pull request, a `t<id>-` branch by the
   repository's owner or a login in `github.owners`, when `wake.enabled`; an outsider's new pull request wakes no one, as
   it is the watcher's intake work). When its own pull request's checks start failing, it reads the
-  end of each failed job's log (at most 5 a run) into `state/github-ci/<owner>-<name>-<number>.md` and the line names
+  end of each failed job's log (at most 5 a run) into `state/connectors/github/ci/<owner>-<name>-<number>.md` and the line names
   the job, its failed step and that file. A conflict names the way out: the team's own change is rebased onto the
   newest base and goes back to the same branch; an outsider's gets the `teamrig pr conflicts`
   line that names its files, for a comment on the rebase it needs, or is taken over. An open issue labelled `security` wakes the session it routes to and pages
@@ -1447,7 +1447,7 @@ Flags:
   repository, so it refuses `--repo`. With `github.statusPush` on it
   then sends the status push (`--push --yes`) too, labels, assignees, fields and types only: a close it plans is printed as a `HELD` line and
   sent only by a session's `--push --yes`. It counts its writes over the rolling hour in
-  `state/github-push-hour.json`: 40 a run until the hour has sent 250, then only what the hour has left; a count it
+  `state/connectors/github/push-hour.json`: 40 a run until the hour has sent 250, then only what the hour has left; a count it
   cannot read or write gives the even share (4 a run at the default `github.probeSeconds` of 60, 20 at 300) and a
   `NOTE`; a failed write is told to the lead like a
   repository that fails.
@@ -1520,7 +1520,7 @@ changed GitHub answers "not modified", which costs no rate limit. Only when some
 `teamrig issue sync --auto`. After a sync that failed it waits 15 minutes for the next, and a repository it cannot
 ask is synced every 15 minutes, so its failure still reaches the lead.
 
-It holds `state/github-watch.json` with its process id and kit version and renews it each round, so one runs per
+It holds `state/connectors/github/watch.json` with its process id and kit version and renews it each round, so one runs per
 team: a second prints `HELD` and stops. A hook of a newer kit takes an older watch's lease over and starts the new
 code, so an update reaches the watch at the next turn's end. It stops on its own (a `STOP` line says why) once no
 session of the team ran for 10 minutes, after 24 hours (the next hook starts a fresh one), and when `github.repos`
