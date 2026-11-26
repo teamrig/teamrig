@@ -183,7 +183,7 @@ Flags:
 - `--waits <reason>,<reason>`: required for `waiting`, and allowed only with it: what the task waits for, one or
   more of `decision:<who>` and `approval:<who>` (the lead, or `owner` for the human; a child team's lead asks its
   parent team's lead, `app/lead`; an approval may also name the security reviewer, `roles.securityReviewer`, on a
-  task not its own, or any session of the team on the GitHub answerer's own task (`github.watcher`, when that is not
+  task not its own, or any session of the team on the answerer's own task (the watcher session, when that is not
   the lead), whose outside change may touch another session's files; a peer's work is a task, asked for with `--ask`), `task:T<id>` (a task to finish first; only for a task already started) and
   `time:<YYYY-MM-DD HH:MM>` (on the team's clock unless marked UTC; a bare day lasts to its end; a budget hold is a time, never an approval). It
   stays waiting until every reason has cleared. A new decision or approval wait posts the lead one inbox line
@@ -540,7 +540,7 @@ Any set before the step ends (a status but `verifying`, `done` or `dropped`) tha
 head's ask included, would leave a merge waiting on it refused, so `set` refuses it: record progress with
 `teamrig update T<id> --note "..."`, or add `--drop-approval` to give the approval up for a new ask.
 Only the lead answers (or a sub-lead above the task's owner, or the security reviewer, `roles.securityReviewer`, on
-a task not its own, or any session of the team on the GitHub answerer's own task), only a task waiting on its
+a task not its own, or any session of the team on the answerer's own task), only a task waiting on its
 approval, always with a note; an approval of the owner's stays the
 owner's. The same answer clears a review hold or a gate hold that `teamrig merge` made on the task's branch
 (see [merge](#teamrig-merge)).
@@ -1413,7 +1413,7 @@ and with [github.activity] on one whose checks pass after failing or running; ea
 it lasts, and the first read of a repository only marks what is there. It goes to the owner of the task the pull
 request's branch names (`t<id>-...`) when an author inside the repository pushed that branch to the repository
 itself, else to `[github.watcher]` (unset: the first holder of a service role holding `issue close`, else the
-lead). That answerer approves an outside pull request at its head alone, and teamrig's own ship merge takes that
+lead). That answerer approves an outside change at its head alone, and teamrig's own ship merge takes that
 approval, unless its branch touches a path outside [pushGuard.lowRiskPaths] (docs text and pictures by default), a path of
 [pushGuard.sensitivePaths], a generic review path or a `pushGuard.reviewPaths` entry (the security reviewer approves
 that head first), or a file that another session's open

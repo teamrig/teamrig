@@ -56,7 +56,7 @@ page you point them to.
 5. A change to a threshold, limit or trigger: ask "can this still fire?" Its tests must show it firing in the real
    flow, through whatever resets its count (a compaction, a `/clear`, a restart); ask for that spec when they do
    not (CONTRIBUTING.md, Tests).
-6. Who approves it: the GitHub answerer (`github.watcher`, else the intake role's holder, else the lead) alone, by
+6. Who approves it: the answerer (the watcher session, else the intake role's holder, else the lead) alone, by
    its own `--approved <full head sha>` on the merge, unless it touches a sensitive path (`pushGuard.sensitivePaths`, a
    generic review path or a `pushGuard.reviewPaths` entry: the security reviewer approves that head first) or a file
    another session's open branch changes (that session approves it). Needing two such approvals, it goes to the lead.
