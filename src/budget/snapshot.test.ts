@@ -123,6 +123,10 @@ describe('snapshotOfTranscript', () => {
     assert.equal(snapshotOfTranscript({ ...SESSION, sessionId: '../x' }, { limits: WEEK, at: TAKEN }, NOW), undefined);
     assert.equal(snapshotOfTranscript(SESSION, { limits: WEEK, at: NOW + 5_000 }, NOW)?.rateLimitsSince, new Date(NOW).toISOString());
   });
+
+  it("takes any host's safe session id, not only Claude Code's UUID (T5050)", () => {
+    assert.equal(snapshotOfTranscript({ ...SESSION, sessionId: 'session-1' }, { limits: WEEK, at: TAKEN }, NOW)?.sessionId, 'session-1');
+  });
 });
 
 describe('snapshotOfStatus and formatSnapshot', () => {

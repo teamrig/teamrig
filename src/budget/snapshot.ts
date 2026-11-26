@@ -145,7 +145,7 @@ export interface TranscriptSession {
  * becomes the snapshot's file name.
  */
 export function snapshotOfTranscript(session: TranscriptSession, reading: DatedRateLimits, now: number): StatusSnapshot | undefined {
-  if (!CLAUDE_SESSION_ID.test(session.sessionId)) {
+  if (!isHostSessionId(session.sessionId)) {
     return undefined;
   }
   return {
