@@ -2,10 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writePluginList, type PluginListFixture } from '../testing/plugin-list.ts';
+import { TEAMRIG_NOT_FOUND } from '../core/launcher-script.ts';
+import { INSTALLED, KIT, KIT_REFUSES, NOT_INSTALLED, writeKit, type KitFixture } from '../testing/kit-fixture.ts';
 import {
   RESTORE_CHECK_LAUNCHER_SCRIPT,
   RESTORE_RUN_LAUNCHER_SCRIPT,
@@ -16,6 +17,9 @@ import {
 
 /** A stand-in CLI that writes the words it was given to the file ARGV_OUT names. */
 const RECORDING_CLI = "import { writeFileSync } from 'node:fs';\nwriteFileSync(process.env.ARGV_OUT, JSON.stringify(process.argv.slice(2)));\n";
+
+/** TEAMRIG_NOT_FOUND as a regex source, each special character escaped. */
+const NOT_FOUND = TEAMRIG_NOT_FOUND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** A launcher the kit writes: where it goes in a kit home, and its text. */
 interface LauncherKind {
@@ -36,7 +40,7 @@ interface Launch {
   readonly stdout: string;
 }
 
-/** A kit home in a fresh folder holding the launcher, with a Claude Code config listing the given plugins. */
+/** A kit home in a fresh folder holding the launcher, beside the fixture's Claude Code config. */
 interface Scene {
   readonly root: string;
   readonly kitHome: string;
@@ -44,16 +48,14 @@ interface Scene {
   readonly env: NodeJS.ProcessEnv;
 }
 
-function scene(kind: LauncherKind, fixture: PluginListFixture): Scene {
+function scene(kind: LauncherKind, fixture: KitFixture): Scene {
   // The folder's real path: macOS's temp folder sits under /var, a link to /private/var, and the launcher finds its
   // kit home from where Node says it runs, which is the real path.
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'teamrig-restore-launcher-')));
-  const config = writePluginList(root, fixture, RECORDING_CLI);
-  const kitHome = join(root, 'my kit');
+  const { kitHome, configDir } = writeKit(root, fixture, RECORDING_CLI, 'my kit');
   const launcher = kind.pathOf(kitHome);
-  mkdirSync(join(kitHome, 'bin'), { recursive: true });
   writeFileSync(launcher, kind.script);
-  return { root, kitHome, launcher, env: { ...process.env, CLAUDE_CONFIG_DIR: config, ARGV_OUT: join(root, 'argv.json') } };
+  return { root, kitHome, launcher, env: { ...process.env, CLAUDE_CONFIG_DIR: configDir, ARGV_OUT: join(root, 'argv.json') } };
 }
 
 function logOf(kitHome: string): string | undefined {
@@ -87,7 +89,7 @@ function wordsIn(path: string): string[] | undefined {
 }
 
 /** Runs the real launcher from a kit home's bin folder, as a logon or the shortcut does, to its end. */
-function launch(kind: LauncherKind, fixture: PluginListFixture): Launch {
+function launch(kind: LauncherKind, fixture: KitFixture): Launch {
   const { root, kitHome, launcher, env } = scene(kind, fixture);
   try {
     const result = spawnSync(process.execPath, [launcher], { encoding: 'utf8', env, cwd: root });
@@ -97,7 +99,7 @@ function launch(kind: LauncherKind, fixture: PluginListFixture): Launch {
   }
 }
 
-function logon(fixture: PluginListFixture): Launch {
+function logon(fixture: KitFixture): Launch {
   return launch(CHECK, fixture);
 }
 
@@ -106,20 +108,20 @@ describe('restore run launcher', () => {
     assert.equal(restoreRunLauncherPath(join('/', 'kit')), join('/', 'kit', 'bin', 'restore-run.mjs'));
   });
 
-  it('runs restore run --tab of the first installed kit CLI on the kit home it sits in, in its own window, and passes its exit on', () => {
+  it('runs restore run --tab of the version current names on the kit home it sits in, in its own window, and passes its exit on', () => {
     const cliText = `${RECORDING_CLI}console.log('Restoring 2 Claude Code sessions');\nprocess.exit(4);\n`;
-    const run = launch(RUN, { installs: ['gone', 'v2'], empty: ['gone'], lookalike: true, cliText });
+    const run = launch(RUN, { ...KIT, cliText });
     assert.deepEqual([run.status, run.argv, run.stdout.trim(), run.log], [4, ['restore', 'run', '--tab', '--home', run.kitHome], 'Restoring 2 Claude Code sessions', undefined]);
   });
 
   it('says why when teamrig is not found, logs it, and keeps its window open to be read', { timeout: 30_000 }, async () => {
-    const { root, kitHome, launcher, env } = scene(RUN, { lookalike: true });
+    const { root, kitHome, launcher, env } = scene(RUN, {});
     const child = spawn(process.execPath, [launcher], { env, cwd: root });
     try {
       const closes = `This window closes in ${RUN_LAUNCHER_HOLD_SECONDS} s.`;
-      assert.deepEqual(await linesUntil(child, closes), ['FAILED: teamrig not found in the Claude Code plugin list', closes]);
+      assert.deepEqual(await linesUntil(child, closes), [`FAILED: ${TEAMRIG_NOT_FOUND}`, closes]);
       assert.equal(child.exitCode, null, 'the window is still open');
-      assert.match(logOf(kitHome) ?? '', /^\d{4}-\d\d-\d\dT[\d:.]+Z shortcut: teamrig not found in the Claude Code plugin list\n$/);
+      assert.match(logOf(kitHome) ?? '', new RegExp(`^\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z shortcut: ${NOT_FOUND}\\n$`));
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
         const ended = once(child, 'exit');
@@ -136,24 +138,32 @@ describe('restore check launcher', () => {
     assert.equal(restoreCheckLauncherPath(join('/', 'kit')), join('/', 'kit', 'bin', 'restore-check.mjs'));
   });
 
-  it('runs restore check of the first installed kit CLI that exists, on the kit home it sits in, and logs only that it started', () => {
-    const run = logon({ installs: ['gone', 'v2'], empty: ['gone'], lookalike: true });
-    assert.equal(run.status, 0);
-    assert.deepEqual(run.argv, ['restore', 'check', '--home', run.kitHome]);
-    assert.match(run.log ?? '', /^\d{4}-\d\d-\d\dT[\d:.]+Z logon: started\n$/);
+  it('runs restore check through the kit launcher, else the plugin list, on the kit home it sits in, and logs only that it started', () => {
+    for (const fixture of INSTALLED) {
+      const run = logon(fixture);
+      assert.equal(run.status, 0);
+      assert.deepEqual(run.argv, ['restore', 'check', '--home', run.kitHome], JSON.stringify(fixture));
+      assert.match(run.log ?? '', /^\d{4}-\d\d-\d\dT[\d:.]+Z logon: started\n$/);
+    }
   });
 
-  it('logs that it started, then that teamrig was not found, when no plugin list or kit plugin is there', () => {
-    for (const fixture of [{ noPluginList: true }, { lookalike: true }] satisfies PluginListFixture[]) {
+  it('logs that it started, then that teamrig was not found, when it finds no teamrig', () => {
+    for (const fixture of NOT_INSTALLED) {
       const run = logon(fixture);
-      assert.deepEqual([run.status, run.argv], [0, undefined]);
-      assert.match(run.log ?? '', /^\d{4}-\d\d-\d\dT[\d:.]+Z logon: started\n\d{4}-\d\d-\d\dT[\d:.]+Z logon: teamrig not found in the Claude Code plugin list\n$/);
+      assert.deepEqual([run.status, run.argv], [0, undefined], JSON.stringify(fixture));
+      assert.match(run.log ?? '', new RegExp(`^\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z logon: started\\n\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z logon: ${NOT_FOUND}\\n$`));
     }
+  });
+
+  it("logs a kit launcher's refusal and never runs the plugin's CLI unchecked in its place", () => {
+    const run = logon(KIT_REFUSES);
+    assert.deepEqual([run.status, run.argv], [0, undefined]);
+    assert.match(run.log ?? '', /^\S+ logon: started\n\S+ logon: teamrig restore check exited 1: teamrig: teamrig files changed\n$/);
   });
 
   it('logs the exit and every line the check printed when it does not exit 0', () => {
     const cliText = "console.log('MANUAL no terminal opened (no wt.exe); open a new terminal and run this:');\nconsole.log('  node main.js restore run');\nconsole.error('WARN a team config did not load');\nprocess.exit(3);\n";
-    const run = logon({ installs: ['v2'], cliText });
+    const run = logon({ ...KIT, cliText });
     assert.equal(run.status, 0);
     assert.match(
       run.log ?? '',
@@ -162,7 +172,7 @@ describe('restore check launcher', () => {
   });
 
   it('logs the exit alone when the check printed nothing', () => {
-    const run = logon({ installs: ['v2'], cliText: 'process.exit(1);\n' });
+    const run = logon({ ...KIT, cliText: 'process.exit(1);\n' });
     assert.match(run.log ?? '', /^\S+ logon: started\n\S+ logon: teamrig restore check exited 1\n$/);
   });
 });
