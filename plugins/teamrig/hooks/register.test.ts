@@ -198,7 +198,7 @@ async function askedTab($: Engine, on: On, asks: readonly object[] = []): Promis
     const answers: Readonly<Record<string, string>> = {
       'clear-dir': ASK_DIR,
       'clear-claim': flags.length === 0 ? 'taken' : 'held',
-      'needs-you': JSON.stringify({ kind: 'asks', asks }),
+      'needs-you': JSON.stringify({ kind: 'asks', asks, watch: [], recheckAt: null }),
     };
     const answer = command === undefined ? undefined : answers[command];
     return {
@@ -576,6 +576,8 @@ describe("a booked meeting's notice in the tab", () => {
 
 /** The needs-you hand's tick (src/mod/needs-you-hand.ts NEEDS_YOU_TICK_MS). */
 const NEEDS_YOU_TICK = 10_000;
+/** The asks stamp the CLI names for the hand to watch (src/core/home.ts tabAsks). */
+const ASKS_FILE = '/home/me/.teamrig/teams/app/state/tab-asks.txt';
 const BRAVO_ASK = { session: 'bravo', tab: '[app] bravo', kind: 'permission', text: 'Allow Bash: npm test?', task: null, since: '2030-01-08T09:58:00.000Z', focus: true };
 const ALPHA_ASK = { session: 'alpha', tab: '[app] alpha', kind: 'decision', text: 'Decision needed: ship T5 today?', task: 'T5', since: '2030-01-08T09:57:00.000Z', focus: true };
 
@@ -605,7 +607,7 @@ async function needsYouTab($: Engine, on: On, options: { readonly update?: boole
   on('process.run', (_$, e) => {
     const command = e.argv.at(-1);
     const given: Readonly<Record<string, unknown>> = {
-      'needs-you': { kind: 'asks', asks: tab.asks },
+      'needs-you': { kind: 'asks', asks: tab.asks, watch: [ASKS_FILE, MEETING_FILE], recheckAt: null },
       'needs-you-focus': { kind: 'focused', text: '[app] bravo is in front' },
       ...(options.update === true ? { 'update-check': { kind: 'notices', notices: [TEAMRIG_UPDATE] } } : {}),
     };
@@ -649,6 +651,15 @@ describe("the band naming another tab's ask (T2511)", () => {
     await tab.clock.advance(NEEDS_YOU_TICK);
     await tab.clock.settle();
     expect(tab.toasts.length).toBe(2);
+  });
+
+  test('runs the CLI at the first look and once more as it takes the named files, then stays quiet while they hold (T5561)', async ($, on) => {
+    const tab = await needsYouTab($, on);
+    for (let look = 0; look < 4; look += 1) {
+      await tab.clock.advance(NEEDS_YOU_TICK);
+      await tab.clock.settle();
+    }
+    expect(tab.runs.filter((run) => run.command === 'needs-you').length).toBe(2);
   });
 
   test("Focus runs hook needs-you-focus for the shown ask's session", async ($, on) => {

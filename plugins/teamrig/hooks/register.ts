@@ -539,6 +539,11 @@ export const register: Register = (on) => {
           const run = await $.process.run(needsYouCliArgv($.plugin.root, command), { cwd, env: { ...env }, stdin, timeoutMs: NEEDS_YOU_TIMEOUT_MS });
           return { exitCode: run.exitCode, stdout: run.stdout };
         },
+        changedAt: (path) => $.fs.stat(path).then(
+          (found) => found.mtimeMs,
+          () => undefined,
+        ),
+        now: () => Date.now(),
         toast: (text, stayMs) => {
           $.ui.toast(text, { timeoutMs: stayMs });
         },

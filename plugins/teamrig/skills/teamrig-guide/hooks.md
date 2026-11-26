@@ -34,7 +34,7 @@ When the team's `hosts` does not list the host a hook line names (a team made af
 | The mod, while a tab is idle | `hook wake-check`, `hook wake-dropped` | Wakes the tab's session when unblocked urgent work is handed to it, [batched, with its cost shown](#the-mod-the-wake-on-urgent-work), and runs the team's [idle pass](#the-idle-pass), at most once a minute |
 | The mod, when one of its hands' ticks throws or stays unsettled past its limit | `hook hand-trace` | Logs that hand to `<team>/state/hand-trace.jsonl`, each hand and kind at most once per 10 minutes, so a hand that stopped answering shows in teamrig's own logs (#920) |
 | The mod, every 30 s in each tab | `hook meeting-due` | Sends a scheduled meeting's notices before, at and past its time (OS notification, tab toast, a missed one to the lead), from one tab of the team ([a scheduled meeting's notification](#the-mod-a-scheduled-meetings-notification)) |
-| The mod, every 10 s in each tab | `hook needs-you`, `hook needs-you-focus` | Names another tab of the team that asks the user something (a permission prompt, a question, a decision line) in a toast and a band above the prompt, whose Focus brings that tab to the front ([the needs-you band](#the-mod-the-needs-you-band)) |
+| The mod, in each tab, when an ask or the meeting changed, or each minute | `hook needs-you`, `hook needs-you-focus` | Names another tab of the team that asks the user something (a permission prompt, a question, a decision line) in a toast and a band above the prompt, whose Focus brings that tab to the front ([the needs-you band](#the-mod-the-needs-you-band)) |
 | The mod, every 15 s in each tab | `hook meeting-panel` | While the owner's daily meeting is open, shows its cards in a pane beside the chat of the team's lead that started it, and while a booked `M<n>` is started, its cards beside the chat of the session it meets, in sections (on the table, up next, decided), each with a one-line summary and a decided one with its decision ([the meeting's agenda panel](#the-mod-the-meetings-agenda-panel)) |
 | The mod, a minute after a tab starts and every 10 minutes, and when an install changes `installed_plugins.json` | `hook update-check`, `hook update-dismiss`, `hook update-apply` | Tells, in a band above the prompt, of a newer teamrig or teamrig-pane than the one installed, and runs the band's Update or Dismiss ([the update notice](#the-mod-the-update-notice)) |
 | `PreCompact` (a compaction Claude Code runs on its own) | `hook pre-compact` | While the session's handover is asked for or written, holds the compaction under `refresh.compactCeilingTokens`, and a tab's first one once for the refresh, where a managed mod keeps the plugin's mod from holding it ([the hold within a turn](#the-mod-the-refresh-within-a-turn)) |
@@ -1579,8 +1579,10 @@ for a tab that opened fresh). A line the inbox refused is logged with why, and n
 
 A tab that asks the user something (a permission prompt, a question or plan, an MCP form, a `Decision needed:` line)
 is often not the tab the user is in. Each tab's hooks record what it asks in `<team>/state/tabs/<id>.json`, and in
-every other tab of the team the mod runs [`teamrig hook needs-you`](commands.md#teamrig-hook-needs-you) every 10 s.
-Each new ask shows once as a toast, `[team] name needs you: <text>`, and the newest one not dismissed shows as a band
+every other tab of the team the mod looks every 10 s and runs
+[`teamrig hook needs-you`](commands.md#teamrig-hook-needs-you) only when `<team>/state/tab-asks.txt` (which a tab's
+hooks rewrite as its ask begins, changes or ends) or the meeting file changed, or a minute after its last run, so an
+idle tab starts no CLI between asks. Each new ask shows once as a toast, `[team] name needs you: <text>`, and the newest one not dismissed shows as a band
 above the prompt, `[team] name asks: <text> (+N more)` (the text cut at 100 characters; the count only when more
 tabs ask), with Focus, which brings that tab to the front
 ([`hook needs-you-focus`](commands.md#teamrig-hook-needs-you-focus)), and Dismiss, which shows the next ask: plain

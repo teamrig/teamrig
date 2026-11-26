@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { TOAST_MAX_MS } from './meeting-hand.ts';
 import {
+  NEEDS_YOU_RECHECK_MS,
   NeedsYouHand,
   needsYouCliArgv,
   needsYouLine,
@@ -22,20 +23,47 @@ function run(answer: unknown, exitCode = 0): NeedsYouRun {
   return { exitCode, stdout: `${JSON.stringify(answer)}\n` };
 }
 
+const STAMP = '/team/state/tab-asks.txt';
+const MEETING = '/team/state/meeting.json';
+
 function asks(...list: readonly NeedsYouAsk[]): NeedsYouRun {
-  return run({ kind: 'asks', asks: list });
+  return run({ kind: 'asks', asks: list, watch: [STAMP, MEETING], recheckAt: null });
 }
 
-/** Claude Code as the mod sees it: the tab, the CLI's answers per command in turn (the last repeats), toasts and redraws. */
+/**
+ * Claude Code as the mod sees it: the tab, the CLI's answers per command in turn (the last repeats), toasts, redraws,
+ * the clock and each watched file's change time.
+ */
 class FakeHost implements NeedsYouHandHost {
   readonly answers: Record<NeedsYouCommand, NeedsYouRun[]> = { 'needs-you': [asks()], 'needs-you-focus': [run({ kind: 'focused', text: 'focused [app] bravo' })] };
   readonly calls: { readonly command: NeedsYouCommand; readonly stdin: unknown; readonly env: Readonly<Record<string, string>>; readonly cwd: string }[] = [];
   readonly toasts: { readonly text: string; readonly stayMs: number }[] = [];
+  readonly changes = new Map<string, number>([[STAMP, 1_000]]);
   redraws = 0;
   failStart = false;
+  session = TAB;
+  clock = 1_000_000;
+
+  /** A tab's ask began, changed or ended: the asks stamp's time moves. */
+  touch(path = STAMP): void {
+    this.changes.set(path, (this.changes.get(path) ?? 0) + 1);
+  }
+
+  /** How many times the hand ran `hook needs-you`. */
+  looks(): number {
+    return this.calls.filter((each) => each.command === 'needs-you').length;
+  }
 
   async sessionId(): Promise<string> {
-    return TAB;
+    return this.session;
+  }
+
+  async changedAt(path: string): Promise<number | undefined> {
+    return this.changes.get(path);
+  }
+
+  now(): number {
+    return this.clock;
   }
 
   async cwd(): Promise<string> {
@@ -74,13 +102,19 @@ describe('needsYouCliArgv', () => {
 });
 
 describe('parseNeedsYouAnswer', () => {
-  it('reads the asks and the off answer', () => {
-    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [BRAVO] })), { kind: 'asks', asks: [BRAVO] });
+  it('reads the asks with their watch files and recheck time, and the off answer', () => {
+    const answer = { kind: 'asks', asks: [BRAVO], watch: [STAMP], recheckAt: null };
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify(answer)), answer);
+    assert.deepEqual(parseNeedsYouAnswer(JSON.stringify({ ...answer, recheckAt: 5 })), { ...answer, recheckAt: 5 });
     assert.deepEqual(parseNeedsYouAnswer('{"kind":"off","why":"needsYou.enabled is false"}'), { kind: 'off', why: 'needsYou.enabled is false' });
   });
 
-  it('refuses a malformed ask, a non-JSON line and an unknown kind', () => {
-    assert.equal(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [{ ...BRAVO, focus: 'yes' }] })), undefined);
+  it('refuses a malformed ask, missing or bad watch files or recheck time, a non-JSON line and an unknown kind', () => {
+    const answer = { kind: 'asks', asks: [BRAVO], watch: [STAMP], recheckAt: null };
+    assert.equal(parseNeedsYouAnswer(JSON.stringify({ ...answer, asks: [{ ...BRAVO, focus: 'yes' }] })), undefined);
+    assert.equal(parseNeedsYouAnswer(JSON.stringify({ kind: 'asks', asks: [BRAVO] })), undefined, 'an answer with no watch files');
+    assert.equal(parseNeedsYouAnswer(JSON.stringify({ ...answer, watch: [3] })), undefined);
+    assert.equal(parseNeedsYouAnswer(JSON.stringify({ ...answer, recheckAt: 'soon' })), undefined);
     assert.equal(parseNeedsYouAnswer('not json'), undefined);
     assert.equal(parseNeedsYouAnswer('{"kind":"later"}'), undefined);
   });
@@ -129,8 +163,51 @@ describe('NeedsYouHand.tick', () => {
       { text: '[app] alpha needs you: Which branch?', stayMs: TOAST_MAX_MS },
     ]);
     assert.deepEqual(hand.view(), { session: 'bravo', since: BRAVO.since, tab: '[app] bravo', text: 'Bash: npm run deploy', focus: true, more: 1 });
+    host.touch();
     assert.deepEqual(await hand.tick(), { kind: 'asks', count: 2, fresh: [] });
     assert.equal(host.toasts.length, 2);
+  });
+
+  it('runs no CLI while nothing it watches changed, and asks once the asks stamp or the meeting changes (T5561)', async () => {
+    const host = new FakeHost();
+    host.answers['needs-you'] = [asks(BRAVO)];
+    const hand = new NeedsYouHand(host);
+    await hand.tick();
+    // The first answer named the files; the next look asks once more, taking their change times before it runs.
+    assert.equal((await hand.tick()).kind, 'asks');
+    const redraws = host.redraws;
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' });
+    host.clock += NEEDS_YOU_RECHECK_MS - 1;
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' });
+    assert.equal(host.looks(), 2);
+    assert.equal(host.redraws, redraws, 'a quiet look redraws nothing');
+    host.touch();
+    assert.equal((await hand.tick()).kind, 'asks');
+    host.touch(MEETING);
+    assert.equal((await hand.tick()).kind, 'asks');
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' });
+    assert.equal(host.looks(), 4);
+  });
+
+  it('asks again a minute after its last ask, for what the files do not show (T5561)', async () => {
+    const host = new FakeHost();
+    const hand = new NeedsYouHand(host);
+    await hand.tick();
+    host.clock += NEEDS_YOU_RECHECK_MS;
+    assert.equal((await hand.tick()).kind, 'asks');
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' });
+    assert.equal(host.looks(), 2);
+  });
+
+  it('asks at once when the tab became another session, as a /clear does (T5561)', async () => {
+    const host = new FakeHost();
+    const hand = new NeedsYouHand(host);
+    await hand.tick();
+    host.session = '0123abcd-0000-4000-8000-0000000000b2';
+    assert.equal((await hand.tick()).kind, 'asks');
+    assert.equal(host.looks(), 2);
+    assert.deepEqual(host.calls.at(-1)?.env, { CLAUDE_CODE_SESSION_ID: host.session, CLAUDE_PROJECT_DIR: '/work/app' });
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' });
   });
 
   it('hides the band once no tab asks, and toasts a tab again when it asks anew', async () => {
@@ -138,31 +215,42 @@ describe('NeedsYouHand.tick', () => {
     host.answers['needs-you'] = [asks(BRAVO), asks(), asks({ ...BRAVO, since: '2030-01-08T10:05:00.000Z' })];
     const hand = new NeedsYouHand(host);
     await hand.tick();
+    host.touch();
     await hand.tick();
     assert.equal(hand.view(), undefined);
+    host.touch();
     await hand.tick();
     assert.equal(host.toasts.length, 2);
   });
 
-  it('shows nothing while the team has needsYou off', async () => {
+  it('shows nothing while the team has needsYou off, and then asks only once a minute (T5561)', async () => {
     const host = new FakeHost();
-    host.answers['needs-you'] = [asks(BRAVO), run({ kind: 'off', why: 'needsYou.enabled is false' })];
+    host.answers['needs-you'] = [run({ kind: 'off', why: 'needsYou.enabled is false' }), asks(BRAVO), run({ kind: 'off', why: 'needsYou.enabled is false' })];
     const hand = new NeedsYouHand(host);
-    await hand.tick();
+    assert.deepEqual(await hand.tick(), { kind: 'off', why: 'needsYou.enabled is false' });
+    host.touch();
+    assert.deepEqual(await hand.tick(), { kind: 'quiet' }, 'an off answer names no files to watch');
+    host.clock += NEEDS_YOU_RECHECK_MS;
+    assert.equal((await hand.tick()).kind, 'asks');
+    host.touch();
     assert.deepEqual(await hand.tick(), { kind: 'off', why: 'needsYou.enabled is false' });
     assert.equal(hand.view(), undefined);
   });
 
-  it('keeps the band on a failed run, and reports it without rejecting', async () => {
+  it('keeps the band on a failed run, reports it without rejecting, and asks again at the next look', async () => {
     const host = new FakeHost();
-    host.answers['needs-you'] = [asks(BRAVO), run('boom', 1)];
+    host.answers['needs-you'] = [asks(BRAVO), run('boom', 1), asks(BRAVO)];
     const hand = new NeedsYouHand(host);
     await hand.tick();
+    host.touch();
     const failed = await hand.tick();
     assert.equal(failed.kind, 'failed');
     assert.equal(hand.view()?.session, 'bravo');
     host.failStart = true;
     assert.deepEqual(await hand.tick(), { kind: 'failed', error: 'spawn node ENOENT' });
+    host.failStart = false;
+    assert.equal((await hand.tick()).kind, 'asks');
+    assert.equal(host.looks(), 3);
   });
 
   it('runs one ask at a time', async () => {
@@ -185,8 +273,10 @@ describe('NeedsYouHand.dismiss', () => {
     assert.equal(host.redraws, redraws + 1);
     assert.equal(hand.view()?.session, 'alpha');
     assert.equal(hand.view()?.more, 0);
+    host.touch();
     await hand.tick();
     assert.equal(hand.view()?.session, 'alpha');
+    host.touch();
     await hand.tick();
     assert.equal(hand.view()?.session, 'bravo');
   });

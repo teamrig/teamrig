@@ -2,20 +2,29 @@
  * The tab's side of the needs-you band (T2511). A tab that asks the person something (a permission prompt, a
  * question or plan, an MCP form, a `Decision needed:` line) is often not the tab the person is in, so the plugin's
  * mod (`hooks/register.ts`) runs a `NeedsYouHand` in every interactive tab. Every NEEDS_YOU_TICK_MS, a turn running
- * or not, the hand runs the CLI's `hook needs-you`, which answers the asks of the team's other tabs now, newest
+ * or not, the hand looks; it runs the CLI's `hook needs-you` only when a file the CLI named changed (the asks stamp
+ * a tab rewrites as its ask begins, changes or ends, and the owner's meeting), when the tab's session changed, or
+ * NEEDS_YOU_RECHECK_MS after its last ask (T5561). The CLI answers the asks of the team's other tabs now, newest
  * first. Each ask the hand had not seen (a tab and the time its ask began) shows once as a toast, for the longest the
  * engine shows one; the band above the prompt names the newest ask not dismissed, with Focus (`hook
  * needs-you-focus`: brings that tab to the front; offered only when the CLI says so, as the owner's meeting holds it
  * to p0 work) and Dismiss (hides that ask in this tab). The band goes once no tab asks. Nothing is typed into the
  * terminal.
  *
- * The mod runs inside Claude Code without Node, so this file imports nothing at run time but meeting-hand.ts.
+ * The mod runs inside Claude Code without Node, so this file imports nothing at run time but meeting-hand.ts and
+ * look-schedule.ts.
  */
 
+import { LookSchedule } from './look-schedule.ts';
 import { TOAST_MAX_MS } from './meeting-hand.ts';
 
-/** How often the hand asks: an ask shows in the other tabs within this. */
+/** How often the hand looks: an ask shows in the other tabs within this. A look runs the CLI only when it may have changed. */
 export const NEEDS_YOU_TICK_MS = 10_000;
+/**
+ * The longest the hand goes without asking the CLI, for what the watched files do not show: a tab that crashed with
+ * an ask open, a task's priority during the meeting, a renamed tab, the config.
+ */
+export const NEEDS_YOU_RECHECK_MS = 60_000;
 /** How long one CLI run may take before it is stopped: a focus runs the terminal's own script. */
 export const NEEDS_YOU_TIMEOUT_MS = 30_000;
 /** The most of an ask's text the band shows; the toast carries it whole. */
@@ -44,8 +53,10 @@ export interface NeedsYouAsk {
   readonly focus: boolean;
 }
 
-/** What `hook needs-you` answers. */
-export type NeedsYouAnswer = { readonly kind: 'asks'; readonly asks: readonly NeedsYouAsk[] } | { readonly kind: 'off'; readonly why: string };
+/** What `hook needs-you` answers: the asks, and the files to watch and when to ask again (null: no time set). */
+export type NeedsYouAnswer =
+  | { readonly kind: 'asks'; readonly asks: readonly NeedsYouAsk[]; readonly watch: readonly string[]; readonly recheckAt: number | null }
+  | { readonly kind: 'off'; readonly why: string };
 
 /** What `hook needs-you-focus` answers: the focus outcome's kind (focused, behind, none) with its line, or why it was not tried. */
 export type NeedsYouFocusAnswer =
@@ -68,6 +79,9 @@ export interface NeedsYouHandHost {
   root(): Promise<string>;
   /** Runs `hook <command>` in `cwd`, `env` set over Claude Code's own; rejects when it cannot start. */
   cli(command: NeedsYouCommand, stdin: string, env: Readonly<Record<string, string>>, cwd: string): Promise<NeedsYouRun>;
+  /** When the file last changed, epoch ms; undefined when it is missing. */
+  changedAt(path: string): Promise<number | undefined>;
+  now(): number;
   /** Shows the person a toast for stayMs. */
   toast(text: string, stayMs: number): void;
   /** Redraws the band: what view() gives changed. */
@@ -88,6 +102,8 @@ export interface NeedsYouView {
 export type NeedsYouTick =
   /** The tick before, or a Focus, still runs. */
   | { readonly kind: 'overlap' }
+  /** Nothing the CLI watches changed since the last ask, and its recheck is not due. */
+  | { readonly kind: 'quiet' }
   /** The CLI answered these asks; `fresh` names the sessions whose ask the tab toasted now. */
   | { readonly kind: 'asks'; readonly count: number; readonly fresh: readonly string[] }
   | { readonly kind: 'off'; readonly why: string }
@@ -147,6 +163,14 @@ function asksOf(value: unknown): readonly NeedsYouAsk[] | undefined {
   return asks.length === value.length ? asks : undefined;
 }
 
+function isTextList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isRecheckAt(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
 function jsonOf(stdout: string): unknown {
   try {
     return JSON.parse(stdout.trim());
@@ -161,10 +185,10 @@ export function parseNeedsYouAnswer(stdout: string): NeedsYouAnswer | undefined 
   if (!isRecord(value)) {
     return undefined;
   }
-  const { kind, why } = value;
+  const { kind, why, watch, recheckAt } = value;
   const asks = asksOf(value['asks']);
-  if (kind === 'asks' && asks !== undefined) {
-    return { kind, asks };
+  if (kind === 'asks' && asks !== undefined && isTextList(watch) && isRecheckAt(recheckAt)) {
+    return { kind, asks, watch, recheckAt };
   }
   return kind === 'off' && typeof why === 'string' ? { kind, why } : undefined;
 }
@@ -197,11 +221,15 @@ export class NeedsYouHand {
   /** The asks toasted and dismissed in this tab, kept only while the CLI still answers them. */
   private toasted = new Set<string>();
   private dismissed = new Set<string>();
+  private readonly looks: LookSchedule;
+  /** The session id of the last ask: a /clear makes the tab another session, whose own ask the band leaves out. */
+  private askedAs: string | undefined;
   private checking = false;
   private focusing = false;
 
   constructor(host: NeedsYouHandHost) {
     this.host = host;
+    this.looks = new LookSchedule(NEEDS_YOU_RECHECK_MS, (path) => host.changedAt(path));
   }
 
   /** What the band shows: the newest ask not dismissed, or undefined. */
@@ -213,34 +241,52 @@ export class NeedsYouHand {
       : { session: first.session, since: first.since, tab: first.tab, text: first.text, focus: first.focus, more: open.length - 1 };
   }
 
-  /** One ask of the CLI; never rejects. A failed one keeps the band as it was, and the next tick asks again. */
+  /** One look, asking the CLI when due; never rejects. A failed ask keeps the band as it was, and the next tick asks again. */
   async tick(): Promise<NeedsYouTick> {
     if (this.checking) {
       return { kind: 'overlap' };
     }
     this.checking = true;
     try {
-      const run = await this.run('needs-you', {});
-      const answer = run.exitCode === 0 ? parseNeedsYouAnswer(run.stdout) : undefined;
-      if (answer === undefined) {
-        return { kind: 'failed', error: `hook needs-you exited ${run.exitCode}: ${run.stdout.trim().slice(0, 200)}` };
-      }
-      const asks = answer.kind === 'asks' ? answer.asks : [];
-      const fresh = asks.filter((ask) => !this.toasted.has(keyOf(ask)));
-      for (const ask of fresh) {
-        this.host.toast(`${ask.tab} needs you: ${ask.text}`, TOAST_MAX_MS);
-      }
-      const live = new Set(asks.map(keyOf));
-      this.toasted = live;
-      this.dismissed = new Set([...this.dismissed].filter((key) => live.has(key)));
-      this.asks = asks;
-      this.host.changed();
-      return answer.kind === 'off' ? answer : { kind: 'asks', count: asks.length, fresh: fresh.map((ask) => ask.session) };
+      return await this.step();
     } catch (error) {
+      this.looks.askAgain();
       return { kind: 'failed', error: messageOf(error) };
     } finally {
       this.checking = false;
     }
+  }
+
+  private async step(): Promise<NeedsYouTick> {
+    const sessionId = await this.host.sessionId();
+    if (sessionId !== this.askedAs) {
+      this.looks.askAgain();
+    }
+    if (!(await this.looks.due(this.host.now()))) {
+      return { kind: 'quiet' };
+    }
+    this.askedAs = sessionId;
+    const run = await this.run('needs-you', {});
+    const answer = run.exitCode === 0 ? parseNeedsYouAnswer(run.stdout) : undefined;
+    if (answer === undefined) {
+      this.looks.askAgain();
+      return { kind: 'failed', error: `hook needs-you exited ${run.exitCode}: ${run.stdout.trim().slice(0, 200)}` };
+    }
+    // An off tab (needsYou off, no team session) names no files, so it asks again only at the recheck.
+    if (answer.kind === 'asks') {
+      this.looks.waitFor(answer.watch, answer.recheckAt);
+    }
+    const asks = answer.kind === 'asks' ? answer.asks : [];
+    const fresh = asks.filter((ask) => !this.toasted.has(keyOf(ask)));
+    for (const ask of fresh) {
+      this.host.toast(`${ask.tab} needs you: ${ask.text}`, TOAST_MAX_MS);
+    }
+    const live = new Set(asks.map(keyOf));
+    this.toasted = live;
+    this.dismissed = new Set([...this.dismissed].filter((key) => live.has(key)));
+    this.asks = asks;
+    this.host.changed();
+    return answer.kind === 'off' ? answer : { kind: 'asks', count: asks.length, fresh: fresh.map((ask) => ask.session) };
   }
 
   /** The band's Focus: brings the shown ask's tab to the front through the CLI, which re-checks the ask; never rejects. */
