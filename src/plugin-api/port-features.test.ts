@@ -8,7 +8,7 @@ import { HOST_PORT_FEATURES, isHostPortName, portFeatureProblems } from './port-
 import { isManifest, type Manifest } from './support.ts';
 
 /** The host port a kit contract binds, where the kit spells the name its own way. */
-const KIT_PORT: Readonly<Record<string, string>> = { transcript: 'transcripts', 'status-line': 'statusLine' };
+const KIT_PORT: Readonly<Record<string, string>> = { transcript: 'transcripts', 'status-line': 'statusLine', 'permission-mode': 'hooks' };
 
 const NO_PORTS: HostPorts = {
   hooks: unsupported('no hooks'),

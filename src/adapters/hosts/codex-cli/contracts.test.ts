@@ -1,12 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bind, CONTRACTS, LAUNCHER_CONTRACT, USAGE_CONTRACT, type LauncherWorld, type UsageWorld } from '../../../conformance/index.ts';
+import { bind, CONTRACTS, LAUNCHER_CONTRACT, PERMISSION_MODE_CONTRACT, USAGE_CONTRACT, type LauncherWorld, type PermissionModeWorld, type UsageWorld } from '../../../conformance/index.ts';
 import type { HostDeclaration } from '../../../plugin-api/index.ts';
 import { describeContracts, suiteOf, type ContractsOf } from '../../../testing/contracts.ts';
 import { SUPPORTED } from '../../../testing/manifests.ts';
 import { declaration } from './declaration.ts';
+import { hookBridge } from './hook-bridge.ts';
 import { sessionLauncher } from './session-launcher.ts';
 import { AGENT_MARK } from './session-variables.ts';
+import { SOURCE_BUILT_HOOK_INPUTS } from './testing/hook-inputs.ts';
+import { toolCallShape } from './tool-call.ts';
 import { usageMeter } from './usage.ts';
 
 /** A Codex CLI conversation id, as `CODEX_THREAD_ID` and `codex resume` carry it. */
@@ -30,6 +33,18 @@ const launcherWorld: LauncherWorld = {
   places: { tab: {}, background: {}, elsewhere: {} },
 };
 
+/**
+ * Codex CLI's hook inputs as its source builds them: every one carrying `permission_mode` was built in its default
+ * mode, and its session end carries none.
+ */
+const permissionModeWorld: PermissionModeWorld = {
+  recorded: Object.values(SOURCE_BUILT_HOOK_INPUTS)
+    .filter(({ input }) => 'permission_mode' in input && typeof input.permission_mode === 'string')
+    .map(({ input }) => ({ input: JSON.stringify(input), mode: 'ask' })),
+  withWord: (word) => JSON.stringify({ ...SOURCE_BUILT_HOOK_INPUTS.preToolUseShell.input, permission_mode: word }),
+  withoutMode: () => JSON.stringify(SOURCE_BUILT_HOOK_INPUTS.sessionEnd.input),
+};
+
 /** What Codex CLI tells of a run: its session's id under its mark, and nothing else (`sessions.identity` is partial). */
 const ONLY_THE_ID = "Codex CLI tells only the session's id, by its mark: no start folder, start word, kind or forced effort";
 
@@ -50,6 +65,7 @@ const BOUND = [
       'launcher.reads-background-job': 'Codex CLI starts a background job with no session on its command line',
     },
   }),
+  bind({ contract: PERMISSION_MODE_CONTRACT, make: () => ({ port: hookBridge(toolCallShape('win32')), world: permissionModeWorld }) }),
 ];
 
 describeContracts({ side: 'host', declaration, bound: BOUND });
@@ -63,12 +79,12 @@ function claiming(...features: readonly (keyof HostDeclaration['manifest'])[]): 
 describe('Codex CLI as it ships', () => {
   const suite = suiteOf({ side: 'host', declaration, bound: BOUND }, { os: 'windows', kit: CONTRACTS });
 
-  it('runs the usage cases and the launcher cases of what it tells, with nothing its bindings break (T5559)', () => {
+  it('runs the usage cases, the launcher cases of what it tells and the permission-mode cases, with nothing its bindings break (T5559, T5082)', () => {
     assert.deepEqual(suite.problems, []);
     const [usage, launcher] = suite.groups;
     assert.deepEqual(
       suite.groups.map((group) => group.port),
-      ['usage', 'launcher'],
+      ['usage', 'launcher', 'permission-mode'],
     );
     assert.ok(usage !== undefined && usage.cases.length > 0);
     assert.deepEqual(

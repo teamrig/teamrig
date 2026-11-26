@@ -27,6 +27,7 @@ export const HOST_PORT_FEATURES = {
     'hooks.tool-failure',
     'sessions.turn-end',
     'sessions.effort-writeback',
+    'sessions.identity',
     'wake.api-retry',
     'errors.kinds',
     'os.windows-hooks',
