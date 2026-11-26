@@ -11,8 +11,8 @@ import { cliLauncherPath } from '../restore/cli-launcher.ts';
 /**
  * teamrig's own install under the kit home (T5278, design D): one full copy of each release in `versions/<v>/`, and
  * the version in use named twice, by the one-line `current` the launcher reads first and by `current.json`, which adds
- * the sha256 of that version's integrity list, where it came from and whether `teamrig kit use` pinned it. Once a host's
- * hook line runs the kit home's fixed launcher (the next step: today each host's hooks still run the plugin folder), the
+ * the sha256 of that version's integrity list, where it came from and whether `teamrig kit use` pinned it. Where a host's
+ * hook line runs the kit home's fixed launcher (Codex CLI's, which `setup hooks` writes), the
  * launcher runs the version `current` names, so an upgrade only adds a folder and moves `current`, and the hook text a
  * host trusts never changes.
  *
