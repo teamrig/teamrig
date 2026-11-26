@@ -47,6 +47,7 @@ function step(main, words) {
     stdio[HANDOFF_PIPE] = 'pipe';
     let child;
     try {
+      // Shown on purpose: the step runs in this tab, on its console, where it prints a refusal or the start line.
       child = spawn(process.execPath, [main, ...words], { stdio, env: { ...process.env, [HANDOFF_VAR]: String(HANDOFF_PIPE) } });
     } catch (error) {
       resolve({ code: 1, problem: 'teamrig launch did not start: ' + error.message });
@@ -78,6 +79,7 @@ function host(plan) {
     const ended = (error) => resolve(error.code === 'ENOENT' ? 'missing' : 'failed:' + error.message);
     let child;
     try {
+      // Shown on purpose: the program runs in this tab, on its console.
       child = spawn(plan.command, plan.args, { cwd: plan.cwd, env, stdio: 'inherit' });
     } catch (error) {
       ended(error);
