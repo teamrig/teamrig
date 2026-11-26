@@ -11,7 +11,7 @@ import { parseArgs, UsageError, type CommandEffect, type CommandEffects, type Co
 import { RENAMED } from './renamed.ts';
 import { EXIT, RefusedError, type CliRuntime, type ProcessExit } from './runtime.ts';
 import { hookLockDeadline } from './hook-timeouts.ts';
-import { chooseHost } from './host-choice.ts';
+import { chooseHost, UnlistedHostError } from './host-choice.ts';
 import type { CommandTable } from '../slash/plan.ts';
 
 type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ProcessExit>;
@@ -1444,9 +1444,11 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
   }
 
   let named: string | undefined;
+  let hostEvent: string | undefined;
   try {
     const args = parseArgs(argv, COMMAND_FLAGS, COMMAND_SWITCHES, RENAMED, COMMAND_REST);
     named = args.command;
+    hostEvent = args.hostEvent;
     if (args.help) {
       runtime.out.stdout(COMMAND_HELP.forCommand(args.command));
       return EXIT.ok;
@@ -1480,6 +1482,14 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));
       return EXIT.usage;
+    }
+    if (error instanceof UnlistedHostError && named !== undefined) {
+      // A hook on a host the team does not list answers in that host's words, not as a failed hook (T5735).
+      const eventRuntime = hostEvent === undefined ? runtime : { ...runtime, hostEvent };
+      const answered = await (await import('./unlisted-host-hook.ts')).answerUnlistedHost(named, error, eventRuntime);
+      if (answered !== undefined) {
+        return answered;
+      }
     }
     if (error instanceof RefusedError) {
       runtime.out.stdout(`REFUSED ${error.message}`);

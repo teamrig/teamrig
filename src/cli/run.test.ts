@@ -1214,6 +1214,43 @@ describe('runCli: which team', () => {
     assert.match(unlisted.stdout[0] ?? '', /^REFUSED --host other is not one of the team's hosts \(claude-code\)/);
   });
 
+  describe('a hook line naming a host the team does not list, as a team made after the install has (T5735)', () => {
+    const emptyVariables = { marks: [], identity: [] };
+    const shippedHosts = {
+      'claude-code': { ports: hostTelling({ projectDir: APP }), sessionVariables: emptyVariables },
+      other: { ports: SHIPPED_HOST, sessionVariables: emptyVariables },
+    };
+    const options: RunOptions = { cwd: ELSEWHERE, host: NO_SESSION_HOST, shippedHosts };
+    const sessionStart = JSON.stringify({ hook_event_name: 'SessionStart', session_id: CLAUDE_SESSION, source: 'startup' });
+
+    it('says once, at the session start and in the host reply, which hosts line turns the hooks back on', async () => {
+      const greeted = await new CliHarness(CURRENT_TEAM).run(['hook', 'session-start', '--host', 'other', '--team', 'app'], { ...options, stdin: sessionStart });
+      assert.equal(greeted.code, EXIT.ok, greeted.stdout.join('\n'));
+      const reply = greeted.stdout.join('\n');
+      assert.doesNotMatch(reply, /REFUSED/);
+      assert.match(reply, /this team's hosts \(claude-code\) does not list other/);
+      assert.match(reply, /Add \\"other\\" to hosts in the team config/);
+    });
+
+    it('ends every other hook that is no guard cleanly with nothing written, so the host shows no failed hook', async () => {
+      const kit = new CliHarness(CURRENT_TEAM);
+      for (const hook of ['stop', 'inbox-reminder', 'route-reminder']) {
+        assert.deepEqual(await kit.run(['hook', hook, '--host', 'other', '--team', 'app'], { ...options, stdin: sessionStart }), { code: EXIT.ok, stdout: [], stderr: [] }, hook);
+      }
+    });
+
+    it('keeps a guard refused, so a team config mistake never lets a call through', async () => {
+      const guard = await new CliHarness(CURRENT_TEAM).run(['hook', 'push-guard', '--host', 'other', '--team', 'app'], { ...options, stdin: sessionStart });
+      assert.equal(guard.code, EXIT.refused);
+      assert.match(guard.stdout[0] ?? '', /^REFUSED --host other is not one of the team's hosts \(claude-code\)/);
+    });
+
+    it('runs the hooks as before once the team lists the host, as a second team listing it does', async () => {
+      const listed = await new CliHarness({ ...CURRENT_TEAM, hosts: ['claude-code', 'other'] }).run(['hook', 'stop', '--host', 'other', '--team', 'app'], { ...options, stdin: sessionStart });
+      assert.doesNotMatch(listed.stdout.join('\n'), /does not list other|REFUSED/);
+    });
+  });
+
   it('takes $TEAMRIG_TEAM over the pointer', async () => {
     const result = await new CliHarness().run(['config', 'validate'], { env: { TEAMRIG_TEAM: 'ops' } });
     assert.equal(result.code, EXIT.refused);
