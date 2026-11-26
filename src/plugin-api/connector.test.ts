@@ -39,6 +39,7 @@ describe('a connector declaration', () => {
       'codehost.pr-land is not unsupported, but its kinds do not list codehost',
       'codehost.review-posts is not unsupported, but its kinds do not list codehost',
       'codehost.linked-pulls is not unsupported, but its kinds do not list codehost',
+      'codehost.pull-files is not unsupported, but its kinds do not list codehost',
     ]);
     const honest = manifestOf('connector', UNSUPPORTED, { 'tracker.comment': SUPPORTED });
     assert.deepEqual(connectorDeclarationProblems(connectorDeclarationData({ kinds: ['tracker'], manifest: honest })), []);

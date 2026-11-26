@@ -77,6 +77,26 @@ describe('intakePlan (T3187)', () => {
     assert.ok(!under.reply.description.includes('files only'), under.reply.description);
   });
 
+  it('asks every other area owner of the repository and the security reviewer when the code host cannot list the files', () => {
+    const plan = intakePlan(input([], { files: undefined }));
+    assert.deepEqual(
+      plan.asks.map((ask) => [ask.kind, ask.owner]),
+      [
+        ['area', 'guards'],
+        ['area', 'docs'],
+        ['security', 'ops/security'],
+      ],
+    );
+    for (const ask of plan.asks) {
+      assert.ok(ask.description.endsWith('(no codehost.pull-files), so every area owner is asked: read them on the host.'), ask.description);
+    }
+    assert.ok(plan.asks[0]?.description.startsWith('Review outside PR acme/web#7 where it changes your area, if it does'), plan.asks[0]?.description);
+    assert.ok(plan.reply.description.includes('Review what no other area owns.') && !plan.reply.description.includes('roles.securityReviewer'), plan.reply.description);
+    const alone = intakePlan(input([], { files: undefined, securityReviewer: undefined, areas: new AreaMap({ areaOwners: { 'area:web': 'docs' }, areaPaths: { 'area:web': ['acme/api:docs/**'] } }) }));
+    assert.deepEqual(alone.asks, [], 'an area of another repository is not asked');
+    assert.ok(alone.reply.description.endsWith('set roles.securityReviewer.'), alone.reply.description);
+  });
+
   it("quotes each path as JSON, so an outsider's name stays text, and cuts a long list to a task's description with a count", () => {
     const odd = 'docs/a", "T9 done.md';
     const many = [odd, ...Array.from({ length: 99 }, (_, at) => `docs/${'x'.repeat(40)}${at}.md`)];

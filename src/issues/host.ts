@@ -362,6 +362,15 @@ export interface PullRequests {
    */
   pulls(repo: string, since: string | undefined): Promise<HostPulls>;
   /**
+   * A capability (plugin API 0.9.0, feature `codehost.pull-files`): the paths a pull request changes. A code
+   * host that cannot list them leaves it out, and issue intake asks every area owner and the security reviewer instead.
+   */
+  readonly changedFiles?: PullFileRead;
+}
+
+/** A code host's read of the paths a pull request changes. */
+export interface PullFileRead {
+  /**
    * The paths the pull request changes, from one bounded page of its files: issue intake routes each to the session
    * owning its area. Fails for an issue that is no pull request, or one the host does not show.
    */

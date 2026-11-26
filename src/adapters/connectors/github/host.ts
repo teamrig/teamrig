@@ -32,6 +32,7 @@ import {
   type HostPullStand,
   type HostPullWork,
   type HostPullFiles,
+  type PullFileRead,
   type HostReach,
   type HostRerun,
   type HostSearch,
@@ -456,11 +457,14 @@ export class GitHubIssueHost implements IssueHost {
     return comments === undefined ? { kind: 'failed', reason: `gh printed no comment list for ${shown}` } : { kind: 'read', comments };
   }
 
+  /** The changed files of a pull request (codehost.pull-files), read as pullFiles reads them. */
+  readonly changedFiles: PullFileRead = { pullFiles: (target) => this.pullFiles(target) };
+
   /**
    * Reads one page of the pull request's changed files (gh.ts pullFilesArgs) and keeps their paths. An issue that is
    * no pull request, or one GitHub does not show, fails the read.
    */
-  async pullFiles(target: IssueTarget): Promise<HostPullFiles> {
+  private async pullFiles(target: IssueTarget): Promise<HostPullFiles> {
     const shown = `the changed files of ${targetText(target)}`;
     const read = await this.read(target.repo, pullFilesArgs(target), shown);
     if (read.kind === 'missing') {

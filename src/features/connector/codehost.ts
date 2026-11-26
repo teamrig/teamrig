@@ -8,4 +8,5 @@ export const CODEHOST_FEATURES = {
   'codehost.pr-land': { kind: 'codehost', doc: 'approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`)', byDefault: 'on' },
   'codehost.review-posts': { kind: 'codehost', doc: 'review comments and reviews in the mention scan', byDefault: 'on' },
   'codehost.linked-pulls': { kind: 'codehost', doc: 'how many open pull requests close an issue', byDefault: 'on' },
+  'codehost.pull-files': { kind: 'codehost', doc: 'the paths a pull request changes, so issue intake asks only the owners of its areas', byDefault: 'on' },
 } as const satisfies ConnectorGroup<'codehost'>;

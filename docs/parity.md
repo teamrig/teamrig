@@ -149,7 +149,7 @@ The AI CLIs a session runs in.
 
 The outside tools holding a team's issues (the `tracker` rows) or its code and pull requests (the `codehost` rows).
 
-- GitHub (`github`), built on plugin API 0.7.0
+- GitHub (`github`), built on plugin API 0.9.0
 - Jira (`jira`), built on plugin API 0.3.0
 - Local (`local`), built on plugin API 0.1.0
 
@@ -189,6 +189,7 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 | `codehost.pr-land` | approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`) | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `codehost.review-posts` | review comments and reviews in the mention scan | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `codehost.linked-pulls` | how many open pull requests close an issue | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.pull-files` | the paths a pull request changes, so issue intake asks only the owners of its areas | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 
 ## Terminals
 

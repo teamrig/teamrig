@@ -41,8 +41,10 @@ export async function issueIntake(args: ParsedArgs, runtime: CliRuntime): Promis
   if (taken !== undefined) {
     throw new RefusedError(`${targetText(target)} is taken in already: ${taken.id} answers its author once its reviews are in; drop ${taken.id} to take it in again`);
   }
-  const files = await hosts.codeHost.pullFiles(target);
-  if (files.kind === 'failed') {
+  // A code host with no codehost.pull-files gives no paths: the plan asks every area owner and security instead.
+  const read = hosts.codeHost.changedFiles;
+  const files = read === undefined ? undefined : await read.pullFiles(target);
+  if (files?.kind === 'failed') {
     runtime.out.stderr(`FAILED ${files.reason}`);
     return EXIT.failed;
   }

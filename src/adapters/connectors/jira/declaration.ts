@@ -77,5 +77,6 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pr-land': NOT_A_CODE_HOST,
     'codehost.review-posts': NOT_A_CODE_HOST,
     'codehost.linked-pulls': NOT_A_CODE_HOST,
+    'codehost.pull-files': NOT_A_CODE_HOST,
   },
 };

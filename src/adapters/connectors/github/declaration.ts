@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.7.0',
+  apiVersion: '0.9.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
@@ -55,5 +55,6 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pr-land': SUPPORTED,
     'codehost.review-posts': SUPPORTED,
     'codehost.linked-pulls': SUPPORTED,
+    'codehost.pull-files': SUPPORTED,
   },
 };

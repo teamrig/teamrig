@@ -38,5 +38,6 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pr-land': NONE,
     'codehost.review-posts': NONE,
     'codehost.linked-pulls': NONE,
+    'codehost.pull-files': NONE,
   },
 };

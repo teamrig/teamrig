@@ -9,6 +9,8 @@ import { targetText, type IssueTarget } from '../issues/host.ts';
  * path under a security review entry asks the security reviewer too, in parallel; the session that takes it in reviews
  * the paths no area owns and replies to the author only after the reviews (its task's plan dependency). The paths are
  * the outsider's input: each is quoted as JSON, and a list longer than a task's description holds is cut with a count.
+ * A code host that cannot list the paths (no codehost.pull-files) gets every area owner of the repository asked, and
+ * the security reviewer always: who reviews never rests on a read that did not happen.
  */
 
 /** The pull request's changed paths, as one bounded read gave them (HostPullFiles). */
@@ -24,7 +26,11 @@ export interface IntakeFiles {
 
 export interface IntakeInput {
   readonly target: IssueTarget;
-  readonly files: IntakeFiles;
+  /**
+   * The paths one read gave; undefined when the code host cannot list a pull request's files (it has no
+   * codehost.pull-files), so every area owner of the repository and the security reviewer are asked.
+   */
+  readonly files: IntakeFiles | undefined;
   readonly areas: AreaMap;
   /** Whether a path sits under a review gate entry of class `security` (push-guard/review-paths.ts). */
   readonly isSecurityPath: (path: string) => boolean;
@@ -60,7 +66,13 @@ export function intakeReplyTitle(target: IssueTarget): string {
 }
 
 export function intakePlan(input: IntakeInput): IntakePlan {
-  const { target, files, areas, caller } = input;
+  const { files } = input;
+  return files === undefined ? unlistedPlan(input) : listedPlan(input, files);
+}
+
+/** The plan when the host listed the paths: each owner is asked about its own, security about the guarded or unseen ones. */
+function listedPlan(input: IntakeInput, files: IntakeFiles): IntakePlan {
+  const { target, areas, caller } = input;
   const shown = targetText(target);
   const split = areas.split(target.repo, files.paths);
   const own = split.owners.find((share) => share.session === caller)?.paths ?? [];
@@ -91,12 +103,47 @@ export function intakePlan(input: IntakeInput): IntakePlan {
       description: guarded.length === 0 ? head : described(`${head} The guarded paths, as the PR names them:`, guarded),
     });
   }
-  return { asks, reply: { title: intakeReplyTitle(target), description: replyDescription(input, shown, [...own, ...split.unowned], guarded.length > 0 && reviewer === undefined) } };
+  return { asks, reply: { title: intakeReplyTitle(target), description: replyDescription(files, shown, [...own, ...split.unowned], guarded.length > 0 && reviewer === undefined) } };
+}
+
+/**
+ * The plan when the code host cannot list the paths: no one can tell whose area it changes or whether it touches a
+ * guarded path, so every other session owning an area of the repository is asked, and the security reviewer always.
+ */
+function unlistedPlan(input: IntakeInput): IntakePlan {
+  const { target, areas, caller } = input;
+  const shown = targetText(target);
+  const unlisted = 'The code host cannot list its changed files (no codehost.pull-files), so every area owner is asked: read them on the host.';
+  const asks: IntakeAsk[] = areas
+    .sessionsOf(target.repo)
+    .filter((session) => session !== caller)
+    .map((session) => ({
+      kind: 'area',
+      owner: session,
+      title: `Best-fix and overlap review of outside PR ${shown} for ${session}`,
+      description: `Review outside PR ${shown} where it changes your area, if it does: is its fix the best one, and does it overlap your open tasks? Say your verdict on this task; ${caller} replies to the author once every review is in. ${unlisted}`,
+    }));
+  const reviewer = input.securityReviewer;
+  if (reviewer !== undefined) {
+    asks.push({
+      kind: 'security',
+      owner: reviewer,
+      title: `Security review of outside PR ${shown}`,
+      description: `Security review of outside PR ${shown}, whose files the code host cannot list, in parallel with its area reviews. Say your verdict on this task; ${caller} replies to the author once every review is in. ${unlisted}`,
+    });
+  }
+  const notes = [unlisted, ...(reviewer === undefined ? ['No one but you reviews its guarded paths, if any: set roles.securityReviewer.'] : [])];
+  return {
+    asks,
+    reply: {
+      title: intakeReplyTitle(target),
+      description: `Answer the author of outside PR ${shown} once every review task this depends on is done: the best fix, or the change asked. Review what no other area owns. ${notes.join(' ')}`,
+    },
+  };
 }
 
 /** The reply task's text: what to review itself, what the read could not see, and when to answer. */
-function replyDescription(input: IntakeInput, shown: string, yours: readonly string[], guardedUnasked: boolean): string {
-  const { files } = input;
+function replyDescription(files: IntakeFiles, shown: string, yours: readonly string[], guardedUnasked: boolean): string {
   const notes = [
     ...unseenNotes(files),
     ...(guardedUnasked ? ['It changes guarded paths and no one but you reviews them: set roles.securityReviewer.'] : []),

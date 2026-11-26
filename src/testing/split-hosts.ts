@@ -48,7 +48,7 @@ export function codeHostOnly(fake: FakeIssueHost): CodeHost {
     name: fake.name,
     reach: (repo, use) => fake.reach(repo, use),
     pulls: (repo, since) => fake.pulls(repo, since),
-    pullFiles: (target) => fake.pullFiles(target),
+    ...(fake.changedFiles === undefined ? {} : { changedFiles: fake.changedFiles }),
     jobLog: (repo, jobId) => fake.jobLog(repo, jobId),
     rerunRun: (repo, runId) => fake.rerunRun(repo, runId),
     posts: (repo, since) => fake.posts(repo, since),

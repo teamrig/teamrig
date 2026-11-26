@@ -535,11 +535,11 @@ describe('GitHubIssueHost', () => {
   it("reads a pull request's changed paths through the one files read, and fails on one GitHub does not show (T3187)", async () => {
     const gh = new FakeGh().pullFiles('acme/web#7', ['src/a.ts', { filename: 'docs/b.md', from: 'src/b.md' }]);
     const host = hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'acme-issues-token'));
-    assert.deepEqual(await host.pullFiles(TARGET), { kind: 'read', paths: ['src/a.ts', 'docs/b.md', 'src/b.md'], leftOut: 0, listed: 2, perRead: PULL_FILES_PAGE });
+    assert.deepEqual(await host.changedFiles.pullFiles(TARGET), { kind: 'read', paths: ['src/a.ts', 'docs/b.md', 'src/b.md'], leftOut: 0, listed: 2, perRead: PULL_FILES_PAGE });
     assert.ok(gh.ran.every((request) => isPullFilesRead(request.args)));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token']);
-    assert.deepEqual(await host.pullFiles({ repo: 'acme/web', number: 8 }), { kind: 'failed', reason: 'GitHub shows no pull request acme/web#8: it is an issue, or one this access cannot see' });
-    const odd = await hostWith(new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' })).pullFiles(TARGET);
+    assert.deepEqual(await host.changedFiles.pullFiles({ repo: 'acme/web', number: 8 }), { kind: 'failed', reason: 'GitHub shows no pull request acme/web#8: it is an issue, or one this access cannot see' });
+    const odd = await hostWith(new FakeGh().answers('acme/web', { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' })).changedFiles.pullFiles(TARGET);
     assert.deepEqual(odd, { kind: 'failed', reason: 'gh printed no file list for the changed files of acme/web#7' });
   });
 
