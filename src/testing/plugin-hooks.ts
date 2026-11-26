@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { GUARD_SET_HOOK } from '../cli/guard-runner.ts';
 import { isRecord, isStringArray, stringField, type JsonRecord } from '../core/guards.ts';
 
 /** One hook the plugin's `hooks/hooks.json` wires to a host event. */
@@ -93,4 +94,17 @@ export function hookMatches(hook: WiredHook, input: JsonRecord): boolean {
   }
   const value = stringField(input, field);
   return value !== undefined && (hook.matcher ?? '').split('|').includes(value);
+}
+
+/**
+ * The hooks a wired entry runs: each guard a `hook guards` set names, before its first flag, else its one hook. A set
+ * runs several guards in one process, so a reader asking which guards meet a call must look inside it.
+ */
+export function hookNamesOf(hook: WiredHook): readonly string[] {
+  const [, name = '', ...after] = hook.argv;
+  if (name !== GUARD_SET_HOOK) {
+    return [name];
+  }
+  const end = after.findIndex((word) => word.startsWith('--'));
+  return end === -1 ? after : after.slice(0, end);
 }

@@ -7,7 +7,7 @@ import { CLIENT_MANIFEST, clientFileHash, clientManifestText, clientRootOf } fro
 import { APP, CliHarness, KIT, TEAM, USER_HOME, type RunOptions } from './cli-harness.ts';
 import { FolderNames, withStrings } from './folder-names.ts';
 import { MemoryTranscripts } from './memory-transcripts.ts';
-import { hookMatches, pluginHooks, type WiredHook } from './plugin-hooks.ts';
+import { hookMatches, hookNamesOf, pluginHooks, type WiredHook } from './plugin-hooks.ts';
 import { quietWorld } from './quiet-world.ts';
 import { hookFile, loadRecording, type RecordedHost, type Recording } from './recorded.ts';
 import { shippedTranscripts } from './shipped-transcripts.ts';
@@ -28,8 +28,9 @@ export interface GuardDeny {
 
 /**
  * One refusal for each guard the plugin wires to PreToolUse. Each goes through the real hook input of a recorded call,
- * the guard's hooks.json wiring and `hook <guard>`, so a bridge or wiring change that loses a refusal shows in the pin
- * where a guard's own specs, which build their input by hand and call it by name, would still pass.
+ * the guard's hooks.json wiring and `hook <guard>` or the `hook guards` set that holds it, so a bridge or wiring
+ * change that loses a refusal shows in the pin where a guard's own specs, which build their input by hand and call it
+ * by name, would still pass.
  */
 export const GUARD_DENIES: readonly GuardDeny[] = [
   { guard: 'push-guard', tool: 'Bash', toolInput: { command: 'git push --force origin main' } },
@@ -197,7 +198,7 @@ async function guardDenies(recording: Recording, hooks: readonly WiredHook[], en
     }
     const input: JsonRecord = { ...recorded.input, tool_input: toolInput };
     const runs: PinnedRun[] = [];
-    for (const hook of hooks.filter((wired) => hookMatches(wired, input) && wired.argv[1] === guard)) {
+    for (const hook of hooks.filter((wired) => hookMatches(wired, input) && hookNamesOf(wired).includes(guard))) {
       // The install guard reads a written path as this platform spells it, as `join` built the kit's path here.
       runs.push(await pinnedRun(kit, hook, { event: recorded.event, index: recorded.index, input }, { env, platform: process.platform }, named));
     }

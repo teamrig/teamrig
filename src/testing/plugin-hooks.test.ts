@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { hookMatches, pluginHooks, wiredHooks, type WiredHook } from './plugin-hooks.ts';
+import { hookMatches, hookNamesOf, pluginHooks, wiredHooks, type WiredHook } from './plugin-hooks.ts';
 
 function command(...words: readonly string[]): Readonly<Record<string, unknown>> {
   return { type: 'command', command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', ...words], timeout: 15 };
@@ -92,17 +92,38 @@ describe('hookMatches', () => {
   });
 });
 
+describe('hookNamesOf', () => {
+  it('names each guard of a set before its first flag, and a lone hook by its one word (T5553)', () => {
+    const wired = (argv: readonly string[]): WiredHook => ({ event: 'PreToolUse', matcher: 'Bash', argv });
+    assert.deepEqual(hookNamesOf(wired(['hook', 'guards', 'push-guard', 'secret-guard', '--host', 'claude-code'])), ['push-guard', 'secret-guard']);
+    assert.deepEqual(hookNamesOf(wired(['hook', 'guards', 'push-guard'])), ['push-guard']);
+    assert.deepEqual(hookNamesOf(wired(['hook', 'picker-guard', '--host', 'claude-code'])), ['picker-guard']);
+  });
+});
+
 describe('pluginHooks', () => {
   const hooks = pluginHooks();
 
   it('reads the manifest the plugin ships, each hook a teamrig hook command naming its host (T4752)', () => {
     assert.ok(hooks.length > 0);
-    for (const { event, argv } of hooks) {
-      assert.equal(argv.length, 4, event);
+    for (const wired of hooks) {
+      const { event, argv } = wired;
+      const names = hookNamesOf(wired);
+      assert.ok(names.length > 0, event);
       assert.equal(argv[0], 'hook', event);
-      assert.match(argv[1] ?? '', /^[a-z][a-z-]+$/, event);
-      assert.deepEqual(argv.slice(2), ['--host', 'claude-code'], event);
+      for (const name of names) {
+        assert.match(name, /^[a-z][a-z-]+$/, event);
+      }
+      assert.deepEqual(argv.slice(argv[1] === 'guards' ? 2 + names.length : 2), ['--host', 'claude-code'], event);
     }
+  });
+
+  it('wires the guards of a Bash call as one set, so a recorded call meets each guard through it (T5553)', () => {
+    const bash = hooks.filter((wired) => hookMatches(wired, { hook_event_name: 'PreToolUse', tool_name: 'Bash' }));
+    assert.deepEqual(
+      bash.map(({ argv }) => argv[1]),
+      ['guards', 'readonly-allow', 'route-allow', 'picker-guard'],
+    );
   });
 
   it('holds only matchers it can decide', () => {
