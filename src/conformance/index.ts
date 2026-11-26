@@ -15,6 +15,7 @@ import { USAGE_CONTRACT } from './host/usage.ts';
 import { entryOf, type KitEntry } from './kit.ts';
 import { TERMINAL_CONTRACT } from './terminal/terminal.ts';
 import { TRACKER_CONTRACT } from './connector/tracker.ts';
+import { TRACKER_READS_CONTRACT } from './connector/reads.ts';
 
 export { bind, defineContract, osOf, runCases, type Binding, type BoundCase, type BoundContract, type CaseOutcome, type CaseResult, type Contract, type ContractCase, type Subject } from './contract.ts';
 export { choiceOf, type Choice, type ChoiceRequest, type Chosen, type ContractOutline } from './choice.ts';
@@ -32,6 +33,8 @@ export { MODELS_CONTRACT, nothingModels, yesModels, type ModelsCase, type Models
 export { STEPS_CONTRACT, nothingSteps, yesSteps, type StepsCase, type StepsSubject, type StepsWorld } from './host/steps.ts';
 export { TRACKER_CONTRACT, type TrackerCase, type TrackerPort, type TrackerSubject, type TrackerWorld, type WorldIssue } from './connector/tracker.ts';
 export { nothingTracker, referenceTracker, TRACKER_WRITES, yesTracker, type TrackerOptions, type TrackerWrite } from './connector/reference.ts';
+export { TRACKER_READS_CONTRACT, type Filing, type TrackerReadsCase, type TrackerReadsPort, type TrackerReadsSubject, type TrackerReadsWorld } from './connector/reads.ts';
+export { nothingReads, READS_LIES, referenceReads, yesReads, type ReadsLie, type ReadsOptions } from './connector/reads-reference.ts';
 export { LAUNCHER_CONTRACT, nothingLauncher, yesLauncher, type LauncherCase, type LauncherOf, type LauncherSubject, type LauncherWorld, type WorldIdentity } from './host/launcher.ts';
 
 /**
@@ -51,4 +54,5 @@ export const CONTRACTS: readonly KitEntry[] = [
   entryOf(LAUNCHER_CONTRACT),
   entryOf(TRACKER_CONTRACT),
   entryOf(PERMISSION_MODE_CONTRACT),
+  entryOf(TRACKER_READS_CONTRACT),
 ];
