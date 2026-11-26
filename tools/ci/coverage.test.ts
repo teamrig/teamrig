@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHECK_TIME_SCALE } from '../../src/core/time-limit.ts';
 import {
+  CHILD_COVERAGE_PRELOAD,
   SLOWEST_REPORTER,
   coverageFindings,
   coverageOptions,
@@ -182,6 +183,12 @@ describe('suiteArgs', () => {
     assert.ok(at >= 0, args.join(' '));
     assert.equal(args[at + 1], '--test-reporter-destination=stdout');
     assert.ok(existsSync(fileURLToPath(SLOWEST_REPORTER)), SLOWEST_REPORTER);
+  });
+
+  it('loads the child coverage router beside it in every process of the run (T5551)', () => {
+    const args = suiteArgs(POLICY, 'out.lcov', 'out.tap', 10);
+    assert.equal(args[3], `--import=${CHILD_COVERAGE_PRELOAD}`);
+    assert.ok(existsSync(fileURLToPath(CHILD_COVERAGE_PRELOAD)), CHILD_COVERAGE_PRELOAD);
   });
 });
 

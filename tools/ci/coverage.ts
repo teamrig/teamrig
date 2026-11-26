@@ -263,12 +263,19 @@ export const MAX_SUITE_WORKERS = 10;
  */
 export const SLOWEST_REPORTER = new URL('./slowest-reporter.ts', import.meta.url).href;
 
+/**
+ * The module each process of the run loads first, so a coverage file a test's child leaves cut short is dropped
+ * instead of costing the run its whole report (T5551); named by its URL for the same reason as the reporter.
+ */
+export const CHILD_COVERAGE_PRELOAD = new URL('./child-coverage-preload.ts', import.meta.url).href;
+
 /** The `node --test` arguments for one coverage run with `workers` test files at once, writing lcov and TAP to the given files. */
 export function suiteArgs(policy: CoveragePolicy, lcovPath: string, tapPath: string, workers: number): string[] {
   return [
     '--test',
     `--test-concurrency=${workers}`,
     '--experimental-test-coverage',
+    `--import=${CHILD_COVERAGE_PRELOAD}`,
     ...SOURCE_DIRS.map((dir) => `--test-coverage-include=${dir}/**`),
     '--test-coverage-exclude=**/*.test.ts',
     ...policy.testSupport.map((entry) => `--test-coverage-exclude=${entry.endsWith('/') ? `${entry}**` : entry}`),
