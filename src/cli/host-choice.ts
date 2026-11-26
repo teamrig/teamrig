@@ -6,6 +6,23 @@ import { RefusedError } from './runtime.ts';
 /** The `hosts` of the team a run is for (its config's list), or undefined when no team config loads. */
 export type TeamHosts = () => Promise<readonly string[] | undefined>;
 
+/**
+ * A run naming a shipped host the team's `hosts` does not list. It carries that host's ports, so a hook run can still
+ * answer in the words its host reads (unlisted-host-hook.ts) rather than as a failed hook.
+ */
+export class UnlistedHostError extends RefusedError {
+  readonly hostId: string;
+  readonly listed: readonly string[];
+  readonly ports: HostSource;
+
+  constructor(hostId: string, listed: readonly string[], ports: HostSource) {
+    super(`--host ${hostId} is not one of the team's hosts (${listed.join(', ')}): add it to hosts in the team config first`);
+    this.hostId = hostId;
+    this.listed = listed;
+    this.ports = ports;
+  }
+}
+
 /** The hosts a process starts with: the default host's ports and every shipped adapter's by id. */
 export interface StartingHosts {
   readonly host: HostSource;
@@ -32,7 +49,7 @@ export async function chooseHost(command: string, named: string | undefined, sta
     }
     const listed = several ? await teamHosts() : undefined;
     if (listed !== undefined && !listed.includes(named)) {
-      throw new RefusedError(`--host ${named} is not one of the team's hosts (${listed.join(', ')}): add it to hosts in the team config first`);
+      throw new UnlistedHostError(named, listed, source.ports);
     }
     return source.ports;
   }

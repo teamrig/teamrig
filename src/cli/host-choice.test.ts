@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import { NO_PATHS_HOST, NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../testing/host.ts';
 import { UsageError } from './args.ts';
-import { chooseHost, type StartingHosts, type TeamHosts } from './host-choice.ts';
+import { chooseHost, UnlistedHostError, type StartingHosts, type TeamHosts } from './host-choice.ts';
 import { RefusedError } from './runtime.ts';
 
 const ONE: ShippedHosts = { 'claude-code': shippedHost(SHIPPED_HOST) };
@@ -45,6 +45,16 @@ describe('chooseHost', () => {
     await assert.rejects(chooseHost('list', 'antigravity-cli', starting(TWO), new Team(['claude-code']).list), (error: unknown) => {
       assert.ok(error instanceof RefusedError);
       assert.match(error.message, /^--host antigravity-cli is not one of the team's hosts \(claude-code\)/);
+      return true;
+    });
+  });
+
+  it("names the unlisted host, the team's list and the host's ports on the refusal, so a hook can still answer (T5735)", async () => {
+    await assert.rejects(chooseHost('hook stop', 'antigravity-cli', starting(TWO), new Team(['claude-code']).list), (error: unknown) => {
+      assert.ok(error instanceof UnlistedHostError);
+      assert.equal(error.hostId, 'antigravity-cli');
+      assert.deepEqual(error.listed, ['claude-code']);
+      assert.equal(error.ports, NO_PATHS_HOST);
       return true;
     });
   });
