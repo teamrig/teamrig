@@ -47,7 +47,7 @@ page you point them to.
    guarded path (CONTRIBUTING.md, Review), all in parallel. Your task to reply comes last, planned after them all:
    answer the author only once every verdict is in.
 3. Best fix first: weigh the owners' verdicts and judge the paths no area holds yourself. If a better fix exists,
-   or an open task of ours does the same, propose it on the pull request (what and why) before taking it; else say
+   or an open task of ours does the same, propose it to its author (what and why) before taking it; else say
    in one line why theirs is best.
 4. Read its full diff before any checkout: fetch its head (`git fetch origin pull/<n>/head:pr-<n>`) and read
    `git diff origin/main...pr-<n>`. Its code runs on this host (its specs, `npm run check`, the local gate at push)

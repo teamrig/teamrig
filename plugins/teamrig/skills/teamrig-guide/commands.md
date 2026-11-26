@@ -1701,7 +1701,7 @@ EDITED acme/web#7: its body is now 1832 characters
 
 ### teamrig issue close
 
-Closes one issue or pull request of the team's repositories (a pull request closes unmerged), first posting
+Closes one issue or change request of the team's repositories (a change request closes unmerged), first posting
 `--comment` when given, with the same access and checks as `teamrig issue reply`. When the comment fails nothing
 is closed. When the close fails after the comment was posted, the `FAILED` line says the comment is posted: rerun
 `teamrig issue close` without `--comment`. Exit 1 when it failed, 2 when refused, else 0.
@@ -1821,10 +1821,10 @@ SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.sim
 
 ### teamrig issue intake
 
-Takes in a pull request from outside the team, named as `owner/name#number`, so each session that owns what it
-changes judges it before anyone answers its author. It reads the paths the pull request changes once (the first 100
-files; the reply task says when there are more), a renamed file's earlier path among them, and writes nothing to
-GitHub. Each session owning an area whose paths it changes (`[github.areaPaths]`, each area label's session in
+Takes in a change request from outside the team, named as `owner/name#number`, so each session that owns what it
+changes judges it before anyone answers its author. It reads the paths it changes once (the first 100 files; the
+reply task says when there are more), a renamed file's earlier path among them, and writes nothing to the host.
+Each session owning an area whose paths it changes (`[github.areaPaths]`, each area label's session in
 `[github.areaOwners]`) gets a task, "Best-fix and overlap review of outside PR <owner/name#number> for <session>",
 listing its paths: is this the best fix, and does an open task of ours do the same? A session owning several areas
 gets one task; the caller's own area is left to its reply. When it changes a guarded path (a review gate entry of
@@ -1836,8 +1836,8 @@ each verdict; it lists the paths no area holds, for the caller to judge. Each ta
 goals given, as `teamrig add` does.
 
 It refuses, adding nothing, a caller not on the team, a target that is not `owner/name#number`, a repository not in
-`github.repos`, a missing `--priority`, and a pull request taken in already while its reply task is not dropped (drop
-it to take the pull request in again). A task the team's own register refuses (a goal or description rule) stops it
+`github.repos`, a missing `--priority`, and a change request taken in already while its reply task is not dropped
+(drop it to take the change request in again). A task the team's own register refuses (a goal or description rule) stops it
 at the first, with nothing added. A review another team's register refuses is named in a `FAILED` line while the rest
 still go: ask it with `teamrig add` and list it in the reply task's `--after`. A read that fails prints `FAILED
 <reason>` and adds nothing; `TEAMRIG_GITHUB=off` prints an `OFF` line and adds nothing. Exit 1 when something
