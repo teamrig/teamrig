@@ -740,6 +740,7 @@ function runFixture(fixture: RunFixture = {}): {
     [`merge-base ${REBASED} ${MOVED}`]: fixture.rebasedBehind === true ? BASE : MOVED,
     [`rev-parse ${REBASED}^{tree}`]: 'tree-checked',
     'rev-parse --verify --quiet abc1234^{commit}': SHA,
+    [`rev-parse --verify --quiet ${SHA}^{commit}`]: SHA,
     [`fetch --quiet origin ${RELEASE} main`]: '',
     [`log --reverse --format=%s refs/remotes/origin/main..${REWRITTEN}`]: 'chore(main): release 1.2.0',
     [`merge-base ${BASE} ${QUEUED}`]: QUEUED,
@@ -1023,6 +1024,16 @@ test('a caught-up head merges on the approval of the head it was caught up from,
   assert.deepEqual(err, []);
   assert.deepEqual(clearMerge.mock.calls.map(call => call.arguments), [[BRANCH, SHA, 'abc1234']]);
   assert.deepEqual(out.slice(0, 2), [APPROVED_LINE, `merge of ${NEXT} rebased0c: caught up from ${BRANCH} abc1234de, approved by lead`]);
+});
+
+test('a commit added to the branch while the merge waited is refused at its catch-up, not merged on the old approval (T4710)', async () => {
+  const extra: WorkCommit = { sha: 'eeee5555eeee', subject: 'cli: c', merge: false, patch: 'patch-c' };
+  const { deps, out, err, clearMerge, ghFor } = runFixture({ mainTip: MOVED, catchUp: [CAUGHT_UP], work: { [SHA]: APPROVED_WORK, [REBASED]: [...REBASED_WORK, extra] } });
+  assert.equal(await runMerge({ ...ARGS, approved: 'abc1234' }, deps), 1);
+  assert.deepEqual(err, ['REFUSED the head rebased0c is not the approved abc1234de rebased: added eeee5555e "cli: c". Ask for approval of the new head, naming it']);
+  assert.deepEqual(out, [APPROVED_LINE]);
+  assert.deepEqual(clearMerge.mock.calls.map(call => call.arguments), [[BRANCH, SHA, 'abc1234']]);
+  assert.equal(ghFor.mock.callCount(), 1, 'only the first head reaches GitHub');
 });
 
 test('a merge run again on the head its catch-up pushed, after GitHub failed the merge call, clears on the approval of the head it was caught up from (#1450)', async () => {

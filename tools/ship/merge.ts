@@ -630,10 +630,12 @@ const CLEARED_BY_SHIP: MergeGate = () => Promise.resolve(null);
 
 /**
  * The gate of `ship.ts merge`: the caller's clearance of the first head on the approval `args` names. runMerge calls
- * it again only for a head catch-up.ts made from that cleared head, which carries the same diff with its context
- * lines (a rebase onto main's tip, nothing else), so that head merges on the first one's clearance: the approval
- * names the first sha, and asking again for a sha nobody could approve beforehand would stop every caught-up merge
- * (T2809). A refused first head never reaches a catch-up, since mergeRun returns its refusal as done.
+ * it again only for a head catch-up.ts made from that cleared head, so that head merges on the first one's clearance
+ * when it carries the cleared head's work commits patch for patch (a rebase onto main's tip, nothing else): the
+ * approval names the first sha, and asking again for a sha nobody could approve beforehand would stop every caught-up
+ * merge (T2809). The catch-up rebases the branch as it is then, so a commit added to it while the merge waited is
+ * refused, not merged on the old approval (T4710). A refused first head never reaches a catch-up, since mergeRun
+ * returns its refusal as done.
  *
  * A first head that is not the approved one clears on that approval only as its rebase, the same work commits patch
  * for patch (approval.ts `approvedRebase`, as `ship.ts --merge` reads it): a run again on the head an earlier run's
@@ -644,6 +646,8 @@ function approvalGate(args: MergeArgs, deps: MergeDeps): MergeGate {
   let cleared: { head: string; sha: string; by: string } | null = null;
   return async (head, sha) => {
     if (cleared !== null) {
+      const caught = approvedRebase((gitArgs) => deps.git(...gitArgs), deps.workOf, cleared.sha, sha);
+      if (caught.kind !== 'rebased') return `${caught.reason}. Ask for approval of the new head, naming it`;
       deps.out(`merge of ${head} ${sha.slice(0, 9)}: caught up from ${cleared.head} ${cleared.sha.slice(0, 9)}, ${cleared.by}`);
       return null;
     }
