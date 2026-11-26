@@ -39,7 +39,7 @@ export interface Act {
   /** The host the run worked in, by its id; undefined when the run's host is none teamrig ships. */
   readonly host: string | undefined;
   readonly command: string;
-  /** The arguments after `teamrig`, as given. */
+  /** The arguments after `teamrig`, as given; the log line redacts them (`actLine`). */
   readonly argv: readonly string[];
   readonly outcome: ActOutcome;
   readonly exit: number;
@@ -55,11 +55,50 @@ function cut(text: string): string {
   return text.length <= ACT_REASON_MAX ? text : `${text.slice(0, ACT_REASON_MAX - 1)}…`;
 }
 
+/** A flag whose value is encoded text (`--encoded-prompt <base64url>`): the scanner cannot read it, anyone can decode it. */
+const ENCODED_FLAG = /^--encoded-[a-z0-9-]+$/;
+const ENCODED_FLAG_WITH_VALUE = /^(--encoded-[a-z0-9-]+)=(.*)$/s;
+
+/** What the log keeps of an encoded value: its length only. */
+export function encodedMark(value: string): string {
+  return `[encoded, ${value.length} chars]`;
+}
+
+/** The arguments with each `--encoded-*` flag's value, given apart or after `=`, replaced by its mark. */
+function withoutEncoded(argv: readonly string[]): string[] {
+  return argv.map((word, index) => {
+    const joined = ENCODED_FLAG_WITH_VALUE.exec(word);
+    if (joined?.[1] !== undefined && joined[2] !== undefined) return `${joined[1]}=${encodedMark(joined[2])}`;
+    const flag = argv[index - 1];
+    return flag !== undefined && ENCODED_FLAG.test(flag) ? encodedMark(word) : word;
+  });
+}
+
+/** The arguments as the log keeps them, and whether they had to be kept as one joined line. */
+interface KeptArgv {
+  readonly argv: readonly string[];
+  readonly joined: boolean;
+}
+
+/**
+ * Each argument redacted, and then the arguments joined by spaces redacted again. Some secret shapes span a space
+ * (an `Authorization: Bearer <token>` header, `password: <value>`, a key block), so a secret a shell split over two
+ * words matches no single one. When the joined line redacts more, it is kept whole instead of the words.
+ */
+function keptArgv(argv: readonly string[], scanner: SecretScanner): KeptArgv {
+  const words = withoutEncoded(argv).map((word) => scanner.redact(word));
+  const line = words.join(' ');
+  const redacted = scanner.redact(line);
+  return redacted === line ? { argv: words, joined: false } : { argv: [redacted], joined: true };
+}
+
 /**
  * The act's log line. Every argument and the reason pass the secret scanner's redaction first: a session may type a
- * key into a note by mistake, and the log must not keep what the register refused to.
+ * key into a note by mistake, and the log must not keep what the register refused to. An encoded value is kept by
+ * its length alone, as no scanner reads it.
  */
 export function actLine(act: Act, scanner: SecretScanner): string {
+  const kept = keptArgv(act.argv, scanner);
   const record: JsonRecord = {
     v: ACT_LOG_VERSION,
     at: act.at.toISOString(),
@@ -68,7 +107,8 @@ export function actLine(act: Act, scanner: SecretScanner): string {
     by: byRecord(act.by),
     host: act.host ?? null,
     command: act.command,
-    argv: act.argv.map((word) => scanner.redact(word)),
+    argv: [...kept.argv],
+    joined: kept.joined,
     outcome: act.outcome,
     exit: act.exit,
     reason: act.reason === undefined ? null : cut(scanner.redact(act.reason)),

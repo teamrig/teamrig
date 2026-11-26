@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SecretScanner } from '../core/secrets.ts';
 import { isRecord } from '../core/guards.ts';
 import { fieldPaths } from '../testing/field-paths.ts';
-import { ACT_LOG_VERSION, ACT_REASON_MAX, ActLog, actLine, type Act } from './act-log.ts';
+import { ACT_LOG_VERSION, ACT_REASON_MAX, ActLog, actLine, encodedMark, type Act } from './act-log.ts';
 import type { LogFile } from '../core/log-file.ts';
 
 const ACT: Act = {
@@ -48,6 +48,7 @@ describe('actLine', () => {
       'command',
       'exit',
       'host',
+      'joined',
       'ms',
       'outcome',
       'reason',
@@ -66,6 +67,7 @@ describe('actLine', () => {
       host: 'claude-code',
       command: 'set',
       argv: ['set', 'T1', '--status', 'done'],
+      joined: false,
       outcome: 'refused',
       exit: 2,
       reason: 'T1 has no evidence',
@@ -85,6 +87,31 @@ describe('actLine', () => {
     assert.equal(record['reason'], 'saw [redacted GitHub token]');
     const team = parsed(actLine({ ...ACT, argv: ['add', 'INTERNAL-42'] }, new SecretScanner(['INTERNAL-[0-9]+'])));
     assert.doesNotMatch(JSON.stringify(team['argv']), /INTERNAL-42/);
+  });
+
+  it('redacts a secret a shell split over two words, keeping the redacted joined line', () => {
+    const token = 'z'.repeat(32);
+    const header = parsed(actLine({ ...ACT, argv: ['queue', '--', 'tool', 'Authorization:', 'Bearer', token] }, new SecretScanner()));
+    assert.equal(header['joined'], true);
+    assert.doesNotMatch(JSON.stringify(header['argv']), new RegExp(token));
+    assert.match(JSON.stringify(header['argv']), /redacted/);
+    const password = parsed(actLine({ ...ACT, argv: ['queue', '--', 'tool', 'password:', 'hunter2-long-value'] }, new SecretScanner()));
+    assert.equal(password['joined'], true);
+    assert.doesNotMatch(JSON.stringify(password['argv']), /hunter2-long-value/);
+  });
+
+  it('keeps the words apart when the joined line redacts nothing more', () => {
+    const record = parsed(actLine(ACT, new SecretScanner()));
+    assert.equal(record['joined'], false);
+    assert.deepEqual(record['argv'], ['set', 'T1', '--status', 'done']);
+  });
+
+  it('keeps an encoded flag value by its length alone, given apart or after =', () => {
+    const encoded = Buffer.from('secret prompt text', 'utf8').toString('base64url');
+    const apart = parsed(actLine({ ...ACT, argv: ['launch', '--encoded-fake', encoded, 'T1'] }, new SecretScanner()));
+    assert.deepEqual(apart['argv'], ['launch', '--encoded-fake', encodedMark(encoded), 'T1']);
+    const after = parsed(actLine({ ...ACT, argv: ['launch', `--encoded-fake=${encoded}`] }, new SecretScanner()));
+    assert.deepEqual(after['argv'], ['launch', `--encoded-fake=${encodedMark(encoded)}`]);
   });
 
   it('cuts a long reason to the limit, marking the cut', () => {
