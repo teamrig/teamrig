@@ -14,16 +14,21 @@ const RELEASE: KitRelease = { tag: 'v0.510.0', commit: 'a'.repeat(40), version: 
 const LIST = '{\n  "files": {\n    "dist/cli/main.js": "abc"\n  }\n}\n';
 const COPY = join(FOLDER, 'teamrig-v0.510.0.integrity.json');
 
-/** gh's JSON output for one verified attestation naming these subjects. */
-function verifiedOutput(subjects: readonly { readonly name: string; readonly sha256: string }[]): string {
-  return JSON.stringify([
-    {
-      attestation: { bundle: {} },
-      verificationResult: {
-        statement: { _type: 'https://in-toto.io/Statement/v1', subject: subjects.map(({ name, sha256 }) => ({ name, digest: { sha256 } })) },
-      },
+type Subject = { readonly name: string; readonly sha256: string };
+
+/** One entry of gh's JSON output: a verified attestation naming these subjects. */
+function verifiedEntry(subjects: readonly Subject[]): object {
+  return {
+    attestation: { bundle: {} },
+    verificationResult: {
+      statement: { _type: 'https://in-toto.io/Statement/v1', subject: subjects.map(({ name, sha256 }) => ({ name, digest: { sha256 } })) },
     },
-  ]);
+  };
+}
+
+/** gh's JSON output for one verified attestation naming these subjects. */
+function verifiedOutput(subjects: readonly Subject[]): string {
+  return JSON.stringify([verifiedEntry(subjects)]);
 }
 
 describe('kit attestation', () => {
@@ -62,6 +67,8 @@ describe('kit attestation', () => {
       '--source-ref',
       'refs/heads/main',
       '--deny-self-hosted-runners',
+      '--predicate-type',
+      'https://slsa.dev/provenance/v1',
       '--format',
       'json',
     ]);
@@ -107,6 +114,30 @@ describe('kit attestation', () => {
   it('refuses a subject of the right name with another digest', async () => {
     answer = { ...answer, stdout: verifiedOutput([{ name: attestedListName('0.510.0'), sha256: 'f'.repeat(64) }]) };
     assert.equal((await checkAttestation({ gh: GH, run, files }, RELEASE, PLUGIN, FOLDER)).kind, 'failed');
+  });
+
+  it("refuses a statement naming this release's subject beside another one, as not exactly one subject", async () => {
+    const subject = { name: attestedListName('0.510.0'), sha256: clientFileHash(LIST) };
+    answer = { ...answer, stdout: verifiedOutput([subject, { name: attestedListName('0.509.0'), sha256: clientFileHash(LIST) }]) };
+    assert.deepEqual(await checkAttestation({ gh: GH, run, files }, RELEASE, PLUGIN, FOLDER), {
+      kind: 'failed',
+      why: `v0.510.0's integrity list (sha256 ${clientFileHash(LIST)}) has 2 verified subjects, not exactly one, so which release it is stays unsaid`,
+    });
+  });
+
+  it("refuses two verified attestations that both match this release's subject, as more than one match", async () => {
+    const entry = verifiedEntry([{ name: attestedListName('0.510.0'), sha256: clientFileHash(LIST) }]);
+    answer = { ...answer, stdout: JSON.stringify([entry, entry]) };
+    const check = await checkAttestation({ gh: GH, run, files }, RELEASE, PLUGIN, FOLDER);
+    assert.equal(check.kind, 'failed');
+    assert.match(check.kind === 'failed' ? check.why : '', /has 2 verified subjects, not exactly one/u);
+  });
+
+  it('refuses a verified output that names no subject at all', async () => {
+    answer = { ...answer, stdout: verifiedOutput([]) };
+    const check = await checkAttestation({ gh: GH, run, files }, RELEASE, PLUGIN, FOLDER);
+    assert.equal(check.kind, 'failed');
+    assert.match(check.kind === 'failed' ? check.why : '', /under no subject named teamrig-v0\.510\.0\.integrity\.json/u);
   });
 
   it("refuses when gh could not verify, naming its exit and last line", async () => {

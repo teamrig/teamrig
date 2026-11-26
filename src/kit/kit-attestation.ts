@@ -32,7 +32,13 @@ export function attestedListName(version: string): string {
   return `teamrig-v${version}.integrity.json`;
 }
 
-/** The `gh` arguments that verify `file`'s attestation: this repository, its release workflow, main, a hosted runner. */
+/** The predicate type of the build provenance the release workflow signs; another type proves nothing about the build. */
+export const KIT_PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
+
+/**
+ * The `gh` arguments that verify `file`'s attestation: this repository, its release workflow, main, a hosted runner,
+ * SLSA build provenance. `--signer-workflow` alone does not pin the ref: a release.yml run on another branch passes it.
+ */
 export function attestationArgs(file: string, slug: string): readonly string[] {
   return [
     'attestation',
@@ -45,6 +51,8 @@ export function attestationArgs(file: string, slug: string): readonly string[] {
     '--source-ref',
     KIT_RELEASE_REF,
     '--deny-self-hosted-runners',
+    '--predicate-type',
+    KIT_PROVENANCE_PREDICATE,
     '--format',
     'json',
   ];
@@ -113,8 +121,17 @@ export async function checkAttestation(ports: KitAttestationPorts, release: KitR
   if (verified.end.kind !== 'exited' || verified.end.code !== 0) {
     return { kind: 'failed', why: `${release.tag}'s attestation: ${runFailure('gh attestation verify', verified.end, verified.stderr)}` };
   }
-  const named = attestedSubjects(verified.stdout).some((subject) => subject.name === name && subject.sha256 === sha256);
-  if (!named) {
+  // gh matches by digest alone, so the subject's name is what ties the list to this tag. Exactly one verified subject
+  // is taken: two would leave which release the list is unsaid, so more than one fails closed, as none does.
+  const subjects = attestedSubjects(verified.stdout);
+  if (subjects.length > 1) {
+    return {
+      kind: 'failed',
+      why: `${release.tag}'s integrity list (sha256 ${sha256}) has ${String(subjects.length)} verified subjects, not exactly one, so which release it is stays unsaid`,
+    };
+  }
+  const only = subjects[0];
+  if (only === undefined || only.name !== name || only.sha256 !== sha256) {
     return {
       kind: 'failed',
       why: `${release.tag}'s integrity list (sha256 ${sha256}) is attested by the release workflow under no subject named ${name}, so the attestation is not this release's`,

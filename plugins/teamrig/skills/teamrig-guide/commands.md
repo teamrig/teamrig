@@ -5042,7 +5042,8 @@ When current is the channel's newest release it prints `UNCHANGED`, and a pin pr
 version kept beside it. It is `REFUSED`, nothing written, for a release older than current, a branch head not tagged
 yet (run it again once the release is tagged), a clone at another commit than the tag's, no git on PATH, no
 attestation tool on PATH without `--no-attestation`, an attestation the tool cannot verify (the tool signed out, a
-release from before attestations, a signature from another workflow) or one under another release's name, and a failed listing or clone.
+release from before attestations, a signature from another workflow or branch, or of no build provenance), one
+under another release's name or naming more than one subject, and a failed listing or clone.
 
 ### teamrig kit uninstall
 
