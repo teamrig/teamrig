@@ -21,6 +21,7 @@ import { APP, CLAUDE_SESSION, CLI_PID, CliHarness, KIT, TEAM, USER_HOME, type Cl
 import { FakeUserPath, quietRestore } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { FakeWebhook } from '../testing/fake-webhook.ts';
+import type { Files } from '../core/files.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { holdFileLock } from '../testing/held-file-lock.ts';
 import { DEFAULT_HOST } from '../composition/adapters.ts';
@@ -512,15 +513,16 @@ describe('hook restore-track: the launcher refresh', () => {
 
   /**
    * Starts a session of `env` on `userPath`, a user PATH of no folders unless given; the PATH it leaves, whether a
-   * launcher was written and what the start printed.
+   * launcher was written and what the start printed. `files` is what the CLI sees, `kit.files` unless given.
    */
   async function startOnEmptyPath(
     kit: CliHarness,
     env: Env,
     userPath = new FakeUserPath(),
+    files: Files = kit.files,
   ): Promise<{ readonly path: readonly string[]; readonly launcher: boolean; readonly stdout: readonly string[] }> {
     const restore = quietRestore();
-    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32' });
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source: 'startup' }), env, restore: { ...restore, userPath }, platform: 'win32', files });
     assert.deepEqual([result.code, result.stderr], [0, []]);
     const launchers = cliLaunchers(KIT, 'win32', KIT_LAUNCHER_TEXT);
     const written = await Promise.all(launchers.map(async (launcher) => (await kit.files.read(launcher.path)) !== undefined));
@@ -543,6 +545,13 @@ describe('hook restore-track: the launcher refresh', () => {
   it('puts nothing on the PATH from a client with no built kit launcher, and still refreshes the others (T5278)', async () => {
     const kit = await oldLauncherKit(TEAM, false);
     assert.deepEqual(await startOnEmptyPath(kit, LAUNCHED), { path: [], launcher: false, stdout: [] });
+    assert.equal(await kit.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT);
+  });
+
+  it('puts nothing on the PATH when the client’s kit launcher cannot be read, and still refreshes the others (T5278)', async () => {
+    const kit = await oldLauncherKit();
+    const files = new FaultyFiles(kit.files).fail('read', BUILT_LAUNCHER, systemError('EACCES'));
+    assert.deepEqual(await startOnEmptyPath(kit, LAUNCHED, new FakeUserPath(), files), { path: [], launcher: false, stdout: [] });
     assert.equal(await kit.files.read(CHECK.path), RESTORE_CHECK_LAUNCHER_SCRIPT);
   });
 
