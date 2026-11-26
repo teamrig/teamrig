@@ -20,6 +20,14 @@ function provedOnWindows(feature: string): Support {
   };
 }
 
+/**
+ * A row whose port is built here while another contract of the kit that holds the row binds a port Codex CLI does not
+ * build: claiming it would let no case hold the claim, so it stays unsupported and names that port.
+ */
+function needsPort(port: string): Support {
+  return { kind: 'unsupported', notice: `not built for Codex CLI yet: it needs the ${port} port` };
+}
+
 function partial(missing: string): Support {
   return { kind: 'partial', missing, notice: `built for Codex CLI in part: ${missing}`, proofs: [] };
 }
@@ -36,8 +44,8 @@ export const declaration: HostDeclaration = {
     'rules.memory': NOT_BUILT,
     'rules.start-size': partial('the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled'),
     'inbox.prompt-line': provedOnWindows('inbox.prompt-line'),
-    'context.compact-hold': partial('the hold never fires: it needs the transcripts and usage ports'),
-    'context.size': NOT_BUILT,
+    'context.compact-hold': partial('the hold never fires: it needs the transcripts port'),
+    'context.size': BUILT,
     'context.refresh': partial('no size trigger (context.size) and no in-tab clear'),
     'hooks.pretool-guard': provedOnWindows('hooks.pretool-guard'),
     'hooks.file-guard': provedOnWindows('hooks.file-guard'),
@@ -50,12 +58,12 @@ export const declaration: HostDeclaration = {
     'hooks.tool-failure': partial('Codex has no tool-failure hook; only the missing-command hint runs'),
     'permissions.deny-lines': NOT_BUILT,
     'permissions.auto-mode-routes': NOT_BUILT,
-    'sessions.open': partial('no session name, settings file or model check'),
-    'sessions.resume': partial('restore after a reboot needs the paths port'),
-    'sessions.identity': BUILT,
+    'sessions.open': needsPort('models'),
+    'sessions.resume': needsPort('steps'),
+    'sessions.identity': partial("only the session's id is told, by its mark: no start folder, start word, kind or forced effort"),
     'sessions.wake': NOT_BUILT,
-    'sessions.turn-end': partial('the turn-end checks that read a transcript need the transcripts port'),
-    'sessions.process': BUILT,
+    'sessions.turn-end': needsPort('transcripts'),
+    'sessions.process': partial("a background job's session is not read: Codex starts one with no session on its command line"),
     'sessions.in-tab': NOT_BUILT,
     'sessions.carry': NOT_BUILT,
     'sessions.effort-writeback': NOT_BUILT,
@@ -74,7 +82,7 @@ export const declaration: HostDeclaration = {
     'plugin.install-update': NOT_BUILT,
     'plugin.cli-on-path': NOT_BUILT,
     'budget.transcripts': NOT_BUILT,
-    'budget.usage': NOT_BUILT,
+    'budget.usage': BUILT,
     'budget.model-share': NOT_BUILT,
     'budget.week-reading': NOT_BUILT,
     'budget.five-hour': NOT_BUILT,

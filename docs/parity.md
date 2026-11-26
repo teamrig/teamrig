@@ -38,8 +38,8 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `context.compact-hold` | holding a compaction while a handover is written | supported, built, not proven live | partial (missing: the hold never fires: it needs the transcripts and usage ports), built, not proven live | unsupported: Antigravity has no PreCompact hook |
-| `context.size` | the context size and its refresh thresholds | supported, proved on [windows](proofs/claude-code.md#contextsize); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: transcript context sizing is not built yet |
+| `context.compact-hold` | holding a compaction while a handover is written | supported, built, not proven live | partial (missing: the hold never fires: it needs the transcripts port), built, not proven live | unsupported: Antigravity has no PreCompact hook |
+| `context.size` | the context size and its refresh thresholds | supported, proved on [windows](proofs/claude-code.md#contextsize); unproved on linux, macos | supported, built, not proven live | unsupported: transcript context sizing is not built yet |
 | `context.refresh` | how the CLI starts fresh (clear, compaction or a new process), with the handover read after | supported, proved on [windows](proofs/claude-code.md#contextrefresh); unproved on linux, macos | partial (missing: no size trigger (context.size) and no in-tab clear), built, not proven live | unsupported: Antigravity has no in-tab /clear mod |
 
 ### hooks
@@ -67,12 +67,12 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | partial (missing: no session name, settings file or model check), built, not proven live | unsupported: Antigravity has no terminal tab launching |
-| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | partial (missing: restore after a reboot needs the paths port), built, not proven live | unsupported: Antigravity has no terminal tab resume |
-| `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `sessions.open` | opening a tab on its model, effort and name | supported, proved on [windows](proofs/claude-code.md#sessionsopen); unproved on linux, macos | unsupported: not built for Codex CLI yet: it needs the models port | unsupported: Antigravity has no terminal tab launching |
+| `sessions.resume` | resuming a session, and restoring it after a reboot | supported, proved on [windows](proofs/claude-code.md#sessionsresume); unproved on linux, macos | unsupported: not built for Codex CLI yet: it needs the steps port | unsupported: Antigravity has no terminal tab resume |
+| `sessions.identity` | the session's own id in the CLI | supported, proved on [windows](proofs/claude-code.md#sessionsidentity); unproved on linux, macos | partial (missing: only the session's id is told, by its mark: no start folder, start word, kind or forced effort), built, not proven live | partial (missing: no live run yet), built, not proven live |
 | `sessions.wake` | waking an idle session | supported, proved on [windows](proofs/claude-code.md#sessionswake); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab wake mod |
-| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | partial (missing: the turn-end checks that read a transcript need the transcripts port), built, not proven live | partial (missing: no live run yet), built, not proven live |
-| `sessions.process` | finding the session's process | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity has no tab process tracking |
+| `sessions.turn-end` | the checks and metering at a turn end | supported, proved on [windows](proofs/claude-code.md#sessionsturn-end); unproved on linux, macos | unsupported: not built for Codex CLI yet: it needs the transcripts port | partial (missing: no live run yet), built, not proven live |
+| `sessions.process` | finding the session's process | supported, built, not proven live | partial (missing: a background job's session is not read: Codex starts one with no session on its command line), built, not proven live | unsupported: Antigravity has no tab process tracking |
 | `sessions.in-tab` | the in-tab command, bands, toasts and the refresh inside a turn | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab JS mod |
 | `sessions.carry` | crons, scheduled wakes, the plan and the scratchpad carried over a refresh | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no in-tab refresh carry |
 | `sessions.effort-writeback` | a typed effort level written back to the session | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no effort level hook field |
@@ -121,7 +121,7 @@ The AI CLIs a session runs in.
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
 | `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
-| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
+| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity usage meter is not built yet |
 | `budget.model-share` | the share of each model and effort level | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.week-reading` | the week reading and the pace line | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.five-hour` | the five-hour forecast | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |

@@ -22,19 +22,19 @@ describe('the Codex CLI adapter', () => {
     assert.deepEqual(claimed('supported'), [
       'rules.session-start',
       'inbox.prompt-line',
+      'context.size',
       'hooks.pretool-guard',
       'hooks.file-guard',
       'hooks.permission-refuse',
       'hooks.prompt-secret',
-      'sessions.identity',
-      'sessions.process',
       'helpers.start-rules',
       'plugin.hooks-file',
+      'budget.usage',
       'os.windows-sessions',
       'os.windows-hooks',
       'os.linux',
     ]);
-    assert.deepEqual(claimed('partial'), ['rules.start-size', 'context.compact-hold', 'context.refresh', 'hooks.exec-review', 'hooks.readonly-allow', 'hooks.tool-failure', 'sessions.open', 'sessions.resume', 'sessions.turn-end', 'tabs.memory']);
+    assert.deepEqual(claimed('partial'), ['rules.start-size', 'context.compact-hold', 'context.refresh', 'hooks.exec-review', 'hooks.readonly-allow', 'hooks.tool-failure', 'sessions.identity', 'sessions.process', 'tabs.memory', 'skills.plugin']);
     assert.deepEqual(
       featuresOf('host').flatMap((row) => {
         const support = declaration.manifest[row.id];
