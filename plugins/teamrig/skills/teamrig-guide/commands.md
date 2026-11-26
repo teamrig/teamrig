@@ -5390,6 +5390,12 @@ TEAMRIG_SESSION and the `LC_*` variables of yours. This teamrig pins teamrig-pan
 which the config guard refuses a session changing. The script runs outside every Claude Code guard, so never point
 [ui.path] at a working tree a session edits: its edits would run in your terminal unchecked.
 
+While the UI runs in a terminal, the run that started it also runs every team's idle pass, as a tab's wake check does
+([open.idle]): a host with no wake check between turns, such as Codex CLI, would otherwise leave the pass unrun until
+a turn ends. It passes a team with a session in such a host each minute, and any other team only once its own tabs
+left its pass 5 minutes unrun. It prints nothing on the UI's screen: `ui/idle-pass.json` under the kit home holds its
+last run (when, the teams passed, and any `WARN` lines).
+
 Flags:
 
 - `--session <id|name>`: the session whose view it stays on, in its team. Without it: the session you last typed in.
