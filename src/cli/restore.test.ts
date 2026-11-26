@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { encodePrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
+import { sessionLauncherPath } from '../open/session-launcher.ts';
 import type { RestoreChoice } from '../restore/countdown.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import { continuePrompt, HUNG_AFTER_MS } from '../restore/plan.ts';
@@ -23,6 +24,8 @@ import { EXIT } from './runtime.ts';
 const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
 const HOME_ARGS = ['--home', resolve(APP, KIT)];
+/** The session launcher a tab runs launch through, in the kit home's bin folder (T5757). */
+const TAB_SCRIPT = sessionLauncherPath(resolve(APP, KIT));
 const SHUTDOWN = Date.parse('2030-01-08T09:50:00Z');
 const ALPHA = '10000000-2222-4333-8444-555555555555';
 const NOTES = '20000000-2222-4333-8444-555555555555';
@@ -97,7 +100,7 @@ function windowsTab(title: string, folder: string, argv: readonly string[]): str
   return ['-w', '0', 'new-tab', '--title', title, '-d', folder, '--', ...argv];
 }
 
-const ALPHA_LAUNCH = [NODE, SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', APP, ...HOME_ARGS, '--resume', ALPHA, '--effort', 'high', '--no-prompt'];
+const ALPHA_LAUNCH = [NODE, TAB_SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', APP, ...HOME_ARGS, '--resume', ALPHA, '--effort', 'high', '--no-prompt'];
 const NOTES_RESUME = [NODE, SCRIPT, 'restore', 'resume', NOTES, '--project', APP, ...HOME_ARGS, '--encoded-prompt', encodePrompt(continuePrompt({ cause: 'killed', apiError: undefined }, { background: 0, crons: 0, wake: false }, undefined))];
 
 async function logOf(kit: CliHarness): Promise<string> {

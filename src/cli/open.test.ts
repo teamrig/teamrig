@@ -7,6 +7,7 @@ import type { JsonRecord } from '../core/guards.ts';
 import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
+import { SESSION_LAUNCHER_SCRIPT, sessionLauncherPath } from '../open/session-launcher.ts';
 import type { SessionStart } from '../ports/host/index.ts';
 import { hostDeps } from '../testing/adapter-deps.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
@@ -21,12 +22,15 @@ import { SessionRecordStore } from '../sessions/record.ts';
 import { APP, CLAUDE_SESSION, CliHarness, CONFIG_PATH, KIT, SKILLS_DIR, TEAM, TEAM_HOME, USER_HOME, type RunOptions } from '../testing/cli-harness.ts';
 import { teamConfigOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 import { FakeStepHandoff } from '../testing/fake-step-handoff.ts';
+import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { CLOSE_LOG_WAIT_MS, endedFlag } from './commands/open.ts';
 import { EXIT } from './runtime.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
 
 const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
+/** The session launcher a tab runs launch through, in the kit home's bin folder (T5757), resolved from the command's folder. */
+const TAB_SCRIPT = sessionLauncherPath(resolve(APP, KIT));
 const FOLDERS = new FakePathProbe({ folders: [APP] });
 const MB = 2 ** 20;
 /** Every team's tabs still loading, beside the host lock the harness's teams share. */
@@ -35,7 +39,7 @@ const ADMIT_FILE = join(KIT, 'host.lock.admit');
 
 /** What `open alpha` hands the new tab to run, with the default prompt. */
 function launchArgv(project: string = APP, prompt: string = defaultPrompt('app', 'alpha')): string[] {
-  return [NODE, SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', project, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(prompt)];
+  return [NODE, TAB_SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', project, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(prompt)];
 }
 
 function openAlpha(processes: FakeProcesses, options: RunOptions = {}, extra: readonly string[] = []) {
@@ -68,6 +72,28 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started, [
       { command: 'wt.exe', args: ['-w', '0', 'new-tab', '--title', '[app] alpha', '-d', APP, '--', ...launchArgv()], cwd: APP, mode: 'exit' },
     ]);
+  });
+
+  it('writes the session launcher into the kit home for the tab, and leaves one with the same text unwritten (T5757)', async () => {
+    const kit = new CliHarness(TEAM);
+    const first = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes: new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' }) });
+    assert.equal(first.code, EXIT.ok, first.stdout.join('\n'));
+    assert.equal(await kit.files.read(TAB_SCRIPT), SESSION_LAUNCHER_SCRIPT);
+    const files = new FaultyFiles(kit.files).fail('write', TAB_SCRIPT, systemError('EACCES'));
+    const processes = new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' });
+    const again = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes, files });
+    assert.deepEqual(again.stderr, []);
+    assert.deepEqual(processes.started[0]?.args.slice(3), launchArgv());
+  });
+
+  it('runs launch through the CLI itself, with a warning, when the session launcher cannot be written (T5757)', async () => {
+    const kit = new CliHarness(TEAM);
+    const files = new FaultyFiles(kit.files).fail('write', TAB_SCRIPT, systemError('EACCES'));
+    const processes = new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' });
+    const result = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes, files });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.deepEqual(result.stderr, [`WARN the session launcher ${TAB_SCRIPT} could not be written (EACCES: simulated): the tab runs teamrig itself`]);
+    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, SCRIPT, ...launchArgv().slice(2)]);
   });
 
   it('passes the host the run named with --host on to the launch line, so the session starts in that host (T5006)', async () => {
@@ -384,7 +410,7 @@ describe('teamrig open', () => {
       processes,
     });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', elsewhere, '--encoded-prompt', encodePrompt(defaultPrompt('app', 'alpha'))]);
+    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, sessionLauncherPath(resolve(APP, USER_HOME, '.teamrig')), 'launch', 'alpha', '--team', 'app', '--project', elsewhere, '--encoded-prompt', encodePrompt(defaultPrompt('app', 'alpha'))]);
   });
 
   it("opens in the session's own folder, else the team's over the pointer's, and in the --project folder over both", async () => {
@@ -449,7 +475,7 @@ describe('teamrig open <team>/<id>', () => {
     const result = await kit.run(['open', 'web/front'], { probe: FOLDERS, processes, platform: 'win32' });
     assert.deepEqual(result.stdout, [`OPENED web-front (session front) in a new Windows Terminal tab in ${APP}, on the default model and effort`]);
     assert.deepEqual(processes.started[0]?.args.slice(8), [
-      NODE, SCRIPT, 'launch', 'front', '--team', 'web', '--project', APP, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(defaultPrompt('web', 'front')),
+      NODE, TAB_SCRIPT, 'launch', 'front', '--team', 'web', '--project', APP, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(defaultPrompt('web', 'front')),
     ]);
     const own = await kit.run(['open', 'app/alpha'], { probe: FOLDERS, processes, platform: 'win32' });
     assert.equal(own.code, EXIT.ok);

@@ -4,7 +4,8 @@ import { describeLaunch, launchModelProblem, launchOf, terminalOf } from '../../
 import type { Roster } from '../../config/roster.ts';
 import { isEffortLevel, isTerminalChoice, TERMINALS, type EffortLevel, type KitConfig, type LaunchConfig, type TerminalChoice } from '../../config/types.ts';
 import { splitAddress } from '../../core/address.ts';
-import { ENV, KIT_NAME, type Env, type TeamPaths } from '../../core/home.ts';
+import { errorMessage } from '../../core/guards.ts';
+import { ENV, KIT_NAME, resolveKitHome, type Env, type TeamPaths } from '../../core/home.ts';
 import { isHostSessionId } from '../../core/host-session.ts';
 import { ID_PATTERN, ID_RULE, sessionDisplay } from '../../core/ids.ts';
 import { samePath } from '../../core/paths.ts';
@@ -18,6 +19,7 @@ import { openTab, type OpenOutcome } from '../../open/open-tab.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, PROMPT_MAX, promptProblem, recoverPrompt, refreshPrompt, rehirePrompt, reopenPrompt, resumePrompt } from '../../open/prompt.ts';
 import { shellCommand } from '../../open/quote.ts';
 import { sessionCredentialFree, sessionEnv } from '../../open/session-env.ts';
+import { SESSION_LAUNCHER_SCRIPT, sessionLauncherPath } from '../../open/session-launcher.ts';
 import type { RunOutcome, RunRequest } from '../../open/processes.ts';
 import type { SessionLauncher } from '../../ports/host/index.ts';
 import { RefreshStore } from '../../refresh/store.ts';
@@ -135,13 +137,32 @@ export interface SessionTabOutcome {
 }
 
 /**
- * Opens a terminal tab titled with the session's name that runs `launch` for it, by absolute paths,
- * since the plugin's bin folder is on PATH only inside Claude Code: `open` and the automatic restart.
+ * The script a new tab runs `launch` through: the session launcher in the kit home's bin folder (T5757), written
+ * when its text differs, so the tab keeps only that small process while the host program runs. When it cannot be
+ * written, the CLI itself, which then stays in the tab for the session's life as it did before. The kit home is
+ * resolved from this command's folder, as `homeArgs` does, since the tab starts in the session's project folder.
+ */
+async function tabScriptOf(runtime: CliRuntime): Promise<string> {
+  const launcher = sessionLauncherPath(resolve(runtime.cwd, resolveKitHome(runtime.env, runtime.userHome)));
+  try {
+    if ((await runtime.files.read(launcher)) !== SESSION_LAUNCHER_SCRIPT) {
+      await runtime.files.write(launcher, SESSION_LAUNCHER_SCRIPT);
+    }
+    return launcher;
+  } catch (error) {
+    runtime.out.stderr(`WARN the session launcher ${launcher} could not be written (${errorMessage(error)}): the tab runs ${KIT_NAME} itself`);
+    return runtime.self.script;
+  }
+}
+
+/**
+ * Opens a terminal tab titled with the session's name that runs `launch` for it, through the session launcher, by
+ * absolute paths, since the plugin's bin folder is on PATH only inside Claude Code: `open` and the automatic restart.
  */
 export async function openSessionTab(runtime: CliRuntime, tab: SessionTab): Promise<SessionTabOutcome> {
   const argv = [
     runtime.self.node,
-    runtime.self.script,
+    await tabScriptOf(runtime),
     'launch',
     tab.id,
     '--team',
