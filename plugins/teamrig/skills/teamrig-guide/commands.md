@@ -4936,9 +4936,13 @@ line, and the command exits 1.
 
 Copies the running teamrig into the kit home as the release `--tag` and `--commit` name, names it current unless a
 pin (`teamrig kit use`) or a newer kept version holds it, and writes the kit launcher hook lines run
-(`<kit home>/bin/teamrig.mjs`) as that current version ships it. A session start of the teamrig plugin does the same on
+(`<kit home>/bin/teamrig.mjs`) as that current version ships it. Then it puts `teamrig` on your user PATH as a
+session start does: the `teamrig` and `teamrig.cmd` launchers in that `bin` folder, and the folder added to your PATH
+(on Windows the user `Path` value, elsewhere a block in `~/.profile` and the shells' start files), every entry kept;
+only terminals opened after it find `teamrig`. A session start of the teamrig plugin does the same on
 its own; this is that install for a host with no teamrig plugin, and the install script (`install-teamrig.ts`) runs it
-before `teamrig setup hooks`, so you rarely type it. Without `--yes` it shows the copy and writes nothing. It moves the
+before `teamrig setup hooks`, so you rarely type it. Without `--yes` it shows the copy and the PATH steps and writes
+nothing. It moves the
 code every host's guards run, so only the person writes it: `--yes` is refused where an agent runs it. Like `kit use`,
 it waits up to 30 s while a session start copies a release and is `REFUSED` past that.
 
@@ -4946,7 +4950,7 @@ Flags:
 
 - `--tag <tag>`: required: the release tag of the running teamrig, `v<its version>`; another tag is a usage error.
 - `--commit <sha>`: required: the release commit it was cloned at, 40 hex characters.
-- `--yes`: copy it and write the launcher; without it, only show the copy.
+- `--yes`: copy it, write the launcher and put teamrig on your PATH; without it, only show them.
 
 Example:
 
@@ -4960,9 +4964,13 @@ and commit):
 ```text
 NOTE teamrig pinned at 0.509.0; 0.510.0 is installed; `teamrig kit use --latest` moves to it.
 UNCHANGED /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.509.0
+WRITE /srv/ada/.teamrig/bin/teamrig
+ADD /srv/ada/.teamrig/bin to the user's PATH (/srv/ada/.profile), so terminals opened from now on run teamrig
+NOTE open a new terminal: one open already keeps the PATH it started with
 ```
 
-A rerun prints `UNCHANGED` lines. A pin or a newer current prints a `NOTE` naming it, and the launcher written is the
+A rerun prints `UNCHANGED` lines, `UNCHANGED teamrig is on your PATH already (<where>)` among them; a PATH step that
+fails prints `FAILED <step>: <why>` and exits 1. A pin or a newer current prints a `NOTE` naming it, and the launcher written is the
 one the current version ships. It is `REFUSED` for a folder with no integrity list (a source tree, no built release)
 and a copy that is not whole; it exits 1 with a `NOTE the kit launcher is not written: <why>` line when the current
 version ships no launcher.

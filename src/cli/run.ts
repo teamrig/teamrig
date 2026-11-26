@@ -523,8 +523,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       them and removes nothing; one a running process holds stays for the next prune (exit 1)
   kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
       branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
-      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
-      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
+      holds it), then writes the kit launcher hook lines run and puts teamrig on the user's PATH as a session
+      start does; the teamrig install script runs it for a host with no teamrig plugin; without --yes it shows
+      the copy and the PATH steps and writes nothing; only the person writes it
   kit update [--channel stable|preview] [--yes]   installs the newest release of the channel (default
       stable): the release tag at the head of its branch, cloned by that tag and checked to be the tag's
       commit, then copied in as kit install does; refuses a release older than current (only kit use goes

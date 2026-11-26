@@ -9,9 +9,12 @@ import { KIT_LOCK_BUSY, kitCurrentPath, kitVersionFolder, readKitCurrent } from 
 import { CliHarness, KIT, type RunOptions } from '../../testing/cli-harness.ts';
 import { holderLetsGo, holdFileLock } from '../../testing/held-file-lock.ts';
 import { writeKeptKitVersion, writeKitRelease } from '../../testing/kit-release.ts';
-import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../../restore/cli-launcher.ts';
+import { CMD_SHIM_SCRIPT, cliLauncherFolder, cliLauncherPath, cmdShimPath, KIT_LAUNCHER_FILE, SH_SHIM_SCRIPT, shShimPath } from '../../restore/cli-launcher.ts';
+import { WINDOWS_ENVIRONMENT_KEY } from '../../restore/user-path.ts';
+import { FakeExecutables, FakeUserPath, quietRestore } from '../../testing/fake-restore.ts';
 import { MemoryKitTree } from '../../testing/memory-kit-tree.ts';
 import { EXIT } from '../runtime.ts';
+import { NEW_TERMINAL_NOTE } from './kit.ts';
 
 const KEPT = ['0.505.0', '0.506.0', '0.507.0', '0.508.0', '0.509.0'];
 const LOCK = kitInstallLockPath(KIT);
@@ -213,29 +216,50 @@ describe('teamrig kit', () => {
     const COMMIT = 'c'.repeat(40);
     const release = ['--tag', `v${KIT_VERSION}`, '--commit', COMMIT];
 
+    /** The user's PATH, which holds no teamrig folder until an install adds one. */
+    let userPath: FakeUserPath;
+    let executables: FakeExecutables;
+    const BIN = cliLauncherFolder(KIT);
+    const ADD = `ADD ${BIN} to the user's PATH (${WINDOWS_ENVIRONMENT_KEY} Path), so terminals opened from now on run teamrig`;
+
     beforeEach(async () => {
       await writeKitRelease(kit.files, CLONE, KIT_VERSION);
       await kit.files.write(join(CLONE, KIT_LAUNCHER_FILE), LAUNCHER);
-      options = { ...options, ...SELF };
+      userPath = new FakeUserPath();
+      executables = new FakeExecutables();
+      options = { ...options, ...SELF, platform: 'win32', restore: { ...quietRestore(), userPath, markExecutable: executables.mark } };
     });
 
-    it('shows the copy and writes nothing without --yes', async () => {
+    it('shows the copy and the PATH steps and writes nothing without --yes', async () => {
       const result = await kit.run(['kit', 'install', ...release], options);
       assert.equal(result.code, EXIT.ok);
-      assert.match(result.stdout.join('\n'), new RegExp(`^PREVIEW nothing written .*github-release v${KIT_VERSION} ${COMMIT}.*current no version -> ${KIT_VERSION}`, 'u'));
-      assert.deepEqual([kit.files.get(kitCurrentPath(KIT)), kit.files.get(cliLauncherPath(KIT))], [undefined, undefined]);
+      assert.match(result.stdout[0] ?? '', new RegExp(`^PREVIEW nothing written .*github-release v${KIT_VERSION} ${COMMIT}.*current no version -> ${KIT_VERSION}`, 'u'));
+      assert.deepEqual(result.stdout.slice(1), [
+        `PREVIEW WRITE ${cliLauncherPath(KIT)}`,
+        `PREVIEW WRITE ${shShimPath(KIT)}`,
+        `PREVIEW WRITE ${cmdShimPath(KIT)}`,
+        `PREVIEW ${ADD}`,
+      ]);
+      assert.deepEqual([kit.files.get(kitCurrentPath(KIT)), kit.files.get(cliLauncherPath(KIT)), kit.files.get(cmdShimPath(KIT))], [undefined, undefined, undefined]);
+      assert.deepEqual(userPath.folders, []);
     });
 
-    it('copies the clone in as the named release, names it current and writes the kit launcher a hook line runs', async () => {
+    it('copies the clone in as the named release, names it current, writes the kit launcher and puts teamrig on the PATH', async () => {
       const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
       assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
       assert.deepEqual(result.stdout, [
         `WROTE current ${KIT_VERSION}: teamrig ${KIT_VERSION} (github-release v${KIT_VERSION} ${COMMIT})`,
         `WROTE ${cliLauncherPath(KIT)}: the kit launcher of teamrig ${KIT_VERSION}`,
+        `WRITE ${shShimPath(KIT)}`,
+        `WRITE ${cmdShimPath(KIT)}`,
+        ADD,
+        NEW_TERMINAL_NOTE,
       ]);
       assert.deepEqual((await readKitCurrent(kit.files, KIT))?.source, { kind: 'github-release', tag: `v${KIT_VERSION}`, commit: COMMIT });
       assert.equal(kit.files.get(cliLauncherPath(KIT)), LAUNCHER);
       assert.equal(await hookLauncherProblem(kit.files, KIT), undefined);
+      assert.deepEqual([kit.files.get(shShimPath(KIT)), kit.files.get(cmdShimPath(KIT))], [SH_SHIM_SCRIPT, CMD_SHIM_SCRIPT]);
+      assert.deepEqual([userPath.folders, executables.marked], [[BIN], [shShimPath(KIT)]]);
     });
 
     it('changes nothing on a second run', async () => {
@@ -243,8 +267,31 @@ describe('teamrig kit', () => {
       const again = await kit.run(['kit', 'install', ...release, '--yes'], options);
       assert.deepEqual(
         [again.code, again.stdout],
-        [EXIT.ok, [`UNCHANGED current ${KIT_VERSION} is installed already`, `UNCHANGED ${cliLauncherPath(KIT)}: the kit launcher of teamrig ${KIT_VERSION}`]],
+        [
+          EXIT.ok,
+          [
+            `UNCHANGED current ${KIT_VERSION} is installed already`,
+            `UNCHANGED ${cliLauncherPath(KIT)}: the kit launcher of teamrig ${KIT_VERSION}`,
+            `UNCHANGED teamrig is on your PATH already (${WINDOWS_ENVIRONMENT_KEY} Path)`,
+          ],
+        ],
       );
+      assert.deepEqual(userPath.folders, [BIN]);
+    });
+
+    it('writes no cmd shim off Windows, and adds the folder to the PATH there too', async () => {
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], { ...options, platform: 'linux' });
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.equal(kit.files.get(cmdShimPath(KIT)), undefined);
+      assert.deepEqual([kit.files.get(shShimPath(KIT)), userPath.folders], [SH_SHIM_SCRIPT, [BIN]]);
+    });
+
+    it('fails naming the PATH step when the user PATH cannot be changed, the install itself kept', async () => {
+      userPath.failWith = 'the registry refused the write';
+      const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
+      assert.equal(result.code, EXIT.failed);
+      assert.equal(result.stdout.at(-1), `FAILED ${ADD}: the registry refused the write`);
+      assert.equal(kit.files.get(cliLauncherPath(KIT)), LAUNCHER);
     });
 
     it('keeps a pinned current, naming the pin, and writes the launcher the pinned version ships', async () => {
@@ -254,7 +301,9 @@ describe('teamrig kit', () => {
       assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
       assert.match(result.stdout[0] ?? '', /^NOTE teamrig pinned at 0\.507\.0; /u);
       assert.equal(kit.files.get(kitCurrentPath(KIT)), '0.507.0\n');
+      // The PATH step keeps the pinned version's launcher, never this client's.
       assert.equal(kit.files.get(cliLauncherPath(KIT)), '// 0.507.0 launcher\n');
+      assert.deepEqual(userPath.folders, [cliLauncherFolder(KIT)]);
     });
 
     it('fails naming the launcher when the current version ships none', async () => {

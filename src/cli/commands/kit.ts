@@ -10,6 +10,8 @@ import { compareVersions, parseVersion } from '../../core/release-version.ts';
 import { hookLauncher, syncKitLauncher } from '../../kit/hook-launcher.ts';
 import { channelReleaseOf, cloneRelease, isKitChannel, KIT_CHANNELS, listChannel, type KitChannel } from '../../kit/kit-release.ts';
 import { findProgram } from '../../open/host-program.ts';
+import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../../restore/cli-launcher.ts';
+import { cliOnPathSteps } from '../../restore/cli-on-path.ts';
 import { installRunningKit, keptAsideNote, KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import {
   damagedPreviewWhy,
@@ -169,7 +171,46 @@ export async function kitPrune(args: ParsedArgs, runtime: KitRuntime): Promise<E
 /** A release's commit as git names it: 40 lowercase hex characters. */
 const COMMIT = /^[0-9a-f]{40}$/u;
 
-type KitInstallRuntime = KitRuntime & Pick<CliRuntime, 'self'>;
+type KitInstallRuntime = KitRuntime & Pick<CliRuntime, 'self' | 'files' | 'platform' | 'restore'>;
+
+/** What the PATH lines end with: a terminal open already keeps the PATH it started with. */
+export const NEW_TERMINAL_NOTE = 'NOTE open a new terminal: one open already keeps the PATH it started with';
+
+/**
+ * Puts `teamrig` on the user's PATH as a plugin's session start does (src/restore/cli-on-path.ts): the kit home's bin
+ * launchers, then that folder added to the user's PATH, every entry kept. The kit launcher is the one the kit home
+ * holds, else (a preview of a first install) this client's, so the step never undoes the launcher of a pinned version.
+ * Without `write` it names each step and takes none; failed when a step fails.
+ */
+async function cliPutOnPath(runtime: KitInstallRuntime, kitHome: string, write: boolean): Promise<ExitCode> {
+  const { files, platform, restore } = runtime;
+  const launcherText =
+    (await files.read(cliLauncherPath(kitHome))) ?? (await files.read(join(clientRootOf(runtime.self.script), KIT_LAUNCHER_FILE)).catch(() => undefined));
+  if (launcherText === undefined) {
+    runtime.out.stdout(`NOTE teamrig is not put on your PATH: ${clientRootOf(runtime.self.script)} ships no ${KIT_LAUNCHER_FILE}`);
+    return EXIT.failed;
+  }
+  const steps = await cliOnPathSteps({ files, kitHome, launcherText, platform, userPath: restore.userPath, markExecutable: restore.markExecutable });
+  if (steps.length === 0) {
+    runtime.out.stdout(`UNCHANGED teamrig is on your PATH already (${restore.userPath.where})`);
+    return EXIT.ok;
+  }
+  if (!write) {
+    steps.forEach((step) => runtime.out.stdout(`PREVIEW ${step.line}`));
+    return EXIT.ok;
+  }
+  for (const step of steps) {
+    try {
+      await step.act();
+    } catch (error) {
+      runtime.out.stdout(`FAILED ${step.line}: ${error instanceof Error ? error.message : String(error)}`);
+      return EXIT.failed;
+    }
+    runtime.out.stdout(step.line);
+  }
+  runtime.out.stdout(NEW_TERMINAL_NOTE);
+  return EXIT.ok;
+}
 
 /** The release `kit install` records: `--tag`, which must name this client's own version, and its 40-hex `--commit`. */
 function releaseSourceOf(args: ParsedArgs): KitSource {
@@ -189,8 +230,9 @@ function releaseSourceOf(args: ParsedArgs): KitSource {
  * into the kit home's `versions/` as the release `--tag` at `--commit` names, makes it current unless a pin or a newer
  * version holds `current`, and writes the kit launcher hook lines run (`<kit home>/bin/teamrig.mjs`). It is the install
  * a session start does for a host whose plugin runs teamrig, for a host with none; the teamrig install script runs it
- * before `teamrig setup hooks`. Without `--yes` it shows the install and writes nothing. Its write is a settings
- * writer's (src/core/settings-writers.ts): it moves the code every host's guards run, so only the person runs it.
+ * before `teamrig setup hooks`. Last it puts `teamrig` on the user's PATH as that session start does (cliPutOnPath).
+ * Without `--yes` it shows the install and writes nothing. Its write is a settings writer's
+ * (src/core/settings-writers.ts): it moves the code every host's guards run, so only the person runs it.
  */
 export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -204,7 +246,7 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
       `PREVIEW nothing written (add --${WRITE_SWITCH} to write): copy ${release} from ${clientRoot} to ${kitVersionFolder(kitHome, KIT_VERSION)}; ` +
         `current ${current?.version ?? 'no version'} -> ${KIT_VERSION} unless a pin or a newer version holds it`,
     );
-    return EXIT.ok;
+    return cliPutOnPath(runtime, kitHome, false);
   }
   const outcome = await installRunningKit({
     files: runtime.files,
@@ -220,9 +262,9 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
       throw new RefusedError(`teamrig kit install: ${clientRoot} holds no integrity list, so it is no built release; nothing written`);
     }
     runtime.out.stdout(`UNCHANGED ${release} runs from the kit home already`);
-    return launcherWritten(runtime, kitHome);
   }
-  return installReported('kit install', outcome, release, runtime, kitHome);
+  const written = outcome.kind === 'skipped' ? await launcherWritten(runtime, kitHome) : await installReported('kit install', outcome, release, runtime, kitHome);
+  return written === EXIT.ok ? cliPutOnPath(runtime, kitHome, true) : written;
 }
 
 /**
