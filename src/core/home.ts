@@ -219,6 +219,11 @@ export interface TeamPaths {
   readonly sessions: string;
   /** What each session's tab shows and what it asks the user, `<id>.json` each, for the needs-you band (src/tabs/need.ts). */
   readonly tabs: string;
+  /**
+   * Rewritten whenever a tab's ask begins, changes or ends, never on a plain turn start or end, so the needs-you
+   * band watches this one file's time instead of running the CLI on every look (src/tabs/need.ts, T5561).
+   */
+  readonly tabAsks: string;
   /** Each asking tab's ask the OS notification told of, so one tab of the team sends it (src/tabs/needs-you.ts). */
   readonly needsYouSent: string;
   /** Held while a tab marks the asks it sends the OS notification of. */
@@ -356,6 +361,7 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     turnLog: join(state, 'turn-log'),
     sessions: join(state, 'sessions'),
     tabs: join(state, 'tabs'),
+    tabAsks: join(state, 'tab-asks.txt'),
     needsYouSent: join(state, 'needs-you-sent.json'),
     needsYouLock: join(state, 'needs-you.lock'),
     promptHoldsPaged: join(state, 'prompt-holds-paged.json'),

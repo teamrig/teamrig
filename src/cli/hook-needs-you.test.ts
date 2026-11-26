@@ -11,6 +11,8 @@ import { EXIT } from './runtime.ts';
 
 const ALPHA_TAB = '0123abcd-0000-4000-8000-0000000000a1';
 const TABS = join(TEAM_HOME, 'state', 'tabs');
+const TAB_ASKS = join(TEAM_HOME, 'state', 'tab-asks.txt');
+const MEETING = join(TEAM_HOME, 'state', 'meeting.json');
 const LOCK = join(TEAM_HOME, 'state', 'needs-you.lock');
 const BRAVO_PID = 7100;
 const LEAD_PID = 7200;
@@ -27,7 +29,7 @@ async function team(needsYou: JsonRecord = {}, launch: JsonRecord = {}): Promise
 }
 
 async function tabs(kit: CliHarness, ...needs: readonly TabNeed[]): Promise<void> {
-  const store = new TabNeedStore(kit.files, { tabs: TABS });
+  const store = new TabNeedStore(kit.files, { tabs: TABS, tabAsks: TAB_ASKS });
   for (const need of needs) {
     await store.record(need);
   }
@@ -51,17 +53,22 @@ function shown(need: TabNeed, focusOffered = true): JsonRecord {
   return { session: need.session, tab: `[app] ${need.session}`, kind: need.kind, text: need.text, task: need.task, since: need.since, focus: focusOffered };
 }
 
+/** The answer naming these asks, and the asks stamp and the meeting file to watch, with no time of its own (T5561). */
+function asked(asks: readonly JsonRecord[]): JsonRecord {
+  return { kind: 'asks', asks, watch: [TAB_ASKS, MEETING], recheckAt: null };
+}
+
 describe('runCli: hook needs-you', () => {
   it("answers the other tabs' asks newest first, leaving out its own tab, kinds the config leaves out and ended tabs", async () => {
     const kit = await team();
     const question: TabNeed = { ...ASKING, session: 'lead', kind: 'question', text: 'Friday or Monday?', task: null, pid: LEAD_PID, since: '2030-01-08T09:59:00.000Z' };
     const own: TabNeed = { ...ASKING, session: 'alpha', pid: null };
     await tabs(kit, ASKING, question, own);
-    assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [shown(question), shown(ASKING)] });
+    assert.deepEqual(answerOf(await look(kit)), asked([shown(question), shown(ASKING)]));
     await tabs(kit, { ...question, kind: 'error', text: 'an API error' }, { ...ASKING, pid: 7999 });
-    assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [] }, 'an error is no default kind, and pid 7999 runs no Claude Code');
+    assert.deepEqual(answerOf(await look(kit)), asked([]), 'an error is no default kind, and pid 7999 runs no Claude Code');
     await tabs(kit, { ...ASKING, state: 'working', kind: null, text: null, task: null });
-    assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [] });
+    assert.deepEqual(answerOf(await look(kit)), asked([]));
   });
 
   it('is off with needsYou.enabled false, and for a tab that is no team session', async () => {
@@ -80,7 +87,7 @@ describe('runCli: hook needs-you', () => {
     const plain: TabNeed = { ...ASKING, task: null };
     await tabs(kit, urgent, plain);
     assert.equal((await kit.run(['meeting', 'start', '--session', 'lead'])).code, EXIT.ok);
-    assert.deepEqual(answerOf(await look(kit)), { kind: 'asks', asks: [shown(urgent), shown(plain, false)] });
+    assert.deepEqual(answerOf(await look(kit)), asked([shown(urgent), shown(plain, false)]));
     const processes = new FakeProcesses();
     assert.deepEqual(answerOf(await focus(kit, 'bravo', processes)), { kind: 'refused', why: "the owner's meeting is open and bravo's ask is no p0 task's" });
     assert.deepEqual(processes.ran, []);
@@ -99,7 +106,7 @@ describe('runCli: hook needs-you', () => {
     const next: TabNeed = { ...ASKING, text: 'Bash: teamrig merge T2', since: '2030-01-08T10:00:00.000Z' };
     await tabs(kit, next);
     await holdFileLock(kit, LOCK);
-    assert.deepEqual(answerOf(await look(kit, processes)), { kind: 'asks', asks: [shown(next)] });
+    assert.deepEqual(answerOf(await look(kit, processes)), asked([shown(next)]));
     await kit.files.remove(LOCK);
     assert.equal(processes.hidden.length, 1, 'the lock is busy: the next look sends it');
     await look(kit, processes);

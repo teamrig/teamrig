@@ -7,7 +7,7 @@ import { hookEventOf } from '../testing/host.ts';
 import { MemoryFiles, normalisePath } from '../testing/memory-files.ts';
 import { askOf, formatTabNeed, NEED_TEXT_MAX_CHARS, parseTabNeed, TabNeedStore, tabNeedOf, taskOf, type TabNeed } from './need.ts';
 
-const PATHS = { tabs: join('/', 'team', 'state', 'tabs') };
+const PATHS = { tabs: join('/', 'team', 'state', 'tabs'), tabAsks: join('/', 'team', 'state', 'tab-asks.txt') };
 const SINCE = '2030-01-08T10:00:00.000Z';
 const WAITING: TabNeed = { session: 'alpha', state: 'waiting', kind: 'permission', text: 'Bash: npm test', task: null, pid: 6900, since: SINCE };
 
@@ -112,6 +112,36 @@ describe('TabNeedStore', () => {
     assert.deepEqual(await store.readAll(), [WAITING, bravo]);
     assert.equal(await store.remove('alpha'), true);
     assert.equal(await store.remove('alpha'), false);
-    assert.deepEqual(files.paths().sort(), [join(PATHS.tabs, 'bravo.json'), join(PATHS.tabs, 'damaged.json'), join(PATHS.tabs, 'notes.txt')].map(normalisePath).sort());
+    const kept = [join(PATHS.tabs, 'bravo.json'), join(PATHS.tabs, 'damaged.json'), join(PATHS.tabs, 'notes.txt'), PATHS.tabAsks];
+    assert.deepEqual(files.paths().sort(), kept.map(normalisePath).sort());
+  });
+
+  it('stamps the asks when an ask begins, changes, moves in time or ends, never on a turn start or end (T5561)', async () => {
+    const files = new MemoryFiles();
+    const store = new TabNeedStore(files, PATHS);
+    const stamp = (): string | undefined => files.get(PATHS.tabAsks);
+    const ready: TabNeed = { ...WAITING, state: 'ready', kind: null, text: null };
+    await store.record(ready);
+    await store.record({ ...ready, state: 'working', since: '2030-01-08T10:01:00.000Z' });
+    assert.equal(stamp(), undefined);
+    await store.record(WAITING);
+    assert.equal(stamp(), `alpha ${SINCE}\n`);
+    await files.write(PATHS.tabAsks, 'seen\n');
+    await store.record({ ...WAITING, since: '2030-01-08T10:05:00.000Z' });
+    assert.equal(stamp(), 'seen\n', 'a rewrite skipped as the same tab stamps nothing');
+    const decided: TabNeed = { ...WAITING, state: 'decision', kind: 'decision', text: 'Decision needed: ship?', since: '2030-01-08T10:06:00.000Z' };
+    await store.record(decided);
+    assert.equal(stamp(), 'alpha 2030-01-08T10:06:00.000Z\n');
+    await store.record({ ...ready, since: '2030-01-08T10:07:00.000Z' });
+    assert.equal(stamp(), 'alpha none\n');
+    await files.write(PATHS.tabAsks, 'seen\n');
+    await store.remove('alpha');
+    assert.equal(stamp(), 'seen\n', 'removing a tab that asked nothing stamps nothing');
+    await store.record(WAITING);
+    await store.remove('alpha');
+    assert.equal(stamp(), 'alpha ended\n');
+    await files.write(PATHS.tabAsks, 'seen\n');
+    assert.equal(await store.remove('alpha'), false);
+    assert.equal(stamp(), 'seen\n');
   });
 });

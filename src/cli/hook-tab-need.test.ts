@@ -8,6 +8,7 @@ import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { EXIT } from './runtime.ts';
 
 const TABS = join(TEAM_HOME, 'state', 'tabs');
+const TAB_ASKS = join(TEAM_HOME, 'state', 'tab-asks.txt');
 const TRANSCRIPT = join(USER_HOME, '.claude', 'projects', 'work-app', `${CLAUDE_SESSION}.jsonl`);
 const ALPHA = { TEAMRIG_SESSION: 'alpha' };
 const SINCE = '2030-01-08T10:00:00.000Z';
@@ -18,7 +19,7 @@ function payload(event: string, fields: JsonRecord = {}): string {
 }
 
 function tabOf(kit: CliHarness): Promise<TabNeed | undefined> {
-  return new TabNeedStore(kit.files, { tabs: TABS }).read('alpha');
+  return new TabNeedStore(kit.files, { tabs: TABS, tabAsks: TAB_ASKS }).read('alpha');
 }
 
 const WORKING: TabNeed = { session: 'alpha', state: 'working', kind: null, text: null, task: null, pid: CLAUDE_PID, since: SINCE };
@@ -35,6 +36,19 @@ describe('hooks: the tab file', () => {
     await kit.run(['hook', 'tab-status'], { stdin: payload('SessionEnd'), env: ALPHA });
     assert.equal(await tabOf(kit), undefined);
     assert.deepEqual(kit.files.paths().filter((path) => path.includes('tabs')), []);
+  });
+
+  it('stamps the asks file as the prompt begins, ends and its session ends, not on a plain turn start (T5561)', async () => {
+    const kit = new CliHarness(TEAM);
+    await kit.run(['hook', 'tab-status'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }), env: ALPHA });
+    assert.equal(kit.files.get(TAB_ASKS), undefined);
+    await kit.run(['hook', 'tab-status'], { stdin: payload('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'npm test' } }), env: ALPHA });
+    assert.equal(kit.files.get(TAB_ASKS), `alpha ${SINCE}\n`);
+    await kit.run(['hook', 'tool-end'], { stdin: payload('PostToolUse', { tool_name: 'Bash' }), env: ALPHA });
+    assert.equal(kit.files.get(TAB_ASKS), 'alpha none\n');
+    await kit.run(['hook', 'tab-status'], { stdin: payload('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'npm test' } }), env: ALPHA });
+    await kit.run(['hook', 'tab-status'], { stdin: payload('SessionEnd'), env: ALPHA });
+    assert.equal(kit.files.get(TAB_ASKS), 'alpha ended\n');
   });
 
   it('records a question and a decision at the turn end, and a plain end as ready', async () => {

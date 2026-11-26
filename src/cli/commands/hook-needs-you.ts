@@ -30,8 +30,14 @@ export interface ShownAsk {
   readonly focus: boolean;
 }
 
-/** What `hook needs-you` answers the plugin's mod, one JSON line: the other tabs' asks now, newest first; or why none. */
-export type NeedsYouAnswer = { readonly kind: 'asks'; readonly asks: readonly ShownAsk[] } | { readonly kind: 'off'; readonly why: string };
+/**
+ * What `hook needs-you` answers the plugin's mod, one JSON line: the other tabs' asks now, newest first, and to ask
+ * again once a file in `watch` changes (the asks stamp, the owner's meeting) or at `recheckAt` (epoch ms; null: no
+ * time of its own, the mod's recheck still runs); or why none.
+ */
+export type NeedsYouAnswer =
+  | { readonly kind: 'asks'; readonly asks: readonly ShownAsk[]; readonly watch: readonly string[]; readonly recheckAt: number | null }
+  | { readonly kind: 'off'; readonly why: string };
 
 /** What `hook needs-you-focus` answers: how bringing the asking tab to the front went, or why it was not tried. */
 export type NeedsYouFocusAnswer =
@@ -108,10 +114,12 @@ async function notifyNew(runtime: CliRuntime, scope: Found): Promise<void> {
 }
 
 /**
- * `hook needs-you`, run by the mod's NeedsYouHand in every open tab of the team every few seconds (T2511): the asks of
- * the team's other tabs (a permission prompt, a question, a form, a decision line), newest first, for the tab's toast
- * and its band with Focus and Dismiss. During the owner's open meeting the band offers Focus only for a p0 task's ask.
- * With `needsYou.osToast` on it also sends one OS notification per ask across the team.
+ * `hook needs-you`, run by the mod's NeedsYouHand in every open tab of the team once a file it names changed, or
+ * once a minute (T2511, T5561): the asks of the team's other tabs (a permission prompt, a question, a form, a decision
+ * line), newest first, for the tab's toast and its band with Focus and Dismiss. During the owner's open meeting the
+ * band offers Focus only for a p0 task's ask. With `needsYou.osToast` on it also sends one OS notification per ask
+ * across the team. It names the asks stamp and the meeting file to watch: the band's answer moves with them, and a
+ * crashed tab's ask, a register priority or a roster rename waits for the mod's minute recheck.
  */
 export async function needsYou(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -133,7 +141,7 @@ export async function needsYou(args: ParsedArgs, runtime: CliRuntime): Promise<E
     since: need.since,
     focus: focus(need),
   }));
-  return answer(runtime, { kind: 'asks', asks: shown });
+  return answer(runtime, { kind: 'asks', asks: shown, watch: [scope.kit.paths.tabAsks, scope.kit.paths.meeting], recheckAt: null });
 }
 
 /** The text of a focus outcome, as `meeting start` words its own. */

@@ -11,7 +11,7 @@ import type { CliRuntime } from './runtime.ts';
 import type { UnownedWarning } from './unowned.ts';
 
 /** The team's tabs held on a permission prompt now (src/tabs/prompt-hold.ts). */
-async function heldNow(runtime: Pick<CliRuntime, 'files'> & { readonly sessionProcesses: Pick<SessionProcesses, 'alive'> }, paths: Pick<TeamPaths, 'tabs'>, now: number): Promise<AskingTab[]> {
+async function heldNow(runtime: Pick<CliRuntime, 'files'> & { readonly sessionProcesses: Pick<SessionProcesses, 'alive'> }, paths: Pick<TeamPaths, 'tabs' | 'tabAsks'>, now: number): Promise<AskingTab[]> {
   const tabs = await new TabNeedStore(runtime.files, paths).readAll();
   return heldPrompts(tabs, now, (pid) => runtime.sessionProcesses.alive(pid));
 }
@@ -45,7 +45,7 @@ export async function pagePromptHolds(runtime: CliRuntime, kit: Kit, scanner: Pi
  * since the held session cannot see it and only a person at that tab can answer; it goes to the lead. Its key names
  * the hold, so the lead is told once a hold.
  */
-export async function promptHoldWarnings(runtime: Pick<CliRuntime, 'files'> & { readonly sessionProcesses: Pick<SessionProcesses, 'alive'> }, paths: Pick<TeamPaths, 'tabs' | 'team'>, zone: TimeZone, scanner: Pick<SecretScanner, 'find'>, now: number): Promise<UnownedWarning[]> {
+export async function promptHoldWarnings(runtime: Pick<CliRuntime, 'files'> & { readonly sessionProcesses: Pick<SessionProcesses, 'alive'> }, paths: Pick<TeamPaths, 'tabs' | 'tabAsks' | 'team'>, zone: TimeZone, scanner: Pick<SecretScanner, 'find'>, now: number): Promise<UnownedWarning[]> {
   const held = await heldNow(runtime, paths, now);
   return held.map((need) => ({
     key: `prompt-hold ${need.session} ${need.since}`,

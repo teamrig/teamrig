@@ -169,14 +169,28 @@ export function formatTabNeed(need: TabNeed): string {
   return toJsonlLine({ [VERSION_FIELD]: TAB_NEED_FORMAT, ...need });
 }
 
-/** Each session's tab file. Ids are session ids, checked by the roster, so they are safe in a path. */
+/** The part of a tab the needs-you band shows: null while it asks nothing, so a turn's start or end changes nothing. */
+function askPartOf(need: TabNeed | undefined): string | null {
+  if (need === undefined || need.kind === null) {
+    return null;
+  }
+  const { kind, text, task, pid, since } = need;
+  return JSON.stringify({ kind, text, task, pid, since });
+}
+
+/**
+ * Each session's tab file, and the asks stamp (`tabAsks`) rewritten when any tab's ask begins, changes or ends. Ids
+ * are session ids, checked by the roster, so they are safe in a path.
+ */
 export class TabNeedStore {
   private readonly files: Files;
   private readonly folder: string;
+  private readonly asksStamp: string;
 
-  constructor(files: Files, paths: Pick<TeamPaths, 'tabs'>) {
+  constructor(files: Files, paths: Pick<TeamPaths, 'tabs' | 'tabAsks'>) {
     this.files = files;
     this.folder = paths.tabs;
+    this.asksStamp = paths.tabAsks;
   }
 
   /** The session's tab; undefined when it has no file, or the file is damaged or from another format. */
@@ -192,19 +206,33 @@ export class TabNeedStore {
     return needs.filter((need): need is TabNeed => need !== undefined);
   }
 
-  /** Writes the tab unless its file already shows the same (`sameTab`); true when it wrote. */
+  /** Writes the tab unless its file already shows the same (`sameTab`), stamping a changed ask; true when it wrote. */
   async record(need: TabNeed): Promise<boolean> {
     const current = await this.read(need.session);
     if (current !== undefined && sameTab(current, need)) {
       return false;
     }
     await this.files.write(this.pathOf(need.session), formatTabNeed(need));
+    const ask = askPartOf(need);
+    if (ask !== askPartOf(current)) {
+      await this.stampAsks(need.session, ask === null ? 'none' : need.since);
+    }
     return true;
   }
 
-  /** Removes the session's file, as its session ends; true when there was one. */
-  remove(id: string): Promise<boolean> {
-    return this.files.remove(this.pathOf(id));
+  /** Removes the session's file, as its session ends, stamping the asks when it asked; true when there was one. */
+  async remove(id: string): Promise<boolean> {
+    const asked = askPartOf(await this.read(id)) !== null;
+    const removed = await this.files.remove(this.pathOf(id));
+    if (removed && asked) {
+      await this.stampAsks(id, 'ended');
+    }
+    return removed;
+  }
+
+  /** Rewrites the asks stamp, whose change time the band watches; its text only names the last change. */
+  private stampAsks(id: string, change: string): Promise<void> {
+    return this.files.write(this.asksStamp, `${id} ${change}\n`);
   }
 
   /** The session's tab file, for a reader that stamps it without reading it. */
