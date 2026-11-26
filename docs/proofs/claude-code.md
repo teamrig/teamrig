@@ -3,8 +3,8 @@
 The records behind the `proved on` cells of the Claude Code column in [Feature parity](../parity.md). Each heading is
 a feature id; its record says where and on what it ran, what ran and what was seen. A proof is a run of teamrig's
 own team on a real install, read from the session transcripts (each hook run is an `attachment` record, each refused
-tool call a `tool_result` with its guard's words) and from the team's state files. A row with no record here stays
-unproved on the page.
+tool call a `tool_result` with its guard's words) and from the team's state files. A row with no record here shows
+built, not proven live on the page.
 
 The 2026-11-20 records come from a scan of that day's 121 session transcripts of one team on Windows 11, Claude Code
 2.1.329, teamrig 0.496.0. The 2026-11-23 records come from one session's own run that day, Claude Code 2.1.330,

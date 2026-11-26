@@ -50,7 +50,7 @@ describe('renderParity', () => {
       'tabs.title-status': UNSUPPORTED,
     });
     const text = page({ hosts: [host({ manifest })] });
-    assert.equal(rowOf(text, 'rules.session-start'), '| `rules.session-start` | team rules, identity and live tasks at a session start | supported, unproved |');
+    assert.equal(rowOf(text, 'rules.session-start'), '| `rules.session-start` | team rules, identity and live tasks at a session start | supported, built, not proven live |');
     assert.equal(
       rowOf(text, 'rules.memory'),
       '| `rules.memory` | memory files kept between sessions | supported, proved on [windows](https://example.com/run), [linux](proofs/some-cli.md#linux); unproved on macos |',
@@ -59,7 +59,7 @@ describe('renderParity', () => {
       rowOf(text, 'context.size'),
       '| `context.size` | the context size and its refresh thresholds | supported, proved on [windows](proofs/some-cli.md#windows), [linux](proofs/some-cli.md#linux), [macos](proofs/some-cli.md#macos) |',
     );
-    assert.equal(rowOf(text, 'sessions.wake'), '| `sessions.wake` | waking an idle session | partial (missing: a wake while a turn runs), unproved |');
+    assert.equal(rowOf(text, 'sessions.wake'), '| `sessions.wake` | waking an idle session | partial (missing: a wake while a turn runs), built, not proven live |');
     assert.match(rowOf(text, 'sessions.carry') ?? '', / \| partial \(missing: crons\), proved on \[macos\]\(proofs\/some-cli\.md#macos\); unproved on windows, linux \|$/);
     assert.equal(rowOf(text, 'tabs.title-status'), '| `tabs.title-status` | tab titles and status circles | unsupported: the tool has no such thing |');
   });
@@ -68,7 +68,7 @@ describe('renderParity', () => {
     const text = page({ connectors: [connector(), connector({ id: 'other-tool', name: 'Other Tool', apiVersion: '0.1.1', manifest: manifestOf('connector', UNSUPPORTED) })] });
     assert.ok(text.includes('\n| Feature | What it does | Some Tool | Other Tool |\n| --- | --- | --- | --- |\n'));
     assert.ok(text.includes('\n- Some Tool (`some-tool`), built on plugin API 0.1.0\n- Other Tool (`other-tool`), built on plugin API 0.1.1\n'));
-    assert.match(rowOf(text, 'tracker.watch') ?? '', / \| supported, unproved \| unsupported: the tool has no such thing \|$/);
+    assert.match(rowOf(text, 'tracker.watch') ?? '', / \| supported, built, not proven live \| unsupported: the tool has no such thing \|$/);
     assert.ok(text.includes('\n| Feature | What it does | Some CLI |\n| --- | --- | --- |\n'));
     assert.ok(text.includes('\n| Feature | What it does | Some Terminal |\n| --- | --- | --- |\n'));
     assert.ok(text.includes('\n- Some Terminal (`some-terminal`), built on plugin API 0.1.0\n'));
@@ -112,7 +112,7 @@ describe('renderParity', () => {
     assert.ok(text.includes('\n| Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |\n'));
     assert.ok(text.includes('\n| Feature | What it does | GitHub | Jira | Local |\n'));
     assert.ok(text.includes('\n| Feature | What it does | tmux | Windows Terminal | macOS Terminal | GNOME Terminal | Konsole | x-terminal-emulator | headless |\n'));
-    assert.match(rowOf(text, 'pane.window') ?? '', /^\| `pane\.window` \| [^|]+ \| unsupported: [^|]+ \| supported, unproved \| unsupported: /);
+    assert.match(rowOf(text, 'pane.window') ?? '', /^\| `pane\.window` \| [^|]+ \| unsupported: [^|]+ \| supported, built, not proven live \| unsupported: /);
     assert.match(rowOf(text, 'tracker.hidden-mark') ?? '', / \| unsupported: GitHub shows every mark .* \| unsupported: the Jira connector keeps no hidden mark .* \| unsupported: the local connector .* \|$/);
   });
 });

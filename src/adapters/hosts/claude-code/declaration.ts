@@ -2,8 +2,9 @@ import type { HostDeclaration, Support } from '../../../plugin-api/index.ts';
 import { SESSION_VARIABLES } from './session-variables.ts';
 
 /**
- * What teamrig does on Claude Code today: every feature but the two below. A row with no proof yet shows unproved on
- * the parity page until a live run on the operating system it names is recorded.
+ * What teamrig does on Claude Code today: every feature but the two below. A row with no proof yet shows built, not
+ * proven live on the parity page, and a row proved on some operating systems shows unproved on the rest, until a
+ * live run there is recorded.
  */
 const SUPPORTED: Support = { kind: 'supported', proofs: [] };
 

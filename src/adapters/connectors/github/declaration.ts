@@ -1,8 +1,8 @@
 import type { ConnectorDeclaration, Support } from '../../../plugin-api/index.ts';
 
 /**
- * What runs on GitHub today. A row with no proof yet shows unproved on the parity page until a live run on the
- * operating system it names is recorded.
+ * What runs on GitHub today. A row with no proof yet shows built, not proven live on the parity page, and a row
+ * proved on some operating systems shows unproved on the rest, until a live run there is recorded.
  */
 const SUPPORTED: Support = { kind: 'supported', proofs: [] };
 

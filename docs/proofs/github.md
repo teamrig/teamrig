@@ -3,7 +3,7 @@
 The records behind the `proved on` cells of the GitHub column in [Feature parity](../parity.md). Each heading is a
 feature id; its record says where and on what it ran, what ran and what was seen. A proof is a run of teamrig's own
 team against its public repositories, read from the team's GitHub state files (`state/github-*.json`, the CI
-excerpts in `state/github-ci/`) and its sessions' inboxes. A row with no record here stays unproved on the page.
+excerpts in `state/github-ci/`) and its sessions' inboxes. A row with no record here shows built, not proven live on the page.
 
 The 2026-11-23 records come from that day's runs of one team on Windows 11, gh 2.101.0, teamrig 0.504.0, against
 `teamrig/teamrig`.

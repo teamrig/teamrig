@@ -19,7 +19,7 @@ const INTRO = [
   '',
   'A cell reads:',
   '',
-  '- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved` says no such record exists yet, not that the feature fails.',
+  '- **supported**: the feature runs on this tool. `proved on` names the operating systems with a live proof, the record of a run on a real install of the tool, each linked to that record. A row counts as proved on an operating system only with a proof made there, so `unproved on` names the systems with no such record yet, and `built, not proven live` says the adapter builds it but no live run is recorded anywhere yet, not that the feature fails.',
   '- **partial**: part of it runs. The cell says what is missing, then where the rest is proved.',
   '- **unsupported**: it does not run on this tool. The cell says why.',
   '',
@@ -37,7 +37,7 @@ const SIDES: { readonly [Side in FeatureSide]: { readonly title: string; readonl
  */
 function proofWords(support: Exclude<Support, { readonly kind: 'unsupported' }>): string {
   const proved = provedOn(support);
-  if (proved.length === 0) return 'unproved';
+  if (proved.length === 0) return 'built, not proven live';
   const unproved = OSES.filter((os) => !proved.includes(os));
   const linked = proved.map((os) => {
     const proof = support.proofs.find((each) => each.os === os);
