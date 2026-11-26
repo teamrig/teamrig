@@ -5,7 +5,7 @@ import type { WeekWindow } from './pace.ts';
 import type { BudgetSplit } from './parts.ts';
 import { emptyPatterns } from './patterns.ts';
 import { EMPTY_USAGE, type UsageState } from './store.ts';
-import { keepTeamWeek, readTeamWeek, teamWeekSummaryOf, type TeamWeekInput } from './team-week-file.ts';
+import { keepTeamWeek, mayWeekStopHold, readTeamWeek, teamWeekSummaryOf, type TeamWeekInput } from './team-week-file.ts';
 import { formatTeamWeek, parseTeamWeek, TEAM_WEEK_FORMAT } from './team-week-summary.ts';
 
 const WINDOW: WeekWindow = { start: Date.parse('2030-01-07T01:00:00Z'), startPct: 0, reset: Date.parse('2030-01-14T01:00:00Z'), paceEnd: Date.parse('2030-01-13T21:00:00Z') };
@@ -107,6 +107,24 @@ describe('readTeamWeek', () => {
     assert.equal(await readTeamWeek(files, PATH), undefined);
     await files.write(PATH, '{"v":3,"usedP');
     assert.equal(await readTeamWeek(files, PATH), undefined);
+  });
+});
+
+describe('mayWeekStopHold', () => {
+  const summary = { account: 'work', usedPct: 15, plannedPct: 84.5, accountUsedPct: 99.5, resetsAt: WINDOW.reset, start: WINDOW.start, startPct: 0, at: NOW, limits: [] };
+
+  it("says the week's stop may hold from the stop line on, before the kept reset only (T5393)", async () => {
+    const files = new MemoryFiles();
+    await keepTeamWeek(files, PATH, summary);
+    assert.equal(await mayWeekStopHold(files, PATH, 99.5, NOW), true);
+    assert.equal(await mayWeekStopHold(files, PATH, 99.6, NOW), false);
+    assert.equal(await mayWeekStopHold(files, PATH, 99.5, WINDOW.reset), false, 'the reset ended the week the summary read');
+    await keepTeamWeek(files, PATH, { ...summary, accountUsedPct: 30 });
+    assert.equal(await mayWeekStopHold(files, PATH, 99.5, NOW), false);
+  });
+
+  it('cannot tell with no summary, so the full reading decides (T5393)', async () => {
+    assert.equal(await mayWeekStopHold(new MemoryFiles(), PATH, 99.5, NOW), true);
   });
 });
 

@@ -63,3 +63,14 @@ export async function readTeamWeek(files: Pick<Files, 'read'>, path: string): Pr
   const text = await files.read(path);
   return text === undefined ? undefined : parseTeamWeek(text);
 }
+
+/**
+ * Whether the week's stop (`weekStopOf`, src/budget/warn.ts, T5393) may hold the team now, from its kept week summary
+ * at `path`: the account at or past `targetPct` before the summary's reset. It is the one-file check that spares a p0
+ * wake the full budget reading, which takes thousands of file reads; with no summary it cannot tell, so it says true
+ * and the full reading decides.
+ */
+export async function mayWeekStopHold(files: Pick<Files, 'read'>, path: string, targetPct: number, now: number): Promise<boolean> {
+  const summary = await readTeamWeek(files, path);
+  return summary === undefined || (summary.accountUsedPct >= targetPct && now < summary.resetsAt);
+}

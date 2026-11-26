@@ -1,9 +1,11 @@
+import { mayWeekStopHold } from '../budget/team-week-file.ts';
 import type { Roster } from '../config/roster.ts';
 import type { KitConfig } from '../config/types.ts';
 import { KIT_NAME } from '../core/home.ts';
 import type { TimeZone } from '../core/zone.ts';
 import { isRightNow } from '../config/priorities.ts';
 import type { Task } from '../register/fold.ts';
+import { BLOCKER_PRIORITY_ID } from '../register/model.ts';
 import { parkRulesOf } from '../register/park.ts';
 import { isActive } from '../register/stats.ts';
 import { TaskTree, type TasksElsewhere } from '../register/tree.ts';
@@ -143,21 +145,27 @@ export interface RestCap {
 }
 
 /**
- * True when the session has an unfinished task past p0 within `configured`: the only tasks a rest (which caps that
- * priority at p0 or p1) can take out of a running session's verdict.
+ * True when the session has an unfinished task past `floor` within `configured`: the only tasks a rest can take out of
+ * a running session's verdict. A daily rest caps that priority at p0 or p1 (floor `HELD_PRIORITY`), the week's stop at
+ * blockers (floor `BLOCKER_PRIORITY_ID`, T5393).
  */
-function hasWorkARestCuts(tasks: ReadonlyMap<string, Task>, id: string, configured: number): boolean {
-  return [...tasks.values()].some((task) => task.owner === id && task.priority > HELD_PRIORITY && task.priority <= configured && task.status !== 'done' && task.status !== 'dropped');
+function hasWorkARestCuts(tasks: ReadonlyMap<string, Task>, id: string, configured: number, floor: number): boolean {
+  return [...tasks.values()].some((task) => task.owner === id && task.priority > floor && task.priority <= configured && task.status !== 'done' && task.status !== 'dropped');
 }
 
 /**
  * The least urgent priority up to `configured` whose work keeps the running session open, and the waited-on work past
  * it, weighed as `hook wake-check` weighs them ({@link wakeWeightOf}). Its budget takes thousands of file reads, so it
- * counts as awake unless its rest can change the verdict: when it has work a rest cuts ({@link hasWorkARestCuts}).
+ * counts as awake unless its rest can change the verdict: when it has work a rest cuts ({@link hasWorkARestCuts}); p0
+ * work only while the week's stop may hold, by its one-file check (`mayWeekStopHold`).
  */
 export async function restCapOf(runtime: CliRuntime, kit: Kit, config: KitConfig, roster: Roster, work: RestWork, configured: number): Promise<RestCap> {
-  if (!hasWorkARestCuts(work.tasks, work.id, configured)) {
-    return { maxPriority: configured, exemption: undefined };
+  const awake = { maxPriority: configured, exemption: undefined };
+  if (!hasWorkARestCuts(work.tasks, work.id, configured, BLOCKER_PRIORITY_ID)) {
+    return awake;
+  }
+  if (!hasWorkARestCuts(work.tasks, work.id, configured, HELD_PRIORITY) && !(await mayWeekStopHold(runtime.files, kit.paths.teamWeek, config.budget.targetPct, runtime.clock.now()))) {
+    return awake;
   }
   const { maxPriority, exemption } = await wakeWeightOf(runtime, kit, config, roster, work, configured);
   return { maxPriority, exemption };
