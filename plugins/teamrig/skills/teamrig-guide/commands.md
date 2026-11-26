@@ -4950,11 +4950,12 @@ Example:
 teamrig kit install --tag v0.510.0 --commit 0123456789abcdef0123456789abcdef01234567 --yes
 ```
 
-Output:
+Output, where a pin holds 0.509.0 current (a new current prints `WROTE current <version> (was <old>)` with the tag
+and commit):
 
 ```text
-WROTE current 0.510.0 (was 0.509.0): teamrig 0.510.0 (github-release v0.510.0 0123456789abcdef0123456789abcdef01234567)
-WROTE /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.510.0
+NOTE teamrig pinned at 0.509.0; 0.510.0 is installed; `teamrig kit use --latest` moves to it.
+UNCHANGED /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.509.0
 ```
 
 A rerun prints `UNCHANGED` lines. A pin or a newer current prints a `NOTE` naming it, and the launcher written is the
@@ -5906,10 +5907,11 @@ UNDO teamrig setup restore 20261025T130500Z --yes --remove-new
 Puts teamrig's hooks into your own hooks file of a host that loads no plugin's hooks: for `--host codex`, Codex CLI's
 `hooks.json` in `$CODEX_HOME` (default `~/.codex`); for `--host antigravity-cli`, Antigravity CLI's `hooks.json` in
 `~/.gemini/config`. Your own handlers stay as they are, in their order; teamrig's
-earlier handlers are replaced, so running it again rewrites the ones an older release wrote. A Codex handler runs
-teamrig's kit launcher, `~/.teamrig/bin/teamrig.mjs`, which names no version and checks the current one before it
-runs it, so a teamrig update leaves the lines as they are; until the kit home holds an intact current version and that
-launcher (one teamrig session's start copies both), the run is refused with nothing written. It reads the hooks from
+earlier handlers are replaced, so running it again rewrites the ones an older release wrote. Where the host's handlers
+run teamrig's kit launcher (the first one above does), `~/.teamrig/bin/teamrig.mjs`, which names no version and checks
+the current one before it runs it, a teamrig update leaves the lines as they are; until the kit home holds an intact
+current version and that launcher (a teamrig session's start or `teamrig kit install` copies both), `--yes` is refused
+with nothing written, and a preview notes why. It reads the hooks from
 the installed plugin, so it is refused from a source checkout (`setup hooks runs from the installed plugin's
 dist/cli/main.js`), and a hooks file with a key the host refuses is refused too; nothing is written then. It prints
 `PREVIEW nothing written (add --yes to write) <file>: inserted <n>, unchanged <n>, changed <n>, removed <n>`, one
