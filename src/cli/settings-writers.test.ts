@@ -13,7 +13,7 @@ const OTHER_HOST = hostNaming({ marks: ['OTHER_AGENT'], identity: [] });
 /** Every settings writer, as its words: `permissions trim`. */
 const WRITERS = [...SETTINGS_WRITERS].flatMap(([group, actions]) => [...actions].map((action) => `${group} ${action}`));
 
-describe('settings writers where Claude Code runs them (T3083)', () => {
+describe('settings writers where an agent runs them (T3083)', () => {
   it('names only write commands of the CLI that take --yes, and knows none else', () => {
     assert.equal(WRITERS.length, 13);
     for (const command of WRITERS) {
@@ -35,9 +35,9 @@ describe('settings writers where Claude Code runs them (T3083)', () => {
     }
     assert.match(
       settingsWriteRefusal('permissions trim', 'CLAUDECODE'),
-      /^`teamrig permissions trim --yes` changes Claude Code's settings, a host's hooks, .* refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
+      /^`teamrig permissions trim --yes` changes Claude Code's settings, a host's hooks, .* refused where an agent runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); run it without --yes for its preview, and the owner types `\/teamrig permissions trim --yes` in a tab or runs it in their own terminal\.$/,
     );
-    assert.match(settingsWriteRefusal('permissions trim', undefined), / refused where Claude Code runs it \(an agent's tool call, a script it runs or a hook\); /);
+    assert.match(settingsWriteRefusal('permissions trim', undefined), / refused where an agent runs it \(an agent's tool call, a script it runs or a hook\); /);
   });
 
   it("refuses each one with --yes under a shipped host's mark whatever host runs, the mark named", async () => {
@@ -76,7 +76,7 @@ describe('settings writers where Claude Code runs them (T3083)', () => {
 
   it('leaves the preview, an empty CLAUDECODE and a run outside Claude Code to the command itself', async () => {
     const kit = new CliHarness();
-    const refusedHere = (stdout: readonly string[]): boolean => stdout.some((line) => line.includes('is refused where Claude Code runs it'));
+    const refusedHere = (stdout: readonly string[]): boolean => stdout.some((line) => line.includes('is refused where an agent runs it'));
     for (const [argv, env] of [
       [['permissions', 'trim'], { CLAUDECODE: '1' }],
       [['statusline', 'install', '--yes'], { CLAUDECODE: '' }],

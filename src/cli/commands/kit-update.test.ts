@@ -152,7 +152,7 @@ describe('teamrig kit update', () => {
     assert.equal(kit.files.get(kitCurrentPath(KIT)), `${CURRENT}\n`);
   });
 
-  it('refuses its write where Claude Code runs it', async () => {
+  it('refuses its write where an agent runs it', async () => {
     const result = await kit.run(['kit', 'update', '--yes'], options({ CLAUDECODE: '1' }));
     assert.deepEqual(result.stdout, [`REFUSED ${settingsWriteRefusal('kit update', 'CLAUDECODE')}`]);
     assert.deepEqual(asked, []);

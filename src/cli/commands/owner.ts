@@ -44,7 +44,7 @@ export function refuseUnlessOwner(runtime: CliRuntime, command: keyof typeof BUT
     runtime,
     `${KIT_NAME} owner ${command}`,
     (mark) =>
-      `${KIT_NAME} owner ${command} acts as the owner, so it is refused where Claude Code runs it (${mark} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`,
+      `${KIT_NAME} owner ${command} acts as the owner, so it is refused where an agent runs it (${mark} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`,
   );
 }
 

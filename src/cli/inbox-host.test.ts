@@ -51,7 +51,7 @@ describe('teamrig inbox add --from host:<job> (#930)', () => {
     assert.equal(inboxOf(kit, 'alpha'), undefined);
   });
 
-  it('refuses where Claude Code runs it, so an agent cannot post a line as a host job', async () => {
+  it('refuses where an agent runs it, so an agent cannot post a line as a host job', async () => {
     const kit = new CliHarness(TEAM);
     const result = await kit.run(['inbox', 'add', '--from', 'host:nightly-backup', '--to', 'alpha', '--text', 'hi'], { env: { CLAUDECODE: '1' } });
     assert.equal(result.code, EXIT.refused);

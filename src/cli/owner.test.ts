@@ -277,13 +277,13 @@ function typed(kit: CliHarness, args: string): Promise<CliResult> {
   return kit.run(['hook', 'slash-command'], { stdin: JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, args, origin: 'composer' }) });
 }
 
-describe('teamrig owner where Claude Code runs it (T1780)', () => {
+describe('teamrig owner where an agent runs it (T1780)', () => {
   it("refuses a Note and a Next under CLAUDECODE, writing nothing and telling nobody", async () => {
     const kit = await team();
     const before = kit.files.get(EVENTS_PATH);
     assertRefused(
       await kit.run(['owner', 'note', 'T1', '--text', 'ship it'], UNDER_CLAUDE_CODE),
-      /^REFUSED teamrig owner note acts as the owner, so it is refused where Claude Code runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); the owner presses Note in the pane or types \/teamrig owner note in a tab$/,
+      /^REFUSED teamrig owner note acts as the owner, so it is refused where an agent runs it \(CLAUDECODE is set: an agent's tool call, a script it runs or a hook\); the owner presses Note in the pane or types \/teamrig owner note in a tab$/,
     );
     assertRefused(await kit.run(['owner', 'next', 'T1'], UNDER_CLAUDE_CODE), /^REFUSED teamrig owner next acts as the owner, .*; the owner presses Next in the pane or types \/teamrig owner next in a tab$/);
     assertRefused(
