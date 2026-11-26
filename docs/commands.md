@@ -94,6 +94,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   kit prune [--yes]            removes the kept versions past the rollback window (all but the current one,
       the newest newer one and the two before it) and what stopped installs left; without --yes it names
       them and removes nothing; one a running process holds stays for the next prune (exit 1)
+  kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
+      branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
+      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
+      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the
@@ -670,7 +674,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       prints the restore that undoes it; --remove-new also removes the files made since
   setup hooks --host <name> [--yes]   puts teamrig's hooks into your own hooks file of a host that loads
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
-      earlier ones are replaced, so run it again after every teamrig update; without --yes it counts what
+      earlier ones are replaced, so run it again after every teamrig update (lines that run the kit launcher,
+      as Codex's do, last across updates; their --yes is refused until the kit home holds teamrig, which a
+      session start or kit install puts there); without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
       the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write

@@ -4928,6 +4928,40 @@ Leftovers it removed follow on a `REMOVED leftovers of stopped installs <n>: <pa
 process still holds open stays, named on a `NOTE left for the next prune, a running process holds a file: <names>`
 line, and the command exits 1.
 
+### teamrig kit install
+
+Copies the running teamrig into the kit home as the release `--tag` and `--commit` name, names it current unless a
+pin (`teamrig kit use`) or a newer kept version holds it, and writes the kit launcher hook lines run
+(`<kit home>/bin/teamrig.mjs`) as that current version ships it. A session start of the teamrig plugin does the same on
+its own; this is that install for a host with no teamrig plugin, and the install script (`install-teamrig.ts`) runs it
+before `teamrig setup hooks`, so you rarely type it. Without `--yes` it shows the copy and writes nothing. It moves the
+code every host's guards run, so only the person writes it: `--yes` is refused where an agent runs it. Like `kit use`,
+it waits up to 30 s while a session start copies a release and is `REFUSED` past that.
+
+Flags:
+
+- `--tag <tag>`: required: the release tag of the running teamrig, `v<its version>`; another tag is a usage error.
+- `--commit <sha>`: required: the release commit it was cloned at, 40 hex characters.
+- `--yes`: copy it and write the launcher; without it, only show the copy.
+
+Example:
+
+```sh
+teamrig kit install --tag v0.510.0 --commit 0123456789abcdef0123456789abcdef01234567 --yes
+```
+
+Output:
+
+```text
+WROTE current 0.510.0 (was 0.509.0): teamrig 0.510.0 (github-release v0.510.0 0123456789abcdef0123456789abcdef01234567)
+WROTE /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.510.0
+```
+
+A rerun prints `UNCHANGED` lines. A pin or a newer current prints a `NOTE` naming it, and the launcher written is the
+one the current version ships. It is `REFUSED` for a folder with no integrity list (a source tree, no built release)
+and a copy that is not whole; it exits 1 with a `NOTE the kit launcher is not written: <why>` line when the current
+version ships no launcher.
+
 ### teamrig restart
 
 The automatic context refresh's restart, when `refresh.autoRestart` is on for the session (`true`, or `"lead"`, the default, for the lead only; otherwise the user types
@@ -5896,7 +5930,9 @@ refused where an agent runs it; the preview stays open.
 
 On a host with no teamrig plugin, the person installs teamrig with the one file `install-teamrig.ts` from the release
 branch (`node install-teamrig.ts --host <name> --yes`, README "An AI CLI with no teamrig plugin"): it clones the
-release into `~/.teamrig/install/teamrig` and runs this command from there for each `--host`.
+release into `~/.teamrig/install/teamrig`, runs its `teamrig kit install` (the kit home a host's lines run from) and then
+this command from there for each `--host`. A host whose lines run the kit launcher previews them before the kit home
+holds teamrig, with a `NOTE` naming why `--yes` would be refused; `--yes` is refused until it does.
 
 Flags:
 
