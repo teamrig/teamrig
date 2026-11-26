@@ -82,7 +82,9 @@ describe('teamrig kit uninstall', () => {
     const before = installed();
     const result = await kit.run(['kit', 'uninstall'], options());
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.match(result.stdout[0] ?? '', new RegExp(`^${PREVIEW.replace(/[()]/gu, '\\$&')} /srv/codex/hooks\\.json: removed [1-9]\\d*$`, 'u'));
+    const [first = ''] = result.stdout;
+    assert.ok(first.startsWith(`${PREVIEW} `), first);
+    assert.match(first.slice(PREVIEW.length), /^ \/srv\/codex\/hooks\.json: removed [1-9]\d*$/u);
     assert.equal(
       result.stdout[1],
       `${PREVIEW} ${KIT_HOME}: versions 1: ${VERSION}; files 3: ${cliLauncherPath(KIT_HOME)}, ${kitCurrentPath(KIT_HOME)}, ${kitCurrentRecordPath(KIT_HOME)}`,
