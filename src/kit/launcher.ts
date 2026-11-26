@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { lstat, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -363,5 +363,19 @@ async function main(script: string): Promise<void> {
   });
 }
 
+/**
+ * True when Node runs `script` itself. Both sides are read as real paths: Node gives this module its real path but
+ * keeps the script word as typed, and a kit home below a linked folder must still run, as a launcher that ran nothing
+ * would let a guard event through.
+ */
+export function isRunBy(script: string, argv1: string | undefined): boolean {
+  if (argv1 === undefined) return false;
+  try {
+    return realpathSync.native(argv1) === realpathSync.native(script);
+  } catch {
+    return false;
+  }
+}
+
 const self = fileURLToPath(import.meta.url);
-if (process.argv[1] !== undefined && process.argv[1] === self) await main(self);
+if (isRunBy(self, process.argv[1])) await main(self);
