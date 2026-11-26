@@ -1,7 +1,7 @@
 # Hooks and permissions
 
 The plugin's `hooks/hooks.json` registers thirty Claude Code hooks, one row each below however many events a hook runs on, and one mod ([the /teamrig command](#the-mod-the-teamrig-command), [the refresh's /clear](#the-mod-the-refreshs-clear), [the reload after an install](#the-mod-the-reload-after-an-install), [the wake on urgent work](#the-mod-the-wake-on-urgent-work), [the update notice](#the-mod-the-update-notice)). Each runs
-`node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
+`node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, those of one tool call together as `hook guards <name> ...` in one process (one run on a shell line, not eight), which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
 they all stay silent, but `hook restore-track` and `hook tool-end` still record the session ([the restore tracker](#every-session-the-restore-tracker)) and `hook missing-cli` still answers a shell that [no longer finds the bare command](#after-a-shell-call-the-cli-by-its-path).
 Each hook line names the host it runs in with `--host <id>` after the hook's name (`hook stop --host claude-code`), so a team mixing hosts loads each session's own ports. A host whose hook JSON does not name its event (Antigravity's) also passes `--host-event <Event>`, as in `hook stop --host antigravity-cli --host-event Stop`. The `Flags: none.` lines below count neither: every command takes `--host`, and `--host-event` is the host's, not the hook's.
 When the team's `hosts` does not list the host a hook line names (a team made after `setup hooks`, or a second team on the machine), `hook session-start` says so once in the host's reply, naming the `hosts` line to add before a new session; the other hooks end cleanly and write nothing, and the guards still refuse, so every tool call stays blocked until the team lists the host.
@@ -2049,9 +2049,18 @@ thread and blocks the call (exit 2) when the guard:
   runs on its own thread, so the runner's clock keeps running;
 - ends with an exit code but 0 or 2, or prints something other than its one JSON answer.
 
-The runner runs nothing but a hook: its words must be exactly `hook <name>`, and any other (`guard-main.js owner
-next ...`, `guard-main.js exec approve ...`) exits 2, saying "teamrig blocked this run", before the CLI loads, so the
-guard entry is no second way into the CLI's commands.
+The runner runs nothing but a hook: its words must be exactly `hook <name>`, or `hook guards <name> ...` naming each
+guard once, all of them guards that can run in a set (the eight before `cold-send` above), and any other
+(`guard-main.js owner next ...`, `guard-main.js exec approve ...`) exits 2, saying "teamrig blocked this run", before
+the CLI loads, so the guard entry is no second way into the CLI's commands.
+
+A set runs its guards side by side in one process, on one load of the CLI and the team config, where each guard once
+started its own Node.js and loaded the CLI again: a shell line ran nine guard processes, now two (the set and
+`picker-guard`). The set answers as Claude Code combines separate hooks: any guard's refusal refuses the call, with
+every refusing guard's reason; else any allow; and every guard's notes are kept. A guard of the set that throws
+refuses the call, naming it (`its <name> guard crashed (...)`), whatever the others said; the 12 seconds are the
+set's, and its block line names every guard in it (`its guards push-guard, ... and service-role-guard gave no
+answer within 12 s`). A hooks file written by an earlier teamrig, with a line per guard, still runs.
 
 The model then reads `teamrig blocked this call: its <hook> guard <what went wrong>, and a guard that cannot answer
 must not let a call through. Fix: ...` ([errors](errors.md#a-blocked-tool-call)). So a broken install blocks every

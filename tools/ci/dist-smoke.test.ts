@@ -62,6 +62,7 @@ class FakeRunner {
         return { ...OK, stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUseFailure', additionalContext: 'path' } }) };
       case 'secret-redact':
         return { ...OK, stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: { stdout: '[redacted GitHub token]' } } }) };
+      case 'guards':
       case 'push-guard':
       case 'package-guard':
       case 'secret-guard':

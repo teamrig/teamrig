@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GUARD_SET_HOOK } from '../../src/cli/guard-runner.ts';
 import { isRecord, isStringArray, recordField, type JsonRecord } from '../../src/core/guards.ts';
 
 /**
@@ -42,7 +43,21 @@ function records(value: unknown): JsonRecord[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
-/** The name after `hook` in each command hooks.json runs, once each, sorted. */
+/**
+ * The hooks one command runs: the name after `hook`, or for `hook guards <name> ...` each guard it names (T5553), since
+ * a set is one process for several hooks, not a hook of its own.
+ */
+function hookNamesOf(args: readonly string[]): readonly string[] {
+  const after = args.slice(args.indexOf('hook') + 1);
+  const [name, ...rest] = after;
+  if (name !== GUARD_SET_HOOK) {
+    return name === undefined ? [] : [name];
+  }
+  const end = rest.findIndex((word) => word.startsWith('--'));
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+/** The hooks the commands hooks.json runs run, once each, sorted. */
 function hooksJsonNames(): string[] {
   const parsed: unknown = JSON.parse(read(HOOKS_JSON));
   const events = isRecord(parsed) ? recordField(parsed, 'hooks') : undefined;
@@ -51,8 +66,7 @@ function hooksJsonNames(): string[] {
   for (const group of Object.values(events).flatMap(records)) {
     for (const hook of records(group['hooks'])) {
       const args = hook['args'];
-      const name = isStringArray(args) && args.includes('hook') ? args[args.indexOf('hook') + 1] : undefined;
-      if (name !== undefined) names.add(name);
+      if (isStringArray(args) && args.includes('hook')) hookNamesOf(args).forEach((name) => names.add(name));
     }
   }
   return [...names].sort();

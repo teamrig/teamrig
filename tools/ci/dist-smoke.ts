@@ -115,6 +115,11 @@ const SAMPLES: Readonly<Record<string, Sample>> = {
     payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'Bash', tool_input: { command: 'npx teamrig-smoke-not-installed' } },
     check: denies('an npx of a tool not installed'),
   },
+  // Every set hooks.json runs holds the secret guard, so each set refuses this read as that guard does (T5553).
+  'hook guards': {
+    payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'Bash', tool_input: { command: 'cat .env' } },
+    check: denies('a read of .env, by the guard set'),
+  },
   'hook secret-guard': {
     payload: { hook_event_name: 'PreToolUse', session_id: SESSION_ID, tool_name: 'Bash', tool_input: { command: 'cat .env' } },
     check: denies('a read of .env'),
