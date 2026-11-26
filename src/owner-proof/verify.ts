@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, verify, type KeyObject } from 'node:crypto';
-import { challengeDigest, instantOf, type OwnerProofChallenge } from './challenge.ts';
+import { challengeDigest } from './challenge.ts';
+import { instantOf, type OwnerProofChallenge } from './challenge-shape.ts';
 import { jcs } from './jcs.ts';
 import { RSA_MIN_MODULUS_BITS, type PinnedKey, type SignatureAlgorithm } from './pin.ts';
 

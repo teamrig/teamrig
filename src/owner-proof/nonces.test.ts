@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isHex64 } from './challenge.ts';
+import { isHex64 } from './challenge-shape.ts';
 import { issueNonce, newNonce, nonceState, pruneNonces, useNonce, type NonceEntry } from './nonces.ts';
 
 const first = { nonce: 'a'.repeat(64), actDigest: 'f'.repeat(64), expires: 1_000 };

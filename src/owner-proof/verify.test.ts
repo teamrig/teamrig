@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { describe, it } from 'node:test';
-import { PROOF_DOMAIN, challengeDigest, type OwnerProofChallenge } from './challenge.ts';
+import { challengeDigest } from './challenge.ts';
+import { PROOF_DOMAIN, type OwnerProofChallenge } from './challenge-shape.ts';
 import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
 import { ISSUED_AT_SKEW_MS, actDigest, verifyProof, type ActBinding, type NonceState, type ProofCheck } from './verify.ts';
 
