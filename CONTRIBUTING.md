@@ -221,7 +221,8 @@ review) and, on ubuntu alone, the build, the docs' specs, the pictures, the conf
 matrix's systems come from `change kind`, `TEST_SYSTEMS` in that file). On ubuntu the suite runs once, in the coverage
 gate, which fails on any failing test, so the ubuntu test leg runs every other step but not `npm test`. Windows, the
 slowest leg, runs as three: the suite in two shards (`test (windows-latest, node 22, 1/2)` and `2/2`) and every other
-step (`checks`). Each job still runs and skips only its steps,
+step (`checks`). The macOS leg and the Windows shards run npm test's suite through `tools/ci/suite-cli.ts`, a test file a
+core at once, as each runner's VM runs its job alone. Each job still runs and skips only its steps,
 so `every check passed` reads a pass from each. Before that, the
 `pre-push` hook that `npm run setup` sets proves the commit being pushed (`tools/ci/local.ts`; the lists are
 `tools/ci/local-checks.ts`). `node tools/ci/local.ts` and `npm run check` run every check CI runs, all but the

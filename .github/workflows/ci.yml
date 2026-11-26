@@ -201,12 +201,12 @@ jobs:
       - run: npm run build
         if: ${{ needs.changes.outputs.kind != 'design' }}
       # On ubuntu the coverage gate runs the whole suite on the same Node and fails on any failing test, so this leg
-      # leaves it there rather than run it twice (T5027).
-      - run: npm test
+      # leaves it there rather than run it twice (T5027). suite-cli.ts runs npm test's own suite a test file a core at
+      # once, as the runner's VM runs this job alone; node --test keeps cores - 1, two on a 3-core macOS runner (T5027).
+      - run: node tools/ci/suite-cli.ts
         if: ${{ needs.changes.outputs.kind == 'code' && matrix.os != 'ubuntu-latest' && matrix.part == 'all' }}
-      # npm test's own line with the shard flag before the file patterns: node ignores a --test-shard after them, so
-      # npm test -- --test-shard would run the whole suite on each shard (tools/ci/ci-workflow.test.ts holds it equal).
-      - run: node --test --test-shard=${{ matrix.part }} --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tools/ci/slowest-reporter.ts --test-reporter-destination=stdout "tools/**/*.test.ts" "src/**/*.test.ts"
+      # The same suite, only this leg's shard of it (T5030).
+      - run: node tools/ci/suite-cli.ts --shard ${{ matrix.part }}
         if: ${{ needs.changes.outputs.kind == 'code' && contains(matrix.part, '/') }}
       # A docs change runs only the specs that hold the docs to the code: tools/docs/, and SECURITY.md's.
       - run: node --test "tools/docs/*.test.ts" tools/ci/security-workflows.test.ts

@@ -39,7 +39,9 @@ describe('localChecks', () => {
       if (command.startsWith('git fetch ')) continue; // CI's shallow checkout fetches the base a local clone holds
       const script = /^node (\S+\.ts)/.exec(command)?.[1];
       const tsc = /^tsc (.+)$/.exec(command)?.[1];
-      if (script !== undefined) assert.ok(argvs.some((argv) => argv.startsWith(`node ${script}`)), `no local check runs ${script}`);
+      // The macOS and Windows legs run npm test's suite through suite-cli.ts (T5027); the coverage gate runs it locally.
+      if (script === 'tools/ci/suite-cli.ts') assert.ok(argvs.includes('node tools/ci/coverage-cli.ts'), 'the coverage gate runs the tests');
+      else if (script !== undefined) assert.ok(argvs.some((argv) => argv.startsWith(`node ${script}`)), `no local check runs ${script}`);
       else if (tsc !== undefined) assert.ok(argvs.includes(`node node_modules/typescript/bin/tsc ${tsc}`), `no local check runs tsc ${tsc}`);
       else if (command === 'npm test') assert.ok(argvs.includes('node tools/ci/coverage-cli.ts'), 'the coverage gate runs the tests');
       // A docs change's job runs a few specs (T4617); the coverage gate runs every spec.
