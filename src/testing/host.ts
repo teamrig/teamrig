@@ -62,6 +62,12 @@ export const SESSIONS_ONLY_HOST: HostSource = (given) => ({ ...bareHost(), launc
 export const NO_PATHS_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), paths: unsupported('no folder of the host is known') });
 
 /**
+ * The shipped host, its paths answering undefined for every place a host may not have (`unknownPlacesPaths`), as the
+ * Antigravity CLI's do: for a spec of what a run does without one, every other port the shipped one.
+ */
+export const UNKNOWN_PLACES_HOST: HostSource = (given) => ({ ...SHIPPED_HOST(given), paths: unknownPlacesPaths() });
+
+/**
  * The shipped host, telling nothing of its sessions: every other port is the shipped one. For a spec of what a run
  * does when its host names no folder a session started in, whatever the environment holds.
  */
@@ -195,6 +201,45 @@ export function testPaths(env: Readonly<Record<string, string | undefined>> = {}
   const { paths } = SHIPPED_HOST({ env, platform });
   if (isUnsupported(paths)) throw new Error(`the shipped host tells none of its folders: ${paths.notice}`);
   return paths;
+}
+
+/** A place the shipped host's paths always know, for a spec's fixture: a spec fails at once when one answers undefined. */
+export function knownPlace(place: string | undefined): string {
+  if (place === undefined) throw new Error('the shipped host answered undefined for a place it keeps');
+  return place;
+}
+
+/**
+ * The shipped host's paths, but answering undefined for every place a host may not have (as the Antigravity CLI's
+ * do): for a spec of what a caller does without one, its other places left as the shipped host's.
+ */
+export function unknownPlacesPaths(): HostPaths {
+  const known = testPaths();
+  return {
+    home: (userHome) => known.home(userHome),
+    userSettings: (userHome) => known.userSettings(userHome),
+    folderSettings: (folder) => known.folderSettings(folder),
+    worktrees: () => undefined,
+    worktreeRepo: (path) => known.worktreeRepo(path),
+    userInstructions: (userHome) => known.userInstructions(userHome),
+    folderInstructions: (folder) => known.folderInstructions(folder),
+    userRules: (userHome) => known.userRules(userHome),
+    projectRules: (project) => known.projectRules(project),
+    skills: (userHome) => known.skills(userHome),
+    projectSkills: (project) => known.projectSkills(project),
+    userAgents: () => undefined,
+    projectAgents: (project) => known.projectAgents(project),
+    memoryFolder: () => undefined,
+    memoryIndex: () => undefined,
+    memoryFolders: () => undefined,
+    scratchpads: () => undefined,
+    scratchpadOf: () => undefined,
+    planFile: () => undefined,
+    shellSnapshots: () => undefined,
+    transcriptsFolder: () => undefined,
+    pluginsFolder: () => undefined,
+    loginFile: (userHome) => known.loginFile(userHome),
+  };
 }
 
 /** The shipped host's secret files in the environment `env` on `platform`, as a run would be told them. */

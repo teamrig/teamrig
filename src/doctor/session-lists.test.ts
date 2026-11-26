@@ -163,6 +163,12 @@ describe('readSessionLists', () => {
     assert.deepEqual(read === undefined ? undefined : listOf(read.lists, 'skills')?.chars, 8);
   });
 
+  it('is undefined on a host whose transcripts folder teamrig does not know (T5582)', async () => {
+    const transcripts = new MemoryTranscripts();
+    transcripts.set(join(dir, `${NEWER}.jsonl`), transcript([skillListingLine([{ name: 'new', description: 'x' }])]), 2);
+    assert.equal(await readSessionLists(transcripts, undefined, PROJECT), undefined);
+  });
+
   it('is undefined for a project with no session transcript', async () => {
     assert.equal(await readSessionLists(new MemoryTranscripts(), ROOT, PROJECT), undefined);
   });

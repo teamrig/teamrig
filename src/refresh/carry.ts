@@ -61,10 +61,13 @@ export interface Carry extends TranscriptCarry {
 
 /** Where the host keeps a session's files outside its transcript. */
 export interface CarryPlaces {
-  /** The scratchpad folder the host gives the session of the transcript `transcript`: the guess when its tail names none. */
-  scratchpadOf(transcript: string): string;
-  /** The plan file of the session the host named `slug`. */
-  planFile(slug: string): string;
+  /**
+   * The scratchpad folder the host gives the session of the transcript `transcript`: the guess when its tail names
+   * none. Undefined on a host whose scratchpads teamrig does not know.
+   */
+  scratchpadOf(transcript: string): string | undefined;
+  /** The plan file of the session the host named `slug`; undefined on a host whose plan files teamrig does not know. */
+  planFile(slug: string): string | undefined;
 }
 
 /** Lines that can matter; the rest of a large transcript is never parsed. */

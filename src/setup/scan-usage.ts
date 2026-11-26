@@ -145,7 +145,7 @@ function addUsedIn(usedIn: Map<string, Set<string>>, names: ReadonlySet<string>,
 }
 
 /** The transcripts (sessions' and their subagents') changed since `since`, newest first, ties by path. */
-async function newestFirst(source: TranscriptSource, projectsDir: string, since: number): Promise<DatedTranscript[]> {
+async function newestFirst(source: TranscriptSource, projectsDir: string | undefined, since: number): Promise<DatedTranscript[]> {
   const paths = (await discoverTranscripts(source, projectsDir, since)).flatMap((session) => [...session.main, ...session.subagents]);
   const dated = await Promise.all(paths.map(async (path) => ({ path, changedAt: (await source.changedAt(path)) ?? since })));
   return dated.sort((a, b) => b.changedAt - a.changedAt || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -156,9 +156,10 @@ async function newestFirst(source: TranscriptSource, projectsDir: string, since:
  * any project on this machine, read newest first until `window.maxBytes`: a month of a busy machine's transcripts runs
  * to gigabytes. It reads each transcript `chunkBytes` at a time and parses only the lines that can name a use, and
  * the first one carrying a `cwd`, the folder the session started in, and what each context hook's runs printed: a project folder's name in `projectsDir` is a
- * lossy slug (`a/b-c` and `a-b/c` share one), so it cannot say where.
+ * lossy slug (`a/b-c` and `a-b/c` share one), so it cannot say where. Nothing used when `projectsDir` is undefined:
+ * a host whose transcripts folder teamrig does not know.
  */
-export async function readTranscriptUse(deps: TranscriptUseDeps, projectsDir: string, window: UsageWindow): Promise<TranscriptUse> {
+export async function readTranscriptUse(deps: TranscriptUseDeps, projectsDir: string | undefined, window: UsageWindow): Promise<TranscriptUse> {
   const skills = new Map<string, Set<string>>();
   const agents = new Map<string, Set<string>>();
   const folders = new Map<string, number>();

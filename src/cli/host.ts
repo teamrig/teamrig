@@ -1,4 +1,5 @@
 import { posix, win32 } from 'node:path';
+import { KIT_NAME } from '../core/home.ts';
 import type { GuardedPlace } from '../hooks/install-guard.ts';
 import {
   isUnsupported,
@@ -418,10 +419,20 @@ export function hostHomeIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'plat
   return pathsIfKnown(runtime)?.home(runtime.userHome);
 }
 
-/** The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
+/**
+ * The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know
+ * refuses, as `pathsOf` does, and so does one whose transcripts folder it does not know.
+ */
 export function transcriptsFolderOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
-  return pathsOf(runtime).transcriptsFolder(runtime.userHome);
+  const folder = pathsOf(runtime).transcriptsFolder(runtime.userHome);
+  if (folder === undefined) {
+    throw new RefusedError(NO_TRANSCRIPTS_FOLDER);
+  }
+  return folder;
 }
+
+/** Why a command that reads the session transcripts cannot run on a host whose transcripts folder teamrig does not know. */
+export const NO_TRANSCRIPTS_FOLDER = `${KIT_NAME} does not know where this host keeps its session transcripts, so it cannot read them`;
 
 /**
  * The folder of the person's session transcripts, or undefined on a host whose folders teamrig does not know: for a

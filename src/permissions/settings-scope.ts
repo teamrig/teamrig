@@ -35,13 +35,21 @@ function worktreeFiles(paths: SettingsHost['paths'], folder: string, worktree: s
   return paths.folderSettings(worktree).map((file) => ({ ...file, projectFile: join(folder, relative(worktree, file.path)) }));
 }
 
-/** The user settings, then each project folder's files and its worktrees' in name order; a path named twice is listed once, as first named. */
+/** The settings files of each worktree under `worktrees` the host made for `folder`, in name order. */
+async function worktreesFiles(files: Files, paths: SettingsHost['paths'], folder: string, worktrees: string): Promise<SettingsFile[]> {
+  const names = (await files.list(worktrees)).sort((left, right) => left.localeCompare(right));
+  return names.flatMap((name) => worktreeFiles(paths, folder, join(worktrees, name)));
+}
+
+/**
+ * The user settings, then each project folder's files and its worktrees' in name order; a path named twice is listed
+ * once, as first named. A host whose worktrees folder teamrig does not know adds no worktree's files.
+ */
 export async function settingsScope(files: Files, { paths, userHome }: SettingsHost, projects: readonly string[], platform: NodeJS.Platform): Promise<SettingsFile[]> {
   const scope: SettingsFile[] = [{ path: paths.userSettings(userHome), kind: 'user' }];
   for (const folder of projects) {
     const worktrees = paths.worktrees(folder);
-    const names = (await files.list(worktrees)).sort((left, right) => left.localeCompare(right));
-    scope.push(...paths.folderSettings(folder), ...names.flatMap((name) => worktreeFiles(paths, folder, join(worktrees, name))));
+    scope.push(...paths.folderSettings(folder), ...(worktrees === undefined ? [] : await worktreesFiles(files, paths, folder, worktrees)));
   }
   return scope.filter((file, index) => scope.findIndex((other) => samePath(other.path, file.path, platform)) === index);
 }

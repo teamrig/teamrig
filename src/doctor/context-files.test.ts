@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { testPaths } from '../testing/host.ts';
+import { testPaths, unknownPlacesPaths } from '../testing/host.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { readContextFiles } from './context-files.ts';
 
@@ -55,6 +55,13 @@ describe('readContextFiles', () => {
       memoryIndex: undefined,
       skills: { folders: [join('/u/.claude/skills')], count: 1, chars: '- x-y: d\n'.length },
     });
+  });
+
+  it('measures no memory index on a host whose memory folder teamrig does not know (T5582)', async () => {
+    const files = new MemoryFiles({ '/u/.claude/CLAUDE.md': 'u'.repeat(10), '/u/.claude/projects/-w-app/memory/MEMORY.md': 'm'.repeat(40) });
+    const read = await readContextFiles(files, { ...AT, paths: unknownPlacesPaths() });
+    assert.equal(read.memoryIndex, undefined);
+    assert.deepEqual(read.claudeMd, [{ path: join('/u/.claude', 'CLAUDE.md'), chars: 10 }]);
   });
 
   it('finds nothing in a project with no CLAUDE.md, memory or skills', async () => {

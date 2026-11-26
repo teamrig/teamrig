@@ -48,8 +48,9 @@ export interface SetupScanInput extends SessionContextLocations {
   readonly paths: SessionContextPaths & RulePlacePaths & Pick<HostPaths, 'userSettings'>;
   /** The host's own folder, which holds its installed plugins (`scanPluginHooks`). */
   readonly claudeDir: string;
-  /** The host's transcripts folder, one folder per project (`HostPaths.transcriptsFolder`). */
-  readonly projectsDir: string;
+  /** The host's transcripts folder, one folder per project (`HostPaths.transcriptsFolder`); undefined for a host whose
+   * transcripts folder teamrig does not know, which leaves the use and session-list findings empty. */
+  readonly projectsDir: string | undefined;
   /** Skills used in a transcript written since then count as used. */
   readonly since: number;
   /** The transcripts are read newest first until this many bytes; older ones are left unread. */

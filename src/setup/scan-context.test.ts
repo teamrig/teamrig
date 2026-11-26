@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
-import { testPaths } from '../testing/host.ts';
+import { knownPlace, testPaths, unknownPlacesPaths } from '../testing/host.ts';
 import { MemoryFiles, MemoryPathProbe } from '../testing/memory-files.ts';
 import {
   agentLineOf,
@@ -20,7 +20,7 @@ const PROJECT = resolve('/', 'work', 'app');
 const TEAM_RULES = resolve('/', 'kit', 'teams', 'app', 'rules.md');
 /** The shipped host's paths: its own folder is `.claude` in the home folder. */
 const PATHS = testPaths();
-const MEMORY_INDEX = PATHS.memoryIndex(USER_HOME, PROJECT);
+const MEMORY_INDEX = knownPlace(PATHS.memoryIndex(USER_HOME, PROJECT));
 const AT: SessionContextLocations = {
   paths: PATHS,
   userHome: USER_HOME,
@@ -136,6 +136,19 @@ describe('readSessionContext', () => {
     assert.deepEqual(
       context.agents.map((agent) => [agent.name, agent.scope]),
       [['runner', 'user']],
+    );
+  });
+
+  it("loads no memory index and only the project's agent types on a host whose memory and user agents folders teamrig does not know (T5582)", async () => {
+    const { files, probe } = world({
+      [join(CLAUDE_DIR, 'agents', 'reader.md')]: '---\ndescription: Reads code.\n---\n',
+      [join(PROJECT, '.claude', 'agents', 'runner.md')]: '---\ndescription: Runs checks.\n---\n',
+    });
+    const context = await readSessionContext(files, probe, { ...AT, paths: unknownPlacesPaths() });
+    assert.deepEqual(context.files.filter((file) => file.kind === 'memory'), []);
+    assert.deepEqual(
+      context.agents.map((agent) => [agent.name, agent.scope]),
+      [['runner', 'project']],
     );
   });
 

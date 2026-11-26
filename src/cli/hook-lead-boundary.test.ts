@@ -6,7 +6,7 @@ import type { Files } from '../core/files.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import { APP, CLAUDE_SESSION, CliHarness, EVENTS_PATH, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
-import { NO_PATHS_HOST } from '../testing/host.ts';
+import { NO_PATHS_HOST, UNKNOWN_PLACES_HOST } from '../testing/host.ts';
 import { teamHomeOf, treeHarness } from '../testing/team-tree.ts';
 import { promptLine, replyLine, resultsLine, transcript, type FixtureTool } from '../testing/transcript-lines.ts';
 
@@ -69,6 +69,18 @@ describe('the lead boundary hooks', () => {
     const scratch: FixtureTool = { id: 'last', name: 'Write', path: join(temp, 'claude', 'work-app', 'old-session', 'scratchpad', 'lead-tasks.tsv') };
     const inTemp = { ...AS_LEAD, CLAUDE_CODE_TMPDIR: temp };
     assert.match((await afterTool(await teamWith(scratch), scratch, inTemp, undefined, NO_PATHS_HOST)).stdout.join(''), /the lead edited lead-tasks\.tsv itself/);
+  });
+
+  it('count no memory folder or scratchpad as the lead own on a host that answers it has none (T5582)', async () => {
+    const memory: FixtureTool = { id: 'last', name: 'Write', path: join(USER_HOME, '.claude', 'projects', 'work-app', 'memory', 'lead-notes.md') };
+    assert.match((await afterTool(await teamWith(memory), memory, AS_LEAD, undefined, UNKNOWN_PLACES_HOST)).stdout.join(''), /the lead edited lead-notes\.md itself/);
+    const temp = join(USER_HOME, 'temp');
+    const scratch: FixtureTool = { id: 'last', name: 'Write', path: join(temp, 'claude', 'work-app', 'old-session', 'scratchpad', 'lead-tasks.tsv') };
+    const inTemp = { ...AS_LEAD, CLAUDE_CODE_TMPDIR: temp };
+    assert.match((await afterTool(await teamWith(scratch), scratch, inTemp, undefined, UNKNOWN_PLACES_HOST)).stdout.join(''), /the lead edited lead-tasks\.tsv itself/);
+    const own: FixtureTool = { id: 'last', name: 'Write', path: join(USER_HOME, 'ops', 'lead', 'agenda.md') };
+    const config = { ...TEAM, leadBoundary: { ownPaths: ['~/ops/lead'] } };
+    assert.deepEqual((await afterTool(await teamWith(own, config), own, AS_LEAD, undefined, UNKNOWN_PLACES_HOST)).stdout, [], 'its configured own paths still hold');
   });
 
   it('hand the lead one line at its first web lookup, naming the owner of the task its prompt asks about (T736)', async () => {

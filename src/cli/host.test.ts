@@ -8,7 +8,7 @@ import { DEFAULT_SECRET_PATHS } from '../secret-guard/paths.ts';
 import { secretRulesOf } from '../secret-guard/rules.ts';
 import { codexUserHooks } from '../adapters/hosts/codex-cli/user-hooks.ts';
 import { bareHost } from '../testing/bare-host.ts';
-import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, shippedHost, testPaths } from '../testing/host.ts';
+import { HOOKS_ONLY_HOST, hostNaming, hostReadingLines, hostRunning, hostStarting, NO_PATHS_HOST, SHIPPED_HOST, shippedHost, testPaths, UNKNOWN_PLACES_HOST } from '../testing/host.ts';
 import { quietWorld } from '../testing/quiet-world.ts';
 import { shippedModels } from '../testing/shipped-models.ts';
 import { shippedSteps } from '../testing/shipped-steps.ts';
@@ -30,6 +30,7 @@ import {
   leadLaunchFrom,
   leadLaunchOf,
   modelsIfKnown,
+  NO_TRANSCRIPTS_FOLDER,
   pathsIfKnown,
   pathsOf,
   hookFilePlacesOf,
@@ -39,6 +40,7 @@ import {
   sessionVariablesOf,
   stepsIfKnown,
   stepsOf,
+  transcriptsFolderOf,
   transcriptsIfKept,
   transcriptsOf,
   usageIfMetered,
@@ -583,6 +585,17 @@ describe('hostHomeOf', () => {
     assert.throws(
       () => hostHomeOf({ host: bare, env: {}, platform: 'linux', userHome: USER_HOME }),
       (error) => error instanceof RefusedError && error.message === 'no folder of the host is known',
+    );
+  });
+});
+
+describe('transcriptsFolderOf', () => {
+  it("gives the host's transcripts folder, and refuses on a host whose transcripts folder teamrig does not know (T5582)", () => {
+    const world = quietWorld();
+    assert.equal(transcriptsFolderOf({ host: world.host, env: {}, platform: world.platform, userHome: USER_HOME }), join(USER_HOME, '.claude', 'projects'));
+    assert.throws(
+      () => transcriptsFolderOf({ host: UNKNOWN_PLACES_HOST, env: {}, platform: 'linux', userHome: USER_HOME }),
+      (error) => error instanceof RefusedError && error.message === NO_TRANSCRIPTS_FOLDER,
     );
   });
 });

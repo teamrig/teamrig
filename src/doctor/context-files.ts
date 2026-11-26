@@ -75,7 +75,8 @@ export async function readContextFiles(files: Files, at: ContextFileLocations): 
   const { paths } = at;
   const instructions = paths === undefined ? [] : instructionPaths(paths, at.userHome, at.project);
   const claudeMd = (await Promise.all(instructions.map((path) => measure(files, path)))).filter((file): file is ContextFile => file !== undefined);
-  const memoryIndex = paths === undefined ? undefined : await measure(files, paths.memoryIndex(at.userHome, at.project));
+  const indexPath = paths?.memoryIndex(at.userHome, at.project);
+  const memoryIndex = indexPath === undefined ? undefined : await measure(files, indexPath);
   const folders = skillFolders(paths, at.skills, at.project);
   const skills = (await Promise.all(folders.map((folder) => new SkillDir(files, folder).readAll()))).flat();
   const chars = skills.reduce((sum, skill) => sum + listingLine(skill.name, skill.text).length, 0);

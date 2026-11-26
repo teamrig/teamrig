@@ -5,7 +5,7 @@ import type { HostSource } from '../composition/host-ports.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { CliHarness, TEAM, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { FakeHooks } from '../testing/fake-hooks.ts';
-import { SHIPPED_HOST } from '../testing/host.ts';
+import { SHIPPED_HOST, UNKNOWN_PLACES_HOST } from '../testing/host.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
 import { EXIT } from './runtime.ts';
 
@@ -64,6 +64,12 @@ describe('runCli: channel', () => {
     assert.equal((await run(kit, [])).code, EXIT.refused);
     const bare = await run(await installed(github()), [], new FakeHooks(), bareHost);
     assert.equal(bare.code, EXIT.refused);
+  });
+
+  it('refuses on a host whose plugins folder teamrig does not know, saying so (T5582)', async () => {
+    const result = await run(await installed(github()), [], new FakeHooks(), UNKNOWN_PLACES_HOST);
+    assert.equal(result.code, EXIT.refused);
+    assert.match(result.stdout.concat(result.stderr).join('\n'), /does not know where this host keeps its installed plugins/);
   });
 });
 

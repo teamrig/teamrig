@@ -228,14 +228,18 @@ export const SESSION_LISTS_CHUNK_BYTES = 8 * 1024 * 1024;
 /**
  * The lists in the context of the newest session in `project`: the one running there now, when there is one. Reads
  * its whole transcript, `chunkBytes` at a time, and nothing else; a last line Claude Code is still writing is left
- * out. Undefined when the project has no session transcript.
+ * out. Undefined when the project has no session transcript, or when `projectsDir` is undefined: a host whose
+ * transcripts folder teamrig does not know.
  */
 export async function readSessionLists(
   source: TranscriptSource,
-  projectsDir: string,
+  projectsDir: string | undefined,
   project: string,
   chunkBytes = SESSION_LISTS_CHUNK_BYTES,
 ): Promise<SessionLists | undefined> {
+  if (projectsDir === undefined) {
+    return undefined;
+  }
   const transcript = await newestProjectTranscript(source, projectsDir, project);
   if (transcript === undefined) {
     return undefined;
