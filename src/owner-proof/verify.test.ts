@@ -4,7 +4,10 @@ import { describe, it } from 'node:test';
 import { PROOF_DOMAIN, challengeDigest, type OwnerProofChallenge } from './challenge.ts';
 import {
   ISSUED_AT_SKEW_MS,
+  SIGNATURE_ALGORITHMS,
   actDigest,
+  isSignatureAlgorithm,
+  pinKeyProblem,
   verifyProof,
   type ActBinding,
   type NonceState,
@@ -137,5 +140,39 @@ describe('verifyProof', () => {
     assert.deepEqual(verifyProof(check(rsa, { pins: [{ ...rsa.pin, publicKeyPem: 'not a key' }] })), { ok: false, reason: 'bad-signature' });
     const ec = ecKey('key-ec');
     assert.deepEqual(verifyProof({ ...check(ec), signature: Buffer.from('not der') }), { ok: false, reason: 'bad-signature' });
+  });
+
+  it('refuses an EC key on another curve pinned as ecdsa-p256-sha256, even with a good signature', () => {
+    const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'secp384r1' });
+    const p384: TestKey = {
+      pin: { keyId: 'key-p384', algorithm: 'ecdsa-p256-sha256', publicKeyPem: pem(publicKey) },
+      sign: (data) => sign('sha256', data, privateKey),
+    };
+    assert.deepEqual(verifyProof(check(p384)), { ok: false, reason: 'bad-signature' });
+  });
+});
+
+describe('pinKeyProblem', () => {
+  it('takes a public key of each algorithm kind', () => {
+    for (const key of [rsa, ecKey('key-ec'), edKey('key-ed')]) {
+      assert.equal(pinKeyProblem(key.pin.publicKeyPem, key.pin.algorithm), undefined);
+    }
+  });
+
+  it('refuses text that is no PEM public key', () => {
+    assert.equal(pinKeyProblem('not a key', 'ed25519'), 'expected a PEM public key');
+  });
+
+  it('refuses a key of another kind or curve than its algorithm', () => {
+    assert.equal(pinKeyProblem(rsa.pin.publicKeyPem, 'ed25519'), 'expected a public key of the ed25519 kind');
+    const p384 = pem(generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey);
+    assert.equal(pinKeyProblem(p384, 'ecdsa-p256-sha256'), 'expected a public key of the ecdsa-p256-sha256 kind');
+  });
+});
+
+describe('isSignatureAlgorithm', () => {
+  it('takes each listed algorithm and refuses anything else', () => {
+    for (const algorithm of SIGNATURE_ALGORITHMS) assert.equal(isSignatureAlgorithm(algorithm), true);
+    for (const other of ['rsa', 'ecdsa-p384-sha384', 7, undefined]) assert.equal(isSignatureAlgorithm(other), false);
   });
 });

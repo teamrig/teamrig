@@ -7,7 +7,13 @@ import { jcs } from './jcs.ts';
  * names (T4758 security read, C3). rsa-pkcs1-sha256 is Windows Hello's KeyCredential; ecdsa-p256-sha256 a Secure Enclave key;
  * ed25519 a key a root-owned helper holds.
  */
-export type SignatureAlgorithm = 'rsa-pkcs1-sha256' | 'ecdsa-p256-sha256' | 'ed25519';
+export const SIGNATURE_ALGORITHMS = ['rsa-pkcs1-sha256', 'ecdsa-p256-sha256', 'ed25519'] as const;
+
+export type SignatureAlgorithm = (typeof SIGNATURE_ALGORITHMS)[number];
+
+export function isSignatureAlgorithm(value: unknown): value is SignatureAlgorithm {
+  return SIGNATURE_ALGORITHMS.some((algorithm) => algorithm === value);
+}
 
 /** The owner's enrolled public key as the pin keeps it. */
 export interface PinnedKey {
@@ -82,17 +88,36 @@ function publicKey(pem: string): KeyObject | undefined {
   }
 }
 
+/** The key type and, for EC, the curve each algorithm's key must be. */
+function keyFits(key: KeyObject, algorithm: SignatureAlgorithm): boolean {
+  switch (algorithm) {
+    case 'rsa-pkcs1-sha256':
+      return key.asymmetricKeyType === 'rsa';
+    case 'ecdsa-p256-sha256':
+      return key.asymmetricKeyType === 'ec' && key.asymmetricKeyDetails?.namedCurve === 'prime256v1';
+    case 'ed25519':
+      return key.asymmetricKeyType === 'ed25519';
+  }
+}
+
+/** Why a pinned public key cannot verify anything, or undefined when it is a public key of its algorithm's kind. */
+export function pinKeyProblem(publicKeyPem: string, algorithm: SignatureAlgorithm): string | undefined {
+  const key = publicKey(publicKeyPem);
+  if (key === undefined) return 'expected a PEM public key';
+  return keyFits(key, algorithm) ? undefined : `expected a public key of the ${algorithm} kind`;
+}
+
 function signatureHolds(pin: PinnedKey, data: Buffer, signature: Buffer): boolean {
   const key = publicKey(pin.publicKeyPem);
-  if (key === undefined) return false;
+  if (key === undefined || !keyFits(key, pin.algorithm)) return false;
   try {
     switch (pin.algorithm) {
       case 'rsa-pkcs1-sha256':
-        return key.asymmetricKeyType === 'rsa' && verify('sha256', data, key, signature);
+        return verify('sha256', data, key, signature);
       case 'ecdsa-p256-sha256':
-        return key.asymmetricKeyType === 'ec' && verify('sha256', data, { key, dsaEncoding: 'der' }, signature);
+        return verify('sha256', data, { key, dsaEncoding: 'der' }, signature);
       case 'ed25519':
-        return key.asymmetricKeyType === 'ed25519' && verify(null, data, key, signature);
+        return verify(null, data, key, signature);
     }
   } catch {
     return false;

@@ -4,7 +4,13 @@ import type { PinnedKey } from './verify.ts';
  * The owner's proof adapters, one per operating system's gesture-held key (T4758 plan): Windows Hello, a Secure
  * Enclave key behind Touch ID, a root-owned key behind polkit, a FIDO2 key through OpenSSH, and none.
  */
-export type OwnerProofAdapterId = 'windows-hello' | 'touch-id' | 'polkit' | 'security-key' | 'none';
+export const OWNER_PROOF_ADAPTERS = ['windows-hello', 'touch-id', 'polkit', 'security-key', 'none'] as const;
+
+export type OwnerProofAdapterId = (typeof OWNER_PROOF_ADAPTERS)[number];
+
+export function isOwnerProofAdapterId(value: unknown): value is OwnerProofAdapterId {
+  return OWNER_PROOF_ADAPTERS.some((id) => id === value);
+}
 
 export type EnrolOutcome =
   | { readonly kind: 'enrolled'; readonly key: PinnedKey }
