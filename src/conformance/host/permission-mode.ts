@@ -94,6 +94,7 @@ function eventWith(permission: ObservedPermission | undefined): ReturnType<HookB
     helper: undefined,
     call: undefined,
     prompt: undefined,
+    hostPrompt: false,
     lastReply: undefined,
     stopActive: false,
     source: undefined,

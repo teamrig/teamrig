@@ -98,6 +98,7 @@ function rotationEventOf(runtime: CliRuntime): HookEvent {
     trigger: undefined,
     model: undefined,
     effort: undefined,
+    permission: undefined,
     message: undefined,
     error: undefined,
   };
