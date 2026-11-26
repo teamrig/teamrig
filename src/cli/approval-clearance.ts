@@ -45,9 +45,18 @@ export interface AnswererChange {
  * `--approved`, when the head touches no sensitive path and no file another session's open branch changes; else the
  * one session that must approve the head first, the security reviewer for a sensitive path or the session whose open
  * branch it overlaps, by an approval naming the head. Several such sessions, or a sensitive path in a team with no
- * other security reviewer, are the leaders' to approve: a task holds one answer at a time.
+ * other security reviewer, are the leaders' to approve: a task holds one answer at a time. `namesHead` tells whether
+ * that approval names the head: a prefix for the ship tool's own branches, all 40 hex digits for `teamrig pr`, whose
+ * outside author picks the commits (T4958 C1).
  */
-export function answererClearance(standing: Pick<MergeStanding, 'caller' | 'securityReviewer'>, task: Task, head: string, unapproved: string, change: AnswererChange): MergeClearance {
+export function answererClearance(
+  standing: Pick<MergeStanding, 'caller' | 'securityReviewer'>,
+  task: Task,
+  head: string,
+  unapproved: string,
+  change: AnswererChange,
+  namesHead: (task: Pick<Task, 'answer'>, head: string) => boolean = answerNamesHead,
+): MergeClearance {
   const { caller, securityReviewer } = standing;
   const { sensitive, overlaps } = change;
   const sensitiveText = `the sensitive ${pathsText(sensitive)}`;
@@ -69,7 +78,7 @@ export function answererClearance(standing: Pick<MergeStanding, 'caller' | 'secu
     return refusedClearance(`${unapproved}; it touches ${needs.map((need) => need.why).join(' and ')}, which the leaders approve`);
   }
   const answered = approvedTaskOf([task], caller, [first.who]);
-  if (answered !== undefined && answerNamesHead(task, head)) {
+  if (answered !== undefined && namesHead(task, head)) {
     return { kind: 'approved', by: answered.by };
   }
   const why = needs.map((need) => need.why).join(' and ');

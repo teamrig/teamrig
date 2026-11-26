@@ -251,6 +251,94 @@ describe('teamrig pr approve and pr merge (T4817)', () => {
     });
   });
 
+  describe("the answerer's own clearance of a low-risk head (owner order, T3448)", () => {
+    const DOCS = ghCommit('1'.repeat(40), 'docs: fix a typo', [{ path: 'docs/guide.md' }]);
+    const CODE = ghCommit('2'.repeat(40), 'fix: a check', [{ path: 'docs/guide.md' }, { path: 'src/core/check.ts' }]);
+
+    /**
+     * A team on acme/web whose answerer is alpha and security reviewer bravo, with T1, alpha's, holding acme/web#12;
+     * unless `reviewed` is null, waiting on bravo, who approved it with that note.
+     */
+    async function answererKit(reviewed: string | null = null): Promise<CliHarness> {
+      const kit = new CliHarness({ ...TEAM, roles: { lead: 'lead', securityReviewer: 'bravo' }, github: { repos: ['acme/web'], watcher: 'alpha' } });
+      const steps: (readonly string[])[] = [['add', '--title', 'Outside fix', '--description', 'Land the outside pull request.', '--priority', 'p2', '--ref', 'gh:acme/web#12', '--session', 'alpha']];
+      if (reviewed !== null) {
+        steps.push(['set', 'T1', '--status', 'waiting', '--waits', 'approval:bravo', '--note', 'sensitive head named', '--session', 'alpha'], ['approve', 'T1', '--note', reviewed, '--session', 'bravo']);
+      }
+      for (const step of steps) {
+        const ran = await kit.run([...step], { env: { TEAMRIG_SESSION: step.at(-1) ?? 'alpha' } });
+        assert.equal(ran.code, EXIT.ok, [...ran.stdout, ...ran.stderr].join('\n'));
+      }
+      return kit;
+    }
+
+    /** GitHub holding acme/web#12 at HEAD as `spec` says, HEAD carrying `commits` over main. */
+    function carrying(commits: readonly JsonRecord[], spec: PullStandSpec = {}, total: number = commits.length): FakeGh {
+      return standing(spec).holdsCompare('acme/web', 'main', HEAD, commits, total);
+    }
+
+    it('approves a head that touches only docs text with no leader approval, saying how it cleared', async () => {
+      const gh = carrying([DOCS]);
+      const result = await (await answererKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+      assert.deepEqual(result.stdout.slice(-2), ['CLEARED acme/web#12 at aaaaaaa: low-risk, approved by alpha, the answerer: 1 changed path(s), none sensitive', 'APPROVED acme/web#12 at aaaaaaa']);
+      assert.deepEqual(writes(gh), [pullApproveArgs({ repo: 'acme/web', number: 12 }, HEAD)]);
+    });
+
+    it('merges a low-risk head with --check writing nothing, then for real', async () => {
+      const checkGh = carrying([DOCS]);
+      const kit = await answererKit();
+      const checked = await kit.run(['pr', 'merge', 'acme/web#12', '--head', HEAD, '--check'], { ...AS_ALPHA, gh: checkGh });
+      assert.equal(checked.code, EXIT.ok, [...checked.stdout, ...checked.stderr].join('\n'));
+      assert.match(checked.stdout.at(-1) ?? '', /^CHECK acme\/web#12 at aaaaaaa: every gate passes/u);
+      assert.deepEqual(writes(checkGh), []);
+      const gh = carrying([DOCS]);
+      const merged = await kit.run(['pr', 'merge', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(merged.code, EXIT.ok, [...merged.stdout, ...merged.stderr].join('\n'));
+      assert.equal(merged.stdout.at(-1), 'MERGED acme/web#12 at aaaaaaa');
+    });
+
+    it("approves a sensitive head once the security reviewer's approval names it in full", async () => {
+      const gh = carrying([CODE]);
+      const result = await (await answererKit(`head ${HEAD} reviewed`)).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+      assert.deepEqual(result.stdout.slice(-2), ['CLEARED acme/web#12 at aaaaaaa: approved by bravo', 'APPROVED acme/web#12 at aaaaaaa']);
+      assert.equal(writes(gh).length, 1);
+    });
+
+    /** A refusal case of the answerer's route: the security reviewer's note, what GitHub holds, and the reason. */
+    const answererRefusals: readonly { readonly name: string; readonly reviewed?: string; readonly gh: () => FakeGh; readonly reason: RegExp }[] = [
+      { name: 'a sensitive path, naming the security reviewer', gh: () => carrying([CODE]), reason: /T1 touches the sensitive src\/core\/check\.ts: set it waiting approval:bravo and ask bravo to approve it naming a{40}/u },
+      { name: "the security reviewer's approval names the head only by a prefix", reviewed: `head ${HEAD.slice(0, 12)} reviewed`, gh: () => carrying([CODE]), reason: /set it waiting approval:bravo/u },
+      { name: "the security reviewer's approval names another head", reviewed: `head ${'b'.repeat(40)} reviewed`, gh: () => carrying([CODE]), reason: /set it waiting approval:bravo/u },
+      { name: 'the live head is past --head', gh: () => carrying([DOCS], { head: 'c'.repeat(40) }), reason: /its head is ccccccccc, not aaaaaaaaa: the answerer clears only the live head it read/u },
+      { name: 'GitHub shows no commits of the head', gh: () => standing(), reason: /the code host shows no commits of its head aaaaaaaaa over main/u },
+      { name: 'GitHub shows only some of the commits', gh: () => carrying([DOCS], {}, 2), reason: /carries 2 commits, more than one landing compares \(1\): the answerer clears only a change whose every path it read/u },
+      { name: 'a merge commit', gh: () => carrying([ghCommit('3'.repeat(40), 'Merge main', [{ path: 'docs/guide.md' }], 2)]), reason: /is a merge commit/u },
+    ];
+
+    for (const refusal of answererRefusals) {
+      it(`refuses, writing nothing, ${refusal.name}`, async () => {
+        const gh = refusal.gh();
+        const result = await (await answererKit(refusal.reviewed ?? null)).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+        assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+        assert.match(result.stdout.join('\n'), refusal.reason);
+        assert.deepEqual(writes(gh), []);
+      });
+    }
+
+    it('keeps another session to its leader’s approval, the answerer’s route being the answerer’s alone', async () => {
+      const kit = new CliHarness({ ...TEAM, roles: { lead: 'lead', securityReviewer: 'bravo' }, github: { repos: ['acme/web'], watcher: 'bravo' } });
+      const added = await kit.run(['add', '--title', 'Outside fix', '--description', 'Land it.', '--priority', 'p2', '--ref', 'gh:acme/web#12', '--session', 'alpha'], AS_ALPHA);
+      assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
+      const gh = carrying([DOCS]);
+      const result = await kit.run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });
+      assert.equal(result.code, EXIT.refused, [...result.stdout, ...result.stderr].join('\n'));
+      assert.match(result.stdout.join('\n'), /T1 has no approval of lead/u);
+      assert.deepEqual(writes(gh), []);
+    });
+  });
+
   it('approves a conflicting pull request with failing checks: only a merge needs it clean and green', async () => {
     const gh = standing({ mergeable: 'CONFLICTING', checks: 'FAILURE' });
     const result = await (await landingKit()).run(['pr', 'approve', 'acme/web#12', '--head', HEAD], { ...AS_ALPHA, gh });

@@ -2,15 +2,19 @@ import { parseIssueTarget, targetText, type IssueTarget, type PullStand } from '
 import { printable } from '../../core/printable.ts';
 import { holderOf } from '../../issues/status-push.ts';
 import { pullCarry } from '../../merge/pull-carry.ts';
+import { pullPathsOf } from '../../merge/pull-paths.ts';
 import { answerNamesFullHead, approvedTaskOf, isFullCommitSha } from '../../register/approval.ts';
 import type { Task } from '../../register/fold.ts';
 import { pullConflicts } from '../../sync/pull-conflicts.ts';
+import { githubWatcher } from '../../sync/watcher.ts';
+import { answererClearance, clearanceText, sensitivePathsOf } from '../approval-clearance.ts';
 import { onePositional, requiredFlag } from '../args.ts';
+import { repoGlobsOf } from '../host.ts';
 import type { Hosts } from '../issue-hosts.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { approversIn } from '../ship-approval.ts';
+import { approversIn, sensitiveGlobsOf } from '../ship-approval.ts';
 import type { ParsedArgs } from '../args.ts';
-import { checkedRepo, hostsAfter } from './team-repo.ts';
+import { checkedRepo, hostsAfter, type CheckedRepo } from './team-repo.ts';
 
 /** A commit id as the report prints it. */
 const SHORT_SHA = 7;
@@ -56,11 +60,18 @@ type LandingStep = 'approve' | 'merge';
 
 /**
  * A pull request cleared for its step (the hosts to write through, where it stood when read and, when its live head is
- * not the approved one, the approved head with the work commits it carried there), or the exit of a landing that ends
- * before any write.
+ * not the approved one, the approved head with the work commits it carried there; `answered` says how the answerer's
+ * route cleared it, undefined on a leader's approval), or the exit of a landing that ends before any write.
  */
 type Clearing =
-  | { readonly kind: 'cleared'; readonly target: IssueTarget; readonly hosts: Hosts; readonly pull: PullStand; readonly carried: Carried | undefined }
+  | {
+      readonly kind: 'cleared';
+      readonly target: IssueTarget;
+      readonly hosts: Hosts;
+      readonly pull: PullStand;
+      readonly carried: Carried | undefined;
+      readonly answered: string | undefined;
+    }
   | { readonly kind: 'ended'; readonly code: ExitCode };
 
 /** The approved head an approval carried from, and how many work commits it carried patch for patch (T5117). */
@@ -73,7 +84,8 @@ interface Carried {
  * `pr approve <owner/name#n> --head <sha> [--check]` (T4817): approves one pull request of the team's repositories at
  * its live head, so the session holding its task can review an outside pull request on GitHub with no person's hand.
  * `--head` is the head the approval names; a live head past it is approved only when it is that head rebased, the
- * same work commits patch for patch (T5117). It writes only once every gate in clearedPull passes. `--check` prints
+ * same work commits patch for patch (T5117). The team's answerer needs no leader's approval of a head that touches
+ * only low-risk paths (owner order, T3448). It writes only once every gate in clearedPull passes. `--check` prints
  * what it would do and writes nothing. Exit 2 when refused, 1 when the host failed, else 0.
  */
 export async function prApprove(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
@@ -98,9 +110,12 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
   if (cleared.kind === 'ended') {
     return cleared.code;
   }
-  const { target, hosts, pull, carried } = cleared;
+  const { target, hosts, pull, carried, answered } = cleared;
   const name = targetText(target);
   const head = pull.head.slice(0, SHORT_SHA);
+  if (answered !== undefined) {
+    say(`CLEARED ${name} at ${head}: ${answered}`);
+  }
   if (carried !== undefined) {
     const count = carried.commits === 1 ? '1 commit' : `${String(carried.commits)} commits`;
     say(`CARRIED ${name} at ${head}: it carries the approved ${carried.approved.slice(0, 9)}'s ${count}, patch for patch, onto a newer base`);
@@ -135,9 +150,10 @@ async function land(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): P
  * covers only the head it names, T2788), which a root team's lead needs from no one; and the pull request open, no
  * draft, on its default branch, its live head either `--head` or that head rebased onto a newer base with the same
  * work commits, patch for patch (pullCarry, T5117). A merge also needs no conflicts, not queued already and its live
- * head's checks passed (pending, failing or none is refused). Ended with exit 0,
- * after an OFF line, while GitHub is off on this machine, and with exit 1 when the read failed. Refused or failed, it
- * writes nothing.
+ * head's checks passed (pending, failing or none is refused). With no leader's approval naming `--head`, the team's
+ * answerer (`githubWatcher`) may clear its own task's pull request instead (owner order, T3448): see answererCleared.
+ * Ended with exit 0, after an OFF line, while GitHub is off on this machine, and with exit 1 when the read failed.
+ * Refused or failed, it writes nothing.
  */
 async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingStep): Promise<Clearing> {
   const text = onePositional(args, 'pull request');
@@ -153,7 +169,9 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
   const checked = await checkedRepo(args, runtime, target.repo);
   const task = ownTask(target, (await checked.team.register.snapshot()).state.tasks.values(), checked.caller);
   const approvers = approversIn(checked.team.paths.team, checked.config, checked.caller, checked.team.above);
-  if (approvers.length > 0 && approvedTaskOf([task], checked.caller, approvers) === undefined) {
+  const leaderApproved = approvers.length === 0 || approvedTaskOf([task], checked.caller, approvers) !== undefined;
+  const answerer = approvers.length > 0 && checked.caller === githubWatcher(checked.config);
+  if (!leaderApproved && !answerer) {
     throw new RefusedError(`${task.id} has no approval of ${approvers.join(' or ')}: set it waiting approval:${approvers[0] ?? ''} with a note naming the head ${given}; nothing was written`);
   }
   const hosts = await hostsAfter(checked, runtime, undefined);
@@ -168,12 +186,19 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
   if (read.kind === 'missing') {
     throw new RefusedError(`${target.repo} has no pull request #${target.number} this access can see; nothing was written`);
   }
-  const refused = standRefusal(read.pull, step) ?? (approvers.length > 0 && !answerNamesFullHead(task, given) ? `the approval of ${task.id} does not name the head ${given} in full: ask for an approval naming all 40 hex digits of that head` : undefined);
-  if (refused !== undefined) {
-    throw new RefusedError(`${name}: ${refused}; nothing was written`);
+  const standing = standRefusal(read.pull, step);
+  if (standing !== undefined) {
+    throw new RefusedError(`${name}: ${standing}; nothing was written`);
+  }
+  const leaderNamesHead = approvers.length === 0 || (leaderApproved && answerNamesFullHead(task, given));
+  if (!leaderNamesHead && answerer) {
+    return answererCleared({ checked, runtime, hosts, target, pull: read.pull, task, given, approvers });
+  }
+  if (!leaderNamesHead) {
+    throw new RefusedError(`${name}: the approval of ${task.id} does not name the head ${given} in full: ask for an approval naming all 40 hex digits of that head; nothing was written`);
   }
   if (read.pull.head === given) {
-    return { kind: 'cleared', target, hosts, pull: read.pull, carried: undefined };
+    return { kind: 'cleared', target, hosts, pull: read.pull, carried: undefined, answered: undefined };
   }
   const carry = await pullCarry(hosts.codeHost, target, read.pull, given);
   switch (carry.kind) {
@@ -183,8 +208,56 @@ async function clearedPull(args: ParsedArgs, runtime: CliRuntime, step: LandingS
     case 'refused':
       throw new RefusedError(`${name}: ${carry.reason}; nothing was written`);
     case 'carried':
-      return { kind: 'cleared', target, hosts, pull: read.pull, carried: { approved: given, commits: carry.commits } };
+      return { kind: 'cleared', target, hosts, pull: read.pull, carried: { approved: given, commits: carry.commits }, answered: undefined };
   }
+}
+
+/** What the answerer's route reads: the checked caller, the pull request as read, its task, `--head` and the caller's leaders. */
+interface AnswererLanding {
+  readonly checked: CheckedRepo;
+  readonly runtime: CliRuntime;
+  readonly hosts: Hosts;
+  readonly target: IssueTarget;
+  readonly pull: PullStand;
+  readonly task: Task;
+  readonly given: string;
+  readonly approvers: readonly string[];
+}
+
+/**
+ * The answerer's clearance of its own task's pull request, which no leader approved naming `--head` (owner order,
+ * T3448): only at the live head itself (an approval carries over a rebase, the answerer's own reading does not), and
+ * only by every path the head's commits change (pullPathsOf, failing closed). A head touching only low-risk paths
+ * (`pushGuard.lowRiskPaths`, none matching sensitiveGlobsOf with the hosts' repository globs) is cleared alone; a
+ * sensitive one needs the security reviewer's approval of the task naming the head in full, as answererClearance
+ * rules. No open-branch overlap is read: an outside pull request that overlaps a session's branch costs that session a
+ * rebase, not a safety gate.
+ */
+async function answererCleared(landing: AnswererLanding): Promise<Clearing> {
+  const { checked, runtime, hosts, target, pull, task, given, approvers } = landing;
+  const name = targetText(target);
+  if (pull.head !== given) {
+    throw new RefusedError(
+      `${name}: its head is ${pull.head.slice(0, 9)}, not ${given.slice(0, 9)}: the answerer clears only the live head it read, so read that head's change and give it as --head; nothing was written`,
+    );
+  }
+  const found = pullPathsOf(await hosts.codeHost.pullWork(target, pull.base, given), `its head ${given.slice(0, 9)} over ${pull.base}`);
+  if (found.kind === 'failed') {
+    runtime.out.stderr(`FAILED ${name}: ${found.reason}; nothing was written`);
+    return { kind: 'ended', code: EXIT.failed };
+  }
+  if (found.kind === 'refused') {
+    throw new RefusedError(`${name}: ${found.reason}; nothing was written`);
+  }
+  const { config, caller } = checked;
+  const sensitive = sensitivePathsOf(found.paths, { lowRisk: config.pushGuard.lowRiskPaths, sensitive: sensitiveGlobsOf(config, repoGlobsOf(runtime)) });
+  const unapproved = `${task.id} has no approval of ${approvers.join(' or ')} naming ${given} in full`;
+  const change = { paths: found.paths.length, sensitive, overlaps: [] };
+  const clearance = answererClearance({ caller, securityReviewer: config.roles.securityReviewer }, task, given, unapproved, change, answerNamesFullHead);
+  if (clearance.kind === 'refused') {
+    throw new RefusedError(`${name}: ${clearance.reason}; nothing was written`);
+  }
+  return { kind: 'cleared', target, hosts, pull, carried: undefined, answered: clearanceText(clearance) };
 }
 
 /** The one task holding `target`, refused when none or several do, or when it is another session's. */
