@@ -42,6 +42,8 @@ interface FakeOptions {
   readonly patches?: readonly string[];
   /** The work commits each rev carries, by rev; none by default. */
   readonly work?: Readonly<Record<string, readonly WorkCommit[]>>;
+  /** Each rev's leading work commits main carries under other shas (`landedOf`); none by default. */
+  readonly landed?: Readonly<Record<string, readonly WorkCommit[]>>;
   /** The git call, its args joined with spaces, that fails like git with no such commit. */
   readonly gitFails?: string;
   /** What a --merge run checks locally (repos.json `mergeChecks`); the whole suite by default. */
@@ -120,14 +122,18 @@ function fake(options: FakeOptions = {}): Fake {
       events.push(`clear ${branch} ${head} ${approved ?? 'none'}`);
       return Promise.resolve(options.clearance ?? { kind: 'approved', by: 'lead' });
     },
-    patchOf: (rev) => {
-      events.push(`patch ${rev}`);
+    patchOf: (rev, from) => {
+      events.push(from === null ? `patch ${rev}` : `patch ${rev} from ${from}`);
       const found = options.patches ?? [];
       return found[patches++] ?? found.at(-1) ?? 'patch0';
     },
     workOf: (rev) => {
       events.push(`work ${rev}`);
       return options.work?.[rev] ?? [];
+    },
+    landedOf: (rev) => {
+      events.push(`landed ${rev}`);
+      return options.landed?.[rev] ?? [];
     },
   };
   return { deps, events, logs, takenBack };
@@ -439,6 +445,7 @@ test('with --merge, clears the merge of the branch at its head and fingerprints 
     'git rev-parse --abbrev-ref HEAD',
     'git rev-parse HEAD',
     `clear t827-ship-tool ${HEAD_SHA} 5efae2e91`,
+    `landed ${HEAD_SHA}`,
     `patch ${HEAD_SHA}`,
     'hold head',
     'take back 2 chunk(s) since origin/main',
@@ -463,6 +470,7 @@ test('with --merge on a rebase of the approved head, the same work commits patch
     'git rev-parse --abbrev-ref HEAD',
     'git rev-parse HEAD',
     'git rev-parse --verify --quiet 61854f9e1^{commit}',
+    `landed ${APPROVED_SHA}`,
     `work ${APPROVED_SHA}`,
     `work ${HEAD_SHA}`,
     `clear t827-ship-tool ${APPROVED_SHA} 61854f9e1`,
@@ -485,6 +493,34 @@ test('with --merge on a head whose work commits differ from the approved head, e
 
   const dropped = fake(rebased([workOf(HEAD_SHA, 'ship: a', 'pa')]));
   await assert.rejects(shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, dropped.deps), /: dropped 777777777 "docs: a"\./);
+});
+
+/** A parent branch's work commit the approved head carries first, which main holds under another sha (T3343). */
+const PARENT = workOf('6666666666', 'core: the parent (T8)', 'pp');
+const STACKED_HEAD = [workOf(HEAD_SHA, 'ship: a', 'pa'), workOf('8888888888', 'docs: a', 'pd')];
+
+test("with --merge on a rebase of an approved head stacked on a parent that merged first, its own commits clear it, its change read past the parent's (T3343)", async () => {
+  const options = rebased(STACKED_HEAD);
+  const { deps, events, logs } = fake({ ...options, work: { ...options.work, [APPROVED_SHA]: [PARENT, ...APPROVED_WORK] }, landed: { [APPROVED_SHA]: [PARENT] } });
+  assert.equal(await shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, deps), 0);
+  assert.deepEqual(events.slice(3, 8), [`landed ${APPROVED_SHA}`, `work ${APPROVED_SHA}`, `work ${HEAD_SHA}`, `clear t827-ship-tool ${APPROVED_SHA} 61854f9e1`, `patch ${APPROVED_SHA} from 6666666666`]);
+  assert.ok(logs.includes("head 5efae2e91 carries the approved 61854f9e1's 2 work commit(s), patch for patch"));
+  assert.ok(logs.includes('61854f9e1 is stacked on a parent main holds already (666666666 "core: the parent (T8)"): its approved change is read from 666666666'));
+  assert.ok(!events.includes(`landed ${HEAD_SHA}`), 'the landed run is read once, on the approved head');
+});
+
+test("with --merge on the approved head itself, stacked on a parent that merged first, its change is read past the parent's, as the ship's rebase leaves it (T3343)", async () => {
+  const { deps, events } = fake({ landed: { [HEAD_SHA]: [PARENT] } });
+  assert.equal(await shipCommits({ ...ARGS, merge: true, approved: '5efae2e91' }, CHUNKS, deps), 0);
+  assert.ok(events.includes(`patch ${HEAD_SHA} from 6666666666`));
+  assert.ok(events.includes('patch HEAD'), 'the pushed head is read from its merge base with main');
+});
+
+test('with --merge on a rebase whose parent was amended before it merged, the parent commit counts as dropped: a new approval (T3343)', async () => {
+  const options = rebased(STACKED_HEAD);
+  const { deps, events } = fake({ ...options, work: { ...options.work, [APPROVED_SHA]: [PARENT, ...APPROVED_WORK] } });
+  await assert.rejects(shipCommits({ ...ARGS, merge: true, approved: '61854f9e1' }, CHUNKS, deps), /: dropped 666666666 "core: the parent \(T8\)"\. Ship it without --merge/);
+  assert.ok(!events.some((event) => event.startsWith('clear ')));
 });
 
 test('with --merge, an --approved that is neither the head nor a commit here is refused before anything changes (T2913)', async () => {

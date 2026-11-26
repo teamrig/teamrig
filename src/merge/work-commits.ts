@@ -12,7 +12,20 @@ export interface WorkCommit {
   readonly patch: string;
 }
 
-const named = (commit: WorkCommit): string => `${commit.sha.slice(0, 9)} "${commit.subject}"`;
+export const named = (commit: WorkCommit): string => `${commit.sha.slice(0, 9)} "${commit.subject}"`;
+
+/**
+ * The leading run of `approved`'s work commits whose patch one of `main`'s work commits carries (T3343): a branch
+ * stacked on a parent branch that rebase-merged first carries the parent's work under its old shas, which main holds
+ * under new ones. Its approval covers only the commits after the run. Empty when no commit leads with a landed patch,
+ * and when every one is landed, which leaves no work of the branch's own to approve. A landed commit after the
+ * branch's own work stays its own, so a head that drops it differs from the approved one.
+ */
+export function landedRun(approved: readonly WorkCommit[], main: readonly WorkCommit[]): readonly WorkCommit[] {
+  const onMain = new Set(main.filter((commit) => !commit.merge).map((commit) => commit.patch));
+  const own = approved.findIndex((commit) => commit.merge || !onMain.has(commit.patch));
+  return own === -1 ? [] : approved.slice(0, own);
+}
 
 /**
  * How `head`'s work commits differ from `approved`'s, each change named (changed, dropped, added, reordered); empty

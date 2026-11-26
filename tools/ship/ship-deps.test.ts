@@ -121,7 +121,8 @@ describe('realShipDeps', () => {
     repo.git('commit', '-q', '-m', 'core: b');
     const deps = realShipDeps(repo.dir, null);
     assert.deepEqual(deps.workOf('HEAD').map((commit) => [commit.subject, commit.merge]), [['core: b', false]]);
-    assert.match(deps.patchOf('HEAD'), /^[0-9a-f]+$/);
-    assert.equal(deps.patchOf('HEAD'), deps.patchOf(repo.git('rev-parse', 'HEAD').trim()));
+    assert.match(deps.patchOf('HEAD', null), /^[0-9a-f]+$/);
+    assert.equal(deps.patchOf('HEAD', null), deps.patchOf(repo.git('rev-parse', 'HEAD').trim(), null));
+    assert.deepEqual(deps.landedOf('HEAD'), []);
   });
 });

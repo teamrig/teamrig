@@ -5,8 +5,8 @@ import { EXIT, RefusedError } from '../../src/cli/runtime.ts';
 import { mergeStandingOf, type MergeStanding } from '../../src/cli/ship-approval.ts';
 import { CLAUDE_SESSION, CliHarness, TEAM_HOME } from '../../src/testing/cli-harness.ts';
 import { TempRepo } from '../lib/temp-repo.ts';
-import { changePatch, clearMerge, clearMergeFrom, clearTaskMerge, clearTaskMergeFrom, mergeClearance, type MergeReads, shipWritesOf, type StandingOf, teamrigShipWritesOf, type TabCallerOf, taskOfBranch, workCommitsOf } from './approval.ts';
-import { type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
+import { changePatch, changePatchFrom, clearMerge, clearMergeFrom, clearTaskMerge, clearTaskMergeFrom, mergeClearance, type MergeReads, shipWritesOf, type StandingOf, teamrigShipWritesOf, type TabCallerOf, taskOfBranch, workCommitsOf } from './approval.ts';
+import { landedRun, type WorkCommit, workChanges } from '../../src/merge/work-commits.ts';
 import { profileFor, readProfiles } from './repos.ts';
 import { TEAMRIG_RELEASE_MANIFEST, TEAMRIG_RELEASE_STAMPS, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_VERSION_FILES } from './version-bump.ts';
 
@@ -568,5 +568,62 @@ describe('changePatch: the fingerprint of what a branch changes over main', () =
         { subject: 'side: c', merge: false, empty: false },
       ]);
     });
+  });
+});
+
+describe('a branch stacked on a parent that merged first keeps its approval once rebased past the parent (T3343)', () => {
+  const WRITES = shipWritesOf(['dist/', MANIFEST, VERSION_TS], TEAMRIG_VERSION_FILES, TEAMRIG_RELEASE_STAMPS);
+  let repo: TempRepo;
+  const git = (args: readonly string[]): string => repo.git(...args);
+  const commitFiles = (subject: string, files: Readonly<Record<string, string>>): string => {
+    for (const [path, text] of Object.entries(files)) repo.write(path, text);
+    repo.git('add', '--', ...Object.keys(files));
+    repo.git('commit', '-q', '-m', subject);
+    return repo.git('rev-parse', 'HEAD').trim();
+  };
+  const raise = (version: string): string => commitFiles(`plugin: version ${version}`, { [MANIFEST]: manifest(version), [VERSION_TS]: versionTs(version) });
+  let parentWork = '';
+  let approved = '';
+
+  beforeEach(() => {
+    repo = new TempRepo('approval-stacked').init();
+    repo.git('symbolic-ref', 'HEAD', 'refs/heads/main');
+    commitFiles('base', { 'src/a.ts': 'a\n', 'dist/a.js': 'a\n', [MANIFEST]: manifest('0.1.0'), [VERSION_TS]: versionTs('0.1.0') });
+    repo.git('checkout', '-q', '-b', 't8-parent');
+    parentWork = commitFiles('core: a (T8)', { 'src/a.ts': 'a, changed\n' });
+    raise('0.1.1');
+    repo.git('checkout', '-q', '-b', 't9-stacked');
+    commitFiles('core: c (T9)', { 'src/c.ts': 'c\n' });
+    approved = raise('0.1.2');
+    repo.git('checkout', '-q', 'main');
+    // Main moved on before the parent landed, so main's copy of the parent's work has another sha.
+    commitFiles('core: b', { 'src/b.ts': 'b\n' });
+    commitFiles('core: a (T8)', { 'src/a.ts': 'a, changed\n' });
+    raise('0.2.0');
+    repo.git('checkout', '-q', '-b', 't9-rebased');
+    repo.git('cherry-pick', approved.slice(0, 12) + '~1');
+    raise('0.2.1');
+  });
+
+  afterEach(() => repo.remove());
+
+  const landed = (rev: string): readonly WorkCommit[] => landedRun(workCommitsOf(git, rev, 'main', WRITES), workCommitsOf(git, 'main', rev, WRITES));
+
+  it("finds the parent's work in the approved head, and the rebased head carries the rest patch for patch", () => {
+    const run = landed(approved);
+    assert.deepEqual(run.map((commit) => commit.sha), [parentWork]);
+    const own = workCommitsOf(git, approved, 'main', WRITES).filter((commit) => !run.some((one) => one.sha === commit.sha));
+    assert.deepEqual(workChanges(own, workCommitsOf(git, 'HEAD', 'main', WRITES)), []);
+    assert.deepEqual(landed('HEAD'), []);
+  });
+
+  it("reads the approved change from the parent's last commit inside it, the fingerprint the rebased head has", () => {
+    assert.notEqual(changePatch(git, approved, 'main', WRITES), changePatch(git, 'HEAD', 'main', WRITES), "from the merge base it holds the parent's work");
+    assert.equal(changePatchFrom(git, parentWork, approved, WRITES), changePatch(git, 'HEAD', 'main', WRITES));
+  });
+
+  it('still tells an edited own commit apart', () => {
+    commitFiles('core: c, more', { 'src/c.ts': 'c, more\n' });
+    assert.notEqual(changePatchFrom(git, parentWork, approved, WRITES), changePatch(git, 'HEAD', 'main', WRITES));
   });
 });
