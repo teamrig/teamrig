@@ -10,6 +10,7 @@ import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from '../core/time.ts';
 import { TimeZone } from '../core/zone.ts';
 import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
 import { isItemType, ITEM_TYPES, type ItemType } from '../register/events.ts';
+import { readLevelNamesSetting } from '../register/level-names.ts';
 import { branchPatternProblem, isBranchType } from '../worktree/branch-name.ts';
 import { KEEP_RULE_PATTERN } from '../permissions/allow-rules.ts';
 import { isServiceCommand, SERVICE_COMMANDS, TEAM_HELD_COMMANDS, type ServiceCommand } from '../permissions/service-commands.ts';
@@ -35,6 +36,7 @@ import {
   DEFAULT_HIRING,
   DEFAULT_EXEC,
   DEFAULT_CHANGES,
+  DEFAULT_LEVELS,
   DEFAULT_LOCK,
   DEFAULT_LEAD_BOUNDARY,
   DEFAULT_TURN_LOG,
@@ -154,6 +156,7 @@ import {
   SKIP_HOOKS,
   type AlertsConfig,
   type ChangesConfig,
+  type LevelsConfig,
   type ContextFilesConfig,
   type ExecConfig,
   type OtherAreaListing,
@@ -631,6 +634,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
       coldAfterMinutes: read.integer(messages, 'coldAfterMinutes', 'messages', DEFAULT_MESSAGES.coldAfterMinutes, CONFIG_LIMITS.coldAfterMinutes),
     },
     register: parseRegister(read, read.section(raw, 'register', '')),
+    levels: parseLevels(read, read.section(raw, 'levels', '')),
     skills: parseSkills(read, read.section(raw, 'skills', '')),
     contextFiles: parseContextFiles(read, read.section(raw, 'contextFiles', '')),
     lock: {
@@ -1825,6 +1829,11 @@ function parseChanges(read: ConfigReader, raw: JsonRecord): ChangesConfig {
   const known = `one of ${CHANGE_SOURCE_IDS.join(', ')}`;
   const sources = read.stringList(raw, 'sources', 'changes', DEFAULT_CHANGES.sources, (id) => (isChangeSourceId(id) ? undefined : known), CHANGE_SOURCE_IDS.length);
   return { sources: [...new Set(sources.filter(isChangeSourceId))] };
+}
+
+/** `levels`: a refused `names` is reported and reads as the default, so the output keeps its labels. */
+function parseLevels(read: ConfigReader, raw: JsonRecord): LevelsConfig {
+  return { names: readLevelNamesSetting(read, raw['names'], 'levels.names') ?? DEFAULT_LEVELS.names };
 }
 
 function parseExec(read: ConfigReader, raw: JsonRecord): ExecConfig {

@@ -236,6 +236,28 @@ describe('parseConfig', () => {
     assert.equal(config.leadBoundary.searchNudgeAt, 3);
   });
 
+  it('reads levels.names as auto by default, a preset or a full map, and refuses anything else with its default kept', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.levels, { names: 'auto' });
+    assert.equal(parseConfig({ ...ROSTER, levels: { names: 'jira' } }).config.levels.names, 'jira');
+    const map = {
+      goal: { singular: 'Theme', plural: 'Themes' },
+      feature: { singular: 'Epic', plural: 'Epics' },
+      task: { singular: 'Story', plural: 'Stories' },
+      subtask: { singular: 'Step', plural: 'Steps' },
+    };
+    const good = parseConfig({ ...ROSTER, levels: { names: map } });
+    assert.deepEqual(good.issues, []);
+    assert.deepEqual(good.config.levels.names, map);
+    const unknown = parseConfig({ ...ROSTER, levels: { names: 'trello' } });
+    assert.deepEqual(paths(unknown.issues), ['levels.names']);
+    assert.match(unknown.issues[0]?.message ?? '', /one of default, youtrack, jira/);
+    assert.equal(unknown.config.levels.names, 'auto');
+    const partial = parseConfig({ ...ROSTER, levels: { names: { goal: map.goal } } });
+    assert.deepEqual(paths(partial.issues), ['levels.names.feature', 'levels.names.task', 'levels.names.subtask']);
+    assert.equal(partial.config.levels.names, 'auto');
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, levels: { names: 3 } }).issues), ['levels.names']);
+  });
+
   it('reads changes.sources as known source ids, every source by default, and refuses an unknown one', () => {
     assert.deepEqual(parseConfig(ROSTER).config.changes, { sources: [] });
     assert.deepEqual(parseConfig({ ...ROSTER, changes: { sources: ['git', 'notes', 'git'] } }).config.changes.sources, ['git', 'notes']);

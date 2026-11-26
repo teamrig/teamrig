@@ -28,6 +28,7 @@ import { SERVICE_COMMANDS } from '../permissions/service-commands.ts';
 import { SHARED_METHOD_NAMES } from '../db-write-guard/verbs.ts';
 import { PREFIX_PATTERN } from '../readonly-shell/rules.ts';
 import { CORE_RULE_KEYS } from '../rules/keys.ts';
+import { AUTO_LEVEL_NAMES, LEVEL_PRESET_NAMES, MAX_LEVEL_LABEL } from '../register/level-names.ts';
 import { AD_HOC_RUNNERS, COMMIT_GATES, CONFLICT_WINNERS, DB_CLIENT_VOCABULARIES, DB_PROGRAM_SHAPES, DB_WRITES, EFFORT_LEVELS, GOALS_MODES, HOOK_ASKS, PACKAGE_INSTALLS, PUSH_TO_PROTECTED, REVIEW_CLASSES, REVIEW_PATH_MODES, ROUTE_ALLOWS, VERIFY_GATES } from './types.ts';
 
 /** The roster has no default; everything else in the schema must state the code's default. */
@@ -96,6 +97,8 @@ const EVERY_KEY = {
   connectors: { tracker2: {} },
   paths: { state: '/s', inbox: '/i', skills: '/k' },
   exec: { path: ['C:/tools'], webhookEnv: 'EXEC_WEBHOOK_URL' },
+  // A preset, not a map: the map is an anyOf branch whose level keys the levelName def describes.
+  levels: { names: 'jira' },
   alerts: { pageWebhookEnv: 'PAGE_WEBHOOK_URL', pageWebhookFile: 'C:/chat/.page-webhook' },
   ui: { path: 'C:/pane/out/ui/main.js' },
 };
@@ -500,6 +503,23 @@ describe('config.schema.json', () => {
 
   it('takes the goals modes the parser takes', async () => {
     assert.deepEqual(nodeAt(await loadSchema(), 'register.goals')['enum'], [...GOALS_MODES]);
+  });
+
+  it('takes the level names the parser takes: auto, every preset, and labels of at most the printed length (T5205)', async () => {
+    const schema = await loadSchema();
+    const branches = nodeAt(schema, 'levels.names')['anyOf'];
+    assert.ok(Array.isArray(branches));
+    const choice: unknown = branches[0];
+    assert.ok(isRecord(choice));
+    assert.deepEqual(choice['enum'], [AUTO_LEVEL_NAMES, ...LEVEL_PRESET_NAMES]);
+    const defs = schema['$defs'];
+    const levelName = isRecord(defs) ? defs['levelName'] : undefined;
+    assert.ok(isRecord(levelName));
+    for (const side of ['singular', 'plural']) {
+      const label: unknown = properties(levelName)[side];
+      assert.ok(isRecord(label));
+      assert.equal(label['maxLength'], MAX_LEVEL_LABEL, side);
+    }
   });
 
   it('takes the db-write guard entries the parser takes', async () => {

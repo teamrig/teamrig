@@ -441,6 +441,31 @@
       },
       "additionalProperties": false
     },
+    "levels": {
+      "description": "What teamrig prints for each level of work. Labels only: commands, fields and the register keep the words goal, feature, task and subtask, and a person's own levels.names in the user file wins over the team's.",
+      "type": "object",
+      "properties": {
+        "names": {
+          "description": "auto: the team's tracker connector's names when it declares them, else the default set. A preset: default (Goal / Feature / Task / Subtask, teamrig's own), youtrack (Epic / User Story / Task / Subtask), jira (Initiative / Epic / Story / Sub-task), azure-devops (Epic / Feature / User Story / Task), linear (Initiative / Project / Issue / Sub-issue), github (Milestone / Feature / Issue / Sub-issue), asana (Goal / Project / Task / Subtask), clickup (Goal / List / Task / Subtask). Or a map naming each of goal, feature, task and subtask with a singular and a plural, each one line of at most 40 characters.",
+          "anyOf": [
+            { "enum": ["auto", "default", "youtrack", "jira", "azure-devops", "linear", "github", "asana", "clickup"] },
+            {
+              "type": "object",
+              "properties": {
+                "goal": { "$ref": "#/$defs/levelName" },
+                "feature": { "$ref": "#/$defs/levelName" },
+                "task": { "$ref": "#/$defs/levelName" },
+                "subtask": { "$ref": "#/$defs/levelName" }
+              },
+              "required": ["goal", "feature", "task", "subtask"],
+              "additionalProperties": false
+            }
+          ],
+          "default": "auto"
+        }
+      },
+      "additionalProperties": false
+    },
     "exec": {
       "description": "Privileged commands a reviewer approved, run once by teamrig exec run.",
       "type": "object",
@@ -2384,6 +2409,16 @@
     }
   },
   "$defs": {
+    "levelName": {
+      "description": "One level's label in levels.names: its singular, for one item, and its plural.",
+      "type": "object",
+      "properties": {
+        "singular": { "description": "The label for one item.", "type": "string", "maxLength": 40, "pattern": "^[^\\r\\n]*$" },
+        "plural": { "description": "The label for several items.", "type": "string", "maxLength": 40, "pattern": "^[^\\r\\n]*$" }
+      },
+      "required": ["singular", "plural"],
+      "additionalProperties": false
+    },
     "sessionName": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{0,31}$"

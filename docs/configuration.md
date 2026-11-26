@@ -30,6 +30,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `lock` | [object](#lock) |  | The file lock each write of the team's state files takes (the task list, the exec audit, the GitHub sync), so two writes never interleave. |
 | `pushGuard` | [object](#pushguard) |  | The push guard: what a git push to a protected branch does. |
 | `changes` | [object](#changes) |  | Where teamrig changes reads what changed in the project. |
+| `levels` | [object](#levels) |  | What teamrig prints for each level of work. Labels only: commands, fields and the register keep the words goal, feature, task and subtask, and a person's own levels.names in the user file wins over the team's. |
 | `exec` | [object](#exec) |  | Privileged commands a reviewer approved, run once by teamrig exec run. |
 | `packageGuard` | [object](#packageguard) |  | The package guard: what a Bash or PowerShell call that installs a package or runs one ad hoc does. |
 | `commitGuard` | [object](#commitguard) |  | The commit guard: what a Bash or PowerShell call that runs git without the repository's hooks does. |
@@ -247,6 +248,14 @@ Where teamrig changes reads what changed in the project.
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `sources` | array (at most 3 items, unique) of one of `"notes"`, `"register"`, `"git"` | `[]` | The change sources teamrig changes reads, in the order their entries win when two name one change: notes (the project's changes/\<slug>.md files not released yet), register (the team's tasks its commits name), git (the commit subjects). Empty: every source that applies to the project. |
+
+## `levels`
+
+What teamrig prints for each level of work. Labels only: commands, fields and the register keep the words goal, feature, task and subtask, and a person's own levels.names in the user file wins over the team's.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `names` | one of `"auto"`, `"default"`, `"youtrack"`, `"jira"`, `"azure-devops"`, `"linear"`, `"github"`, `"asana"`, `"clickup"` or object | `"auto"` | auto: the team's tracker connector's names when it declares them, else the default set. A preset: default (Goal / Feature / Task / Subtask, teamrig's own), youtrack (Epic / User Story / Task / Subtask), jira (Initiative / Epic / Story / Sub-task), azure-devops (Epic / Feature / User Story / Task), linear (Initiative / Project / Issue / Sub-issue), github (Milestone / Feature / Issue / Sub-issue), asana (Goal / Project / Task / Subtask), clickup (Goal / List / Task / Subtask). Or a map naming each of goal, feature, task and subtask with a singular and a plural, each one line of at most 40 characters. |
 
 ## `exec`
 
@@ -1051,5 +1060,6 @@ Folders moved from their defaults; a relative path is resolved against the team'
 
 | Name | Type | What it is |
 | --- | --- | --- |
+| level name | object | One level's label in levels.names: its singular, for one item, and its plural. |
 | session name | string (matching `^[a-z][a-z0-9-]{0,31}$`) |  |
 | role holder | string (matching `^[a-z][a-z0-9-]{0,31}(/[a-z][a-z0-9-]{0,31})?$`) | A session of the team by id, or `<team>/<id>`: the session holding the same role on a team above it (doctor's tree-role problem when that team is not above, or the session does not hold the role there). |

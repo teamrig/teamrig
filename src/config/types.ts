@@ -7,6 +7,7 @@ import type { NeedKind } from '../tabs/need-kind.ts';
 import type { ServiceCommand } from '../permissions/service-commands.ts';
 import type { ChangeSourceId } from '../changes/ids.ts';
 import type { ImportScope } from '../sync/scope.ts';
+import type { LevelNamesSetting } from '../register/level-names.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 10;
@@ -228,6 +229,12 @@ export interface LockConfig {
 export interface ChangesConfig {
   /** The change sources to read, in the order their entries win; empty: every source that applies to the project. */
   readonly sources: readonly ChangeSourceId[];
+}
+
+/** What teamrig prints for each level of work (src/register/level-names.ts): labels only, never a command's words. */
+export interface LevelsConfig {
+  /** `auto` (the tracker connector's names, else the default set), a tracker preset's name, or a map of every level. */
+  readonly names: LevelNamesSetting;
 }
 
 /** Privileged commands a reviewer approved, run by `teamrig exec` (src/exec/). */
@@ -1905,6 +1912,7 @@ export interface KitConfig {
   readonly ruleConflicts: readonly RuleConflict[];
   readonly messages: MessagesConfig;
   readonly register: RegisterConfig;
+  readonly levels: LevelsConfig;
   readonly skills: SkillsConfig;
   readonly contextFiles: ContextFilesConfig;
   readonly lock: LockConfig;
