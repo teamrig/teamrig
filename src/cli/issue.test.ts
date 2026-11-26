@@ -236,7 +236,7 @@ describe('teamrig issue reopen (T5612)', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [LOGIN, 'COMMENTED acme/web#612', 'REOPENED acme/web#612']);
     assert.equal(gh.ran.length, 2);
-    assert.ok(isIssueComment(gh.ran[0]?.args ?? []) && isIssueReopen(gh.ran[1]?.args ?? []));
+    assert.ok(isIssueComment(gh.ran[0] ?? { args: [] }) && isIssueReopen(gh.ran[1]?.args ?? []));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token']);
     assert.ok(![...result.stdout, ...result.stderr].some((line) => line.includes('acme-issues-token')));
   });
