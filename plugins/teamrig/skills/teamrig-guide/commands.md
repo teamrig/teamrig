@@ -4963,6 +4963,40 @@ one the current version ships. It is `REFUSED` for a folder with no integrity li
 and a copy that is not whole; it exits 1 with a `NOTE the kit launcher is not written: <why>` line when the current
 version ships no launcher.
 
+### teamrig kit update
+
+Installs the newest teamrig release of a channel into the kit home, for a host with no teamrig plugin to update it at
+a session start. The teamrig already installed does the checks: it lists the channel's branch in the public
+repository (`release` for stable, `preview` for preview), takes the release tag at its head, clones that tag one
+commit deep into a folder of the kit home's `install/`, checks the clone is at the tag's commit, and copies it in as
+`kit install` does, the launcher too; the clone is removed after. It never moves current down (`teamrig kit use` does)
+and changes no hooks file, so the hook lines and the trust a host gave them stay. Without `--yes` it shows the release
+and writes nothing. It moves the code every host's guards run, so only the person writes it: `--yes` is refused where
+an agent runs it.
+
+Flags:
+
+- `--channel <stable|preview>`: the release line to follow, stable by default; another name is a usage error.
+- `--yes`: clone and install it; without it, only show the release.
+
+Example:
+
+```sh
+teamrig kit update --yes
+```
+
+Output:
+
+```text
+WROTE current 0.510.0 (was 0.509.0): teamrig 0.510.0 (github-release v0.510.0 0123456789abcdef0123456789abcdef01234567)
+WROTE /srv/ada/.teamrig/bin/teamrig.mjs: the kit launcher of teamrig 0.510.0
+```
+
+When current is the channel's newest release it prints `UNCHANGED`, and a pin prints a `NOTE` naming it, the new
+version kept beside it. It is `REFUSED`, nothing written, for a release older than current, a branch head not tagged
+yet (run it again once the release is tagged), a clone at another commit than the tag's, no git on PATH, and a failed
+listing or clone.
+
 ### teamrig kit uninstall
 
 Removes teamrig's own install from the kit home. First it takes teamrig's handlers out of each hooks file of yours

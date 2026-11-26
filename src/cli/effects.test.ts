@@ -180,6 +180,7 @@ const EXPECTED = {
   'key check': 'read',
   'kit prune': 'write',
   'kit install': 'write',
+  'kit update': 'write',
   'kit uninstall': 'write',
   'kit use': 'write',
   'kit versions': 'read',

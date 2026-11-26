@@ -6,10 +6,14 @@ import { WRITE_SWITCH } from '../../core/settings-writers.ts';
 import type { Mutex } from '../../core/lock.ts';
 import { KIT_VERSION } from '../../core/version.ts';
 import { clientRootOf } from '../../exec/client-integrity.ts';
+import { compareVersions, parseVersion } from '../../core/release-version.ts';
 import { hookLauncher, syncKitLauncher } from '../../kit/hook-launcher.ts';
+import { channelReleaseOf, cloneRelease, isKitChannel, KIT_CHANNELS, listChannel, type KitChannel } from '../../kit/kit-release.ts';
+import { findProgram } from '../../open/host-program.ts';
 import { installRunningKit, keptAsideNote, KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import {
   damagedPreviewWhy,
+  installKitVersion,
   KIT_LOCK_BUSY,
   kitInstallParts,
   kitLeftovers,
@@ -36,7 +40,7 @@ import { readUserSettings } from '../user-settings.ts';
  * `teamrig kit ...`: teamrig's own install under the kit home (src/kit/kit-versions.ts), the copy of each release a
  * session start ran, one named current; hosts run it once their hooks point at the kit home. `kit versions` lists
  * what is kept, `kit use` moves which one is current, `kit prune` removes the ones past the rollback window,
- * `kit uninstall` removes the install, its hook lines first.
+ * `kit update` installs a channel's newest release by its tag, `kit uninstall` removes the install, its hook lines first.
  */
 
 const LATEST = 'latest';
@@ -254,6 +258,97 @@ async function launcherWritten(runtime: Pick<CliRuntime, 'files' | 'out'>, kitHo
   }
   runtime.out.stdout(`${launcher.kind === 'written' ? 'WROTE' : 'UNCHANGED'} ${launcher.path}: the kit launcher of teamrig ${launcher.version}`);
   return EXIT.ok;
+}
+
+type KitUpdateRuntime = KitRuntime & Pick<CliRuntime, 'files' | 'platform' | 'probe' | 'self' | 'run' | 'pid'>;
+
+/** The channel `kit update` follows: `--channel`, else stable. */
+function updateChannelOf(args: ParsedArgs): KitChannel {
+  const named = args.flags.get('channel') ?? 'stable';
+  if (!isKitChannel(named)) {
+    throw new UsageError(`teamrig kit update: --channel ${named} is no channel; name ${Object.keys(KIT_CHANNELS).join(' or ')}`);
+  }
+  return named;
+}
+
+/** The git program by its absolute path from PATH, never a bare name Windows would look for in the current folder first. */
+async function gitOf(runtime: KitUpdateRuntime): Promise<string> {
+  const found = await findProgram({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, 'git');
+  if (found.kind === 'missing' || found.program.prefix.length > 0) {
+    throw new RefusedError('teamrig kit update: no git program is on PATH; install git and run this again; nothing written');
+  }
+  return found.program.command;
+}
+
+/**
+ * `teamrig kit update [--channel stable|preview] [--yes]`: the already-installed teamrig finds the newest release tag at
+ * the head of the channel's branch, clones it by that tag into a folder of the kit home's `install/`, checks the clone's
+ * HEAD is the tag's commit, and installs it as `kit install` does: current moves to it unless a pin holds it, and the
+ * launcher is written. It refuses a release older than current (only `kit use` moves down) and touches no hooks file.
+ * Without `--yes` it shows the release and writes nothing; its write is a settings writer's, as `kit install`'s is.
+ */
+export async function kitUpdate(args: ParsedArgs, runtime: KitUpdateRuntime): Promise<ExitCode> {
+  noPositionals(args);
+  const channel = updateChannelOf(args);
+  const branch = KIT_CHANNELS[channel];
+  const kitHome = kitHomeOf(runtime);
+  const git = { git: await gitOf(runtime), run: runtime.run };
+  const listed = await listChannel(git, branch);
+  if (listed.kind === 'failed') {
+    throw new RefusedError(`teamrig kit update: ${listed.why}; nothing written`);
+  }
+  const found = channelReleaseOf(listed.text, branch);
+  if (found.kind === 'none') {
+    throw new RefusedError(`teamrig kit update: the ${channel} channel: ${found.why}; nothing written`);
+  }
+  const { release } = found;
+  const current = await readKitCurrent(runtime.files, kitHome);
+  const order = current === undefined ? 1 : releaseOrder(release.version, current.version);
+  if (current !== undefined && order < 0) {
+    throw new RefusedError(
+      `teamrig kit update: the ${channel} channel's ${release.tag} is older than current ${current.version}; an update never moves current down, teamrig kit use <version> does`,
+    );
+  }
+  if (current !== undefined && order === 0) {
+    runtime.out.stdout(`UNCHANGED current ${current.version} is the ${channel} channel's newest release ${release.tag}`);
+    return EXIT.ok;
+  }
+  const source: KitSource = { kind: 'github-release', tag: release.tag, commit: release.commit };
+  const text = `teamrig ${release.version} (${sourceText({ source })})`;
+  if (!args.switches.has(WRITE_SWITCH)) {
+    runtime.out.stdout(
+      `PREVIEW nothing written (add --${WRITE_SWITCH} to write): clone ${text} of the ${channel} channel into ${kitVersionFolder(kitHome, release.version)}; ` +
+        `current ${current?.version ?? 'no version'} -> ${release.version} unless a pin holds it`,
+    );
+    return EXIT.ok;
+  }
+  const folder = join(kitHome, 'install', `kit-update-${runtime.pid}`);
+  await runtime.kitTree.removeFolder(folder);
+  try {
+    const clone = await cloneRelease(git, release, folder);
+    if (clone.kind === 'failed') {
+      throw new RefusedError(`teamrig kit update: ${clone.why}; nothing written`);
+    }
+    const outcome = await installKitVersion({
+      files: runtime.files,
+      tree: runtime.kitTree,
+      kitHome,
+      from: clone.pluginRoot,
+      version: release.version,
+      source,
+      lock: commandLockOf(runtime, kitHome),
+    });
+    return await installReported('kit update', outcome, text, runtime, kitHome);
+  } finally {
+    await runtime.kitTree.removeFolder(folder);
+  }
+}
+
+/** Where release `a` stands to `b`: negative before, zero the same, positive after; a version neither parses as is after. */
+function releaseOrder(a: string, b: string): number {
+  const wanted = parseVersion(a);
+  const held = parseVersion(b);
+  return wanted === undefined || held === undefined ? 1 : compareVersions(wanted, held);
 }
 
 /** One host's hooks file as `kit uninstall` found it: the file with teamrig's lines out, undefined when it holds none. */
