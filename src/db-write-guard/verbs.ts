@@ -117,7 +117,8 @@ export function sqlWritesIn(sql: string): string[] {
       const name = keyword.toUpperCase();
       const at = match.index ?? 0;
       // The order the words were first met in, so a report reads like the statement list.
-      if (!first.has(name) || at < first.get(name)!) first.set(name, at);
+      const seen = first.get(name);
+      if (seen === undefined || at < seen) first.set(name, at);
     }
   }
   return [...first.entries()].sort((a, b) => a[1] - b[1]).map(([name]) => name);
@@ -136,6 +137,8 @@ const PSQL_ECHO = /^\\(?:echo|qecho|warn)(?![A-Za-z])/;
  * - a backslash escapes the quote that follows it in a `'...'` literal only with `standard_conforming_strings`
  *   off;
  * - a block comment nests in PostgreSQL, and ends at the first closing marker in MySQL and SQLite.
+ * - MySQL starts a `--` comment only when a space or control character follows it (`1--1` is arithmetic there), while
+ *   PostgreSQL and SQLite start one at any `--`.
  *
  * What the server does run stays as it is: string literals, whose text a trailing meta-command may run as SQL;
  * dollar-quoted bodies; quoted identifiers; and MySQL's executable comments, which MySQL runs.
@@ -144,14 +147,16 @@ function sqlReadings(sql: string): string[] {
   const readings: string[] = [];
   for (const backslashEscapes of [false, true]) {
     for (const nested of [true, false]) {
-      readings.push(blankNonCode(sql, backslashEscapes, nested));
+      for (const mysqlCommentNeedsSpace of [false, true]) {
+        readings.push(blankNonCode(sql, backslashEscapes, nested, mysqlCommentNeedsSpace));
+      }
     }
   }
   return readings;
 }
 
 /** `sql` with every span the server does not run replaced by spaces, keeping each newline in place. */
-function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): string {
+function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, mysqlCommentNeedsSpace: boolean): string {
   const out = sql.split('');
   const blank = (from: number, to: number) => {
     for (let i = from; i < to && i < out.length; i++) if (out[i] !== '\n') out[i] = ' ';
@@ -159,7 +164,7 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): 
   let i = 0;
   while (i < sql.length) {
     const two = sql.slice(i, i + 2);
-    if (two === '--') {
+    if (two === '--' && !(mysqlCommentNeedsSpace && !isMysqlCommentStart(sql[i + 2]))) {
       const end = sql.indexOf('\n', i);
       const stop = end === -1 ? sql.length : end;
       blank(i, stop);
@@ -224,7 +229,7 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): 
       continue;
     }
     if (sql[i] === '$') {
-      const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i));
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
       if (tag) {
         const close = sql.indexOf(tag[0], i + tag[0].length);
         i = close === -1 ? sql.length : close + tag[0].length;
@@ -234,9 +239,13 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): 
     if (sql[i] === '\\') {
       const meta = PSQL_ECHO.exec(sql.slice(i));
       if (meta) {
-        // Its text runs to the next backslash: `\gexec` after it, or a doubled `\\`, ends it.
-        const next = sql.indexOf('\\', i + meta[0].length);
-        const stop = next === -1 ? sql.length : next;
+        // Its text runs to the end of the line, or to a backslash before it: `\gexec` after an echo, or a doubled `\\`,
+        // ends the text and the line goes on as SQL.
+        const from = i + meta[0].length;
+        const newline = sql.indexOf('\n', from);
+        const lineEnd = newline === -1 ? sql.length : newline;
+        const backslash = sql.indexOf('\\', from);
+        const stop = backslash !== -1 && backslash < lineEnd ? backslash : lineEnd;
         blank(i, stop);
         i = stop;
         continue;
@@ -245,6 +254,12 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean): 
     i++;
   }
   return out.join('');
+}
+
+/** True when `char`, the one after a `--`, is what MySQL requires for a comment to start there. */
+function isMysqlCommentStart(char: string | undefined): boolean {
+  if (char === undefined) return true;
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r' || char === '\f' || char === '\v';
 }
 
 /** The vocabularies of the team's clients Node code loads: a module by its name, or a `module/sub` path under it. */

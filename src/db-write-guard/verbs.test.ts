@@ -229,4 +229,32 @@ describe('sqlWritesIn', () => {
     assert.deepEqual(sqlWritesIn('/*! DROP TABLE x */'), ['DROP']);
     assert.deepEqual(sqlWritesIn("SELECT '-- x', 'DROP TABLE y' \\gexec"), ['DROP']);
   });
+
+  // #2536: an echo line ends with its line, so the statement under it is still read.
+  it('ends an echo line at its newline, so a write on the next line is still named', () => {
+    assert.deepEqual(sqlWritesIn('\\echo 1 create issued\nDROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('\\qecho done\nUPDATE t SET a = 1'), ['UPDATE']);
+    assert.deepEqual(sqlWritesIn('\\warn later\nDELETE FROM t'), ['DELETE']);
+    assert.deepEqual(sqlWritesIn('\\echo one\n\\echo two\nCREATE TABLE t (a int)'), ['CREATE']);
+    assert.deepEqual(sqlWritesIn('\\echo no newline at all'), []);
+  });
+
+  // #2536: MySQL starts a `--` comment only when a space or control character follows it, so `1--1` is arithmetic there
+  // and a write after it runs; by the rule above, a span is skipped only where every reading agrees.
+  it('reads a -- with no space after it as arithmetic, because MySQL does', () => {
+    assert.deepEqual(sqlWritesIn('SELECT 1--1; DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('SELECT 5-3--2'), []);
+    assert.deepEqual(sqlWritesIn('-- DROP TABLE x\nSELECT 1'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1;\t-- DELETE FROM t'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1-- a comment MySQL also reads\nDROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a dollar-quote tag that holds digits whole, as PostgreSQL allows', () => {
+    assert.deepEqual(sqlWritesIn('DO $tag1$ BEGIN UPDATE t SET a = 1; END $tag1$'), ['UPDATE']);
+    // The body stays as it is, so a write inside it names even where it reads like a comment: a tag left unrecognized
+    // would end the body early and lose it.
+    assert.deepEqual(sqlWritesIn('DO $a1b2$ SELECT 1; -- DROP TABLE x\n$a1b2$'), ['DROP']);
+    // A tag may not start with a digit, so `$1$` is no dollar quote.
+    assert.deepEqual(sqlWritesIn('DO $1$ SELECT 1; -- DROP TABLE x\n$1$'), []);
+  });
 });
