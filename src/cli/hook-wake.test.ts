@@ -998,6 +998,20 @@ describe('hook wake-check runs the idle pass', () => {
     assert.equal((await logLines(kit, PASS_LOG)).length, 1, 'still once a minute across the team');
   });
 
+  it('says on stderr that the idle pass did not run when it fails at a turn end of a host with no tab mod, and the turn still ends (T5059)', async () => {
+    const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST] });
+    const files = new FaultyFiles(kit.files).fail('write', PASS_STATE, systemError('EACCES', 'EACCES: permission denied'));
+    const result = await kit.run(['hook', 'stop', '--host', WAKING_HOST], {
+      stdin: payload(),
+      files,
+      probe: new FakePathProbe({ folders: [APP] }),
+      memory: new FakeHostMemory().lists([], COMMIT),
+      shippedHosts: wakingHosts(),
+    });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.stderr, ['teamrig hook stop: the idle pass did not run: EACCES: permission denied']);
+  });
+
   it('runs at no turn end of a host with no tab mod while wake.enabled is false (T5059)', async () => {
     const kit = await idleTeam({ ...DRY_RUN, hosts: [DEFAULT_HOST, WAKING_HOST], wake: { enabled: false } });
     const result = await kit.run(['hook', 'stop', '--host', WAKING_HOST], {

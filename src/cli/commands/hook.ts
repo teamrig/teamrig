@@ -938,7 +938,7 @@ export async function stop(args: ParsedArgs, runtime: CliRuntime): Promise<ExitC
   // After the reply, which neither step may hold up or cost: an error here leaves the next turn's end to try again.
   if (event !== undefined) {
     await turnEndWeekReading(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the plan's reading was not saved: ${errorMessage(error)}`));
-    await turnEndIdlePass(runtime, event).catch(() => undefined);
+    await turnEndIdlePass(runtime, event).catch((error: unknown) => runtime.out.stderr(`teamrig hook stop: the idle pass did not run: ${errorMessage(error)}`));
   }
   return EXIT.ok;
 }
