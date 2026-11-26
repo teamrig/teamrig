@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { PROOF_DOMAIN, challengeDigest, type OwnerProofChallenge } from './challenge.ts';
 import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
-import { ISSUED_AT_SKEW_MS, actDigest, pinKeyProblem, verifyProof, type ActBinding, type NonceState, type ProofCheck } from './verify.ts';
+import { ISSUED_AT_SKEW_MS, actDigest, verifyProof, type ActBinding, type NonceState, type ProofCheck } from './verify.ts';
 
 interface TestKey {
   readonly pin: PinnedKey;
@@ -138,23 +138,5 @@ describe('verifyProof', () => {
       sign: (data) => sign('sha256', data, privateKey),
     };
     assert.deepEqual(verifyProof(check(p384)), { ok: false, reason: 'bad-signature' });
-  });
-});
-
-describe('pinKeyProblem', () => {
-  it('takes a public key of each algorithm kind', () => {
-    for (const key of [rsa, ecKey('key-ec'), edKey('key-ed')]) {
-      assert.equal(pinKeyProblem(key.pin.publicKeyPem, key.pin.algorithm), undefined);
-    }
-  });
-
-  it('refuses text that is no PEM public key', () => {
-    assert.equal(pinKeyProblem('not a key', 'ed25519'), 'expected a PEM public key');
-  });
-
-  it('refuses a key of another kind or curve than its algorithm', () => {
-    assert.equal(pinKeyProblem(rsa.pin.publicKeyPem, 'ed25519'), 'expected a public key of the ed25519 kind');
-    const p384 = pem(generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey);
-    assert.equal(pinKeyProblem(p384, 'ecdsa-p256-sha256'), 'expected a public key of the ecdsa-p256-sha256 kind');
   });
 });

@@ -81,13 +81,6 @@ function keyFits(key: KeyObject, algorithm: SignatureAlgorithm): boolean {
   }
 }
 
-/** Why a pinned public key cannot verify anything, or undefined when it is a public key of its algorithm's kind. */
-export function pinKeyProblem(publicKeyPem: string, algorithm: SignatureAlgorithm): string | undefined {
-  const key = publicKey(publicKeyPem);
-  if (key === undefined) return 'expected a PEM public key';
-  return keyFits(key, algorithm) ? undefined : `expected a public key of the ${algorithm} kind`;
-}
-
 function signatureHolds(pin: PinnedKey, data: Buffer, signature: Buffer): boolean {
   const key = publicKey(pin.publicKeyPem);
   if (key === undefined || !keyFits(key, pin.algorithm)) return false;
