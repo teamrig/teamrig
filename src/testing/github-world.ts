@@ -27,8 +27,46 @@ function ok(body: unknown = {}): GhResult {
   return { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(body), stderr: '' };
 }
 
-/** The `-f`/`-F` fields of a command line after its method, in order, or undefined when one is not `key=value`. */
-function fieldsOf(args: readonly string[]): [string, string][] | undefined {
+function isStringList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/**
+ * The fields a JSON request body on stdin holds, as `gh api --input -` sends it: a string as one field, a list of
+ * strings as one `key[]` field per item, as `-f key[]=` would name them; undefined for any other value or no JSON object.
+ */
+function inputFieldsOf(input: string | undefined): [string, string][] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input ?? '');
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const entries: readonly [string, unknown][] = Object.entries(parsed);
+  const pairs: [string, string][] = [];
+  for (const [key, value] of entries) {
+    if (typeof value === 'string') {
+      pairs.push([key, value]);
+    } else if (isStringList(value)) {
+      value.forEach((item) => pairs.push([`${key}[]`, item]));
+    } else {
+      return undefined;
+    }
+  }
+  return pairs;
+}
+
+/**
+ * The fields of a command line after its method, in order: its `-f`/`-F` pairs, or the JSON body on stdin when the
+ * line is `--input -` alone; undefined when a pair is not `key=value` or the body is not one this fake reads.
+ */
+function fieldsOf(args: readonly string[], input: string | undefined): [string, string][] | undefined {
+  if (args.length === 2 && args[0] === '--input' && args[1] === '-') {
+    return inputFieldsOf(input);
+  }
   const pairs: [string, string][] = [];
   for (let at = 0; at < args.length; at += 2) {
     const flag = args[at];
@@ -48,7 +86,7 @@ function valuesOf(fields: readonly [string, string][], key: string): string[] {
 
 /**
  * One repository on GitHub, faked behind `gh api` as the GitHub connector calls it: the REST lines that open an issue,
- * comment on it, replace its body, close it, add and take off its labels and assignees, and read a label. It holds
+ * comment on it, replace its body (their text a JSON body on stdin, or `-f` fields), close it, add and take off its labels and assignees, and read a label. It holds
  * what those lines change, as GitHub does, so the tracker contract reads the result past the port. GitHub's own
  * answers are kept where the contract can see them: a write on an issue it does not hold, and a label taken off an
  * issue that does not carry it, answer Not Found; a login that may not be assigned is left out with no error. Any
@@ -70,7 +108,7 @@ export class GitHubWorld implements GhRunner {
 
   run(request: GhRequest): Promise<GhResult> {
     this.ran.push(request.args);
-    return Promise.resolve(this.answer(request.args));
+    return Promise.resolve(this.answer(request.args, request.input));
   }
 
   /** The tracker contract's view of this repository. */
@@ -105,9 +143,9 @@ export class GitHubWorld implements GhRunner {
     return { repo: this.repo, number: this.last };
   }
 
-  private answer(args: readonly string[]): GhResult {
+  private answer(args: readonly string[], input: string | undefined): GhResult {
     const [verb, path, xFlag, method, ...rest] = args;
-    const fields = fieldsOf(rest);
+    const fields = fieldsOf(rest, input);
     const base = `repos/${this.repo}/`;
     if (verb !== 'api' || path === undefined || !path.startsWith(base)) {
       return this.unknown(args);

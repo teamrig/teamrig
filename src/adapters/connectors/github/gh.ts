@@ -1,6 +1,7 @@
 import {
   areaLabelSpec,
   isLogin,
+  isRecord,
   LABEL_FILE,
   labelRefusal,
   MANAGED_LABEL_SPECS,
@@ -12,6 +13,7 @@ import {
   type Env,
   type IssueDraft,
   type IssueQuery,
+  type JsonRecord,
   type LabelSpec,
   type ProgramRunner,
   type ShellEnd,
@@ -72,28 +74,81 @@ const LABEL_FIELD = 'labels[]';
 /** The field gh sends as one item of the issue's assignee list. */
 const ASSIGNEE_FIELD = 'assignees[]';
 
-/** The command line that opens one issue: the REST create, every field raw, so no value is read as a file or a number. */
-export function issueCreateArgs(draft: IssueDraft): string[] {
-  return ['api', `repos/${draft.repo}/issues`, '-X', 'POST', RAW_FIELD, `title=${draft.title}`, RAW_FIELD, `body=${draft.body}`, ...draft.labels.flatMap((label) => [RAW_FIELD, `${LABEL_FIELD}=${label}`])];
+/**
+ * One gh run: its arguments, and the text gh reads on its standard input when the run sends a request body there. An
+ * issue's text goes on stdin, never in an argument: Windows caps a whole command line at 32,767 characters, so a body
+ * past that failed to start (spawn ENAMETOOLONG, T5636), and stdin has no such cap on any OS.
+ */
+export interface GhCall {
+  readonly args: readonly string[];
+  /** The request body as JSON, read by `--input -`; a run without it gets no stdin. */
+  readonly input?: string;
+}
+
+/** The flags that make `gh api` send its standard input as the request body, and no field of the command line. */
+const STDIN_BODY = ['--input', '-'] as const;
+
+/** The fields a request body sent on stdin holds, parsed; undefined when it is not JSON naming exactly `keys`. */
+function bodyFields(input: string | undefined, keys: readonly string[]): JsonRecord | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const own = Object.keys(parsed);
+  return own.length === keys.length && keys.every((key) => own.includes(key)) ? parsed : undefined;
+}
+
+/** Whether `value` is a list of strings alone. */
+function isStringList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/** The fields of an issue create's request body, in the shape issueCreateCall sends them. */
+export interface IssueCreateFields {
+  readonly title: string;
+  readonly body: string;
+  readonly labels: readonly string[];
+}
+
+/** The fields an issue create's stdin holds, when it holds exactly a title, a body and a list of labels; else undefined. */
+export function issueCreateFields(input: string | undefined): IssueCreateFields | undefined {
+  const fields = bodyFields(input, ['title', 'body', 'labels']);
+  const title = fields?.['title'];
+  const body = fields?.['body'];
+  const labels = fields?.['labels'];
+  return typeof title === 'string' && typeof body === 'string' && isStringList(labels) ? { title, body, labels } : undefined;
+}
+
+/** The text of a comment's or a body edit's stdin, when it holds exactly a body; else undefined. */
+export function bodyFieldOf(input: string | undefined): string | undefined {
+  const body = bodyFields(input, ['body'])?.['body'];
+  return typeof body === 'string' ? body : undefined;
+}
+
+/** The run that opens one issue: the REST create, its title, body and labels a JSON body on stdin, so each stays text of any length. */
+export function issueCreateCall(draft: IssueDraft): GhCall {
+  const fields: IssueCreateFields = { title: draft.title, body: draft.body, labels: draft.labels };
+  return { args: ['api', `repos/${draft.repo}/issues`, '-X', 'POST', ...STDIN_BODY], input: JSON.stringify(fields) };
 }
 
 /**
- * True for `gh api repos/<owner>/<name>/issues -X POST -f title=<t> -f body=<b> [-f labels[]=<l>]...`: one
- * issue created, its title and body given once each and any labels after them. A path past `issues` (an issue
- * number, comments, labels), another method, or any other flag or field is refused, so the run can create one
- * issue and change nothing else.
+ * True for `gh api repos/<owner>/<name>/issues -X POST --input -` with a stdin of JSON holding a string title, a
+ * string body and a list of string labels, and nothing more: one issue created. A path past `issues` (an issue
+ * number, comments, labels), another method, flag or field, `--input` naming a file, or any other key in the body is
+ * refused, so the run can create one issue and change nothing else.
  */
-export function isIssueCreate(args: readonly string[]): boolean {
-  const path = args[1] ?? '';
-  if (args[0] !== 'api' || !path.startsWith('repos/') || !path.endsWith('/issues') || args[2] !== '-X' || args[3] !== 'POST') {
-    return false;
-  }
-  const pairs = rawPairs(args.slice(4));
-  if (!REPO_NAME.test(path.slice('repos/'.length, -'/issues'.length)) || pairs === null || pairs.length < 2) {
-    return false;
-  }
-  const [title, body, ...labels] = pairs;
-  return title?.[0] === 'title' && body?.[0] === 'body' && labels.every(([key]) => key === LABEL_FIELD);
+export function isIssueCreate(call: GhCall): boolean {
+  const path = call.args[1] ?? '';
+  const repo = path.startsWith('repos/') && path.endsWith('/issues') ? path.slice('repos/'.length, -'/issues'.length) : '';
+  return REPO_NAME.test(repo) && sameArgs(call.args, ['api', path, '-X', 'POST', ...STDIN_BODY]) && issueCreateFields(call.input) !== undefined;
 }
 
 /** One issue or pull request of a repository (`owner/name`): GitHub numbers both in one sequence, and its issues API reaches either. */
@@ -102,9 +157,9 @@ export interface IssueNumber {
   readonly number: number;
 }
 
-/** The command line that posts one comment on an issue or pull request, its body a raw field so it stays text. */
-export function issueCommentArgs(target: IssueNumber, body: string): string[] {
-  return ['api', `repos/${target.repo}/issues/${target.number}/comments`, '-X', 'POST', RAW_FIELD, `body=${body}`];
+/** The run that posts one comment on an issue or pull request, its body a JSON body on stdin so it stays text of any length. */
+export function issueCommentCall(target: IssueNumber, body: string): GhCall {
+  return { args: ['api', `repos/${target.repo}/issues/${target.number}/comments`, '-X', 'POST', ...STDIN_BODY], input: JSON.stringify({ body }) };
 }
 
 /** GitHub's word for each close reason, as its REST API takes it in `state_reason`. */
@@ -156,9 +211,9 @@ export function commentsReadArgs(target: IssueNumber, since: string): string[] {
 /** A UTC time as Date.toISOString writes it. */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-/** The command line that replaces the body of one issue or pull request, the body a raw field so it stays text. */
-export function issueBodyArgs(target: IssueNumber, body: string): string[] {
-  return ['api', `repos/${target.repo}/issues/${target.number}`, '-X', 'PATCH', RAW_FIELD, `body=${body}`];
+/** The run that replaces the body of one issue or pull request, the body a JSON body on stdin so it stays text of any length. */
+export function issueBodyCall(target: IssueNumber, body: string): GhCall {
+  return { args: ['api', `repos/${target.repo}/issues/${target.number}`, '-X', 'PATCH', ...STDIN_BODY], input: JSON.stringify({ body }) };
 }
 
 /** The command line that adds `labels` to one issue or pull request, each a raw item of the label list. */
@@ -273,15 +328,19 @@ function issueCall(args: readonly string[]): { readonly method: string; readonly
   return isLabelSegment(tail.slice('/labels/'.length)) ? { method, part: 'label' } : undefined;
 }
 
+/** Whether `call` is `gh api <one issue's path> -X <method> --input -` with a stdin of JSON holding exactly a string body. */
+function isBodyWrite(call: GhCall, method: string, part: IssuePart): boolean {
+  const target = issueCall(call.args);
+  return target?.method === method && target.part === part && sameArgs(call.args.slice(4), STDIN_BODY) && bodyFieldOf(call.input) !== undefined;
+}
+
 /**
- * True for `gh api repos/<owner>/<name>/issues/<number>/comments -X POST -f body=<text>` and nothing more: one
- * comment, its body the only field. Another path, method, flag or field is refused, so the run edits, labels or
- * assigns nothing.
+ * True for `gh api repos/<owner>/<name>/issues/<number>/comments -X POST --input -` with a stdin of JSON holding a
+ * string body and nothing more: one comment. Another path, method, flag or field, `--input` naming a file, or any
+ * other key in the body is refused, so the run edits, labels or assigns nothing.
  */
-export function isIssueComment(args: readonly string[]): boolean {
-  const call = issueCall(args);
-  const pairs = rawPairs(args.slice(4));
-  return call?.method === 'POST' && call.part === 'comments' && pairs?.length === 1 && pairs[0]?.[0] === 'body';
+export function isIssueComment(call: GhCall): boolean {
+  return isBodyWrite(call, 'POST', 'comments');
 }
 
 /**
@@ -399,14 +458,13 @@ export function isCommentsRead(args: readonly string[]): boolean {
 }
 
 /**
- * True for `gh api repos/<owner>/<name>/issues/<number> -X PATCH -f body=<text>` and nothing more: the body of one
- * issue or pull request replaced, the body the only field. A title, state, assignee, label or milestone field, or
- * any field beside the body, is refused, so the edit changes the text and nothing else.
+ * True for `gh api repos/<owner>/<name>/issues/<number> -X PATCH --input -` with a stdin of JSON holding a string
+ * body and nothing more: the body of one issue or pull request replaced. A title, state, assignee, label or milestone
+ * key beside the body, a field or flag on the command line, or `--input` naming a file is refused, so the edit changes
+ * the text and nothing else.
  */
-export function isIssueBodyEdit(args: readonly string[]): boolean {
-  const call = issueCall(args);
-  const pairs = rawPairs(args.slice(4));
-  return call?.method === 'PATCH' && call.part === 'issue' && pairs?.length === 1 && pairs[0]?.[0] === 'body';
+export function isIssueBodyEdit(call: GhCall): boolean {
+  return isBodyWrite(call, 'PATCH', 'issue');
 }
 
 /**
@@ -734,9 +792,8 @@ export function isRunRerun(args: readonly string[]): boolean {
   return REPO_NAME.test(repo) && JOB_ID.test(runId) && sameArgs(args, runRerunArgs(repo, Number(runId)));
 }
 
-/** One `gh` run: its arguments, passed as a list and never read by a shell, and the environment. */
-export interface GhRequest {
-  readonly args: readonly string[];
+/** One `gh` run: its arguments, passed as a list and never read by a shell, any stdin (GhCall), and the environment. */
+export interface GhRequest extends GhCall {
   readonly env: Env;
 }
 
@@ -746,7 +803,7 @@ export interface GhResult {
   readonly stderr: string;
 }
 
-/** Runs the GitHub CLI to its end with no stdin. It rejects when `gh` cannot start, such as when it is not installed. */
+/** Runs the GitHub CLI to its end, with the request's input as its stdin or none. It rejects when `gh` cannot start, such as when it is not installed. */
 export interface GhRunner {
   run(request: GhRequest): Promise<GhResult>;
 }
@@ -1021,15 +1078,27 @@ export class GhRefusedError extends Error {
   }
 }
 
-/** True for each fixed command line the runner starts, an area label's create among them; it also makes a label a read label file named (isFileLabelCreate). */
+/**
+ * True for each fixed run the runner starts with stdin (isAllowedGh for one without): the three that send an issue's
+ * text there, an issue's create, a comment and a body edit, and nothing else.
+ */
+export function isAllowedGhCall(call: GhCall): boolean {
+  if (call.input === undefined) {
+    return isAllowedGh(call.args);
+  }
+  return isIssueCreate(call) || isIssueComment(call) || isIssueBodyEdit(call);
+}
+
+/**
+ * True for each fixed command line the runner starts with no stdin, an area label's create among them; it also makes a
+ * label a read label file named (isFileLabelCreate). An issue's create, comment or body edit is never one: those send
+ * their text on stdin (isAllowedGhCall).
+ */
 export function isAllowedGh(args: readonly string[]): boolean {
   return (
     isIssueQuery(args) ||
-    isIssueCreate(args) ||
-    isIssueComment(args) ||
     isCommentsRead(args) ||
     isIssueClose(args) ||
-    isIssueBodyEdit(args) ||
     isLabelAdd(args) ||
     isLabelRemove(args) ||
     isLabelRead(args) ||
@@ -1116,10 +1185,11 @@ export function ghRunnerOver(run: ProgramRunner): GhRunner {
   const labelFiles = new LabelFileReads();
   return {
     run: async (request) => {
-      if (!isAllowedGh(request.args) && !isFileLabelCreate(request.args, labelFiles.of)) {
+      if (!isAllowedGhCall(request) && (request.input !== undefined || !isFileLabelCreate(request.args, labelFiles.of))) {
         throw new GhRefusedError(request.args);
       }
-      const result = await run({ program: GH_PROGRAM, args: request.args, env: { ...request.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' } });
+      const input = request.input === undefined ? {} : { input: request.input };
+      const result = await run({ program: GH_PROGRAM, args: request.args, ...input, env: { ...request.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' } });
       labelFiles.note(request.args, result);
       return result;
     },

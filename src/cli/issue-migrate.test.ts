@@ -8,7 +8,7 @@ import { foldEvents, type Task } from '../register/fold.ts';
 import { readEvents } from '../register/snapshot.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
-import { FakeGh } from '../testing/fake-gh.ts';
+import { FakeGh, sentOf } from '../testing/fake-gh.ts';
 import { EXIT } from './runtime.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'] } };
@@ -87,10 +87,16 @@ describe('teamrig issue migrate', () => {
       "DONE opened 2 issue(s) and set each task's ref",
     ]);
     assert.deepEqual(
-      gh.ran.map((request) => request.args),
+      gh.ran.map(sentOf),
       [
-        ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Add a health check', '-f', `body=${withStampFooter('Why Add a health check.')}`, '-f', 'labels[]=enhancement', '-f', 'labels[]=p2'],
-        ['api', 'repos/acme/api/issues', '-X', 'POST', '-f', 'title=Login fails on retry', '-f', `body=${withStampFooter('Why Login fails on retry.')}`, '-f', 'labels[]=bug', '-f', 'labels[]=p1'],
+        {
+          args: ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'],
+          input: JSON.stringify({ title: 'Add a health check', body: withStampFooter('Why Add a health check.'), labels: ['enhancement', 'p2'] }),
+        },
+        {
+          args: ['api', 'repos/acme/api/issues', '-X', 'POST', '--input', '-'],
+          input: JSON.stringify({ title: 'Login fails on retry', body: withStampFooter('Why Login fails on retry.'), labels: ['bug', 'p1'] }),
+        },
       ],
     );
     const tasks = tasksOf(kit);
@@ -208,7 +214,7 @@ describe('teamrig issue migrate', () => {
     const kit = await migratingTeam();
     const gh = new FakeGh();
     await expectRun(kit, ['issue', 'migrate', 'rows.jsonl', '--yes'], gh, EXIT.ok);
-    assert.ok(gh.ran.length > 0 && gh.ran.every((request) => isIssueCreate(request.args)));
+    assert.ok(gh.ran.length > 0 && gh.ran.every(isIssueCreate));
   });
 
   it('opens nothing while GitHub is off on the machine', async () => {

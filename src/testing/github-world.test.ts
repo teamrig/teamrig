@@ -36,4 +36,18 @@ describe('the fake GitHub world', () => {
     assert.equal(opened.stdout, JSON.stringify({ number: 1 }));
     assert.equal((await github.run({ args: ['api', 'repos/acme/web/labels/new'], env: {} })).stdout, JSON.stringify({ name: 'new' }));
   });
+
+  it('reads an issue, a comment and a body edit sent as a JSON body on stdin, as gh api --input - sends them (T5636)', async () => {
+    const github = new GitHubWorld('acme/web');
+    const world = github.world();
+    const stdin = ['--input', '-'];
+    const opened = await github.run({ args: ['api', 'repos/acme/web/issues', '-X', 'POST', ...stdin], input: JSON.stringify({ title: 'T', body: 'B', labels: ['bug'] }), env: {} });
+    assert.equal(opened.stdout, JSON.stringify({ number: 1 }));
+    await github.run({ args: ['api', 'repos/acme/web/issues/1/comments', '-X', 'POST', ...stdin], input: JSON.stringify({ body: 'C' }), env: {} });
+    await github.run({ args: ['api', 'repos/acme/web/issues/1', '-X', 'PATCH', ...stdin], input: JSON.stringify({ body: 'B2' }), env: {} });
+    const issue = await world.issue({ repo: 'acme/web', number: 1 });
+    assert.deepEqual([issue?.title, issue?.body, issue?.labels, issue?.comments], ['T', 'B2', ['bug'], ['C']]);
+    const bad = await github.run({ args: ['api', 'repos/acme/web/issues/1/comments', '-X', 'POST', ...stdin], input: '{"body": 7}', env: {} });
+    assert.equal(bad.end.kind === 'exited' && bad.end.code, 1);
+  });
 });

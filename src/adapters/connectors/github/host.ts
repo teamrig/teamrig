@@ -59,10 +59,10 @@ import {
   issueAssignArgs,
   issueAssigneeReadArgs,
   issueUnassignArgs,
-  issueBodyArgs,
+  issueBodyCall,
   issueCloseArgs,
-  issueCommentArgs,
-  issueCreateArgs,
+  issueCommentCall,
+  issueCreateCall,
   issueLabelAddArgs,
   issueLabelRemoveArgs,
   issueReadArgs,
@@ -89,6 +89,7 @@ import {
   watchProbeArgs,
   userReadArgs,
   viewerReadArgs,
+  type GhCall,
   type GhResult,
   type GhRunner,
   type WatchPath,
@@ -303,7 +304,7 @@ export class GitHubIssueHost implements IssueHost {
     }
     let result: GhResult;
     try {
-      result = await this.gh.run({ args: issueCreateArgs({ ...draft, body: this.stamped(draft.body) }), env: access.env });
+      result = await this.gh.run({ ...issueCreateCall({ ...draft, body: this.stamped(draft.body) }), env: access.env });
     } catch (error) {
       return { kind: 'failed', reason: startFailureText(error) };
     }
@@ -319,15 +320,15 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   comment(target: IssueTarget, body: string): Promise<HostEnd> {
-    return this.write(target, issueCommentArgs(target, this.stamped(body)), 'comment on');
+    return this.write(target, issueCommentCall(target, this.stamped(body)), 'comment on');
   }
 
   editBody(target: IssueTarget, body: string): Promise<HostEnd> {
-    return this.write(target, issueBodyArgs(target, this.stamped(body)), 'edit the body of');
+    return this.write(target, issueBodyCall(target, this.stamped(body)), 'edit the body of');
   }
 
   close(target: IssueTarget, reason?: CloseReason, duplicateId?: number): Promise<HostEnd> {
-    return this.write(target, issueCloseArgs(target, reason, duplicateId), 'close');
+    return this.write(target, { args: issueCloseArgs(target, reason, duplicateId) }, 'close');
   }
 
   /**
@@ -552,13 +553,13 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   addLabels(target: IssueTarget, labels: readonly string[]): Promise<HostEnd> {
-    return this.write(target, issueLabelAddArgs(target, labels), 'label');
+    return this.write(target, { args: issueLabelAddArgs(target, labels) }, 'label');
   }
 
   /** Takes the label off; Not Found here means the issue does not carry it (or is not there), which the reason says. */
   removeLabel(target: IssueTarget, label: string): Promise<HostEnd> {
     const shown = JSON.stringify(label);
-    return this.write(target, issueLabelRemoveArgs(target, label), `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
+    return this.write(target, { args: issueLabelRemoveArgs(target, label) }, `take ${shown} off`, `${targetText(target)} does not carry the label ${shown}, or is not there`);
   }
 
   /** Every issue of the repository with its links, read with the same access as a list. */
@@ -568,15 +569,15 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   addSubIssue(parent: IssueTarget, childId: number): Promise<HostEnd> {
-    return this.write(parent, subIssueAddArgs(parent, childId), 'add a sub-issue to');
+    return this.write(parent, { args: subIssueAddArgs(parent, childId) }, 'add a sub-issue to');
   }
 
   addBlockedBy(target: IssueTarget, blockerId: number): Promise<HostEnd> {
-    return this.write(target, blockedByAddArgs(target, blockerId), 'add a blocker to');
+    return this.write(target, { args: blockedByAddArgs(target, blockerId) }, 'add a blocker to');
   }
 
   assign(target: IssueTarget, logins: readonly string[]): Promise<HostEnd> {
-    return this.write(target, issueAssignArgs(target, logins), 'assign');
+    return this.write(target, { args: issueAssignArgs(target, logins) }, 'assign');
   }
 
   /**
@@ -595,8 +596,8 @@ export class GitHubIssueHost implements IssueHost {
       return access instanceof NoAccessError ? { kind: 'failed', reason: access.message } : readFields(this.gh, access, repo);
     },
     setField: (target: IssueTarget, field: HostField, value: FieldValue): Promise<HostEnd> =>
-      this.write(target, fieldValueSetArgs(target, field.id, value), `set the field ${JSON.stringify(field.name)} of`),
-    setType: (target: IssueTarget, type: string): Promise<HostEnd> => this.write(target, issueTypeSetArgs(target, type), 'set the type of'),
+      this.write(target, { args: fieldValueSetArgs(target, field.id, value) }, `set the field ${JSON.stringify(field.name)} of`),
+    setType: (target: IssueTarget, type: string): Promise<HostEnd> => this.write(target, { args: issueTypeSetArgs(target, type) }, 'set the type of'),
   };
 
   /**
@@ -675,7 +676,7 @@ export class GitHubIssueHost implements IssueHost {
   }
 
   unassign(target: IssueTarget, login: string): Promise<HostEnd> {
-    return this.write(target, issueUnassignArgs(target, login), `take ${login} off the assignees of`);
+    return this.write(target, { args: issueUnassignArgs(target, login) }, `take ${login} off the assignees of`);
   }
 
   /**
@@ -733,7 +734,7 @@ export class GitHubIssueHost implements IssueHost {
 
   /** Approves the pull request at `head` (a full sha), with gh.ts approvalBody as the review's text. */
   approvePull(target: IssueTarget, head: string): Promise<HostEnd> {
-    return this.write(target, pullApproveArgs(target, head), 'approve');
+    return this.write(target, { args: pullApproveArgs(target, head) }, 'approve');
   }
 
   /**
@@ -743,19 +744,19 @@ export class GitHubIssueHost implements IssueHost {
   async landPull(target: IssueTarget, pull: PullStand): Promise<HostLanding> {
     const queue = pull.mergeQueue;
     const args = queue ? pullEnqueueArgs(pull.id, pull.head) : pullMergeArgs(target, pull.head);
-    const end = await this.write(target, args, queue ? 'add to the merge queue' : 'merge');
+    const end = await this.write(target, { args }, queue ? 'add to the merge queue' : 'merge');
     return end.kind === 'failed' ? end : { kind: queue ? 'enqueued' : 'merged' };
   }
 
   /** One write; `missing`, when given, says what a Not Found means for it in place of the issue not being there. */
-  private async write(target: IssueTarget, args: readonly string[], what: string, missing?: string): Promise<HostEnd> {
+  private async write(target: IssueTarget, call: GhCall, what: string, missing?: string): Promise<HostEnd> {
     const access = await this.tokens.accessFor(target.repo);
     if (access instanceof NoAccessError) {
       return { kind: 'failed', reason: access.message };
     }
     let result: GhResult;
     try {
-      result = await this.gh.run({ args, env: access.env });
+      result = await this.gh.run({ ...call, env: access.env });
     } catch (error) {
       return { kind: 'failed', reason: startFailureText(error) };
     }

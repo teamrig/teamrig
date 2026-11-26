@@ -37,6 +37,7 @@ import {
   pullStandArgs,
   GhRefusedError,
   isAllowedGh,
+  isAllowedGhCall,
   isAreaLabelCreate,
   isAssigneeRead,
   isCommentsRead,
@@ -70,10 +71,12 @@ import {
   runRerunArgs,
   issueAssignArgs,
   issueAssigneeReadArgs,
-  issueBodyArgs,
+  issueBodyCall,
   issueCloseArgs,
-  issueCommentArgs,
-  issueCreateArgs,
+  issueCommentCall,
+  issueCreateCall,
+  issueCreateFields,
+  bodyFieldOf,
   issueLabelAddArgs,
   issueLabelRemoveArgs,
   issueReadArgs,
@@ -87,6 +90,7 @@ import {
   MENTION_LISTS,
   mentionListArgs,
   reviewListArgs,
+  type GhCall,
   type GhResult,
   subIssueAddArgs,
   WATCH_PATHS,
@@ -162,71 +166,117 @@ describe('isIssueQuery', () => {
   });
 });
 
-describe('isIssueCreate', () => {
-  const CREATE = issueCreateArgs(DRAFT);
+/** An issue's text past the 32,767 characters Windows lets a whole command line hold (T5636). */
+const LONG_BODY = `${'A long spec line, with $(x) @file | y; state=closed\n'.repeat(900)}end`;
 
-  it('takes the command line issueCreateArgs builds, with no labels or several', () => {
-    assert.deepEqual(CREATE, ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Fix login', '-f', 'body=Steps: $(x) @file', '-f', 'labels[]=bug', '-f', 'labels[]=p1']);
+describe('isIssueCreate', () => {
+  const CREATE = issueCreateCall(DRAFT);
+  const CREATE_ARGS = ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'];
+
+  it('takes the run issueCreateCall builds, its title, body and labels JSON on stdin, with no labels or several', () => {
+    assert.deepEqual(CREATE, { args: CREATE_ARGS, input: JSON.stringify({ title: 'Fix login', body: 'Steps: $(x) @file', labels: ['bug', 'p1'] }) });
     assert.equal(isIssueCreate(CREATE), true);
-    assert.equal(isIssueCreate(issueCreateArgs({ ...DRAFT, labels: [] })), true);
-    assert.equal(isIssueCreate(issueCreateArgs({ ...DRAFT, repo: 'acme-co/web.site_2' })), true);
+    assert.equal(isIssueCreate(issueCreateCall({ ...DRAFT, labels: [] })), true);
+    assert.equal(isIssueCreate(issueCreateCall({ ...DRAFT, repo: 'acme-co/web.site_2' })), true);
+  });
+
+  it('keeps a body past the command line cap on stdin: the arguments stay six short words', () => {
+    const call = issueCreateCall({ ...DRAFT, body: LONG_BODY });
+    assert.ok(LONG_BODY.length > 40_000);
+    assert.deepEqual(call.args, CREATE_ARGS);
+    assert.equal(issueCreateFields(call.input)?.body, LONG_BODY);
+    assert.equal(isIssueCreate(call) && isAllowedGhCall(call), true);
   });
 
   it('refuses any path but one repository\'s issues: an issue, its comments, another API', () => {
     for (const path of ['repos/acme/web/issues/7', 'repos/acme/web/issues/7/comments', 'repos/acme/issues', 'repos/acme/web/x/issues', 'repos/../web/issues', 'repos/acme/../issues', 'repos/acme/./issues', 'user/repos', 'repos/acme/web/labels']) {
-      assert.equal(isIssueCreate(['api', path, ...CREATE.slice(2)]), false, path);
+      assert.equal(isIssueCreate({ ...CREATE, args: ['api', path, ...CREATE_ARGS.slice(2)] }), false, path);
     }
   });
 
-  it('refuses another method, a flag but -f, and any field out of place', () => {
-    const fields = CREATE.slice(4);
+  it('refuses another method, a file for --input, any flag or field, and no stdin', () => {
     for (const args of [
-      ['api', 'repos/acme/web/issues', '-X', 'PATCH', ...fields],
-      ['api', 'repos/acme/web/issues', ...fields],
-      [...CREATE, '-F', 'labels[]=x'],
-      [...CREATE, '--input', 'file.json'],
-      [...CREATE, '-f', 'assignees[]=octocat'],
-      [...CREATE, '-f', 'title=Again'],
-      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'body=b', '-f', 'title=t'],
-      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=t'],
-      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=t', '-f', 'body=b', '-f', 'milestone=1'],
+      ['api', 'repos/acme/web/issues', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/web/issues', '--input', '-'],
+      ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', 'file.json'],
+      ['api', 'repos/acme/web/issues', '-X', 'POST'],
+      [...CREATE_ARGS, '-F', 'labels[]=x'],
+      [...CREATE_ARGS, '-f', 'assignees[]=octocat'],
+      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=t', '-f', 'body=b'],
     ]) {
-      assert.equal(isIssueCreate(args), false, args.slice(4).join(' '));
+      assert.equal(isIssueCreate({ ...CREATE, args }), false, args.slice(4).join(' '));
+    }
+    assert.equal(isIssueCreate({ args: CREATE_ARGS }), false, 'no stdin');
+  });
+
+  it('refuses a stdin that is not JSON of exactly a string title, a string body and a list of string labels', () => {
+    for (const input of [
+      '',
+      'not json',
+      '["Fix login"]',
+      JSON.stringify({ title: 't', body: 'b' }),
+      JSON.stringify({ title: 't', body: 'b', labels: ['p1'], assignees: ['octocat'] }),
+      JSON.stringify({ title: 't', body: 'b', labels: ['p1'], milestone: 1 }),
+      JSON.stringify({ title: 1, body: 'b', labels: [] }),
+      JSON.stringify({ title: 't', body: { text: 'b' }, labels: [] }),
+      JSON.stringify({ title: 't', body: 'b', labels: 'p1' }),
+      JSON.stringify({ title: 't', body: 'b', labels: [1] }),
+    ]) {
+      assert.equal(isIssueCreate({ args: CREATE_ARGS, input }), false, input);
+      assert.equal(isAllowedGhCall({ args: CREATE_ARGS, input }), false, input);
     }
   });
 
   it('is never taken for a query, nor a query for a create', () => {
-    assert.equal(isIssueCreate(READ), false);
-    assert.equal(isIssueQuery(CREATE), false);
+    assert.equal(isIssueCreate({ args: READ }), false);
+    assert.equal(isIssueQuery(CREATE.args), false);
   });
 });
 
 describe('isIssueComment', () => {
-  const COMMENT = issueCommentArgs(ISSUE, 'Thanks: $(x) @file state=closed');
+  const COMMENT = issueCommentCall(ISSUE, 'Thanks: $(x) @file state=closed');
+  const COMMENT_ARGS = ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '--input', '-'];
 
-  it('takes the command line issueCommentArgs builds, its body kept as text', () => {
-    assert.deepEqual(COMMENT, ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '-f', 'body=Thanks: $(x) @file state=closed']);
+  it('takes the run issueCommentCall builds, its body JSON on stdin kept as text', () => {
+    assert.deepEqual(COMMENT, { args: COMMENT_ARGS, input: JSON.stringify({ body: 'Thanks: $(x) @file state=closed' }) });
     assert.equal(isIssueComment(COMMENT), true);
-    assert.equal(isIssueComment(issueCommentArgs({ repo: 'acme-co/web.site_2', number: 1234567890 }, '')), true);
+    assert.equal(isIssueComment(issueCommentCall({ repo: 'acme-co/web.site_2', number: 1234567890 }, '')), true);
+  });
+
+  it('keeps a body past the command line cap on stdin: the arguments stay six short words', () => {
+    const call = issueCommentCall(ISSUE, LONG_BODY);
+    assert.deepEqual(call.args, COMMENT_ARGS);
+    assert.equal(bodyFieldOf(call.input), LONG_BODY);
+    assert.equal(isIssueComment(call) && isAllowedGhCall(call), true);
   });
 
   it("refuses any path but one issue's comments", () => {
     for (const path of ['repos/acme/web/issues/7', 'repos/acme/web/issues/comments', 'repos/acme/web/issues/0/comments', 'repos/acme/web/issues/07/comments', 'repos/acme/web/issues/12345678901/comments', 'repos/acme/web/pulls/7/comments', 'repos/acme/web/issues/7/comments/9', 'repos/acme/web/issues/comments/9', 'repos/acme/../issues/7/comments', 'repos/acme/web/x/issues/7/comments']) {
-      assert.equal(isIssueComment(['api', path, ...COMMENT.slice(2)]), false, path);
+      assert.equal(isIssueComment({ ...COMMENT, args: ['api', path, ...COMMENT_ARGS.slice(2)] }), false, path);
     }
   });
 
-  it('refuses another method, a flag but -f, and any field but one body', () => {
+  it('refuses another method, a file for --input, any flag or field, and no stdin', () => {
     for (const args of [
-      ['api', 'repos/acme/web/issues/7/comments', '-X', 'PATCH', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/7/comments', '-f', 'body=b'],
+      ['api', 'repos/acme/web/issues/7/comments', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/web/issues/7/comments', '--input', '-'],
+      ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '--input', 'file.json'],
       ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '-F', 'body=@file'],
+      ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '-f', 'body=b'],
       ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST'],
-      [...COMMENT, '-f', 'body=again'],
-      [...COMMENT, '--input', 'file.json'],
-      ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '-f', 'title=t'],
+      [...COMMENT_ARGS, '-f', 'body=again'],
     ]) {
-      assert.equal(isIssueComment(args), false, args.slice(2).join(' '));
+      assert.equal(isIssueComment({ ...COMMENT, args }), false, args.slice(2).join(' '));
+      assert.equal(isAllowedGhCall({ ...COMMENT, args }), false, args.slice(2).join(' '));
+    }
+    assert.equal(isIssueComment({ args: COMMENT_ARGS }), false, 'no stdin');
+    assert.equal(isAllowedGh(COMMENT_ARGS), false, 'no stdin');
+  });
+
+  it('refuses a stdin that is not JSON of exactly one string body', () => {
+    for (const input of ['', 'b', '"b"', JSON.stringify({}), JSON.stringify({ body: 1 }), JSON.stringify({ body: null }), JSON.stringify({ body: 'b', title: 't' }), JSON.stringify({ text: 'b' })]) {
+      assert.equal(isIssueComment({ args: COMMENT_ARGS, input }), false, input);
+      assert.equal(isAllowedGhCall({ args: COMMENT_ARGS, input }), false, input);
     }
   });
 });
@@ -269,49 +319,68 @@ describe('isIssueClose', () => {
   });
 
   it('is never taken for a comment, a create or a query, nor they for a close', () => {
-    assert.ok([READ, issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'b')].every((args) => !isIssueClose(args)));
-    assert.ok([READ, issueCreateArgs(DRAFT), CLOSE].every((args) => !isIssueComment(args)));
-    assert.ok(!isIssueCreate(CLOSE) && !isIssueQuery(CLOSE) && !isIssueCreate(issueCommentArgs(ISSUE, 'b')));
+    const create = issueCreateCall(DRAFT);
+    const comment = issueCommentCall(ISSUE, 'b');
+    assert.ok([READ, create.args, comment.args].every((args) => !isIssueClose(args)));
+    assert.ok([{ args: READ }, create, { args: CLOSE }].every((call) => !isIssueComment(call)));
+    assert.ok(!isIssueCreate({ args: CLOSE }) && !isIssueQuery(CLOSE) && !isIssueCreate(comment));
   });
 });
 
 describe('isIssueBodyEdit', () => {
-  const EDIT = issueBodyArgs(ISSUE, 'New spec: $(x) @file | y');
+  const EDIT = issueBodyCall(ISSUE, 'New spec: $(x) @file | y');
+  const EDIT_ARGS = ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '--input', '-'];
 
-  it('takes the command line issueBodyArgs builds, the body a raw field that stays text', () => {
-    assert.deepEqual(EDIT, ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=New spec: $(x) @file | y']);
+  it('takes the run issueBodyCall builds, the body JSON on stdin that stays text', () => {
+    assert.deepEqual(EDIT, { args: EDIT_ARGS, input: JSON.stringify({ body: 'New spec: $(x) @file | y' }) });
     assert.equal(isIssueBodyEdit(EDIT), true);
-    assert.equal(isAllowedGh(EDIT), true);
+    assert.equal(isAllowedGhCall(EDIT), true);
   });
 
-  it('refuses any field beside the body, another method, flag or path, and a typed field', () => {
+  it('keeps a body past the command line cap on stdin: the arguments stay six short words', () => {
+    const call = issueBodyCall(ISSUE, LONG_BODY);
+    assert.deepEqual(call.args, EDIT_ARGS);
+    assert.equal(bodyFieldOf(call.input), LONG_BODY);
+    assert.equal(isIssueBodyEdit(call) && isAllowedGhCall(call), true);
+  });
+
+  it('refuses any key beside the body, a field or flag on the command line, another method or path, and a file for --input', () => {
+    for (const input of [JSON.stringify({ body: 'b', title: 't' }), JSON.stringify({ body: 'b', state: 'open' }), JSON.stringify({ body: 'b', assignees: ['someone'] }), JSON.stringify({ body: 'b', milestone: 1 }), JSON.stringify({ title: 't' }), JSON.stringify({ body: 7 })]) {
+      assert.equal(isIssueBodyEdit({ args: EDIT_ARGS, input }), false, input);
+      assert.equal(isAllowedGhCall({ args: EDIT_ARGS, input }), false, input);
+    }
     for (const args of [
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=b', '-f', 'title=t'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'title=t', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=b', '-f', 'state=open'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=b', '-f', 'assignees[]=someone'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=b', '-f', 'milestone=1'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'title=t'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-F', 'body=@secret.txt'],
+      [...EDIT_ARGS, '-f', 'title=t'],
+      [...EDIT_ARGS, '-F', 'body=@secret.txt'],
       ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '--input', 'body.json'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'body=b'],
       ['api', 'repos/acme/web/issues/7', '-X', 'PATCH'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'POST', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PUT', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/7', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/7/comments', '-X', 'PATCH', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues/comments/7', '-X', 'PATCH', '-f', 'body=b'],
-      ['api', 'repos/acme/web/pulls/7', '-X', 'PATCH', '-f', 'body=b'],
-      ['api', 'repos/acme/../issues/7', '-X', 'PATCH', '-f', 'body=b'],
-      ['api', 'repos/acme/web/issues', '-X', 'PATCH', '-f', 'body=b'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'POST', '--input', '-'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PUT', '--input', '-'],
+      ['api', 'repos/acme/web/issues/7', '--input', '-'],
+      ['api', 'repos/acme/web/issues/7/comments', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/web/issues/comments/7', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/web/pulls/7', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/../issues/7', '-X', 'PATCH', '--input', '-'],
+      ['api', 'repos/acme/web/issues', '-X', 'PATCH', '--input', '-'],
     ]) {
-      assert.equal(isIssueBodyEdit(args), false, args.slice(1).join(' '));
-      assert.equal(isAllowedGh(args), false, args.slice(1).join(' '));
+      assert.equal(isIssueBodyEdit({ ...EDIT, args }), false, args.slice(1).join(' '));
+      assert.equal(isAllowedGhCall({ ...EDIT, args }), false, args.slice(1).join(' '));
+    }
+  });
+
+  it('refuses a body write with no stdin, and stdin on any other run', () => {
+    assert.equal(isIssueBodyEdit({ args: EDIT_ARGS }), false);
+    assert.equal(isAllowedGh(EDIT_ARGS), false);
+    for (const args of [READ, issueReadArgs(ISSUE), issueCloseArgs(ISSUE), issueLabelAddArgs(ISSUE, ['p1'])]) {
+      assert.equal(isAllowedGh(args), true, args.join(' '));
+      assert.equal(isAllowedGhCall({ ...EDIT, args }), false, args.join(' '));
     }
   });
 
   it('is never taken for a close or a comment, nor they for a body edit', () => {
-    assert.ok([READ, issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'b'), issueCloseArgs(ISSUE, 'completed')].every((args) => !isIssueBodyEdit(args)));
-    assert.ok(!isIssueClose(EDIT) && !isIssueComment(EDIT) && !isIssueCreate(EDIT) && !isIssueQuery(EDIT));
+    assert.ok([{ args: READ }, issueCreateCall(DRAFT), issueCommentCall(ISSUE, 'b'), { args: issueCloseArgs(ISSUE, 'completed') }].every((call) => !isIssueBodyEdit(call)));
+    assert.ok(!isIssueClose(EDIT.args) && !isIssueComment(EDIT) && !isIssueCreate(EDIT) && !isIssueQuery(EDIT.args));
   });
 });
 
@@ -389,13 +458,13 @@ describe('the duplicate close and the issue read', () => {
       assert.equal(isCommentsRead(args), false, args.slice(1).join(' '));
       assert.equal(isAllowedGh(args), false, args.slice(1).join(' '));
     }
-    assert.ok(!isIssueComment(read) && !isIssueRead(read) && !isLabelRead(read));
+    assert.ok(!isIssueComment({ args: read }) && !isIssueRead(read) && !isLabelRead(read));
   });
 
   it('is never taken for a close, a comment or a label call, nor they for a read', () => {
     const read = issueReadArgs(ISSUE);
-    assert.ok(!isIssueClose(read) && !isIssueComment(read) && !isIssueCreate(read) && !isIssueQuery(read) && !isLabelRead(read));
-    for (const args of [READ, DUPLICATE, issueCommentArgs(ISSUE, 'b'), labelReadArgs('acme/web', 'p1'), issueCreateArgs(DRAFT)]) {
+    assert.ok(!isIssueClose(read) && !isIssueComment({ args: read }) && !isIssueCreate({ args: read }) && !isIssueQuery(read) && !isLabelRead(read));
+    for (const args of [READ, DUPLICATE, issueCommentCall(ISSUE, 'b').args, labelReadArgs('acme/web', 'p1'), issueCreateCall(DRAFT).args]) {
       assert.equal(isIssueRead(args), false, args[1]);
     }
   });
@@ -799,9 +868,9 @@ describe('the label calls', () => {
 
   it('is never taken for a comment, a close, a create or a query, nor they for a label call', () => {
     for (const args of [ADD, REMOVE, labelReadArgs('acme/web', 'p1')]) {
-      assert.ok(!isIssueClose(args) && !isIssueComment(args) && !isIssueCreate(args) && !isIssueQuery(args), args[1]);
+      assert.ok(!isIssueClose(args) && !isIssueComment({ args: args }) && !isIssueCreate({ args: args }) && !isIssueQuery(args), args[1]);
     }
-    for (const args of [READ, issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'b'), issueCloseArgs(ISSUE, 'duplicate')]) {
+    for (const args of [READ, issueCreateCall(DRAFT).args, issueCommentCall(ISSUE, 'b').args, issueCloseArgs(ISSUE, 'duplicate')]) {
       assert.ok(!isLabelAdd(args) && !isLabelRemove(args) && !isLabelRead(args), args[1]);
     }
   });
@@ -844,9 +913,9 @@ describe('isLinkAdd', () => {
   });
 
   it('is never taken for a query, create, comment, close or label call, nor they for a link, and the runner starts it', () => {
-    const others = [READ, issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'b'), issueCloseArgs(ISSUE), issueLabelAddArgs(ISSUE, ['p1']), issueLabelRemoveArgs(ISSUE, 'p1'), labelReadArgs('acme/web', 'p1')];
+    const others = [READ, issueCreateCall(DRAFT).args, issueCommentCall(ISSUE, 'b').args, issueCloseArgs(ISSUE), issueLabelAddArgs(ISSUE, ['p1']), issueLabelRemoveArgs(ISSUE, 'p1'), labelReadArgs('acme/web', 'p1')];
     assert.ok(others.every((args) => !isLinkAdd(args)));
-    assert.ok([SUB, BLOCKED].every((args) => !isIssueQuery(args) && !isIssueCreate(args) && !isIssueComment(args) && !isIssueClose(args)));
+    assert.ok([SUB, BLOCKED].every((args) => !isIssueQuery(args) && !isIssueCreate({ args: args }) && !isIssueComment({ args: args }) && !isIssueClose(args)));
     assert.ok([SUB, BLOCKED].every((args) => !isLabelAdd(args) && !isLabelRemove(args) && !isLabelRead(args)));
     assert.ok([SUB, BLOCKED].every(isAllowedGh));
   });
@@ -909,9 +978,9 @@ describe('the issue field and type writes (T3406)', () => {
   });
 
   it('is never taken for a body edit, a close or a link, nor they for a field or type write', () => {
-    assert.ok(!isIssueBodyEdit(TYPE) && !isIssueClose(TYPE) && !isFieldValueSet(TYPE));
+    assert.ok(!isIssueBodyEdit({ args: TYPE }) && !isIssueClose(TYPE) && !isFieldValueSet(TYPE));
     assert.ok([DAY, NUMBER].every((args) => !isLinkAdd(args) && !isIssueTypeSet(args) && !isLabelAdd(args)));
-    assert.ok([issueBodyArgs(ISSUE, 'b'), issueCloseArgs(ISSUE, 'completed'), subIssueAddArgs(ISSUE, 12)].every((args) => !isIssueTypeSet(args) && !isFieldValueSet(args)));
+    assert.ok([issueBodyCall(ISSUE, 'b').args, issueCloseArgs(ISSUE, 'completed'), subIssueAddArgs(ISSUE, 12)].every((args) => !isIssueTypeSet(args) && !isFieldValueSet(args)));
   });
 });
 
@@ -954,8 +1023,8 @@ describe('isWatchProbe', () => {
 
   it('is never taken for a query or a write, nor they for a probe', () => {
     const probe = watchProbeArgs('acme/web', 'issues?state=all&sort=updated&per_page=1', TAG);
-    assert.ok(!isIssueQuery(probe) && !isIssueCreate(probe) && !isIssueComment(probe) && !isIssueClose(probe) && !isLabelAdd(probe) && !isLabelRemove(probe) && !isLabelRead(probe) && !isLinkAdd(probe));
-    for (const args of [READ, issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'b'), issueCloseArgs(ISSUE, 'duplicate'), labelReadArgs('acme/web', 'p1'), subIssueAddArgs(ISSUE, 12), blockedByAddArgs(ISSUE, 12)]) {
+    assert.ok(!isIssueQuery(probe) && !isIssueCreate({ args: probe }) && !isIssueComment({ args: probe }) && !isIssueClose(probe) && !isLabelAdd(probe) && !isLabelRemove(probe) && !isLabelRead(probe) && !isLinkAdd(probe));
+    for (const args of [READ, issueCreateCall(DRAFT).args, issueCommentCall(ISSUE, 'b').args, issueCloseArgs(ISSUE, 'duplicate'), labelReadArgs('acme/web', 'p1'), subIssueAddArgs(ISSUE, 12), blockedByAddArgs(ISSUE, 12)]) {
       assert.equal(isWatchProbe(args), false, args[1]);
     }
   });
@@ -1157,16 +1226,26 @@ describe('ghRunnerOver', () => {
   });
 
   it('starts the creation of one issue, one comment on or the close of one issue, and one link added', async () => {
-    const calls = [issueCreateArgs(DRAFT), issueCommentArgs(ISSUE, 'a;b $(x) | y'), issueCloseArgs(ISSUE), subIssueAddArgs(ISSUE, 42), blockedByAddArgs(ISSUE, 43)];
+    const calls: GhCall[] = [issueCreateCall(DRAFT), issueCommentCall(ISSUE, 'a;b $(x) | y'), issueBodyCall(ISSUE, LONG_BODY), { args: issueCloseArgs(ISSUE) }, { args: subIssueAddArgs(ISSUE, 42) }, { args: blockedByAddArgs(ISSUE, 43) }];
     const { run, asked } = recordingProgram();
     const runner = ghRunnerOver(run);
-    for (const args of calls) {
-      await runner.run({ args, env: {} });
+    for (const call of calls) {
+      await runner.run({ ...call, env: {} });
     }
     assert.deepEqual(
-      asked.map((request) => request.args),
+      asked.map((request) => (request.input === undefined ? { args: request.args } : { args: request.args, input: request.input })),
       calls,
     );
+  });
+
+  it('refuses stdin on a run that sends none, and a body write without its stdin, starting nothing', async () => {
+    const { run, asked } = recordingProgram();
+    const runner = ghRunnerOver(run);
+    const comment = issueCommentCall(ISSUE, 'b');
+    await assert.rejects(runner.run({ args: READ, input: JSON.stringify({ body: 'b' }), env: {} }), GhRefusedError);
+    await assert.rejects(runner.run({ args: comment.args, env: {} }), GhRefusedError);
+    await assert.rejects(runner.run({ args: comment.args, input: JSON.stringify({ body: 'b', state: 'closed' }), env: {} }), GhRefusedError);
+    assert.deepEqual(asked, []);
   });
 
   it("gives the program runner's result as it is: stdout and stderr apart, with how the run ended", async () => {

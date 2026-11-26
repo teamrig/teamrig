@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MANAGED_LABEL_SPECS, MAX_COMMENT, withStampFooter, type HostPull, type IssueDraft, type JsonRecord } from '../../../plugin-api/index.ts';
 import { secretScanner } from '../../../testing/adapter-deps.ts';
 import { FakeCredentials, TEST_OWNERS } from '../../../testing/fake-credentials.ts';
-import { commentNode, FakeGh, ghCommit, ghIssue, ghPull, ghPullStand, restComment, STAND_HEAD } from '../../../testing/fake-gh.ts';
+import { commentNode, FakeGh, ghCommit, ghIssue, ghPull, ghPullStand, restComment, sentBody, sentOf, STAND_HEAD } from '../../../testing/fake-gh.ts';
 import {
   assigneeReadArgs,
   commitReadArgs,
@@ -63,10 +63,6 @@ function hostWith(
   return new GitHubIssueHost(gh, new RepoTokens(credentials, ENV), secretScanner(['tok_[a-z0-9]{8}']), stamp);
 }
 
-/** The `body=` field of a command line, or undefined when it has none. */
-function bodyOf(args: readonly string[] | undefined): string | undefined {
-  return args?.find((arg) => arg.startsWith('body='))?.slice('body='.length);
-}
 
 /** Whether `text` carries one footer, at its end: stamping takes every earlier footer out first, so only such a text stays as it is. */
 function stampedOnce(text: string | undefined): boolean {
@@ -366,7 +362,7 @@ describe('GitHubIssueHost.open', () => {
   it("opens the issue through the allowlisted create, with the owner's token, and gives its number", async () => {
     const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7)]);
     assert.deepEqual(await hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'acme-issues-token')).open(DRAFT), { kind: 'opened', target: { repo: 'acme/web', number: 8 } });
-    assert.ok(isIssueCreate(gh.ran[0]?.args ?? []));
+    assert.ok(isIssueCreate(gh.ran[0] ?? { args: [] }));
     assert.equal(gh.ran[0]?.env['GH_TOKEN'], 'acme-issues-token');
   });
 
@@ -393,8 +389,8 @@ describe('GitHubIssueHost stamp', () => {
     await host.open(DRAFT);
     await host.comment(TARGET, 'Thanks');
     await host.editBody(TARGET, 'Spec');
-    assert.deepEqual(gh.ran.map((request) => bodyOf(request.args)), [withStampFooter('Steps'), withStampFooter('Thanks'), withStampFooter('Spec')]);
-    assert.ok(isIssueCreate(gh.ran[0]?.args ?? []) && isIssueComment(gh.ran[1]?.args ?? []) && isIssueBodyEdit(gh.ran[2]?.args ?? []));
+    assert.deepEqual(gh.ran.map((request) => sentBody(request)), [withStampFooter('Steps'), withStampFooter('Thanks'), withStampFooter('Spec')]);
+    assert.ok(isIssueCreate(gh.ran[0] ?? { args: [] }) && isIssueComment(gh.ran[1] ?? { args: [] }) && isIssueBodyEdit(gh.ran[2] ?? { args: [] }));
   });
 
   it('keeps one footer when a stamped text is posted again: a rerun, or a body read back and edited', async () => {
@@ -402,18 +398,32 @@ describe('GitHubIssueHost stamp', () => {
     const host = hostWith(gh);
     await host.comment(TARGET, withStampFooter('Thanks'));
     await host.editBody(TARGET, `${withStampFooter('Spec', '0.1.0')}\n\nOne more step.`);
-    assert.deepEqual(gh.ran.map((request) => stampedOnce(bodyOf(request.args))), [true, true]);
-    assert.equal(bodyOf(gh.ran[1]?.args), withStampFooter('Spec\n\nOne more step.'));
+    assert.deepEqual(gh.ran.map((request) => stampedOnce(sentBody(request))), [true, true]);
+    assert.equal(sentBody(gh.ran[1]), withStampFooter('Spec\n\nOne more step.'));
   });
 
   it('posts the text as given when the stamp is off, or when the footer would take it past what GitHub holds', async () => {
     const off = new FakeGh();
     assert.deepEqual(await hostWith(off, new FakeCredentials().savesTokensFor(TEST_OWNERS), false).comment(TARGET, 'Thanks'), { kind: 'done' });
-    assert.equal(bodyOf(off.ran[0]?.args), 'Thanks');
+    assert.equal(sentBody(off.ran[0]), 'Thanks');
     const full = new FakeGh();
     const long = 'x'.repeat(MAX_COMMENT - 10);
     await hostWith(full).comment(TARGET, long);
-    assert.equal(bodyOf(full.ran[0]?.args), long);
+    assert.equal(sentBody(full.ran[0]), long);
+  });
+});
+
+describe('GitHubIssueHost long text (T5636)', () => {
+  it('opens, comments and replaces a body past the 32,767 characters Windows lets a command line hold, the text whole on stdin', async () => {
+    const long = `${'## Step\n\nA line of the spec, $(x) @file | y.\n'.repeat(1000)}end`;
+    assert.ok(long.length > 40_000);
+    const gh = new FakeGh().holds('acme/web', [ghIssue('acme/web', 7)]);
+    const host = hostWith(gh);
+    assert.equal((await host.open({ ...DRAFT, body: long })).kind, 'opened');
+    assert.deepEqual(await host.comment(TARGET, long), { kind: 'done' });
+    assert.deepEqual(await host.editBody(TARGET, long), { kind: 'done' });
+    assert.deepEqual(gh.ran.map(sentBody), [withStampFooter(long), withStampFooter(long), withStampFooter(long)]);
+    assert.ok(gh.ran.every((request) => request.args.join(' ').length < 100), 'every argument list stays short');
   });
 });
 
@@ -424,11 +434,11 @@ describe('GitHubIssueHost', () => {
     assert.deepEqual(await host.reach('acme/web', 'write'), { kind: 'reached', access: 'acme: writes with the token saved as teamrig-gh-acme', scope: 'acme' });
     assert.deepEqual(await host.comment(TARGET, 'Thanks'), { kind: 'done' });
     assert.deepEqual(await host.close(TARGET), { kind: 'done' });
-    assert.deepEqual(gh.ran.map((request) => request.args), [
-      ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '-f', `body=${withStampFooter('Thanks')}`],
-      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=closed'],
+    assert.deepEqual(gh.ran.map(sentOf), [
+      { args: ['api', 'repos/acme/web/issues/7/comments', '-X', 'POST', '--input', '-'], input: JSON.stringify({ body: withStampFooter('Thanks') }) },
+      { args: ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=closed'] },
     ]);
-    assert.ok(isIssueComment(gh.ran[0]?.args ?? []) && isIssueClose(gh.ran[1]?.args ?? []));
+    assert.ok(isIssueComment(gh.ran[0] ?? { args: [] }) && isIssueClose(gh.ran[1]?.args ?? []));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token']);
   });
 
@@ -436,8 +446,8 @@ describe('GitHubIssueHost', () => {
     const gh = new FakeGh();
     const host = hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'acme-issues-token'));
     assert.deepEqual(await host.editBody(TARGET, '## Spec\n\nStep one: $(x) @file'), { kind: 'done' });
-    assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', `body=${withStampFooter('## Spec\n\nStep one: $(x) @file')}`]]);
-    assert.ok(isIssueBodyEdit(gh.ran[0]?.args ?? []));
+    assert.deepEqual(gh.ran.map(sentOf), [{ args: ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '--input', '-'], input: JSON.stringify({ body: withStampFooter('## Spec\n\nStep one: $(x) @file') }) }]);
+    assert.ok(isIssueBodyEdit(gh.ran[0] ?? { args: [] }));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token']);
     const denied = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Resource not accessible by personal access token (HTTP 403)\n' });
     const end = await hostWith(denied, new FakeCredentials().saves('teamrig-gh-acme', 'k')).editBody(TARGET, 'b');

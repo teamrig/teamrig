@@ -7,7 +7,7 @@ import { isAreaLabelCreate, isIssueAssign, isIssueAssigneeRead, isIssueBodyEdit,
 import { areaLabelSpec } from '../issues/managed-labels.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
-import { FakeGh, ghIssue } from '../testing/fake-gh.ts';
+import { FakeGh, ghIssue, sentBody, sentOf } from '../testing/fake-gh.ts';
 import { rotateRegister } from '../testing/rotation.ts';
 import { EXIT } from './runtime.ts';
 
@@ -41,10 +41,14 @@ describe('teamrig issue reply (T3169)', () => {
     assert.equal(result.code, EXIT.ok, printed);
     // The lead maps to no login, so the push assigns the token's own user, as the repository push does (T4581).
     assert.match(printed, /SET acme\/web#922 T1 in-progress: add status:in progress, take off status:open, assign sync-bot$/mu);
-    const writes = gh.ran.map((request) => request.args).filter((args) => !isIssueRead(args) && !isLabelRead(args));
-    assert.ok(writes.some(isLabelAdd) && writes.some(isLabelRemove), printed);
-    assert.deepEqual(writes.at(-1), ['api', 'repos/acme/web/issues/922/comments', '-X', 'POST', '-f', `body=${withStampFooter('Picking this up.')}`]);
-    assert.ok(writes.slice(0, -1).every((args) => !isIssueComment(args)));
+    const writes = gh.ran.filter((request) => !isIssueRead(request.args) && !isLabelRead(request.args));
+    assert.ok(writes.some((request) => isLabelAdd(request.args)) && writes.some((request) => isLabelRemove(request.args)), printed);
+    const last = writes.at(-1);
+    assert.deepEqual(last === undefined ? undefined : sentOf(last), {
+      args: ['api', 'repos/acme/web/issues/922/comments', '-X', 'POST', '--input', '-'],
+      input: JSON.stringify({ body: withStampFooter('Picking this up.') }),
+    });
+    assert.ok(writes.slice(0, -1).every((request) => !isIssueComment(request)));
     const list = await kit.run(['list', '--session', 'lead'], AS_LEAD);
     assert.match(list.stdout.join('\n'), /T1 in-progress/u);
   });
@@ -54,8 +58,7 @@ describe('teamrig issue reply (T3169)', () => {
     const gh = stale();
     const result = await kit.run(['issue', 'reply', 'acme/web#922', '--body-file', 'reply.md'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    const comments = gh.ran.map((request) => request.args).filter(isIssueComment);
-    assert.deepEqual(comments.map((args) => args.at(-1)), ['body=Picking this up.']);
+    assert.deepEqual(gh.ran.filter(isIssueComment).map(sentBody), ['Picking this up.']);
   });
 
   it('writes nothing to the thread when the task may not be set, and nothing anywhere when no task holds the issue', async () => {
@@ -138,7 +141,7 @@ describe('teamrig issue close', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, ['ACCESS acme: writes with the token saved as teamrig-gh-acme', 'COMMENTED acme/web#612', 'CLOSED acme/web#612']);
     assert.equal(gh.ran.length, 2);
-    assert.ok(isIssueComment(gh.ran[0]?.args ?? []) && isIssueClose(gh.ran[1]?.args ?? []));
+    assert.ok(isIssueComment(gh.ran[0] ?? { args: [] }) && isIssueClose(gh.ran[1]?.args ?? []));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token']);
     assert.ok(![...result.stdout, ...result.stderr].some((line) => line.includes('acme-issues-token')));
   });
@@ -363,8 +366,8 @@ describe('teamrig issue edit', () => {
     const result = await kit.run(['issue', 'edit', 'Acme/Web#612', '--body-file', 'spec.md'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [LOGIN, `EDITED acme/web#612: its body is now ${BODY.length} characters`]);
-    assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/issues/612', '-X', 'PATCH', '-f', `body=${withStampFooter(BODY)}`]]);
-    assert.ok(isIssueBodyEdit(gh.ran[0]?.args ?? []));
+    assert.deepEqual(gh.ran.map(sentOf), [{ args: ['api', 'repos/acme/web/issues/612', '-X', 'PATCH', '--input', '-'], input: JSON.stringify({ body: withStampFooter(BODY) }) }]);
+    assert.ok(isIssueBodyEdit(gh.ran[0] ?? { args: [] }));
     assert.equal(kit.files.get(EVENTS_PATH), log);
   });
 
@@ -373,7 +376,7 @@ describe('teamrig issue edit', () => {
     await kit.files.write(SPEC, `\uFEFF${BODY}`);
     const gh = new FakeGh();
     await kit.run(['issue', 'edit', 'acme/web#7', '--body-file', SPEC], { ...AS_LEAD, gh });
-    assert.deepEqual(gh.ran.map((request) => request.args.at(-1)), [`body=${withStampFooter(BODY)}`]);
+    assert.deepEqual(gh.ran.map(sentBody), [withStampFooter(BODY)]);
   });
 
   it('refuses, running no gh, no file, a missing file, and a body that is empty, secret or names a task id', async () => {
@@ -592,8 +595,11 @@ describe('teamrig issue open (T4860)', () => {
     const result = await kit.run([...OPEN, '--label', 'type: bug'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [OPEN_LOGIN, 'OPENED acme/web#1: Login fails after a reset']);
-    assert.deepEqual(gh.ran.map((request) => request.args).filter(isIssueCreate), [
-      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Login fails after a reset', '-f', `body=${withStampFooter('Steps: reset, then log in.')}`, '-f', 'labels[]=type: bug'],
+    assert.deepEqual(gh.ran.filter(isIssueCreate).map(sentOf), [
+      {
+        args: ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'],
+        input: JSON.stringify({ title: 'Login fails after a reset', body: withStampFooter('Steps: reset, then log in.'), labels: ['type: bug'] }),
+      },
     ]);
     assert.equal(kit.files.get(EVENTS_PATH) ?? '', '');
   });
@@ -604,7 +610,7 @@ describe('teamrig issue open (T4860)', () => {
     const result = await kit.run([...OPEN, '--label', 'type: bgu'], { ...AS_LEAD, gh });
     assert.equal(result.code, EXIT.failed);
     assert.match(result.stdout.at(-1) ?? '', /^FAILED acme\/web: it has no label "type: bgu"/u);
-    assert.deepEqual(gh.ran.filter((request) => isIssueCreate(request.args)), []);
+    assert.deepEqual(gh.ran.filter(isIssueCreate), []);
   });
 
   it('refuses before any call a title or body no issue may carry, a bad label name, a repository not the team\'s or a positional', async () => {

@@ -6,7 +6,7 @@ import { foldEvents, type Task } from '../register/fold.ts';
 import { readEvents } from '../register/snapshot.ts';
 import { CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
-import { FakeGh } from '../testing/fake-gh.ts';
+import { FakeGh, sentBody, sentOf } from '../testing/fake-gh.ts';
 import { EXIT } from './runtime.ts';
 
 const AT_ADD_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], issueAtAdd: 'acme/web' } };
@@ -31,8 +31,13 @@ describe('teamrig add with its issue', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.equal(result.stdout.at(-1), 'OPENED T1 gh:acme/web#1');
     assert.deepEqual(
-      gh.ran.map((request) => request.args),
-      [['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=Add a health check', '-f', `body=${withStampFooter('A probe the load balancer reads.')}`, '-f', 'labels[]=bug', '-f', 'labels[]=p2']],
+      gh.ran.map(sentOf),
+      [
+        {
+          args: ['api', 'repos/acme/web/issues', '-X', 'POST', '--input', '-'],
+          input: JSON.stringify({ title: 'Add a health check', body: withStampFooter('A probe the load balancer reads.'), labels: ['bug', 'p2'] }),
+        },
+      ],
     );
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token']);
     const task = tasksOf(kit).get('T1');
@@ -44,7 +49,7 @@ describe('teamrig add with its issue', () => {
     const gh = new FakeGh().holds('acme/web', []);
     const result = await kit.run([...TASK, ...ISSUE], { ...AS_LEAD, gh, credentials: withToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(gh.ran.map((request) => request.args.find((arg) => arg.startsWith('body='))), ['body=A probe the load balancer reads.']);
+    assert.deepEqual(gh.ran.map(sentBody), ['A probe the load balancer reads.']);
   });
 
   it('opens in --issue-repo when it names another of github.repos', async () => {
