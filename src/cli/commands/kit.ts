@@ -22,6 +22,7 @@ import {
   useKitVersion,
   kitVersionFolder,
   type KitCurrent,
+  type KitInstallOutcome,
   type KitSource,
   type KitUseTarget,
 } from '../../kit/kit-versions.ts';
@@ -210,17 +211,26 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
     source,
     lock: commandLockOf(runtime, kitHome),
   });
+  if (outcome.kind === 'skipped') {
+    if (outcome.why === 'no-integrity-list') {
+      throw new RefusedError(`teamrig kit install: ${clientRoot} holds no integrity list, so it is no built release; nothing written`);
+    }
+    runtime.out.stdout(`UNCHANGED ${release} runs from the kit home already`);
+    return launcherWritten(runtime, kitHome);
+  }
+  return installReported('kit install', outcome, release, runtime, kitHome);
+}
+
+/**
+ * Prints what an install of `release` did, then writes the kit launcher of the version current names: refused for a
+ * held lock or a release the install would not take, failed when no launcher could be written.
+ */
+async function installReported(command: string, outcome: KitInstallOutcome, release: string, runtime: KitRuntime & Pick<CliRuntime, 'files'>, kitHome: string): Promise<ExitCode> {
   switch (outcome.kind) {
-    case 'skipped':
-      if (outcome.why === 'no-integrity-list') {
-        throw new RefusedError(`teamrig kit install: ${clientRoot} holds no integrity list, so it is no built release; nothing written`);
-      }
-      runtime.out.stdout(`UNCHANGED ${release} runs from the kit home already`);
-      break;
     case 'busy':
-      throw new RefusedError(`teamrig kit install: ${KIT_LOCK_BUSY}`);
+      throw new RefusedError(`teamrig ${command}: ${KIT_LOCK_BUSY}`);
     case 'refused':
-      throw new RefusedError(`teamrig kit install: ${outcome.why}`);
+      throw new RefusedError(`teamrig ${command}: ${outcome.why}`);
     case 'installed':
       runtime.out.stdout(`WROTE current ${outcome.version}${outcome.previous === undefined ? '' : ` (was ${outcome.previous})`}: ${release}`);
       break;
@@ -232,6 +242,11 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
       runtime.out.stdout(`NOTE ${keptAsideNote(outcome)}`);
       break;
   }
+  return launcherWritten(runtime, kitHome);
+}
+
+/** Writes the kit launcher of the version current names, saying whether it changed; failed when none could be written. */
+async function launcherWritten(runtime: Pick<CliRuntime, 'files' | 'out'>, kitHome: string): Promise<ExitCode> {
   const launcher = await syncKitLauncher(runtime.files, kitHome);
   if (launcher.kind === 'missing') {
     runtime.out.stdout(`NOTE the kit launcher is not written: ${launcher.why}`);
