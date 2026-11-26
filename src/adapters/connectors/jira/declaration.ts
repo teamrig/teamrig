@@ -42,6 +42,7 @@ export const declaration: ConnectorDeclaration = {
       "a description's formatting, and the reporter's tie to the project",
       'a Jira description is read as plain text, and Jira names no tie between a reporter and the project: every issue is read as an outsider\'s',
     ),
+    'tracker.issue-read': partial("a description's formatting", 'a Jira description is read as plain text, and a Jira issue is never a pull request'),
     'tracker.accept-label': unsupported('the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue'),
     'tracker.watch': partial('a free look for a change', 'each look for a change is one Jira search, which counts against the site\'s rate limit'),
     'tracker.issue-open': partial(
@@ -68,6 +69,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.links': unsupported(NOT_BUILT.links),
     'tracker.fields': unsupported('the Jira connector does not write an issue\'s priority or type yet'),
     'tracker.similar': UNPROVED,
+    'tracker.search': partial('pull requests', 'a Jira search finds issues alone: a search of pull requests finds none, as Jira holds no code'),
     'tracker.security-alert': UNPROVED,
     'tracker.stamp': UNPROVED,
     'tracker.hidden-mark': unsupported('the Jira connector keeps no hidden mark on an issue yet'),
