@@ -236,9 +236,19 @@ describe('teamrig setup hooks --host codex', () => {
       const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], options());
       assert.equal(result.code, EXIT.refused);
       assert.match(result.stdout[0] ?? '', refusal);
-      assert.match(result.stdout[0] ?? '', /start one teamrig session, .*; nothing written$/u);
+      assert.match(result.stdout[0] ?? '', /start one teamrig session or run the teamrig install script again, .*; nothing written$/u);
       assert.equal(kit.files.get(CODEX_HOOKS), undefined);
       assert.equal(kit.files.get(CODEX_CONFIG), undefined);
+    });
+
+    it(`previews the lines while ${what}, noting the refusal --yes would meet, so an install can show its whole plan`, async () => {
+      const kit = await kitWithPlugin();
+      await damage(kit);
+      const result = await kit.run(['setup', 'hooks', '--host', 'codex'], options());
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.match(result.stdout[0] ?? '', /^PREVIEW nothing written /u);
+      assert.ok(result.stdout.some((line) => line.startsWith('  NOTE --yes is refused until the kit home can run these lines: ')), result.stdout.join('\n'));
+      assert.equal(kit.files.get(CODEX_HOOKS), undefined);
     });
   }
 });

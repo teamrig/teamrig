@@ -39,7 +39,12 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
   const target = port.file(runtime.userHome);
   const current = await readUserSettings(runtime, target);
-  const answer = port.merge(current.json, source, pluginRoot, await launcherOf(runtime, port.runsKitLauncher === true));
+  const write = args.switches.has('yes');
+  const kit = await launcherOf(runtime, port.runsKitLauncher === true);
+  if (write && kit.problem !== undefined) {
+    throw new RefusedError(`${kit.problem}; nothing written`);
+  }
+  const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
   if (!answer.ok) {
     throw new RefusedError(`${answer.problem}; nothing written`);
   }
@@ -48,7 +53,6 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   const configs = [...(await configPlans(runtime, port.configLines)), ...sets.plans];
   const { file, counts, skipped } = answer.value;
   const counted = `inserted ${counts.inserted}, unchanged ${counts.unchanged}, changed ${counts.changed}, removed ${counts.removed}`;
-  const write = args.switches.has('yes');
   if (file === undefined) {
     runtime.out.stdout(`UNCHANGED ${target}: teamrig's hooks are already in it (${counted})`);
   } else if (!write) {
@@ -61,26 +65,35 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     runtime.out.stdout(await configWritten(runtime, config, port.host, write));
   }
   [...skipped, ...sets.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
+  if (kit.problem !== undefined) {
+    runtime.out.stdout(`  NOTE --yes is refused until the kit home can run these lines: ${kit.problem}`);
+  }
   if (file !== undefined) {
     port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
   }
   return EXIT.ok;
 }
 
+/** The kit launcher a host's lines run, and why the kit home cannot run them yet. */
+interface KitLauncherState {
+  readonly launcher?: HookLauncher;
+  readonly problem?: string;
+}
+
 /**
- * The kit launcher a host's lines run, for a host whose lines run it; undefined for one whose lines name the plugin
- * folder. Refused before any write while the kit home cannot run a line: the launcher would block every guard event.
+ * The kit launcher a host's lines run, for a host whose lines run it; none for one whose lines name the plugin folder.
+ * Its problem refuses a write while the kit home cannot run a line, as the launcher would block every guard event; a
+ * preview still shows the lines, so an install that fills the kit home next (the install script previews first) can
+ * show its whole plan.
  */
-async function launcherOf(runtime: CliRuntime, runsKitLauncher: boolean): Promise<HookLauncher | undefined> {
+async function launcherOf(runtime: CliRuntime, runsKitLauncher: boolean): Promise<KitLauncherState> {
   if (!runsKitLauncher) {
-    return undefined;
+    return {};
   }
   const kitHome = resolveKitHome(runtime.env, runtime.userHome);
   const problem = await hookLauncherProblem(runtime.files, kitHome);
-  if (problem !== undefined) {
-    throw new RefusedError(`${problem}; nothing written`);
-  }
-  return hookLauncher(kitHome);
+  const launcher = hookLauncher(kitHome);
+  return problem === undefined ? { launcher } : { launcher, problem };
 }
 
 async function pluginHooks(runtime: CliRuntime, file: string): Promise<unknown> {
