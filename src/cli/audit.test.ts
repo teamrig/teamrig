@@ -7,6 +7,7 @@ import { readEvents } from '../register/snapshot.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
 import { SUB_TEAMS, teamConfigOf, teamEventsOf, teamInboxOf, treeHarness } from '../testing/team-tree.ts';
 import { TEST_CARD, TEST_CARD_FLAGS, TEST_OWNER_CARD_FLAGS } from '../testing/card.ts';
+import { teamDataOf } from '../testing/team-data.ts';
 import { EXIT } from './runtime.ts';
 
 const STEP = join(APP, 'steps', 'grant-read.ps1');
@@ -15,8 +16,9 @@ const STEP_SHA256 = createHash('sha256').update(STEP_TEXT).digest('hex');
 const SHORT = STEP_SHA256.slice(0, 8);
 const WEB = { TEAMRIG_TEAM: 'web' };
 
+/** Every file but the act log, which keeps a refused run too. */
 function filesOf(kit: CliHarness): [string, string | undefined][] {
-  return kit.files.paths().map((path) => [path, kit.files.get(path)]);
+  return teamDataOf(kit.files);
 }
 
 /** `text` matched as itself in a RegExp. */

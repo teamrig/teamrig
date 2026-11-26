@@ -10,6 +10,7 @@ import { configChangedMeanwhile, hired } from '../testing/config-race.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
 import { rotateRegister } from '../testing/rotation.ts';
+import { teamDataOf } from '../testing/team-data.ts';
 import { EXIT } from './runtime.ts';
 
 const DAY = 24 * 60 * 60_000;
@@ -24,9 +25,9 @@ function split(kit: CliHarness, argv: readonly string[] = SPLIT, session = 'lead
   return kit.run([...argv, '--session', session], { probe: new MemoryPathProbe(kit.files), ...options });
 }
 
-/** Every file of the harness with its text, to show a refused split wrote nothing. */
+/** Every file of the harness with its text but the act log, which keeps a refusal too, to show a refused split wrote nothing. */
 function filesOf(kit: CliHarness): Map<string, string | undefined> {
-  return new Map(kit.files.paths().map((path) => [path, kit.files.get(path)]));
+  return new Map(teamDataOf(kit.files));
 }
 
 /** The sessions a config file lists. */
