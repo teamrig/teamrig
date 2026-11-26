@@ -18,6 +18,7 @@ your main branch on your git host too.
 - [Database writes after a preview](#database-writes-after-a-preview)
 - [Privileged commands on review](#privileged-commands-on-review)
 - [Hand steps you run yourself](#hand-steps-you-run-yourself)
+- [Who did what](#who-did-what)
 - [Reads without a prompt](#reads-without-a-prompt)
 - [A guard that breaks](#a-guard-that-breaks)
 
@@ -325,6 +326,17 @@ rule is in every session's start. A card that types the step is refused, and a r
 block or a `& '<path>'` line with no sha256 beside it sends its session back once, to tell you not to run it and hand
 you the audited file instead ([a hand step typed into the
 reply](../../plugins/teamrig/skills/teamrig-guide/hooks.md#end-of-a-turn-a-hand-step-typed-into-the-reply)).
+
+## Who did what
+
+Every teamrig command that changes something is a line of the team's `state/acts.jsonl`, refusals and failures too:
+when it ran and for how long, the session it named, whether an agent ran it (by its host's mark, such as
+`$CLAUDECODE`), you did, or the host cannot tell, the host, the command and its words, and how it ended with the
+reason it printed. Each word and reason passes the secret check first, so a key typed by mistake is kept as
+`[redacted ...]`. Reads, hooks and a line teamrig cannot parse are not logged, nor is a run for no team. Lines over 30
+days old move to `state/archive/acts-YYYYMMDD.jsonl`, never deleted. A log that cannot be written prints
+`NOTE the act log was not written: <why>` and leaves the command's own result as it was. Like the rest of the team
+folder, the log tells you what happened on the routine routes; a script running as your OS user can still edit it.
 
 ## Reads without a prompt
 
