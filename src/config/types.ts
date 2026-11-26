@@ -1133,9 +1133,9 @@ export interface QueueConfig {
    * (`endFreeMb`) and commit charge (`commitMb`, `commitLimitMb`) at the kill; 0 samples nothing and records none.
    */
   readonly memorySampleSeconds: number;
-  /** A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host. */
+  /** A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host; an eighth of the host's RAM when that is less. */
   readonly memoryFloorMb: number;
-  /** The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb. */
+  /** The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb; a seventh of the host's RAM when that is less. */
   readonly smallReserveMb: number;
   /**
    * The least MB held for a heavy queued step, a merge or a deploy besides memoryFloorMb: it takes the host lock only

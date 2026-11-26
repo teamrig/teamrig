@@ -1204,14 +1204,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       under queue, merge or deploy) runs at once under it. No --session: $TEAMRIG_SESSION, the
       parent step's session, else the session this Claude Code tab is bound to. Every step, merge and
       deploy waits in its turn for host memory: the least of 3 free-memory reads 1 s apart over
-      delivery.queue.memoryFloorMb plus the MB held for it, for the small steps running and for the tabs
+      delivery.queue.memoryFloorMb (an eighth of a smaller host's RAM) plus the MB held for it, for the small steps running and for the tabs
       still loading (at most half the host's RAM), and the commit charge under open.headroom.commitMaxPct
       with its MB and those tabs' counted. A step
       holds the need its latest 20 runs under its session and --what (commit ids, re-run aside) show
       (their most held, one outlier aside, and a quarter, or their median host drop, whichever is
       more; with no such run, its session's runs of the same --kind and size, never other), or
       its --memory-mb when more; at least
-      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb.
+      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb (a seventh of a smaller host's RAM).
       The wait line says where a learned or declared need came from. --small (a spec run, a lint):
       shares the host with other small steps, waiting in a line of its own, never behind a heavy step,
       under pipeline at most delivery.queue.maxSmallParallel at once, and is killed after

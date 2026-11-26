@@ -899,14 +899,14 @@
               "default": 15
             },
             "memoryFloorMb": {
-              "description": "A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host.",
+              "description": "A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host; an eighth of the host's RAM when that is less.",
               "type": "integer",
               "minimum": 0,
               "maximum": 1048576,
               "default": 4096
             },
             "smallReserveMb": {
-              "description": "The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb.",
+              "description": "The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb; a seventh of the host's RAM when that is less.",
               "type": "integer",
               "minimum": 0,
               "maximum": 1048576,

@@ -6521,8 +6521,9 @@ still loading, leaves `delivery.queue.memoryFloorMb` (4096) plus its own, and th
 those tabs' counted stays under `open.headroom.commitMaxPct` (92) of the limit the page files can grow to. A tab
 [teamrig open](#teamrig-open) just opened holds the MB it was counted at for `open.headroom.loadMinutes` (5), as free memory does not show it while Claude Code
 loads; the wait line names them (`..., 1500 MB held for 1 tab still loading, ...`). Free memory is read 3 times 1 s apart and the least read counts, since a step
-that just ended or started gives back or takes its memory in a burst. On a host with less than twice that RAM, half
-the host's RAM is enough. Until then it waits first in line (`...; host memory: 7000 MB free, 4096 MB held for them,
+that just ended or started gives back or takes its memory in a burst. A host with less than 8 times the floor in RAM
+keeps an eighth of its RAM free instead (896 MB on a 7168 MB host: `896 kept free for the host (an eighth of its 7168
+MB)`). On a host with less than twice that RAM, half the host's RAM is enough. Until then it waits first in line (`...; host memory: 7000 MB free, 4096 MB held for them,
 6144 MB needed (4096 kept free for the host + 2048 for this step)`), and when its wait runs out it is refused with `host memory still
 short: ...`.
 
@@ -6534,7 +6535,8 @@ they ran (`startFreeMb` less `lowFreeMb`), whichever is more. With no such run, 
 the same `--kind` and size (`--small` or not), never for kind `other`, which spans ships, checks and installs. A run
 that measured nothing teaches nothing. `--memory-mb <MB>` declares a need, held when it is at least the learned one. A
 step without `--small` holds at least `delivery.queue.heavyReserveMb` (2048); a small step with neither a learned nor
-a declared need holds `delivery.queue.smallReserveMb` (2048). The wait line says where a need came from:
+a declared need holds `delivery.queue.smallReserveMb` (2048), or a seventh of the host's RAM when that is less (1024
+MB on a 7168 MB host), so a small host runs it; a learned or declared need is never scaled. The wait line says where a need came from:
 `(4096 kept free for the host + 7500 for this step, learned from 2 runs)`, `learned from 1 build run` when its kind's runs taught it,
 `declared with --memory-mb`.
 
@@ -6848,7 +6850,8 @@ BACK heavy: merge api: its host share is taken back
 Shows the host's queued steps (`queue`, `merge`, `deploy`) in one read, taking nothing and changing nothing, so a
 session that waits on the host lock sees why without reading the lock, the tickets and the ledger by hand:
 
-- `HOST`: free memory of the RAM, the floor kept free (`delivery.queue.memoryFloorMb`), the commit charge, the MB
+- `HOST`: free memory of the RAM, the floor kept free (`delivery.queue.memoryFloorMb`, or an eighth of a smaller
+  host's RAM), the commit charge, the MB
   held for the steps sharing the host (heavy and small) and for the tabs still loading (each named by its team and
   session, held for `open.headroom.loadMinutes` after its open), what the running steps' process trees use, and the
   top memory holders.
