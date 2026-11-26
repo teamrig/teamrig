@@ -447,11 +447,11 @@ test('with --merge, clears the merge of the branch at its head and fingerprints 
   assert.ok(!events.some((event) => event.startsWith('work ')), 'the approved head itself needs no work compare');
 });
 
-test("with --merge, takes the GitHub answerer's low-risk clearance as an approval, fingerprinting its head (T3448)", async () => {
+test("with --merge, takes the answerer's low-risk clearance as an approval, fingerprinting its head (T3448)", async () => {
   const { deps, events, logs } = fake({ clearance: { kind: 'low-risk', by: 'gh', paths: 2 } });
   assert.equal(await shipCommits({ ...ARGS, merge: true, approved: '5efae2e91' }, CHUNKS, deps), 0);
   assert.deepEqual(events.slice(2, 4), [`clear t827-ship-tool ${HEAD_SHA} 5efae2e91`, `patch ${HEAD_SHA}`]);
-  assert.ok(logs.includes('merge of t827-ship-tool 5efae2e91: low-risk, approved by gh, the GitHub answerer: 2 changed path(s), none sensitive'), logs.join('\n'));
+  assert.ok(logs.includes('merge of t827-ship-tool 5efae2e91: low-risk, approved by gh, the answerer: 2 changed path(s), none sensitive'), logs.join('\n'));
   assert.deepEqual(events.slice(-2), ['push', 'merge t827-ship-tool']);
 });
 

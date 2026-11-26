@@ -38,7 +38,7 @@ export interface MergeStanding {
    * then `pushGuard.reviewPaths`, then `pushGuard.sensitivePaths`, then the hosts' repository globs (`repoGlobsOf`).
    */
   readonly sensitive: readonly string[];
-  /** The team's security reviewer, who passes a sensitive change before the GitHub answerer merges it (T3448). */
+  /** The team's security reviewer, who passes a sensitive change before the answerer merges it (T3448). */
   readonly securityReviewer: string | undefined;
   /** The owners of the tasks not shipped yet (open, in progress or waiting), by task id, whose branches a change may overlap (T3448). */
   readonly open: ReadonlyMap<string, string>;

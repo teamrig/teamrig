@@ -14,7 +14,7 @@ import { shipsInVersions, shipVersionFileOf, TEAMRIG_RELEASE_STAMPS, versionIn, 
 /**
  * Whether a merge may go ahead (T2788, security verdict on T2763): refused with why; the caller's own say (a root
  * team's lead, whom nobody approves); the approval of `by`, one of the caller's leaders, given in the register; or
- * `low-risk` (owner order, T3448): the GitHub answerer `by` approved the head itself, and none of its `paths` is
+ * `low-risk` (owner order, T3448): the answerer `by` approved the head itself, and none of its `paths` is
  * sensitive.
  */
 export type MergeClearance =
@@ -31,7 +31,7 @@ export function clearanceText(clearance: Exclude<MergeClearance, { kind: 'refuse
     case 'approved':
       return `approved by ${clearance.by}`;
     case 'low-risk':
-      return `low-risk, approved by ${clearance.by}, the GitHub answerer: ${clearance.paths} changed path(s), none sensitive`;
+      return `low-risk, approved by ${clearance.by}, the answerer: ${clearance.paths} changed path(s), none sensitive`;
   }
 }
 
@@ -61,7 +61,7 @@ const refused = (reason: string): MergeClearance => ({ kind: 'refused', reason }
  * - else `approved` must be a sha `head` starts with, the task must hold one of its approvers' approval
  *   (`approvedTaskOf`, as the push guard reads it), and that answer's note must name a sha `head` starts with, so an
  *   approval of an earlier head never clears a later one;
- * - failing that, the GitHub answerer's merge reads the paths its head changes (`reads`, only then) and is cleared by
+ * - failing that, the answerer's merge reads the paths its head changes (`reads`, only then) and is cleared by
  *   `answererClearance` (owner order, T3448).
  */
 export function mergeClearance(standing: MergeStanding, taskId: string, head: string, approved: string | null, reads: ChangeReads): MergeClearance {
@@ -100,7 +100,7 @@ export function mergeClearance(standing: MergeStanding, taskId: string, head: st
   });
 }
 
-/** What the GitHub answerer's head touches (T3448): how many paths, the sensitive ones, and the other sessions' open branches it overlaps. */
+/** What the answerer's head touches (T3448): how many paths, the sensitive ones, and the other sessions' open branches it overlaps. */
 export interface AnswererChange {
   readonly paths: number;
   readonly sensitive: readonly string[];
@@ -108,7 +108,7 @@ export interface AnswererChange {
 }
 
 /**
- * The GitHub answerer's clearance of its own head, which no leader approved (owner order, T3448): alone, by its own
+ * The answerer's clearance of its own head, which no leader approved (owner order, T3448): alone, by its own
  * `--approved`, when the head touches no sensitive path and no file another session's open branch changes; else the
  * one session that must approve the head first, the security reviewer for a sensitive path or the session whose open
  * branch it overlaps, by an approval naming the head. Several such sessions, or a sensitive path in a team with no
@@ -226,7 +226,7 @@ export function repoChanges(git: GitText, main: string, regenerated: readonly st
 
 /**
  * `repoChanges` for the repo `origin` names, its `main` and `regenerated` read from that repo's `profiles` entry at the
- * first read and kept: only the GitHub answerer's clearance reads the repo, so another caller's merge never reads the
+ * first read and kept: only the answerer's clearance reads the repo, so another caller's merge never reads the
  * remote or needs a profile for it.
  */
 export function originRepoChanges(git: GitText, profiles: ReadonlyMap<string, RepoProfile>): ChangeReads {
@@ -278,7 +278,7 @@ export type StandingOf = (team: string, caller: string, taskId: string) => Promi
 /** The session the merging tab is bound to, which must be the one the caller names (`tabCallerOf`); rejects with `RefusedError` otherwise. */
 export type TabCallerOf = (team: string, hostSession: string, caller: string) => Promise<string>;
 
-/** What the GitHub answerer's clearance reads of the repo (T3448): the paths a rev changes over main, and the branches named for a task. */
+/** What the answerer's clearance reads of the repo (T3448): the paths a rev changes over main, and the branches named for a task. */
 export interface ChangeReads {
   readonly changedPaths: (rev: string) => readonly string[];
   readonly taskBranches: () => readonly TaskBranch[];
@@ -287,7 +287,7 @@ export interface ChangeReads {
 /** The repository paths through which the shipped hosts change what a session does (`repoGlobsOf`), read once the merge needs them. */
 export type HostGlobs = () => Promise<readonly string[]>;
 
-/** What a merge's clearance reads: the tab's session, then that session's standing, then, for the GitHub answerer, the repo. */
+/** What a merge's clearance reads: the tab's session, then that session's standing, then, for the answerer, the repo. */
 export interface MergeReads {
   readonly tabCallerOf: TabCallerOf;
   readonly standingOf: StandingOf;
@@ -340,7 +340,7 @@ export type ClearMerge = (branch: string, head: string, approved: string | null)
  * `clearMerge` for the session, team and tab `env` names (`$TEAMRIG_SESSION`, `$TEAMRIG_TEAM`,
  * `$CLAUDE_CODE_SESSION_ID`), reading the inbox marks and the register through `reader`. The session must be the one
  * the tab is bound to, so a typed name merges no other session's task; the marks are files of the shared account
- * (stopgap T791), so the guards stay the trust boundary. `changes` reads the repo for the GitHub answerer's clearance,
+ * (stopgap T791), so the guards stay the trust boundary. `changes` reads the repo for the answerer's clearance,
  * and `hostGlobs` the hosts' paths that clearance counts sensitive.
  */
 export function clearMergeFrom(env: Env, reader: KitReader, changes: ChangeReads, hostGlobs: HostGlobs): ClearMerge {

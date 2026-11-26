@@ -337,7 +337,7 @@ export class RegisterPolicy {
     const reviewer = others.find((who) => who === roles.securityReviewer);
     const approvers = this.approversText(owner);
     const named = reviewer === undefined ? approvers : `${approvers} or the security reviewer (${reviewer})`;
-    return others.some((who) => who !== reviewer) ? `${named} or, on the GitHub answerer's own task, another session of the team` : named;
+    return others.some((who) => who !== reviewer) ? `${named} or, on the answerer's own task, another session of the team` : named;
   }
 
   /** The caller must be on the roster before writing anything. */
@@ -931,7 +931,7 @@ export class RegisterPolicy {
   /**
    * Decision and approval waits are for the task owner's leaders (the lead, and any sub-lead above it; for a child
    * team's lead, the parent team's lead) and the owner, an approval wait also for the security reviewer, on another's
-   * task, and any session on the GitHub answerer's own (`waitAnswerersOf`, T3448): a peer's work is a task, waited on
+   * task, and any session on the answerer's own (`waitAnswerersOf`, T3448): a peer's work is a task, waited on
    * by its id, which clears by itself once that task finishes, where a peer's decision would hold the task until its
    * owner noticed.
    */
@@ -949,7 +949,7 @@ export class RegisterPolicy {
   /**
    * An answer to a task's approval wait (T684): only a leader above the task's owner answers (the lead, or a sub-lead,
    * T781; on a child team's lead's task, the parent team's lead, as `<team>/<id>`, T1140), or the security reviewer on
-   * another's task (T828), or any other session on the GitHub answerer's own task (T3448), only a task waiting on its
+   * another's task (T828), or any other session on the answerer's own task (T3448), only a task waiting on its
    * own approval, and always with a note, which the task's owner reads: what it checked, or why it declines. An
    * approval of the owner's stays the owner's: no lead answers it.
    */

@@ -61,18 +61,18 @@ describe('waitAnswerersOf (T828)', () => {
     assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'alpha' }, 'bravo'), { decision: ['alpha', 'lead'], approval: ['alpha', 'lead'] });
   });
 
-  it("lets every other session approve the GitHub answerer's own task, and no other's, deciding nothing (T3448)", () => {
-    const githubAnswerer = { session: 'bravo', team: ['lead', 'alpha', 'bravo', 'charlie', 'security'] };
-    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security', githubAnswerer }, 'bravo'), {
+  it("lets every other session approve the answerer's own task, and no other's, deciding nothing (T3448)", () => {
+    const answerer = { session: 'bravo', team: ['lead', 'alpha', 'bravo', 'charlie', 'security'] };
+    assert.deepEqual(waitAnswerersOf(tree, { securityReviewer: 'security', answerer }, 'bravo'), {
       decision: ['alpha', 'lead'],
       approval: ['alpha', 'lead', 'security', 'charlie'],
     });
-    assert.deepEqual(waitAnswerersOf(tree, { githubAnswerer }, 'charlie'), { decision: ['lead'], approval: ['lead'] }, "charlie's task: the leaders alone");
+    assert.deepEqual(waitAnswerersOf(tree, { answerer }, 'charlie'), { decision: ['lead'], approval: ['lead'] }, "charlie's task: the leaders alone");
   });
 
   it('reads the approval roles from the config: the security reviewer, the answerer and its team', () => {
     const config = testConfig({ roles: { lead: 'lead', securityReviewer: 'bravo' }, github: { watcher: 'alpha' } });
-    assert.deepEqual(approvalRolesOf(config), { securityReviewer: 'bravo', githubAnswerer: { session: 'alpha', team: config.sessions } });
+    assert.deepEqual(approvalRolesOf(config), { securityReviewer: 'bravo', answerer: { session: 'alpha', team: config.sessions } });
     assert.deepEqual(approvalRolesOf(testConfig()), {}, 'no watcher: the lead answers GitHub, its approvals as they were');
   });
 });

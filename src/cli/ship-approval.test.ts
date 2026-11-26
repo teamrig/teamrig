@@ -27,7 +27,7 @@ describe('mergeStandingOf: who merges, its task and who approves it, read from t
     assert.equal(standing.task?.answer?.note, 'head 0123456789abcdef checked');
   });
 
-  it('names the GitHub answerer, the low-risk paths, and the generic review paths, the review entries and the sensitive paths as sensitive (T3448)', async () => {
+  it('names the answerer, the low-risk paths, and the generic review paths, the review entries and the sensitive paths as sensitive (T3448)', async () => {
     const kit = new CliHarness({ ...TEAM, github: { watcher: 'bravo' }, pushGuard: { reviewPaths: [{ glob: '*.sql' }], lowRiskPaths: ['src/pane/**'], sensitivePaths: ['src/billing/**'] } });
     const standing = await mergeStandingOf(kit.runtime(), 'app', 'alpha', 'T1', []);
     assert.equal(standing.answerer, 'bravo');

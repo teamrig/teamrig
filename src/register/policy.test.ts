@@ -814,7 +814,7 @@ describe('RegisterPolicy.setStatus to waiting', () => {
     assert.equal(led.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'bravo' }] }, CTX).ok, true, 'the lead is whoever roles.lead names');
   });
 
-  it("takes a wait on another session's approval on the GitHub answerer's own task, a decision still refused (T3448)", () => {
+  it("takes a wait on another session's approval on the answerer's own task, a decision still refused (T3448)", () => {
     const answering = new RegisterPolicy(testConfig({ github: { watcher: 'alpha' } }));
     assert.equal(answering.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'bravo' }] }, CTX).ok, true);
     assert.match(
@@ -823,7 +823,7 @@ describe('RegisterPolicy.setStatus to waiting', () => {
     );
     assert.equal(
       error(answering.setStatus(TASK, 'alpha', { status: 'waiting', note: 'x', waits: [{ kind: 'approval', who: 'zulu' }] }, CTX)),
-      "approval zulu: zulu is neither the lead (lead) or, on the GitHub answerer's own task, another session of the team nor owner",
+      "approval zulu: zulu is neither the lead (lead) or, on the answerer's own task, another session of the team nor owner",
     );
   });
 
@@ -1829,7 +1829,7 @@ describe('RegisterPolicy.approve (T684)', () => {
     assert.equal(error(tree.approve(alphas, 'alpha', 'approved', 'ok')), "only the lead (lead) answers an approval of alpha's");
   });
 
-  it("lets another session answer an approval of the GitHub answerer's own task, and no other's (T3448)", () => {
+  it("lets another session answer an approval of the answerer's own task, and no other's (T3448)", () => {
     const team = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie'], github: { watcher: 'bravo' } }));
     const bravos = testTask({ owner: 'bravo', status: 'waiting', waits: [{ kind: 'approval', who: 'charlie' }] });
     assert.equal(team.approve(bravos, 'charlie', 'approved', 'its files are mine, fine').ok, true);

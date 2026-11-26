@@ -100,7 +100,7 @@ const pathsReader = (paths: readonly string[], branches: Readonly<Record<string,
   };
 };
 /**
- * The standing of `base` with alpha as the GitHub answerer, charlie as the security reviewer, and the given sensitive
+ * The standing of `base` with alpha as the answerer, charlie as the security reviewer, and the given sensitive
  * globs carved out of the given low-risk ones.
  */
 const answering = (
@@ -118,7 +118,7 @@ const answering = (
 const opening = (base: MergeStanding, open: Readonly<Record<string, string>>): MergeStanding => ({ ...base, open: new Map(Object.entries(open)) });
 
 /**
- * Team app whose GitHub answerer is alpha and security reviewer charlie, with T1, alpha's, waiting on `approver`'s
+ * Team app whose answerer is alpha and security reviewer charlie, with T1, alpha's, waiting on `approver`'s
  * approval, which `approver` gave naming `note`.
  */
 async function answererKit(approver: string, note: string): Promise<CliHarness> {
@@ -199,7 +199,7 @@ describe('mergeClearance: the merge needs its approver to have approved the head
   });
 });
 
-describe('mergeClearance: the GitHub answerer approves a low-risk change alone (owner order, T3448)', () => {
+describe('mergeClearance: the answerer approves a low-risk change alone (owner order, T3448)', () => {
   it('clears the answerer naming its own head when no changed path is sensitive, with no approval asked', async () => {
     const paths = pathsReader(['src/cli/list.ts', 'docs/commands.md', 'README.md']);
     assert.deepEqual(mergeClearance(answering(await standing(await waitingKit())), 'T1', HEAD, HEAD.slice(0, 9), paths.read), { kind: 'low-risk', by: 'alpha', paths: 3 });
@@ -494,7 +494,7 @@ describe('clearMerge', () => {
     assert.match(reasonOf(await clearTaskMergeFrom({ ...env, TEAMRIG_SESSION: 'bravo' }, kit.runtime(), UNREAD, NO_HOST_GLOBS)('T1', HEAD, HEAD)), /not bound to bravo alone/);
   });
 
-  it("reads the paths of the head it clears for the GitHub answerer's low-risk merge (T3448)", async () => {
+  it("reads the paths of the head it clears for the answerer's low-risk merge (T3448)", async () => {
     const value = answering(await standing(await waitingKit()));
     const heads: string[] = [];
     const reads: MergeReads = {
@@ -516,7 +516,7 @@ describe('clearanceText: how the merge log names its clearance', () => {
   it('names the lead, the approver, or the answerer and the paths it counted', () => {
     assert.equal(clearanceText({ kind: 'self' }), "the caller's own, a root team's lead");
     assert.equal(clearanceText({ kind: 'approved', by: 'lead' }), 'approved by lead');
-    assert.equal(clearanceText({ kind: 'low-risk', by: 'gh', paths: 4 }), 'low-risk, approved by gh, the GitHub answerer: 4 changed path(s), none sensitive');
+    assert.equal(clearanceText({ kind: 'low-risk', by: 'gh', paths: 4 }), 'low-risk, approved by gh, the answerer: 4 changed path(s), none sensitive');
   });
 });
 
