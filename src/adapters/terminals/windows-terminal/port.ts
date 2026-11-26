@@ -5,6 +5,8 @@ import {
   type OpenAnswer,
   type PaneAnswer,
   type PaneOpen,
+  type PaneSplit,
+  type SplitAnswer,
   type StartOutcome,
   type StartRequest,
   type TerminalDeps,
@@ -20,6 +22,26 @@ const UNSERVED: Unserved = { kind: 'unserved' };
  * `"`. teamrig's own arguments (ids, base64url) never hold these; a path might.
  */
 const UNSAFE = /[;"%\p{Cc}]/u;
+
+/** The first of the request's texts Windows Terminal would misread, if any, as a failure saying so. */
+function misread(texts: readonly string[]): { readonly kind: 'failed'; readonly why: string } | undefined {
+  const unsafe = texts.find((text) => UNSAFE.test(text));
+  return unsafe === undefined ? undefined : { kind: 'failed', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+}
+
+/** What a launch that started nothing answers. */
+function notStarted(outcome: Exclude<StartOutcome, { kind: 'started' }>): { readonly kind: 'failed'; readonly why: string } {
+  return { kind: 'failed', why: outcome.kind === 'missing' ? 'Windows Terminal is not installed' : outcome.error };
+}
+
+/**
+ * The launcher that splits the active pane of the most recent window, the one the person types in: a split is of the
+ * window the run is in, so no window is named.
+ */
+export function splitLauncherOf(request: PaneSplit): StartRequest {
+  const { title, folder, argv } = request;
+  return { command: 'wt.exe', args: ['-w', '0', 'split-pane', '--vertical', '--title', title, '-d', folder, '--', ...argv], cwd: folder, mode: 'exit' };
+}
 
 /** The launcher that opens the pane's tab: `-w 0` is the most recent window; a name is the window of that name, made when none is open. */
 export function launcherOf(request: PaneOpen): StartRequest {
@@ -64,8 +86,8 @@ function focusAnswerOf(code: number): PaneAnswer {
 
 /**
  * The Windows Terminal port: a pane is a tab opened by `wt.exe new-tab --title`, in the window named for it, and its
- * title is the id it answers and finds the tab by again, through UI Automation. It opens and focuses panes and
- * serves nothing else, as its declaration says.
+ * title is the id it answers and finds the tab by again, through UI Automation. It opens, splits and focuses panes
+ * and serves nothing else, as its declaration says.
  */
 export function windowsTerminalPort(deps: TerminalDeps): TerminalPort {
   /** Starts the launcher through the keep-focus script. Without Windows PowerShell, it starts plainly: the tab then takes the focus rather than not opening at all. */
@@ -77,22 +99,24 @@ export function windowsTerminalPort(deps: TerminalDeps): TerminalPort {
   }
 
   return {
-    capabilities: async () => ({ requests: ['open', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
+    capabilities: async () => ({ requests: ['open', 'split', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
     open: async (request: PaneOpen): Promise<OpenAnswer> => {
-      const unsafe = [request.title, request.folder, ...(request.window === undefined ? [] : [request.window]), ...request.argv].find((arg) => UNSAFE.test(arg));
-      if (unsafe !== undefined) {
-        return { kind: 'failed', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
+      const refused = misread([request.title, request.folder, ...(request.window === undefined ? [] : [request.window]), ...request.argv]);
+      if (refused !== undefined) {
+        return refused;
       }
       const launcher = launcherOf(request);
       const outcome = request.focus === 'keep' ? await startKeepingFocus(launcher) : await deps.processes.start(launcher);
-      switch (outcome.kind) {
-        case 'started':
-          return { kind: 'opened', pane: request.title };
-        case 'missing':
-          return { kind: 'failed', why: 'Windows Terminal is not installed' };
-        case 'failed':
-          return { kind: 'failed', why: outcome.error };
+      return outcome.kind === 'started' ? { kind: 'opened', pane: request.title } : notStarted(outcome);
+    },
+    split: async (request: PaneSplit): Promise<SplitAnswer> => {
+      // The split is of the person's own window, so it takes the focus there as wt.exe gives it: no other window is raised.
+      const refused = misread([request.title, request.folder, ...request.argv]);
+      if (refused !== undefined) {
+        return refused;
       }
+      const outcome = await deps.processes.start(splitLauncherOf(request));
+      return outcome.kind === 'started' ? { kind: 'split' } : notStarted(outcome);
     },
     focus: async (pane: string): Promise<PaneAnswer> => {
       const { program, args } = powerShellRequest(FOCUS_SCRIPT);
@@ -106,7 +130,6 @@ export function windowsTerminalPort(deps: TerminalDeps): TerminalPort {
           return { kind: 'failed', why: outcome.error };
       }
     },
-    split: async () => UNSERVED,
     close: async () => UNSERVED,
     restart: async () => UNSERVED,
     rename: async () => UNSERVED,

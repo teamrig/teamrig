@@ -1,4 +1,4 @@
-import { INTERFACE_VERSION, type OpenAnswer, type PaneAnswer, type PaneOpen, type TerminalDeps, type TerminalPort, type Unserved } from '../../../plugin-api/index.ts';
+import { INTERFACE_VERSION, type OpenAnswer, type PaneAnswer, type PaneOpen, type PaneSplit, type SplitAnswer, type StartOutcome, type TerminalDeps, type TerminalPort, type Unserved } from '../../../plugin-api/index.ts';
 
 const UNSERVED: Unserved = { kind: 'unserved' };
 
@@ -7,11 +7,16 @@ const NOT_INSTALLED = 'tmux is not installed';
 
 /**
  * The tmux port: a pane is a tmux window named by its title, which is the id it answers and finds the window by
- * again. It opens and focuses panes and serves nothing else, as its declaration says.
+ * again. It opens, splits and focuses panes and serves nothing else, as its declaration says.
  */
 export function tmuxPort(deps: TerminalDeps): TerminalPort {
+  /** What a launch that started nothing answers, in tmux's words. */
+  function notStarted(outcome: Exclude<StartOutcome, { kind: 'started' }>): { readonly kind: 'failed'; readonly why: string } {
+    return { kind: 'failed', why: outcome.kind === 'missing' ? NOT_INSTALLED : outcome.error };
+  }
+
   return {
-    capabilities: async () => ({ requests: ['open', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
+    capabilities: async () => ({ requests: ['open', 'split', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
     open: async (request: PaneOpen): Promise<OpenAnswer> => {
       // tmux 3.0 and later run a command given as several arguments without a shell; -d leaves the current window selected.
       const keep = request.focus === 'keep' ? ['-d'] : [];
@@ -42,7 +47,17 @@ export function tmuxPort(deps: TerminalDeps): TerminalPort {
           return { kind: 'failed', why: outcome.error };
       }
     },
-    split: async () => UNSERVED,
+    split: async (request: PaneSplit): Promise<SplitAnswer> => {
+      // split-window splits the pane this run works in, which tmux names in TMUX_PANE; -h puts the new one beside it.
+      const keep = request.focus === 'keep' ? ['-d'] : [];
+      const outcome = await deps.processes.start({
+        command: 'tmux',
+        args: ['split-window', '-h', ...keep, '-c', request.folder, ...request.argv],
+        cwd: request.folder,
+        mode: 'exit',
+      });
+      return outcome.kind === 'started' ? { kind: 'split' } : notStarted(outcome);
+    },
     close: async () => UNSERVED,
     restart: async () => UNSERVED,
     rename: async () => UNSERVED,

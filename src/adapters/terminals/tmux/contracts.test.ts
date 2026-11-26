@@ -5,13 +5,16 @@ import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { declaration } from './declaration.ts';
 import { tmuxPort } from './port.ts';
 
-/** tmux itself, faked: `new-window` and `select-window` as the port calls them, read from their arguments. */
+/** tmux itself, faked: `new-window`, `split-window` and `select-window` as the port calls them, read from their arguments. */
 class FakeTmux implements TerminalProcesses {
   private readonly shown: ShownPane[] = [];
   private selected: string | undefined;
 
   async start(request: StartRequest): Promise<StartOutcome> {
     const [verb, ...rest] = request.args;
+    if (request.command === 'tmux' && verb === 'split-window') {
+      return this.split(rest);
+    }
     if (request.command !== 'tmux' || verb !== 'new-window') {
       return { kind: 'failed', error: `fake tmux does not know ${request.command} ${verb ?? ''}` };
     }
@@ -23,6 +26,22 @@ class FakeTmux implements TerminalProcesses {
     this.shown.push({ pane: title, title, folder, argv, window: undefined });
     if (!keep) {
       this.selected = title;
+    }
+    return { kind: 'started', end: 'exited' };
+  }
+
+  /** A split pane has no name of its own: tmux shows the command it runs, as the fake does for its title. */
+  private split(rest: readonly string[]): StartOutcome {
+    const [hFlag, ...after] = rest;
+    const keep = after[0] === '-d';
+    const [cFlag, folder, ...argv] = keep ? after.slice(1) : after;
+    if (hFlag !== '-h' || cFlag !== '-c' || folder === undefined) {
+      return { kind: 'failed', error: `fake tmux cannot read split-window ${rest.join(' ')}` };
+    }
+    const pane = `split-${this.shown.length}`;
+    this.shown.push({ pane, title: argv[0] ?? '', folder, argv, window: undefined });
+    if (!keep) {
+      this.selected = pane;
     }
     return { kind: 'started', end: 'exited' };
   }

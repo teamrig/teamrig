@@ -117,7 +117,10 @@ export type ListAnswer = { readonly kind: 'listed'; readonly panes: readonly Lis
 export interface TerminalPort {
   readonly capabilities: () => Promise<TerminalCapabilities>;
   readonly open: (request: PaneOpen) => Promise<OpenAnswer>;
-  /** Splits the pane the person works in and runs the request's command in the new half, side by side. */
+  /**
+   * Splits the pane the person works in and runs the request's command in the new half, side by side. The title is
+   * shown where the terminal can: tmux shows a pane's command instead.
+   */
   readonly split: (request: PaneSplit) => Promise<SplitAnswer>;
   /** Brings the pane forward. */
   readonly focus: (pane: string) => Promise<PaneAnswer>;

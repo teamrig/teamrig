@@ -4,7 +4,7 @@ import type { ModuleImporter } from '../composition/loader.ts';
 import type { TerminalChoice } from '../config/types.ts';
 import type { Env } from '../core/home.ts';
 import type { Processes } from './processes.ts';
-import { autoTerminals, splitCommand, splittableTerminal, type SplitTerminal, type TabRequest, type Terminal } from './terminals.ts';
+import { autoTerminals, splittableTerminal, type SplitTerminal, type TabRequest, type Terminal } from './terminals.ts';
 
 /** A tab opened in `terminal`, with the terminal's own id of it, or none, with why each terminal tried could not open it. */
 export type OpenOutcome = { readonly kind: 'opened'; readonly terminal: Terminal; readonly pane: string } | { readonly kind: 'none'; readonly reasons: readonly string[] };
@@ -70,27 +70,27 @@ export async function openTab(deps: OpenTabDeps, choice: TerminalChoice, tab: Ta
 }
 
 /**
- * Splits the terminal window this run works in and runs the tab's command in the new pane (T5105): only tmux and
- * Windows Terminal split, found by their own variables (`splittableTerminal`), whatever `open.terminal` says, as the
- * split is of the run's own window. It starts the split's launcher itself, as the terminal port has no split yet;
- * the focus stays by the launcher's own flag, so no window is raised over the person's.
+ * Splits the terminal window this run works in and runs the tab's command in the new pane (T5105, T5236): only tmux
+ * and Windows Terminal split, found by their own variables (`splittableTerminal`), whatever `open.terminal` says, as
+ * the split is of the run's own window. The terminal's port serves the split; how it keeps the focus is the port's own.
  */
 export async function openSplit(deps: OpenTabDeps, tab: TabRequest): Promise<SplitOutcome> {
   const terminal = splittableTerminal(deps.env);
   if (terminal === undefined) {
     return { kind: 'none', reasons: ['this terminal is neither tmux nor Windows Terminal, the ones that split'] };
   }
-  const planned = splitCommand(terminal, tab);
-  if (planned.kind === 'unusable') {
-    return { kind: 'none', reasons: [planned.why] };
+  const reach = await terminalPortOf(terminal, { env: deps.env, platform: deps.platform, processes: deps.processes, cwd: deps.cwd }, deps.importer);
+  if (reach.kind === 'refused') {
+    return { kind: 'none', reasons: [`${terminal}: ${reach.why}`] };
   }
-  const outcome = await deps.processes.start(planned.request);
-  switch (outcome.kind) {
-    case 'started':
+  const { title, folder, argv, focus } = tab;
+  const answer = await reach.port.split({ title, folder, argv, focus, identity: {}, wakeToken: mintWakeToken() });
+  switch (answer.kind) {
+    case 'split':
       return { kind: 'opened', terminal };
-    case 'missing':
-      return { kind: 'none', reasons: [`${terminal} is not installed`] };
+    case 'unserved':
+      return { kind: 'none', reasons: [`${terminal} splits no pane`] };
     case 'failed':
-      return { kind: 'none', reasons: [`${terminal} failed: ${outcome.error}`] };
+      return { kind: 'none', reasons: [`${terminal}: ${answer.why}`] };
   }
 }

@@ -61,16 +61,27 @@ const OPEN_SHOWS_THE_PANE: TerminalCase = {
 
 const SPLIT_SHOWS_THE_PANE: TerminalCase = {
   id: 'terminal.split-shows-the-pane',
-  title: 'splits to show a pane with the title, folder and command it is given, the focus kept where it was',
+  // A split pane's title is the terminal's to show where it can: tmux shows the command a pane runs, not a title.
+  title: 'splits to show a pane running the command it is given, in the folder it is given',
   features: ['pane.split'],
   run: async (subject) => {
     const pane = await opened(subject);
     assert.deepEqual(await subject.port.split(splitOf()), { kind: 'split' });
     const shown = await subject.world.panes();
     assert.deepEqual(
-      shown.filter((each) => each.pane !== pane).map(({ title, folder, argv, window }) => ({ title, folder, argv, window })),
-      [{ title: 'board', folder: '/work/repo', argv: ['teamrig', 'ui'], window: undefined }],
+      shown.filter((each) => each.pane !== pane).map(({ folder, argv, window }) => ({ folder, argv, window })),
+      [{ folder: '/work/repo', argv: ['teamrig', 'ui'], window: undefined }],
     );
+  },
+};
+
+const SPLIT_KEEPS_THE_FOCUS: TerminalCase = {
+  id: 'terminal.split-keeps-the-focus',
+  title: 'splits with the focus kept on the pane the person works in, when it is asked to keep it',
+  features: ['pane.split'],
+  run: async (subject) => {
+    const pane = await opened(subject);
+    assert.deepEqual(await subject.port.split(splitOf({ focus: 'keep' })), { kind: 'split' });
     assert.equal(await subject.world.front(), pane);
   },
 };
@@ -324,6 +335,7 @@ export const TERMINAL_CONTRACT: Contract<TerminalPort, TerminalWorld, 'terminal'
     OPEN_IDS_DIFFER,
     SAYS_WHAT_IT_SERVES,
     SPLIT_SHOWS_THE_PANE,
+    SPLIT_KEEPS_THE_FOCUS,
     OPEN_IN_THE_NAMED_WINDOW,
     FOCUS_BRINGS_FORWARD,
     FOCUS_OF_A_GONE_PANE,

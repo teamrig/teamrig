@@ -1,11 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { PaneOpen } from '../../../plugin-api/index.ts';
+import type { PaneOpen, PaneSplit } from '../../../plugin-api/index.ts';
 import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { FakeProcesses } from '../../../testing/fake-processes.ts';
 import { tmuxPort } from './port.ts';
 
 const PANE: PaneOpen = { title: 'worker [p1]', folder: '/work/repo', argv: ['claude', '--resume'], window: undefined, focus: 'take', identity: {}, wakeToken: 'token' };
+
+const SPLIT: PaneSplit = { title: 'board', folder: '/work/repo', argv: ['teamrig', 'ui'], focus: 'keep', identity: {}, wakeToken: 'token' };
 
 describe('the tmux port', () => {
   it('opens a pane as a new window named by its title, in its folder, the command as separate arguments', async () => {
@@ -42,5 +44,20 @@ describe('the tmux port', () => {
     assert.deepEqual(await tmuxPort(terminalDeps({ processes: missing })).focus('worker'), { kind: 'failed', why: 'tmux is not installed' });
     const failing = new FakeProcesses().onRun('tmux', { kind: 'failed', error: 'spawn EACCES' });
     assert.deepEqual(await tmuxPort(terminalDeps({ processes: failing })).focus('worker'), { kind: 'failed', why: 'spawn EACCES' });
+  });
+
+  it('splits the pane this run works in, beside it, in its folder, the focus kept there with -d', async () => {
+    const processes = new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' });
+    assert.deepEqual(await tmuxPort(terminalDeps({ processes })).split(SPLIT), { kind: 'split' });
+    assert.deepEqual(processes.started, [{ command: 'tmux', args: ['split-window', '-h', '-d', '-c', '/work/repo', 'teamrig', 'ui'], cwd: '/work/repo', mode: 'exit' }]);
+  });
+
+  it('moves the focus to the split pane when asked to take it, and answers failed when tmux cannot split', async () => {
+    const processes = new FakeProcesses().onStart('tmux', { kind: 'started', end: 'exited' });
+    await tmuxPort(terminalDeps({ processes })).split({ ...SPLIT, focus: 'take' });
+    assert.deepEqual(processes.started[0]?.args.slice(0, 3), ['split-window', '-h', '-c']);
+    assert.deepEqual(await tmuxPort(terminalDeps()).split(SPLIT), { kind: 'failed', why: 'tmux is not installed' });
+    const failing = new FakeProcesses().onStart('tmux', { kind: 'failed', error: 'exited with code 1: no space for new pane' });
+    assert.deepEqual(await tmuxPort(terminalDeps({ processes: failing })).split(SPLIT), { kind: 'failed', why: 'exited with code 1: no space for new pane' });
   });
 });
