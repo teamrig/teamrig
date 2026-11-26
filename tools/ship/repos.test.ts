@@ -112,12 +112,15 @@ test('reads whether main merges through GitHub\'s merge queue, false when not li
   assert.throws(() => parseProfiles(entry('local', 'true')), /O\/R "queue": true needs the "ci" gate/);
 });
 
-test('the shipped repos.json merges teamrig through the merge queue its main ruleset requires, and no other repo (T3386, T5460)', () => {
-  // main's ruleset refuses the direct merge call ("Repository rule violations found", or HTTP 405 once auto-merge.yml
-  // queued the pull request), so without queue every ship.ts merge of teamrig ends refused even when it lands.
-  assert.ok(MAIN_RULESETS.some(file => ruleTypesOf(file).includes('merge_queue')), 'teamrig\'s main requires the merge queue');
+test('the shipped repos.json merges no repo through the merge queue while main\'s review rule wants a last-push approval only the direct merge bypasses (T3386, T5745)', () => {
+  // main review asks for an approval by someone other than the last pusher, and an own pull request has none. The
+  // direct merge call honours the admin role's pull_request bypass; GitHub's enqueue does not, so queue: true refused
+  // every own merge ("New changes require approval from someone other than the last pusher", T5745).
+  const review = pullRequestRuleOf('main-review.json');
+  assert.equal(review.lastPushApproval, true, 'main review wants a last-push approval');
+  assert.equal(review.pullRequestBypass, true, 'main review lets an actor bypass it on the direct merge');
   const profiles = readProfiles();
-  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, slug === 'GeneralA6/teamrig', slug);
+  for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, false, slug);
 });
 
 test('the shipped repos.json keeps every repo\'s merge on the whole local suite until its main requires CI (T3414); teamrig\'s does, so its merge runs the changed checks (#1464)', () => {
@@ -146,15 +149,20 @@ function rulesetRequiredChecks(): string[] {
   return MAIN_RULESETS.flatMap(file => requiredChecksOf(file));
 }
 
-/** The type of each rule a ruleset file in .github/rulesets holds. */
-function ruleTypesOf(file: string): string[] {
+/** Whether a ruleset file's pull_request rule wants a last-push approval, and whether an actor bypasses it on a pull request. */
+function pullRequestRuleOf(file: string): { lastPushApproval: boolean; pullRequestBypass: boolean } {
   const ruleset: unknown = JSON.parse(readFileSync(new URL(`../../.github/rulesets/${file}`, import.meta.url), 'utf8'));
   assert.ok(typeof ruleset === 'object' && ruleset !== null && 'rules' in ruleset && Array.isArray(ruleset.rules));
-  const types: string[] = [];
+  let lastPushApproval = false;
   for (const rule of ruleset.rules) {
-    if (typeof rule === 'object' && rule !== null && 'type' in rule && typeof rule.type === 'string') types.push(rule.type);
+    if (typeof rule !== 'object' || rule === null || !('type' in rule) || rule.type !== 'pull_request') continue;
+    if ('parameters' in rule && typeof rule.parameters === 'object' && rule.parameters !== null && 'require_last_push_approval' in rule.parameters) {
+      lastPushApproval = rule.parameters.require_last_push_approval === true;
+    }
   }
-  return types;
+  const actors: unknown = 'bypass_actors' in ruleset ? ruleset.bypass_actors : [];
+  const pullRequestBypass = Array.isArray(actors) && actors.some(actor => typeof actor === 'object' && actor !== null && 'bypass_mode' in actor && actor.bypass_mode === 'pull_request');
+  return { lastPushApproval, pullRequestBypass };
 }
 
 function requiredChecksOf(file: string): string[] {
