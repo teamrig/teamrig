@@ -194,7 +194,7 @@ function nextStep(input: InstallInput): string {
   }
   return input.write
     ? 'Then open each host and trust teamrig\'s hooks where it asks. Run this script again after each teamrig release.'
-    : 'Nothing was written to the hosts yet: run it again with --yes to write their hooks.';
+    : 'Nothing was written to the kit home or the hosts yet: run it again with --yes to write them.';
 }
 
 /** Runs a program to its end with no shell and no window, giving its exit code and both output streams. */

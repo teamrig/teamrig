@@ -99,12 +99,13 @@ describe('installTeamrig', () => {
 
   it("installs the clone into the kit home, then connects each named host through the install's own setup hooks, writing only with --yes", () => {
     const preview = fakeRunner();
-    installTeamrig(input({ hosts: ['one', 'two'] }), preview.run);
+    const previewed = installTeamrig(input({ hosts: ['one', 'two'] }), preview.run);
     assert.deepEqual(preview.calls.slice(4).map(words), [
       `/usr/bin/node ${CLI} kit install --tag v1.2.3 --commit ${SHA}`,
       `/usr/bin/node ${CLI} setup hooks --host one`,
       `/usr/bin/node ${CLI} setup hooks --host two`,
     ]);
+    assert.equal(previewed.lines.at(-1), 'Nothing was written to the kit home or the hosts yet: run it again with --yes to write them.');
     const written = fakeRunner();
     const report = installTeamrig(input({ hosts: ['one'], write: true }), written.run);
     assert.deepEqual(written.calls.slice(4).map(words), [
