@@ -52,6 +52,11 @@ describe('the plugin skills', () => {
         assert.doesNotMatch(description, /:\s/);
       });
 
+      // Every host's skill list shows the description, so it names the AI CLI neutrally, never one host.
+      it('has a description that names no AI CLI', () => {
+        assert.doesNotMatch(descriptionOf(front) ?? '', /\bClaude\b|\bCodex\b/iu);
+      });
+
       it('has relative links and anchors that resolve', () => {
         const report = checkDocs(docs, (target) => existsSync(join(ROOT, target)));
         assert.deepEqual(report.problems.filter((problem) => problem.path.startsWith(`${SKILLS}/${folder}/`)), []);

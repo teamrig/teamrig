@@ -1,6 +1,6 @@
 ---
 name: team-setup
-description: Use to split work across parallel Claude Code sessions or a sub-team (propose, slim the setup, create, open), to settle local rules that override teamrig, and at each lead checkpoint.
+description: Use to split work across parallel AI CLI sessions or a sub-team (propose, slim the setup, create, open), to settle local rules that override teamrig, and at each lead checkpoint.
 ---
 
 # Team setup
