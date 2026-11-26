@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
-import { isHex64 } from '../owner-proof/challenge.ts';
+import { isHex64 } from '../owner-proof/challenge-shape.ts';
 import type { OwnerProofAdapter, OwnerProofAdapterId, EnrolOutcome, SignOutcome } from '../owner-proof/port.ts';
 
 /** What the fake's owner does at a prompt, whether the system is ready, and each prompt it was shown. */

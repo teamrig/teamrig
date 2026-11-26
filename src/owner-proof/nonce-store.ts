@@ -1,7 +1,7 @@
 import type { Files } from '../core/files.ts';
 import { isRecord, numberField, stringField, type JsonRecord } from '../core/guards.ts';
 import type { Clock, Mutex } from '../core/lock.ts';
-import { isHex64 } from './challenge.ts';
+import { isHex64 } from './challenge-shape.ts';
 import { issueNonce, newNonce, nonceState, pruneNonces, useNonce, type NonceEntry } from './nonces.ts';
 import type { NonceState } from './verify.ts';
 

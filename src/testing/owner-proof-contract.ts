@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PROOF_DOMAIN, challengeHex, type OwnerProofChallenge } from '../owner-proof/challenge.ts';
+import { challengeHex } from '../owner-proof/challenge.ts';
+import { PROOF_DOMAIN, type OwnerProofChallenge } from '../owner-proof/challenge-shape.ts';
 import type { OwnerProofAdapter } from '../owner-proof/port.ts';
 import type { PinnedKey } from '../owner-proof/pin.ts';
 import { actDigest, verifyProof } from '../owner-proof/verify.ts';

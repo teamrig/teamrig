@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PROOF_DOMAIN, challengeDigest, challengeHex, challengeText, isHex64, parseChallenge, type OwnerProofChallenge } from './challenge.ts';
+import { challengeDigest, challengeHex, challengeText } from './challenge.ts';
+import { PROOF_DOMAIN, isHex64, parseChallenge, type OwnerProofChallenge } from './challenge-shape.ts';
 
 const card = 'c'.repeat(64);
 
