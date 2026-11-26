@@ -38,6 +38,7 @@ describe('the act log of write commands', () => {
       host: 'claude-code',
       command: 'add',
       argv: ADD,
+      joined: false,
       outcome: 'ok',
       exit: 0,
       reason: null,
