@@ -4,9 +4,9 @@
  * release branch at `<teamrig home>/install/teamrig` (TEAMRIG_HOME, else ~/.teamrig); a later run clones afresh and
  * swaps the new clone in, keeping the old one aside, and a folder there that is no git clone is refused. Then it runs
  * that install's own `teamrig kit install`, which copies it into the kit home as the release its tag and commit name
- * (the kit home a host's hook lines run from), and for each `--host` its `teamrig setup hooks --host <name>`; each
- * previews and, with --yes, writes. It edits no shell
- * profile: it prints the folder to put on PATH.
+ * (the kit home a host's hook lines run from) and puts `teamrig` on the user's PATH as a plugin's session start does
+ * (the kit home's bin folder added, every entry kept), and for each `--host` its `teamrig setup hooks --host <name>`;
+ * each previews and, with --yes, writes.
  *
  * The file imports only Node's own modules, since it runs before any teamrig is on the machine; for the same reason it
  * names no host: each host's words come from its adapter, through `setup hooks`.
@@ -150,14 +150,7 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     for (const host of input.hosts) {
       lines.push(must(`setup hooks --host ${host}`, input.nodePath, [cli, 'setup', 'hooks', '--host', host, ...(input.write ? ['--yes'] : [])]));
     }
-    const bin = path.join(plugin, 'bin');
-    lines.push('', `teamrig is installed at ${plugin}.`, `Put ${bin} on your PATH, then open a new terminal:`);
-    lines.push(
-      input.platform === 'win32'
-        ? `  Settings > System > About > Advanced system settings > Environment Variables > Path > New: ${bin}`
-        : `  add  export PATH="${bin}:$PATH"  to your shell's profile (~/.zshrc or ~/.bashrc)`,
-    );
-    lines.push(nextStep(input));
+    lines.push('', `teamrig is installed at ${plugin}.`, nextStep(input));
     return { ok: true, lines };
   } catch (error) {
     if (error instanceof InstallStop) {

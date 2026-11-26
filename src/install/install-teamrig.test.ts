@@ -94,7 +94,18 @@ describe('installTeamrig', () => {
     ]);
     assert.ok(report.lines.includes('teamrig 1.2.3'));
     assert.ok(report.lines.includes(`CLONED ${RELEASE_REPO} (release) into ${CLONE}`));
-    assert.ok(report.lines.some((line) => line.includes(`export PATH="${CLONE}/plugins/teamrig/bin:$PATH"`)));
+  });
+
+  it("leaves the PATH to kit install, printing its lines and no step for the person to take by hand", () => {
+    const added = 'ADD /home/you/.teamrig/bin to the user\'s PATH (/home/you/.profile), so terminals opened from now on run teamrig';
+    const { run } = fakeRunner([
+      { when: (call) => call.args.includes('--version') && call.command === '/usr/bin/node', give: { code: 0, out: 'teamrig 1.2.3' } },
+      { when: (call) => call.args.includes('kit'), give: { code: 0, out: added } },
+    ]);
+    const report = installTeamrig(input({ write: true }), run);
+    assert.equal(report.ok, true);
+    assert.ok(report.lines.includes(added));
+    assert.ok(!report.lines.some((line) => /on your PATH|export PATH=|Environment Variables/u.test(line)), report.lines.join('\n'));
   });
 
   it("installs the clone into the kit home, then connects each named host through the install's own setup hooks, writing only with --yes", () => {
@@ -207,11 +218,11 @@ describe('installTeamrig', () => {
     assert.match(installTeamrig(input(), run).lines.join('\n'), /FAILED git is needed: install it from https:\/\/git-scm\.com \(exit -1\)/);
   });
 
-  it('builds Windows paths and the Windows PATH step on win32', () => {
+  it('builds Windows paths on win32', () => {
     const { calls, run } = fakeRunner();
     const report = installTeamrig(input({ kitHome: 'D:\\people\\you\\.teamrig', platform: 'win32', nodePath: 'node.exe' }), run);
     assert.equal(calls[1]?.args.at(-1), `D:\\people\\you\\.teamrig\\install\\teamrig.new-${STAMP}`);
-    assert.ok(report.lines.some((line) => line.includes('Environment Variables > Path > New: D:\\people\\you\\.teamrig\\install\\teamrig\\plugins\\teamrig\\bin')));
+    assert.ok(report.lines.includes('teamrig is installed at D:\\people\\you\\.teamrig\\install\\teamrig\\plugins\\teamrig.'), report.lines.join('\n'));
   });
 
   it('tells a run with no --host how to connect one', () => {
