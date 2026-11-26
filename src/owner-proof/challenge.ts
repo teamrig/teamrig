@@ -65,8 +65,21 @@ function nullableString(record: JsonRecord, key: string): string | null | undefi
   return value === null || typeof value === 'string' ? value : undefined;
 }
 
-function isInstant(text: string): boolean {
-  return !Number.isNaN(Date.parse(text));
+/** A UTC instant as Date.toISOString writes it: the one form a challenge's times take. */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/** The ms since the epoch of an ISO UTC instant, or undefined for any other text, a day past its month's end among them. */
+export function instantOf(text: string): number | undefined {
+  if (!ISO_UTC.test(text)) return undefined;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) && new Date(ms).toISOString() === text ? ms : undefined;
+}
+
+/** Whether a challenge's times are both ISO UTC instants, and it expires after it was issued. */
+export function timesHold(issuedAt: string, expires: string): boolean {
+  const issued = instantOf(issuedAt);
+  const ends = instantOf(expires);
+  return issued !== undefined && ends !== undefined && ends > issued;
 }
 
 /** The challenge a record holds, or undefined when any field is missing, of the wrong type, or not its form. */
@@ -83,6 +96,6 @@ export function parseChallenge(value: unknown): OwnerProofChallenge | undefined 
   const expires = stringField(value, 'expires');
   if (keyId === undefined || hostId === undefined || team === undefined || !isStringArray(act)) return undefined;
   if (commit === undefined || cardDigest === undefined || nonce === undefined || !isHex64(nonce)) return undefined;
-  if (issuedAt === undefined || expires === undefined || !isInstant(issuedAt) || !isInstant(expires)) return undefined;
+  if (issuedAt === undefined || expires === undefined || !timesHold(issuedAt, expires)) return undefined;
   return { domain: PROOF_DOMAIN, keyId, hostId, team, act, commit, cardDigest, nonce, issuedAt, expires };
 }

@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, verify, type KeyObject } from 'node:crypto';
-import { challengeDigest, type OwnerProofChallenge } from './challenge.ts';
+import { challengeDigest, instantOf, type OwnerProofChallenge } from './challenge.ts';
 import { jcs } from './jcs.ts';
 import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
 
@@ -25,6 +25,7 @@ export type ProofRefusal =
   | 'expired'
   | 'issued-in-future'
   | 'lifetime-too-long'
+  | 'bad-times'
   | 'bad-signature';
 
 export type ProofVerdict = { readonly ok: true; readonly keyId: string } | { readonly ok: false; readonly reason: ProofRefusal };
@@ -98,9 +99,14 @@ function signatureHolds(pin: PinnedKey, data: Buffer, signature: Buffer): boolea
   }
 }
 
+/**
+ * Why the challenge's times refuse it, if they do. A time out of form or a lifetime of zero or less refuses it here
+ * too, not only in parseChallenge, so a challenge built in code fails closed: NaN would pass every compare below.
+ */
 function timeRefusal(challenge: OwnerProofChallenge, now: number): ProofRefusal | undefined {
-  const issuedAt = Date.parse(challenge.issuedAt);
-  const expires = Date.parse(challenge.expires);
+  const issuedAt = instantOf(challenge.issuedAt);
+  const expires = instantOf(challenge.expires);
+  if (issuedAt === undefined || expires === undefined || expires <= issuedAt || !Number.isFinite(now)) return 'bad-times';
   if (issuedAt > now + ISSUED_AT_SKEW_MS) return 'issued-in-future';
   if (expires - issuedAt > MAX_LIFETIME_MS) return 'lifetime-too-long';
   return now >= expires ? 'expired' : undefined;

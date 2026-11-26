@@ -67,6 +67,12 @@ describe('owner proof challenge', () => {
       { ...vector, issuedAt: undefined },
       { ...vector, expires: 'later' },
       { ...vector, expires: undefined },
+      { ...vector, issuedAt: '2026-11-26T09:00:00.000+02:00' },
+      { ...vector, issuedAt: '2026-11-26T07:00:00Z' },
+      { ...vector, issuedAt: 'Thu, 26 Nov 2026 07:00:00 GMT' },
+      { ...vector, expires: '2026-02-30T07:05:00.000Z' },
+      { ...vector, expires: vector.issuedAt },
+      { ...vector, expires: '2026-11-26T06:59:59.999Z' },
     ];
     for (const record of bad) assert.equal(parseChallenge(record), undefined, JSON.stringify(record));
   });

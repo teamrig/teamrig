@@ -100,6 +100,25 @@ describe('verifyProof', () => {
     assert.equal(verifyProof(check(rsa, { now: issuedAt - ISSUED_AT_SKEW_MS })).ok, true);
   });
 
+  it('fails closed on a time out of form, even a challenge built in code that parseChallenge never read: NaN passes no compare', () => {
+    const outOfForm: readonly Partial<OwnerProofChallenge>[] = [
+      { issuedAt: 'yesterday' },
+      { expires: 'later' },
+      { issuedAt: '2026-11-26T09:00:00.000+02:00' },
+      { expires: '2026-11-26 07:05:00Z' },
+      { issuedAt: '2026-11-26T07:00:00Z' },
+      { expires: '2026-02-30T07:05:00.000Z' },
+    ];
+    for (const times of outOfForm) assert.deepEqual(verifyProof(check(rsa, {}, times)), { ok: false, reason: 'bad-times' }, JSON.stringify(times));
+    assert.deepEqual(verifyProof(check(rsa, { now: Number.NaN })), { ok: false, reason: 'bad-times' });
+  });
+
+  it('refuses a challenge that expires when or before it was issued', () => {
+    for (const expires of ['2026-11-26T07:00:00.000Z', '2026-11-26T06:59:59.999Z']) {
+      assert.deepEqual(verifyProof(check(rsa, { now: Date.parse('2026-11-26T06:59:00.000Z') }, { expires })), { ok: false, reason: 'bad-times' }, expires);
+    }
+  });
+
   it('refuses a challenge that lives longer than the ceiling', () => {
     assert.deepEqual(verifyProof(check(rsa, {}, { expires: '2026-11-26T07:10:00.001Z' })), { ok: false, reason: 'lifetime-too-long' });
     assert.equal(verifyProof(check(rsa, {}, { expires: '2026-11-26T07:10:00.000Z' })).ok, true);
