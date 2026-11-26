@@ -151,6 +151,13 @@ export const CONFIG_LIMITS = {
    * hour the meeting has lost its spotlight for good (T2524).
    */
   spotlightBreakthroughSeconds: { min: 10, max: 3600 },
+  /**
+   * Under 30 s the owner cannot finish a Windows Hello or Touch ID prompt; past 10 minutes the verifier's own ceiling
+   * on a challenge's life refuses it anyway (T4758).
+   */
+  ownerProofTtlSeconds: { min: 30, max: 600 },
+  /** A key per device the owner signs from, with room to rotate; more is a pin list no one audits (T4758). */
+  ownerProofPins: { maxItems: 8 },
 } as const;
 
 /**

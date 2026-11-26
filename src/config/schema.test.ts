@@ -267,6 +267,8 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   passEnv: 'delivery.passEnv',
   spotlightDim: 'meeting.spotlight.dim',
   spotlightBreakthroughSeconds: 'meeting.spotlight.breakthroughSeconds',
+  ownerProofTtlSeconds: 'owner.proof.ttlSeconds',
+  ownerProofPins: 'owner.proof.pins',
 };
 
 function isLimitName(name: string): name is keyof typeof CONFIG_LIMITS {

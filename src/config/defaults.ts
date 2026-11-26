@@ -25,6 +25,7 @@ import type {
   LeadBoundaryConfig,
   LoopsConfig,
   OpenConfig,
+  OwnerConfig,
   PackageGuardConfig,
   PermissionsConfig,
   PromptsConfig,
@@ -271,6 +272,9 @@ export const DEFAULT_ALERTS: AlertsConfig = { persistentFailureHours: 24 };
 
 /** The UI shows in the terminal `teamrig ui` is run in, as it did before `ui.mode` (T5105). */
 export const DEFAULT_UI: UiConfig = { mode: 'terminal' };
+
+/** No owner proof: no act asks for one, as before `owner.proof` (T4758); 5 minutes is the verifier's usual life. */
+export const DEFAULT_OWNER: OwnerConfig = { proof: { adapter: 'none', ttlSeconds: 300, pins: [] } };
 
 /** The remote a repository's merge command merges into when `merge.remote` is unset. */
 export const DEFAULT_MERGE_REMOTE = 'origin';

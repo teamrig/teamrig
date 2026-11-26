@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC } from './defaults.ts';
+import { generateKeyPairSync } from 'node:crypto';
+import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_OWNER } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
@@ -12,6 +13,18 @@ const ROSTER = { sessions: ['alpha', 'bravo'], roles: { lead: 'alpha' } };
 
 function paths(issues: readonly ConfigIssue[]): string[] {
   return issues.map((issue) => issue.path);
+}
+
+const PUBLIC_PEMS = {
+  rsa: generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey,
+  ec: generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey,
+  p384: generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey,
+  ed25519: generateKeyPairSync('ed25519').publicKey,
+};
+
+/** A fresh public key's PEM, one per kind, made once for the file. */
+function publicPem(kind: keyof typeof PUBLIC_PEMS): string {
+  return PUBLIC_PEMS[kind].export({ type: 'spki', format: 'pem' }).toString();
 }
 
 describe('parseConfig', () => {
@@ -348,6 +361,67 @@ describe('parseConfig', () => {
       assert.deepEqual(paths(issues), ['ui.path'], String(path));
       assert.deepEqual(config.ui, { mode: 'terminal' }, String(path));
     }
+  });
+
+  it('reads owner.proof as no adapter, 5 minutes and no pins by default (T4758)', () => {
+    const { config, issues } = parseConfig(ROSTER);
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.owner, DEFAULT_OWNER);
+    assert.deepEqual(DEFAULT_OWNER, { proof: { adapter: 'none', ttlSeconds: 300, pins: [] } });
+  });
+
+  it('reads an owner.proof adapter, life and pins of each algorithm (T4758)', () => {
+    const pins = [
+      { keyId: 'hello-1', algorithm: 'rsa-pkcs1-sha256', publicKeyPem: publicPem('rsa') },
+      { keyId: 'enclave:2', algorithm: 'ecdsa-p256-sha256', publicKeyPem: publicPem('ec') },
+      { keyId: 'polkit.3', algorithm: 'ed25519', publicKeyPem: publicPem('ed25519') },
+    ];
+    const { config, issues } = parseConfig({ ...ROSTER, owner: { proof: { adapter: 'windows-hello', ttlSeconds: 120, pins } } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.owner.proof, { adapter: 'windows-hello', ttlSeconds: 120, pins });
+  });
+
+  it('keeps the owner.proof defaults for a bad adapter or life (T4758)', () => {
+    for (const [proof, path] of [
+      [{ adapter: 'face-id' }, 'owner.proof.adapter'],
+      [{ ttlSeconds: 29 }, 'owner.proof.ttlSeconds'],
+      [{ ttlSeconds: 601 }, 'owner.proof.ttlSeconds'],
+      [{ ttlSeconds: 60.5 }, 'owner.proof.ttlSeconds'],
+    ] as const) {
+      const { config, issues } = parseConfig({ ...ROSTER, owner: { proof } });
+      assert.deepEqual(paths(issues), [path], path);
+      assert.deepEqual(config.owner, DEFAULT_OWNER, path);
+    }
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, owner: 'on' }).issues), ['owner']);
+  });
+
+  it('drops an owner.proof pin that is incomplete, badly named, of an unknown algorithm or of the wrong key kind (T4758)', () => {
+    const good = { keyId: 'k1', algorithm: 'ed25519', publicKeyPem: publicPem('ed25519') };
+    const cases: readonly (readonly [unknown, readonly string[]])[] = [
+      ['k1', ['owner.proof.pins[0]']],
+      [{ algorithm: 'ed25519', publicKeyPem: good.publicKeyPem }, ['owner.proof.pins[0].keyId']],
+      [{ ...good, keyId: 'two words' }, ['owner.proof.pins[0].keyId']],
+      [{ ...good, keyId: 'k'.repeat(129) }, ['owner.proof.pins[0].keyId']],
+      [{ ...good, algorithm: 'ecdsa-p384-sha384' }, ['owner.proof.pins[0].algorithm']],
+      [{ keyId: 'k1', algorithm: 'ed25519' }, ['owner.proof.pins[0].publicKeyPem']],
+      [{ ...good, publicKeyPem: 'not a key' }, ['owner.proof.pins[0].publicKeyPem']],
+      [{ ...good, algorithm: 'rsa-pkcs1-sha256' }, ['owner.proof.pins[0].publicKeyPem']],
+      [{ ...good, algorithm: 'ecdsa-p256-sha256', publicKeyPem: publicPem('p384') }, ['owner.proof.pins[0].publicKeyPem']],
+    ];
+    for (const [pin, expected] of cases) {
+      const { config, issues } = parseConfig({ ...ROSTER, owner: { proof: { adapter: 'polkit', pins: [pin, { ...good, keyId: 'k2' }] } } });
+      assert.deepEqual(paths(issues), expected, JSON.stringify(pin));
+      assert.deepEqual(config.owner.proof.pins.map((kept) => kept.keyId), ['k2'], JSON.stringify(pin));
+    }
+  });
+
+  it('refuses an owner.proof key id pinned twice and a pin list past its cap (T4758)', () => {
+    const pin = { keyId: 'k1', algorithm: 'ed25519', publicKeyPem: publicPem('ed25519') };
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, owner: { proof: { pins: [pin, pin] } } }).issues), ['owner.proof.pins']);
+    const many = Array.from({ length: 9 }, (_, index) => ({ ...pin, keyId: `k${index}` }));
+    const { config, issues } = parseConfig({ ...ROSTER, owner: { proof: { pins: many } } });
+    assert.deepEqual(paths(issues), ['owner.proof.pins']);
+    assert.deepEqual(config.owner.proof.pins, []);
   });
 
   it('reads ui.mode as terminal, window or both, terminal by default, and keeps the default for any other value (T5105)', () => {

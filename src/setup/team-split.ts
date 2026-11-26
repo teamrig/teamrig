@@ -107,6 +107,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   meeting: 'copy',
   turnLog: 'copy',
   ui: 'copy',
+  owner: 'copy',
   meetingNotices: 'copy',
   readonlyShell: 'copy',
   permissions: 'copy',

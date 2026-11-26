@@ -8,6 +8,8 @@ import type { ServiceCommand } from '../permissions/service-commands.ts';
 import type { ChangeSourceId } from '../changes/ids.ts';
 import type { ImportScope } from '../sync/scope.ts';
 import type { LevelNamesSetting } from '../register/level-names.ts';
+import type { OwnerProofAdapterId } from '../owner-proof/port.ts';
+import type { PinnedKey } from '../owner-proof/verify.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 10;
@@ -619,6 +621,24 @@ export interface UiConfig {
    * the UI itself. Absent: the released UI.
    */
   readonly path?: string;
+}
+
+/**
+ * How the owner proves an act is their own (T4758): a challenge signed by a key behind the OS's own gesture (Windows
+ * Hello, Touch ID, polkit, a security key), checked against the keys pinned here.
+ */
+export interface OwnerProofConfig {
+  /** The OS gesture that signs; none: no act asks for a proof, as before this key. */
+  readonly adapter: OwnerProofAdapterId;
+  /** How long a challenge stays signable, in seconds. */
+  readonly ttlSeconds: number;
+  /** The owner's enrolled public keys; a proof by any other key is refused. */
+  readonly pins: readonly PinnedKey[];
+}
+
+/** What only the team's owner holds. */
+export interface OwnerConfig {
+  readonly proof: OwnerProofConfig;
 }
 
 /**
@@ -1971,6 +1991,7 @@ export interface KitConfig {
   readonly meeting: MeetingConfig;
   readonly turnLog: TurnLogConfig;
   readonly ui: UiConfig;
+  readonly owner: OwnerConfig;
   readonly meetingNotices: MeetingNoticesConfig;
   /** Lets a shell line that only reads run without a permission prompt; off by default. */
   readonly readonlyShell: ReadonlyShellConfig;

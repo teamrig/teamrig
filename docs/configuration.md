@@ -58,6 +58,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `meeting` | [object](#meeting) |  | The owner's daily meeting with the lead, in the lead's tab. |
 | `turnLog` | [object](#turnlog) |  | Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour>.jsonl for the task pane, so a /clear or a compaction never takes away what the person was reading in the tab. Secret shapes are redacted. |
 | `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts. |
+| `owner` | [object](#owner) |  | What only the team's owner holds. The owner's keys: the config guard refuses a session changing any of them. |
 | `meetingNotices` | [object](#meetingnotices) |  | What a booked meeting (teamrig meeting schedule) tells the person, and when: a notice some minutes before its slot, one at the slot, and an alert once it is some minutes past its slot with no meeting start. Each notice goes out once, by whichever tab of the team looks first, on each channel left on. |
 | `readonlyShell` | [object](#readonlyshell) |  | Lets a Bash or PowerShell line run without a permission prompt when every command in it provably only reads: known readers (grep, cat, Get-Content, Select-Object...), git and kubectl reading subcommands, and no write, file redirection, command that runs code, or variable a program reads. It only ever allows: any other line gets Claude Code's own permission check. |
 | `permissions` | [object](#permissions) |  | Which local allow rules stay. An allow rule in a Claude Code settings file approves a call before auto mode's classifier sees it, so a rule that approves a whole tool or a program with any arguments skips the one check that stops an injected or mistaken action. teamrig permissions trim removes the rules off keepAllow (the owner runs it with --yes); doctor flags the ones that approve a whole tool or program, or hold a credential (text in a secret's shape) that Claude Code saved with an approved command. |
@@ -835,6 +836,34 @@ The dedicated UI that teamrig ui starts.
 | --- | --- | --- | --- |
 | `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
+
+## `owner`
+
+What only the team's owner holds. The owner's keys: the config guard refuses a session changing any of them.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `proof` | [object](#ownerproof) |  | How the owner proves an act is their own: teamrig asks for a challenge signed by a key behind the operating system's own gesture, and checks it against the keys pinned here. |
+
+## `owner.proof`
+
+How the owner proves an act is their own: teamrig asks for a challenge signed by a key behind the operating system's own gesture, and checks it against the keys pinned here.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `adapter` | one of `"windows-hello"`, `"touch-id"`, `"polkit"`, `"security-key"`, `"none"` | `"none"` | The gesture that signs: windows-hello (Windows Hello), touch-id (a Secure Enclave key behind Touch ID), polkit (a root-owned key behind a polkit prompt), security-key (a FIDO2 key through OpenSSH), or none, where no act asks for a proof. |
+| `ttlSeconds` | integer (30 to 600) | `300` | How long a challenge stays signable, in seconds. |
+| `pins` | array (at most 8 items) of [object](#ownerproofpins) | `[]` | The owner's enrolled public keys, one per device they sign from; a proof by any other key is refused. A key id pinned twice is refused. |
+
+## `owner.proof.pins[]`
+
+The owner's enrolled public keys, one per device they sign from; a proof by any other key is refused. A key id pinned twice is refused.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `keyId` (required) | string (matching `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`) |  | The name the adapter gives the key: letters, digits and . \_ : -, at most 128 characters. |
+| `algorithm` (required) | one of `"rsa-pkcs1-sha256"`, `"ecdsa-p256-sha256"`, `"ed25519"` |  | The key's signature scheme: rsa-pkcs1-sha256 (Windows Hello), ecdsa-p256-sha256 (a Secure Enclave key), ed25519 (a root-owned helper's key). |
+| `publicKeyPem` (required) | string |  | The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key). |
 
 ## `meetingNotices`
 
