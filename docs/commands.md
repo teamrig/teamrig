@@ -98,6 +98,11 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
       holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
       with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
+  kit uninstall [--yes]        takes teamrig's handlers out of each hooks file of yours whose host runs the
+      kit launcher (your own stay, the old file is backed up), then removes the launcher, the current records
+      and every kept version; teams, backups and the install clone stay; without --yes it counts what would
+      go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
+      a file a running process holds stays (exit 1)
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the

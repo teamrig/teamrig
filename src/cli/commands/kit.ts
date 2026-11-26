@@ -1,19 +1,24 @@
+import { join } from 'node:path';
+import { writeConfigWithBackup } from '../../config/load.ts';
+import type { JsonRecord } from '../../core/guards.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
 import type { Mutex } from '../../core/lock.ts';
 import { KIT_VERSION } from '../../core/version.ts';
 import { clientRootOf } from '../../exec/client-integrity.ts';
-import { syncKitLauncher } from '../../kit/hook-launcher.ts';
+import { hookLauncher, syncKitLauncher } from '../../kit/hook-launcher.ts';
 import { installRunningKit, keptAsideNote, KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import {
   damagedPreviewWhy,
   KIT_LOCK_BUSY,
+  kitInstallParts,
   kitLeftovers,
   listKitVersions,
   planKitUse,
   prunableKitVersions,
   pruneKitVersions,
   readKitCurrent,
+  uninstallKit,
   useKitVersion,
   kitVersionFolder,
   type KitCurrent,
@@ -22,12 +27,15 @@ import {
 } from '../../kit/kit-versions.ts';
 import { noPositionals, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { fileLockOf, type FileLockRuntime } from '../file-locks.ts';
+import { kitLauncherHooksOf } from '../host.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { readUserSettings } from '../user-settings.ts';
 
 /**
  * `teamrig kit ...`: teamrig's own install under the kit home (src/kit/kit-versions.ts), the copy of each release a
  * session start ran, one named current; hosts run it once their hooks point at the kit home. `kit versions` lists
- * what is kept, `kit use` moves which one is current, `kit prune` removes the ones past the rollback window.
+ * what is kept, `kit use` moves which one is current, `kit prune` removes the ones past the rollback window,
+ * `kit uninstall` removes the install, its hook lines first.
  */
 
 const LATEST = 'latest';
@@ -230,5 +238,73 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
     return EXIT.failed;
   }
   runtime.out.stdout(`${launcher.kind === 'written' ? 'WROTE' : 'UNCHANGED'} ${launcher.path}: the kit launcher of teamrig ${launcher.version}`);
+  return EXIT.ok;
+}
+
+/** One host's hooks file as `kit uninstall` found it: the file with teamrig's lines out, undefined when it holds none. */
+interface HooksRemoval {
+  readonly host: string;
+  readonly target: string;
+  readonly file: JsonRecord | undefined;
+  readonly removed: number;
+}
+
+/** Each existing hooks file whose host's lines run the kit launcher, read and planned before anything is written. */
+async function hooksRemovals(runtime: CliRuntime, kitHome: string): Promise<readonly HooksRemoval[]> {
+  const launcher = hookLauncher(kitHome);
+  const removals: HooksRemoval[] = [];
+  for (const { port, lines } of kitLauncherHooksOf(runtime)) {
+    const target = port.file(runtime.userHome);
+    const current = await readUserSettings(runtime, target);
+    if (!current.exists) continue;
+    const answer = lines.remove(current.json, launcher);
+    if (!answer.ok) {
+      throw new RefusedError(`teamrig kit uninstall: ${target}: ${answer.problem}; nothing removed`);
+    }
+    removals.push({ host: port.host, target, file: answer.value.file, removed: answer.value.counts.removed });
+  }
+  return removals;
+}
+
+/**
+ * `teamrig kit uninstall [--yes]`: takes teamrig's handlers out of each hooks file of the person's whose host runs the
+ * kit launcher (the person's own handlers stay, the old file is kept in the kit's backups folder first), then removes
+ * the launcher, the records naming the version in use and every kept version, under the install lock. The teams, the
+ * backups and the install clone stay. Without `--yes` it counts what would go and removes nothing; any hooks file it
+ * cannot edit refuses the run before anything is written. Its write is a settings writer's (src/core/settings-writers.ts):
+ * it changes a host's hooks, so only the person runs it.
+ */
+export async function kitUninstall(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
+  noPositionals(args);
+  const kitHome = kitHomeOf(runtime);
+  const removals = await hooksRemovals(runtime, kitHome);
+  const parts = await kitInstallParts(runtime.files, kitHome);
+  const stays = `NOTE ${join(kitHome, 'teams')}, the backups and the install clone stay; a host's teamrig plugin installs teamrig again at its next session start, so remove the plugin first`;
+  if (!args.switches.has(WRITE_SWITCH)) {
+    const preview = `PREVIEW nothing removed (add --${WRITE_SWITCH} to remove)`;
+    for (const removal of removals) {
+      runtime.out.stdout(removal.file === undefined ? `UNCHANGED ${removal.target}: it holds none of teamrig's handlers` : `${preview} ${removal.target}: removed ${removal.removed}`);
+    }
+    runtime.out.stdout(`${preview} ${kitHome}: versions ${countedList(parts.versions)}; files ${countedList(parts.files)}`);
+    runtime.out.stdout(stays);
+    return EXIT.ok;
+  }
+  // The lines go first: a line left running a removed launcher would fail every hook call of its host.
+  for (const removal of removals) {
+    if (removal.file === undefined) continue;
+    const target = { configPath: removal.target, backupsDir: join(kitHome, 'backups'), backupName: `${removal.host}-hooks` };
+    const backup = await writeConfigWithBackup(runtime.files, target, removal.file, runtime.clock);
+    runtime.out.stdout(`WROTE ${removal.target}: removed ${removal.removed}; the old file is at ${backup}`);
+  }
+  const outcome = await uninstallKit({ files: runtime.files, tree: runtime.kitTree, kitHome, lock: commandLockOf(runtime, kitHome) });
+  if (outcome.kind === 'busy') {
+    throw new RefusedError(`teamrig kit uninstall: ${KIT_LOCK_BUSY}; the hooks files above no longer run it: run this again to remove the kit home`);
+  }
+  runtime.out.stdout(`REMOVED ${countedList(outcome.removed)}`);
+  runtime.out.stdout(stays);
+  if (outcome.failed.length > 0) {
+    runtime.out.stdout(`NOTE left in place, a running process holds a file in it: ${outcome.failed.join(', ')}; run it again once that process ends`);
+    return EXIT.failed;
+  }
   return EXIT.ok;
 }

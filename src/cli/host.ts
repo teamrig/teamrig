@@ -13,6 +13,7 @@ import {
   type HostSecrets,
   type HostSteps,
   type HostUserHooks,
+  type KitLauncherLines,
   type RunningProgram,
   type SessionIdentity,
   type SessionLauncher,
@@ -319,6 +320,29 @@ export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 
   const names = [...new Set(offered.map((port) => port.host))];
   const known = names.length === 0 ? 'no host teamrig runs on keeps one' : `the hosts that keep one: ${names.join(', ')}`;
   throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
+}
+
+/** A hooks file of the person's whose host's lines run the kit launcher, with how teamrig's lines come out of it. */
+export interface KitLauncherHooks {
+  readonly port: HostUserHooks;
+  readonly lines: KitLauncherLines;
+}
+
+/**
+ * Every host whose lines in the person's hooks file run the kit launcher, from every host adapter teamrig ships with
+ * and the run's own host, once each by name: `kit uninstall` takes their lines out before the launcher goes.
+ */
+export function kitLauncherHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform'>): readonly KitLauncherHooks[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const byHost = new Map<string, KitLauncherHooks>();
+  for (const source of sourcesOf(runtime)) {
+    const { userHooks } = source(seen);
+    if (isUnsupported(userHooks) || userHooks.kitLauncher === undefined || byHost.has(userHooks.host)) {
+      continue;
+    }
+    byHost.set(userHooks.host, { port: userHooks, lines: userHooks.kitLauncher });
+  }
+  return [...byHost.values()];
 }
 
 /**

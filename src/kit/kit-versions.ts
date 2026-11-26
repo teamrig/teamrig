@@ -6,6 +6,7 @@ import { LockBusyError, type Mutex } from '../core/lock.ts';
 import { compareVersions, parseVersion, type Version } from '../core/release-version.ts';
 import { checkClient, CLIENT_MANIFEST, clientFileHash } from '../exec/client-integrity.ts';
 import type { KitTree } from './kit-tree.ts';
+import { cliLauncherPath } from '../restore/cli-launcher.ts';
 
 /**
  * teamrig's own install under the kit home (T5278, design D): one full copy of each release in `versions/<v>/`, and
@@ -581,4 +582,67 @@ async function prunedUnderLock(ports: KitPorts): Promise<KitPruned> {
     }
   }
   return { kind: 'pruned', removed, leftovers, failed };
+}
+/**
+ * What `teamrig kit uninstall` removes from the kit home: the launcher every hook line and the CLI on PATH run, the
+ * records naming the version in use, and the folder of every kept version. Teams, backups and the install clone stay.
+ */
+export interface KitInstallParts {
+  /** The kept versions, newest first. */
+  readonly versions: readonly string[];
+  /** The launcher and the records that are there, by path. */
+  readonly files: readonly string[];
+}
+
+/** The files `kit uninstall` removes before the versions folder: the launcher first, so no line runs a half-removed kit. */
+function installFilePaths(kitHome: string): readonly string[] {
+  return [cliLauncherPath(kitHome), kitCurrentPath(kitHome), kitCurrentRecordPath(kitHome)];
+}
+
+/** The parts of teamrig's install the kit home holds now. */
+export async function kitInstallParts(files: Pick<Files, 'read' | 'list'>, kitHome: string): Promise<KitInstallParts> {
+  const present: string[] = [];
+  for (const path of installFilePaths(kitHome)) {
+    if ((await files.read(path)) !== undefined) present.push(path);
+  }
+  return { versions: await listKitVersions(files, kitHome), files: present };
+}
+
+/** What `kit uninstall --yes` removed, and what a process holding a file kept in place. */
+export interface KitUninstalled {
+  readonly kind: 'uninstalled';
+  readonly removed: readonly string[];
+  readonly failed: readonly string[];
+}
+
+export type KitUninstallOutcome = KitUninstalled | { readonly kind: 'busy' };
+
+/**
+ * Removes teamrig's install from the kit home under the install lock, so a session start copying a release in never
+ * leaves half of one behind: the launcher, then `current` and `current.json`, then the versions folder.
+ */
+export async function uninstallKit(ports: KitPrunePorts): Promise<KitUninstallOutcome> {
+  const held = await underLock(ports.lock, async (): Promise<KitUninstalled> => {
+    const { files, tree, kitHome } = ports;
+    const removed: string[] = [];
+    const failed: string[] = [];
+    for (const path of installFilePaths(kitHome)) {
+      try {
+        if (await files.remove(path)) removed.push(path);
+      } catch {
+        failed.push(path);
+      }
+    }
+    const folder = kitVersionsFolder(kitHome);
+    if ((await files.list(folder)).length > 0) {
+      try {
+        await tree.removeFolder(folder);
+        removed.push(folder);
+      } catch {
+        failed.push(folder);
+      }
+    }
+    return { kind: 'uninstalled', removed, failed };
+  });
+  return held.kind === 'done' ? held.result : held;
 }

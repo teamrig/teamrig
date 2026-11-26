@@ -4963,6 +4963,37 @@ one the current version ships. It is `REFUSED` for a folder with no integrity li
 and a copy that is not whole; it exits 1 with a `NOTE the kit launcher is not written: <why>` line when the current
 version ships no launcher.
 
+### teamrig kit uninstall
+
+Removes teamrig's own install from the kit home. First it takes teamrig's handlers out of each hooks file of yours
+whose host runs the kit launcher (`teamrig setup hooks` wrote them), keeping your own handlers and the old file in the
+kit's backups folder; then it removes the launcher (`<kit home>/bin/teamrig.mjs`, which the `teamrig` command on PATH
+runs too), `current`, `current.json` and every kept version. Your teams, the backups and the install clone stay. Without
+`--yes` it counts what would go and removes nothing. A hooks file it cannot edit refuses the run before anything is
+removed. It changes a host's hooks, so only the person runs it: `--yes` is refused where an agent runs it. A host's
+teamrig plugin copies teamrig back in at its next session start, so remove the plugin first.
+
+Flags:
+
+- `--yes`: take the lines out and remove the install; without it, only count them.
+
+Example:
+
+```sh
+teamrig kit uninstall --yes
+```
+
+Output:
+
+```text
+WROTE /srv/ada/.host/hooks.json: removed 9; the old file is at /srv/ada/.teamrig/backups/host-hooks.json
+REMOVED 4: /srv/ada/.teamrig/bin/teamrig.mjs, /srv/ada/.teamrig/current, /srv/ada/.teamrig/current.json, /srv/ada/.teamrig/versions
+NOTE /srv/ada/.teamrig/teams, the backups and the install clone stay; a host's teamrig plugin installs teamrig again at its next session start, so remove the plugin first
+```
+
+It is `REFUSED` while a session start copies a release in past a 30 s wait, after the hooks files are written: run it
+again. A file or folder a running process holds stays, and it exits 1 naming it.
+
 ### teamrig restart
 
 The automatic context refresh's restart, when `refresh.autoRestart` is on for the session (`true`, or `"lead"`, the default, for the lead only; otherwise the user types

@@ -14,8 +14,9 @@ import { KIT_NAME } from './home.ts';
 export const SETTINGS_WRITERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['automode', new Set(['install', 'uninstall'])],
   ['config', new Set(['migrate'])],
-  // Moves the code behind every host's guards, a rollback to older guards included (T5278 design D, C1).
-  ['kit', new Set(['use', 'install'])],
+  // Moves the code behind every host's guards, a rollback to older guards included (T5278 design D, C1), or takes it
+  // out with a host's hook lines.
+  ['kit', new Set(['use', 'install', 'uninstall'])],
   ['permissions', new Set(['trim'])],
   ['restore', new Set(['install'])],
   ['setup', new Set(['restore', 'hooks'])],
