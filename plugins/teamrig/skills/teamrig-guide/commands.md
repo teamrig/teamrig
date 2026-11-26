@@ -2277,11 +2277,12 @@ line names the sub-lead to route such work via next time; a line that starts wit
 #### From a host scheduled job
 
 A job the host runs on a schedule, outside any session, posts its line through `~/.teamrig/bin/inbox-add.mjs`. The
-file never moves, while the plugin folder changes with each plugin version, so the job's entry names it once. Each
-session start, on every machine a session starts on, writes it when missing and keeps it up to date, so deleting it is
-undone at the next start. It runs the installed plugin's `teamrig inbox add` with
-the job's words, so the line meets the same rules and refusals; `--team <team>`, first on the line, names the team when the job does not
-run in the team's project folder. It exits with the CLI's code, and 1 when no teamrig plugin is installed, so the
+file never moves, while the version and plugin folders change with each version, so the job's entry names it once.
+Each session start, on every machine a session starts on, writes it when missing and keeps it up to date, so deleting
+it is undone at the next start. It runs `teamrig inbox add` through the kit launcher, which checks the kit home's
+current version before it runs it, on any AI CLI, else through the installed plugin's CLI, with the job's words, so
+the line meets the same rules and refusals; `--team <team>`, first on the line, names the team when the job does not
+run in the team's project folder. It exits with the CLI's code, and 1 when it finds neither, so the
 job's own log shows a line that did not land. It is refused where an agent runs it (`CLAUDECODE` is set: an
 agent's tool call, a script it runs or a hook), since a session posts as itself, and for a job named `owner`, `lead`
 or as a session of the team by id or name, so the line never reads as theirs.
@@ -4731,12 +4732,13 @@ OPENED the restore of 2 Claude Code sessions in a new Windows Terminal tab
 
 Has the system run `restore check` at each logon of this user, so the sessions a crash or reboot killed come back
 by themselves, and gives you a shortcut that runs the restore by hand from anywhere. It first writes two small
-launchers to `<kit home>/bin/`, `restore-check.mjs` and `restore-run.mjs`, which find the installed plugin each
-time they run, so a plugin update needs no new install. Then it points the logon entry at the check launcher: on
+launchers to `<kit home>/bin/`, `restore-check.mjs` and `restore-run.mjs`, which each time they run start the kit
+launcher, which checks the current version before it runs it, else the installed plugin's CLI, so an update needs
+no new install. Then it points the logon entry at the check launcher: on
 Windows, the `TeamrigSessionRestore` value of the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` key, which
 runs it with the Node that ran this command, through `conhost --headless` so no window opens. No one sees a logon's
 output, so the launcher first writes `logon: started` to `<kit home>/restore/restore.log`, which proves a logon ran
-it, and when the plugin is not found or the check exits other than 0, it writes why as another `logon:` line.
+it, and when teamrig is not found or the check exits other than 0, it writes why as another `logon:` line.
 Last, it makes the Start-menu shortcut `Restore Claude
 Sessions` start that Node on the run launcher, in your home folder: it opens a window running `restore run --tab`,
 with its list and countdown, after a crash, a reboot or a window you closed. Every other shortcut of that name on
@@ -8563,8 +8565,9 @@ FIVE-HOUR.
 
 Makes `teamrig statusline` Claude Code's status line on this machine. A plugin cannot set the status line, so this
 writes it into your own Claude Code settings (`settings.json` in `$CLAUDE_CONFIG_DIR`, else in `~/.claude`). It
-first writes a small launcher to `<kit home>/bin/statusline.mjs`, which finds the installed plugin each time it
-runs, so a plugin update needs no new setup. With no status line, the launcher becomes it. With one already there,
+first writes a small launcher to `<kit home>/bin/statusline.mjs`, which each time it runs starts the kit launcher,
+which checks the current version before it runs it, else the installed plugin's CLI, so an update needs no new
+setup. With no status line, the launcher becomes it. With one already there,
 the launcher goes in front of it in a pipe (`node "<launcher>" --pass | <yours>`): it saves the week's reading and
 hands the same input on, so your status line runs and shows as before. A status line that is a compound shell line
 (`&&`, `||`, `;` or a line break outside quotes) is refused, because the pipe would feed only its first part: put

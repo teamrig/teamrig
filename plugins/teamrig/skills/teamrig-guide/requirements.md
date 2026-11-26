@@ -82,8 +82,8 @@ it:
 teamrig statusline install
 ```
 
-It writes a small launcher to `<kit home>/bin`, which finds the installed plugin each time it runs, so a plugin
-update needs no new setup, and makes it the status line in your user `settings.json` (`~/.claude/settings.json`,
+It writes a small launcher to `<kit home>/bin`, which each time it runs starts the kit launcher, which checks the
+current version before it runs it, else the installed plugin's CLI, so an update needs no new setup, and makes it the status line in your user `settings.json` (`~/.claude/settings.json`,
 or in `$CLAUDE_CONFIG_DIR`). A status line you already have keeps running: the launcher goes in front of it in a
 pipe and hands it the same input ([commands.md](commands.md#teamrig-statusline-install)). The launcher saves a
 small snapshot per Claude Code session in the team's `budget.statusSnapshotDir`, keeps the week's reading in that
