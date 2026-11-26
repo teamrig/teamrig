@@ -67,6 +67,16 @@ describe('AreaMap', () => {
     });
   });
 
+  it("names every session owning an area of a repository once, in the order of github.areaOwners, not another repository's", () => {
+    const areas = new AreaMap({
+      areaOwners: { 'area:cli': 'gh', 'area:docs': 'docs', 'area:sync': 'gh', 'area:api': 'guards' },
+      areaPaths: { 'area:cli': ['src/cli/**'], 'area:docs': ['ACME/Web:docs/**'], 'area:sync': ['src/github/**'], 'area:api': ['acme/api:src/**'] },
+    });
+    assert.deepEqual(areas.sessionsOf('acme/web'), ['gh', 'docs']);
+    assert.deepEqual(areas.sessionsOf('Acme/API'), ['gh', 'guards']);
+    assert.deepEqual(map({}).sessionsOf('acme/web'), []);
+  });
+
   it("reads a label named like an object's own member as a plain label, holding no paths it does not list", () => {
     const areas = new AreaMap({ areaOwners: { constructor: 'gh', tostring: 'docs' }, areaPaths: {} });
     assert.equal(areas.isEmpty, true);

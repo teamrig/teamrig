@@ -66,6 +66,15 @@ export class AreaMap {
     return [...new Set(owners)];
   }
 
+  /**
+   * Every session owning an area of `repo` (`owner/name`, any case), once each, in the order of `github.areaOwners`:
+   * who may own a change whose paths are not known.
+   */
+  sessionsOf(repo: string): readonly string[] {
+    const lower = repo.toLowerCase();
+    return [...new Set(this.entries.filter((entry) => entry.repo === undefined || entry.repo === lower).map((entry) => entry.session))];
+  }
+
   /** Each owner of any of `paths` with the ones it owns, and the paths no area holds. */
   split(repo: string, paths: readonly string[]): AreaSplit {
     const shares = new Map<string, string[]>();
