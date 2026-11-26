@@ -5,6 +5,7 @@ import {
   installTeamrig,
   kitHomeOf,
   parseInstallArgs,
+  releaseTagOf,
   RELEASE_REPO,
   runInstall,
   runProgram,
@@ -18,13 +19,26 @@ interface Call {
   readonly args: readonly string[];
 }
 
-/** A runner that records each call and answers from the first rule whose test matches, else exit 0 with no output. */
-function fakeRunner(rules: readonly { readonly when: (call: Call) => boolean; readonly give: InstallRun }[] = []) {
+type Rule = { readonly when: (call: Call) => boolean; readonly give: InstallRun };
+
+const SHA = 'a'.repeat(40);
+
+/** What a release clone answers: its teamrig's version and its commit. */
+const CLONE_RULES: readonly Rule[] = [
+  { when: (call) => call.command !== 'git' && call.args.at(-1) === '--version', give: { code: 0, out: 'teamrig 1.2.3' } },
+  { when: (call) => call.command === 'git' && call.args.includes('rev-parse'), give: { code: 0, out: SHA } },
+];
+
+/**
+ * A runner that records each call and answers from the first rule whose test matches, then as a release clone does,
+ * else exit 0 with no output.
+ */
+function fakeRunner(rules: readonly Rule[] = []) {
   const calls: Call[] = [];
   const run = (command: string, args: readonly string[]): InstallRun => {
     const call = { command, args };
     calls.push(call);
-    return rules.find((rule) => rule.when(call))?.give ?? { code: 0, out: '' };
+    return [...rules, ...CLONE_RULES].find((rule) => rule.when(call))?.give ?? { code: 0, out: '' };
   };
   return { calls, run };
 }
@@ -75,20 +89,46 @@ describe('installTeamrig', () => {
       'git --version',
       `git clone -q --depth 1 --branch release ${RELEASE_REPO} ${FRESH}`,
       `/usr/bin/node ${FRESH}/plugins/teamrig/dist/cli/main.js --version`,
+      `git -C ${FRESH} rev-parse HEAD`,
+      `/usr/bin/node ${CLI} kit install --tag v1.2.3 --commit ${SHA}`,
     ]);
     assert.ok(report.lines.includes('teamrig 1.2.3'));
     assert.ok(report.lines.includes(`CLONED ${RELEASE_REPO} (release) into ${CLONE}`));
     assert.ok(report.lines.some((line) => line.includes(`export PATH="${CLONE}/plugins/teamrig/bin:$PATH"`)));
   });
 
-  it('connects each named host through the install\'s own setup hooks, writing only with --yes', () => {
+  it("installs the clone into the kit home, then connects each named host through the install's own setup hooks, writing only with --yes", () => {
     const preview = fakeRunner();
     installTeamrig(input({ hosts: ['one', 'two'] }), preview.run);
-    assert.deepEqual(preview.calls.slice(3).map(words), [`/usr/bin/node ${CLI} setup hooks --host one`, `/usr/bin/node ${CLI} setup hooks --host two`]);
+    assert.deepEqual(preview.calls.slice(4).map(words), [
+      `/usr/bin/node ${CLI} kit install --tag v1.2.3 --commit ${SHA}`,
+      `/usr/bin/node ${CLI} setup hooks --host one`,
+      `/usr/bin/node ${CLI} setup hooks --host two`,
+    ]);
     const written = fakeRunner();
     const report = installTeamrig(input({ hosts: ['one'], write: true }), written.run);
-    assert.equal(words(written.calls[3] ?? { command: '', args: [] }), `/usr/bin/node ${CLI} setup hooks --host one --yes`);
+    assert.deepEqual(written.calls.slice(4).map(words), [
+      `/usr/bin/node ${CLI} kit install --tag v1.2.3 --commit ${SHA} --yes`,
+      `/usr/bin/node ${CLI} setup hooks --host one --yes`,
+    ]);
     assert.match(report.lines.at(-1) ?? '', /trust teamrig's hooks/);
+  });
+
+  it('connects no host when the kit install fails, as their lines would run a kit home without this teamrig', () => {
+    const { calls, run } = fakeRunner([{ when: (call) => call.args.includes('kit'), give: { code: 2, out: 'REFUSED busy' } }]);
+    const report = installTeamrig(input({ hosts: ['one'], write: true }), run);
+    assert.equal(report.ok, false);
+    assert.equal(report.lines.at(-1), 'FAILED kit install (exit 2):\nREFUSED busy');
+    assert.equal(calls.some((call) => call.args.includes('setup')), false);
+  });
+
+  it('stops before any move when the new teamrig prints no version, naming the folder it stays in', () => {
+    const { run } = fakeRunner([{ when: (call) => call.args.at(-1) === '--version' && call.command === '/usr/bin/node', give: { code: 0, out: 'hello' } }]);
+    const { moves, rename } = fakeRename();
+    const report = installTeamrig(input({ rename }, [CLONE, `${CLONE}/.git`]), run);
+    assert.equal(report.ok, false);
+    assert.deepEqual(moves, []);
+    assert.equal(report.lines.at(-1), `FAILED the new teamrig printed no version (hello); it stays in ${FRESH}; the install in use is unchanged`);
   });
 
   it('updates by a fresh clone beside the old install, moving the old one aside, never running git inside it', () => {
@@ -96,7 +136,7 @@ describe('installTeamrig', () => {
     const { moves, rename } = fakeRename();
     const report = installTeamrig(input({ rename }, [CLONE, `${CLONE}/.git`]), run);
     assert.equal(report.ok, true);
-    assert.equal(calls.some((call) => call.args.includes('-C')), false);
+    assert.deepEqual(calls.filter((call) => call.command === 'git' && call.args[0] === '-C').map((call) => call.args[1]), [FRESH]);
     assert.equal(calls[1]?.args.at(-1), FRESH);
     assert.deepEqual(moves, [`${CLONE}>${ASIDE}`, `${FRESH}>${CLONE}`]);
     assert.ok(report.lines.includes(`UPDATED ${RELEASE_REPO} (release) into ${CLONE}`));
@@ -107,6 +147,7 @@ describe('installTeamrig', () => {
     const steps: readonly { readonly failing: string; readonly when: (call: Call) => boolean }[] = [
       { failing: 'clone', when: (call) => call.args[0] === 'clone' },
       { failing: 'new teamrig', when: (call) => call.command === '/usr/bin/node' },
+      { failing: 'commit read', when: (call) => call.args.includes('rev-parse') },
     ];
     for (const { failing, when } of steps) {
       const { run } = fakeRunner([{ when, give: { code: 1, out: 'bad' } }]);
@@ -132,7 +173,7 @@ describe('installTeamrig', () => {
     assert.equal(report.ok, false);
     assert.deepEqual(moves, []);
     assert.equal(report.lines.at(-1), `FAILED move ${CLONE} to ${ASIDE}: Error: EPERM`);
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
   });
 
   it('refuses on Windows when a git program sits in the current folder, before running anything', () => {
@@ -174,6 +215,16 @@ describe('installTeamrig', () => {
 
   it('tells a run with no --host how to connect one', () => {
     assert.match(installTeamrig(input(), fakeRunner().run).lines.at(-1) ?? '', /run this again with --host <name>/);
+  });
+});
+
+describe('releaseTagOf', () => {
+  it("gives the release tag of a teamrig version line, a prerelease's too", () => {
+    assert.deepEqual([releaseTagOf('teamrig 0.510.0\n'), releaseTagOf('teamrig 0.510.0-preview.2')], ['v0.510.0', 'v0.510.0-preview.2']);
+  });
+
+  it('gives none for any other output', () => {
+    assert.deepEqual([releaseTagOf(''), releaseTagOf('teamrig'), releaseTagOf('teamrig 0.510.0 extra'), releaseTagOf('warning\nteamrig 0.510.0')], [undefined, undefined, undefined, undefined]);
   });
 });
 

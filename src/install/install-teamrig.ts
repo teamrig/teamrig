@@ -2,9 +2,10 @@
  * teamrig's host-neutral install, for an AI CLI that loads no teamrig plugin: a person downloads this one file from the
  * release branch and runs `node install-teamrig.ts [--host <name>]... [--yes]`. It keeps a shallow clone of the public
  * release branch at `<teamrig home>/install/teamrig` (TEAMRIG_HOME, else ~/.teamrig); a later run clones afresh and
- * swaps the new clone in, keeping the old one aside, and a folder there that is no git clone is refused. Then, for
- * each `--host`, it runs that install's own
- * `teamrig setup hooks --host <name>`, which previews and, with --yes, writes the host's hooks file. It edits no shell
+ * swaps the new clone in, keeping the old one aside, and a folder there that is no git clone is refused. Then it runs
+ * that install's own `teamrig kit install`, which copies it into the kit home as the release its tag and commit name
+ * (the kit home a host's hook lines run from), and for each `--host` its `teamrig setup hooks --host <name>`; each
+ * previews and, with --yes, writes. It edits no shell
  * profile: it prints the folder to put on PATH.
  *
  * The file imports only Node's own modules, since it runs before any teamrig is on the machine; for the same reason it
@@ -124,6 +125,9 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     }
     must('clone the release branch', 'git', ['clone', '-q', '--depth', '1', '--branch', RELEASE_BRANCH, RELEASE_REPO, fresh]);
     const version = must(`run the new teamrig (it stays in ${fresh}; the install in use is unchanged)`, input.nodePath, [cliIn(fresh), '--version']);
+    const tag = releaseTagOf(version) ?? refuse(`FAILED the new teamrig printed no version (${version}); it stays in ${fresh}; the install in use is unchanged`);
+    // The new clone is this run's own, so git runs in it; never in an install already there.
+    const commit = must(`read the new clone's commit (it stays in ${fresh}; the install in use is unchanged)`, 'git', ['-C', fresh, 'rev-parse', 'HEAD']);
     if (present) {
       moveOrStop(input, clone, aside, lines);
     }
@@ -141,6 +145,8 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     }
     const plugin = path.join(clone, 'plugins', 'teamrig');
     const cli = cliIn(clone);
+    // Before any host's hooks: a host whose lines run the kit launcher needs the kit home to hold this teamrig first.
+    lines.push(must('kit install', input.nodePath, [cli, 'kit', 'install', '--tag', tag, '--commit', commit, ...(input.write ? ['--yes'] : [])]));
     for (const host of input.hosts) {
       lines.push(must(`setup hooks --host ${host}`, input.nodePath, [cli, 'setup', 'hooks', '--host', host, ...(input.write ? ['--yes'] : [])]));
     }
@@ -159,6 +165,12 @@ export function installTeamrig(input: InstallInput, run: InstallRunner): Install
     }
     throw error;
   }
+}
+
+/** The release tag of what `teamrig --version` printed (`teamrig 1.2.3` gives `v1.2.3`); undefined for any other output. */
+export function releaseTagOf(printed: string): string | undefined {
+  const version = /^teamrig (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/u.exec(printed.trim())?.[1];
+  return version === undefined ? undefined : `v${version}`;
 }
 
 /** Moves a folder, or stops the install naming the move that failed. */
