@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { outsideUsageDir } from '../../budget/measure.ts';
 import { snapshotDirOf } from '../../budget/snapshot.ts';
+import { WEEK_SUMMARY_FILE } from '../../budget/week-summary.ts';
 import { planBody } from '../../interface/index.ts';
 import { layoutPaths, MissingSegmentError } from '../../register/layout.ts';
 import { NO_TASKS_ELSEWHERE, TaskTree, type TasksElsewhere } from '../../register/tree.ts';
@@ -23,7 +24,8 @@ type Elsewhere = { readonly tasks: TasksElsewhere; readonly problem: null } | { 
  *
  * Its revision covers each of them by their files' stamps alone, so a follower's pass stamps and parses nothing. The
  * spend is stamped where the week's rate is read from: every tree team's session stores and renames (the account's
- * meter log is kept by whichever team holds the account) and the status line's snapshots. A metered turn moves a
+ * meter log is kept by whichever team holds the account) and the status line's week summary, or its snapshots in a
+ * folder that keeps none. A metered turn moves a
  * session's store, so on a working team the revision moves at every turn, as the scores do: `--unless` saves this
  * document little there. The clock is no part of it; `validUntil` tells a reader when to ask again with no file
  * moved.
@@ -54,7 +56,7 @@ export function planSource(scope: ReadScope): DocumentSource {
           ...(await stampsOf(runtime, teams.map((other) => other.kit.paths.goals))),
           ...(await stampsOf(runtime, kept.map((paths) => paths.renames))),
           ...(await foldersStampsOf(runtime, kept.flatMap((paths) => [paths.usage, outsideUsageDir(paths.usage)]))),
-          ...(await folderStampsOf(runtime, snapshotDirOf(config.budget, kit.paths))),
+          ...(await weekStampsOf(runtime, snapshotDirOf(config.budget, kit.paths))),
         ],
       };
     },
@@ -118,6 +120,18 @@ async function foldersStampsOf(runtime: CliRuntime, folders: readonly string[]):
     stamps.push(...(await folderStampsOf(runtime, folder)));
   }
   return stamps;
+}
+
+/**
+ * The status line snapshots' stamps as the week is read from them (`readFolderWeek`): the folder's week summary
+ * alone when it keeps one, else every snapshot. The folder holds a snapshot per conversation for 8 days, which is
+ * over a thousand files on a busy host, and a follower stamps them every pass (T5755). A summary the reader finds
+ * damaged is rebuilt and written by the next status line, and one a newer teamrig keeps moves when it folds a
+ * reading, so the summary's stamp moves whenever the week read from the folder does.
+ */
+async function weekStampsOf(runtime: CliRuntime, folder: string): Promise<(string | null)[]> {
+  const summary = (await runtime.files.stamp(join(folder, WEEK_SUMMARY_FILE))) ?? null;
+  return summary === null ? folderStampsOf(runtime, folder) : [WEEK_SUMMARY_FILE, summary];
 }
 
 /** A folder's entries by name, then each one's stamp: a file added, removed or written moves it. */

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { WEEK_SUMMARY_FILE } from '../../budget/week-summary.ts';
 import { formatConfig } from '../../config/load.ts';
 import type { JsonRecord } from '../../core/guards.ts';
 import { INTERFACE_VERSION } from '../../interface/index.ts';
@@ -182,6 +183,29 @@ describe('teamrig read plan', () => {
     await ok(kit, ['rename', 'alpha', 'able', '--session', 'alpha']);
     const afterRename = await revision();
     assert.equal(new Set([first, afterKeeper, afterSnapshot, afterRename]).size, 4);
+  });
+
+  it('stamps the week summary alone where the snapshot folder keeps one, never each snapshot (T5755)', async () => {
+    const kit = await needingTheRoot();
+    const live = join(KIT, 'usage', 'live');
+    const folded = join(live, 'one.json');
+    const snapshots = [folded, join(live, 'two.json'), join(live, 'three.json')];
+    for (const snapshot of snapshots) {
+      await kit.files.write(snapshot, '{}\n');
+    }
+    await kit.files.write(join(live, WEEK_SUMMARY_FILE), '{"v":2,"reading":null,"followed_by":null}');
+    const files = new WatchedFiles(kit.files);
+    const revision = async () => String(served(await kit.run(READ_PLAN, { ...AS_WEB, files }))['revision']);
+    const first = await revision();
+    const reached = new Set(files.touched());
+    assert.deepEqual(
+      snapshots.filter((snapshot) => reached.has(normalisePath(snapshot))),
+      [],
+    );
+    await kit.files.write(folded, '{"ts":"later"}\n');
+    assert.equal(await revision(), first, 'a snapshot the summary already folded moves nothing the plan reads');
+    await kit.files.write(join(live, WEEK_SUMMARY_FILE), '{"v":2,"reading":null,"followed_by":"2030-01-01T00:00:00.000Z"}');
+    assert.notEqual(await revision(), first, 'the summary moves it');
   });
 
   it('serves the plan beside a team folder whose config cannot be read, and moves its revision when that config is written', async () => {
