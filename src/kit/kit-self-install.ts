@@ -64,14 +64,17 @@ export async function installRunningKit(install: KitSelfInstall): Promise<KitSel
  * else undefined.
  */
 export function kitSelfInstallNote(outcome: KitSelfInstallOutcome): string | undefined {
-  switch (outcome.kind) {
-    case 'pinned':
-      return `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig kit use --latest\` moves to it.`;
-    case 'older':
-      return `teamrig ${outcome.current} stays current; this plugin's ${outcome.version} is older and kept; \`teamrig kit use ${outcome.version}\` moves to it.`;
-    default:
-      return undefined;
-  }
+  return outcome.kind === 'pinned' || outcome.kind === 'older' ? keptAsideNote(outcome) : undefined;
+}
+
+/** An install whose version was kept while `current` stays elsewhere: a pin, or a newer current. */
+export type KeptAsideOutcome = Extract<KitSelfInstallOutcome, { readonly kind: 'pinned' | 'older' }>;
+
+/** Why `current` stays where it is after a kept-aside install, and the `teamrig kit use` line that moves it. */
+export function keptAsideNote(outcome: KeptAsideOutcome): string {
+  return outcome.kind === 'pinned'
+    ? `teamrig pinned at ${outcome.pinned}; ${outcome.version} is installed; \`teamrig kit use --latest\` moves to it.`
+    : `teamrig ${outcome.current} stays current; this plugin's ${outcome.version} is older and kept; \`teamrig kit use ${outcome.version}\` moves to it.`;
 }
 
 /** The restore log's line for a self-copy that changed or refused something; undefined for one that did nothing. */

@@ -4,7 +4,7 @@ import type { Mutex } from '../../core/lock.ts';
 import { KIT_VERSION } from '../../core/version.ts';
 import { clientRootOf } from '../../exec/client-integrity.ts';
 import { syncKitLauncher } from '../../kit/hook-launcher.ts';
-import { installRunningKit, KIT_COMMAND_LOCK, kitInstallLockPath, kitSelfInstallNote } from '../../kit/kit-self-install.ts';
+import { installRunningKit, keptAsideNote, KIT_COMMAND_LOCK, kitInstallLockPath } from '../../kit/kit-self-install.ts';
 import {
   damagedPreviewWhy,
   KIT_LOCK_BUSY,
@@ -221,7 +221,7 @@ export async function kitInstall(args: ParsedArgs, runtime: KitInstallRuntime): 
       break;
     case 'pinned':
     case 'older':
-      runtime.out.stdout(`NOTE ${kitSelfInstallNote(outcome) ?? ''}`);
+      runtime.out.stdout(`NOTE ${keptAsideNote(outcome)}`);
       break;
   }
   const launcher = await syncKitLauncher(runtime.files, kitHome);

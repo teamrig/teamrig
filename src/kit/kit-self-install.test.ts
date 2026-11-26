@@ -6,7 +6,7 @@ import { InlineMutex } from '../testing/inline-mutex.ts';
 import { writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
-import { installRunningKit, kitSelfInstallLogLine, kitSelfInstallNote } from './kit-self-install.ts';
+import { installRunningKit, keptAsideNote, kitSelfInstallLogLine, kitSelfInstallNote } from './kit-self-install.ts';
 import { kitCurrentPath, kitVersionFolder, readKitCurrent, useKitVersion, type KitSource } from './kit-versions.ts';
 
 const KIT = '/home/user/.teamrig';
@@ -70,6 +70,16 @@ describe('installRunningKit', () => {
     assert.equal(kitSelfInstallNote(outcome), "teamrig 0.509.0 stays current; this plugin's 0.508.0 is older and kept; `teamrig kit use 0.508.0` moves to it.");
     assert.equal(kitSelfInstallLogLine(outcome), 'kit: 0.508.0 kept; current 0.509.0 is newer');
     assert.equal(files.get(kitCurrentPath(KIT)), '0.509.0\n');
+  });
+
+  it('names where current stays for each kept-aside outcome, the same note a session start gives', () => {
+    const pinned = { kind: 'pinned', version: '0.509.0', pinned: '0.508.0' } as const;
+    const older = { kind: 'older', version: '0.508.0', current: '0.509.0' } as const;
+    assert.deepEqual(
+      [keptAsideNote(pinned), keptAsideNote(older)],
+      [kitSelfInstallNote(pinned), kitSelfInstallNote(older)],
+    );
+    assert.match(keptAsideNote(older), /^teamrig 0\.509\.0 stays current; .*`teamrig kit use 0\.508\.0` moves to it\.$/);
   });
 
   it('gives no note and no log line for a start that finds another start copying', async () => {
