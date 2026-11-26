@@ -78,7 +78,8 @@ mark a part that must wait for another as blocked by it.
   second label that says the same as another (a "help wanted" beside a status that already says the issue is open
   to take).
 - A parent issue (a goal) takes no status label: its parts carry the status, and the goal is done when they are.
-- A design issue (section 6) takes `design` and no status label or assignee: it is not work to take.
+- A design issue (section 6) takes `design` and no status label: it is not work to take. It is assigned to the
+  team's design assignees, when it names any (teamrig's `designAssignees` setting), else to no one.
 - `good first issue` only on a small, well-defined issue a newcomer can finish with no knowledge beyond its body;
   on a few such issues, so the label keeps meaning something.
 - Assign the issue to its taker once they say they take it; until then it stays unassigned, open to anyone. On a
@@ -91,8 +92,10 @@ When the question is how something should work and nothing is agreed yet, open a
 everyone, and the agent working for them, gives their side in comments, and no one takes it as work until the
 maintainers mark it agreed. It replaces a discussion forum, so the talk stays beside the work it leads to.
 
-- **Label** it `design`, with no status label and no assignee. teamrig makes the label where a repository lacks it
-  (`teamrig issue label <owner/name#n> --add design`), and its status push shows no status on a design issue.
+- **Label** it `design`, with no status label; assign it to the team's design assignees, if it names any (teamrig's
+  status push and `issue migrate` do so from that setting), else to no one. teamrig makes the label
+  where a repository lacks it (`teamrig issue label <owner/name#n> --add design`), and its status push shows no
+  status on a design issue.
 - **Sections**, in place of section 3's: **Question** (what to decide, in one or two sentences), **Context** (what
   exists today, by path, and why it needs a decision now), **Options** (each with what it costs and what it gives
   up), **Proposal** (the opener's pick, if any), **Early steps** (what is cheap to do now and would cost far more

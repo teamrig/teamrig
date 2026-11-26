@@ -14,7 +14,8 @@ import { parseRef } from './ref.ts';
  * edited by hand is set back. A person's close is never undone here: the issue stays closed and the plan names it.
  * An open issue with no assignee gets one (T2999): the login of the task's owning session, else the login the sync runs
  * as (T4581), else none; never the repository's owner, which may be an organization no one can be assigned as. An
- * issue a person assigned keeps its assignees, and the push takes none off.
+ * issue a person assigned keeps its assignees, and the push takes none off. An open design issue with no assignee gets
+ * every design assignee the team names that the repository may assign (#1491), else none.
  * An open task no session has scheduled leaves its issue open to anyone (T3021): `status:open` and no assignee, so a
  * contributor sees what is free to take. A scheduled one, or one a person took, shows `status:claimed`. A goal, a
  * task planned after its parts, shows no status label: its parts' issues carry theirs (T3056).
@@ -119,8 +120,8 @@ export interface IssueFacts {
 }
 
 /**
- * The issue a task calls for. A design issue shows no status label and is assigned to no one: it is talk, not work
- * to take, until it is agreed (T3096).
+ * The issue a task calls for. A design issue shows no status label and no session claims it: it is talk, not work
+ * to take, until it is agreed (T3096); the push assigns it to the design assignees instead (designAssigneesOf).
  */
 export function issueGoal(task: GoalFacts, issue: IssueFacts): IssueGoal {
   switch (task.status) {
@@ -153,8 +154,8 @@ export interface IssueChange {
   readonly remove: readonly string[];
   /** Set when the issue is to close, for this reason. */
   readonly close: CloseReason | undefined;
-  /** Set when the open issue has no assignee: the login to assign it to. */
-  readonly assign?: string;
+  /** Set when the open issue has no assignee: the logins to assign it to, never none. */
+  readonly assign?: readonly string[];
 }
 
 /**
@@ -194,13 +195,16 @@ function viewerLogin(viewer: ViewerLogin): string | undefined {
 }
 
 /**
- * Whom the push may assign in one repository: each session's login, the login the sync runs as, and what the host
- * answered for each login read so far. GitHub logins match whatever their case, so both sets key by the lowercase.
+ * Whom the push may assign in one repository: each session's login, the login the sync runs as, the design assignees,
+ * and what the host answered for each login read so far. The host's logins match whatever their case, so both sets key by
+ * the lowercase.
  */
 export interface PushAssignees {
   readonly logins: SessionLogins;
   /** The login the sync's access belongs to, the one it runs as (ViewerLogin). */
   readonly viewer: ViewerLogin;
+  /** The logins an open design issue with no assignee is assigned to (the team's design assignees), in their order. */
+  readonly design: readonly string[];
   /** Logins the repository may not assign, lowercase: each is passed over for the next in line. */
   readonly refused: ReadonlySet<string>;
   /** Logins the repository may assign, lowercase, to the host's own spelling, which GitHub's assign needs. */
@@ -208,8 +212,8 @@ export interface PushAssignees {
 }
 
 /** The assignees of a run whose logins the host has not been asked about yet. */
-export function pushAssignees(logins: SessionLogins, viewer: ViewerLogin): PushAssignees {
-  return { logins, viewer, refused: new Set(), spelled: new Map() };
+export function pushAssignees(logins: SessionLogins, viewer: ViewerLogin, design: readonly string[] = []): PushAssignees {
+  return { logins, viewer, design, refused: new Set(), spelled: new Map() };
 }
 
 /**
@@ -225,6 +229,16 @@ export function assigneeOf(session: string, who: PushAssignees): string | undefi
     }
   }
   return undefined;
+}
+
+/**
+ * Who an open design issue with no assignee is assigned to: each design assignee the repository may assign, as the host
+ * spells it, in one write; undefined when none is left. A refused one is left out, never replaced: no session takes
+ * design talk, so the viewer is no fallback.
+ */
+export function designAssigneesOf(who: PushAssignees): readonly string[] | undefined {
+  const logins = who.design.filter((login) => !who.refused.has(login.toLowerCase())).map((login) => who.spelled.get(login.toLowerCase()) ?? login);
+  return logins.length === 0 ? undefined : logins;
 }
 
 /** A closed issue whose task is still active: closed by a person, so it stays closed, and the task's owner decides. */
@@ -322,7 +336,8 @@ export const SESSION_PUSH: PushLimits = { writesPerRun: PUSH_WRITES_PER_RUN, clo
  * two or more active team tasks hold it, none does: the plan writes nothing to it and names them (SharedIssue); one
  * active team task speaks over finished ones (holders). The run sends at most `limits.writesPerRun` writes; the rest is deferred. Without `limits.closes` a closing change
  * is held instead, taking none of the run's writes. With `who` an open issue of a scheduled task with no assignee
- * is assigned (assigneeOf); without, the plan assigns nobody. While `who`'s viewer is unread, the plan says where it
+ * is assigned (assigneeOf), and an open design issue with none to the design assignees (designAssigneesOf); without,
+ * the plan assigns nobody. While `who`'s viewer is unread, the plan says where it
  * would count (wantsViewer), for the caller to read it and plan again. A login `who` refuses is never planned, so it takes none
  * of the run's writes and the changes behind it go out (T4581). A number the list left out that is in `openPulls`, the
  * repository's open pull requests, is named as one, not as an issue gone from the list. A status label is planned
@@ -419,12 +434,13 @@ export type IssuePlan =
 /**
  * The push of the one issue `task` holds, planned against `issue` as the host has it now, the same way planPush plans
  * each issue of a repository: with `who` an open issue of a scheduled task with no assignee is assigned (assigneeOf),
- * and without, nobody is. `wantsViewer` says the plan would change once `who`'s unread viewer is known
+ * an open design issue with none to the design assignees (designAssigneesOf), and without, nobody is. `wantsViewer` says the plan would change once `who`'s unread viewer is known
  * (PushPlan.wantsViewer). Its status label is planned under the name the tracker holds it by (`labelName`), as
  * `issue` carries it under that name.
  */
 export function planIssue(target: IssueTarget, task: Task, issue: IssueNow, who?: PushAssignees, labelName: LabelNaming = (label) => label): IssuePlan {
-  const goal = heldGoal(issueGoal(task, { assigned: issue.assignees.length > 0, design: issue.labels.includes(DESIGN_LABEL) }), labelName);
+  const design = issue.labels.includes(DESIGN_LABEL);
+  const goal = heldGoal(issueGoal(task, { assigned: issue.assignees.length > 0, design }), labelName);
   if (issue.state === 'closed' && goal.open) {
     return { kind: 'closed-active' };
   }
@@ -432,8 +448,10 @@ export function planIssue(target: IssueTarget, task: Task, issue: IssueNow, who?
   if (kept !== undefined) {
     return { kind: 'kept-open', why: kept, wantsViewer: kept.kind === 'taken' && who?.viewer.kind === 'unread' };
   }
-  const assigns = goal.open && goal.claim && who !== undefined && issue.assignees.length === 0;
-  const assign = assigns ? assigneeOf(task.owner, who) : undefined;
+  const unassigned = goal.open && who !== undefined && issue.assignees.length === 0;
+  const assigns = unassigned && goal.claim;
+  const sessionLogin = assigns ? assigneeOf(task.owner, who) : undefined;
+  const assign = design ? (unassigned ? designAssigneesOf(who) : undefined) : sessionLogin === undefined ? undefined : [sessionLogin];
   const wantsViewer = assigns && assign === undefined && who.viewer.kind === 'unread';
   const change = changeFor(target, task, issue, goal, assign);
   return change === undefined ? { kind: 'unchanged', wantsViewer } : { kind: 'change', change, wantsViewer };
@@ -524,9 +542,9 @@ export function heldIssue(task: Task): IssueTarget | undefined {
 /**
  * The writes for one listed issue, or undefined when it already shows its task's status. A closing issue loses its
  * status labels too, so a closed issue never shows work as still going on. `assign`, set for an open issue with no
- * assignee, is the login it gets.
+ * assignee, is the logins it gets.
  */
-function changeFor(target: IssueTarget, task: Task, issue: IssueNow, goal: IssueGoal, assign: string | undefined): IssueChange | undefined {
+function changeFor(target: IssueTarget, task: Task, issue: IssueNow, goal: IssueGoal, assign: readonly string[] | undefined): IssueChange | undefined {
   const statusLabels = issue.labels.filter((label) => label.startsWith(STATUS_LABEL_PREFIX));
   if (!goal.open) {
     if (issue.state === 'closed') {
@@ -566,7 +584,7 @@ export function changeLine(change: IssueChange): string {
     ...(change.close === undefined ? [] : [`close as ${change.close}`]),
     ...change.add.map((label) => `add ${label}`),
     ...change.remove.map((label) => `take off ${label}`),
-    ...(change.assign === undefined ? [] : [`assign ${change.assign}`]),
+    ...(change.assign === undefined ? [] : [`assign ${change.assign.join(', ')}`]),
   ];
   return `${changeTag(change)} ${targetText(change.target)} ${change.task} ${change.status}: ${writes.join(', ')}`;
 }

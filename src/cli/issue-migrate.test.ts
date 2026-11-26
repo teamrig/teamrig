@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
 import { withStampFooter } from '../core/stamp.ts';
-import { isIssueCreate, isIssueQuery } from '../adapters/connectors/github/gh.ts';
+import { isIssueCreate, isIssueQuery, issueAssignArgs } from '../adapters/connectors/github/gh.ts';
 import { foldEvents, type Task } from '../register/fold.ts';
 import { readEvents } from '../register/snapshot.ts';
 import { APP, CliHarness, EVENTS_PATH, TEAM } from '../testing/cli-harness.ts';
@@ -208,6 +208,35 @@ describe('teamrig issue migrate', () => {
     const gh = new FakeGh().failsCreate('acme/web', { end: { kind: 'exited', code: 0 }, stdout: 'created', stderr: '' });
     const lines = await expectRun(kit, ['issue', 'migrate', 'rows.jsonl', '--yes'], gh, EXIT.failed);
     assert.equal(lines[2], "FAILED T1: gh printed no issue number: look for it on acme/web before a rerun, and set the task's ref if it is there");
+  });
+
+  it('opens a design row labelled design and assigns it to the design assignees that may be assigned', async () => {
+    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web'], designAssignees: ['MonaLisa', 'outsider'] } });
+    const added = await kit.run(['add', '--title', 'Private question', '--description', 'private what and why', '--priority', 'p2', '--owner', 'alpha'], AS_LEAD);
+    assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
+    await kit.files.write(ROWS, issueRow('T1', 'acme/web', 'How should retries work', { type: 'design', priority: 'p3' }));
+    const gh = new FakeGh().cannotAssign('acme/web', ['outsider']).spells('MonaLisa');
+    assert.deepEqual((await expectRun(kit, ['issue', 'migrate', 'rows.jsonl', '--yes'], gh, EXIT.ok)).slice(2), [
+      'OPENED T1 gh:acme/web#1',
+      'UNASSIGNED T1 gh:acme/web#1: outsider may not be assigned there (not a person with access to it); name a login that may under github.designAssignees',
+      'ASSIGNED T1 gh:acme/web#1 to MonaLisa',
+      "DONE opened 1 issue(s) and set each task's ref",
+    ]);
+    const writes = gh.ran.map((request) => request.args).filter((args) => args.includes('POST'));
+    assert.deepEqual(writes, [
+      ['api', 'repos/acme/web/issues', '-X', 'POST', '-f', 'title=How should retries work', '-f', `body=${withStampFooter('Why How should retries work.')}`, '-f', 'labels[]=design', '-f', 'labels[]=p3'],
+      issueAssignArgs({ repo: 'acme/web', number: 1 }, ['MonaLisa']),
+    ]);
+  });
+
+  it('opens a design row unassigned when no design assignee is named', async () => {
+    const kit = new CliHarness(GITHUB_TEAM);
+    const added = await kit.run(['add', '--title', 'Private question', '--description', 'private what and why', '--priority', 'p2', '--owner', 'alpha'], AS_LEAD);
+    assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
+    await kit.files.write(ROWS, issueRow('T1', 'acme/web', 'How should retries work', { type: 'design' }));
+    const gh = new FakeGh();
+    assert.deepEqual((await expectRun(kit, ['issue', 'migrate', 'rows.jsonl', '--yes'], gh, EXIT.ok)).slice(2), ['OPENED T1 gh:acme/web#1', "DONE opened 1 issue(s) and set each task's ref"]);
+    assert.ok(gh.ran.every((request) => isIssueCreate(request.args)));
   });
 
   it('runs gh for issue creates only', async () => {

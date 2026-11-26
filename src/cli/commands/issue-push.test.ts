@@ -48,6 +48,7 @@ function runOn(tracker: FakeIssueHost, code: FakeIssueHost): PushRun {
     send: false,
     limits: SESSION_PUSH,
     logins: new Map(),
+    design: [],
     told: new Set(),
     fields: undefined,
   };

@@ -26,12 +26,13 @@ async function assignedFor(
   limits: PushLimits,
   owners: Readonly<Record<string, string>>,
   issues: readonly HostIssue[] = tasks.map((_, index) => testHostIssue(index + 1)),
+  design: readonly string[] = [],
 ): Promise<{ result: AssignedPlan; lines: string[] }> {
   const lines: string[] = [];
   const say = (line: string): void => {
     lines.push(line);
   };
-  const result = await planAssigned(host, REPO, (who) => planPush(REPO, issues, tasks, limits, who), pushAssignees(sessionLogins(owners), VIEWER_UNREAD), () => viewerOf(host, REPO, say), say);
+  const result = await planAssigned(host, REPO, (who) => planPush(REPO, issues, tasks, limits, who), pushAssignees(sessionLogins(owners), VIEWER_UNREAD, design), () => viewerOf(host, REPO, say), say);
   return { result, lines };
 }
 
@@ -105,6 +106,15 @@ describe('planAssigned (T4581)', () => {
       assert.deepEqual(result.plan.changes.map((change) => change.close), ['completed']);
       assert.deepEqual(result.plan.keptOpen, []);
     }
+  });
+
+  it('assigns a design issue the design assignees the host takes, as it spells them, without reading the viewer (#1491)', async () => {
+    const host = new FakeIssueHost().cannotAssign('outsider').spells('MonaLisa');
+    const design = [testHostIssue(1, { labels: ['design'] })];
+    const { result, lines } = await assignedFor(host, [holding('T1', 1, 'lead')], RUN, { octocat: 'dev' }, design, ['monalisa', 'outsider', 'hubot']);
+    assert.deepEqual(planned(result).changes, ['ASSIGN acme/web#1 T1 in-progress: assign MonaLisa, hubot']);
+    assert.deepEqual(lines, ['UNASSIGNED acme/web: outsider may not be assigned there (not a person with access to it); its 1 issue(s) go without it, at no write: name a login that may under github.designAssignees']);
+    assert.equal(host.viewerReads, 0);
   });
 
   it('plans nothing when a login read fails, and says nothing was written', async () => {

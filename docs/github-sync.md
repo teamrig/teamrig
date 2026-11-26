@@ -572,8 +572,9 @@ PREVIEW nothing was written; a push would send 7 write(s) now, at most 40 a run,
   `MADE` line: these five and `design` are the only labels teamrig ever makes, and the push makes its five only with
   `--yes` or the automatic push.
 - **A design issue shows none.** An issue labelled `design` is talk about how something should work, not work to
-  take until it is agreed: the push takes every `status:` label off it and assigns it to no one, whatever its task's
-  status. Its task ending never closes it: an `OPEN` line names it, and the maintainers' `Agreed:` ends it.
+  take until it is agreed: the push takes every `status:` label off it, whatever its task's status, and assigns an
+  open one no one is assigned to every login of `github.designAssignees` in one write (none by default: it stays
+  unassigned). `teamrig issue migrate` assigns a `design` row's issue to them as it opens it. Its task ending never closes it: an `OPEN` line names it, and the maintainers' `Agreed:` ends it.
 - **Planned against GitHub as it is.** The plan compares each task with its issue as listed now, so a label someone
   changed by hand is set back, and a run that stopped half way is planned again whole.
 - **A person's close stands.** An issue closed while its task is active is never reopened: a `KEPT` line names it.
@@ -594,10 +595,12 @@ PREVIEW nothing was written; a push would send 7 write(s) now, at most 40 a run,
   no one is assigned to gets an assignee: the login `github.owners` maps to the task's owning session, else the login
   the sync runs as (the one its token belongs to, read once a run), else none (sessions are not GitHub users). It is
   never the account that owns the repository, which for an organization's repository no one can be assigned as. An
-  issue a person assigned keeps its assignees; the push takes none off. Each login is read before the run's plan is
-  kept: one the repository may not assign (not a person with access to it) gets an `UNASSIGNED` line and its issues
-  go to the next login in line, or stay unassigned, so it takes none of the run's writes and the label changes behind
-  it go out, where GitHub would drop it silently and every run would send it again. When the login the sync runs as
+  open design issue no one is assigned to gets every login of `github.designAssignees` in one write, and never the
+  login the sync runs as. An issue a person assigned keeps its assignees; the push takes none off. Each login, a
+  design assignee's too, is read before the run's plan is kept: one the repository may not assign (not a person with
+  access to it) gets an `UNASSIGNED` line and takes none of the run's writes, where GitHub would drop it silently and
+  every run would send it again. A session's issues then go to the next login in line, or stay unassigned; a design
+  issue gets the other design assignees, and the label changes behind either go out. When the login the sync runs as
   cannot be read (a `NOTE` line), only mapped sessions are assigned.
 - **Fields and type too.** On a repository with issue fields or types, the push then sets each held open issue's
   fields, one way from the task list: the priority as an option of a single-select `Priority` field (`P<n>`, else

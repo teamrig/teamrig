@@ -6,6 +6,7 @@ import type { Task } from '../register/fold.ts';
 import { refOf } from '../issues/ref.ts';
 import { ACTIVE_STATUSES, isIssueRef } from '../register/model.ts';
 import type { Verdict } from '../register/policy.ts';
+import { DESIGN_LABEL } from '../issues/design-label.ts';
 import type { IssueDraft } from '../issues/host.ts';
 
 /**
@@ -21,9 +22,13 @@ import type { IssueDraft } from '../issues/host.ts';
 const PRIORITY_LABELS = ['p1', 'p2', 'p3'] as const;
 type PriorityLabel = (typeof PRIORITY_LABELS)[number];
 
-/** A row's kind of work, and the GitHub label each one gets: a bug stays `bug`, a task is an `enhancement`. */
-const TYPE_LABELS = { bug: 'bug', task: 'enhancement' } as const;
+/**
+ * A row's kind of work, and the GitHub label each one gets: a bug stays `bug`, a task is an `enhancement`, and a
+ * design question is a design issue (issues/design-label.ts), talk until it is agreed.
+ */
+const TYPE_LABELS = { bug: 'bug', task: 'enhancement', design: DESIGN_LABEL } as const;
 export type RowType = keyof typeof TYPE_LABELS;
+const ROW_TYPES: readonly RowType[] = ['bug', 'task', 'design'];
 
 /** The priority label of a task's priority: p0 and p1 are `p1`, the sync's highest, p2 is `p2`, any lower `p3`. */
 export function priorityLabelOf(priority: number): PriorityLabel {
@@ -168,8 +173,9 @@ function issueRow(raw: JsonRecord, id: string, scanner: SecretScanner): Verdict<
   if (typeof repo !== 'string' || typeof title !== 'string' || typeof body !== 'string') {
     return { ok: false, error: `${id}: repo, title and body are text` };
   }
-  if (type !== 'bug' && type !== 'task') {
-    return { ok: false, error: `${id}: type is neither "bug" nor "task"` };
+  const kind = ROW_TYPES.find((one) => one === type);
+  if (kind === undefined) {
+    return { ok: false, error: `${id}: type is not one of ${ROW_TYPES.join(', ')}` };
   }
   const label = PRIORITY_LABELS.find((one) => one === priority);
   if (label === undefined) {
@@ -179,7 +185,7 @@ function issueRow(raw: JsonRecord, id: string, scanner: SecretScanner): Verdict<
   if (!text.ok) {
     return text;
   }
-  return { ok: true, value: { decision: 'issue', id, repo: repo.trim().toLowerCase(), type, priority: label, ...text.value } };
+  return { ok: true, value: { decision: 'issue', id, repo: repo.trim().toLowerCase(), type: kind, priority: label, ...text.value } };
 }
 
 /** An issue's public wording, trimmed: what a migrate row and `add --issue` both open. */
