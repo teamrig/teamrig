@@ -7,7 +7,7 @@ import { CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { EXIT } from './runtime.ts';
 
 const FOLLOW_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], followMax: 2 } };
-const FOLLOWS_PATH = join(TEAM_HOME, 'state', 'github-follows.json');
+const FOLLOWS_PATH = join(TEAM_HOME, 'state', 'connectors', 'github', 'follows.json');
 const AS_ALPHA = { env: { TEAMRIG_SESSION: 'alpha' } };
 const AS_BRAVO = { env: { TEAMRIG_SESSION: 'bravo' } };
 

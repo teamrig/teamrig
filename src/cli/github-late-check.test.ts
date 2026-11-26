@@ -8,7 +8,7 @@ import { EXIT } from './runtime.ts';
 
 const AS_ALPHA: RunOptions = { env: { TEAMRIG_SESSION: 'alpha' } };
 const AS_LEAD: RunOptions = { env: { TEAMRIG_SESSION: 'lead' } };
-const CLOCKS = join(TEAM_HOME, 'state', 'github-clocks.json');
+const CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
 
 function clocks(...list: readonly Clock[]): string {
   return formatClocks(new Map(list.map((clock) => [clock.ref, clock])));

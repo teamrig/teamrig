@@ -5,6 +5,7 @@ import { autoPushWrites, hourPushWrites, PUSH_WRITES_PER_HOUR, PUSH_WRITES_PER_R
 import { fileLockOf } from '../file-locks.ts';
 import type { Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
+import { githubState } from '../github-state.ts';
 
 /**
  * The hour's count around one automatic push (T4592, issues/push-hour.ts). Before the push, under the sync's lock,
@@ -28,12 +29,12 @@ export async function reserveHour(runtime: CliRuntime, kit: Kit, config: KitConf
   const probeSeconds = config.github.probeSeconds;
   const share = autoPushWrites(probeSeconds);
   try {
-    return await fileLockOf(runtime, kit.paths.githubSyncLock, config.lock).run(async (): Promise<HourLimit> => {
-      const read = parsePushHour(await runtime.files.read(kit.paths.githubPushHour));
+    return await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async (): Promise<HourLimit> => {
+      const read = parsePushHour(await runtime.files.read(githubState(kit.paths).pushHour));
       const now = runtime.clock.now();
       const minute = minuteOf(now);
       const limit = read.kind === 'read' ? readLimit(probeSeconds, hourSent(read.hour, now)) : { writesPerRun: share, lines: [`NOTE status push: the hour's write count could not be read (${read.reason}), so this run sends at most the even share of ${share}; its own writes start a new count`] };
-      await runtime.files.write(kit.paths.githubPushHour, pushHourText(shiftWrites(read.kind === 'read' ? read.hour : [], now, minute, limit.writesPerRun)));
+      await runtime.files.write(githubState(kit.paths).pushHour, pushHourText(shiftWrites(read.kind === 'read' ? read.hour : [], now, minute, limit.writesPerRun)));
       return { ...limit, reserved: { minute, writes: limit.writesPerRun } };
     });
   } catch (error) {
@@ -54,12 +55,12 @@ export async function settleHour(runtime: CliRuntime, kit: Kit, config: KitConfi
     return [];
   }
   try {
-    await fileLockOf(runtime, kit.paths.githubSyncLock, config.lock).run(async () => {
-      const read = parsePushHour(await runtime.files.read(kit.paths.githubPushHour));
+    await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async () => {
+      const read = parsePushHour(await runtime.files.read(githubState(kit.paths).pushHour));
       const now = runtime.clock.now();
       // A count damaged since the reservation is replaced by this run's writes alone.
       const hour = read.kind === 'read' ? shiftWrites(read.hour, now, reserved.minute, writes - reserved.writes) : shiftWrites([], now, reserved.minute, writes);
-      await runtime.files.write(kit.paths.githubPushHour, pushHourText(hour));
+      await runtime.files.write(githubState(kit.paths).pushHour, pushHourText(hour));
     });
     return [];
   } catch (error) {

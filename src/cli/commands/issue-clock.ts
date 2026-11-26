@@ -12,6 +12,7 @@ import { fileLockOf } from '../file-locks.ts';
 import { teamZone, type Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
 import { inboxDepsOf } from './inbox.ts';
+import { githubState } from '../github-state.ts';
 
 /**
  * The response clock's part of a sync that writes (T3028, sync/clock.ts): from each repository it read, the open
@@ -61,9 +62,9 @@ export function pullThreads(pulls: readonly HostPull[], recipientOf: (pull: Host
  */
 export async function recordClocks(runtime: CliRuntime, kit: Kit, config: KitConfig, read: ReadonlySet<string>, threads: readonly Thread[]): Promise<string[]> {
   const now = runtime.clock.now();
-  const remind = await fileLockOf(runtime, kit.paths.githubSyncLock, config.lock).run(async (): Promise<readonly Clock[]> => {
-    const step = stepClocks(parseClocks((await runtime.files.read(kit.paths.githubClocks)) ?? ''), read, threads, now);
-    await runtime.files.write(kit.paths.githubClocks, formatClocks(step.clocks));
+  const remind = await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async (): Promise<readonly Clock[]> => {
+    const step = stepClocks(parseClocks((await runtime.files.read(githubState(kit.paths).clocks)) ?? ''), read, threads, now);
+    await runtime.files.write(githubState(kit.paths).clocks, formatClocks(step.clocks));
     return step.remind;
   });
   const inboxes = inboxDepsOf(runtime, kit.paths).inboxes;

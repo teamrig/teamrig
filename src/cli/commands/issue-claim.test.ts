@@ -9,7 +9,7 @@ import { openTeamKit, requireConfig } from '../kit.ts';
 import { claimWrites, recordClaims, RELEASE_REPLY } from './issue-claim.ts';
 
 const REPO = 'acme/web';
-const CLAIMS = join(TEAM_HOME, 'state', 'github-claims.json');
+const CLAIMS = join(TEAM_HOME, 'state', 'connectors', 'github', 'claims.json');
 const HOUR = 3_600_000;
 
 describe('recordClaims on a tracker that holds a label under another name (T4754)', () => {

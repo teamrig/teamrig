@@ -186,24 +186,6 @@ export interface TeamPaths {
   readonly warn: string;
   /** The full output of each `teamrig test` run, `test-<session>-<n>.log` each. */
   readonly logs: string;
-  /** The automatic GitHub sync's last start, finish and failing repositories (sync/auto.ts). */
-  readonly githubSync: string;
-  /** The end of each failed CI job's log of a session's own pull request, one `<owner>-<name>-<number>.md` per pull request (sync/ci-excerpt.ts). */
-  readonly githubCi: string;
-  /** Held while a sync records its finish. */
-  readonly githubSyncLock: string;
-  /** The automatic status push's writes per minute over the last hour (issues/push-hour.ts). */
-  readonly githubPushHour: string;
-  /** The response clock of each GitHub thread waiting on an answer of ours (sync/clock.ts). */
-  readonly githubClocks: string;
-  /** The lease of the team's one `issue watch`: its pid and last beat (sync/watch.ts). */
-  readonly githubWatch: string;
-  /** Held while a hook claims the watch or the watch claims, renews or drops its lease. */
-  readonly githubWatchLock: string;
-  /** The issues and pull requests each session follows (sync/follows.ts). */
-  readonly githubFollows: string;
-  /** The issue claims the sync made, the only assignees it may ever take off (issues/claim.ts). */
-  readonly githubClaims: string;
   /** The hookless-tab check's last run and the tabs it named (restore/hookless.ts). */
   readonly hookless: string;
   /** Held while a hook runs the hookless-tab check. */
@@ -359,15 +341,6 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     keepWorkingAsks: join(state, 'keep-working-asks'),
     warn: join(state, 'usage', 'warn'),
     logs: join(state, 'logs'),
-    githubSync: join(state, 'github-sync.json'),
-    githubCi: join(state, 'github-ci'),
-    githubSyncLock: join(state, 'github-sync.lock'),
-    githubPushHour: join(state, 'github-push-hour.json'),
-    githubClocks: join(state, 'github-clocks.json'),
-    githubWatch: join(state, 'github-watch.json'),
-    githubWatchLock: join(state, 'github-watch.lock'),
-    githubClaims: join(state, 'github-claims.json'),
-    githubFollows: join(state, 'github-follows.json'),
     hookless: join(state, 'hookless.json'),
     hooklessLock: join(state, 'hookless.lock'),
     idlePass: join(state, 'idle-pass.json'),

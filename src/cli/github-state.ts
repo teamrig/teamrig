@@ -21,6 +21,11 @@ const EARLIER_NAMES: ReadonlyArray<readonly [string, keyof ConnectorState]> = [
   ['github-follows.json', 'follows'],
 ];
 
+/** GitHub's state paths, for code that runs after its command's entry opened them with openGithubState. */
+export function githubState(paths: TeamPaths): ConnectorState {
+  return connectorState(paths, GITHUB_CONNECTOR_ID);
+}
+
 /**
  * GitHub's state paths, after moving any file an older teamrig left in the team's state folder into GitHub's own.
  * It costs one folder listing while nothing is left to move. A file already in GitHub's folder wins over the older

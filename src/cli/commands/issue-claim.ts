@@ -7,6 +7,7 @@ import { labelIssue } from '../../issues/write.ts';
 import { fileLockOf } from '../file-locks.ts';
 import type { Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
+import { githubState } from '../github-state.ts';
 
 /**
  * The claim part of an automatic sync that writes to GitHub (T3021, issues/claim.ts): in each repository it read,
@@ -74,8 +75,8 @@ export function claimBudget(writesPerRun: number): number {
  * unread, or whose read failed, keeps the pass time at its oldest new comment, so the next run reads it.
  */
 export async function recordClaims(runtime: CliRuntime, kit: Kit, config: KitConfig, run: ClaimRun): Promise<ClaimOutcome> {
-  const lock = fileLockOf(runtime, kit.paths.githubSyncLock, config.lock);
-  const before = await lock.run(async (): Promise<ClaimState> => parseClaims((await runtime.files.read(kit.paths.githubClaims)) ?? ''));
+  const lock = fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock);
+  const before = await lock.run(async (): Promise<ClaimState> => parseClaims((await runtime.files.read(githubState(kit.paths).claims)) ?? ''));
   const now = runtime.clock.now();
   const lines: string[] = [];
   const say = (line: string): void => {
@@ -117,7 +118,7 @@ export async function recordClaims(runtime: CliRuntime, kit: Kit, config: KitCon
     // Up to the oldest comment left unread, so the next pass reads it again; past the read ones, which it skips.
     checked.set(repo, held ? since : Math.min(run.started, ...read.later));
   }
-  await lock.run(async () => runtime.files.write(kit.paths.githubClaims, formatClaims({ claims, checked })));
+  await lock.run(async () => runtime.files.write(githubState(kit.paths).claims, formatClaims({ claims, checked })));
   return { lines, writes: run.writes - left };
 }
 
