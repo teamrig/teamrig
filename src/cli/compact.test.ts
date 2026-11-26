@@ -10,6 +10,7 @@ import { EVENT_VERSION } from '../register/events.ts';
 import { layoutPaths } from '../register/layout.ts';
 import { CliHarness, CONFIG_PATH, EVENTS_PATH, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
+import { teamDataOf } from '../testing/team-data.ts';
 import { USAGE } from './run.ts';
 import { EXIT } from './runtime.ts';
 
@@ -30,9 +31,9 @@ async function twoTasks(config: JsonRecord = TEAM): Promise<CliHarness> {
   return kit;
 }
 
-/** Every file's text, to show a run wrote nothing. */
+/** Every file's text but the act log, which keeps a no-op run too, to show a run wrote nothing. */
 function contents(kit: CliHarness): Record<string, string | undefined> {
-  return Object.fromEntries(kit.files.paths().map((path) => [path, kit.files.get(path)]));
+  return Object.fromEntries(teamDataOf(kit.files));
 }
 
 /** A snapshot line as a teamrig that did not parse `evidence` wrote it back: T1's status without it; any other line as it was. */
