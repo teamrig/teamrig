@@ -48,8 +48,8 @@ describe('release.yml', () => {
     assert.match(workflow, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false\n/m);
   });
 
-  it('has the release pull request, build and publish jobs, each stopping within 20 minutes', () => {
-    assert.deepEqual([...jobs.keys()], ['release-please', 'build', 'publish']);
+  it('has the release pull request, build, attest and publish jobs, each stopping within 20 minutes', () => {
+    assert.deepEqual([...jobs.keys()], ['release-please', 'build', 'attest', 'publish']);
     for (const [id, text] of jobs) assert.match(text, /^ {4}timeout-minutes: 20$/m, id);
   });
 
@@ -93,11 +93,30 @@ describe('release.yml', () => {
   it('publishes to the preview branch, started from the release branch, with a read-only token, running no npm package, the commit and version the build took', () => {
     const text = job('publish');
     assert.deepEqual(permissionsOf(text), ['contents: read']);
-    assert.match(text, /^ {4}needs: build\n {4}if: \$\{\{ always\(\) && needs\.build\.result == 'success' \}\}$/m);
+    assert.match(
+      text,
+      /^ {4}needs: \[build, attest\]\n {4}if: \$\{\{ always\(\) && needs\.build\.result == 'success' && needs\.attest\.result == 'success' \}\}$/m,
+    );
     assert.match(text, /^ {10}VERSION: \$\{\{ needs\.build\.outputs\.version \}\}\n {10}SOURCE: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
     assert.doesNotMatch(text, /^ {6}- run: .*\bnp[mx]\b/m);
     assert.match(text, /^ {10}ref: \$\{\{ needs\.build\.outputs\.sha \}\}$/m);
     assert.match(text, /^ {6}- run: node tools\/release\/publish-cli\.ts --version "\$VERSION" --source "\$SOURCE" --branch preview --seed release$/m);
+  });
+
+  it('attests the built integrity list in a job of its own that runs no code but the pinned attest action (T5278 C3)', () => {
+    const text = job('attest');
+    assert.match(text, /^ {4}needs: build\n {4}if: \$\{\{ always\(\) && needs\.build\.result == 'success' \}\}$/m);
+    assert.deepEqual(permissionsOf(text), ['contents: read', 'id-token: write', 'attestations: write']);
+    assert.deepEqual(
+      [...text.matchAll(/^ {6}- (\w+): ([\w./-]+)/gm)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`),
+      ['uses actions/download-artifact', 'uses actions/attest-build-provenance'],
+    );
+    assert.match(text, /^ {10}name: dist\n {10}path: dist$/m);
+    assert.match(text, /^ {10}subject-path: dist\/integrity\.json$/m);
+  });
+
+  it('gives the OIDC token and the attestation write to the attest job alone', () => {
+    for (const [id, text] of jobs) if (id !== 'attest') assert.doesNotMatch(text, /id-token:|attestations:/, id);
   });
 
   it("pushes with the release environment's deploy key, the one actor the release rulesets let through", () => {

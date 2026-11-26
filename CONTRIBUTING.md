@@ -321,7 +321,8 @@ matrix.
   gained a commit the changelog shows, since release-please then rewrites the head; when main gained only commits it
   hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
   merged, the next run tags
-  main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
+  main `teamrig-v<version>` with the notes, builds the dist with a read-only token, signs a build provenance
+  attestation of its `dist/integrity.json` in a job of its own (`teamrig kit update` checks it), and pushes main's commit with
   the dist on top to the `preview` branch, tagged `v<version>` (`tools/release/publish.ts`; its first commit
   descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the
   stable channel (a `git-subdir` source on ref `release`), which only ever moves along `preview`'s chain, so main

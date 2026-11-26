@@ -116,14 +116,37 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  attest:
+    name: attest the integrity list
+    # Signs a build provenance attestation of the built dist/integrity.json, which holds the sha256 of every dist file:
+    # `teamrig kit update` checks it with `gh attestation verify` before it installs a release (T5278 C3), so a
+    # release is one this workflow built from main, not only one a tag names. A job of its own, so the OIDC token and
+    # the attestation write reach one pinned action and never the build's npm tree.
+    needs: build
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/integrity.json
+
   publish:
     name: publish to the preview branch
     # The preview channel installs from the preview branch: main's released commit with the dist built above on top,
     # tagged v<version> (tools/release/publish.ts). Its first commit descends from the release branch, which stable
     # installs read and which only moves along preview's chain (T5133). It runs no npm package, only the repo's own
-    # reviewed code.
-    needs: build
-    if: ${{ always() && needs.build.result == 'success' }}
+    # reviewed code. It waits for the attestation, so no release is published that `kit update` would refuse.
+    needs: [build, attest]
+    if: ${{ always() && needs.build.result == 'success' && needs.attest.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The rulesets let one actor create or move the release and preview branches and a v<version> tag: a deploy key, whose private
