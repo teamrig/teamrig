@@ -110,6 +110,7 @@ describe('the UI idle ticker (T5634)', () => {
       () => ({ teams: ['app'], problems: ['WARN one'] }),
     ];
     const ticker = startUiIdleTicker(runtime, async (passRuntime) => {
+      passRuntime.out.stdout('REOPEN app-bravo, kept off the terminal');
       passRuntime.out.stderr('WARN kept off the terminal');
       return (ticks.shift() ?? (() => ({ teams: [], problems: [] })))();
     });
@@ -124,6 +125,23 @@ describe('the UI idle ticker (T5634)', () => {
     await held.release();
     await ticker.ended;
     assert.equal(held.asked.length, 3, 'a ticker stopped during its wait runs no tick after it');
+  });
+
+  it('goes on to its next tick when a tick cannot be written', async () => {
+    const kit = new CliHarness(TEAM);
+    const held = new HeldSleep();
+    const files = new FaultyFiles(kit.files).fail('write', PATH, systemError('EACCES'));
+    let runs = 0;
+    const ticker = startUiIdleTicker(kit.runtime({ idleSleep: held.sleep, files }), async () => {
+      runs += 1;
+      return { teams: [], problems: [] };
+    });
+    await held.release();
+    await held.release();
+    ticker.stop();
+    await held.release();
+    await ticker.ended;
+    assert.deepEqual([runs, kit.files.get(PATH)], [2, undefined]);
   });
 
   it('runs no tick once stopped before its first wait ends', async () => {
