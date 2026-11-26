@@ -40,7 +40,10 @@ While the plugin is enabled, its `bin/` folder is on the PATH of Claude Code's B
 multi-line `--description`, reaches teamrig whole from all three, although cmd.exe alone would cut it at the break
 ([the refusal when it cannot](errors.md#usage-errors-exit-64)). For your own terminals, outside Claude Code, the first
 session start after an install or update writes `teamrig.mjs`, `teamrig` and on Windows `teamrig.cmd` to `~/.teamrig/bin`,
-which find the installed plugin on each run, and adds that folder at the end of your user PATH, so a program you put
+which run the kit home's current version (the one `teamrig kit versions` marks `current`) once its files match the
+list it was installed with, and refuse with `teamrig files changed: <paths>` (or `no teamrig installed`, `install
+record changed`, `teamrig files moved`) when they do not: a hook it runs is then blocked, except the ones that only
+add context, so `teamrig kit use <version>` from a session's own shell, naming a kept version, sets it right. The start also adds that folder at the end of your user PATH, so a program you put
 there first keeps its place: on Windows the `Path` value of
 `HKCU\Environment`, elsewhere a marked block in `~/.profile`, and in `~/.bash_profile`, `~/.bashrc` and `~/.zshrc`
 where they exist (`~/.zshrc` always on macOS). A terminal opened before that keeps its old PATH: open a new one. The
