@@ -2056,7 +2056,7 @@ the CLI loads, so the guard entry is no second way into the CLI's commands.
 
 A set runs its guards side by side in one process, on one load of the CLI and the team config, where each guard once
 started its own Node.js and loaded the CLI again: a shell line ran nine guard processes, now two (the set and
-`picker-guard`). The set answers as Claude Code combines separate hooks: any guard's refusal refuses the call, with
+`picker-guard`). The set answers as the host combines separate hooks: any guard's refusal refuses the call, with
 every refusing guard's reason; else any allow; and every guard's notes are kept. A guard of the set that throws
 refuses the call, naming it (`its <name> guard crashed (...)`), whatever the others said; the 12 seconds are the
 set's, and its block line names every guard in it (`its guards push-guard, ... and service-role-guard gave no
