@@ -4,9 +4,10 @@
  * with an optional field a declaration may use (0.2.0: `steps` and `terms`; 0.3.0: a tracker's `search` and a
  * thread's `title`; 0.4.0: a usage meter's `transcriptWeekReading`; 0.5.0: a session launcher's
  * `restrictionReading`; 0.6.0: a host's paths may answer undefined for a place the host does not have; 0.7.0: a
- * tracker's `reopen`), which a teamrig of the same major but an older minor leaves unread.
+ * tracker's `reopen`; 0.8.0: a hook bridge's `unreadable`), which a teamrig of the same major but an older minor
+ * leaves unread.
  */
-export const API_VERSION = '0.7.0';
+export const API_VERSION = '0.8.0';
 
 const SEMVER = /^(\d+)\.\d+\.\d+$/;
 

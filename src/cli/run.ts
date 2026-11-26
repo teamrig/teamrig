@@ -10,6 +10,7 @@ import { CommandHelp } from './help.ts';
 import { parseArgs, UsageError, type CommandEffect, type CommandEffects, type CommandFlags, type CommandRest, type CommandSwitches, type ParsedArgs } from './args.ts';
 import { RENAMED } from './renamed.ts';
 import { EXIT, RefusedError, type CliRuntime, type ProcessExit } from './runtime.ts';
+import { guardInputGate } from './hook-input-gate.ts';
 import { hookLockDeadline } from './hook-timeouts.ts';
 import { chooseHost, UnlistedHostError } from './host-choice.ts';
 import type { CommandTable } from '../slash/plan.ts';
@@ -1483,7 +1484,11 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     const command = await spec.load();
     const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
     const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
-    return await command(args, args.hostEvent === undefined ? hookRuntime : { ...hookRuntime, hostEvent: args.hostEvent });
+    if (args.hostEvent === undefined) {
+      return await command(args, hookRuntime);
+    }
+    const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
+    return gated === undefined ? EXIT.ok : await command(args, gated);
   } catch (error) {
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));

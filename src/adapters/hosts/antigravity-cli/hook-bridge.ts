@@ -80,8 +80,10 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape, hostName: string | u
     // No prompt antigravity-cli submits of its own is known to reach the prompt hook.
     hostPrompt: false,
     lastReply: undefined,
-    // `continuationActive` comes from Antigravity 2.0's hooks docs; antigravity-cli may omit it or send `fullyIdle`.
-    stopActive: payload['continuationActive'] === true,
+    // agy's hooks page gives every Stop `fullyIdle`; one that is not fully idle may be one a hook continued, so it
+    // counts as active and a second block cannot loop. `continuationActive` comes from Antigravity 2.0's docs. Both
+    // unproven until a live agy run; a wrong reading here costs one missed block, never a loop.
+    stopActive: payload['continuationActive'] === true || payload['fullyIdle'] === false,
     source: undefined,
     reason: stringField(payload, 'terminationReason'),
     trigger: undefined,
@@ -184,7 +186,8 @@ function replyText(on: HookEventName, reply: HookReply): string {
  *
  * agy's input does not name its event, so the hook's command line does (`--host-event`, written by the hooks file):
  * that event wins, and the input must then fit the shape agy's hooks page gives it, or the bridge reads no event, as
- * it does for text that is no JSON object, rather than act on a misread input. A line with no `--host-event` falls
+ * it does for text that is no JSON object, rather than act on a misread input; `unreadable` names why, so a guard
+ * hook refuses that call rather than pass it (hook-input-gate.ts, T5574). A line with no `--host-event` falls
  * back to a `hookEventName` field in the input, unchecked, until a live agy run shows whether any build sends one.
  */
 export function hookBridge(shape: ToolCallShape): HookBridge {
@@ -198,6 +201,14 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
         return eventOf(value, shape, stringField(value, 'hookEventName'));
       }
       return checkHookInput(hostEvent, value).ok ? eventOf(value, shape, hostEvent) : undefined;
+    },
+    unreadable: (raw, hostEvent) => {
+      const value = parsed(raw);
+      if (!isRecord(value)) {
+        return `the ${hostEvent} hook input is no JSON object`;
+      }
+      const check = checkHookInput(hostEvent, value);
+      return check.ok ? undefined : check.reason;
     },
     reply: replyText,
     titleSwitch: undefined,
