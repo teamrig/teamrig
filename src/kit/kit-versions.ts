@@ -583,6 +583,7 @@ async function prunedUnderLock(ports: KitPorts): Promise<KitPruned> {
   }
   return { kind: 'pruned', removed, leftovers, failed };
 }
+
 /**
  * What `teamrig kit uninstall` removes from the kit home: the launcher every hook line and the CLI on PATH run, the
  * records naming the version in use, and the folder of every kept version. Teams, backups and the install clone stay.
