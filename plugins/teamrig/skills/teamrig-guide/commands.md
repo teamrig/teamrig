@@ -3106,7 +3106,10 @@ until its reader ends.
 
 A refusal is `read`'s: one `REFUSED` line on stderr with exit 2, before any frame. The follower ends with exit 0
 once the program that started it is gone, or once that program reads its stdout no more, which is seen at the next
-frame's write. It writes no file, marks nothing read and takes no lock. It keeps the team, sessions and paths it
+frame's write. It also ends with exit 0 once an update makes a newer teamrig current, with one stderr line such as
+`ENDED teamrig 0.512.0 is installed, and this follower ran 0.511.0; start it again`: start it again from the CLI you
+find then. A newer version already current when it started ends nothing. It writes no file, marks nothing read and
+takes no lock. It keeps the team, sessions and paths it
 started with: start it again after the team config changed (every followed document is then named in one frame).
 
 Flags:
