@@ -4,7 +4,16 @@ import { describe, it } from 'node:test';
 import { challengeDigest } from './challenge.ts';
 import { PROOF_DOMAIN, type OwnerProofChallenge } from './challenge-shape.ts';
 import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
-import { ISSUED_AT_SKEW_MS, actDigest, verifyProof, type ActBinding, type NonceState, type ProofCheck } from './verify.ts';
+import {
+  ISSUED_AT_SKEW_MS,
+  actDigest,
+  verifyProof,
+  verifyRecordedProof,
+  type ActBinding,
+  type NonceState,
+  type ProofCheck,
+  type RecordedProofCheck,
+} from './verify.ts';
 
 interface TestKey {
   readonly pin: PinnedKey;
@@ -164,5 +173,66 @@ describe('verifyProof', () => {
   it('refuses an RSA pin under 2048 bits, even with a good signature, so a pin past the config check still fails (T5792)', () => {
     assert.deepEqual(verifyProof(check(rsaKey('key-rsa-1024', 1024))), { ok: false, reason: 'bad-signature' });
     assert.deepEqual(verifyProof(check(rsaKey('key-rsa-2040', 2040))), { ok: false, reason: 'bad-signature' });
+  });
+});
+
+const spent: NonceState = { kind: 'used', actDigest: actDigest(binding), spentBy: 'ev-decided-1' };
+
+function recorded(key: TestKey, overrides: Partial<RecordedProofCheck> = {}, challengeOverrides: Partial<OwnerProofChallenge> = {}): RecordedProofCheck {
+  const challenge = challengeFor(key.pin.keyId, challengeOverrides);
+  return {
+    challenge,
+    signature: key.sign(challengeDigest(challenge)),
+    pins: [key.pin],
+    expected: binding,
+    nonce: spent,
+    decidedId: 'ev-decided-1',
+    ...overrides,
+  };
+}
+
+describe('verifyRecordedProof', () => {
+  it('passes the proof its own Decided event spent, for each scheme', () => {
+    for (const key of [rsa, ecKey('key-ec'), edKey('key-ed')]) {
+      assert.deepEqual(verifyRecordedProof(recorded(key)), { ok: true, keyId: key.pin.keyId });
+    }
+  });
+
+  it('refuses the same signature on a second Decided event', () => {
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { decidedId: 'ev-decided-2' })), { ok: false, reason: 'nonce-spent-by-other' });
+  });
+
+  it('refuses the same signature on another task, and on a head other than the one it was signed for', () => {
+    const otherTask: ActBinding = { ...binding, act: ['merge', 'T13'] };
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { expected: otherTask })), { ok: false, reason: 'other-act' });
+    const otherHead: ActBinding = { ...binding, commit: 'e'.repeat(40) };
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { expected: otherHead })), { ok: false, reason: 'other-act' });
+  });
+
+  it('refuses a nonce never issued, one never spent, and one spent for another act', () => {
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { nonce: { kind: 'unknown' } })), { ok: false, reason: 'nonce-unknown' });
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { nonce: issued })), { ok: false, reason: 'nonce-unspent' });
+    const otherAct: NonceState = { ...spent, actDigest: actDigest({ ...binding, act: ['merge', 'T13'] }) };
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { nonce: otherAct })), { ok: false, reason: 'nonce-other-act' });
+  });
+
+  it('takes no clock: a proof long expired still approves the act its event recorded', () => {
+    const check = recorded(rsa, {}, { issuedAt: '2026-01-01T00:00:00.000Z', expires: '2026-01-01T00:05:00.000Z' });
+    assert.equal(verifyRecordedProof(check).ok, true);
+  });
+
+  it('refuses times out of form and a lifetime past the ceiling', () => {
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, {}, { issuedAt: 'yesterday' })), { ok: false, reason: 'bad-times' });
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, {}, { expires: '2026-11-26T07:00:00.000Z' })), { ok: false, reason: 'bad-times' });
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, {}, { expires: '2026-11-26T07:10:00.001Z' })), { ok: false, reason: 'lifetime-too-long' });
+  });
+
+  it('refuses a key no pin holds, a changed signature, and a pin of another scheme', () => {
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { pins: [] })), { ok: false, reason: 'unknown-key' });
+    const signed = recorded(rsa);
+    const flipped = Buffer.from(signed.signature);
+    flipped[0] = (flipped[0] ?? 0) ^ 1;
+    assert.deepEqual(verifyRecordedProof({ ...signed, signature: flipped }), { ok: false, reason: 'bad-signature' });
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { pins: [{ ...rsa.pin, algorithm: 'ed25519' }] })), { ok: false, reason: 'bad-signature' });
   });
 });

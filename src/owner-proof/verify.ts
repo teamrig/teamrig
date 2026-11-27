@@ -28,6 +28,8 @@ export type ProofRefusal =
   | 'other-act'
   | 'nonce-unknown'
   | 'nonce-used'
+  | 'nonce-unspent'
+  | 'nonce-spent-by-other'
   | 'nonce-other-act'
   | 'expired'
   | 'issued-in-future'
@@ -106,23 +108,45 @@ function signatureHolds(pin: PinnedKey, data: Buffer, signature: Buffer): boolea
   }
 }
 
+/** A challenge's times as instants, once both are in form and it expires after it was issued. */
+interface Lifetime {
+  readonly issuedAt: number;
+  readonly expires: number;
+}
+
 /**
- * Why the challenge's times refuse it, if they do. A time out of form or a lifetime of zero or less refuses it here
- * too, not only in parseChallenge, so a challenge built in code fails closed: NaN would pass every compare below.
+ * The challenge's lifetime, or why its times refuse it whatever the clock reads. A time out of form or a lifetime of
+ * zero or less refuses it here too, not only in parseChallenge, so a challenge built in code fails closed: NaN would
+ * pass every compare.
  */
-function timeRefusal(challenge: OwnerProofChallenge, now: number): ProofRefusal | undefined {
+function lifetimeOf(challenge: OwnerProofChallenge): Lifetime | ProofRefusal {
   const issuedAt = instantOf(challenge.issuedAt);
   const expires = instantOf(challenge.expires);
-  if (issuedAt === undefined || expires === undefined || expires <= issuedAt || !Number.isFinite(now)) return 'bad-times';
-  if (issuedAt > now + ISSUED_AT_SKEW_MS) return 'issued-in-future';
-  if (expires - issuedAt > MAX_LIFETIME_MS) return 'lifetime-too-long';
-  return now >= expires ? 'expired' : undefined;
+  if (issuedAt === undefined || expires === undefined || expires <= issuedAt) return 'bad-times';
+  return expires - issuedAt > MAX_LIFETIME_MS ? 'lifetime-too-long' : { issuedAt, expires };
+}
+
+/** Why the challenge's times refuse it now, if they do: lifetimeOf's refusals, then a future issuedAt or an expiry. */
+function timeRefusal(challenge: OwnerProofChallenge, now: number): ProofRefusal | undefined {
+  const lifetime = lifetimeOf(challenge);
+  if (typeof lifetime === 'string') return lifetime;
+  if (!Number.isFinite(now)) return 'bad-times';
+  if (lifetime.issuedAt > now + ISSUED_AT_SKEW_MS) return 'issued-in-future';
+  return now >= lifetime.expires ? 'expired' : undefined;
 }
 
 function nonceRefusal(nonce: NonceState, expected: ActBinding): ProofRefusal | undefined {
   if (nonce.kind === 'unknown') return 'nonce-unknown';
   if (nonce.kind === 'used') return 'nonce-used';
   return nonce.actDigest === actDigest(expected) ? undefined : 'nonce-other-act';
+}
+
+/** Why a recorded proof's nonce refuses it: it must have been spent, for this act, by this one Decided event. */
+function spentRefusal(nonce: NonceState, expected: ActBinding, decidedId: string): ProofRefusal | undefined {
+  if (nonce.kind === 'unknown') return 'nonce-unknown';
+  if (nonce.kind === 'issued') return 'nonce-unspent';
+  if (nonce.actDigest !== actDigest(expected)) return 'nonce-other-act';
+  return nonce.spentBy === decidedId ? undefined : 'nonce-spent-by-other';
 }
 
 /**
@@ -136,6 +160,37 @@ export function verifyProof(check: ProofCheck): ProofVerdict {
   if (pin === undefined) return { ok: false, reason: 'unknown-key' };
   if (!sameAct(check.challenge, check.expected)) return { ok: false, reason: 'other-act' };
   const refusal = nonceRefusal(check.nonce, check.expected) ?? timeRefusal(check.challenge, check.now);
+  if (refusal !== undefined) return { ok: false, reason: refusal };
+  if (!signatureHolds(pin, challengeDigest(check.challenge), check.signature)) return { ok: false, reason: 'bad-signature' };
+  return { ok: true, keyId: pin.keyId };
+}
+
+/** A proof a Decided event recorded, checked again when the act it approved runs. */
+export interface RecordedProofCheck {
+  readonly challenge: OwnerProofChallenge;
+  readonly signature: Buffer;
+  readonly pins: readonly PinnedKey[];
+  /** Rebuilt from the act about to run (its argv, the card, the head it will merge or deploy), never from the event. */
+  readonly expected: ActBinding;
+  /** The ledger's state of the challenge's nonce, read without spending it. */
+  readonly nonce: NonceState;
+  /** The id of the Decided event that recorded the proof. */
+  readonly decidedId: string;
+}
+
+/**
+ * Whether a proof a Decided event recorded still approves the act about to run (T4758 security read, O4): the key is
+ * pinned and verified by the pin's algorithm; the challenge names this act; its nonce was spent, for this act, by
+ * this Decided event and no other, so one signature never serves a second event or another task; its times are in
+ * form and within the lifetime ceiling; and the signature holds. Expiry is not checked: the act may run long after
+ * the owner signed. This is its own check, never verifyProof with the nonce check turned off.
+ */
+export function verifyRecordedProof(check: RecordedProofCheck): ProofVerdict {
+  const pin = check.pins.find((candidate) => candidate.keyId === check.challenge.keyId);
+  if (pin === undefined) return { ok: false, reason: 'unknown-key' };
+  if (!sameAct(check.challenge, check.expected)) return { ok: false, reason: 'other-act' };
+  const lifetime = lifetimeOf(check.challenge);
+  const refusal = spentRefusal(check.nonce, check.expected, check.decidedId) ?? (typeof lifetime === 'string' ? lifetime : undefined);
   if (refusal !== undefined) return { ok: false, reason: refusal };
   if (!signatureHolds(pin, challengeDigest(check.challenge), check.signature)) return { ok: false, reason: 'bad-signature' };
   return { ok: true, keyId: pin.keyId };
