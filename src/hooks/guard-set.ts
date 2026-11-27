@@ -54,10 +54,16 @@ function firstOf<K extends 'tabTitle' | 'sessionTitle' | 'toolOutput'>(replies: 
 
 /** The set's one reply; undefined when every guard let the call go with nothing to say. */
 export function combinedGuardReply(answers: readonly GuardAnswer[]): HookReply | undefined {
-  const replies = answers.flatMap((answer) => {
-    const reply = replyOf(answer);
-    return reply === undefined ? [] : [reply];
-  });
+  return combinedReply(answers.map(replyOf));
+}
+
+/**
+ * The one reply for the replies of hooks run on the same call, in their order, as the host combines separate hooks'
+ * (a missing reply is a hook with nothing to say); undefined when none says anything. `hook after` (T5821) combines
+ * its PostToolUse members' with it too.
+ */
+export function combinedReply(answered: readonly (HookReply | undefined)[]): HookReply | undefined {
+  const replies = answered.flatMap((reply) => (reply === undefined ? [] : [reply]));
   if (replies.length === 0) {
     return undefined;
   }

@@ -2,9 +2,10 @@ import { errorMessage } from '../../core/guards.ts';
 import { combinedGuardReply, type GuardAnswer } from '../../hooks/guard-set.ts';
 import { passRecordGuardReply } from '../../hooks/pass-record-guard.ts';
 import type { HookEvent, HookReply } from '../../ports/host/index.ts';
-import { somePositionals, UsageError, type ParsedArgs } from '../args.ts';
+import type { ParsedArgs } from '../args.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { guardLoadOf, type GuardLoad } from './hook-guard-load.ts';
+import { membersNamed } from './hook-set-names.ts';
 import { dbWriteGuardReplyOf, execGuardReplyOf, installGuardReplyOf, packageGuardReplyOf, pushGuardReplyOf, secretGuardReplyOf, serviceRoleGuardReplyOf } from './hook-guard-outputs.ts';
 import { readHookInput, writeReply } from './hook-input.ts';
 import { pickerGuardReplyOf } from './hook-picker-guard.ts';
@@ -60,22 +61,6 @@ export function setMembersOf(deps: GuardSetDeps): ReadonlyMap<string, SetMember>
   ]);
 }
 
-/** The members the command line names, in its order, each once; a name of no set member is a usage error. */
-function membersNamed(args: ParsedArgs, members: ReadonlyMap<string, SetMember>): readonly (readonly [string, SetMember])[] {
-  const names = somePositionals(args, 'guard');
-  const unknown = names.find((name) => !members.has(name));
-  if (unknown !== undefined) {
-    throw new UsageError(`no guard named "${unknown}" runs in a set; the set's guards are ${[...members.keys()].join(', ')}`);
-  }
-  if (new Set(names).size !== names.length) {
-    throw new UsageError('a guard is named twice');
-  }
-  return names.flatMap((name) => {
-    const member = members.get(name);
-    return member === undefined ? [] : [[name, member] as const];
-  });
-}
-
 /**
  * One member's answer: what it replied, or why it could not, a throw caught so the other members still answer. A
  * `pass` member's throw is no answer.
@@ -102,7 +87,7 @@ export function guardSet(deps: GuardSetDeps): (args: ParsedArgs, runtime: CliRun
 /** The set over the given members, for a spec of a member's failure mode; `guardSet` gives it the shipped ones. */
 export function guardSetOf(members: ReadonlyMap<string, SetMember>): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
   return async (args, runtime) => {
-    const named = membersNamed(args, members);
+    const named = membersNamed(args, members, 'guard');
     const { event } = await readHookInput(runtime);
     const guard = await guardLoadOf(event?.cwd, runtime);
     if (guard === undefined || event === undefined) {
