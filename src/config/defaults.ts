@@ -385,6 +385,7 @@ export const DEFAULT_REFRESH: RefreshConfig = {
   countdownSeconds: 20,
   compactCeilingTokens: 185_000,
   handoverMaxBytes: 20_000,
+  handoverWarnBytes: 10_000,
   endCommand: [],
 };
 

@@ -1527,6 +1527,12 @@ export interface RefreshConfig {
    */
   readonly handoverMaxBytes: number;
   /**
+   * A handover past this many bytes is still taken, with a note that it should move its how-tos to skills and its code
+   * map to a reference file, and `teamrig doctor` names its session: so a handover is cut before it reaches the cap.
+   * 0: no warning.
+   */
+  readonly handoverWarnBytes: number;
+  /**
    * A program (its path, then its arguments) run after an automatic restart ended a session, given Claude
    * Code's SessionEnd hook input (reason `clear`) on stdin: for a SessionEnd hook the end skipped, since on
    * Windows a process is ended without running them. Empty: none.

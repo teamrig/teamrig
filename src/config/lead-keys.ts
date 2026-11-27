@@ -51,7 +51,7 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'focus.leaderWaitMinutes', 'focus.parkAfterDays', 'focus.plannedTargetPct', 'focus.improvementsDay',
   'refresh.enabled', 'refresh.contextTokens', 'refresh.everyTasks', 'refresh.everyTasksMinTokens', 'refresh.tabTitle',
   'refresh.restartDelaySeconds', 'refresh.holdAfterActivityMinutes', 'refresh.countdownSeconds',
-  'refresh.compactCeilingTokens', 'refresh.handoverMaxBytes',
+  'refresh.compactCeilingTokens', 'refresh.handoverMaxBytes', 'refresh.handoverWarnBytes',
   'hiring.reviewDays', 'hiring.resumeMaxTokens', 'hiring.resumeMaxIdleDays', 'hiring.scaleOut.windowDays',
   'hiring.scaleOut.minDone', 'hiring.scaleOut.topPriorities',
 ]);
