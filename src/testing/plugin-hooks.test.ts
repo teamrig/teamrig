@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { hookMatches, hookNamesOf, pluginHooks, wiredHooks, type WiredHook } from './plugin-hooks.ts';
+import { hookMatches, hookNamesOf, isHookSet, pluginHooks, wiredHooks, type WiredHook } from './plugin-hooks.ts';
 
 function command(...words: readonly string[]): Readonly<Record<string, unknown>> {
   return { type: 'command', command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js', ...words], timeout: 15 };
@@ -99,6 +99,14 @@ describe('hookNamesOf', () => {
     assert.deepEqual(hookNamesOf(wired(['hook', 'guards', 'push-guard'])), ['push-guard']);
     assert.deepEqual(hookNamesOf(wired(['hook', 'picker-guard', '--host', 'claude-code'])), ['picker-guard']);
   });
+
+  it('names each hook of a `hook after` set the same way, and tells a set from a lone hook (T5821)', () => {
+    const wired = (argv: readonly string[]): WiredHook => ({ event: 'PostToolUse', matcher: 'Bash', argv });
+    assert.deepEqual(hookNamesOf(wired(['hook', 'after', 'secret-redact', 'loop-nudge', '--host', 'claude-code'])), ['secret-redact', 'loop-nudge']);
+    assert.equal(isHookSet(wired(['hook', 'after', 'loop-nudge'])), true);
+    assert.equal(isHookSet(wired(['hook', 'guards', 'push-guard'])), true);
+    assert.equal(isHookSet(wired(['hook', 'loop-nudge', '--host', 'claude-code'])), false);
+  });
 });
 
 describe('pluginHooks', () => {
@@ -114,7 +122,7 @@ describe('pluginHooks', () => {
       for (const name of names) {
         assert.match(name, /^[a-z][a-z-]+$/, event);
       }
-      assert.deepEqual(argv.slice(argv[1] === 'guards' ? 2 + names.length : 2), ['--host', 'claude-code'], event);
+      assert.deepEqual(argv.slice(isHookSet(wired) ? 2 + names.length : 2), ['--host', 'claude-code'], event);
     }
   });
 
@@ -124,6 +132,30 @@ describe('pluginHooks', () => {
       bash.map(({ argv }) => argv[1]),
       ['guards'],
     );
+  });
+
+  it('wires the PostToolUse hooks of each tool as one set beside tool-end (T5821)', () => {
+    const after = (tool: string): readonly (readonly string[])[] =>
+      hooks.filter((wired) => hookMatches(wired, { hook_event_name: 'PostToolUse', tool_name: tool })).map(hookNamesOf);
+    assert.deepEqual(after('Bash'), [['secret-redact', 'loop-nudge', 'missing-cli'], ['tool-end']]);
+    assert.deepEqual(after('PowerShell'), [['secret-redact', 'loop-nudge', 'missing-cli'], ['tool-end']]);
+    assert.deepEqual(after('Read'), [['secret-redact', 'loop-nudge'], ['tool-end']]);
+    assert.deepEqual(after('Glob'), [['loop-nudge'], ['tool-end']]);
+    assert.deepEqual(after('SendMessage'), [['failed-send', 'route-reminder'], ['tool-end']]);
+  });
+
+  it('starts at most one process per tool call and event besides tool-end and tab-status (T5553 review, T5821)', () => {
+    // tool-end runs on every tool and tab-status on a few: folding either into a matched set would need a matcher
+    // of "every tool but these", which the Codex and Antigravity hooks files built from this one cannot translate.
+    const apart = new Set(['tool-end', 'tab-status']);
+    const toolEvents = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest'];
+    for (const event of toolEvents) {
+      const named = hooks.filter((wired) => wired.event === event).flatMap((wired) => (wired.matcher ?? '').split('|'));
+      for (const tool of new Set([...named.filter((name) => name !== '' && name !== '*'), 'SomeToolNoMatcherNames'])) {
+        const processes = hooks.filter((wired) => hookMatches(wired, { hook_event_name: event, tool_name: tool }) && !hookNamesOf(wired).some((name) => apart.has(name)));
+        assert.ok(processes.length <= 1, `${event} on ${tool} starts ${processes.length}: ${processes.map(({ argv }) => argv.join(' ')).join('; ')}`);
+      }
+    }
   });
 
   it('holds only matchers it can decide', () => {

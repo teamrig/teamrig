@@ -115,7 +115,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
   it('runs each hook through the kit launcher, naming its entry and its event, with no plugin folder or variable left', () => {
     for (const [event, groups] of Object.entries(file.hooks)) {
       for (const handler of groups.flatMap((group) => group.hooks)) {
-        const line = new RegExp(`^node /srv/a/\\.teamrig/bin/teamrig\\.mjs --launcher-entry (?:guard-)?main --launcher-event ${event} hook (?:guards(?: [a-z-]+)+|[a-z-]+) --host codex-cli$`, 'u');
+        const line = new RegExp(`^node /srv/a/\\.teamrig/bin/teamrig\\.mjs --launcher-entry (?:guard-)?main --launcher-event ${event} hook (?:(?:guards|after)(?: [a-z-]+)+|[a-z-]+) --host codex-cli$`, 'u');
         assert.match(handler.command, line);
         assert.equal(handler.commandWindows, handler.command);
       }

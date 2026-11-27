@@ -40,7 +40,8 @@ async function manifestLimits(): Promise<Map<string, number>> {
 describe('HOOK_TIMEOUT_MS (#737)', () => {
   it("holds the limit hooks.json gives each hook it runs, a guard's being the runner's", async () => {
     const limits = await manifestLimits();
-    assert.ok(limits.size > 20, 'hooks.json was read');
+    // Named hooks, not a count: sets (`hook guards`, `hook after`) fold many hooks into one entry (T5821).
+    assert.ok(limits.has('session-start') && limits.has('guards') && limits.has('after'), 'hooks.json was read');
     for (const [name, limit] of limits) {
       assert.equal(HOOK_TIMEOUT_MS[name], limit, `hook ${name}`);
     }

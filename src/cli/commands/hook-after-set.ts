@@ -15,6 +15,9 @@ import { membersNamed } from './hook-set-names.ts';
  * answer; none of them can refuse anything after the call has run.
  */
 
+/** The word after `hook` that names this set, as guard-runner.ts's GUARD_SET_HOOK names the guard set. */
+export const AFTER_SET_HOOK = 'after';
+
 /** One member's reply to the call, built as its own `hook <name>` builds it. */
 export type AfterMember = (runtime: CliRuntime, event: HookEvent) => Promise<HookReply | undefined> | HookReply | undefined;
 
