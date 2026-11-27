@@ -1,18 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { dirname } from 'node:path';
 import { isRecord, type JsonRecord } from '../../core/guards.ts';
 import { inboxLineOf } from '../../inbox/inbox.ts';
 import { DOCUMENTS, INTERFACE_VERSION } from '../../interface/index.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { CliHarness, CONFIG_PATH, type CliResult } from '../../testing/cli-harness.ts';
+import { FakeFolderSignals } from '../../testing/fake-folder-signals.ts';
 import { FakeStarterWatch } from '../../testing/fake-starter-watch.ts';
 import { FaultyFiles, systemError } from '../../testing/faulty-files.ts';
+import { normalisePath } from '../../testing/memory-files.ts';
 import { served } from '../../testing/read-answers.ts';
 import { teamInboxOf } from '../../testing/team-tree.ts';
 import { WatchedFiles } from '../../testing/watched-files.ts';
 import type { Sleep } from '../../core/lock.ts';
 import { EXIT } from '../runtime.ts';
-import { EVENTS_PASS_MS } from './events.ts';
+import { EVENTS_FALLBACK_MS, EVENTS_PASS_MS } from './events.ts';
 
 const EVENTS = ['events', '--json', '--session', 'alpha'] as const;
 const ALPHA_INBOX = teamInboxOf('app', 'alpha');
@@ -209,6 +212,103 @@ describe('teamrig events', () => {
     const [hello] = framesOf(await kit.run([...EVENTS, '--documents', 'stats', '--range', '30d'], { starters, sleep }));
     const read = served(await kit.run(['read', 'stats', '--json', '--range', '30d', '--session', 'alpha']))['revision'];
     assert.equal(revisionIn(hello, 'stats'), read);
+  });
+
+  describe('with folders it can watch (T5758)', () => {
+    // The platform's dirname, as the recorder's: the path is joined with the platform's separator.
+    const INBOX_FOLDER = dirname(ALPHA_INBOX);
+    const quiet: Step = () => undefined;
+
+    /** `waits`, each wait moving the kit's clock by what it asked first, as a real wait does. */
+    function timedWaits(kit: CliHarness, starters: FakeStarterWatch, steps: readonly Step[]): { readonly sleep: Sleep; readonly asked: number[] } {
+      const inner = waits(starters, steps);
+      const sleep: Sleep = async (ms) => {
+        kit.clock.advance(ms);
+        await inner.sleep(ms);
+      };
+      return { sleep, asked: inner.asked };
+    }
+
+    it('takes no look while nothing changes, after the one look that follows the watch it opened', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const files = new WatchedFiles(kit.files);
+      const seen: number[] = [];
+      // Read while the follower runs: its watch is closed once it ends.
+      let watched: string[] = [];
+      const steps = Array.from({ length: 10 }, (): Step => () => {
+        seen.push(files.touched().length);
+        watched = signals.watched();
+      });
+      const { sleep, asked } = timedWaits(kit, starters, steps);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, files, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => frame['event']), ['hello']);
+      const [first = 0, second = 0, ...rest] = seen;
+      assert.ok(second > first, 'the wait after the watch opened looks once');
+      assert.deepEqual(rest, rest.map(() => second), 'no look while nothing changed');
+      assert.ok(asked.every((ms) => ms === EVENTS_PASS_MS));
+      assert.equal(signals.watchCount, 1);
+      assert.ok(watched.includes(normalisePath(INBOX_FOLDER)), watched.join(', '));
+    });
+
+    it('looks at the wait after a watched folder tells of a change, and names what moved', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const changed: Step = async () => {
+        await post(kit, 'one');
+        signals.change(INBOX_FOLDER);
+      };
+      const { sleep } = timedWaits(kit, starters, [quiet, quiet, changed, quiet]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => namedIn(frame)), [['tasks', 'inbox'], ['inbox']]);
+    });
+
+    // The look after the watch opened is at 1 s; the change at 2 s goes untold, so the next look is the fallback's.
+    const fallbackWait = EVENTS_FALLBACK_MS / EVENTS_PASS_MS;
+    for (const [what, waitsRun, events] of [
+      ['not before the fallback is due', fallbackWait, ['hello']],
+      ['at the look the fallback is due', fallbackWait + 1, ['hello', 'changed']],
+    ] as const) {
+      it(`names a change no folder told of ${what}`, async () => {
+        const kit = new CliHarness();
+        const starters = new FakeStarterWatch();
+        const signals = new FakeFolderSignals();
+        const steps = Array.from({ length: waitsRun }, (_, index): Step => (index === 1 ? () => post(kit, 'untold') : quiet));
+        const { sleep } = timedWaits(kit, starters, steps);
+        const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+        assert.deepEqual(frames.map((frame) => frame['event']), events);
+      });
+    }
+
+    it('looks every second while a folder it reads cannot be watched', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals((folder) => folder !== INBOX_FOLDER);
+      const { sleep } = timedWaits(kit, starters, [quiet, quiet, () => post(kit, 'one'), () => post(kit, 'two')]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => namedIn(frame)), [['tasks', 'inbox'], ['inbox'], ['inbox']]);
+    });
+
+    it('goes back to a look every second once a watch ends with an error', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const { sleep } = timedWaits(kit, starters, [quiet, () => signals.fail(INBOX_FOLDER), quiet, () => post(kit, 'one')]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => frame['event']), ['hello', 'changed']);
+    });
+
+    it('closes its watch once its starter ends', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const { sleep } = timedWaits(kit, starters, [quiet]);
+      framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+      assert.equal(signals.watchCount, 1);
+      assert.equal(signals.openWatches, 0);
+    });
   });
 
   it('keeps the scope it opened: a config edit moves every revision and ends no run', async () => {

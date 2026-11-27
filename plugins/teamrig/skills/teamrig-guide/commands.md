@@ -3096,8 +3096,9 @@ until its reader ends.
 - The first frame is `hello`: `{ "interface", "event": "hello", "documents": [{ "document", "revision" }] }`, every
   followed document with the revision `teamrig read` answers for it now.
 - Then a `changed` frame each time a revision moved, naming only the documents that moved, with their new revision.
-  The files are looked at once a second, so every change inside a second is one frame, and a second with no change
-  sends nothing.
+  The follower watches the folders of the files it reads and looks at the files at most once a second, only after a
+  folder told of a change, every second while a folder cannot be watched, and at least every 30 seconds for a change
+  the system did not tell of. Every change inside one second is one frame, and a look with no change sends nothing.
 - A frame holds documents and revisions and no text of the team's: run `teamrig read <document> --json --unless
   <document>=<revision you hold>` for what changed. A `revision` of `null` means the document's files could not be
   looked at; read it to be told why.

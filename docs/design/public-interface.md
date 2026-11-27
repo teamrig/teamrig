@@ -211,8 +211,9 @@ A tool that shows the team learns that something changed from events, then reads
 starts and reads: its stdout is a pipe only that tool holds, so no address is opened and no token is needed. Its
 frames are `hello` (every followed document with its revision) and `changed` (the documents whose revision moved),
 which is less than ids and statuses: a frame names documents and revisions, and the tool reads the document with
-`teamrig read --unless` to learn what changed. It looks at the documents' files once a second and sends at most one
-frame a look. The named pipe or socket, for a tool that cannot keep a child process, and frames that name a task or
+`teamrig read --unless` to learn what changed. It watches the folders of the documents' files and looks at the files
+at most once a second, only after a folder told of a change (every second while one cannot be watched, and at least
+every 30 seconds for a change the system did not tell of), and sends at most one frame a look. The named pipe or socket, for a tool that cannot keep a child process, and frames that name a task or
 a session come after it, in a later minor version with the same frame envelope.
 
 ## The owner's own acts
