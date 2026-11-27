@@ -155,6 +155,20 @@ function sqlReadings(sql: string): string[] {
   return readings;
 }
 
+/**
+ * True when the block comment opening at `at` is one a server executes: MySQL runs `/*!`, MariaDB also runs `/*M!`.
+ * Its text is code, so it stays read; skipping it whole keeps a `--` inside from starting a comment.
+ */
+function isExecutableComment(sql: string, at: number): boolean {
+  return sql.startsWith('/*!', at) || sql.startsWith('/*M!', at);
+}
+
+/** True when a `$` at `at` can open a PostgreSQL dollar quote: never right after a character an identifier may hold. */
+function canOpenDollarQuote(sql: string, at: number): boolean {
+  if (at === 0) return true;
+  return !/[A-Za-z0-9_$]/.test(sql[at - 1] ?? '');
+}
+
 /** `sql` with every span the server does not run replaced by spaces, keeping each newline in place. */
 function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, mysqlCommentNeedsSpace: boolean): string {
   const out = sql.split('');
@@ -171,8 +185,8 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, m
       i = stop;
       continue;
     }
-    if (two === '/*' && sql[i + 2] !== '!') {
-      // MySQL executes /*! ... */; every other block comment is prose. Nesting is read per dialect.
+    if (two === '/*' && !isExecutableComment(sql, i)) {
+      // Every other block comment is prose. Nesting is read per dialect.
       let depth = 1;
       let j = i + 2;
       while (j < sql.length && depth > 0) {
@@ -211,12 +225,19 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, m
       i = j;
       continue;
     }
-    if (sql[i] === '"') {
-      // A quoted identifier: an identifier, so a `--` inside it starts nothing.
+    if (sql[i] === '"' || sql[i] === '`' || sql[i] === '[') {
+      // A quoted identifier: an identifier, so a `--` inside it starts nothing. A `"..."` is also a string in MySQL
+      // without ANSI_QUOTES, where a backslash escapes the closing quote, so it takes the same reading as `'...'`.
+      const open = sql[i];
+      const close = open === '[' ? ']' : open;
       let j = i + 1;
       while (j < sql.length) {
-        if (sql[j] === '"') {
-          if (sql[j + 1] === '"') {
+        if (open === '"' && backslashEscapes && sql[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (sql[j] === close) {
+          if (sql[j + 1] === close && open !== '[') {
             j += 2;
             continue;
           }
@@ -228,7 +249,7 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, m
       i = j;
       continue;
     }
-    if (sql[i] === '$') {
+    if (sql[i] === '$' && canOpenDollarQuote(sql, i)) {
       const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
       if (tag) {
         const close = sql.indexOf(tag[0], i + tag[0].length);
@@ -239,6 +260,13 @@ function blankNonCode(sql: string, backslashEscapes: boolean, nested: boolean, m
     if (sql[i] === '\\') {
       const meta = PSQL_ECHO.exec(sql.slice(i));
       if (meta) {
+        // psql runs backquoted text as a shell command, so a line holding one is not all prose: leave it read.
+        const lineEndAt = sql.indexOf('\n', i);
+        const lineText = sql.slice(i, lineEndAt === -1 ? sql.length : lineEndAt);
+        if (lineText.includes('`')) {
+          i += meta[0].length;
+          continue;
+        }
         // Its text runs to the end of the line, or to a backslash before it: `\gexec` after an echo, or a doubled `\\`,
         // ends the text and the line goes on as SQL.
         const from = i + meta[0].length;

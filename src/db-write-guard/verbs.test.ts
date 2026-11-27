@@ -257,4 +257,43 @@ describe('sqlWritesIn', () => {
     // A tag may not start with a digit, so `$1$` is no dollar quote.
     assert.deepEqual(sqlWritesIn('DO $1$ SELECT 1; -- DROP TABLE x\n$1$'), []);
   });
+
+  // The rule a reading is held to: a span is blanked only where every server agrees it never runs. Six spans that some
+  // server executes were blanked, so a write after each one went unnamed.
+  it('reads a MariaDB executable comment, so a write after it names', () => {
+    assert.deepEqual(sqlWritesIn('/*M!100100 DROP TABLE x */ SELECT 1'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/*M! DROP TABLE x */'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/* plain prose */ SELECT 1'), []);
+  });
+
+  it('reads a double-quoted string whose closing quote is escaped, as MySQL reads it', () => {
+    assert.deepEqual(sqlWritesIn('SELECT "a\\" -- DROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a backtick identifier whole, so a `--` inside it starts nothing', () => {
+    // Blanked from `a` to end of line as a comment, the write after it went unnamed.
+    assert.deepEqual(sqlWritesIn('SELECT `a` FROM t; DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('SELECT `a; DROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a bracket identifier whole, so a `--` inside it starts nothing', () => {
+    // The `[` branch does not exist before this change, so it blanked from `a]` to end of line and lost the write.
+    assert.deepEqual(sqlWritesIn('SELECT [a] FROM t; DROP TABLE x'), ['DROP']);
+    // An unclosed `[` is not blanked, so a write after it still names.
+    assert.deepEqual(sqlWritesIn('SELECT [a; DROP TABLE x'), ['DROP']);
+  });
+
+  it('opens a dollar quote only where an identifier cannot go on', () => {
+    // `a$b$` is an identifier and `$c` follows it, so no quote opens there and the `--` after it is a real comment:
+    // read as a quote, it would end the quote early and take the comment's text as body.
+    assert.deepEqual(sqlWritesIn('SELECT a$b$c; -- DROP TABLE x'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1$x$y; -- DELETE FROM t'), []);
+    // A tag after `;`, where no identifier can go on, still opens: its body is read, and its text names.
+    assert.deepEqual(sqlWritesIn('DO $$ UPDATE t SET a = 1; $$'), ['UPDATE']);
+  });
+
+  it('leaves an echo line read when it holds a backquoted shell command', () => {
+    assert.deepEqual(sqlWritesIn('\\echo `date` DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('\\echo no command here'), []);
+  });
 });
