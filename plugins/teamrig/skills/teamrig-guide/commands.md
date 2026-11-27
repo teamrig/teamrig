@@ -5077,6 +5077,35 @@ NOTE /srv/ada/.teamrig/teams, the backups and the install clone stay; a host's t
 It is `REFUSED` while a session start copies a release in past a 30 s wait, after the hooks files are written: run it
 again. A file or folder a running process holds stays, and it exits 1 naming it.
 
+### teamrig kit sweep
+
+Ends what an older teamrig version left running after an update: its task pane watchers (`teamrig events`) and UIs
+(`teamrig ui`), each with every process it started. A process counts as an older version's when it runs a teamrig entry
+script from the kit home's `versions` folder, or the folder this teamrig runs from, whose version is older than the one
+running. Only the version the kit home names current ends any, so an old version never ends a newer one's, and never
+the tree it runs in. A session's hooks start it after an update and at most every 10 minutes. Without `--yes` it names
+what it would end and ends nothing; with it, each end, or why one failed, goes to the restore log.
+
+Flags:
+
+- `--yes`: end them; without it, only name them.
+
+Example:
+
+```sh
+teamrig kit sweep --yes
+```
+
+Output:
+
+```text
+ENDED old events 1840 (0.504.0), tree 1840
+ENDED old ui 2210 (0.504.0), tree 2210 2216
+```
+
+It notes it ended nothing when this teamrig is not the current version, and exits 1 when a process could not be ended
+or the system would not list its processes.
+
 ### teamrig restart
 
 The automatic context refresh's restart, when `refresh.autoRestart` is on for the session (`true`, or `"lead"`, the default, for the lead only; otherwise the user types

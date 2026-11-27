@@ -110,6 +110,7 @@ const conformanceClientCommand = () => import('./commands/conformance-client.ts'
 const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const keyCommands = () => import('./commands/key.ts');
 const kitCommands = () => import('./commands/kit.ts');
+const kitSweepCommands = () => import('./commands/kit-sweep.ts');
 const queueCommand = () => import('./commands/queue.ts');
 const withdrawCommand = () => import('./commands/withdraw.ts');
 const stepAsideCommands = () => import('./commands/step-aside.ts');
@@ -243,6 +244,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'kit install': { effect: 'write', flags: ['tag', 'commit'], switches: ['yes'], load: async () => (await kitCommands()).kitInstall },
   'kit update': { effect: 'write', flags: ['channel'], switches: ['no-attestation', 'yes'], load: async () => (await kitCommands()).kitUpdate },
   'kit uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitUninstall },
+  'kit sweep': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitSweepCommands()).kitSweep },
   restart: { effect: 'internal', flags: ['team', 'at', 'project'], load: async () => (await restartCommands()).restart },
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
   'idle-open': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleOpen },
@@ -540,6 +542,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       and every kept version; teams, backups and the install clone stay; without --yes it counts what would
       go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
       a file a running process holds stays (exit 1)
+  kit sweep [--yes]            ends the task pane watchers and UIs an older teamrig version left running,
+      each with every process it started; only the version the kit home names current ends any, never its
+      own; hooks start it after an update; without --yes it names them and ends nothing; each end goes to
+      the restore log; exit 1 when one could not be ended or the processes could not be listed
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the

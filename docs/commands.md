@@ -112,6 +112,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       and every kept version; teams, backups and the install clone stay; without --yes it counts what would
       go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
       a file a running process holds stays (exit 1)
+  kit sweep [--yes]            ends the task pane watchers and UIs an older teamrig version left running,
+      each with every process it started; only the version the kit home names current ends any, never its
+      own; hooks start it after an update; without --yes it names them and ends nothing; each end goes to
+      the restore log; exit 1 when one could not be ended or the processes could not be listed
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the
