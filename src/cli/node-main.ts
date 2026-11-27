@@ -19,6 +19,7 @@ import { NODE_PATH_PROBE } from '../core/path-probe.ts';
 import { storeWriter } from '../core/store-program.ts';
 import { NODE_STORE_FOLDERS } from '../plugin-store/node-folders.ts';
 import { nodeKitTree } from '../kit/kit-tree.ts';
+import { INSTALL_MARK_TIMEOUT_MS, nodeInstallMark } from '../kit/install-mark.ts';
 import { chatWebhook } from '../core/webhook.ts';
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from '../core/credentials.ts';
 import { nodeHttpClient } from '../core/http.ts';
@@ -162,6 +163,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
       markExecutable: nodeMarkExecutable(process.platform),
     },
     kitTree: nodeKitTree(),
+    installMark: nodeInstallMark(process.platform, nodeProgramRunner(INSTALL_MARK_TIMEOUT_MS), process.env['SystemRoot']),
     mergeGit: GIT_MERGE,
     pulls: GIT_PULLS,
     changeGit: GIT_CHANGES,

@@ -13,6 +13,8 @@ import { CMD_SHIM_SCRIPT, cliLauncherFolder, cliLauncherPath, cmdShimPath, KIT_L
 import { WINDOWS_ENVIRONMENT_KEY } from '../../restore/user-path.ts';
 import { FakeExecutables, FakeUserPath, quietRestore } from '../../testing/fake-restore.ts';
 import { MemoryKitTree } from '../../testing/memory-kit-tree.ts';
+import { RecordingMark } from '../../testing/recording-mark.ts';
+import { kitMarkedPaths } from '../../kit/install-mark.ts';
 import { EXIT } from '../runtime.ts';
 import { NEW_TERMINAL_NOTE } from './kit.ts';
 
@@ -339,5 +341,41 @@ describe('teamrig kit', () => {
       const result = await kit.run(['kit', 'install', ...release, '--yes'], options);
       assert.deepEqual([result.code, result.stdout], [EXIT.refused, [`REFUSED teamrig kit install: ${KIT_LOCK_BUSY}`]]);
     });
+  });
+});
+
+describe("teamrig kit: the install's read-only mark (T5828)", () => {
+  const MARKED = kitMarkedPaths(KIT)
+    .map((marked) => marked.path)
+    .join(' ');
+
+  it('kit use lifts the mark while it names the version and sets it again after', async () => {
+    const kit = new CliHarness();
+    const mark = new RecordingMark();
+    await writeKeptKitVersion(kit.files, KIT, '0.509.0');
+    const result = await kit.run(['kit', 'use', '0.509.0', '--yes'], { kitTree: new MemoryKitTree(kit.files), installMark: mark });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.deepEqual(mark.log, [`lift ${MARKED}`, `set ${MARKED}`]);
+  });
+
+  it('tells a mark it could not set again on stderr, and the change still stands', async () => {
+    const kit = new CliHarness();
+    const mark = new RecordingMark();
+    mark.failSet = true;
+    await writeKeptKitVersion(kit.files, KIT, '0.509.0');
+    const result = await kit.run(['kit', 'use', '0.509.0', '--yes'], { kitTree: new MemoryKitTree(kit.files), installMark: mark });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.deepEqual(result.stderr, ['NOTE set refused; the next teamrig kit change sets it again']);
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), '0.509.0\n');
+  });
+
+  it('lifts nothing when a session start holds the install lock', async () => {
+    const kit = new CliHarness();
+    const mark = new RecordingMark();
+    await writeKeptKitVersion(kit.files, KIT, '0.509.0');
+    await holdFileLock(kit, LOCK);
+    const result = await kit.run(['kit', 'use', '0.509.0', '--yes'], { kitTree: new MemoryKitTree(kit.files), installMark: mark });
+    assert.equal(result.code, EXIT.refused);
+    assert.deepEqual(mark.log, []);
   });
 });

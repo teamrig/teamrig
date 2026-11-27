@@ -4,6 +4,8 @@ import { ID_PATTERN } from '../../core/ids.ts';
 import { KIT_VERSION } from '../../core/version.ts';
 import { clientRootOf } from '../../exec/client-integrity.ts';
 import { INBOX_ADD_LAUNCHER_SCRIPT, inboxAddLauncherPath } from '../../inbox/host-launcher.ts';
+import { errorMessage } from '../../core/guards.ts';
+import { kitMarkedPaths, markedMutex } from '../../kit/install-mark.ts';
 import { installRunningKit, KIT_INSTALL_LOCK, kitInstallLockPath, kitSelfInstallLogLine, kitSelfInstallNote } from '../../kit/kit-self-install.ts';
 import type { HookEvent } from '../../ports/host/index.ts';
 import { dayProbePath, dayProbeReleaseLine, type DayProbeReply } from '../../restore/day-probe.ts';
@@ -253,6 +255,7 @@ async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: 
   if (event.kind !== 'start') {
     return undefined;
   }
+  const logged = (line: string): Promise<void> => runtime.files.append(restoreLogPath(kitHome), `${new Date(runtime.clock.now()).toISOString()} ${line}\n`);
   const outcome = await installRunningKit({
     files: runtime.files,
     tree: runtime.kitTree,
@@ -260,11 +263,13 @@ async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: 
     clientRoot: clientRootOf(runtime.self.script),
     version: KIT_VERSION,
     source: { kind: 'claude-code-plugin' },
-    lock: fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_INSTALL_LOCK),
+    lock: markedMutex(fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_INSTALL_LOCK), runtime.installMark, kitMarkedPaths(kitHome), (error) =>
+      logged(`${errorMessage(error)}; the next session start sets it again`),
+    ),
   });
   const line = kitSelfInstallLogLine(outcome);
   if (line !== undefined) {
-    await runtime.files.append(restoreLogPath(kitHome), `${new Date(runtime.clock.now()).toISOString()} ${line}\n`);
+    await logged(line);
   }
   return { note: kitSelfInstallNote(outcome), installed: outcome.kind === 'installed' };
 }

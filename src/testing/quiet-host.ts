@@ -1,5 +1,6 @@
 import type { CliRuntime } from '../cli/runtime.ts';
 import { DEFAULT_HOST } from '../composition/adapters.ts';
+import { NO_INSTALL_MARK } from '../kit/install-mark.ts';
 import { SHIPPED_HOST, shippedHost } from './host.ts';
 import { FakeFolderSignals } from './fake-folder-signals.ts';
 import { FakePluginStore } from './fake-plugin-store.ts';
@@ -26,6 +27,7 @@ export type HostWorld = Pick<
   | 'requirements'
   | 'restore'
   | 'kitTree'
+  | 'installMark'
   | 'idleSleep'
   | 'folderSignals'
 >;
@@ -63,6 +65,7 @@ export function quietHost(stdin: string): HostWorld {
       },
       removeFolder: async () => undefined,
     },
+    installMark: NO_INSTALL_MARK,
     idleSleep: () => new Promise<void>(() => undefined),
     // No folder can be watched, so `teamrig events` looks every second and a spec's change shows at the next wait.
     folderSignals: new FakeFolderSignals(() => false),

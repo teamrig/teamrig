@@ -32,6 +32,7 @@ import type { HttpClient } from '../core/http.ts';
 import type { GhRunner } from '../adapters/connectors/github/gh.ts';
 import type { ShellRunner } from '../test-run/shell.ts';
 import type { KitTree } from '../kit/kit-tree.ts';
+import type { InstallMark } from '../kit/install-mark.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
 import type { StarterWatch } from '../delivery/starter-watch.ts';
@@ -206,6 +207,8 @@ export interface RunOptions {
   readonly restore?: RestorePorts;
   /** The folder copies of a session start's self-install; default the quiet host's, which copies nothing. */
   readonly kitTree?: KitTree;
+  /** The read-only mark on the kit home's install; default the quiet host's, which marks nothing. */
+  readonly installMark?: InstallMark;
   /** The runner `teamrig queue` runs its step in; default one whose steps exit 0 at once. */
   readonly steps?: StepRunner;
   /** The host memory (queue's watch, `teamrig sessions`); default one that lists no process and measures nothing. */
@@ -319,6 +322,7 @@ export class CliHarness {
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
       restore: options.restore ?? cliOnPathRestore(env, userHome),
       ...(options.kitTree === undefined ? {} : { kitTree: options.kitTree }),
+      ...(options.installMark === undefined ? {} : { installMark: options.installMark }),
       ...(options.steps === undefined ? {} : { steps: options.steps }),
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),

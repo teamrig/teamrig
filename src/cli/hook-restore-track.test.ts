@@ -33,6 +33,8 @@ import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import { FakeProcesses } from '../testing/fake-processes.ts';
 import { seedKitHome } from '../testing/kit-home.ts';
 import { oldKitSweepStampPath, OLD_KIT_SWEEP_EVERY_MS } from '../kit/old-kit-sweep.ts';
+import { RecordingMark } from '../testing/recording-mark.ts';
+import { kitMarkedPaths } from '../kit/install-mark.ts';
 import { treeHarness } from '../testing/team-tree.ts';
 import { apiErrorLine, promptLine, transcript } from '../testing/transcript-lines.ts';
 
@@ -611,11 +613,34 @@ describe('hook restore-track: the kit self-install (T5278)', () => {
   const PLUGIN_ROOT = '/plugins/teamrig';
   const SELF = { node: '/usr/bin/node', script: join(PLUGIN_ROOT, 'dist', 'cli', 'main.js'), execArgv: [] };
 
-  async function startFrom(kit: CliHarness, tree: MemoryKitTree, source = 'startup'): Promise<CliResult> {
-    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source }), env: LAUNCHED, self: SELF, kitTree: tree });
+  async function startFrom(kit: CliHarness, tree: MemoryKitTree, source = 'startup', installMark = new RecordingMark()): Promise<CliResult> {
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('SessionStart', { source }), env: LAUNCHED, self: SELF, kitTree: tree, installMark });
     assert.deepEqual([result.code, result.stderr], [0, []]);
     return result;
   }
+
+  const MARKED = kitMarkedPaths(KIT)
+    .map((marked) => marked.path)
+    .join(' ');
+
+  it("lifts the install's read-only mark for the copy and sets it again after (T5828)", async () => {
+    const kit = new CliHarness();
+    const mark = new RecordingMark();
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, new MemoryKitTree(kit.files), 'startup', mark);
+    assert.deepEqual(mark.log, [`lift ${MARKED}`, `set ${MARKED}`]);
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${KIT_VERSION}\n`);
+  });
+
+  it('logs a mark it could not set again, and the start and its install still go through', async () => {
+    const kit = new CliHarness();
+    const mark = new RecordingMark();
+    mark.failSet = true;
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await startFrom(kit, new MemoryKitTree(kit.files), 'startup', mark);
+    assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${KIT_VERSION}\n`);
+    assert.ok(((await kit.files.read(restoreLogPath(KIT))) ?? '').includes(' set refused; the next session start sets it again\n'));
+  });
 
   it('copies the running plugin into versions/<v>, names it current and logs it', async () => {
     const kit = new CliHarness();

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { writeConfigWithBackup } from '../../config/load.ts';
-import type { JsonRecord } from '../../core/guards.ts';
+import { errorMessage, type JsonRecord } from '../../core/guards.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { WRITE_SWITCH } from '../../core/settings-writers.ts';
 import type { Mutex } from '../../core/lock.ts';
@@ -9,6 +9,7 @@ import { clientRootOf } from '../../exec/client-integrity.ts';
 import { compareVersions, parseVersion } from '../../core/release-version.ts';
 import { hookLauncher, syncKitLauncher } from '../../kit/hook-launcher.ts';
 import { checkAttestation } from '../../kit/kit-attestation.ts';
+import { kitMarkedPaths, markedMutex } from '../../kit/install-mark.ts';
 import { channelReleaseOf, cloneRelease, isKitChannel, KIT_CHANNELS, listChannel, type KitChannel } from '../../kit/kit-release.ts';
 import { findProgram } from '../../open/host-program.ts';
 import { cliLauncherPath, KIT_LAUNCHER_FILE } from '../../restore/cli-launcher.ts';
@@ -48,15 +49,21 @@ import { readUserSettings } from '../user-settings.ts';
 
 const LATEST = 'latest';
 
-type KitRuntime = Pick<CliRuntime, 'kitTree' | 'env' | 'userHome' | 'out'> & FileLockRuntime;
+type KitRuntime = Pick<CliRuntime, 'kitTree' | 'installMark' | 'env' | 'userHome' | 'out'> & FileLockRuntime;
 
 function kitHomeOf(runtime: KitRuntime): string {
   return resolveKitHome(runtime.env, runtime.userHome);
 }
 
-/** The kit home's install lock as the person's command takes it: a short wait for a session start's copy. */
+/**
+ * The kit home's install lock as the person's command takes it: a short wait for a session start's copy, with the
+ * install's read-only mark lifted while the command changes it. A mark that cannot be set again is told, not failed:
+ * the change did happen, and the next locked change sets it.
+ */
 function commandLockOf(runtime: KitRuntime, kitHome: string): Mutex {
-  return fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_COMMAND_LOCK);
+  return markedMutex(fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_COMMAND_LOCK), runtime.installMark, kitMarkedPaths(kitHome), (error) => {
+    runtime.out.stderr(`NOTE ${errorMessage(error)}; the next teamrig kit change sets it again`);
+  });
 }
 
 /** How a record names where its version came from. */

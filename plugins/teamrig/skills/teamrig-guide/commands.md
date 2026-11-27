@@ -4953,6 +4953,14 @@ Output:
 installs one. A `NOTE no version is current` line means the records naming it are missing or disagree; `teamrig
 kit use --latest` names the newest.
 
+The kept versions and the `current` and `current.json` records are read-only to your own account: a stray edit or
+removal is refused, and only teamrig's own changes (a session start's copy, `kit use`, `kit prune`, `kit install`,
+`kit update`, `kit uninstall`) lift the mark while they hold the install lock and set it again after. On Windows it is
+a deny entry for your account in each one's access list, on macOS and Linux the write bits off. A `NOTE ... the next
+teamrig kit change sets it again` line (or a restore log line at a session start) means the mark could not be set back
+after a change that did happen; the next change sets it. It guards against mistakes, not against a program that lifts
+it as teamrig does.
+
 ### teamrig kit use
 
 Moves which kept version the kit home names current; hosts run it once their hooks point at the kit home. A named
