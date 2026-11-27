@@ -336,6 +336,22 @@ export function userHooksHostId(runtime: Pick<CliRuntime, 'shippedHosts' | 'env'
   return found?.[0];
 }
 
+/** A hooks file of the person's, with the id of the shipped host adapter that keeps it, as a team's `hosts` lists it. */
+export interface ListedUserHooks {
+  readonly id: string;
+  readonly port: HostUserHooks;
+}
+
+/** The hooks file of each host `ids` lists (a team's `hosts`) whose shipped adapter keeps one of the person's, in that order. */
+export function listedUserHooksOf(runtime: Pick<CliRuntime, 'shippedHosts' | 'env' | 'platform'>, ids: readonly string[]): readonly ListedUserHooks[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const shipped = new Map(Object.entries(runtime.shippedHosts));
+  return ids.flatMap((id) => {
+    const userHooks = shipped.get(id)?.ports(seen).userHooks;
+    return userHooks === undefined || isUnsupported(userHooks) ? [] : [{ id, port: userHooks }];
+  });
+}
+
 /** A hooks file of the person's whose host's lines run the kit launcher, with how teamrig's lines come out of it. */
 export interface KitLauncherHooks {
   readonly port: HostUserHooks;

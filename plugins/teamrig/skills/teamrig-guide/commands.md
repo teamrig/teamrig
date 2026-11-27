@@ -776,7 +776,12 @@ not call `teamrig stamp commit`, with the line to add (`teamrig stamp commit "$1
 read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
-`disableAllHooks`, which stops every teamrig hook, the secret guard's included, AUTOMODE-STALE: the team's
+`disableAllHooks`, which stops every teamrig hook, the secret guard's included, HOOK-DRIFT: a host in the team's
+`hosts` whose hooks live in a file of the person's (Codex CLI's `hooks.json`, `config.toml` and its profiles) where
+`teamrig setup hooks --host <name>` would write anything today: a teamrig handler missing, changed or stale, the file
+gone, or a setting the guards need taken out, so that host's sessions may run unguarded; it is planned afresh at each
+check, so only the heal (`teamrig setup hooks --host <name> --yes`, the owner's step) clears it, and a run from a
+source checkout or a host whose folder is not on the machine never shows it, AUTOMODE-STALE: the team's
 `[teamrig <team>]` lines in the host's `autoMode.environment` differ from what `teamrig automode install` writes now
 (a config change such as a repository rename, or an upgrade that adds a line), so auto mode reads the team as it was;
 `teamrig automode install` shows the change, and writing it with `--yes` is the owner's call, as it changes the

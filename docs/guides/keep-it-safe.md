@@ -216,7 +216,10 @@ A value that is exactly one placeholder (`%s`, `$NAME`, `${NAME}`, `<token>`) or
 
 Turning a secret check off is the owner's call: `teamrig check` warns the lead (SECRET-GUARD-OFF) while
 `secretGuard.secretReads` or `secretGuard.writes` is `allow`, `secretGuard.redact` is `false`, or a Claude Code
-settings file the team's sessions run under sets `disableAllHooks`, which stops every teamrig hook.
+settings file the team's sessions run under sets `disableAllHooks`, which stops every teamrig hook. A host whose hooks
+sit in a file of yours (Codex CLI) is checked the same way: once that file or its config no longer holds what
+`teamrig setup hooks` writes, `teamrig check` warns the lead (HOOK-DRIFT) until `teamrig setup hooks --host <name>
+--yes` puts it back.
 
 A secret typed or pasted into a prompt goes the same way: the prompt hook stops a prompt that holds a token,
 credentials in a URL, an Authorization or API key header, a quoted literal given to a secret-like name or a
