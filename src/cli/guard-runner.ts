@@ -146,8 +146,8 @@ export const GUARD_HOOKS: ReadonlySet<string> = new Set([
 export const GUARD_SET_HOOK = 'guards';
 
 /**
- * The guards `hook guards` may name (hook-guard-set.ts `SET_GUARD_REPLIES`, not imported: see above; its spec holds
- * the two equal).
+ * The hooks `hook guards` may name (hook-guard-set.ts `setMembersOf`, not imported: see above; its spec holds the two
+ * equal): the guards, and the PreToolUse hooks that run beside them on a shell call (T5821).
  */
 export const SET_GUARDS: ReadonlySet<string> = new Set([
   'push-guard',
@@ -158,6 +158,9 @@ export const SET_GUARDS: ReadonlySet<string> = new Set([
   'pass-record-guard',
   'install-guard',
   'service-role-guard',
+  'picker-guard',
+  'readonly-allow',
+  'route-allow',
 ]);
 
 /** The flag naming the host a hook line runs in (args.ts `HOST_FLAG`, not imported: see above). */
