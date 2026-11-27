@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MS_PER_HOUR } from '../core/time.ts';
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
 import { TEST_CARD } from '../testing/card.ts';
+import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
 import type { DecisionCard } from './card.ts';
 import { cutOf, cutTask } from './description-cut.ts';
 import { EVENT_VERSION, type ApprovalVerdict, type RegisterEvent, type TaskFields } from './events.ts';
@@ -566,8 +568,19 @@ describe('foldEvents: the waits a Later gives a task (T1295)', () => {
   });
 });
 
-function decided(hour: number, waits: readonly WaitReason[]): RegisterEvent {
-  return { v: EVENT_VERSION, type: 'update', id: 'T1', at: at(hour), by: 'lead', changes: {}, note: 'owner decided: ship it', waits, decided: true };
+function decided(hour: number, waits: readonly WaitReason[], ownerProof?: OwnerProofRecord): RegisterEvent {
+  return {
+    v: EVENT_VERSION,
+    type: 'update',
+    id: 'T1',
+    at: at(hour),
+    by: 'lead',
+    changes: {},
+    note: 'owner decided: ship it',
+    waits,
+    decided: true,
+    ...(ownerProof === undefined ? {} : { ownerProof }),
+  };
 }
 
 describe("foldEvents: the owner's decision a leader records (T1366)", () => {
@@ -577,6 +590,12 @@ describe("foldEvents: the owner's decision a leader records (T1366)", () => {
     const task = taskAfter([create(9), status(10, 'waiting', OWNER), decided(11, [])]);
     assert.deepEqual([task.waits, task.status, task.note], [[], 'waiting', 'n']);
     assert.deepEqual(task.decided, { by: 'lead', at: at(11), note: 'owner decided: ship it' });
+  });
+
+  it("keeps a signed Decided's proof record on the decision (T4758 C1), and none on an unsigned one", () => {
+    const task = taskAfter([create(9), status(10, 'waiting', OWNER), decided(11, [], OWNER_PROOF_RECORD)]);
+    assert.deepEqual(task.decided, { by: 'lead', at: at(11), note: 'owner decided: ship it', ownerProof: OWNER_PROOF_RECORD });
+    assert.ok(!('ownerProof' in (taskAfter([create(9), status(10, 'waiting', OWNER), decided(11, [])]).decided ?? {})));
   });
 
   it('means nothing outside a wait status, and the next status clears it', () => {

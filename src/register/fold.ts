@@ -1,3 +1,4 @@
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
 import type { DecisionCard } from './card.ts';
 import type { DescriptionCut } from './description-cut.ts';
 import { withAudit, type HandStepAudit } from './hand-step.ts';
@@ -24,6 +25,11 @@ export interface OwnerDecision {
   readonly at: string;
   /** What the owner decided. */
   readonly note: string | null;
+  /**
+   * The owner's signed proof of this decision (T4758 C1), when the proof was on as `owner decide` wrote it. The act a
+   * decision approves checks it again before it runs, against what it is about to run.
+   */
+  readonly ownerProof?: OwnerProofRecord;
 }
 
 /** A task as the event log describes it after replaying every event in write order. */
@@ -343,13 +349,13 @@ function reparksAfter(task: Task, event: Extract<RegisterEvent, { type: 'status'
  * wrote it (T2312). An update that gives a description, or clears it, ends the mark of a cut one (T4781): the task
  * holds its text whole again.
  */
-function withChanges(task: Task, { changes, note, at, by, verdict, waits, decided, sizeBase, audit, securityVerdict }: UpdateEvent): Task {
+function withChanges(task: Task, { changes, note, at, by, verdict, waits, decided, ownerProof, sizeBase, audit, securityVerdict }: UpdateEvent): Task {
   const priorityAt = changes.priority === undefined || changes.priority === task.priority ? task.priorityAt : at;
   const shown = note !== null && by === task.owner ? note : task.note;
   const answer = verdict === undefined ? task.answer : { verdict, by, at, note };
   const waitable = WAIT_STATUSES.includes(task.status);
   const kept = waits !== undefined && waitable ? waits : task.waits;
-  const decision = decided === true && waitable ? { by, at, note } : task.decided;
+  const decision = decided === true && waitable ? { by, at, note, ...(ownerProof === undefined ? {} : { ownerProof }) } : task.decided;
   const base = changes.size === undefined ? task.sizeBase : (sizeBase ?? null);
   const next: Task = {
     ...task,
