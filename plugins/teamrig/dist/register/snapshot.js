@@ -66,7 +66,7 @@ export function lacksEventsOf(snapshot, id) {
 }
 /** Replays a read log: every task as its events leave it, plus the counts `teamrig list` warns about. */
 export function snapshotOf(read) {
-    return { state: foldEvents(read.events, read.seenIds), read, retired: null, window: null };
+    return { state: foldEvents(read.events, read.seenIds), read, retired: null, window: null, skippedSnapshot: null };
 }
 /**
  * The register that one log text describes, read the way every teamrig command reads a register that

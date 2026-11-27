@@ -131,6 +131,14 @@ describe("Codex CLI's config.toml: a boolean key set in each named profile", () 
     }
     assert.deepEqual(profilesOff('[profiles.a]\nmodel_providers = { x = 1 }\n'), { ok: true, text: undefined });
   });
+
+  it('refuses an inline table under the profiles that spans lines, as its key may sit on a later line (T5362)', () => {
+    for (const text of ['[profiles.a]\nfeatures = {\n  unified_exec_tty = true,\n}\n', 'profiles = {\n  a = { features = { unified_exec_tty = true } },\n}\n']) {
+      const answer = profilesOff(text);
+      assert.equal(answer.ok, false, text);
+      assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
+    }
+  });
 });
 
 function whereSetOff(text: string): TomlEdit {
@@ -159,5 +167,31 @@ describe("a Codex profile file's boolean key, set only where it is already writt
     const answer = whereSetOff('features = { unified_exec_tty = true }\n');
     assert.equal(answer.ok, false);
     assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty.*set unified_exec_tty = false in it by hand/u);
+  });
+
+  it('refuses an inline features table that spans lines, as its key may sit on a later line (T5362)', () => {
+    const answer = whereSetOff('features = {\n  unified_exec_tty = true,\n}\n');
+    assert.equal(answer.ok, false);
+    assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
+  });
+
+  it('reads an inline table as open past a nested close, a quoted brace, a commented one or an open string (T5362)', () => {
+    for (const text of [
+      'features = { a = { b = 1 },\n  unified_exec_tty = true,\n}\n',
+      'features = { a = "}",\n  unified_exec_tty = true,\n}\n',
+      "features = { a = '}',\n  unified_exec_tty = true,\n}\n",
+      'features = { a = 1, # }\n  unified_exec_tty = true,\n}\n',
+      'features = { a = "open,\n  unified_exec_tty = true,\n}\n',
+    ]) {
+      const answer = whereSetOff(text);
+      assert.equal(answer.ok, false, text);
+      assert.match(answer.ok ? '' : answer.problem, /inline table that may hold unified_exec_tty/u);
+    }
+  });
+
+  it('passes an inline table closed on its line that does not name the key, nested or holding quoted braces (T5362)', () => {
+    for (const text of ['features = { a = { b = 1 } }\n', 'features = { a = "{", b = \'{\' } # {\n', 'features = { a = "\\"{" }\n']) {
+      assert.deepEqual(whereSetOff(text), { ok: true, text: undefined }, text);
+    }
   });
 });

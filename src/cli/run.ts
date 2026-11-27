@@ -9,12 +9,13 @@ import { QUEUE_FLAGS, QUEUE_SWITCHES } from './commands/queue-args.ts';
 import { CommandHelp } from './help.ts';
 import { parseArgs, UsageError, type CommandEffect, type CommandEffects, type CommandFlags, type CommandRest, type CommandSwitches, type ParsedArgs } from './args.ts';
 import { RENAMED } from './renamed.ts';
-import { EXIT, RefusedError, type CliRuntime, type ExitCode } from './runtime.ts';
+import { EXIT, RefusedError, type CliRuntime, type ProcessExit } from './runtime.ts';
+import { guardInputGate } from './hook-input-gate.ts';
 import { hookLockDeadline } from './hook-timeouts.ts';
-import { chooseHost } from './host-choice.ts';
+import { chooseHost, UnlistedHostError } from './host-choice.ts';
 import type { CommandTable } from '../slash/plan.ts';
 
-type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode>;
+type Command = (args: ParsedArgs, runtime: CliRuntime) => Promise<ProcessExit>;
 
 interface CommandSpec {
   readonly flags: readonly string[];
@@ -102,6 +103,7 @@ const automodeCommands = () => import('./commands/automode.ts');
 const permissionsCommands = () => import('./commands/permissions.ts');
 const setupScanCommand = () => import('./commands/setup-scan.ts');
 const testCommand = () => import('./commands/test.ts');
+const redactExecCommand = () => import('./commands/redact-exec.ts');
 const ghCommand = () => import('./commands/gh.ts');
 const conformanceCommand = () => import('./commands/conformance.ts');
 const conformanceClientCommand = () => import('./commands/conformance-client.ts');
@@ -239,7 +241,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'kit use': { effect: 'write', flags: [], switches: ['latest', 'yes'], load: async () => (await kitCommands()).kitUse },
   'kit prune': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitPrune },
   'kit install': { effect: 'write', flags: ['tag', 'commit'], switches: ['yes'], load: async () => (await kitCommands()).kitInstall },
-  'kit update': { effect: 'write', flags: ['channel'], switches: ['yes'], load: async () => (await kitCommands()).kitUpdate },
+  'kit update': { effect: 'write', flags: ['channel'], switches: ['no-attestation', 'yes'], load: async () => (await kitCommands()).kitUpdate },
   'kit uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitUninstall },
   restart: { effect: 'internal', flags: ['team', 'at', 'project'], load: async () => (await restartCommands()).restart },
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
@@ -279,6 +281,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   },
   'issue edit': { effect: 'write', flags: ['session', 'body-file'], load: async () => (await issueCommands()).issueEdit },
   'issue close': { effect: 'write', flags: ['session', 'comment', 'reason', 'duplicate-of'], load: async () => (await issueCommands()).issueClose },
+  'issue reopen': { effect: 'write', flags: ['session', 'comment'], load: async () => (await issueCommands()).issueReopen },
   'issue label': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueLabel },
   'issue similar': { effect: 'read', flags: [], load: async () => (await issueCommands()).issueSimilar },
   'issue search': { effect: 'read', flags: ['session', 'repo', 'state', 'kind'], load: async () => (await issueCommands()).issueSearch },
@@ -347,6 +350,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'worktree add': { effect: 'write', flags: ['repo', 'task', 'type'], load: async () => (await worktreeCommands()).add },
   'worktree remove': { effect: 'write', flags: ['base', 'session'], switches: ['delete-branch', 'dry-run'], load: async () => (await worktreeCommands()).remove },
   test: { effect: 'write', flags: ['session'], rest: true, load: async () => (await testCommand()).test },
+  'redact-exec': { effect: 'write', flags: ['session', 'shell', 'encoded-command'], rest: true, load: async () => (await redactExecCommand()).redactExec },
   gh: { effect: 'write', flags: [], rest: true, load: async () => (await ghCommand()).gh },
   'conformance terminal': { effect: 'write', flags: ['program', 'sha256', 'args'], load: async () => (await conformanceCommand()).conformanceTerminal },
   'conformance client': { effect: 'write', flags: ['script', 'home', 'steps'], load: async () => (await conformanceClientCommand()).conformanceClient },
@@ -451,7 +455,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       or approval; --dry-run prints the plan, with what crosses the new border, and writes nothing
   team tree                    the tree of teams this team is in, with each team's lead and sessions
   open <id|name|team/id> [--prompt "<first prompt>"] [--terminal <name>] [--project <dir>] [--resume]
-      a new terminal tab running Claude Code as that session (team/id: another team of the tree);
+      a new terminal tab running that session (team/id: another team of the tree) in the host it last
+      started in, a Codex CLI session in Codex CLI, unless --host names one;
       it takes no --session, as the session it opens is its argument; --terminal print opens no tab
       and prints the command to run, as open does when no terminal it tries opens (exit 3);
       a rehired session reads the handover it left first, or,
@@ -520,12 +525,15 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       them and removes nothing; one a running process holds stays for the next prune (exit 1)
   kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
       branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
-      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
-      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
-  kit update [--channel stable|preview] [--yes]   installs the newest release of the channel (default
-      stable): the release tag at the head of its branch, cloned by that tag and checked to be the tag's
-      commit, then copied in as kit install does; refuses a release older than current (only kit use goes
-      down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
+      holds it), then writes the kit launcher hook lines run and puts teamrig on the user's PATH as a session
+      start does; the teamrig install script runs it for a host with no teamrig plugin; without --yes it shows
+      the copy and the PATH steps and writes nothing; only the person writes it
+  kit update [--channel stable|preview] [--no-attestation] [--yes]   installs the newest release of the
+      channel (default stable): the release tag at the head of its branch, cloned by that tag and checked to
+      be the tag's commit, its integrity list checked with gh attestation verify to be one the release
+      workflow attested under the tag's name, then copied in as kit install does; refuses without gh on PATH
+      unless --no-attestation, which says what it skips; refuses a release older than current (only kit use
+      goes down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
       person writes it
   kit uninstall [--yes]        takes teamrig's handlers out of each hooks file of yours whose host runs the
       kit launcher (your own stay, the old file is backed up), then removes the launcher, the current records
@@ -977,6 +985,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       first posting --comment when given, with the same checks; a failed comment closes nothing;
       --reason is the one the host shows; --duplicate-of closes it as a duplicate of that issue of the
       same repository, which the host links, and is refused when the host has no such issue
+  issue reopen <owner/name#n> [--comment <text>]   reopens one closed issue or pull request of the
+      team's repositories, first posting --comment when given, with the same checks; a failed comment
+      reopens nothing; refused on a tracker that cannot reopen
   issue label <owner/name#n> [--add <label,...>] [--remove <label,...>]   adds labels to and takes
       labels off one issue or pull request of the team's repositories, with the same access; each
       label to add must already be one of the repository's, but design (talk only, not work to take
@@ -1110,7 +1121,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
       earlier ones are replaced, so run it again after every teamrig update (lines that run the kit launcher,
       as Codex's do, last across updates; their --yes is refused until the kit home holds teamrig, which a
-      session start or kit install puts there); without --yes it counts what
+      session start or kit install puts there, and while the team's hosts lacks the host they name);
+      without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
       the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
@@ -1199,14 +1211,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       under queue, merge or deploy) runs at once under it. No --session: $TEAMRIG_SESSION, the
       parent step's session, else the session this Claude Code tab is bound to. Every step, merge and
       deploy waits in its turn for host memory: the least of 3 free-memory reads 1 s apart over
-      delivery.queue.memoryFloorMb plus the MB held for it, for the small steps running and for the tabs
+      delivery.queue.memoryFloorMb (an eighth of a smaller host's RAM) plus the MB held for it, for the small steps running and for the tabs
       still loading (at most half the host's RAM), and the commit charge under open.headroom.commitMaxPct
       with its MB and those tabs' counted. A step
       holds the need its latest 20 runs under its session and --what (commit ids, re-run aside) show
       (their most held, one outlier aside, and a quarter, or their median host drop, whichever is
       more; with no such run, its session's runs of the same --kind and size, never other), or
       its --memory-mb when more; at least
-      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb.
+      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb (a seventh of a smaller host's RAM).
       The wait line says where a learned or declared need came from. --small (a spec run, a lint):
       shares the host with other small steps, waiting in a line of its own, never behind a heavy step,
       under pipeline at most delivery.queue.maxSmallParallel at once, and is killed after
@@ -1326,6 +1338,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       node spec file as --small, anything more as a heavy step; exit 0 when the command passed, 1
       otherwise. One quoted word runs as a shell line ("npm run build && npm test"); several run as one
       command, each word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
+  redact-exec [--session <id|name>] [--shell <cmd|sh|bash|powershell>] (--encoded-command <text> | -- <command ...>)
+      runs a shell command after loading secretGuard config, redacts secret shapes and secret variables from
+      merged stdout/stderr before printing, files rotation tasks on a leak, and returns the command's exit code
   gh -- <gh args ...>          runs one gh call with the key saved for the owner of the repository it
       reaches (-R, a gh api repos/, orgs/ or users/ path, a gh repo command's repository, else GH_REPO,
       else the folder's git remotes), never the machine's gh login; REFUSED when it reaches more than
@@ -1419,7 +1434,7 @@ function refuseSettingsWrite(command: string, switches: ReadonlySet<string>, run
   }
 }
 
-export async function runCli(given: readonly string[], runtime: CliRuntime): Promise<ExitCode> {
+export async function runCli(given: readonly string[], runtime: CliRuntime): Promise<ProcessExit> {
   const argv = shimArgs(given, runtime.cmdShimLine);
   if (argv === undefined) {
     runtime.out.stderr(cutLineMessage(runtime.self.script));
@@ -1436,9 +1451,11 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
   }
 
   let named: string | undefined;
+  let hostEvent: string | undefined;
   try {
     const args = parseArgs(argv, COMMAND_FLAGS, COMMAND_SWITCHES, RENAMED, COMMAND_REST);
     named = args.command;
+    hostEvent = args.hostEvent;
     if (args.help) {
       runtime.out.stdout(COMMAND_HELP.forCommand(args.command));
       return EXIT.ok;
@@ -1467,11 +1484,23 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     const command = await spec.load();
     const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
     const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
-    return await command(args, args.hostEvent === undefined ? hookRuntime : { ...hookRuntime, hostEvent: args.hostEvent });
+    if (args.hostEvent === undefined) {
+      return await command(args, hookRuntime);
+    }
+    const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
+    return gated === undefined ? EXIT.ok : await command(args, gated);
   } catch (error) {
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));
       return EXIT.usage;
+    }
+    if (error instanceof UnlistedHostError && named !== undefined) {
+      // A hook on a host the team does not list answers in that host's words, not as a failed hook (T5735).
+      const eventRuntime = hostEvent === undefined ? runtime : { ...runtime, hostEvent };
+      const answered = await (await import('./unlisted-host-hook.ts')).answerUnlistedHost(named, error, eventRuntime);
+      if (answered !== undefined) {
+        return answered;
+      }
     }
     if (error instanceof RefusedError) {
       runtime.out.stdout(`REFUSED ${error.message}`);

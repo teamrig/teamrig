@@ -181,6 +181,7 @@ export interface CliRuntime {
 export const EXIT = { ok: 0, failed: 1, refused: 2, wake: 2, printed: 3, ask: 4, usage: 64, waiting: 75 } as const;
 
 export type ExitCode = (typeof EXIT)[keyof typeof EXIT];
+export type ProcessExit = number;
 
 /** A request the team's rules or state refuse: printed as `REFUSED <reason>`, exit 2. */
 export class RefusedError extends Error {

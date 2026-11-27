@@ -19,8 +19,12 @@ import type { GhResult, GhRunner } from './gh.ts';
 import { closedPageArgs, openPageArgs, type PageVariables } from './queries.ts';
 import type { RepoAccess } from './tokens.ts';
 
-/** The most issues one list reads before it stops asking for pages; a list stopped with more on GitHub says so. */
-export const ISSUE_LIMIT = 500;
+/**
+ * The most issues one list reads before it stops asking for pages; a list stopped with more on GitHub says so. The
+ * open list runs oldest first, so a cap the repository outgrows hides its newest issues from the sync and the status
+ * push; it matches the fields and links reads (T4949).
+ */
+export const ISSUE_LIMIT = 5000;
 
 /** gh's exit code when it has no login to use. */
 const GH_EXIT_NO_LOGIN = 4;

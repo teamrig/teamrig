@@ -114,6 +114,11 @@ describe('task lines', () => {
     assert.deepEqual(parseTaskLine(onDisk(task)), task);
   });
 
+  it('reads a line written before inProgressMs existed as none spent, so its snapshot stays usable (#2584)', () => {
+    const task = testTask({ id: 'T9', status: 'in-progress', inProgressMs: 5_400_000 });
+    assert.deepEqual(parseTaskLine(editedLine(task, { inProgressMs: undefined })), { ...task, inProgressMs: 0 });
+  });
+
   it('reads back a card with none of its optional parts', () => {
     const task = testTask({ status: 'waiting', waits: [{ kind: 'decision', who: 'owner' }], card: { question: 'Which?', options: ['a', 'b'], recommend: 'a', byDefault: 'a' } });
     assert.deepEqual(parseTaskLine(onDisk(task)), task);

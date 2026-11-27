@@ -6,6 +6,7 @@ export { API_VERSION, apiVersionNotice, isApiVersion } from './version.ts';
 export { OSES, isManifest, isOs, isProofRef, isSupport, manifestProblems, provedOn, supportProblem, type Manifest, type Os, type ProofRef, type Support } from './support.ts';
 export { ADAPTER_ID, adapterEntry, declarationProblems, type AdapterDeclaration, type AdapterEntry, type EntryFunction } from './declaration.ts';
 export { defineHost, hostAdapterProblems, hostDeclarationProblems, isHostAdapter, isHostDeclaration, type HostAdapter, type HostDeclaration, type HostDeps } from './host.ts';
+export { HOST_PORT_FEATURES, isHostPortName, portFeatureProblems } from './port-features.ts';
 export {
   CONNECTOR_RUN_MAX_BYTES,
   CONNECTOR_RUN_TIMEOUT_MS,
@@ -42,7 +43,9 @@ export {
   type PaneAnswer,
   type PaneIdentity,
   type PaneOpen,
+  type PaneSplit,
   type PaneState,
+  type SplitAnswer,
   type TerminalCapabilities,
   type TerminalFailure,
   type TerminalPort,
@@ -191,6 +194,20 @@ export {
   type ConfigLinesAnswer,
   type HostConfigFileSet,
   type HostConfigLines,
+  OBSERVED_FROM,
+  PERMISSION_MODES,
+  UNKNOWN_WHY,
+  effectiveOf,
+  hostCannotTell,
+  knownFrom,
+  observedPermission,
+  type EffectiveConfig,
+  type Known,
+  type MappedPermissionMode,
+  type ObservedFrom,
+  type ObservedPermission,
+  type PermissionMode,
+  type UnknownWhy,
 } from '../ports/host/index.ts';
 export type { CredentialRead, CredentialStore } from '../core/credentials.ts';
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a
@@ -262,11 +279,13 @@ export {
   type IssueDraft,
   type IssueHost,
   type IssueQuery,
+  type IssueReopen,
   type IssueSearch,
   type IssueTarget,
   type LabelSpec,
   type PullLanding,
   type PullStand,
+  type Reopenable,
   type Searchable,
   type Tracker,
   type WatchMarks,

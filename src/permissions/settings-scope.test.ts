@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { testPaths } from '../testing/host.ts';
+import { testPaths, unknownPlacesPaths } from '../testing/host.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { settingsScope, type SettingsFile, type SettingsHost } from './settings-scope.ts';
 
@@ -66,6 +66,14 @@ describe('settingsScope', () => {
       { path: join(HOME, 'agent.toml'), kind: 'user' },
       { path: join(REPO, '.agent', 'rules.toml'), kind: 'local' },
       { path: join(trees, 'fix', '.agent', 'rules.toml'), kind: 'local', projectFile: join(REPO, '.agent', 'rules.toml') },
+    ]);
+  });
+
+  it('lists no worktree files on a host whose worktrees folder teamrig does not know (T5582)', async () => {
+    const files = new MemoryFiles({ [join(REPO, '.claude', 'worktrees', 'a-tree', '.claude', 'settings.json')]: '{}' });
+    assert.deepEqual(await settingsScope(files, { paths: unknownPlacesPaths(), userHome: HOME }, [REPO], 'linux'), [
+      { path: join(CLAUDE, 'settings.json'), kind: 'user' },
+      ...project(REPO),
     ]);
   });
 });

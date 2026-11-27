@@ -1,5 +1,5 @@
 import { basename, isAbsolute, relative, sep } from 'node:path';
-import { MissingSegmentError, readHistory, readWorkingSet } from "../../register/layout.js";
+import { layoutPaths, MissingSegmentError, readHistory, readWorkingSet } from "../../register/layout.js";
 import { lacksEventsOf } from "../../register/snapshot.js";
 /** `load`, run at the first call and answered from that one run after it. */
 export function once(load) {
@@ -100,7 +100,19 @@ export async function wholeHistoryOf(runtime, folder, layout) {
 function damageOf(snapshot, folder, path) {
     const { orphans } = snapshot.state;
     const unowned = orphans > 0 ? [`${servedPathOf(folder, path)}: ${orphans} event(s) naming no task left out`] : [];
-    return [...skippedOf(folder, path, snapshot.read), ...unowned];
+    return [...skippedOf(folder, path, snapshot.read), ...unowned, ...snapshotSkipOf(snapshot, folder, path)];
+}
+/**
+ * A snapshot the read did not use, as a fixed text: its reason can quote the snapshot's own fields, which were never
+ * scanned for a secret, so it stays out of a served document.
+ */
+function snapshotSkipOf({ skippedSnapshot }, folder, path) {
+    if (skippedSnapshot === null) {
+        return [];
+    }
+    const name = servedPathOf(folder, layoutPaths(path).snapshot);
+    const fix = skippedSnapshot.newerVersion > 0 ? 'from a newer teamrig; update teamrig' : 'damaged or from an older teamrig';
+    return [`${name}: not used (${fix}), so the whole history was read`];
 }
 /**
  * What the config's own read has to tell, as `configWarnings` tells a person, less the first problem's words: they

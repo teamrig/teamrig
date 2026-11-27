@@ -1,6 +1,6 @@
 import { holderText, isHeavyShare, sharesCount } from "../../delivery/host-lock.js";
 import { parseLedger } from "../../delivery/ledger.js";
-import { tabsText } from "../../delivery/memory-gate.js";
+import { hostFloorMb, tabsText } from "../../delivery/memory-gate.js";
 import { holdersText, treeMb } from "../../delivery/memory.js";
 import { deliveryPlaces } from "../../delivery/places.js";
 import { liveFreezes, parsePipelineFreezes, pipelineFreezeText } from "../../delivery/pipeline-freezes.js";
@@ -25,7 +25,10 @@ function runningPids(state, shares) {
     return [...(state.kind === 'held' ? [state.info.pid] : []), ...shares.map((share) => share.pid)];
 }
 async function hostLines(memory, floorMb, { shares, tabs }, pids, rows) {
-    const parts = [`${memory.freeMb()} MB free of ${memory.totalMb()} MB, ${floorMb} MB kept free (delivery.queue.memoryFloorMb)`];
+    const hostMb = memory.totalMb();
+    const keptMb = hostFloorMb(floorMb, hostMb);
+    const kept = keptMb < floorMb ? `${keptMb} MB kept free (an eighth of the host, under delivery.queue.memoryFloorMb's ${floorMb})` : `${floorMb} MB kept free (delivery.queue.memoryFloorMb)`;
+    const parts = [`${memory.freeMb()} MB free of ${hostMb} MB, ${kept}`];
     const commit = await memory.commit();
     if (commit !== undefined) {
         parts.push(`commit charge ${commit.usedMb} of ${commit.limitMb} MB`);

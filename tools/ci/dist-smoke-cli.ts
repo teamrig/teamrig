@@ -8,8 +8,12 @@ import { isRecord, stringField } from '../lib/guards.ts';
 import { adapterFindings, builtAdapterSides } from './adapter-smoke.ts';
 import { launcherModeFinding, smokeDist, type Runner } from './dist-smoke.ts';
 import { spawnRun } from './spawn-run.ts';
+import { scaledLimitMs, withCheckTimeScale } from '../../src/core/time-limit.ts';
 
 const PLUGIN_ROOT = resolve('plugins', 'teamrig');
+
+/** The limit on one run of the built plugin, as written; the check's time scale stretches it. */
+const SPAWN_TIMEOUT_MS = 15_000;
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -25,8 +29,9 @@ async function main(): Promise<number> {
   }
   const home = mkdtempSync(join(tmpdir(), 'teamrig-smoke-'));
   try {
-    const env = { ...process.env, TEAMRIG_HOME: home, TEAMRIG_TEAM: 'smoke' };
-    const run: Runner = (request) => spawnRun(request, { env, cwd: home, timeout: 15_000 });
+    // The smoke times the built hooks on the check's loaded host, so its limit and theirs take the check's time scale.
+    const env = withCheckTimeScale({ ...process.env, TEAMRIG_HOME: home, TEAMRIG_TEAM: 'smoke' });
+    const run: Runner = (request) => spawnRun(request, { env, cwd: home, timeout: scaledLimitMs(SPAWN_TIMEOUT_MS, env) });
     const findings = smokeDist(
       {
         platform: process.platform,

@@ -30,6 +30,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `lock` | [object](#lock) |  | The file lock each write of the team's state files takes (the task list, the exec audit, the GitHub sync), so two writes never interleave. |
 | `pushGuard` | [object](#pushguard) |  | The push guard: what a git push to a protected branch does. |
 | `changes` | [object](#changes) |  | Where teamrig changes reads what changed in the project. |
+| `levels` | [object](#levels) |  | What teamrig prints for each level of work. Labels only: commands, fields and the register keep the words goal, feature, task and subtask, and a person's own levels.names in the user file wins over the team's. |
 | `exec` | [object](#exec) |  | Privileged commands a reviewer approved, run once by teamrig exec run. |
 | `packageGuard` | [object](#packageguard) |  | The package guard: what a Bash or PowerShell call that installs a package or runs one ad hoc does. |
 | `commitGuard` | [object](#commitguard) |  | The commit guard: what a Bash or PowerShell call that runs git without the repository's hooks does. |
@@ -57,6 +58,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `meeting` | [object](#meeting) |  | The owner's daily meeting with the lead, in the lead's tab. |
 | `turnLog` | [object](#turnlog) |  | Each session's prompts and replies, kept in state/turn-log/\<session>/\<UTC hour>.jsonl for the task pane, so a /clear or a compaction never takes away what the person was reading in the tab. Secret shapes are redacted. |
 | `ui` | [object](#ui) |  | The dedicated UI that teamrig ui starts. |
+| `owner` | [object](#owner) |  | What only the team's owner holds. The owner's keys: the config guard refuses a session changing any of them. |
 | `meetingNotices` | [object](#meetingnotices) |  | What a booked meeting (teamrig meeting schedule) tells the person, and when: a notice some minutes before its slot, one at the slot, and an alert once it is some minutes past its slot with no meeting start. Each notice goes out once, by whichever tab of the team looks first, on each channel left on. |
 | `readonlyShell` | [object](#readonlyshell) |  | Lets a Bash or PowerShell line run without a permission prompt when every command in it provably only reads: known readers (grep, cat, Get-Content, Select-Object...), git and kubectl reading subcommands, and no write, file redirection, command that runs code, or variable a program reads. It only ever allows: any other line gets Claude Code's own permission check. |
 | `permissions` | [object](#permissions) |  | Which local allow rules stay. An allow rule in a Claude Code settings file approves a call before auto mode's classifier sees it, so a rule that approves a whole tool or a program with any arguments skips the one check that stops an injected or mistaken action. teamrig permissions trim removes the rules off keepAllow (the owner runs it with --yes); doctor flags the ones that approve a whole tool or program, or hold a credential (text in a secret's shape) that Claude Code saved with an approved command. |
@@ -248,6 +250,14 @@ Where teamrig changes reads what changed in the project.
 | --- | --- | --- | --- |
 | `sources` | array (at most 3 items, unique) of one of `"notes"`, `"register"`, `"git"` | `[]` | The change sources teamrig changes reads, in the order their entries win when two name one change: notes (the project's changes/\<slug>.md files not released yet), register (the team's tasks its commits name), git (the commit subjects). Empty: every source that applies to the project. |
 
+## `levels`
+
+What teamrig prints for each level of work. Labels only: commands, fields and the register keep the words goal, feature, task and subtask, and a person's own levels.names in the user file wins over the team's.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `names` | one of `"auto"`, `"default"`, `"youtrack"`, `"jira"`, `"azure-devops"`, `"linear"`, `"github"`, `"asana"`, `"clickup"` or object | `"auto"` | auto: the team's tracker connector's names when it declares them, else the default set. A preset: default (Goal / Feature / Task / Subtask, teamrig's own), youtrack (Epic / User Story / Task / Subtask), jira (Initiative / Epic / Story / Sub-task), azure-devops (Epic / Feature / User Story / Task), linear (Initiative / Project / Issue / Sub-issue), github (Milestone / Feature / Issue / Sub-issue), asana (Goal / Project / Task / Subtask), clickup (Goal / List / Task / Subtask). Or a map naming each of goal, feature, task and subtask with a singular and a plural, each one line of at most 40 characters. |
+
 ## `exec`
 
 Privileged commands a reviewer approved, run once by teamrig exec run.
@@ -431,8 +441,8 @@ The host lock and the limits of one queued step.
 | `smallMaxRunMinutes` | integer (1 to 1430) | `10` | A small step (queue --small) still running after this many minutes is killed the same way, so a hung one does not hold back the steps waiting for the lock; a longer step runs without --small. At most maxRunMinutes. |
 | `waitMinutes` | integer (0 to 1440) | `60` | A queued step is refused once its line for the host lock has not moved for this many minutes: no step ahead of it, holding the lock or sharing the host ended meanwhile. |
 | `memorySampleSeconds` | integer (0 to 600) | `15` | While a queued step runs, its process tree's memory and the host's free memory are sampled this often, for its ledger record's peakTreeMb and lowFreeMb; 0 samples nothing. |
-| `memoryFloorMb` | integer (0 to 1048576) | `4096` | A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host. |
-| `smallReserveMb` | integer (0 to 1048576) | `2048` | The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb. |
+| `memoryFloorMb` | integer (0 to 1048576) | `4096` | A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host; an eighth of the host's RAM when that is less. |
+| `smallReserveMb` | integer (0 to 1048576) | `2048` | The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb; a seventh of the host's RAM when that is less. |
 | `heavyReserveMb` | integer (0 to 1048576) | `2048` | The least MB held for a heavy queued step, a merge or a deploy besides memoryFloorMb: it takes the host lock only while free memory covers both (at most half the host's RAM). A heavy step whose need, learned from its past runs in the ledger or declared with --memory-mb, is more holds that instead. |
 | `admission` | one of `"pipeline"`, `"serial"` | `"pipeline"` | How the host lock's line is ordered: pipeline lets the most urgent step in first (a step of the task the lead put at the front with teamrig pipeline front, then a p0 step at once, then by class turn, priority raised by agingMinutes waited, and arrival), with at most perSessionRunning heavy steps of one session running and maxHeavyParallel heavy steps sharing the host at once, small steps in a line of their own with at most maxSmallParallel of them at once, and is the default; serial keeps one line in arrival order with no cap and one heavy step at a time, for a team whose own deploy tool takes the lock file without first waiting for the shares to end. A step in line reads this key and the five after it again at each look, so an edit reaches the steps already waiting. |
 | `agingMinutes` | integer (0 to 1440) | `15` | In pipeline admission, a waiting step's priority rises one level per this many minutes waited, never to p0; 0 ages nothing. |
@@ -827,6 +837,34 @@ The dedicated UI that teamrig ui starts.
 | `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
 
+## `owner`
+
+What only the team's owner holds. The owner's keys: the config guard refuses a session changing any of them.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `proof` | [object](#ownerproof) |  | How the owner proves an act is their own: teamrig asks for a challenge signed by a key behind the operating system's own gesture, and checks it against the keys pinned here. |
+
+## `owner.proof`
+
+How the owner proves an act is their own: teamrig asks for a challenge signed by a key behind the operating system's own gesture, and checks it against the keys pinned here.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `adapter` | one of `"windows-hello"`, `"touch-id"`, `"polkit"`, `"security-key"`, `"none"` | `"none"` | The gesture that signs: windows-hello (Windows Hello), touch-id (a Secure Enclave key behind Touch ID), polkit (a root-owned key behind a polkit prompt), security-key (a FIDO2 key through OpenSSH), or none, where no act asks for a proof. |
+| `ttlSeconds` | integer (30 to 600) | `300` | How long a challenge stays signable, in seconds. |
+| `pins` | array (at most 8 items) of [object](#ownerproofpins) | `[]` | The owner's enrolled public keys, one per device they sign from; a proof by any other key is refused. A key id pinned twice is refused. |
+
+## `owner.proof.pins[]`
+
+The owner's enrolled public keys, one per device they sign from; a proof by any other key is refused. A key id pinned twice is refused.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `keyId` (required) | string (matching `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`) |  | The name the adapter gives the key: letters, digits and . \_ : -, at most 128 characters. |
+| `algorithm` (required) | one of `"rsa-pkcs1-sha256"`, `"ecdsa-p256-sha256"`, `"ed25519"` |  | The key's signature scheme: rsa-pkcs1-sha256 (Windows Hello), ecdsa-p256-sha256 (a Secure Enclave key), ed25519 (a root-owned helper's key). |
+| `publicKeyPem` (required) | string |  | The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key). |
+
 ## `meetingNotices`
 
 What a booked meeting (teamrig meeting schedule) tells the person, and when: a notice some minutes before its slot, one at the slot, and an alert once it is some minutes past its slot with no meeting start. Each notice goes out once, by whichever tab of the team looks first, on each channel left on.
@@ -1051,5 +1089,6 @@ Folders moved from their defaults; a relative path is resolved against the team'
 
 | Name | Type | What it is |
 | --- | --- | --- |
+| level name | object | One level's label in levels.names: its singular, for one item, and its plural. |
 | session name | string (matching `^[a-z][a-z0-9-]{0,31}$`) |  |
 | role holder | string (matching `^[a-z][a-z0-9-]{0,31}(/[a-z][a-z0-9-]{0,31})?$`) | A session of the team by id, or `<team>/<id>`: the session holding the same role on a team above it (doctor's tree-role problem when that team is not above, or the session does not hold the role there). |

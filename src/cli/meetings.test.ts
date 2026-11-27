@@ -312,6 +312,17 @@ describe('runCli: meeting start <id>', () => {
     assert.equal((await asksOf(kit, 'alpha')).length, 1);
   });
 
+  // T5716: the spotlight read the team's open.terminal, so a headless session's meeting ran the overlay for no window.
+  it('starts no spotlight over a session met that runs headless, though the team opens in Windows Terminal', async () => {
+    const kit = await team({ ...TEAM, launch: { alpha: { terminal: 'headless' } } });
+    await booked(kit, '--session', 'lead');
+    const processes = new FakeProcesses().onRun('powershell.exe', { kind: 'exited', code: 0 });
+    const result = await kit.run(['meeting', 'start', 'M1', '--session', 'lead'], { ...(await alphaRuns(kit)), platform: 'win32', processes });
+    assert.equal(result.code, EXIT.ok, said(result));
+    assert.ok(!result.stdout.some((line) => line.startsWith('SPOTLIGHT')), result.stdout.join('\n'));
+    assert.deepEqual(processes.hidden, []);
+  });
+
   it("brings the session met's running tab to the front in Windows Terminal, by its title", async () => {
     const kit = await team();
     await booked(kit, '--session', 'lead');

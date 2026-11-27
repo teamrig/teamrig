@@ -214,6 +214,19 @@ describe('nodeStepRunner', () => {
     assert.deepEqual(events, ['kill done', 'reported']);
   });
 
+  it('ends what a step left running once it exits by itself, before it reports its end (#1492)', async () => {
+    const started = join(dir, 'left-running-started');
+    // The step's shell starts an idler in the background, waits until it runs, and exits 0 with it still running.
+    await writeFile(join(dir, 'wait-for.cjs'), "const f = process.argv[2]; const t = setInterval(() => { if (require('node:fs').existsSync(f)) { clearInterval(t); process.exit(0); } }, 50); setTimeout(() => process.exit(0), 10_000);");
+    const idle = await idleStep(started);
+    const background = process.platform === 'win32' ? `start "" /b ${idle}` : idle;
+    const end = await runner.run({ command: `${background} & node wait-for.cjs "${started}"`, cwd: dir, env: process.env, timeoutMs: 30_000 });
+    assert.deepEqual(end, { kind: 'exited', code: 0 });
+    const left = parseWrittenProcess(await readFile(started, 'utf8'));
+    assert.ok(left !== undefined, 'the idler wrote its pid and the time');
+    assert.equal(await endsWithin(left, 5_000), true, 'the idler was ended with its step');
+  });
+
   it('kills the step with every process it started once its stop aborts, well before its time is up', async () => {
     const started = join(dir, 'stopped-grandchild-started');
     const killing = nodeStepRunner(process.platform, killOnceStarted(started, nodeTreeKill(process.platform)));

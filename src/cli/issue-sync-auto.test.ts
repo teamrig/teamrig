@@ -19,13 +19,13 @@ import { PUSH_WRITES_PER_HOUR } from '../issues/status-push.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
-const STATE = join(TEAM_HOME, 'state', 'github-sync.json');
+const STATE = join(TEAM_HOME, 'state', 'connectors', 'github', 'sync.json');
 const MINUTE = 60_000;
 /** What the sync keeps of a repository that has no pull request. */
 const NO_PULLS = { cursor: undefined, open: [] };
 const REFUSED = { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 401: Bad credentials (https://api.github.com/graphql)\n' } as const;
 /** The status push's count of the hour's writes (T4592), and the harness clock's time. */
-const PUSH_HOUR = join(TEAM_HOME, 'state', 'github-push-hour.json');
+const PUSH_HOUR = join(TEAM_HOME, 'state', 'connectors', 'github', 'push-hour.json');
 const NOW = Date.parse('2030-01-08T10:00:00Z');
 
 /** `count` open issues assigned to a person, so each one's change is a single label write; the first `labelled` show it already. */
@@ -161,7 +161,7 @@ describe('teamrig issue sync --auto', () => {
       const result = await kit.run(['issue', 'sync', '--auto'], { gh });
       assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     }
-    const file = join(TEAM_HOME, 'state', 'github-ci', 'acme-web-20.md');
+    const file = join(TEAM_HOME, 'state', 'connectors', 'github', 'ci', 'acme-web-20.md');
     assert.deepEqual(githubLines(kit, 'bravo').at(-1), `GitHub pull requests: gh:acme/web#20 "Change 20": checks failing ("test" at "Run tests"; log end in ${file})`);
     assert.match(kit.files.get(file) ?? '', /## Job "test", step "Run tests"\n\n```text\nnot ok 3 - reads\nError: exit code 1\n```/);
     assert.equal((await new WakeAsks(kit.files, join(TEAM_HOME, 'state', 'wake-asks')).read('bravo')).length, 1);
@@ -354,7 +354,7 @@ describe('teamrig issue sync --auto, the activity on a task\'s or a followed ite
     const kit = new CliHarness(config);
     const added = await kit.run(['add', '--title', 'Ship the login fix', '--description', 'Tracked on its issue.', '--priority', 'p2', '--owner', 'alpha', '--ref', 'gh:acme/web#9'], { env: { TEAMRIG_SESSION: 'lead' } });
     assert.equal(added.code, EXIT.ok, [...added.stdout, ...added.stderr].join('\n'));
-    await kit.files.write(join(TEAM_HOME, 'state', 'github-follows.json'), formatFollows(new Map([['charlie', ['gh:acme/web#9']]])));
+    await kit.files.write(join(TEAM_HOME, 'state', 'connectors', 'github', 'follows.json'), formatFollows(new Map([['charlie', ['gh:acme/web#9']]])));
     return kit;
   }
 

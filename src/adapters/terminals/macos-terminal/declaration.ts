@@ -20,6 +20,7 @@ export const declaration: TerminalDeclaration = {
       notice: 'the window opens with no title from teamrig, so teamrig cannot find it again',
       proofs: [],
     },
+    'pane.split': { kind: 'unsupported', notice: 'Terminal has no call to split a window' },
     'pane.window': { kind: 'unsupported', notice: 'every pane is a window of its own' },
     'pane.focus': NOT_ASKED,
     'pane.close': NOT_ASKED,

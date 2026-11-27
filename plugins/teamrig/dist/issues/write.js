@@ -205,6 +205,43 @@ export async function writeIssue(host, write, say) {
     say(`CLOSED ${shown}${write.reason === undefined ? '' : ` as ${write.reason}${of}`}`);
     return true;
 }
+/**
+ * Reopens `write.target` through `host`, one line said for each step: ACCESS, then COMMENTED and REOPENED, or FAILED
+ * with the host's reason. A tracker without the reopen capability (plugin API 0.7.0) is refused before anything is
+ * reached; the host is reached before any write, so a key that cannot be read writes nothing. A failed comment reopens
+ * nothing, and a reopen that fails after its comment says so, so a rerun does not post the comment twice. True when
+ * every step was done.
+ */
+export async function reopenIssue(host, write, say) {
+    const shown = targetText(write.target);
+    const reopen = host.reopen;
+    if (reopen === undefined) {
+        say(`FAILED ${shown}: its tracker cannot reopen an issue (plugin API 0.7.0 adds it); nothing was written`);
+        return false;
+    }
+    const reach = await host.reach(write.target.repo, 'write');
+    if (reach.kind === 'unreachable') {
+        say(`FAILED ${shown}: ${reach.reason}; nothing was written`);
+        return false;
+    }
+    say(`ACCESS ${reach.access}`);
+    if (write.comment !== undefined) {
+        const commented = await host.comment(write.target, write.comment);
+        if (commented.kind === 'failed') {
+            say(`FAILED ${shown}: ${commented.reason}; it was not reopened`);
+            return false;
+        }
+        say(`COMMENTED ${shown}`);
+    }
+    const reopened = await reopen.reopenIssue(write.target);
+    if (reopened.kind === 'failed') {
+        const rerun = write.comment === undefined ? '' : `; the comment was posted: rerun ${KIT_NAME} issue reopen ${shown} without --comment`;
+        say(`FAILED ${shown}: ${reopened.reason}${rerun}`);
+        return false;
+    }
+    say(`REOPENED ${shown}`);
+    return true;
+}
 /** The host's id of the issue a duplicate close names, or why it cannot be named: the host has no such issue, or the read failed. */
 async function duplicateIdOf(host, original) {
     const read = await host.issueId(original);

@@ -1275,6 +1275,17 @@ describe('hook hand-trace', () => {
       { v: 1, at, session: 'alpha', tab: ALPHA_TAB, hand: 'wake', kind: 'stalled', ms: 61_000 },
     ]);
   });
+
+  it('exits 0 when the append fails, naming the file and why on stderr (#1820)', async () => {
+    const kit = await teamWithAlphaTab();
+    const log = join(TEAM_HOME, 'state', 'hand-trace.jsonl');
+    const files = new FaultyFiles(kit.files).fail('append', log, systemError('ENOSPC'));
+    const traced = await kit.run(['hook', 'hand-trace'], { stdin: payload({ hand: 'clear', kind: 'threw', error: 'boom' }), files });
+    assert.equal(traced.code, 0);
+    assert.deepEqual(traced.stdout, []);
+    assert.equal(traced.stderr.length, 1);
+    assert.match(traced.stderr[0] ?? '', /^teamrig hook hand-trace: could not append to .*hand-trace\.jsonl: .*ENOSPC/);
+  });
 });
 
 const MARKER = loginMarkerPath(KIT);

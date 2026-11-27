@@ -1,7 +1,7 @@
 import type { TimeZone } from '../../core/zone.ts';
 import { holderText, isHeavyShare, sharesCount, type HostShare, type LockState, type LockWaiter } from '../../delivery/host-lock.ts';
 import { parseLedger, type LedgerRecord, type RefusalRecord } from '../../delivery/ledger.ts';
-import { tabsText } from '../../delivery/memory-gate.ts';
+import { hostFloorMb, tabsText } from '../../delivery/memory-gate.ts';
 import { holdersText, treeMb, type HostMemory, type ProcessRow } from '../../delivery/memory.ts';
 import { deliveryPlaces } from '../../delivery/places.ts';
 import { liveFreezes, parsePipelineFreezes, pipelineFreezeText } from '../../delivery/pipeline-freezes.ts';
@@ -39,7 +39,10 @@ interface HostHolds {
 }
 
 async function hostLines(memory: HostMemory, floorMb: number, { shares, tabs }: HostHolds, pids: readonly number[], rows: readonly ProcessRow[] | undefined): Promise<string[]> {
-  const parts = [`${memory.freeMb()} MB free of ${memory.totalMb()} MB, ${floorMb} MB kept free (delivery.queue.memoryFloorMb)`];
+  const hostMb = memory.totalMb();
+  const keptMb = hostFloorMb(floorMb, hostMb);
+  const kept = keptMb < floorMb ? `${keptMb} MB kept free (an eighth of the host, under delivery.queue.memoryFloorMb's ${floorMb})` : `${floorMb} MB kept free (delivery.queue.memoryFloorMb)`;
+  const parts = [`${memory.freeMb()} MB free of ${hostMb} MB, ${kept}`];
   const commit = await memory.commit();
   if (commit !== undefined) {
     parts.push(`commit charge ${commit.usedMb} of ${commit.limitMb} MB`);

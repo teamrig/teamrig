@@ -12,6 +12,8 @@ import {
   replyOf,
   requestLine,
   speaksOurMajor,
+  splitAnswerOf,
+  splitParams,
   type WireMethod,
 } from './wire.ts';
 
@@ -82,6 +84,7 @@ export function protocolTerminal(transport: Transport): TerminalPort {
       return state.kind === 'known' ? state.capabilities : NOTHING;
     },
     open: (request) => served('open', openParams(request), openAnswerOf),
+    split: (request) => served('split', splitParams(request), splitAnswerOf),
     focus: (pane) => served('focus', { pane }, (result) => paneAnswerOf('focus', result)),
     close: (pane) => served('close', { pane }, (result) => paneAnswerOf('close', result)),
     restart: (pane, resume) => served('restart', { pane, resume }, (result) => paneAnswerOf('restart', result)),

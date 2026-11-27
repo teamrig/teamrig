@@ -49,6 +49,7 @@ import {
   isIssueCreate,
   isIssueQuery,
   isIssueRead,
+  isIssueReopen,
   isIssueSearch,
   issueSearchArgs,
   searchTerms,
@@ -73,6 +74,7 @@ import {
   issueAssigneeReadArgs,
   issueBodyCall,
   issueCloseArgs,
+  issueReopenArgs,
   issueCommentCall,
   issueCreateCall,
   issueCreateFields,
@@ -324,6 +326,37 @@ describe('isIssueClose', () => {
     assert.ok([READ, create.args, comment.args].every((args) => !isIssueClose(args)));
     assert.ok([{ args: READ }, create, { args: CLOSE }].every((call) => !isIssueComment(call)));
     assert.ok(!isIssueCreate({ args: CLOSE }) && !isIssueQuery(CLOSE) && !isIssueCreate(comment));
+  });
+});
+
+describe('isIssueReopen', () => {
+  const REOPEN = issueReopenArgs(ISSUE);
+
+  it('takes the command line issueReopenArgs builds, and the runner allows it', () => {
+    assert.deepEqual(REOPEN, ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=open']);
+    assert.equal(isIssueReopen(REOPEN), true);
+    assert.equal(isAllowedGh(REOPEN), true);
+  });
+
+  it('refuses a reason, any other field, a typed field, method or path', () => {
+    for (const args of [
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=open', '-f', 'state_reason=reopened'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=open', '-f', 'title=t'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'title=t', '-f', 'state=open'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-F', 'state=open'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=opened'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'PATCH'],
+      ['api', 'repos/acme/web/issues/7', '-X', 'POST', '-f', 'state=open'],
+      ['api', 'repos/acme/web/issues/7', '-f', 'state=open'],
+      ['api', 'repos/acme/web/issues/7/comments', '-X', 'PATCH', '-f', 'state=open'],
+      ['api', 'repos/acme/web/pulls/7', '-X', 'PATCH', '-f', 'state=open'],
+    ]) {
+      assert.equal(isIssueReopen(args), false, args.slice(1).join(' '));
+    }
+  });
+
+  it('is never taken for a close, nor a close for it', () => {
+    assert.ok(!isIssueReopen(issueCloseArgs(ISSUE)) && !isIssueClose(REOPEN));
   });
 });
 
@@ -1220,7 +1253,7 @@ describe('ghRunnerOver', () => {
     }
     await assert.rejects(
       ghRunnerOver(run).run({ args: ['issue', 'close', '7'], env: {} }),
-      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh issue close with these arguments/,
+      /teamrig only runs gh for its shipped issue queries, its two watch probes, to open, read, search, comment on, edit the body of, label, assign, close, reopen, link, type or set a field of an issue, to read a failed job's log, to read and re-run one CI run, to read the posts that may mention a user, and to read, approve at its head or land one pull request, with the commits its heads carry: it refuses gh issue close with these arguments/,
     );
     assert.deepEqual(asked, []);
   });

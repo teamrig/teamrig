@@ -13,10 +13,10 @@ function answer(runtime, value) {
     runtime.out.stdout(JSON.stringify(value));
     return EXIT.ok;
 }
-/** The host's plugins folder and the kit home's updates folder; undefined on a host whose folders teamrig does not know. */
+/** The host's plugins folder and the kit home's updates folder; undefined on a host whose plugins folder teamrig does not know. */
 export function updatePathsOf(runtime) {
-    const paths = pathsIfKnown(runtime);
-    return paths === undefined ? undefined : { pluginsFolder: paths.pluginsFolder(runtime.userHome), updatesFolder: join(resolveKitHome(runtime.env, runtime.userHome), 'updates') };
+    const pluginsFolder = pathsIfKnown(runtime)?.pluginsFolder(runtime.userHome);
+    return pluginsFolder === undefined ? undefined : { pluginsFolder, updatesFolder: join(resolveKitHome(runtime.env, runtime.userHome), 'updates') };
 }
 /** Why a plugin store's check cannot run: teamrig knows none of the host's folders, so not where its plugins are. */
 const NO_PLUGINS_FOLDER = 'teamrig knows no folder of this host, so not where its plugins are';

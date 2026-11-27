@@ -1,5 +1,5 @@
 import { exitText, isLogin, isRecord, LABEL_FILE, MAX_COMMENT, parseLabelFile, plainLine, targetText, withStampFooter, } from "../../../plugin-api/index.js";
-import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyCall, issueCloseArgs, issueCommentCall, issueCreateCall, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueSearchArgs, searchTerms, widensSearch, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
+import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyCall, issueCloseArgs, issueReopenArgs, issueCommentCall, issueCreateCall, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueSearchArgs, searchTerms, widensSearch, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
 import { probeAnswerOf } from "./probe.js";
 import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, runRead, startFailureText, unreachableText } from "./issues.js";
 import { readFields } from "./fields.js";
@@ -81,7 +81,7 @@ export class GitHubIssueHost {
         if (closed.kind === 'failed') {
             return closed;
         }
-        return { kind: 'listed', issues: latestIssues(open.issues, closed.issues), notes: [...listNotes('open', open), ...listNotes('closed', closed)] };
+        return { kind: 'listed', issues: latestIssues(open.issues, closed.issues), notes: [...listNotes('open', open), ...listNotes('closed', closed)], cut: open.full };
     }
     /**
      * The open pull requests, then those changed since `since`, as the owner's saved token reads them
@@ -170,9 +170,32 @@ export class GitHubIssueHost {
             return { kind: 'failed', reason: `gh was stopped (${result.end.signal}) on its way to re-run run ${String(runId)} of ${repo}: look on GitHub before a rerun` };
         }
         if (result.end.code !== 0) {
-            return { kind: 'failed', reason: this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access)) };
+            const reason = this.scanner.redact(rerunFailureText(repo, runId, result.end.code, result.stderr, access));
+            return ghFailureKind(result.end.code, result.stderr) === undefined ? this.rerunAfterOddFailure(repo, runId, state, access, reason) : { kind: 'failed', reason };
         }
         return { kind: 'done', workflow: state.workflow, event: state.event, attempt: state.attempt + 1 };
+    }
+    /**
+     * gh failed the re-run call with no known refusal, such as `unexpected end of JSON input` when GitHub answers an
+     * error with an empty body and gh hides its status (T5610): the run is read again, so a re-run GitHub started all
+     * the same is done, and one it did not start says so, safe to run again since the read refuses a second re-run.
+     */
+    async rerunAfterOddFailure(repo, runId, before, access, reason) {
+        let read;
+        try {
+            read = await this.gh.run({ args: runReadArgs(repo, runId), env: access.env });
+        }
+        catch {
+            return { kind: 'failed', reason: `${reason}; the run could not be read after it: look on GitHub before a rerun` };
+        }
+        const after = read.end.kind === 'exited' && read.end.code === 0 ? runStateOf(read.stdout) : undefined;
+        if (after === undefined) {
+            return { kind: 'failed', reason: `${reason}; the run could not be read after it: look on GitHub before a rerun` };
+        }
+        if (after.attempt > before.attempt) {
+            return { kind: 'done', workflow: after.workflow, event: after.event, attempt: after.attempt };
+        }
+        return { kind: 'failed', reason: `${reason}; the run reads attempt ${String(after.attempt)} still, so nothing was re-run: run it again` };
     }
     /** The posts of `repo` changed since `since` (posts.ts), as the owner's saved token reads them. */
     async posts(repo, since) {
@@ -223,6 +246,10 @@ export class GitHubIssueHost {
     close(target, reason, duplicateId) {
         return this.write(target, { args: issueCloseArgs(target, reason, duplicateId) }, 'close');
     }
+    /** The reopen of one closed issue or pull request, through its allowlisted line (gh.ts isIssueReopen). */
+    reopen = {
+        reopenIssue: (target) => this.write(target, { args: issueReopenArgs(target) }, 'reopen'),
+    };
     /**
      * Reads the one issue for its `id`: found with it, missing when GitHub answers Not Found (no such issue, or one the
      * access cannot see), else failed with gh's own line, or when the answer holds no id.

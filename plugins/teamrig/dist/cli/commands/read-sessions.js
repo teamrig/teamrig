@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { describeLaunch, launchOf } from "../../config/launch.js";
-import { leadLaunchOf } from "../host.js";
+import { DEFAULT_HOST } from "../../composition/adapters.js";
+import { hostNameIfKnown, leadLaunchOf } from "../host.js";
 import { LeadTree } from "../../config/lead-tree.js";
 import { Roster } from "../../config/roster.js";
 import { PlainLogFile } from "../../core/log-file.js";
@@ -18,8 +19,16 @@ import { SessionRecordStore } from "../../sessions/record.js";
 import { TabNeedStore } from "../../tabs/need.js";
 import { teamsFolderOf } from "../tree.js";
 import { servedPathOf, skippedOf, stampsOf } from "./read-source.js";
-/** The one program a session runs in, until a team's config names each session's host. */
-const HOST = { id: 'claude-code', name: 'Claude Code' };
+/**
+ * The host a session runs in, from its record of its last start (T5061): a record naming none, and a session never
+ * started, are the default host's. Named as its launcher names it, else by its id for a host teamrig does not ship.
+ */
+export function servedHostOf(runtime, record) {
+    const id = record?.host ?? DEFAULT_HOST;
+    const shipped = runtime.shippedHosts[id];
+    const name = shipped === undefined ? undefined : hostNameIfKnown({ ...runtime, host: shipped.ports });
+    return { id, name: name ?? id };
+}
 /** The loaded teams of the tree `own` is in, the root first, then each team's children by id, depth first. */
 export function treeTeamsOf(loaded, own) {
     const teams = [];
@@ -127,7 +136,7 @@ async function teamInputOf(runtime, tree, own, { kit, config }) {
             rehiredFrom: rehiredFrom(hiring.records, id) ?? null,
             unread: mark === undefined ? null : unreadOf(id, (await inboxes.lines(id)) ?? [], mark, lineHash).lines.length,
             tab: (await tabs.read(id)) ?? null,
-            host: HOST,
+            host: servedHostOf(runtime, records.get(id)),
             conversation: records.get(id)?.hostSession ?? null,
         });
     }

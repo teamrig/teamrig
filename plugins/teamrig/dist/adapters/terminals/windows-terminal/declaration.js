@@ -13,6 +13,12 @@ export const declaration = {
     name: 'Windows Terminal',
     manifest: {
         'pane.open': SUPPORTED,
+        'pane.split': {
+            kind: 'partial',
+            missing: 'the focus kept where it was',
+            notice: "Windows Terminal moves the focus to the pane it splits off, in the person's own window",
+            proofs: [],
+        },
         'pane.window': SUPPORTED,
         'pane.focus': SUPPORTED,
         'pane.close': NO_CALL,

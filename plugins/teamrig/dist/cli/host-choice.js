@@ -2,6 +2,21 @@ import { KIT_NAME } from "../core/home.js";
 import { UsageError } from "./args.js";
 import { RefusedError } from "./runtime.js";
 /**
+ * A run naming a shipped host the team's `hosts` does not list. It carries that host's ports, so a hook run can still
+ * answer in the words its host reads (unlisted-host-hook.ts) rather than as a failed hook.
+ */
+export class UnlistedHostError extends RefusedError {
+    hostId;
+    listed;
+    ports;
+    constructor(hostId, listed, ports) {
+        super(`--host ${hostId} is not one of the team's hosts (${listed.join(', ')}): add it to hosts in the team config first`);
+        this.hostId = hostId;
+        this.listed = listed;
+        this.ports = ports;
+    }
+}
+/**
  * The host a run works in (T4752). The process names it: each host's hooks file writes `--host <id>` into its hook
  * lines, so a team mixing hosts loads each session's own. A named id teamrig does not ship is a usage error; one the
  * team's `hosts` does not list is refused, as its files were never installed for the team. A run naming none, such as
@@ -21,7 +36,7 @@ export async function chooseHost(command, named, starting, teamHosts) {
         }
         const listed = several ? await teamHosts() : undefined;
         if (listed !== undefined && !listed.includes(named)) {
-            throw new RefusedError(`--host ${named} is not one of the team's hosts (${listed.join(', ')}): add it to hosts in the team config first`);
+            throw new UnlistedHostError(named, listed, source.ports);
         }
         return source.ports;
     }

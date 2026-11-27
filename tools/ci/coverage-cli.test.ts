@@ -108,12 +108,34 @@ describe('coverage-cli', () => {
     assert.match(thrown.output, /1 suite\(s\) failed outside any test, which the run counted as no failure \(the error is above\): built wrong/);
   });
 
+  it('drops a coverage file a test\'s child left cut short and still judges every file (T5551)', () => {
+    // A child process killed while it writes its coverage file at its exit leaves one cut short, which Node cannot
+    // read: before T5551 it cost the run its whole report. The child here writes one on purpose.
+    const child = "require('node:fs').writeFileSync(require('node:path').join(process.env.NODE_V8_COVERAGE, 'coverage-1-1700000000000-1.json'), '{\"result\":[')";
+    const cutByChild = [
+      "import { spawnSync } from 'node:child_process';",
+      `spawnSync(process.execPath, ['-e', ${JSON.stringify(child)}], { stdio: 'inherit' });`,
+      '',
+    ].join('\n');
+    const coverage = mkdtempSync(join(tmpdir(), 'teamrig-coverage-cut-'));
+    try {
+      const { status, output } = gate({ 'src/sign.test.ts': `${FULL_TEST}${cutByChild}` }, { ...process.env, NODE_V8_COVERAGE: coverage });
+      assert.equal(status, 0, output);
+      assert.match(output, /coverage: dropped coverage-1-1700000000000-1\.json, a coverage file a child of .*sign\.test\.ts left cut short/);
+      assert.doesNotMatch(output, /Could not report code coverage/);
+      assert.match(output, /coverage: 1 tests; 1 files: lines 100%/);
+    } finally {
+      rmSync(coverage, { recursive: true, force: true });
+    }
+  });
+
   it('names a coverage file cut short as the cause of a run with no report, with no line per file', () => {
-    // A child process killed while it writes its coverage file at its exit leaves one cut short, which Node cannot read.
+    // A file cut short in the run's own folder, the parent of the folder this test file's children write to, is past
+    // any sweep (such as one a process outside the routing wrote), and Node cannot read it.
     const cut = [
       "import { writeFileSync } from 'node:fs';",
-      "import { join } from 'node:path';",
-      "writeFileSync(join(process.env.NODE_V8_COVERAGE ?? '', 'coverage-1-1700000000000-1.json'), '{\"result\":[');",
+      "import { dirname, join } from 'node:path';",
+      "writeFileSync(join(dirname(process.env.NODE_V8_COVERAGE ?? ''), 'coverage-1-1700000000000-1.json'), '{\"result\":[');",
       '',
     ].join('\n');
     // The inner run gets a coverage folder of its own: it copies its files to the one it was given as it ends, the cut

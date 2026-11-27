@@ -419,8 +419,8 @@ describe('Register on a rotated log', () => {
     await files.write(layoutPaths(LOG).snapshot, `${JSON.stringify({ v: 9, type: 'snapshot' })}
 `);
     await assert.rejects(register.add('lead', { title: 'x', description: 'what and why', owner: 'alpha', source: 'owner', priority: 1 }), NewerDataError);
-    const { read } = await register.snapshot();
-    assert.deepEqual([read.newer, read.newestVersion], [1, 9]);
+    const { read, skippedSnapshot } = await register.snapshot();
+    assert.deepEqual([read.newer, read.newestVersion, skippedSnapshot?.newerVersion], [0, 9, 9]);
   });
 });
 

@@ -143,6 +143,9 @@ Every change ships tests, so the next change cannot break it unnoticed:
 - A change to a threshold, limit or trigger (a count, a timeout, a restart or retry limit, a wake condition) gets a
   spec of the trigger firing in the real flow, with whatever resets its count on the way (a compaction, a `/clear`,
   a restart): a unit test of the comparison alone passes even when the real flow resets the count before it fires.
+- A wall-clock limit on a real child program (git, node, a built hook) goes through `scaledLimitMs` in
+  `src/core/time-limit.ts`. The check sets `TEAMRIG_TIME_SCALE=4` for the specs and the dist smoke, so a loaded host
+  slows a spec without failing it; outside the check nothing sets it, and every limit stays as written.
 - A recorded Claude Code session (`src/testing/recorded/claude-code/`, recorded with `node tools/record/cli.ts`) holds
   the hook inputs and transcripts a real session sent, and its `expected/` folder pins what teamrig prints for each;
   `src/testing/recorded-pins.test.ts` fails when the code and the pins differ. A refactor leaves the pins as they are.
@@ -321,7 +324,8 @@ matrix.
   gained a commit the changelog shows, since release-please then rewrites the head; when main gained only commits it
   hides, the merge rebases the head onto main itself, with the same diff, and merges it on the same approval. Once it
   merged, the next run tags
-  main `teamrig-v<version>` with the notes, builds the dist with a read-only token, and pushes main's commit with
+  main `teamrig-v<version>` with the notes, builds the dist with a read-only token, signs a build provenance
+  attestation of its `dist/integrity.json` in a job of its own (`teamrig kit update` checks it), and pushes main's commit with
   the dist on top to the `preview` branch, tagged `v<version>` (`tools/release/publish.ts`; its first commit
   descends from `release`'s head, `--seed release`). The marketplace entry installs from the `release` branch, the
   stable channel (a `git-subdir` source on ref `release`), which only ever moves along `preview`'s chain, so main
@@ -412,7 +416,9 @@ as how teamrig works today.
   checks pass, in place of its own merge call, and waits for the queue to land it. The queue orders the landings,
   so the merge takes no landing turn. A pull request already queued is waited on, not queued again. One the queue
   lets go unmerged stops the merge with GitHub's reason and the failed merge group run's jobs; one still queued at
-  the timeout stays queued, and a merge run again waits on it.
+  the timeout stays queued, and a merge run again waits on it. teamrig keeps it off: its main review ruleset wants an
+  approval by someone other than the last pusher, which only the direct merge's bypass meets, and GitHub's queue
+  honours no bypass.
 - **Auto-merge on at open**: the `auto-merge` workflow (`.github/workflows/auto-merge.yml`) switches GitHub's
   auto-merge on for each pull request into `main` that is not a draft, at open, reopen, ready for review and each
   push, so one that is approved and green enters the merge queue with no click. It runs `main`'s copy of the file

@@ -27,7 +27,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       or approval; --dry-run prints the plan, with what crosses the new border, and writes nothing
   team tree                    the tree of teams this team is in, with each team's lead and sessions
   open <id|name|team/id> [--prompt "<first prompt>"] [--terminal <name>] [--project <dir>] [--resume]
-      a new terminal tab running Claude Code as that session (team/id: another team of the tree);
+      a new terminal tab running that session (team/id: another team of the tree) in the host it last
+      started in, a Codex CLI session in Codex CLI, unless --host names one;
       it takes no --session, as the session it opens is its argument; --terminal print opens no tab
       and prints the command to run, as open does when no terminal it tries opens (exit 3);
       a rehired session reads the handover it left first, or,
@@ -96,12 +97,15 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       them and removes nothing; one a running process holds stays for the next prune (exit 1)
   kit install --tag <tag> --commit <sha> [--yes]   copies the running teamrig, a clone of the release
       branch at that tag and commit, into the kit home and names it current (unless a pin or a newer version
-      holds it), then writes the kit launcher hook lines run; the teamrig install script runs it for a host
-      with no teamrig plugin; without --yes it shows the copy and writes nothing; only the person writes it
-  kit update [--channel stable|preview] [--yes]   installs the newest release of the channel (default
-      stable): the release tag at the head of its branch, cloned by that tag and checked to be the tag's
-      commit, then copied in as kit install does; refuses a release older than current (only kit use goes
-      down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
+      holds it), then writes the kit launcher hook lines run and puts teamrig on the user's PATH as a session
+      start does; the teamrig install script runs it for a host with no teamrig plugin; without --yes it shows
+      the copy and the PATH steps and writes nothing; only the person writes it
+  kit update [--channel stable|preview] [--no-attestation] [--yes]   installs the newest release of the
+      channel (default stable): the release tag at the head of its branch, cloned by that tag and checked to
+      be the tag's commit, its integrity list checked with gh attestation verify to be one the release
+      workflow attested under the tag's name, then copied in as kit install does; refuses without gh on PATH
+      unless --no-attestation, which says what it skips; refuses a release older than current (only kit use
+      goes down) and changes no hooks file; without --yes it shows the release and writes nothing; only the
       person writes it
   kit uninstall [--yes]        takes teamrig's handlers out of each hooks file of yours whose host runs the
       kit launcher (your own stay, the old file is backed up), then removes the launcher, the current records
@@ -553,6 +557,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       first posting --comment when given, with the same checks; a failed comment closes nothing;
       --reason is the one the host shows; --duplicate-of closes it as a duplicate of that issue of the
       same repository, which the host links, and is refused when the host has no such issue
+  issue reopen <owner/name#n> [--comment <text>]   reopens one closed issue or pull request of the
+      team's repositories, first posting --comment when given, with the same checks; a failed comment
+      reopens nothing; refused on a tracker that cannot reopen
   issue label <owner/name#n> [--add <label,...>] [--remove <label,...>]   adds labels to and takes
       labels off one issue or pull request of the team's repositories, with the same access; each
       label to add must already be one of the repository's, but design (talk only, not work to take
@@ -686,7 +693,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       no plugin's hooks (an unknown name lists those that do), beside your own handlers, which stay; teamrig's
       earlier ones are replaced, so run it again after every teamrig update (lines that run the kit launcher,
       as Codex's do, last across updates; their --yes is refused until the kit home holds teamrig, which a
-      session start or kit install puts there); without --yes it counts what
+      session start or kit install puts there, and while the team's hosts lacks the host they name);
+      without --yes it counts what
       it would insert, keep, change and remove and writes nothing; --yes keeps the old file first; a setting
       the hooks need in the host's config file (such as interactive shells off) is set the same way; it never
       trusts the hooks for you: trust them in the host's own hooks review after each write
@@ -775,14 +783,14 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       under queue, merge or deploy) runs at once under it. No --session: $TEAMRIG_SESSION, the
       parent step's session, else the session this Claude Code tab is bound to. Every step, merge and
       deploy waits in its turn for host memory: the least of 3 free-memory reads 1 s apart over
-      delivery.queue.memoryFloorMb plus the MB held for it, for the small steps running and for the tabs
+      delivery.queue.memoryFloorMb (an eighth of a smaller host's RAM) plus the MB held for it, for the small steps running and for the tabs
       still loading (at most half the host's RAM), and the commit charge under open.headroom.commitMaxPct
       with its MB and those tabs' counted. A step
       holds the need its latest 20 runs under its session and --what (commit ids, re-run aside) show
       (their most held, one outlier aside, and a quarter, or their median host drop, whichever is
       more; with no such run, its session's runs of the same --kind and size, never other), or
       its --memory-mb when more; at least
-      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb.
+      delivery.queue.heavyReserveMb without --small, else with neither delivery.queue.smallReserveMb (a seventh of a smaller host's RAM).
       The wait line says where a learned or declared need came from. --small (a spec run, a lint):
       shares the host with other small steps, waiting in a line of its own, never behind a heavy step,
       under pipeline at most delivery.queue.maxSmallParallel at once, and is killed after
@@ -902,6 +910,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       node spec file as --small, anything more as a heavy step; exit 0 when the command passed, 1
       otherwise. One quoted word runs as a shell line ("npm run build && npm test"); several run as one
       command, each word passed as is, so a word that is only &&, || or ; is REFUSED before anything runs
+  redact-exec [--session <id|name>] [--shell <cmd|sh|bash|powershell>] (--encoded-command <text> | -- <command ...>)
+      runs a shell command after loading secretGuard config, redacts secret shapes and secret variables from
+      merged stdout/stderr before printing, files rotation tasks on a leak, and returns the command's exit code
   gh -- <gh args ...>          runs one gh call with the key saved for the owner of the repository it
       reaches (-R, a gh api repos/, orgs/ or users/ path, a gh repo command's repository, else GH_REPO,
       else the folder's git remotes), never the machine's gh login; REFUSED when it reaches more than

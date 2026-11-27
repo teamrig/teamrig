@@ -1,5 +1,5 @@
 import { resolveKitHome } from "../../core/home.js";
-import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, END_SWITCH, HOLD_SWITCH, isHostSessionId, WHY_FLAG } from "../../mod/clear-hand.js";
+import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, END_SWITCH, HOLD_SWITCH, isClaudeSessionId, WHY_FLAG } from "../../mod/clear-hand.js";
 import { ClearAsks, clearAskDir } from "../../refresh/clear-asks.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { noPositionals } from "../args.js";
@@ -85,7 +85,7 @@ export async function clearClaim(args, runtime) {
     noPositionals(args);
     const answer = tabAnswerOf(args);
     const hostSession = (await readHookInput(runtime)).event?.session;
-    const result = hostSession === undefined || !isHostSessionId(hostSession)
+    const result = hostSession === undefined || !isClaudeSessionId(hostSession)
         ? { problem: 'no Claude Code session id on stdin' }
         : await claimOf(runtime, asksOf(runtime), hostSession, answer);
     runtime.out.stdout('problem' in result ? `declined: ${result.problem}` : result.claimed);

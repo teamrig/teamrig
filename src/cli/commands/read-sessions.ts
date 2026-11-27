@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { describeLaunch, launchOf } from '../../config/launch.ts';
-import { leadLaunchOf } from '../host.ts';
+import { DEFAULT_HOST } from '../../composition/adapters.ts';
+import { hostNameIfKnown, leadLaunchOf } from '../host.ts';
 import { LeadTree } from '../../config/lead-tree.ts';
 import { Roster } from '../../config/roster.ts';
 import type { TeamTree } from '../../config/tree.ts';
@@ -15,14 +16,22 @@ import { InboxDir, JsonlMarkLog } from '../../inbox/store.ts';
 import { unreadOf } from '../../inbox/unread.ts';
 import { sessionsBody, type MemberInput, type ServedHost, type SessionPlace, type ServedWeek, type TeamFailure, type TeamInput, type TeamReach } from '../../interface/index.ts';
 import { JsonlRenameLog } from '../../names/log.ts';
-import { SessionRecordStore } from '../../sessions/record.ts';
+import { SessionRecordStore, type SessionRecord } from '../../sessions/record.ts';
 import { TabNeedStore } from '../../tabs/need.ts';
 import type { CliRuntime } from '../runtime.ts';
 import { teamsFolderOf, type KitTree, type TreeTeam } from '../tree.ts';
 import { servedPathOf, skippedOf, stampsOf, type DocumentSource, type ReadScope } from './read-source.ts';
 
-/** The one program a session runs in, until a team's config names each session's host. */
-const HOST: ServedHost = { id: 'claude-code', name: 'Claude Code' };
+/**
+ * The host a session runs in, from its record of its last start (T5061): a record naming none, and a session never
+ * started, are the default host's. Named as its launcher names it, else by its id for a host teamrig does not ship.
+ */
+export function servedHostOf(runtime: CliRuntime, record: SessionRecord | undefined): ServedHost {
+  const id = record?.host ?? DEFAULT_HOST;
+  const shipped = runtime.shippedHosts[id];
+  const name = shipped === undefined ? undefined : hostNameIfKnown({ ...runtime, host: shipped.ports });
+  return { id, name: name ?? id };
+}
 
 /** The loaded teams of the tree `own` is in, the root first, then each team's children by id, depth first. */
 export function treeTeamsOf(loaded: KitTree, own: string): TreeTeam[] {
@@ -142,7 +151,7 @@ async function teamInputOf(runtime: CliRuntime, tree: TeamTree, own: string, { k
       rehiredFrom: rehiredFrom(hiring.records, id) ?? null,
       unread: mark === undefined ? null : unreadOf(id, (await inboxes.lines(id)) ?? [], mark, lineHash).lines.length,
       tab: (await tabs.read(id)) ?? null,
-      host: HOST,
+      host: servedHostOf(runtime, records.get(id)),
       conversation: records.get(id)?.hostSession ?? null,
     });
   }

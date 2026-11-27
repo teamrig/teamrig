@@ -54,6 +54,13 @@ describe('readTranscriptUse', () => {
     assert.deepEqual([use.unread, use.since], [0, SINCE]);
   });
 
+  it('reads no transcript on a host whose transcripts folder teamrig does not know (T5582)', async () => {
+    const source = new MemoryTranscripts();
+    source.set(join(PROJECTS, 'app', '0123abcd-0000-4000-8000-00000000000a.jsonl'), `${skillCall('alpha-check')}\n`, RECENT);
+    const use = await readTranscriptUse({ source, reader, paths }, undefined, { since: SINCE, maxBytes: UNBOUNDED });
+    assert.deepEqual([use.skills.size, use.agents.size, use.transcripts, use.bytes], [0, 0, 0, 0]);
+  });
+
   it('names the agent types Agent calls ran and the folder each session started in, by its first cwd, never the slug (T1232)', async () => {
     const slashC = [
       callIn(undefined, [{ id: 's1', name: 'Skill', skill: 'alpha-check' }]),

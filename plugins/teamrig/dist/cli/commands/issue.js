@@ -9,7 +9,7 @@ import { bareRef, refOf } from "../../issues/ref.js";
 import { checkReply, sendReply } from "../../issues/reply.js";
 import { issueDoc, mirroredIssues, mirrorsIssue, similarIssues } from "../../issues/similar.js";
 import { holderOf, sessionLogins } from "../../issues/status-push.js";
-import { editIssueBody, labelIssue, labelRefusal, postRefusal, writeIssue } from "../../issues/write.js";
+import { editIssueBody, labelIssue, labelRefusal, postRefusal, reopenIssue, writeIssue } from "../../issues/write.js";
 import { publicIssueText } from "../../sync/migrate.js";
 import { secretRulesOf } from "../../secret-guard/rules.js";
 import { noPositionals, onePositional, requiredFlag, somePositionals } from "../args.js";
@@ -191,6 +191,22 @@ export async function issueClose(args, runtime) {
         ...(duplicateOf === undefined ? {} : { duplicateOf }),
     };
     return writeOn(args, runtime, write, '--comment');
+}
+/**
+ * `issue reopen <owner/name#n> [--comment <text>]` (T5612): reopens one closed issue or pull request of the team's
+ * repositories, first posting `--comment` when given, through the same host and checks as `issue close`; reopening a
+ * pull request makes GitHub read its branch again, which refreshes a head it showed stale. A tracker without the
+ * reopen capability is refused, and a failed comment reopens nothing. Exit 1 when the host failed, else 0.
+ */
+export async function issueReopen(args, runtime) {
+    const target = targetOf(args);
+    const comment = args.flags.get('comment');
+    const hosts = await hostsFor(args, runtime, target.repo, comment === undefined ? undefined : { flag: '--comment', text: comment });
+    if (hosts === undefined) {
+        return EXIT.ok;
+    }
+    const write = { target, ...(comment === undefined ? {} : { comment }) };
+    return (await reopenIssue(hosts.tracker, write, (line) => runtime.out.stdout(line))) ? EXIT.ok : EXIT.failed;
 }
 /**
  * `issue label <owner/name#n> [--add <label,...>] [--remove <label,...>]` (T2679): adds labels to and takes labels

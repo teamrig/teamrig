@@ -87,6 +87,14 @@ describe('teamrig pipeline', () => {
     assert.deepEqual(result, { code: 0, stdout: ['HOST 16000 MB free of 32768 MB, 4096 MB kept free (delivery.queue.memoryFloorMb)', ...NO_STEPS], stderr: [] });
   });
 
+  it('names the floor a small host keeps free as an eighth of its RAM, under the config (T5676)', async () => {
+    const kit = new CliHarness(TEAM);
+    const memory = new FakeHostMemory(3038).lists(undefined);
+    memory.total = 7168;
+    const result = await kit.run(['pipeline'], { memory });
+    assert.equal(result.stdout[0], "HOST 3038 MB free of 7168 MB, 896 MB kept free (an eighth of the host, under delivery.queue.memoryFloorMb's 4096)");
+  });
+
   it("shows the host, the lock's holder and the small steps with their trees, the line with what each waits on, and the last day's refusals on the team's clock", async () => {
     const kit = new CliHarness(TEAM);
     await kit.files.write(LOCK, JSON.stringify(HELD));

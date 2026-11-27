@@ -8,7 +8,7 @@ import { noPositionals, type ParsedArgs } from '../args.ts';
 import type { CommandHelp } from '../help.ts';
 import { hostNameOf, stepsOf } from '../host.ts';
 import { openKit, rosterOf } from '../kit.ts';
-import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { EXIT, RefusedError, type CliRuntime, type ExitCode, type ProcessExit } from '../runtime.ts';
 import { readModRequest, sessionTeam, teamSessionOf, type HookOrigin } from './hook-input.ts';
 
 /** What `hook slash-command` takes from the CLI: its command table, its help and its runner, given so this module never imports run.ts back. */
@@ -16,7 +16,7 @@ export interface SlashDeps {
   readonly table: CommandTable;
   readonly help: CommandHelp;
   /** Runs one command line, as `teamrig <argv>` in a terminal would. */
-  readonly run: (argv: readonly string[], runtime: CliRuntime) => Promise<ExitCode>;
+  readonly run: (argv: readonly string[], runtime: CliRuntime) => Promise<ProcessExit>;
 }
 
 /**
@@ -103,7 +103,7 @@ function notThePerson(argv: readonly string[], origin: string | undefined): stri
  * - a command Claude Code or teamrig runs itself is refused with exit 64.
  * A tab that is no team session runs the line as typed, after one note.
  */
-export function slashCommand(deps: SlashDeps): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
+export function slashCommand(deps: SlashDeps): (args: ParsedArgs, runtime: CliRuntime) => Promise<ProcessExit> {
   return async (args, runtime) => {
     noPositionals(args);
     // Its stdin says who typed the line, and whoever runs it writes that stdin, so only the mod runs it (T3081). The

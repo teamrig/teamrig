@@ -73,12 +73,13 @@ export function parseArgs(argv, commandFlags, commandSwitches = {}, renamed = {}
     // The flags a host writes into a command line, which no command reads itself: one value each, never in `flags`.
     const hostFlags = new Map();
     const hostFlagNamed = (name) => !allowed.includes(name) && (name === HOST_FLAG || (name === HOST_EVENT_FLAG && isHookCommand(command)));
-    const parsed = (rest) => ({
+    const parsed = (rest, restMarker = false) => ({
         command,
         positionals,
         flags,
         switches,
         rest,
+        ...(restMarker ? { restMarker: true } : {}),
         help: false,
         common,
         hostEvent: hostFlags.get(HOST_EVENT_FLAG),
@@ -90,7 +91,7 @@ export function parseArgs(argv, commandFlags, commandSwitches = {}, renamed = {}
             return { command, positionals: [], flags: new Map(), switches: new Set(), rest: [], help: true, common: new Map() };
         }
         if (token === REST_MARKER && restCommands.has(command)) {
-            return parsed(tail.slice(index + 1));
+            return parsed(tail.slice(index + 1), true);
         }
         if (!token.startsWith('--')) {
             positionals.push(token);

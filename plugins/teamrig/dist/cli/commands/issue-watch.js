@@ -13,6 +13,7 @@ import { CONNECTOR_OFF } from "../connector-off.js";
 import { runsHostSession } from "../session-process.js";
 import { githubOffBy } from "./issue-sync-auto.js";
 import { issueSync } from "./issue-sync.js";
+import { githubState, openGithubState } from "../github-state.js";
 /**
  * `issue watch`: the team's one watch on its GitHub repositories, started hidden by the hooks (`ensureWatch`). Every
  * `github.probeSeconds` it asks GitHub whether each repository changed (IssueEvents.watch: conditional reads, free when
@@ -39,10 +40,10 @@ export function watchOffReason(config, env) {
     return undefined;
 }
 function leaseLock(runtime, kit, config, waitMs) {
-    return fileLockOf(runtime, kit.paths.githubWatchLock, { ...config.lock, waitMs });
+    return fileLockOf(runtime, githubState(kit.paths).watchLock, { ...config.lock, waitMs });
 }
 async function readLease(runtime, kit) {
-    return parseWatchLease((await runtime.files.read(kit.paths.githubWatch)) ?? '');
+    return parseWatchLease((await runtime.files.read(githubState(kit.paths).watch)) ?? '');
 }
 /**
  * Whether a lease holds the watch: fresh, of this kit's version or a newer one, and either a hook's claim on its way or
@@ -64,6 +65,9 @@ export async function ensureWatch(runtime, kit, config) {
     if (watchOffReason(config, runtime.env) !== undefined) {
         return;
     }
+    // Moving an older teamrig's lease out of its old path also stops that teamrig's watch at its next beat, which then
+    // finds no lease of its own.
+    await openGithubState(runtime.files, kit.paths);
     const now = runtime.clock.now();
     const { probeSeconds } = config.github;
     if (holds(runtime, await readLease(runtime, kit), now, probeSeconds)) {
@@ -73,7 +77,7 @@ export async function ensureWatch(runtime, kit, config) {
         if (holds(runtime, await readLease(runtime, kit), now, probeSeconds)) {
             return false;
         }
-        await runtime.files.write(kit.paths.githubWatch, formatWatchLease({ pid: undefined, kitVersion: KIT_VERSION, startedAt: now, beatAt: now }));
+        await runtime.files.write(githubState(kit.paths).watch, formatWatchLease({ pid: undefined, kitVersion: KIT_VERSION, startedAt: now, beatAt: now }));
         return true;
     });
     if (claimed) {
@@ -95,13 +99,14 @@ export async function issueWatch(args, runtime) {
         say(`OFF ${off}; no watch runs`);
         return EXIT.ok;
     }
+    await openGithubState(runtime.files, kit.paths);
     const now = runtime.clock.now();
     const claimed = await leaseLock(runtime, kit, config, config.lock.waitMs).run(async () => {
         const lease = await readLease(runtime, kit);
         if (lease?.pid !== undefined && lease.pid !== runtime.pid && holds(runtime, lease, now, config.github.probeSeconds)) {
             return false;
         }
-        await runtime.files.write(kit.paths.githubWatch, formatWatchLease({ pid: runtime.pid, kitVersion: KIT_VERSION, startedAt: now, beatAt: now }));
+        await runtime.files.write(githubState(kit.paths).watch, formatWatchLease({ pid: runtime.pid, kitVersion: KIT_VERSION, startedAt: now, beatAt: now }));
         return true;
     });
     if (!claimed) {
@@ -114,7 +119,7 @@ export async function issueWatch(args, runtime) {
     finally {
         await leaseLock(runtime, kit, config, config.lock.waitMs).run(async () => {
             if ((await readLease(runtime, kit))?.pid === runtime.pid) {
-                await runtime.files.remove(kit.paths.githubWatch);
+                await runtime.files.remove(githubState(kit.paths).watch);
             }
         });
     }
@@ -168,7 +173,7 @@ async function beat(runtime, kit, config) {
         if (lease?.pid !== runtime.pid) {
             return false;
         }
-        await runtime.files.write(kit.paths.githubWatch, formatWatchLease({ ...lease, beatAt: runtime.clock.now() }));
+        await runtime.files.write(githubState(kit.paths).watch, formatWatchLease({ ...lease, beatAt: runtime.clock.now() }));
         return true;
     });
 }

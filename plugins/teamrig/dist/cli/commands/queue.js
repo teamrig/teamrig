@@ -9,6 +9,7 @@ import { passOf, PRE_PUSH_MAX_WAIT_MS, recordPass } from "../../delivery/push-pa
 import { isStepKind, kindOfCommand, processRequest, STEP_KINDS, takesShipSlot, taskOfLabel } from "../../delivery/process-request.js";
 import { recordRefusal, runRecorded } from "../../delivery/recorded-step.js";
 import { treeFieldsOf, treeHeader, treeText } from "../../delivery/run-tree.js";
+import { smallReserveOf } from "../../delivery/memory-gate.js";
 import { stepNeedOf } from "../../delivery/step-need.js";
 import { causeOfLockWait, WaitLog } from "../../delivery/wait-log.js";
 import { queueCutoffReason, minutesText } from "../../delivery/schedule.js";
@@ -161,10 +162,12 @@ function exclusiveOf(args, small) {
 }
 /**
  * What the step asks of the host (`stepNeedOf`): its need learned from its own past runs in the ledger, or its
- * `--memory-mb`, else the config's default, so a step known to need more waits for that much room.
+ * `--memory-mb`, else the config's default, so a step known to need more waits for that much room. A small step's
+ * default is scaled to the host (`smallReserveOf`), so a small host runs it; a learned or declared need never is.
  */
 async function needOf(runtime, ledger, ask, config) {
-    return stepNeedOf(parseLedger((await runtime.files.read(ledger)) ?? ''), ask, config);
+    const defaults = { smallReserveMb: smallReserveOf(config.smallReserveMb, runtime.memory.totalMb()), heavyReserveMb: config.heavyReserveMb };
+    return stepNeedOf(parseLedger((await runtime.files.read(ledger)) ?? ''), ask, defaults);
 }
 /**
  * The line a step holding `reserveMb` prints when it shares the host: the other steps of its own kind (small or heavy)

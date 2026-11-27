@@ -354,7 +354,7 @@ async function spotlightMeeting(runtime, mk, meeting) {
         holderFile: spotlightHolderPath(mk.kit.paths.kitHome),
     };
     const { spotlight } = mk.config.meeting;
-    return spotlightLine(await startSpotlight(runtime, spotlight, mk.config.open.terminal, place, runtime.cwd), place, spotlight.dim);
+    return spotlightLine(await startSpotlight(runtime, spotlight, terminalOf(mk.config, meeting.session), place, runtime.cwd), place, spotlight.dim);
 }
 /**
  * Brings the opening prompt to the session met and returns what that prints. While its tab runs, the tab is brought

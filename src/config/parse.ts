@@ -10,6 +10,7 @@ import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from '../core/time.ts';
 import { TimeZone } from '../core/zone.ts';
 import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME, type TaskStatus } from '../register/model.ts';
 import { isItemType, ITEM_TYPES, type ItemType } from '../register/events.ts';
+import { readLevelNamesSetting } from '../register/level-names.ts';
 import { branchPatternProblem, isBranchType } from '../worktree/branch-name.ts';
 import { KEEP_RULE_PATTERN } from '../permissions/allow-rules.ts';
 import { isServiceCommand, SERVICE_COMMANDS, TEAM_HELD_COMMANDS, type ServiceCommand } from '../permissions/service-commands.ts';
@@ -35,6 +36,7 @@ import {
   DEFAULT_HIRING,
   DEFAULT_EXEC,
   DEFAULT_CHANGES,
+  DEFAULT_LEVELS,
   DEFAULT_LOCK,
   DEFAULT_LEAD_BOUNDARY,
   DEFAULT_TURN_LOG,
@@ -72,7 +74,10 @@ import {
   DEFAULT_MEETING,
   QUEUE_TTL_MARGIN_MINUTES,
   DEFAULT_UI,
+  DEFAULT_OWNER,
 } from './defaults.ts';
+import { OWNER_PROOF_ADAPTERS, isOwnerProofAdapterId } from '../owner-proof/port.ts';
+import { SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem, type PinnedKey } from '../owner-proof/pin.ts';
 import { isEffort, isModel, isTerminalName } from './launch.ts';
 import {
   APPLY_FLAG_PATTERN,
@@ -154,6 +159,7 @@ import {
   SKIP_HOOKS,
   type AlertsConfig,
   type ChangesConfig,
+  type LevelsConfig,
   type ContextFilesConfig,
   type ExecConfig,
   type OtherAreaListing,
@@ -188,6 +194,7 @@ import {
   type HeadroomConfig,
   type IdleConfig,
   type OpenConfig,
+  type OwnerConfig,
   type PathsConfig,
   type PermissionsConfig,
   type PushToProtected,
@@ -631,6 +638,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
       coldAfterMinutes: read.integer(messages, 'coldAfterMinutes', 'messages', DEFAULT_MESSAGES.coldAfterMinutes, CONFIG_LIMITS.coldAfterMinutes),
     },
     register: parseRegister(read, read.section(raw, 'register', '')),
+    levels: parseLevels(read, read.section(raw, 'levels', '')),
     skills: parseSkills(read, read.section(raw, 'skills', '')),
     contextFiles: parseContextFiles(read, read.section(raw, 'contextFiles', '')),
     lock: {
@@ -696,6 +704,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     meeting: parseMeeting(read, read.section(raw, 'meeting', '')),
     turnLog: parseTurnLog(read, read.section(raw, 'turnLog', '')),
     ui: parseUi(read, read.section(raw, 'ui', '')),
+    owner: parseOwner(read, read.section(raw, 'owner', '')),
     meetingNotices: parseMeetingNotices(read, read.section(raw, 'meetingNotices', '')),
     readonlyShell: parseReadonlyShell(read, read.section(raw, 'readonlyShell', '')),
     permissions: parsePermissions(read, read.section(raw, 'permissions', '')),
@@ -1827,6 +1836,11 @@ function parseChanges(read: ConfigReader, raw: JsonRecord): ChangesConfig {
   return { sources: [...new Set(sources.filter(isChangeSourceId))] };
 }
 
+/** `levels`: a refused `names` is reported and reads as the default, so the output keeps its labels. */
+function parseLevels(read: ConfigReader, raw: JsonRecord): LevelsConfig {
+  return { names: readLevelNamesSetting(read, raw['names'], 'levels.names') ?? DEFAULT_LEVELS.names };
+}
+
 function parseExec(read: ConfigReader, raw: JsonRecord): ExecConfig {
   const path = 'exec';
   const webhookEnv = read.optionalString(raw, 'webhookEnv', path, ENV_VARIABLE);
@@ -1845,6 +1859,51 @@ function parseUi(read: ConfigReader, raw: JsonRecord): UiConfig {
   const mode = isUiMode(named) ? named : DEFAULT_UI.mode;
   const path = read.optionalString(raw, 'path', 'ui', isAbsoluteFile);
   return path === undefined ? { mode } : { mode, path };
+}
+
+/** A pin's key id: the name the adapter gives the key, one word, so a challenge names it plainly. */
+const KEY_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+const keyIdCheck: Check<string> = (value) => (KEY_ID.test(value) ? undefined : 'expected letters, digits and . _ : - (at most 128)');
+
+/**
+ * `owner`: a bad adapter keeps none, so no act asks for a proof nobody can give; a bad pin is dropped, so no proof
+ * verifies by a key the owner did not enrol, and a key id pinned twice is an issue, since the verifier would pick one.
+ */
+function parseOwner(read: ConfigReader, raw: JsonRecord): OwnerConfig {
+  const path = 'owner.proof';
+  const proof = read.section(raw, 'proof', 'owner');
+  const defaults = DEFAULT_OWNER.proof;
+  const named = read.string(proof, 'adapter', path, defaults.adapter, oneOf(OWNER_PROOF_ADAPTERS));
+  const pins = read.list(proof, 'pins', path, defaults.pins, (value, itemPath) => parsePin(read, value, itemPath), CONFIG_LIMITS.ownerProofPins.maxItems);
+  const seen = new Set<string>();
+  for (const pin of pins) {
+    if (seen.has(pin.keyId)) read.report(`${path}.pins`, `pins the key id ${describe(pin.keyId)} twice`);
+    seen.add(pin.keyId);
+  }
+  return {
+    proof: {
+      adapter: isOwnerProofAdapterId(named) ? named : defaults.adapter,
+      ttlSeconds: read.integer(proof, 'ttlSeconds', path, defaults.ttlSeconds, CONFIG_LIMITS.ownerProofTtlSeconds),
+      pins,
+    },
+  };
+}
+
+function parsePin(read: ConfigReader, value: unknown, itemPath: string): PinnedKey | undefined {
+  const item = read.objectItem(value, itemPath);
+  if (item === undefined) return undefined;
+  // requiredString reads a missing or bad field as '', each with its issue.
+  const keyId = read.requiredString(item, 'keyId', itemPath, keyIdCheck);
+  const named = read.requiredString(item, 'algorithm', itemPath, oneOf(SIGNATURE_ALGORITHMS));
+  const publicKeyPem = read.requiredString(item, 'publicKeyPem', itemPath);
+  if (keyId === '' || publicKeyPem === '' || !isSignatureAlgorithm(named)) return undefined;
+  const problem = pinKeyProblem(publicKeyPem, named);
+  if (problem !== undefined) {
+    read.report(`${itemPath}.publicKeyPem`, problem);
+    return undefined;
+  }
+  return { keyId, algorithm: named, publicKeyPem };
 }
 
 function parseAlerts(read: ConfigReader, raw: JsonRecord): AlertsConfig {

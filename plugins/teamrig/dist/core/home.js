@@ -21,6 +21,11 @@ export const ENV = {
     launched: 'TEAMRIG_LAUNCHED',
     /** `off` turns `teamrig issue sync` off on this machine: it reads nothing and writes nothing. */
     github: 'TEAMRIG_GITHUB',
+    /**
+     * How many times longer the kit's wall-clock limits on a child program run, 1 to 20 (time-limit.ts). The check sets
+     * it for the specs it runs, so a loaded host slows them without failing them; unset, every limit is as written.
+     */
+    timeScale: 'TEAMRIG_TIME_SCALE',
 };
 /**
  * The kit home is the machine root: each team keeps its config, rules and state in its own folder
@@ -133,15 +138,6 @@ export function teamPaths(kitHome, team, hostSkills, overrides = {}) {
         keepWorkingAsks: join(state, 'keep-working-asks'),
         warn: join(state, 'usage', 'warn'),
         logs: join(state, 'logs'),
-        githubSync: join(state, 'github-sync.json'),
-        githubCi: join(state, 'github-ci'),
-        githubSyncLock: join(state, 'github-sync.lock'),
-        githubPushHour: join(state, 'github-push-hour.json'),
-        githubClocks: join(state, 'github-clocks.json'),
-        githubWatch: join(state, 'github-watch.json'),
-        githubWatchLock: join(state, 'github-watch.lock'),
-        githubClaims: join(state, 'github-claims.json'),
-        githubFollows: join(state, 'github-follows.json'),
         hookless: join(state, 'hookless.json'),
         hooklessLock: join(state, 'hookless.lock'),
         idlePass: join(state, 'idle-pass.json'),

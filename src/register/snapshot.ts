@@ -57,6 +57,17 @@ export interface RegisterSnapshot {
   readonly retired: RetiredTasks | null;
   /** null when `read.events` holds every event of the tasks in `state`; else where they start. */
   readonly window: EventWindow | null;
+  /**
+   * The snapshot beside the log that this read did not use, so it folded the whole history (layout.ts); null when it
+   * used one or there is none. It is no line of the log, so it is named apart from the lines `read` counts (#2584).
+   */
+  readonly skippedSnapshot: SkippedSnapshot | null;
+}
+
+/** Why a snapshot was not used, and the layout of the newer teamrig that wrote it (0: none, it is damaged). */
+export interface SkippedSnapshot {
+  readonly reason: string;
+  readonly newerVersion: number;
 }
 
 export function readEvents(text: string): EventLogRead {
@@ -126,7 +137,7 @@ export function lacksEventsOf(snapshot: RegisterSnapshot, id: string): boolean {
 
 /** Replays a read log: every task as its events leave it, plus the counts `teamrig list` warns about. */
 export function snapshotOf(read: EventLogRead): RegisterSnapshot {
-  return { state: foldEvents(read.events, read.seenIds), read, retired: null, window: null };
+  return { state: foldEvents(read.events, read.seenIds), read, retired: null, window: null, skippedSnapshot: null };
 }
 
 /**

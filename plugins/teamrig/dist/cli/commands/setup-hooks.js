@@ -5,7 +5,8 @@ import { hookLauncher, hookLauncherProblem } from "../../kit/hook-launcher.js";
 import { resolveKitHome } from "../../core/home.js";
 import { noPositionals, requiredFlag } from "../args.js";
 import { readUserSettings } from "../user-settings.js";
-import { userHooksOf } from "../host.js";
+import { userHooksHostId, userHooksOf } from "../host.js";
+import { teamHostsOf } from "../team-hosts.js";
 import { pluginRootOf } from "../plugin-root.js";
 import { EXIT, RefusedError } from "../runtime.js";
 /**
@@ -14,7 +15,8 @@ import { EXIT, RefusedError } from "../runtime.js";
  * handlers are replaced, so the same command rewrites lines an older release wrote. A host whose lines run the kit
  * launcher (`kitLauncher`, Codex) gets lines naming `<kit home>/bin/teamrig.mjs` and no version, so an update
  * leaves them as they are; the run is refused before any write until the kit home holds an intact current version and
- * its launcher. Without --yes it only counts what would be inserted, unchanged, changed and removed; with it, the old
+ * its launcher, and while the team the run is for does not list in `hosts` the host the lines name (each hook run
+ * naming an unlisted host is refused). Without --yes it only counts what would be inserted, unchanged, changed and removed; with it, the old
  * file is kept in the kit's backups folder first. It never writes the host's trust in a handler: the person gives that
  * in the host, after every write. A setting the hooks need
  * in the host's own config file (the adapter's `configLines`, such as a host's interactive shells off) is set the
@@ -39,6 +41,10 @@ export async function hooks(args, runtime) {
     const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
     if (write && kit.problem !== undefined) {
         throw new RefusedError(`${kit.problem}; nothing written`);
+    }
+    const unlisted = await unlistedHost(runtime, userHooksHostId(runtime, port.host), args.flags.get('team') ?? args.common.get('team'));
+    if (write && unlisted !== undefined) {
+        throw new RefusedError(`${unlisted}; nothing written`);
     }
     const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
     if (!answer.ok) {
@@ -66,10 +72,28 @@ export async function hooks(args, runtime) {
     if (kit.problem !== undefined) {
         runtime.out.stdout(`  NOTE --yes is refused until the kit home can run these lines: ${kit.problem}`);
     }
+    if (unlisted !== undefined) {
+        runtime.out.stdout(`  NOTE --yes is refused until the team lists the host: ${unlisted}`);
+    }
     if (file !== undefined) {
         port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
     }
     return EXIT.ok;
+}
+/**
+ * Why the team this run is for cannot run the lines: each names `--host <id>`, and a hook run naming a host the team's
+ * `hosts` does not list is refused (host-choice.ts), so every handler would exit 2 in its sessions. Undefined when no
+ * team config loads (a first install) or the host is no shipped adapter, whose lines name no id.
+ */
+async function unlistedHost(runtime, hostId, team) {
+    if (hostId === undefined) {
+        return undefined;
+    }
+    const listed = await teamHostsOf(runtime, team);
+    if (listed === undefined || listed.includes(hostId)) {
+        return undefined;
+    }
+    return `the team's hosts (${listed.join(', ')}) does not list ${hostId}, which these lines name, so each would be refused in its sessions: add ${hostId} to hosts in the team config first`;
 }
 /**
  * The kit launcher a host's lines run, for a host whose lines run it; none for one whose lines name the plugin folder.

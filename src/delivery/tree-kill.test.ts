@@ -2,9 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LIST_TRIES,
+  nodeLeftoverKill,
   nodeTreeKill,
   parseStartedProcesses,
   stragglersOf,
+  sweepOrphans,
   sweepTree,
   SWEEP_ROUNDS,
   windowsSweepHostOf,
@@ -154,6 +156,47 @@ describe('sweepTree', () => {
   });
 });
 
+describe('sweepOrphans (#1492)', () => {
+  /** Root 10 ran from 100 to 500 and is gone; 20 runs beside it. */
+  const BESIDE = [proc(1, 0, 0), proc(20, 1, 50)];
+
+  it('ends what the exited root started while it ran, with its tree, and reports it swept', async () => {
+    const host = new FakeSweepHost([[...BESIDE, proc(11, 10, 200), proc(12, 11, 300)], BESIDE]);
+    assert.equal(await sweepOrphans(10, 100, 500, host), 'swept');
+    assert.deepEqual(host.kills, [[11, 12]]);
+  });
+
+  it("leaves alone what an earlier or a later holder of the root's id started", async () => {
+    const host = new FakeSweepHost([[...BESIDE, proc(30, 10, 50), proc(11, 10, 200), proc(31, 10, 900)], [...BESIDE, proc(30, 10, 50), proc(31, 10, 900)]]);
+    await sweepOrphans(10, 100, 500, host);
+    assert.deepEqual(host.kills, [[11]]);
+  });
+
+  it("leaves alone what a later holder of the root's id started inside the window", async () => {
+    const host = new FakeSweepHost([[...BESIDE, proc(10, 1, 400), proc(32, 10, 450)]]);
+    assert.equal(await sweepOrphans(10, 100, 500, host), 'gone');
+    assert.deepEqual(host.kills, []);
+  });
+
+  it("still ends what the root started before a later holder took its id", async () => {
+    const host = new FakeSweepHost([[...BESIDE, proc(11, 10, 200), proc(10, 1, 400), proc(32, 10, 450)], [...BESIDE, proc(10, 1, 400), proc(32, 10, 450)]]);
+    assert.equal(await sweepOrphans(10, 100, 500, host), 'swept');
+    assert.deepEqual(host.kills, [[11]]);
+  });
+
+  it('kills nothing and reports gone when the root left nothing running', async () => {
+    const host = new FakeSweepHost([BESIDE]);
+    assert.equal(await sweepOrphans(10, 100, 500, host), 'gone');
+    assert.deepEqual(host.kills, []);
+  });
+
+  it('ends nothing and reports unlisted when no first list works', async () => {
+    const host = new FakeSweepHost(Array.from({ length: LIST_TRIES }, () => undefined));
+    assert.equal(await sweepOrphans(10, 100, 500, host), 'unlisted');
+    assert.deepEqual(host.kills, []);
+  });
+});
+
 describe('sweepTree on the Windows host', () => {
   it('ends a command born after the list and the grandchild it starts while the kill runs (T990)', async () => {
     // The list sees the shell 10 alone; its command 12 starts during that list, and starts 13 during the first kill.
@@ -295,6 +338,23 @@ class CountingOpener {
     };
   }
 }
+
+describe('nodeLeftoverKill', () => {
+  it("sweeps the exited step's orphans through one session of the host on Windows, and closes it", async () => {
+    const host = new FakeSweepHost([[proc(1, 0, 0), proc(11, 10, 200)], [proc(1, 0, 0)]]);
+    const opener = new CountingOpener(host);
+    await nodeLeftoverKill('win32', opener.open)(10, 100, 500);
+    assert.deepEqual(host.kills, [[11]]);
+    assert.deepEqual([opener.opened, opener.closed], [1, 1]);
+  });
+
+  it('closes the session and never rejects when the sweep throws', async () => {
+    const broken: SweepHost = { list: () => Promise.reject(new Error('no PowerShell')), kill: () => Promise.resolve(), now: () => 0 };
+    const opener = new CountingOpener(broken);
+    await nodeLeftoverKill('win32', opener.open)(10, 100, 500);
+    assert.equal(opener.closed, 1);
+  });
+});
 
 describe('nodeTreeKill', () => {
   it('sweeps through one session of the host on Windows, closes it, and sends nothing through the held handle', async () => {

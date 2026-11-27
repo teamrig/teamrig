@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { HandWatch, STALL_MS, TRACE_ERROR_CHARS, TRACE_EVERY_MS, type HandTrace } from './hand-watch.ts';
+import { HandWatch, MAX_PENDING_TICKS, STALL_MS, TRACE_ERROR_CHARS, TRACE_EVERY_MS, type HandTrace } from './hand-watch.ts';
 
 class Host {
   time = 1_000_000;
@@ -42,6 +42,31 @@ describe('HandWatch', () => {
       { kind: 'threw', hand: 'clear', error: 'band write refused' },
       { kind: 'threw', hand: 'wake', error: 'no session' },
     ]);
+  });
+
+  it('keeps at most MAX_PENDING_TICKS ticks of a hung hand, skipping new ones until one settles, and still traces the stall (#1817)', async () => {
+    const host = new Host();
+    const watch = new HandWatch(host);
+    const hung = held();
+    let started = 0;
+    const tick = (): Promise<string> => {
+      started += 1;
+      return hung.tick();
+    };
+    const runs: Promise<string | undefined>[] = [];
+    for (let index = 0; index < 100; index += 1) {
+      runs.push(watch.run('clear', tick));
+      host.time += 1_000;
+      await Promise.resolve();
+    }
+    assert.equal(watch.pendingOf('clear'), MAX_PENDING_TICKS);
+    assert.equal(started, MAX_PENDING_TICKS);
+    assert.equal(host.traces.filter((trace) => trace.kind === 'stalled').length, 1);
+    assert.equal(await watch.run('wake', async () => 'other hands run'), 'other hands run');
+    hung.settle();
+    await Promise.all(runs);
+    assert.equal(watch.pendingOf('clear'), 0);
+    assert.equal(await watch.run('clear', async () => 'runs again'), 'runs again');
   });
 
   it("cuts a long error to the trace's length", async () => {

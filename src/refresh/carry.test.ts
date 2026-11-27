@@ -199,6 +199,16 @@ describe('readCarry', () => {
     assert.deepEqual(carry?.scratchpad, { path: told, entries: 1 });
     assert.equal(carry?.plan, undefined);
   });
+
+  it('on a host whose scratchpads and plan files teamrig does not know, guesses no scratchpad and looks for no plan (T5582)', async () => {
+    const unknown: CarryPlaces = { scratchpadOf: () => undefined, planFile: () => undefined };
+    const files = new MemoryFiles({
+      [TRANSCRIPT]: lines({ type: 'assistant', slug: 'quiet-river-otter' }),
+      [join(GUESSED, 'notes.md')]: 'n',
+      [join(CLAUDE, 'plans', 'quiet-river-otter.md')]: '# plan',
+    });
+    assert.deepEqual(await readCarry(reader, files, TRANSCRIPT, NOW, unknown, []), { crons: [], wake: undefined, planSlug: 'quiet-river-otter', scratchpad: undefined, plan: undefined });
+  });
 });
 
 describe('parseCarriedJobs', () => {

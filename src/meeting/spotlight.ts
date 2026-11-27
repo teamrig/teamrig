@@ -259,7 +259,8 @@ export interface SpotlightDeps extends Pick<OpenTabDeps, 'processes' | 'env' | '
 
 /**
  * Starts the spotlight when the team turned it on and the tab it frames can be found: Windows, with Windows Terminal among
- * the terminals the team's `open.terminal` tries. It first names itself the host's holder, which lifts the spotlight on
+ * the terminals `terminal` tries, the session met's own (`terminalOf`), never the team's alone, so a headless session
+ * runs no overlay for a window it lacks (T5716). It first names itself the host's holder, which lifts the spotlight on
  * already, of this team or another (T4294). Never waits for the overlay to show.
  */
 export async function startSpotlight(
@@ -276,7 +277,7 @@ export async function startSpotlight(
     return { kind: 'unsupported', why: `it needs Windows, and this is ${deps.platform}` };
   }
   if (!candidatesOf(terminal, deps).includes('windows-terminal')) {
-    return { kind: 'unsupported', why: `it needs Windows Terminal, and open.terminal is ${terminal}` };
+    return { kind: 'unsupported', why: `it needs Windows Terminal, and the session met opens in ${terminal}` };
   }
   await deps.files.write(target.holderFile, `${JSON.stringify({ meetingFile: target.meetingFile, startedAt: target.startedAt })}\n`);
   return { kind: 'start', outcome: await deps.processes.startHidden(spotlightRequest({ ...target, dim: config.dim, liftMs: config.breakthroughSeconds * MS_PER_SECOND }, deps.env, cwd)) };

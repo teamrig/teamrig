@@ -34,7 +34,7 @@ export function isSettingsWriter(command: string): boolean {
 }
 
 /**
- * Why a settings writer's write is refused where Claude Code runs it, and the routes the owner runs it by. `mark` is
+ * Why a settings writer's write is refused where an agent runs it, and the routes the owner runs it by. `mark` is
  * the host's variable that showed the run to be an agent's; the exec guard, which refuses the tool call itself, names
  * none where its own run shows none.
  */
@@ -43,7 +43,7 @@ export function settingsWriteRefusal(command: string, mark: string | undefined):
   const shown = mark === undefined ? '' : `${mark} is set: `;
   return (
     `\`${line}\` changes Claude Code's settings, a host's hooks, the team config's format, the teamrig version the hooks run or what runs at login, permissions only the ` +
-    `owner changes, so it is refused where Claude Code runs it (${shown}an agent's tool call, a script it ` +
+    `owner changes, so it is refused where an agent runs it (${shown}an agent's tool call, a script it ` +
     `runs or a hook); run it without --${WRITE_SWITCH} for its preview, and the owner types \`/${line}\` in a tab or ` +
     'runs it in their own terminal.'
   );

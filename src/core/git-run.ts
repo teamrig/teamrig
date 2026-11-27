@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { scaledLimitMs } from './time-limit.ts';
 
 /**
  * Runs the git CLI for the kit's git ports: in the folder a command names, never in a repository a caller's hook
@@ -71,8 +72,9 @@ export function unansweredOf(end: GitEnd): string | undefined {
   return undefined;
 }
 
+/** One git run with `timeout` as its limit, stretched by `$TEAMRIG_TIME_SCALE` (time-limit.ts). */
 export function runGit(dir: string, args: readonly string[], timeout: number = QUERY_TIMEOUT_MS): GitRun {
-  const result = spawnSync('git', args, { cwd: dir, windowsHide: true, env: gitEnvironment(process.env), encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 });
+  const result = spawnSync('git', args, { cwd: dir, windowsHide: true, env: gitEnvironment(process.env), encoding: 'utf8', timeout: scaledLimitMs(timeout), maxBuffer: 16 * 1024 * 1024 });
   const unanswered = unansweredOf(result);
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '', ...(unanswered === undefined ? {} : { unanswered }) };
 }
@@ -82,7 +84,7 @@ export function runGit(dir: string, args: readonly string[], timeout: number = Q
  * `git cat-file --batch` (T4035); undefined unless git exits 0.
  */
 export function queryBytes(dir: string, args: readonly string[], input: string, maxBuffer: number): Buffer | undefined {
-  const result = spawnSync('git', args, { cwd: dir, windowsHide: true, env: gitEnvironment(process.env), input, timeout: QUERY_TIMEOUT_MS, maxBuffer });
+  const result = spawnSync('git', args, { cwd: dir, windowsHide: true, env: gitEnvironment(process.env), input, timeout: scaledLimitMs(QUERY_TIMEOUT_MS), maxBuffer });
   return unansweredOf(result) === undefined && result.status === 0 ? result.stdout : undefined;
 }
 

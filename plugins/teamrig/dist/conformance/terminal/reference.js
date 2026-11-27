@@ -58,6 +58,13 @@ export function referenceTerminal(options = {}) {
             }
             return { kind: 'opened', pane: id };
         }),
+        split: (request) => answer('split', { kind: 'split' }, () => {
+            const id = add({ title: request.title, folder: request.folder, argv: request.argv, window: undefined, identity: request.identity, token: request.wakeToken });
+            if (request.focus === 'take' || front === undefined) {
+                front = id;
+            }
+            return { kind: 'split' };
+        }),
         focus: (id) => onPane('focus', id, () => {
             front = id;
         }),
@@ -111,6 +118,7 @@ export function nothingTerminal() {
         port: {
             capabilities: () => Promise.resolve({ requests: TERMINAL_REQUESTS, interfaces: ['1.0'], seesDraft: true }),
             open: fails,
+            split: fails,
             focus: fails,
             close: fails,
             restart: fails,

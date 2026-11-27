@@ -6,11 +6,12 @@ export { API_VERSION, apiVersionNotice, isApiVersion } from "./version.js";
 export { OSES, isManifest, isOs, isProofRef, isSupport, manifestProblems, provedOn, supportProblem } from "./support.js";
 export { ADAPTER_ID, adapterEntry, declarationProblems } from "./declaration.js";
 export { defineHost, hostAdapterProblems, hostDeclarationProblems, isHostAdapter, isHostDeclaration } from "./host.js";
+export { HOST_PORT_FEATURES, isHostPortName, portFeatureProblems } from "./port-features.js";
 export { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS, connectorAdapterProblems, connectorDeclarationProblems, defineConnector, isConnectorAdapter, isConnectorDeclaration, } from "./connector.js";
 export { PANE_STATES, TERMINAL_REQUESTS, isPaneState, isTerminalRequest, KIT_MODE_ENV, KIT_REQUESTS, isKitRequest, } from "./terminal.js";
 export { defineTerminal, isTerminalAdapter, isTerminalDeclaration, terminalAdapterProblems, terminalDeclarationProblems, } from "./terminal-adapter.js";
 export { CONNECTOR_FEATURES, CONNECTOR_KINDS, HOST_FEATURES, TERMINAL_FEATURES, featuresOf, isConnectorFeatureId, isConnectorKind, isHostFeatureId, isTerminalFeatureId, } from "../features/registry.js";
-export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName, isToolKind, isUnsupported, unsupported, skippedUserHookLine, userHooksCounts, } from "../ports/host/index.js";
+export { HOOK_EVENTS, INPUT_ORIGINS, SHELL_DIALECTS, TOOL_KINDS, isHookEventName, isToolKind, isUnsupported, unsupported, skippedUserHookLine, userHooksCounts, OBSERVED_FROM, PERMISSION_MODES, UNKNOWN_WHY, effectiveOf, hostCannotTell, knownFrom, observedPermission, } from "../ports/host/index.js";
 // What an adapter reads outside JSON with, an API's answer or a host's own line: it is narrowed, never cast. And a
 // thrown value's code and text.
 export { errorCode, errorMessage, instantField, isNonNegativeInteger, isRecord, isStringArray, numberField, recordField, stringField, } from "../core/guards.js";

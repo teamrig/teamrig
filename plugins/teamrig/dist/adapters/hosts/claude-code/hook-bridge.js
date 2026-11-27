@@ -1,4 +1,4 @@
-import { HOOK_EVENTS, isRecord, recordField, stringField, } from "../../../plugin-api/index.js";
+import { HOOK_EVENTS, isRecord, observedPermission, recordField, stringField, } from "../../../plugin-api/index.js";
 import { TITLE_SWITCH } from "./title-switch.js";
 /** Claude Code's name for each moment teamrig knows: the `hook_event_name` of its hook input and of a reply. */
 const HOST_NAMES = {
@@ -40,6 +40,16 @@ function titleOf(payload) {
 function effortOf(payload) {
     const effort = recordField(payload, 'effort');
     return effort === undefined ? undefined : stringField(effort, 'level');
+}
+/**
+ * Claude Code's permission_mode words that a recording holds (src/testing/recorded/claude-code, 2.1.329): only these
+ * are mapped, and any other word stays unmapped until a recording shows the hook input really carries it.
+ */
+const PERMISSION_WORDS = { default: 'ask' };
+/** The permission mode, which Claude Code 2.1.329 gives its prompt, tool and stop hooks, and not SessionStart, SessionEnd, SubagentStart or a compaction. */
+function permissionModeOf(payload) {
+    const word = stringField(payload, 'permission_mode');
+    return word === undefined ? undefined : observedPermission(word, PERMISSION_WORDS);
 }
 /** A hook that fires inside a helper carries `agent_id`; a session started as an agent carries its type alone. */
 function helperOf(payload) {
@@ -103,6 +113,7 @@ function eventOf(payload, shape) {
         trigger: stringField(payload, 'trigger'),
         model: stringField(payload, 'model'),
         effort: effortOf(payload),
+        permission: permissionModeOf(payload),
         // A form with no text of its own is named by the MCP server that asks.
         message: stringField(payload, 'message') ?? (name === 'form-start' ? stringField(payload, 'mcp_server_name') : undefined),
         error: stringField(payload, 'error'),
@@ -181,8 +192,6 @@ export function hookBridge(shape) {
             return isRecord(payload) ? eventOf(payload, shape) : undefined;
         },
         reply: replyText,
-        // A hook that exits with an error other than 2 is shown to the human and the moment goes on.
-        failureRule: 'passes',
         titleSwitch: TITLE_SWITCH,
     };
 }

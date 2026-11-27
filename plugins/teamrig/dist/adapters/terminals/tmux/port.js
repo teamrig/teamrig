@@ -4,11 +4,15 @@ const UNSERVED = { kind: 'unserved' };
 const NOT_INSTALLED = 'tmux is not installed';
 /**
  * The tmux port: a pane is a tmux window named by its title, which is the id it answers and finds the window by
- * again. It opens and focuses panes and serves nothing else, as its declaration says.
+ * again. It opens, splits and focuses panes and serves nothing else, as its declaration says.
  */
 export function tmuxPort(deps) {
+    /** What a launch that started nothing answers, in tmux's words. */
+    function notStarted(outcome) {
+        return { kind: 'failed', why: outcome.kind === 'missing' ? NOT_INSTALLED : outcome.error };
+    }
     return {
-        capabilities: async () => ({ requests: ['open', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
+        capabilities: async () => ({ requests: ['open', 'split', 'focus'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
         open: async (request) => {
             // tmux 3.0 and later run a command given as several arguments without a shell; -d leaves the current window selected.
             const keep = request.focus === 'keep' ? ['-d'] : [];
@@ -38,6 +42,17 @@ export function tmuxPort(deps) {
                 case 'failed':
                     return { kind: 'failed', why: outcome.error };
             }
+        },
+        split: async (request) => {
+            // split-window splits the pane this run works in, which tmux names in TMUX_PANE; -h puts the new one beside it.
+            const keep = request.focus === 'keep' ? ['-d'] : [];
+            const outcome = await deps.processes.start({
+                command: 'tmux',
+                args: ['split-window', '-h', ...keep, '-c', request.folder, ...request.argv],
+                cwd: request.folder,
+                mode: 'exit',
+            });
+            return outcome.kind === 'started' ? { kind: 'split' } : notStarted(outcome);
         },
         close: async () => UNSERVED,
         restart: async () => UNSERVED,

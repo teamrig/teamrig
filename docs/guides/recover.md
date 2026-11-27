@@ -63,8 +63,8 @@ teamrig restore run      # reopen the sessions the last shutdown killed
   window of the team's own (`teamrig-<team>`), so two teams' tabs never mix; without it, and for sessions outside a
   team, they open in the most recent window.
 - By itself at logon: on Windows, `teamrig restore install --yes` has the system run `teamrig restore check` at
-  each logon of this user, through a small launcher that finds the installed plugin each time, so a plugin update
-  needs no new install. When the shutdown killed sessions, the check opens a tab titled `Restore Claude sessions`
+  each logon of this user, through a small launcher that each time runs the kit launcher, which checks the kit home's current
+  version before it runs it, else the Claude Code plugin's CLI, so an update needs no new install, on any AI CLI. When the shutdown killed sessions, the check opens a tab titled `Restore Claude sessions`
   that runs the restore and closes by itself once they are open. `restore uninstall --yes` stops it. macOS and Linux
   have no logon entry yet: there you run `teamrig restore run` after a crash or reboot.
 - By hand, from anywhere: the same install adds the Start-menu shortcut `Restore Claude Sessions` (pin it to the

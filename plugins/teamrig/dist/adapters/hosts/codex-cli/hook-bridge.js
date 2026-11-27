@@ -1,4 +1,4 @@
-import { HOOK_EVENTS, isRecord, recordField, stringField, } from "../../../plugin-api/index.js";
+import { HOOK_EVENTS, isRecord, observedPermission, recordField, stringField, } from "../../../plugin-api/index.js";
 /**
  * Codex CLI's name for each moment teamrig knows and Codex 0.170.0 fires (`codex-rs/protocol/src/hooks.rs`). The four
  * it lacks (a failed tool call, a failed stop, a form and its answer) are never called, so they map to nothing.
@@ -31,6 +31,18 @@ const BLOCKED_AT_TOP = new Set(['prompt', 'tool-end', 'stop', 'helper-stop']);
 const TAKES_CONTEXT = new Set(['session-start', 'prompt', 'tool-start', 'tool-end', 'helper-start']);
 /** Codex refuses a blank reason, and a refusal with no reason would then not refuse. */
 const UNEXPLAINED = 'A teamrig hook refused this and gave no reason.';
+/** Codex's permission_mode words, from the list its 0.170.0 hook input schemas publish (hook-input.ts). */
+const PERMISSION_WORDS = {
+    default: 'ask',
+    acceptEdits: 'accept-edits',
+    plan: 'plan',
+    dontAsk: 'no-prompts',
+    bypassPermissions: 'bypass',
+};
+function permissionModeOf(payload) {
+    const word = stringField(payload, 'permission_mode');
+    return word === undefined ? undefined : observedPermission(word, PERMISSION_WORDS);
+}
 function sessionOf(payload) {
     const id = stringField(payload, 'session_id');
     return id !== undefined && SESSION_ID.test(id) ? id : undefined;
@@ -79,6 +91,7 @@ function eventOf(payload, shape) {
         trigger: stringField(payload, 'trigger'),
         model: stringField(payload, 'model'),
         effort: undefined,
+        permission: permissionModeOf(payload),
         message: undefined,
         error: undefined,
     };
@@ -157,8 +170,6 @@ export function hookBridge(shape) {
             return isRecord(payload) ? eventOf(payload, shape) : undefined;
         },
         reply: replyText,
-        // A hook that exits with any code but 2 is marked failed and the moment goes on (`hooks_src_events_pre_tool_use.rs`).
-        failureRule: 'passes',
         // Codex CLI turns its own tab title off by a config key (`tui.terminal_title`, `config_src_types.rs`), not an
         // environment switch, and its hook output has no title field, so there is no switch to name here.
         titleSwitch: undefined,

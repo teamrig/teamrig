@@ -16,7 +16,7 @@ need; teamrig checks for anything else when you set up a team, and tells you in 
 
 On an AI CLI with no teamrig plugin, run the one-file install under
 [An AI CLI with no teamrig plugin](../../README.md#an-ai-cli-with-no-teamrig-plugin) instead: `node install-teamrig.ts
---host <name> --yes` clones the release and writes that host's hooks.
+--host <name> --yes` clones the release, puts `teamrig` on your PATH and writes that host's hooks.
 
 ## Your first team
 

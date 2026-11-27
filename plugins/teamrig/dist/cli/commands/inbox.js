@@ -247,7 +247,7 @@ async function addFromHost(args, runtime, from) {
     if (!HOST_SENDER.test(from)) {
         throw new UsageError(`--from takes host:<job>, the job ${NAME_RULE}, not "${from}"`);
     }
-    refuseUnlessPerson(runtime, `${KIT_NAME} inbox add --from ${from}`, (mark) => `--from ${from} is for a job the host runs on a schedule, so it is refused where Claude Code runs it (${mark} is set: an agent's tool call, a script it runs or a hook); a session posts as itself without --from`);
+    refuseUnlessPerson(runtime, `${KIT_NAME} inbox add --from ${from}`, (mark) => `--from ${from} is for a job the host runs on a schedule, so it is refused where an agent runs it (${mark} is set: an agent's tool call, a script it runs or a hook); a session posts as itself without --from`);
     if (args.flags.get('session') !== undefined) {
         throw new UsageError(`--from ${from} is for a job that runs as no session: drop --session, or post as the session without --from`);
     }

@@ -1,10 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { runGit as runKitGit } from "../core/git-run.js";
 import { COMMIT_LOG_FORMAT, parseCommitLog } from "./commit-size.js";
+import { scaledLimitMs } from "../core/time-limit.js";
+/** The limit on one state read (branch, head, push target, a config value), stretched by `$TEAMRIG_TIME_SCALE`. */
+const STATE_READ_TIMEOUT_MS = 5_000;
 /** One git run's stdout; any failure (no repository, an unknown ref, no git on PATH) reads as undefined. */
 function runGit(dir, args) {
     try {
-        return execFileSync('git', args, { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5_000, maxBuffer: 16 * 1024 * 1024 });
+        return execFileSync('git', args, { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: scaledLimitMs(STATE_READ_TIMEOUT_MS), maxBuffer: 16 * 1024 * 1024 });
     }
     catch {
         return undefined;
@@ -18,7 +21,7 @@ function readGit(dir, args) {
 /** One config value as git in `dir` reads it: git exits 1 for a key that is not set, and fails otherwise for no git or no folder. */
 function readConfig(dir, key) {
     try {
-        const value = execFileSync('git', ['config', '--get', key], { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5_000 });
+        const value = execFileSync('git', ['config', '--get', key], { cwd: dir, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: scaledLimitMs(STATE_READ_TIMEOUT_MS) });
         return { kind: 'set', value: value.replace(/\r?\n$/, '') };
     }
     catch (error) {

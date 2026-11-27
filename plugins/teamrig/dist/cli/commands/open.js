@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { DEFAULT_HOST } from "../../composition/adapters.js";
 import { describeLaunch, launchModelProblem, launchOf, terminalOf } from "../../config/launch.js";
 import { isEffortLevel, isTerminalChoice, TERMINALS } from "../../config/types.js";
 import { splitAddress } from "../../core/address.js";
@@ -17,6 +18,7 @@ import { sessionCredentialFree, sessionEnv } from "../../open/session-env.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { noRoomText } from "../../sessions/headroom.js";
 import { closedOf, SessionLog } from "../../sessions/log.js";
+import { SessionRecordStore } from "../../sessions/record.js";
 import { teamWindowOf } from "../../open/terminals.js";
 import { urgentFirstPrompt } from "../../wake/asks.js";
 import { WakePrompts } from "../../wake/prompts.js";
@@ -155,15 +157,36 @@ export function printOpenResult(runtime, opened) {
     return EXIT.printed;
 }
 /**
+ * The run that opens session `id`: on the host its record of its last start names (T5061), so a Codex CLI session
+ * opened from the UI, a meet or an owner wake starts, resumes and is checked in Codex CLI, not in the caller's host
+ * (a bare command takes the first of the team's `hosts`). A record naming no host is the default host's. A run that
+ * names `--host` keeps it, as a person chose it; a session never started, or of a host teamrig does not ship, keeps
+ * the caller's.
+ */
+async function ownHostRun(caller, kit, id) {
+    if (caller.hostId !== undefined) {
+        return caller;
+    }
+    const record = await new SessionRecordStore(caller.files, kit.paths).read(id);
+    if (record === undefined) {
+        return caller;
+    }
+    const hostId = record.host ?? DEFAULT_HOST;
+    const shipped = caller.shippedHosts[hostId];
+    return shipped === undefined ? caller : { ...caller, host: shipped.ports, hostId };
+}
+/**
  * Opens the session's tab as `open` describes: a rehired one on its handover, a closed one in its last Claude Code
  * session or fresh (always fresh with `fresh`), refused (`RefusedError`) while it runs in a Claude Code and, for any
  * session but the lead, when the host has no room, its tab held while it loads (admitTab, so the next opens of every
  * team count it before free memory shows it), and a closed one's reopen logged once its tab opened (fresh on its
  * handover while its refresh is ready, T2354). A home close
  * (a hire that never ran, T1364) opens as a new hire does, its reopen logged too.
+ * It runs on the session's own host (ownHostRun), whichever host the caller works in.
  */
-export async function openSession(runtime, kit, config, roster, request) {
+export async function openSession(caller, kit, config, roster, request) {
     const { team, id, project, terminal, asked, focus } = request;
+    const runtime = await ownHostRun(caller, kit, id);
     const name = roster.nameOf(id) ?? id;
     await refuseLiveRun(runtime, kit, roster, id, name);
     const from = rehiredFrom((await new HiringLog(runtime.files, kit.paths.hires).read()).records, id);

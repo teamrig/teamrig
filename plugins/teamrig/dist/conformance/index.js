@@ -4,6 +4,7 @@
  * its own folder, nothing else, so it ships as it is to whoever builds a host or a connector.
  */
 import { LAUNCHER_CONTRACT } from "./host/launcher.js";
+import { PERMISSION_MODE_CONTRACT } from "./host/permission-mode.js";
 import { PERMISSIONS_CONTRACT } from "./host/permissions.js";
 import { MODELS_CONTRACT } from "./host/models.js";
 import { STEPS_CONTRACT } from "./host/steps.js";
@@ -24,6 +25,7 @@ export { nothingUsage, USAGE_CONTRACT, yesUsage } from "./host/usage.js";
 export { nothingStatusLine, STATUS_LINE_CONTRACT, yesStatusLine } from "./host/status-line.js";
 export { nothingPermissions, PERMISSIONS_CONTRACT, yesPermissions } from "./host/permissions.js";
 export { nothingPlugin, PLUGIN_CONTRACT, yesPlugin } from "./host/plugin.js";
+export { PERMISSION_MODE_CONTRACT, nothingPermissionMode, yesPermissionMode } from "./host/permission-mode.js";
 export { MODELS_CONTRACT, nothingModels, yesModels } from "./host/models.js";
 export { STEPS_CONTRACT, nothingSteps, yesSteps } from "./host/steps.js";
 export { TRACKER_CONTRACT } from "./connector/tracker.js";
@@ -45,4 +47,5 @@ export const CONTRACTS = [
     entryOf(STEPS_CONTRACT),
     entryOf(LAUNCHER_CONTRACT),
     entryOf(TRACKER_CONTRACT),
+    entryOf(PERMISSION_MODE_CONTRACT),
 ];

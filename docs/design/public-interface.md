@@ -239,6 +239,7 @@ terminal a **host**: a program teamrig runs, speaking a small protocol, in the m
 | Request | What the host does |
 | --- | --- |
 | `open` | Opens a pane for a session, with the command, folder, title and an opaque identity bag teamrig gives, and answers with the host's own pane id |
+| `split` | Splits the pane the person works in to show a session's pane beside it, with the same command, folder, title and identity bag; since 1.11. A split pane has no id a host could find again, so it answers none |
 | `focus` | Brings a session's pane forward; answers `selected` when the pane is selected but the system keeps another app's window in front |
 | `close` | Closes it |
 | `restart` | Restarts it, resuming the conversation when asked |

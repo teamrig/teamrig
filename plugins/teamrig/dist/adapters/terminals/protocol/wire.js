@@ -19,6 +19,9 @@ export function requestLine(id, method, params) {
 export function openParams(request) {
     return { ...request, window: request['window'] ?? null };
 }
+export function splitParams(request) {
+    return { ...request };
+}
 export function deliverParams(pane, wake) {
     return { pane, token: wake.token, text: wake.text };
 }
@@ -96,6 +99,12 @@ export function openAnswerOf(result) {
         return { kind: 'opened', pane: result['pane'] };
     }
     return commonAnswer(result) ?? mismatch('open');
+}
+export function splitAnswerOf(result) {
+    if (result['kind'] === 'split') {
+        return { kind: 'split' };
+    }
+    return commonAnswer(result) ?? mismatch('split');
 }
 export function paneAnswerOf(method, result) {
     if (result['kind'] === 'done' || result['kind'] === 'gone') {

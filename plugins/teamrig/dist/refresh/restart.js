@@ -1,5 +1,5 @@
 import { typedEffortsOf } from "../effort/typed-effort.js";
-import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isHostSessionId } from "../mod/clear-hand.js";
+import { CLAIM_END, CLAIM_HELD, CLAIM_TAKEN, isClaudeSessionId } from "../mod/clear-hand.js";
 import { endAndWait, tabProcessOf, workCutOffBy } from "../open/end-tab.js";
 import { readRunningWork } from "./running.js";
 import { TURN_TAIL_BYTES, turnRunning } from "./turn.js";
@@ -28,6 +28,15 @@ const QUIET_TAIL_BYTES = 4_096;
 const CANCELLED = { kind: 'cancelled', why: 'the restart was cancelled or replaced' };
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */
 export const CLAIM_WAIT_MS = 10_000;
+/**
+ * How long a claimed /clear has to reach the SessionStart `clear` hook, which takes the refresh (the state leaves
+ * `ready`), before the runner calls it not run (#1819). The clear hand's run is stopped at 30 s (`hook clear-claim`'s
+ * timeout), and a run stopped after it wrote its claim but before it read it ran no /clear; a /clear it did run
+ * starts the new session well inside this, the rest being room for a loaded host.
+ */
+export const CLEAR_TAKEN_WAIT_MS = 60_000;
+/** Why a restart failed when its tab claimed the /clear but no new session took the refresh. */
+export const CLAIMED_NO_CLEAR = 'the tab claimed the /clear but ran none';
 /** The pending request this restart was started for; undefined once it was cancelled, taken or replaced. */
 async function pendingOf(deps, plan) {
     const request = await deps.store.restart(plan.id);
@@ -187,6 +196,22 @@ async function handToTab(deps, plan, hostSession, mode) {
     }
 }
 /**
+ * Whether the SessionStart `clear` hook took the refresh (the state left `ready`) within CLEAR_TAKEN_WAIT_MS of a
+ * claim, so a `taken` the hand never acted on is not logged as cleared (#1819).
+ */
+async function clearTaken(deps, plan) {
+    const deadline = deps.clock.now() + CLEAR_TAKEN_WAIT_MS;
+    for (;;) {
+        if ((await deps.store.state(plan.id))?.phase !== 'ready') {
+            return true;
+        }
+        if (deps.clock.now() >= deadline) {
+            return false;
+        }
+        await deps.sleep(POLL_MS);
+    }
+}
+/**
  * Ends the session's process: in its own tab under `teamrig launch`, else after a new tab opened. Never while it
  * runs a background shell (`workCutOffBy`): that leaves the session to type /clear.
  */
@@ -286,7 +311,7 @@ export async function runRestart(deps, plan) {
         if ((await pendingOf(deps, plan)) === undefined) {
             return CANCELLED;
         }
-        if (!isHostSessionId(request.hostSession)) {
+        if (!isClaudeSessionId(request.hostSession)) {
             return endSession(deps, plan, request, claude);
         }
         const answer = await handToTab(deps, plan, request.hostSession, await modeOf(deps, request, claude, transcript));
@@ -296,7 +321,7 @@ export async function runRestart(deps, plan) {
                 if ((await pendingOf(deps, plan)) !== undefined) {
                     await deps.store.clearRestart(plan.id);
                 }
-                return { kind: 'cleared' };
+                return (await clearTaken(deps, plan)) ? { kind: 'cleared' } : { kind: 'failed', why: CLAIMED_NO_CLEAR };
             case 'end':
                 // The end claim leaves the request pending, so a prompt typed since still cancels the end.
                 return endSession(deps, plan, request, claude);

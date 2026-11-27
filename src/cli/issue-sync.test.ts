@@ -296,7 +296,7 @@ describe('teamrig issue sync', () => {
 
   it('names the pull request news since the last automatic read, and by hand keeps no watch and tells no inbox', async () => {
     const kit = new CliHarness(GITHUB_TEAM);
-    const state = join(TEAM_HOME, 'state', 'github-sync.json');
+    const state = join(TEAM_HOME, 'state', 'connectors', 'github', 'sync.json');
     const watched = '{"v":3,"startedAt":1,"failing":[],"pulls":{"acme/web":{"cursor":"2030-01-01T00:00:00Z","open":[{"number":20,"mergeable":"mergeable","checks":"none","review":"none"}]}}}\n';
     await kit.files.write(state, watched);
     const gh = twoIssues().holdsPulls('acme/web', [ghPull('acme/web', 20, { mergeable: 'CONFLICTING', updatedAt: '2030-01-02T00:00:00Z' })]);
@@ -310,8 +310,20 @@ describe('teamrig issue sync', () => {
     assert.equal(kit.files.get(join(TEAM_HOME, 'state', 'inbox', 'lead.md')), undefined);
   });
 
+  it("reads the sync state an older teamrig left in the team's state folder, moved into GitHub's", async () => {
+    const kit = new CliHarness(GITHUB_TEAM);
+    const earlier = join(TEAM_HOME, 'state', 'github-sync.json');
+    const watched = '{"v":3,"startedAt":1,"failing":[],"pulls":{"acme/web":{"cursor":"2030-01-01T00:00:00Z","open":[{"number":20,"mergeable":"mergeable","checks":"none","review":"none"}]}}}\n';
+    await kit.files.write(earlier, watched);
+    const gh = twoIssues().holdsPulls('acme/web', [ghPull('acme/web', 20, { mergeable: 'CONFLICTING', updatedAt: '2030-01-02T00:00:00Z' })]);
+    const lines = await expectRun(kit, ['issue', 'sync'], gh, EXIT.ok);
+    assert.ok(lines.some((line) => line.startsWith('PULL NEWS lead (wakes): GitHub pull requests: gh:acme/web#20')), lines.join('\n'));
+    assert.equal(kit.files.get(join(TEAM_HOME, 'state', 'connectors', 'github', 'sync.json')), watched);
+    assert.equal(kit.files.get(earlier), undefined);
+  });
+
   describe("an outside pull request's task for the watcher", () => {
-    const state = join(TEAM_HOME, 'state', 'github-sync.json');
+    const state = join(TEAM_HOME, 'state', 'connectors', 'github', 'sync.json');
     const WATCHED = '{"v":3,"startedAt":1,"failing":[],"pulls":{"acme/web":{"cursor":"2030-01-01T00:00:00Z","open":[]}}}\n';
     const OPENED = { authorAssociation: 'NONE', author: 'stranger', fork: true, createdAt: '2030-01-02T00:00:00Z', updatedAt: '2030-01-02T00:00:00Z' };
     const ADD_LINE = 'gh:acme/web#21 p2 lead: "Pull request acme/web#21 by stranger", due 2030-01-03 00:00 UTC';

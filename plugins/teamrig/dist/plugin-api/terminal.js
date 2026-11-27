@@ -4,7 +4,7 @@
  * through the protocol by a client that serves this same port, so one contract holds both.
  */
 /** The protocol's requests, by the names they have on the wire. */
-export const TERMINAL_REQUESTS = ['open', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list'];
+export const TERMINAL_REQUESTS = ['open', 'split', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list'];
 export function isTerminalRequest(value) {
     return TERMINAL_REQUESTS.some((request) => request === value);
 }

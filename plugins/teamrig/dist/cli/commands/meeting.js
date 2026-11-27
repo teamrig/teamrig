@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { resetSummaryLine } from "../../budget/resets.js";
+import { terminalOf } from "../../config/launch.js";
 import { deliveryPlaces } from "../../delivery/places.js";
 import { formatAddress } from "../../core/address.js";
 import { sessionDisplay } from "../../core/ids.js";
@@ -241,7 +242,7 @@ export async function meetingStart(args, runtime) {
         holderFile: spotlightHolderPath(mk.kit.paths.kitHome),
     };
     const { spotlight } = mk.config.meeting;
-    const line = spotlightLine(await startSpotlight(runtime, spotlight, mk.config.open.terminal, spotlit, runtime.cwd), spotlit, spotlight.dim);
+    const line = spotlightLine(await startSpotlight(runtime, spotlight, terminalOf(mk.config, mk.lead), spotlit, runtime.cwd), spotlit, spotlight.dim);
     if (line !== undefined) {
         runtime.out.stdout(line);
     }

@@ -142,6 +142,13 @@ describe('readSnapshotText', () => {
     assert.equal(read.read.lines.length, 1, 'a task line is no event line');
   });
 
+  it('reads a snapshot written before 0.508.0, its task lines holding no inProgressMs, as usable (#2584)', () => {
+    const { inProgressMs: _dropped, ...older } = lined('T1', 7);
+    const line = toJsonlLine({ v: TASK_LINES_LAYOUT_VERSION, type: TASK_LINE_TYPE, task: older });
+    const read = usable(readSnapshotText(snapshotText({ tasks: 1, events: 0 }, line)));
+    assert.deepEqual(read.tasks.get('T1'), { ...lined('T1', 7), inProgressMs: 0 });
+  });
+
   it('refuses a layout 5 snapshot with a damaged or repeated task line, or more or fewer than its header names (T4076)', () => {
     const torn = toJsonlLine({ v: TASK_LINES_LAYOUT_VERSION, type: TASK_LINE_TYPE, task: { ...lined('T1', 7), reparks: -1 } });
     assert.match(reason(readSnapshotText(snapshotText({ tasks: 1, events: 0 }, torn))), /a task line is damaged \(T1: reparks is not a count\)/);
@@ -209,12 +216,15 @@ describe('assemble', () => {
     assert.throws(() => assemble(historyPlan(readEvents(toJsonlLine(markerRecord(1, at(20))))), [], readEvents('')), /names 1 segment\(s\) and 0 were read/);
   });
 
-  it('counts a skipped snapshot with the damaged lines, or with the newer ones when a newer teamrig wrote it', () => {
+  it('names a skipped snapshot apart from the log lines it counts, a newer one still blocking writes (#2584)', () => {
     const tail = readEvents(create('T1', 7));
     const damaged = assemble({ base: undefined, segments: [], skipped: { kind: 'unusable', reason: 'torn', newerVersion: 0 } }, [], tail);
-    assert.deepEqual([damaged.read.unreadable, damaged.read.newer, damaged.read.newestVersion], [1, 0, EVENT_VERSION]);
+    assert.deepEqual([damaged.read.unreadable, damaged.read.newer, damaged.read.newestVersion], [0, 0, EVENT_VERSION]);
+    assert.deepEqual(damaged.skippedSnapshot, { reason: 'torn', newerVersion: 0 });
     const newer = assemble({ base: undefined, segments: [], skipped: { kind: 'unusable', reason: 'newer', newerVersion: 9 } }, [], tail);
-    assert.deepEqual([newer.read.unreadable, newer.read.newer, newer.read.newestVersion], [0, 1, 9]);
+    assert.deepEqual([newer.read.unreadable, newer.read.newer, newer.read.newestVersion], [0, 0, 9]);
+    assert.deepEqual(newer.skippedSnapshot, { reason: 'newer', newerVersion: 9 });
+    assert.equal(assemble(historyPlan(tail), [], tail).skippedSnapshot, null);
   });
 
   it("goes on from the header's counts and next id, and names the retired tasks", () => {
@@ -282,10 +292,11 @@ describe('readWorkingSet and readHistory', () => {
     // Stopped after starting the new tail, before the snapshot: the segment is folded whole.
     await files.write(LOG, toJsonlLine(markerRecord(1, at(20))));
     assert.deepEqual((await readWorkingSet(files, PATHS)).state, whole.state);
-    // Stopped halfway through a snapshot written in place: it is skipped and counted.
+    // Stopped halfway through a snapshot written in place: it is skipped and named.
     await files.write(PATHS.snapshot, snapshotText({ covered: 1, events: 5 }, create('T2', 2)));
     const torn = await readWorkingSet(files, PATHS);
-    assert.deepEqual([torn.state, torn.read.unreadable], [whole.state, 1]);
+    assert.deepEqual([torn.state, torn.read.unreadable], [whole.state, 0]);
+    assert.match(torn.skippedSnapshot?.reason ?? '', /holds 1 event\(s\) where its header says 5/);
   });
 
   it('reads the working set without the segments its snapshot covers, and refuses a history with one missing', async () => {

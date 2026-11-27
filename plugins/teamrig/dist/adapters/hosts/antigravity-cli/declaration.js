@@ -32,9 +32,10 @@ const PROMPT_SECRET = {
 const NOT_YET = (what) => ({ kind: 'unsupported', notice: `${what} is not built yet` });
 const NO_HOST_SUPPORT = (what) => ({ kind: 'unsupported', notice: `Antigravity has no ${what}` });
 export const declaration = {
-    apiVersion: '0.1.0',
+    apiVersion: '0.2.0',
     id: 'antigravity-cli',
     name: 'Antigravity CLI',
+    steps: ['host.hooks-file'],
     sessionVariables: {
         marks: ['ANTIGRAVITY_CONVERSATION_ID'],
         identity: ['ANTIGRAVITY_CONVERSATION_ID'],

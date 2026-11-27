@@ -16,6 +16,7 @@ import { formatSessionRecord } from '../../sessions/record.ts';
 import { formatTabNeed } from '../../tabs/need.ts';
 import { INTERFACE_MAJOR, INTERFACE_MINOR, INTERFACE_VERSION } from '../../interface/index.ts';
 import { CliHarness, CONFIG_PATH, EVENTS_PATH, TEAM, TEAM_HOME, type CliResult } from '../../testing/cli-harness.ts';
+import { hostCalled, SHIPPED_HOST, shippedHost } from '../../testing/host.ts';
 import { rotateRegister } from '../../testing/rotation.ts';
 import { normalisePath } from '../../testing/memory-files.ts';
 import { answersOf, problemsOf, rowsOf, served } from '../../testing/read-answers.ts';
@@ -523,6 +524,19 @@ describe('teamrig read sessions', () => {
     );
   });
 
+  it("serves each session's host from its last start: the one its record names, else the default host (T5061)", async () => {
+    const kit = await treeHarness();
+    const start = { claudePid: 7, hostSession: CONVERSATION, at: '2030-01-08T09:00:00.000Z' };
+    await kit.files.write(startRecordOf('ui', 'pixel'), formatSessionRecord({ ...start, host: 'codex-cli' }));
+    await kit.files.write(startRecordOf('web', 'front'), formatSessionRecord({ ...start, host: 'gone-cli' }));
+    const shippedHosts = { 'claude-code': shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(hostCalled('Codex CLI', 'codex')) };
+    const answer = served(await kit.run(READ_SESSIONS, { ...AS_UI, shippedHosts }));
+    assert.deepEqual(
+      [sessionOf(answer, 'ui', 'pixel')['host'], sessionOf(answer, 'web', 'front')['host'], sessionOf(answer, 'web', 'back')['host']],
+      [{ id: 'codex-cli', name: 'Codex CLI' }, { id: 'gone-cli', name: 'gone-cli' }, { id: 'claude-code', name: 'Claude Code' }],
+    );
+  });
+
   it('answers self with the session the conversation runs in, the newest start when two sessions hold it', async () => {
     const kit = await treeHarness();
     const startOf = (at: string): string => formatSessionRecord({ claudePid: 7, hostSession: CONVERSATION, at });
@@ -886,6 +900,18 @@ describe('teamrig read: what could not be read', () => {
     const answer = served(await kit.run(READ_TASKS));
     assert.deepEqual(titlesOf(answer), ['Ship the gate']);
     assert.deepEqual(problemsOf(answer), ['app/state/events.jsonl: 1 unreadable line(s) left out']);
+  });
+
+  it('names a snapshot it did not use by its file, never its reason, which quotes the snapshot (#2584)', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Ship the gate', 'alpha');
+    await rotateRegister(kit.files, EVENTS_PATH, { now: new Date(kit.clock.now()) });
+    await kit.files.write(layoutPaths(EVENTS_PATH).snapshot, `{"note": "${SECRET}", torn\n`);
+    const result = await kit.run(READ_TASKS);
+    const answer = served(result);
+    assert.deepEqual(titlesOf(answer), ['Ship the gate']);
+    assert.deepEqual(problemsOf(answer), ['app/state/snapshot.jsonl: not used (damaged or from an older teamrig), so the whole history was read']);
+    assert.equal(result.stdout.join('\n').includes(SECRET), false);
   });
 
   it('names a damaged register line by its file and a count, never by the parser\'s words, which quote the line', async () => {

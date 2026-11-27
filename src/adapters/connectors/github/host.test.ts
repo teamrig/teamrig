@@ -14,6 +14,7 @@ import {
   issueAssigneeReadArgs,
   isIssueBodyEdit,
   isIssueClose,
+  isIssueReopen,
   isIssueComment,
   isIssueCreate,
   isIssueQuery,
@@ -128,9 +129,22 @@ describe('GitHubIssueHost.list', () => {
     const gh = new FakeGh().holds('acme/web', [...many, { ...ghIssue('acme/web', 900, { state: 'CLOSED' }), number: 'nine hundred' }]);
     const list = await hostWith(gh).list('acme/web', '2029-12-25');
     assert.deepEqual(list.kind === 'listed' && list.notes, [
-      'the open list reached 500 issues, so it may leave some out',
+      `the open list reached ${ISSUE_LIMIT} issues, so it may leave some out`,
       '1 closed item(s) gh printed did not read as issues and were left out',
     ]);
+    // T5451: the push reads this to name an unlisted issue as cut off, not closed.
+    assert.equal(list.kind === 'listed' && list.cut, true);
+  });
+
+  it('lists the newest open issue of a repository past 500 open issues, as the list runs oldest first', async () => {
+    // T4949: a cap of 500 left every newer open issue out of the sync and the status push.
+    const many = Array.from({ length: 600 }, (_, index) => ghIssue('acme/web', index + 1));
+    const list = await hostWith(new FakeGh().holds('acme/web', many)).list('acme/web', '2029-12-25');
+    assert.equal(list.kind, 'listed');
+    assert.equal(list.kind === 'listed' && list.issues.length, 600);
+    assert.ok(list.kind === 'listed' && list.issues.some((issue) => issue.number === 600));
+    assert.deepEqual(list.kind === 'listed' && list.notes, []);
+    assert.equal(list.kind === 'listed' && list.cut, false);
   });
 
   it('gives nothing of the repository when either read fails', async () => {
@@ -326,6 +340,18 @@ describe('GitHubIssueHost.rerunRun', () => {
     assert.equal(odd.startsWith('gh api to re-run run 7 of acme/web') && odd.includes('already running') && !odd.includes('tok_abcdefgh'), true, odd);
   });
 
+  it('reads the run again after an odd gh failure, so a re-run GitHub started is done and one it did not start says so (T5610)', async () => {
+    const emptyBody = failing(1, 'unexpected end of JSON input\n');
+    const started = new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(emptyBody).startsRerunAnyway();
+    assert.deepEqual(await hostWith(started, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7), { kind: 'done', workflow: 'ci.yml', event: 'push', attempt: 2 });
+    assert.deepEqual(started.ran.map((request) => request.args[1]), ['repos/acme/web/actions/runs/7', 'repos/acme/web/actions/runs/7/rerun-failed-jobs', 'repos/acme/web/actions/runs/7']);
+    const none = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(emptyBody), new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+    assert.deepEqual(none, { kind: 'failed', reason: 'gh api to re-run run 7 of acme/web exited with code 1: unexpected end of JSON input; the run reads attempt 1 still, so nothing was re-run: run it again' });
+    const known = new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite(failing(1, 'HTTP 403: Resource not accessible by personal access token\n'));
+    await hostWith(known, new FakeCredentials().saves('teamrig-gh-acme', 'k')).rerunRun('acme/web', 7);
+    assert.equal(known.ran.length, 2, 'a known refusal reads nothing after it');
+  });
+
   it('says to look on GitHub after a signal, and fails with no saved token, running nothing', async () => {
     const stopped = await hostWith(new FakeGh().holdsRun(7, 'completed', 'failure').failsWrite({ end: { kind: 'signal', signal: 'SIGTERM' }, stdout: '', stderr: '' })).rerunRun('acme/web', 7);
     assert.deepEqual(stopped, { kind: 'failed', reason: 'gh was stopped (SIGTERM) on its way to re-run run 7 of acme/web: look on GitHub before a rerun' });
@@ -468,6 +494,18 @@ describe('GitHubIssueHost', () => {
     const [close, add, remove] = gh.ran.map((request) => request.args);
     assert.ok(isIssueClose(close ?? []) && isLabelAdd(add ?? []) && isLabelRemove(remove ?? []));
     assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token', 'acme-issues-token', 'acme-issues-token']);
+  });
+
+  it("reopens an issue or pull request through the allowlisted call, with the owner's token, and says a refused one in plain words", async () => {
+    const gh = new FakeGh();
+    const host = hostWith(gh, new FakeCredentials().saves('teamrig-gh-acme', 'acme-issues-token'));
+    assert.deepEqual(await host.reopen.reopenIssue(TARGET), { kind: 'done' });
+    assert.deepEqual(gh.ran.map((request) => request.args), [['api', 'repos/acme/web/issues/7', '-X', 'PATCH', '-f', 'state=open']]);
+    assert.ok(isIssueReopen(gh.ran[0]?.args ?? []));
+    assert.deepEqual(gh.ran.map((request) => request.env['GH_TOKEN']), ['acme-issues-token']);
+    const denied = new FakeGh().failsWrite({ end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'gh: Resource not accessible by personal access token (HTTP 403)\n' });
+    const end = await hostWith(denied, new FakeCredentials().saves('teamrig-gh-acme', 'k')).reopen.reopenIssue(TARGET);
+    assert.ok(end.kind === 'failed' && end.reason.startsWith('the token saved as teamrig-gh-acme may not reopen acme/web#7'), JSON.stringify(end));
   });
 
   it("reads an issue's comments since a time with their claim match, and fails on an issue GitHub does not show", async () => {

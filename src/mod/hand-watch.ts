@@ -5,7 +5,8 @@
  * tick of the same hand is still unsettled, and traces it once it has stayed so past STALL_MS from the first run that
  * found it unsettled (one tick after it started). The clock is read only then, or for a throw, so a hand whose ticks
  * settle in time costs no clock call (the clear hand ticks every second). The same hand and kind are traced at most
- * once per TRACE_EVERY_MS, so a hand stuck for hours writes a few lines, not one per tick.
+ * once per TRACE_EVERY_MS, so a hand stuck for hours writes a few lines, not one per tick. A hand with
+ * MAX_PENDING_TICKS ticks unsettled runs no more until one settles.
  *
  * The mod runs inside Claude Code without Node, so this file imports nothing: it compiles to a module the mod
  * imports as it is.
@@ -19,6 +20,12 @@ export const HAND_TRACE_TIMEOUT_MS = 10_000;
 export const TRACE_EVERY_MS = 10 * 60_000;
 /** The most of an error's text a trace carries. */
 export const TRACE_ERROR_CHARS = 300;
+/**
+ * The most ticks of one hand left unsettled at once (#1817). Past it a new tick of that hand is skipped, not run: each
+ * hung tick keeps its entry, and every run walks them, so one hung hand would grow the set for as long as Claude Code
+ * runs. The stall trace already says the hand stopped answering.
+ */
+export const MAX_PENDING_TICKS = 4;
 
 /** What a watch saw: a tick that threw, or one still unsettled `ms` after a run first found it so. */
 export type HandTrace =
@@ -68,6 +75,9 @@ export class HandWatch {
       if (late.length > 0) {
         this.emit({ kind: 'stalled', hand, ms: Math.max(...late) }, at);
       }
+      if (ticks.size >= MAX_PENDING_TICKS) {
+        return undefined;
+      }
     }
     const token: { readonly limitMs: number; seenAt?: number } = { limitMs };
     ticks.add(token);
@@ -85,6 +95,11 @@ export class HandWatch {
     } finally {
       ticks.delete(token);
     }
+  }
+
+  /** How many ticks of `hand` are unsettled now. */
+  pendingOf(hand: string): number {
+    return this.pending.get(hand)?.size ?? 0;
   }
 
   private emit(trace: HandTrace, at: number): void {

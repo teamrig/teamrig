@@ -421,7 +421,7 @@ async function spotlightMeeting(runtime: CliRuntime, mk: MeetingsKit, meeting: S
     holderFile: spotlightHolderPath(mk.kit.paths.kitHome),
   };
   const { spotlight } = mk.config.meeting;
-  return spotlightLine(await startSpotlight(runtime, spotlight, mk.config.open.terminal, place, runtime.cwd), place, spotlight.dim);
+  return spotlightLine(await startSpotlight(runtime, spotlight, terminalOf(mk.config, meeting.session), place, runtime.cwd), place, spotlight.dim);
 }
 
 /**

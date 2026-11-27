@@ -19,6 +19,7 @@ import { postUrgentLine } from "../urgent-line.js";
 import { inboxDepsOf } from "./inbox.js";
 import { fileLockOf } from "../file-locks.js";
 import { githubWatcher } from "../../sync/watcher.js";
+import { githubState } from "../github-state.js";
 /**
  * The automatic GitHub sync's report: `issue watch` (issue-watch.ts) runs `issue sync --auto` when GitHub changed,
  * and that run tells each owner's inbox the tasks it added, the lead's when the failing repositories change or an
@@ -33,19 +34,19 @@ export function githubOffBy(env) {
 }
 /** The lock around the sync state file, held while a finishing sync records its end. */
 function stateLock(runtime, kit, config, waitMs) {
-    return fileLockOf(runtime, kit.paths.githubSyncLock, { ...config.lock, waitMs });
+    return fileLockOf(runtime, githubState(kit.paths).syncLock, { ...config.lock, waitMs });
 }
 /** The last sync's state, read without the lock: what a sync compares its pull request reads with. */
 export async function readSyncState(runtime, kit) {
-    return parseSyncState((await runtime.files.read(kit.paths.githubSync)) ?? '');
+    return parseSyncState((await runtime.files.read(githubState(kit.paths).sync)) ?? '');
 }
 /**
  * The state before a write, under the lock. A file a newer teamrig wrote is refused (`NewerDataError`), so an older
  * teamrig still running in some tab never drops its fields: its hook starts no sync, its `issue sync --auto` fails.
  */
 async function writableState(runtime, kit) {
-    const text = await runtime.files.read(kit.paths.githubSync);
-    writableObject(kit.paths.githubSync, text, SYNC_STATE_FORMAT);
+    const text = await runtime.files.read(githubState(kit.paths).sync);
+    writableObject(githubState(kit.paths).sync, text, SYNC_STATE_FORMAT);
     return parseSyncState(text ?? '');
 }
 /**
@@ -68,7 +69,7 @@ export async function reportAutoSync(runtime, kit, config, run) {
         // A question and a mention on the same item share its wake gap, so a busy thread wakes its owner once.
         const woken = wakeRoutes([...run.mentionRoutes, ...questions], state?.mentionWakes ?? new Map(), now);
         const finished = finishState(state, now, run, woken.lastWoken);
-        await runtime.files.write(kit.paths.githubSync, formatSyncState(finished));
+        await runtime.files.write(githubState(kit.paths).sync, formatSyncState(finished));
         return { before: state, after: finished, wakes: woken.wakes };
     });
     const posts = [...addedLines(run.added)].map(([to, text]) => ({ to, text, wake: false }));

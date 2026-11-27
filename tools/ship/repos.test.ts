@@ -112,7 +112,13 @@ test('reads whether main merges through GitHub\'s merge queue, false when not li
   assert.throws(() => parseProfiles(entry('local', 'true')), /O\/R "queue": true needs the "ci" gate/);
 });
 
-test('the shipped repos.json merges no repo through the merge queue until main\'s ruleset turns the queue on (T3386)', () => {
+test('the shipped repos.json merges no repo through the merge queue while main\'s review rule wants a last-push approval only the direct merge bypasses (T3386, T5745)', () => {
+  // main review asks for an approval by someone other than the last pusher, and an own pull request has none. The
+  // direct merge call honours the admin role's pull_request bypass; GitHub's enqueue does not, so queue: true refused
+  // every own merge ("New changes require approval from someone other than the last pusher", T5745).
+  const review = pullRequestRuleOf('main-review.json');
+  assert.equal(review.lastPushApproval, true, 'main review wants a last-push approval');
+  assert.equal(review.pullRequestBypass, true, 'main review lets an actor bypass it on the direct merge');
   const profiles = readProfiles();
   for (const slug of repoSlugs(profiles)) assert.equal(profileFor(profiles, slug).queue, false, slug);
 });
@@ -141,6 +147,22 @@ const MAIN_RULESETS = ['main.json', 'main-checks.json', 'main-review.json'];
 /** The status checks main's rulesets require before GitHub accepts a merge, whichever ruleset holds them (T4916). */
 function rulesetRequiredChecks(): string[] {
   return MAIN_RULESETS.flatMap(file => requiredChecksOf(file));
+}
+
+/** Whether a ruleset file's pull_request rule wants a last-push approval, and whether an actor bypasses it on a pull request. */
+function pullRequestRuleOf(file: string): { lastPushApproval: boolean; pullRequestBypass: boolean } {
+  const ruleset: unknown = JSON.parse(readFileSync(new URL(`../../.github/rulesets/${file}`, import.meta.url), 'utf8'));
+  assert.ok(typeof ruleset === 'object' && ruleset !== null && 'rules' in ruleset && Array.isArray(ruleset.rules));
+  let lastPushApproval = false;
+  for (const rule of ruleset.rules) {
+    if (typeof rule !== 'object' || rule === null || !('type' in rule) || rule.type !== 'pull_request') continue;
+    if ('parameters' in rule && typeof rule.parameters === 'object' && rule.parameters !== null && 'require_last_push_approval' in rule.parameters) {
+      lastPushApproval = rule.parameters.require_last_push_approval === true;
+    }
+  }
+  const actors: unknown = 'bypass_actors' in ruleset ? ruleset.bypass_actors : [];
+  const pullRequestBypass = Array.isArray(actors) && actors.some(actor => typeof actor === 'object' && actor !== null && 'bypass_mode' in actor && actor.bypass_mode === 'pull_request');
+  return { lastPushApproval, pullRequestBypass };
 }
 
 function requiredChecksOf(file: string): string[] {

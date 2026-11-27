@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { sessionSettingsFiles, type SessionSettingsHost } from '../doctor/settings-env.ts';
-import { testPaths } from '../testing/host.ts';
+import { knownPlace, testPaths, unknownPlacesPaths } from '../testing/host.ts';
 import { MemoryFiles, MemoryPathProbe, normalisePath } from '../testing/memory-files.ts';
 import { findRulePlaces, isPlaceKind, NESTED_FOLDERS_MAX, type RulePlace, type RulePlaceLocations, type RulePlacePaths } from './places.ts';
 
@@ -12,7 +12,7 @@ const PROJECT = resolve('/', 'work', 'app');
 const TEAM_RULES = resolve('/', 'kit', 'teams', 'app', 'rules.md');
 /** The shipped host's paths: its own folder is `.claude` in the home folder. */
 const PATHS = testPaths();
-const MEMORY = PATHS.memoryFolder(USER_HOME, PROJECT);
+const MEMORY = knownPlace(PATHS.memoryFolder(USER_HOME, PROJECT));
 const HOST: SessionSettingsHost = { paths: PATHS, userHome: USER_HOME };
 const AT: RulePlaceLocations = {
   paths: PATHS,
@@ -182,6 +182,13 @@ describe('findRulePlaces', () => {
       `skill ${path(PROJECT, 'agent-skills', 'api-run', 'SKILL.md')}`,
       `memory ${path(told('memory', 'feedback.md'))}`,
     ]);
+  });
+
+  it('finds no memory files on a host whose memory folder teamrig does not know (T5582)', async () => {
+    const { files, probe } = world();
+    const { places } = await findRulePlaces(files, probe, { ...AT, paths: unknownPlacesPaths() });
+    assert.deepEqual(places.filter((place) => place.kind === 'memory'), []);
+    assert.notDeepEqual(places.filter((place) => place.kind === 'claude-md'), [], 'the places it does know are still found');
   });
 
   it(`stops looking for CLAUDE.md files below the project after ${NESTED_FOLDERS_MAX} folders, and says so`, async () => {

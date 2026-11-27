@@ -6,6 +6,7 @@ import { fileLockOf } from "../file-locks.js";
 import { callerOf } from "../inputs.js";
 import { openTeamKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
+import { githubState, openGithubState } from "../github-state.js";
 /**
  * `follow <owner/name#n>`, `follow --list` and `unfollow <owner/name#n>`: the issues and pull requests a session
  * follows, whose activity the automatic sync tells it as it tells a task's owner the activity of its task's item
@@ -15,6 +16,7 @@ import { EXIT, RefusedError } from "../runtime.js";
 const FOLLOW_REACH = 'its new comments, reviews, CI results, labels, closes and merges reach your inbox from the next sync';
 async function callerOfRun(args, runtime) {
     const kit = await openTeamKit(runtime);
+    await openGithubState(runtime.files, kit.paths);
     const config = requireConfig(kit, runtime, 'read');
     const roster = await rosterOf(runtime, kit, config);
     return { kit, config, session: sessionIdOf(roster, callerOf(args.flags, runtime.env)) };
@@ -33,8 +35,8 @@ function refArg(args) {
  * returns new ones. A file a newer teamrig wrote is refused, never overwritten.
  */
 async function changeFollows(runtime, caller, change) {
-    const path = caller.kit.paths.githubFollows;
-    return fileLockOf(runtime, caller.kit.paths.githubSyncLock, caller.config.lock).run(async () => {
+    const path = githubState(caller.kit.paths).follows;
+    return fileLockOf(runtime, githubState(caller.kit.paths).syncLock, caller.config.lock).run(async () => {
         const text = await runtime.files.read(path);
         writableObject(path, text, FOLLOWS_FORMAT);
         const { follows, result } = change(parseFollows(text ?? ''));
@@ -48,7 +50,7 @@ export async function follow(args, runtime) {
     const caller = await callerOfRun(args, runtime);
     if (args.switches.has('list')) {
         noPositionals(args);
-        const own = parseFollows((await runtime.files.read(caller.kit.paths.githubFollows)) ?? '').get(caller.session) ?? [];
+        const own = parseFollows((await runtime.files.read(githubState(caller.kit.paths).follows)) ?? '').get(caller.session) ?? [];
         if (own.length === 0) {
             runtime.out.stdout('FOLLOWING nothing: teamrig follow <owner/name#n> follows an issue or pull request');
         }

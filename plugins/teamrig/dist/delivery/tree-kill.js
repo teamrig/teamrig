@@ -55,14 +55,34 @@ async function firstList(host) {
  */
 export async function sweepTree(root, host, rounds = SWEEP_ROUNDS) {
     const first = await firstList(host);
+    return first === undefined ? 'unlisted' : sweepFrom(treeOf(root, first), host, rounds);
+}
+/**
+ * Ends on Windows what `root` started and left running once it exited by itself (#1492): each listed process whose
+ * parent id is root's and that started while root ran (from `startedMs`, at or before root's start, to `exitedMs`), with
+ * its tree, then the stragglers list after list as sweepTree does. A process an earlier or a later holder of root's id
+ * started falls outside that time and is left alone. `exitedMs` is read after the real exit, and Windows hands a freed
+ * id on within ms, so a listed process with root's id is a later holder: only what started before it is root's. Windows
+ * keeps no link past an ended process, so a process whose own parent ended before the list is not found.
+ */
+export async function sweepOrphans(root, startedMs, exitedMs, host, rounds = SWEEP_ROUNDS) {
+    const first = await firstList(host);
     if (first === undefined) {
         return 'unlisted';
     }
-    const members = new Map();
-    let targets = treeOf(root, first);
-    if (targets.length === 0) {
+    const laterHolder = first.find((row) => row.pid === root);
+    const endMs = laterHolder === undefined ? exitedMs : Math.min(exitedMs, laterHolder.startedMs - 1);
+    const orphans = first.filter((row) => row.parent === root && row.pid !== root && row.startedMs >= startedMs && row.startedMs <= endMs);
+    const trees = new Map(orphans.flatMap((orphan) => treeOf(orphan.pid, first)).map((row) => [row.pid, row]));
+    return sweepFrom([...trees.values()], host, rounds);
+}
+/** Ends `targets`, then lists again and ends the stragglers, until a list finds none or `rounds` run out. */
+async function sweepFrom(firstTargets, host, rounds) {
+    if (firstTargets.length === 0) {
         return 'gone';
     }
+    const members = new Map();
+    let targets = firstTargets;
     for (let round = 0; round < rounds && targets.length > 0; round += 1) {
         for (const target of targets) {
             members.set(target.pid, target.startedMs);
@@ -171,6 +191,35 @@ export function nodeTreeKill(platform, open = openWindowsSweep) {
             catch {
                 // The group ended on its own between the timer and the kill.
             }
+        }
+        return Promise.resolve();
+    };
+}
+/**
+ * On POSIX the step ran as its own process group, so the group is killed, as at its time limit; with the group
+ * leader gone its id names the group until the last member ends. On Windows the orphans are swept (sweepOrphans).
+ */
+export function nodeLeftoverKill(platform, open = openWindowsSweep) {
+    if (platform === 'win32') {
+        return async (pid, startedMs, exitedMs) => {
+            const session = open();
+            try {
+                await sweepOrphans(pid, startedMs, exitedMs, session.host);
+            }
+            catch {
+                // A sweep that fails ends nothing more; the step's own end stands.
+            }
+            finally {
+                session.close();
+            }
+        };
+    }
+    return (pid) => {
+        try {
+            process.kill(-pid, 'SIGKILL');
+        }
+        catch {
+            // No process of the group runs on.
         }
         return Promise.resolve();
     };

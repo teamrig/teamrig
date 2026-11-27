@@ -13,12 +13,13 @@ describe('the Windows Terminal adapter', () => {
     assert.equal(apiVersionNotice(declaration.apiVersion, API_VERSION), undefined);
   });
 
-  it('opens a pane, in a named window too, and brings it forward, and claims nothing else', () => {
+  it('opens a pane, in a named window too, splits one off and brings it forward, and claims nothing else', () => {
     const claimed = featuresOf('terminal')
       .filter((row) => declaration.manifest[row.id].kind !== 'unsupported')
       .map((row) => [row.id, declaration.manifest[row.id].kind]);
     assert.deepEqual(claimed, [
       ['pane.open', 'supported'],
+      ['pane.split', 'partial'],
       ['pane.window', 'supported'],
       ['pane.focus', 'supported'],
     ]);
@@ -29,6 +30,6 @@ describe('the Windows Terminal adapter', () => {
     assert.deepEqual(terminalAdapterProblems(adapter), []);
     const port = adapter.create(terminalDeps({ platform: 'win32' })).terminal;
     assert.notEqual(port, undefined);
-    assert.deepEqual((await port?.capabilities())?.requests, ['open', 'focus']);
+    assert.deepEqual((await port?.capabilities())?.requests, ['open', 'split', 'focus']);
   });
 });

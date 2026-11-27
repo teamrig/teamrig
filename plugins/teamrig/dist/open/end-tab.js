@@ -47,8 +47,22 @@ export async function tabProcessOf(ender, claude) {
     if (parent === undefined || !TAB_SHELL.test(parent.name)) {
         return claude.pid;
     }
-    const line = parent.commandLine.toLowerCase();
-    return ender.hostPrograms.some((program) => line.includes(program.toLowerCase())) ? parent.pid : claude.pid;
+    return ender.hostPrograms.some((program) => namesProgram(parent.commandLine, program)) ? parent.pid : claude.pid;
+}
+/** A character a program's name can hold, so one beside a match makes it part of a longer word. */
+const NAME_CHAR = '[a-z0-9_.-]';
+/** The endings Windows starts a program by. */
+const RUNNABLE_EXTENSION = '(?:\\.(?:exe|cmd|bat|ps1|com))?';
+/**
+ * Whether `commandLine` names `program` as a whole word, bare or as a path's last part, with or without a runnable
+ * ending: a host named `agy` must not take a tab whose line says `strategy`. An empty name names nothing.
+ */
+function namesProgram(commandLine, program) {
+    if (program === '') {
+        return false;
+    }
+    const escaped = program.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?<!${NAME_CHAR})${escaped}${RUNNABLE_EXTENSION}(?!${NAME_CHAR})`, 'i').test(commandLine);
 }
 /** The command shells `pid` runs; undefined when the system would not tell. */
 async function shellsUnder(ender, pid) {

@@ -18,6 +18,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.comment': NONE,
     'tracker.edit-body': NONE,
     'tracker.close': NONE,
+    'tracker.reopen': NONE,
     'tracker.labels': NONE,
     'tracker.status-push': NONE,
     'tracker.assign': NONE,

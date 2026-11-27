@@ -118,6 +118,15 @@ async function answer(port: TerminalPort, method: unknown, params: JsonRecord): 
         identity: identityOf(params['identity']),
         wakeToken: text(params, 'wakeToken'),
       })) };
+    case 'split':
+      return { ...(await port.split({
+        title: text(params, 'title'),
+        folder: text(params, 'folder'),
+        argv: argvOf(params['argv']),
+        focus: params['focus'] === 'keep' ? 'keep' : 'take',
+        identity: identityOf(params['identity']),
+        wakeToken: text(params, 'wakeToken'),
+      })) };
     case 'focus':
       return { ...(await port.focus(pane)) };
     case 'close':

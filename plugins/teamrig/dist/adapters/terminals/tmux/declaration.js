@@ -14,6 +14,7 @@ export const declaration = {
     name: 'tmux',
     manifest: {
         'pane.open': SUPPORTED,
+        'pane.split': SUPPORTED,
         'pane.window': { kind: 'unsupported', notice: 'a pane opens in the tmux session teamrig runs in: teamrig names no other' },
         'pane.focus': SUPPORTED,
         'pane.close': NOT_ASKED,

@@ -23,6 +23,8 @@ export interface ParsedArgs {
   readonly switches: ReadonlySet<string>;
   /** The words after `--`, passed on untouched: flags, `--help` and quotes included; empty without a `--`. */
   readonly rest: readonly string[];
+  /** True when `--` appeared on a command that accepts `rest`, even with zero words after it. */
+  readonly restMarker?: boolean;
   /** `--help` or `-h` followed the command: print its help and nothing else; `command` may then be a group word. */
   readonly help: boolean;
   /**
@@ -162,12 +164,13 @@ export function parseArgs(
   const hostFlags = new Map<string, string>();
   const hostFlagNamed = (name: string): boolean =>
     !allowed.includes(name) && (name === HOST_FLAG || (name === HOST_EVENT_FLAG && isHookCommand(command)));
-  const parsed = (rest: readonly string[]): ParsedArgs => ({
+  const parsed = (rest: readonly string[], restMarker = false): ParsedArgs => ({
     command,
     positionals,
     flags,
     switches,
     rest,
+    ...(restMarker ? { restMarker: true } : {}),
     help: false,
     common,
     hostEvent: hostFlags.get(HOST_EVENT_FLAG),
@@ -179,7 +182,7 @@ export function parseArgs(
       return { command, positionals: [], flags: new Map(), switches: new Set(), rest: [], help: true, common: new Map() };
     }
     if (token === REST_MARKER && restCommands.has(command)) {
-      return parsed(tail.slice(index + 1));
+      return parsed(tail.slice(index + 1), true);
     }
     if (!token.startsWith('--')) {
       positionals.push(token);

@@ -56,8 +56,8 @@ export function channelReleaseOf(listing, branch) {
     }
     return { kind: 'release', release: { tag: `v${newest.text}`, commit: head, version: newest.text } };
 }
-/** A run's failure text: its exit and the last line it printed. */
-function failure(step, end, stderr) {
+/** A run's failure text: its step, its exit and the last line it printed. */
+export function runFailure(step, end, stderr) {
     const said = stderr.trim().split(/\r?\n/u).at(-1);
     const how = end.kind === 'exited' ? `exit ${end.code}` : `stopped by ${end.signal}`;
     return `${step} failed (${how})${said === undefined || said === '' ? '' : `: ${said}`}`;
@@ -66,7 +66,7 @@ function failure(step, end, stderr) {
 export async function listChannel(ports, branch) {
     const result = await ports.run({ program: ports.git, args: channelListingArgs(branch) });
     if (result.end.kind !== 'exited' || result.end.code !== 0) {
-        return { kind: 'failed', why: failure(`git ls-remote ${KIT_RELEASE_REPO}`, result.end, result.stderr) };
+        return { kind: 'failed', why: runFailure(`git ls-remote ${KIT_RELEASE_REPO}`, result.end, result.stderr) };
     }
     return { kind: 'listed', text: result.stdout };
 }
@@ -80,11 +80,11 @@ export async function cloneRelease(ports, release, folder) {
         args: ['-c', 'advice.detachedHead=false', 'clone', '-q', '--depth', '1', '--branch', release.tag, KIT_RELEASE_REPO, folder],
     });
     if (clone.end.kind !== 'exited' || clone.end.code !== 0) {
-        return { kind: 'failed', why: failure(`git clone --branch ${release.tag}`, clone.end, clone.stderr) };
+        return { kind: 'failed', why: runFailure(`git clone --branch ${release.tag}`, clone.end, clone.stderr) };
     }
     const head = await ports.run({ program: ports.git, args: ['-C', folder, 'rev-parse', 'HEAD'] });
     if (head.end.kind !== 'exited' || head.end.code !== 0) {
-        return { kind: 'failed', why: failure('git rev-parse HEAD in the clone', head.end, head.stderr) };
+        return { kind: 'failed', why: runFailure('git rev-parse HEAD in the clone', head.end, head.stderr) };
     }
     const commit = head.stdout.trim();
     if (commit !== release.commit) {

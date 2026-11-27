@@ -34,6 +34,7 @@ export function macosTerminalPort(deps) {
                     return { kind: 'failed', why: outcome.error };
             }
         },
+        split: async () => UNSERVED,
         focus: async () => UNSERVED,
         close: async () => UNSERVED,
         restart: async () => UNSERVED,

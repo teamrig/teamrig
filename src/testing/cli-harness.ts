@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import type { Sleep } from '../core/lock.ts';
 import { join, resolve } from 'node:path';
 import { runCli } from '../cli/run.ts';
-import type { CliRuntime, ExitCode, Output, SelfLocation } from '../cli/runtime.ts';
+import type { CliRuntime, Output, ProcessExit, SelfLocation } from '../cli/runtime.ts';
 import { CONFIG_LIMITS, RULE_CONFLICT_LIMITS } from '../config/limits.ts';
 import { formatConfig } from '../config/load.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
@@ -117,7 +117,7 @@ export function rulesToOverflow(roomy: string): string {
 }
 
 export interface CliResult {
-  readonly code: ExitCode;
+  readonly code: ProcessExit;
   readonly stdout: readonly string[];
   readonly stderr: readonly string[];
 }

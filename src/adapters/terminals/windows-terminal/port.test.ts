@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { PaneOpen } from '../../../plugin-api/index.ts';
+import type { PaneOpen, PaneSplit } from '../../../plugin-api/index.ts';
 import { terminalDeps } from '../../../testing/adapter-deps.ts';
 import { FakeProcesses } from '../../../testing/fake-processes.ts';
 import { launcherOf, windowsTerminalPort } from './port.ts';
@@ -17,6 +17,8 @@ const PANE: PaneOpen = {
   identity: {},
   wakeToken: 'token',
 };
+
+const SPLIT: PaneSplit = { title: TITLE, folder: PANE.folder, argv: PANE.argv, focus: 'keep', identity: {}, wakeToken: 'token' };
 
 function scriptOf(args: readonly string[]): string {
   return Buffer.from(args.at(-1) ?? '', 'base64').toString('utf16le');
@@ -122,5 +124,24 @@ describe('the Windows Terminal port', () => {
       const processes = new FakeProcesses().onRun('powershell.exe', outcome);
       assert.deepEqual(await windowsTerminalPort(terminalDeps({ processes })).focus(TITLE), expected, JSON.stringify(outcome));
     }
+  });
+
+  it('splits the active pane of the most recent window, titled, in its folder, the command after --', async () => {
+    const processes = opened(new FakeProcesses());
+    assert.deepEqual(await windowsTerminalPort(terminalDeps({ processes })).split(SPLIT), { kind: 'split' });
+    assert.deepEqual(processes.started, [
+      { command: 'wt.exe', args: ['-w', '0', 'split-pane', '--vertical', '--title', TITLE, '-d', PANE.folder, '--', ...PANE.argv], cwd: PANE.folder, mode: 'exit' },
+    ]);
+    assert.deepEqual(processes.ran, []);
+  });
+
+  it('refuses a split whose text Windows Terminal would misread, and answers failed when it is not installed', async () => {
+    const processes = opened(new FakeProcesses());
+    assert.deepEqual(await windowsTerminalPort(terminalDeps({ processes })).split({ ...SPLIT, argv: ['a;b'] }), {
+      kind: 'failed',
+      why: 'Windows Terminal would misread "a;b" (it holds ; " % or a control character)',
+    });
+    assert.deepEqual(processes.started, []);
+    assert.deepEqual(await windowsTerminalPort(terminalDeps()).split(SPLIT), { kind: 'failed', why: 'Windows Terminal is not installed' });
   });
 });

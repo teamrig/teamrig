@@ -100,10 +100,16 @@ async function readAgentFolder(files, folder, scope) {
     }
     return listed;
 }
-/** The user's agent types, then the project's, from the folders the host loads them from, each folder read once. */
+/**
+ * The user's agent types, then the project's, from the folders the host loads them from, each folder read once; none
+ * of the user's on a host whose folder for them teamrig does not know.
+ */
 async function readAgents(files, at) {
     const user = at.paths.userAgents(at.userHome);
     const project = at.paths.projectAgents(at.project);
+    if (user === undefined) {
+        return readAgentFolder(files, project, 'project');
+    }
     const own = samePath(user, project) ? [] : await readAgentFolder(files, project, 'project');
     return [...(await readAgentFolder(files, user, 'user')), ...own];
 }
@@ -128,7 +134,10 @@ export async function readSessionContext(files, probe, at) {
             loaded.keep('rules', path, text);
         }
     }
-    await loaded.add('memory', paths.memoryIndex(at.userHome, at.project), (text) => text.split('\n').slice(0, MEMORY_INDEX_LINES).join('\n'));
+    const memoryIndex = paths.memoryIndex(at.userHome, at.project);
+    if (memoryIndex !== undefined) {
+        await loaded.add('memory', memoryIndex, (text) => text.split('\n').slice(0, MEMORY_INDEX_LINES).join('\n'));
+    }
     for (const path of at.teamRules) {
         await loaded.add('team-rules', path);
     }

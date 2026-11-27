@@ -7,6 +7,9 @@ const WAKE = { token: 'token-of-worker', text: 'teamrig: new work is in your inb
 function paneOf(over = {}) {
     return { title: 'worker', folder: '/work/repo', argv: ['claude', '--resume'], window: undefined, focus: 'take', identity: IDENTITY, wakeToken: WAKE.token, ...over };
 }
+function splitOf(over = {}) {
+    return { title: 'board', folder: '/work/repo', argv: ['teamrig', 'ui'], focus: 'keep', identity: {}, wakeToken: 'token-of-board', ...over };
+}
 /** Opens a pane and answers the terminal's id of it; what the terminal did for it is `open-shows-the-pane`'s to check. */
 async function opened({ port }, over = {}) {
     const answer = await port.open(paneOf(over));
@@ -18,6 +21,8 @@ async function opened({ port }, over = {}) {
 /** One request on a pane, whichever it is, for the cases that hold every request to the same rule. */
 function ask(port, request, pane) {
     switch (request) {
+        case 'split':
+            return port.split(splitOf());
         case 'focus':
             return port.focus(pane);
         case 'close':
@@ -42,6 +47,28 @@ const OPEN_SHOWS_THE_PANE = {
         const pane = await opened(subject);
         assert.notEqual(pane, '');
         assert.deepEqual(await subject.world.panes(), [{ pane, title: 'worker', folder: '/work/repo', argv: ['claude', '--resume'], window: undefined }]);
+    },
+};
+const SPLIT_SHOWS_THE_PANE = {
+    id: 'terminal.split-shows-the-pane',
+    // A split pane's title is the terminal's to show where it can: tmux shows the command a pane runs, not a title.
+    title: 'splits to show a pane running the command it is given, in the folder it is given',
+    features: ['pane.split'],
+    run: async (subject) => {
+        const pane = await opened(subject);
+        assert.deepEqual(await subject.port.split(splitOf()), { kind: 'split' });
+        const shown = await subject.world.panes();
+        assert.deepEqual(shown.filter((each) => each.pane !== pane).map(({ folder, argv, window }) => ({ folder, argv, window })), [{ folder: '/work/repo', argv: ['teamrig', 'ui'], window: undefined }]);
+    },
+};
+const SPLIT_KEEPS_THE_FOCUS = {
+    id: 'terminal.split-keeps-the-focus',
+    title: 'splits with the focus kept on the pane the person works in, when it is asked to keep it',
+    features: ['pane.split'],
+    run: async (subject) => {
+        const pane = await opened(subject);
+        assert.deepEqual(await subject.port.split(splitOf({ focus: 'keep' })), { kind: 'split' });
+        assert.equal(await subject.world.front(), pane);
     },
 };
 const OPEN_IN_THE_NAMED_WINDOW = {
@@ -277,6 +304,8 @@ export const TERMINAL_CONTRACT = defineContract({
         OPEN_SHOWS_THE_PANE,
         OPEN_IDS_DIFFER,
         SAYS_WHAT_IT_SERVES,
+        SPLIT_SHOWS_THE_PANE,
+        SPLIT_KEEPS_THE_FOCUS,
         OPEN_IN_THE_NAMED_WINDOW,
         FOCUS_BRINGS_FORWARD,
         FOCUS_OF_A_GONE_PANE,

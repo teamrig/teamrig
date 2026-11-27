@@ -30,6 +30,7 @@ import { noProgressFlag } from "../../register/progress.js";
 import { sliceLateFlags } from "../../register/slice-late.js";
 import { overSizeFlags } from "../../register/over-size.js";
 import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID } from "../../register/model.js";
+import { layoutPaths } from "../../register/layout.js";
 import { lacksEventsOf } from "../../register/snapshot.js";
 import { readStopgapTags, stopgapFlags, stopgapTags } from "../../register/stopgap.js";
 import { dueStartHolds, dueVerifyHold, heldStart, heldStartNotice, metStartNotice, startHolds, verifyQueue, watchQueue } from "../../register/verify.js";
@@ -54,6 +55,7 @@ import { transcriptsIfKept } from "../host.js";
 import { idleFactsOf } from "../idle-check.js";
 import { logSizeWarnings } from "../log-size-check.js";
 import { githubLateWarnings } from "../github-late-check.js";
+import { githubState } from "../github-state.js";
 import { promptHoldWarnings } from "../prompt-hold-page.js";
 import { restartStalledWarnings } from "../restart-stalled-check.js";
 import { runsHostSession } from "../session-process.js";
@@ -156,10 +158,19 @@ export function reportRotation(runtime, rotation, paths) {
         runtime.out.stderr(`WARN the write is saved, but archiving the task list's log failed (the next write tries again; ${turnOff}): ${rotation.error}`);
     }
 }
-/** Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. */
+/**
+ * Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. A snapshot the read did
+ * not use is named by its own file and reason (#2584): it is no line of `path`, and it makes every read fold the
+ * whole history until the next archive writes a new one.
+ */
 export function warnDamage(runtime, snapshot, path) {
     const { unreadable, newer } = snapshot.read;
     const { orphans } = snapshot.state;
+    const skipped = snapshot.skippedSnapshot;
+    if (skipped !== null) {
+        const fix = skipped.newerVersion > 0 ? `update ${KIT_NAME}` : `the next archive writes a new one (${KIT_NAME} compact)`;
+        runtime.out.stderr(`WARN ${layoutPaths(path).snapshot}: not used, so every read folds the whole history; ${fix}: ${skipped.reason}`);
+    }
     if (unreadable + newer + orphans > 0) {
         runtime.out.stderr(`WARN ${path}: ${unreadable} unreadable line(s), ${newer} line(s) from a newer teamrig, ${orphans} event(s) naming no task`);
     }
@@ -1101,7 +1112,7 @@ export async function checkReport(args, runtime) {
     const off = await secretGuardOffWarnings(runtime.files, own.config.secretGuard, settings);
     const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
     const resets = resetExpiryWarnings(own.config.budget, zone, now.getTime());
-    const late = await githubLateWarnings(runtime.files, { clocks: own.paths.githubClocks, notices: own.paths.unownedNotices }, zone, now.getTime());
+    const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime());
     const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
     const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
     const logs = await logSizeWarnings(runtime.files, own.paths);

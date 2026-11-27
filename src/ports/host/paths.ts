@@ -13,6 +13,10 @@ export interface FolderSettings {
   readonly kind: 'shared' | 'local';
 }
 
+/**
+ * A place that answers `string | undefined` is undefined where teamrig has not verified the host's own: a guess could
+ * point a write or a guard at a folder the host never reads, so each caller says what it does without one.
+ */
 export interface HostPaths {
   /** The host's own folder for the person whose home folder is `userHome`: its settings, plugins and session files. */
   home(userHome: string): string;
@@ -21,7 +25,7 @@ export interface HostPaths {
   /** The settings files the host reads in `folder`, a project's folder or one of its worktrees, in the order it reads them. */
   folderSettings(folder: string): readonly FolderSettings[];
   /** The folder the host makes its own worktrees of the project in `project` in. */
-  worktrees(project: string): string;
+  worktrees(project: string): string | undefined;
   /**
    * For a path at or below one of the host's own worktrees of a project, the same place in that project's folder: such
    * a worktree is a temporary copy of the project. Undefined for any other path.
@@ -43,27 +47,27 @@ export interface HostPaths {
   /** The folder the host loads the skills of the project in `project` from. */
   projectSkills(project: string): string;
   /** The folder the host loads that person's own agent types from, in every project. */
-  userAgents(userHome: string): string;
+  userAgents(userHome: string): string | undefined;
   /** The folder the host loads the agent types of the project in `project` from. */
   projectAgents(project: string): string;
   /** The folder the host keeps that person's memory of the project in `project` in. */
-  memoryFolder(userHome: string, project: string): string;
+  memoryFolder(userHome: string, project: string): string | undefined;
   /** The index of that memory: the one file of it the host loads into every session of the project. */
-  memoryIndex(userHome: string, project: string): string;
+  memoryIndex(userHome: string, project: string): string | undefined;
   /** The memory folders the host keeps for that person, one per project, as one pattern. */
-  memoryFolders(userHome: string): string;
+  memoryFolders(userHome: string): string | undefined;
   /** The scratchpad folders of every session, on a machine whose temporary folder is `systemTemp`, as one pattern. */
-  scratchpads(systemTemp: string): string;
+  scratchpads(systemTemp: string): string | undefined;
   /** The scratchpad folder the host gives the session whose transcript is the file `transcript`, on that machine. */
-  scratchpadOf(transcript: string, systemTemp: string): string;
+  scratchpadOf(transcript: string, systemTemp: string): string | undefined;
   /** The file the host keeps the plan of the session it named `slug` in. */
-  planFile(userHome: string, slug: string): string;
+  planFile(userHome: string, slug: string): string | undefined;
   /** The folder of the snapshots the host takes of that person's shell and sources before each shell call. */
-  shellSnapshots(userHome: string): string;
+  shellSnapshots(userHome: string): string | undefined;
   /** The folder the host keeps that person's session transcripts in, one folder per project below it. */
-  transcriptsFolder(userHome: string): string;
+  transcriptsFolder(userHome: string): string | undefined;
   /** The folder the host keeps that person's installed plugins and their marketplaces in. */
-  pluginsFolder(userHome: string): string;
+  pluginsFolder(userHome: string): string | undefined;
   /**
    * The file the host keeps that person's login in, which a new login or token refresh rewrites: a caller only stats
    * it. Undefined where the host keeps the login in no file of its own.

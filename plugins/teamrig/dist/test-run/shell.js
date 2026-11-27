@@ -62,7 +62,7 @@ export function nodeShellRunner(graceMs = HELD_OUTPUT_GRACE_MS) {
     return {
         run: (request) => new Promise((resolve, reject) => {
             const child = spawn(request.command, {
-                shell: true,
+                shell: request.shell ?? true,
                 cwd: request.cwd,
                 env: { ...request.env },
                 stdio: ['ignore', 'pipe', 'pipe'],

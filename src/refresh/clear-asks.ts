@@ -86,7 +86,7 @@ function holdWhyLine(why: string): string {
  * or the band's count) `held`, the restart's withdraw `withdrawn`, and whichever comes later learns that it
  * lost, so a tab is never both cleared and ended, nor ended while it held the ask. A hold's reason goes in
  * `<session>.held` first, so the restart reads it once it sees `held`. Callers check the session id with
- * `isHostSessionId` (src/core/host-session.ts) first; an unsafe one throws.
+ * `isClaudeSessionId` (src/mod/clear-hand.ts) first; an unsafe one throws.
  */
 export class ClearAsks {
   private readonly files: Files;

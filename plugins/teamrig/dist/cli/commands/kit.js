@@ -6,8 +6,11 @@ import { KIT_VERSION } from "../../core/version.js";
 import { clientRootOf } from "../../exec/client-integrity.js";
 import { compareVersions, parseVersion } from "../../core/release-version.js";
 import { hookLauncher, syncKitLauncher } from "../../kit/hook-launcher.js";
+import { checkAttestation } from "../../kit/kit-attestation.js";
 import { channelReleaseOf, cloneRelease, isKitChannel, KIT_CHANNELS, listChannel } from "../../kit/kit-release.js";
 import { findProgram } from "../../open/host-program.js";
+import { cliLauncherPath, KIT_LAUNCHER_FILE } from "../../restore/cli-launcher.js";
+import { cliOnPathSteps } from "../../restore/cli-on-path.js";
 import { installRunningKit, keptAsideNote, KIT_COMMAND_LOCK, kitInstallLockPath } from "../../kit/kit-self-install.js";
 import { damagedPreviewWhy, installKitVersion, KIT_LOCK_BUSY, kitInstallParts, kitLeftovers, listKitVersions, planKitUse, prunableKitVersions, pruneKitVersions, readKitCurrent, uninstallKit, useKitVersion, kitVersionFolder, } from "../../kit/kit-versions.js";
 import { noPositionals, requiredFlag, UsageError } from "../args.js";
@@ -134,6 +137,43 @@ export async function kitPrune(args, runtime) {
 }
 /** A release's commit as git names it: 40 lowercase hex characters. */
 const COMMIT = /^[0-9a-f]{40}$/u;
+/** What the PATH lines end with: a terminal open already keeps the PATH it started with. */
+export const NEW_TERMINAL_NOTE = 'NOTE open a new terminal: one open already keeps the PATH it started with';
+/**
+ * Puts `teamrig` on the user's PATH as a plugin's session start does (src/restore/cli-on-path.ts): the kit home's bin
+ * launchers, then that folder added to the user's PATH, every entry kept. The kit launcher is the one the kit home
+ * holds, else (a preview of a first install) this client's, so the step never undoes the launcher of a pinned version.
+ * Without `write` it names each step and takes none; failed when a step fails.
+ */
+async function cliPutOnPath(runtime, kitHome, write) {
+    const { files, platform, restore } = runtime;
+    const launcherText = (await files.read(cliLauncherPath(kitHome))) ?? (await files.read(join(clientRootOf(runtime.self.script), KIT_LAUNCHER_FILE)).catch(() => undefined));
+    if (launcherText === undefined) {
+        runtime.out.stdout(`NOTE teamrig is not put on your PATH: ${clientRootOf(runtime.self.script)} ships no ${KIT_LAUNCHER_FILE}`);
+        return EXIT.failed;
+    }
+    const steps = await cliOnPathSteps({ files, kitHome, launcherText, platform, userPath: restore.userPath, markExecutable: restore.markExecutable });
+    if (steps.length === 0) {
+        runtime.out.stdout(`UNCHANGED teamrig is on your PATH already (${restore.userPath.where})`);
+        return EXIT.ok;
+    }
+    if (!write) {
+        steps.forEach((step) => runtime.out.stdout(`PREVIEW ${step.line}`));
+        return EXIT.ok;
+    }
+    for (const step of steps) {
+        try {
+            await step.act();
+        }
+        catch (error) {
+            runtime.out.stdout(`FAILED ${step.line}: ${error instanceof Error ? error.message : String(error)}`);
+            return EXIT.failed;
+        }
+        runtime.out.stdout(step.line);
+    }
+    runtime.out.stdout(NEW_TERMINAL_NOTE);
+    return EXIT.ok;
+}
 /** The release `kit install` records: `--tag`, which must name this client's own version, and its 40-hex `--commit`. */
 function releaseSourceOf(args) {
     const tag = requiredFlag(args.flags, 'tag');
@@ -151,8 +191,9 @@ function releaseSourceOf(args) {
  * into the kit home's `versions/` as the release `--tag` at `--commit` names, makes it current unless a pin or a newer
  * version holds `current`, and writes the kit launcher hook lines run (`<kit home>/bin/teamrig.mjs`). It is the install
  * a session start does for a host whose plugin runs teamrig, for a host with none; the teamrig install script runs it
- * before `teamrig setup hooks`. Without `--yes` it shows the install and writes nothing. Its write is a settings
- * writer's (src/core/settings-writers.ts): it moves the code every host's guards run, so only the person runs it.
+ * before `teamrig setup hooks`. Last it puts `teamrig` on the user's PATH as that session start does (cliPutOnPath).
+ * Without `--yes` it shows the install and writes nothing. Its write is a settings writer's
+ * (src/core/settings-writers.ts): it moves the code every host's guards run, so only the person runs it.
  */
 export async function kitInstall(args, runtime) {
     noPositionals(args);
@@ -164,7 +205,7 @@ export async function kitInstall(args, runtime) {
         const current = await readKitCurrent(runtime.files, kitHome);
         runtime.out.stdout(`PREVIEW nothing written (add --${WRITE_SWITCH} to write): copy ${release} from ${clientRoot} to ${kitVersionFolder(kitHome, KIT_VERSION)}; ` +
             `current ${current?.version ?? 'no version'} -> ${KIT_VERSION} unless a pin or a newer version holds it`);
-        return EXIT.ok;
+        return cliPutOnPath(runtime, kitHome, false);
     }
     const outcome = await installRunningKit({
         files: runtime.files,
@@ -180,9 +221,9 @@ export async function kitInstall(args, runtime) {
             throw new RefusedError(`teamrig kit install: ${clientRoot} holds no integrity list, so it is no built release; nothing written`);
         }
         runtime.out.stdout(`UNCHANGED ${release} runs from the kit home already`);
-        return launcherWritten(runtime, kitHome);
     }
-    return installReported('kit install', outcome, release, runtime, kitHome);
+    const written = outcome.kind === 'skipped' ? await launcherWritten(runtime, kitHome) : await installReported('kit install', outcome, release, runtime, kitHome);
+    return written === EXIT.ok ? cliPutOnPath(runtime, kitHome, true) : written;
 }
 /**
  * Prints what an install of `release` did, then writes the kit launcher of the version current names: refused for a
@@ -225,20 +266,42 @@ function updateChannelOf(args) {
     }
     return named;
 }
-/** The git program by its absolute path from PATH, never a bare name Windows would look for in the current folder first. */
+/** The switch that installs a release without its attestation check, which only the person types. */
+const NO_ATTESTATION_SWITCH = 'no-attestation';
+/**
+ * A program by its absolute path from PATH, never a bare name Windows would look for in the current folder first;
+ * undefined when PATH has none, or only one run through another program.
+ */
+async function programOf(runtime, name) {
+    const found = await findProgram({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, name);
+    return found.kind === 'missing' || found.program.prefix.length > 0 ? undefined : found.program.command;
+}
 async function gitOf(runtime) {
-    const found = await findProgram({ env: runtime.env, platform: runtime.platform, probe: runtime.probe, files: runtime.files, node: runtime.self.node }, 'git');
-    if (found.kind === 'missing' || found.program.prefix.length > 0) {
+    const git = await programOf(runtime, 'git');
+    if (git === undefined) {
         throw new RefusedError('teamrig kit update: no git program is on PATH; install git and run this again; nothing written');
     }
-    return found.program.command;
+    return git;
+}
+/** The gh program that checks the attestation, or undefined under --no-attestation; refused when PATH has none. */
+async function attestationGhOf(args, runtime) {
+    if (args.switches.has(NO_ATTESTATION_SWITCH))
+        return undefined;
+    const gh = await programOf(runtime, 'gh');
+    if (gh === undefined) {
+        throw new RefusedError(`teamrig kit update: no gh program is on PATH, which checks that the release workflow built the release; install gh, sign it in (gh auth login) and run this again, or add --${NO_ATTESTATION_SWITCH} to install without that check; nothing written`);
+    }
+    return gh;
 }
 /**
- * `teamrig kit update [--channel stable|preview] [--yes]`: the already-installed teamrig finds the newest release tag at
- * the head of the channel's branch, clones it by that tag into a folder of the kit home's `install/`, checks the clone's
- * HEAD is the tag's commit, and installs it as `kit install` does: current moves to it unless a pin holds it, and the
- * launcher is written. It refuses a release older than current (only `kit use` moves down) and touches no hooks file.
- * Without `--yes` it shows the release and writes nothing; its write is a settings writer's, as `kit install`'s is.
+ * `teamrig kit update [--channel stable|preview] [--no-attestation] [--yes]`: the already-installed teamrig finds the
+ * newest release tag at the head of the channel's branch, clones it by that tag into a folder of the kit home's
+ * `install/`, checks the clone's HEAD is the tag's commit and that the release workflow attested its integrity list
+ * under the tag's name (`gh attestation verify`; gh must be on PATH unless the person types `--no-attestation`, and
+ * the run then says what it skipped), and installs it as `kit install` does: current moves to it unless a pin holds
+ * it, and the launcher is written. It refuses a release older than current (only `kit use` moves down) and touches no
+ * hooks file. Without `--yes` it shows the release and writes nothing; its write is a settings writer's, as
+ * `kit install`'s is.
  */
 export async function kitUpdate(args, runtime) {
     noPositionals(args);
@@ -246,6 +309,7 @@ export async function kitUpdate(args, runtime) {
     const branch = KIT_CHANNELS[channel];
     const kitHome = kitHomeOf(runtime);
     const git = { git: await gitOf(runtime), run: runtime.run };
+    const gh = await attestationGhOf(args, runtime);
     const listed = await listChannel(git, branch);
     if (listed.kind === 'failed') {
         throw new RefusedError(`teamrig kit update: ${listed.why}; nothing written`);
@@ -266,9 +330,12 @@ export async function kitUpdate(args, runtime) {
     }
     const source = { kind: 'github-release', tag: release.tag, commit: release.commit };
     const text = `teamrig ${release.version} (${sourceText({ source })})`;
+    const skipped = `the attestation check skipped (--${NO_ATTESTATION_SWITCH}): nothing shows the release workflow built ${release.tag}, only that its tag names it`;
     if (!args.switches.has(WRITE_SWITCH)) {
-        runtime.out.stdout(`PREVIEW nothing written (add --${WRITE_SWITCH} to write): clone ${text} of the ${channel} channel into ${kitVersionFolder(kitHome, release.version)}; ` +
-            `current ${current?.version ?? 'no version'} -> ${release.version} unless a pin holds it`);
+        runtime.out.stdout(`PREVIEW nothing written (add --${WRITE_SWITCH} to write): clone ${text} of the ${channel} channel into ${kitVersionFolder(kitHome, release.version)}` +
+            `${gh === undefined ? '' : ', checking its attestation with gh'}; current ${current?.version ?? 'no version'} -> ${release.version} unless a pin holds it`);
+        if (gh === undefined)
+            runtime.out.stdout(`NOTE ${skipped}`);
         return EXIT.ok;
     }
     const folder = join(kitHome, 'install', `kit-update-${runtime.pid}`);
@@ -277,6 +344,16 @@ export async function kitUpdate(args, runtime) {
         const clone = await cloneRelease(git, release, folder);
         if (clone.kind === 'failed') {
             throw new RefusedError(`teamrig kit update: ${clone.why}; nothing written`);
+        }
+        if (gh === undefined) {
+            runtime.out.stdout(`NOTE ${skipped}`);
+        }
+        else {
+            const check = await checkAttestation({ gh, run: runtime.run, files: runtime.files }, release, clone.pluginRoot, folder);
+            if (check.kind === 'failed') {
+                throw new RefusedError(`teamrig kit update: ${check.why}; nothing written`);
+            }
+            runtime.out.stdout(`VERIFIED ${release.tag}: the release workflow attested its integrity list, sha256 ${check.sha256}`);
         }
         const outcome = await installKitVersion({
             files: runtime.files,

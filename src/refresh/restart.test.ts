@@ -13,7 +13,7 @@ import type { EffortLevel } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
 import { askFileOf, holdWhyFileOf, outcomeFileOf, type ClearMode } from '../mod/clear-hand.ts';
 import { ClearAsks, type ClearAsk, type PostedClearAsk } from './clear-asks.ts';
-import { CLAIM_WAIT_MS, GIVE_UP_MS, LOOKUP_FAILED, NO_HOLD_REASON, personHoldOf, restartMayAct, runRestart, SILENT_MOD, type RestartDeps, type RestartPlan, type TabOpening } from './restart.ts';
+import { CLAIM_WAIT_MS, CLAIMED_NO_CLEAR, CLEAR_TAKEN_WAIT_MS, GIVE_UP_MS, LOOKUP_FAILED, NO_HOLD_REASON, personHoldOf, restartMayAct, runRestart, SILENT_MOD, type RestartDeps, type RestartPlan, type TabOpening } from './restart.ts';
 import type { RestoreEntry } from '../restore/entry.ts';
 import type { RestartRequest } from './state.ts';
 import { RefreshStore } from './store.ts';
@@ -135,13 +135,19 @@ class World {
     };
   }
 
-  /** The tab's mod at work: claims the posted ask, as `hook clear-claim` does. */
+  /** The tab's mod at work: claims the posted ask, as `hook clear-claim` does, and runs its /clear. */
   async claimAsk(): Promise<void> {
     this.claimed = await this.asks.ask(SESSION);
     assert.ok(this.claimed, 'an ask is posted');
     this.posted = JSON.parse(this.files.get(askFileOf(ASK_DIR, SESSION) ?? '') ?? '');
     assert.equal(await this.asks.claim(SESSION), true);
     await this.store.clearRestart('alpha');
+    await this.sessionStarts();
+  }
+
+  /** The SessionStart `clear` hook of the session a /clear started: it takes the refresh. */
+  async sessionStarts(): Promise<void> {
+    await this.store.setState('alpha', { phase: 'refreshed', task: 'T3', at: AT });
   }
 
   /** The tab's mod while Claude Code lists a live helper: holds the posted ask, as `hook clear-claim --hold` does. */
@@ -427,10 +433,18 @@ describe('runRestart', () => {
   });
 });
 
-/** Asks whose claim lands between the runner's last look and its withdraw. */
+/** Asks whose claim lands between the runner's last look and its withdraw; `ranClear` is the /clear it then runs. */
 class ClaimedAtWithdraw extends ClearAsks {
+  private readonly ranClear: () => Promise<void>;
+
+  constructor(files: Files, dir: string, ranClear: () => Promise<void>) {
+    super(files, dir);
+    this.ranClear = ranClear;
+  }
+
   override async withdraw(hostSession: string): Promise<boolean> {
     await this.claim(hostSession);
+    await this.ranClear();
     return super.withdraw(hostSession);
   }
 }
@@ -444,7 +458,7 @@ describe("runRestart through the tab's mod", () => {
     assert.deepEqual(world.posted, { ...world.claimed, hold: PLAN.hold, askEveryMs: DELAY_MS }, "the file carries the plan's hold and delay, for the tab's mod");
     assert.deepEqual([world.processes.ends, world.opened, world.processes.fed], [[], [], []]);
     assert.equal(await world.store.restart('alpha'), undefined);
-    assert.equal((await world.store.state('alpha'))?.phase, 'ready', "the SessionStart clear hook takes the refresh, not the runner");
+    assert.equal((await world.store.state('alpha'))?.phase, 'refreshed', 'the SessionStart clear hook took the refresh');
     assert.ok(world.asksClosed());
   });
 
@@ -452,14 +466,30 @@ describe("runRestart through the tab's mod", () => {
     const world = await new World().arm();
     world.onSleep(3, async () => {
       await world.asks.claim(SESSION);
+      await world.sessionStarts();
     });
     assert.deepEqual(await runRestart(world.deps, PLAN), { kind: 'cleared' });
     assert.equal(await world.store.restart('alpha'), undefined);
   });
 
+  it('fails, so the session is told to type /clear, when the tab claimed the /clear but no new session took the refresh (#1819)', async () => {
+    const world = await new World().arm();
+    // `hook clear-claim` stopped after writing `taken`, before the hand read it: no /clear ran.
+    world.onSleep(3, async () => {
+      await world.asks.claim(SESSION);
+    });
+    const started = world.clock.now();
+    assert.deepEqual(await runRestart(world.deps, PLAN), { kind: 'failed', why: CLAIMED_NO_CLEAR });
+    assert.ok(world.clock.now() - started >= CLEAR_TAKEN_WAIT_MS, 'it waited for the new session first');
+    assert.equal(await world.store.restart('alpha'), undefined);
+    assert.equal((await world.store.state('alpha'))?.phase, 'ready');
+    assert.deepEqual([world.processes.ends, world.opened], [[], []]);
+    assert.ok(world.asksClosed());
+  });
+
   it("counts a claim that lands just before its withdraw as the tab's", async () => {
     const world = await new World().arm();
-    const asks = new ClaimedAtWithdraw(world.files, ASK_DIR);
+    const asks = new ClaimedAtWithdraw(world.files, ASK_DIR, () => world.sessionStarts());
     assert.deepEqual(await runRestart({ ...world.deps, asks }, PLAN), { kind: 'cleared' });
     assert.deepEqual(world.processes.ends, []);
     assert.equal(await world.store.restart('alpha'), undefined);
@@ -547,7 +577,10 @@ describe("runRestart when the session runs at another effort level than its conf
   async function worldOf(running: EffortLevel | null, wanted: EffortLevel | undefined, options: WorldOptions & { readonly supervised?: boolean; readonly withEnd?: boolean } = {}): Promise<{ readonly world: World; readonly asks: ClaimedByMod }> {
     const world = await new World(options).arm({ effort: running, supervised: options.supervised ?? true });
     world.launchEffort = wanted;
-    const asks = new ClaimedByMod(world.files, ASK_DIR, options.withEnd ?? true, () => world.store.clearRestart('alpha'));
+    const asks = new ClaimedByMod(world.files, ASK_DIR, options.withEnd ?? true, async () => {
+      await world.store.clearRestart('alpha');
+      await world.sessionStarts();
+    });
     return { world, asks };
   }
 

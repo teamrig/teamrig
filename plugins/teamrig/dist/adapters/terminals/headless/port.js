@@ -75,6 +75,7 @@ export function headlessPort(deps) {
     return {
         capabilities: async () => ({ requests: ['open'], interfaces: [INTERFACE_VERSION], seesDraft: false }),
         open: async (request) => (deps.platform === 'win32' ? openOnWindows(deps, request) : openWithTmux(deps, request)),
+        split: async () => UNSERVED,
         focus: async () => UNSERVED,
         close: async () => UNSERVED,
         restart: async () => UNSERVED,

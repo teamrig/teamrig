@@ -12,6 +12,7 @@ import { resolveKitHome } from '../../core/home.ts';
 import { LastTypedStore } from '../../sessions/last-typed.ts';
 import { foundTeamOf, lookForTeam, openKit, requireConfig, rosterOf, sessionIdOf, type Kit } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { startUiIdleTicker, type UiIdleTicker } from '../ui-idle-ticker.ts';
 import { homeArgs, homeRuntimeOf } from './open.ts';
 
 /**
@@ -221,8 +222,8 @@ async function openUiWindow(runtime: CliRuntime, config: KitConfig, kit: Kit, st
 }
 
 /**
- * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, the focus left
- * on the session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
+ * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, asking the
+ * terminal to leave the focus on the session's pane (tmux does; Windows Terminal moves it to the split): terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
  * tool, whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
  */
 async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session: string | undefined): Promise<Placed> {
@@ -276,9 +277,10 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
  * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
  * (`placeUi`). A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
- * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec.
+ * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec. While the UI runs here, `startTicker` runs
+ * the teams' idle passes beside it (ui-idle-ticker.ts).
  */
-export function uiCommand(pin: UiPin | undefined): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
+export function uiCommand(pin: UiPin | undefined, startTicker: (runtime: CliRuntime) => UiIdleTicker = startUiIdleTicker): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
   return async (args, hostRuntime) => {
     noPositionals(args);
     // The window or split this command opens hands its kit home on as --home (homeArgs), as its own environment may not carry it.
@@ -299,7 +301,13 @@ export function uiCommand(pin: UiPin | undefined): (args: ParsedArgs, runtime: C
     const { node, script } = runtime.self;
     const request = uiRequest({ entry, node, script, ...start, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
     await markUiStarted(runtime, kit.paths.kitHome);
-    return uiExit(runtime, node, await runtime.processes.run(request));
+    // While it is up, the UI runs the teams' idle passes, for a host with no wake check between turns (T5634).
+    const ticker = startTicker(runtime);
+    try {
+      return uiExit(runtime, node, await runtime.processes.run(request));
+    } finally {
+      ticker.stop();
+    }
   };
 }
 

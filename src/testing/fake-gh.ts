@@ -11,6 +11,7 @@ import {
   isIssueUnassign,
   isIssueBodyEdit,
   isIssueClose,
+  isIssueReopen,
   isFieldValueSet,
   isIssueComment,
   isIssueTypeSet,
@@ -455,6 +456,7 @@ export class FakeGh implements GhRunner {
   private readonly createFailures = new Map<string, GhResult>();
   private failure: Error | undefined;
   private writeFailure: GhResult | undefined;
+  private rerunStartsAnyway = false;
   private readonly labels = new Map<string, readonly string[]>();
   private readonly labelFiles = new Map<string, string>();
   /** What each label file read named, as the real runner keeps it, so a create of a label it named is taken. */
@@ -668,6 +670,12 @@ export class FakeGh implements GhRunner {
     return this;
   }
 
+  /** From now on, a run's re-run starts on GitHub (its next read shows one more attempt, queued) even when failsWrite fails the call. */
+  startsRerunAnyway(): this {
+    this.rerunStartsAnyway = true;
+    return this;
+  }
+
   /** From now on, the watch probes of `repo` (all, or the one `path`) see a change they were not told of yet. */
   changes(repo: string, path?: WatchPath): this {
     for (const probe of path === undefined ? WATCH_PATHS : [path]) {
@@ -751,7 +759,7 @@ export class FakeGh implements GhRunner {
       const run = this.runs.get(Number(runId));
       return this.canned.get(repo) ?? (run === undefined ? { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 404: Not Found\n' } : { end: { kind: 'exited', code: 0 }, stdout: JSON.stringify(run), stderr: '' });
     }
-    if (isIssueComment(request) || isIssueBodyEdit(request) || isIssueClose(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
+    if (isIssueComment(request) || isIssueBodyEdit(request) || isIssueClose(request.args) || isIssueReopen(request.args) || isLabelAdd(request.args) || isLabelRemove(request.args) || isIssueAssign(request.args) || isIssueUnassign(request.args) || isFieldValueSet(request.args) || isIssueTypeSet(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };
     }
     if (isLinkAdd(request.args)) {
@@ -769,6 +777,13 @@ export class FakeGh implements GhRunner {
     if (isCommitRead(request.args)) {
       const [, repo = '', sha = ''] = /^repos\/([^/]+\/[^/]+)\/commits\/(.+)$/u.exec(request.args[1] ?? '') ?? [];
       return this.canned.get(repo) ?? restAnswer(this.commits.get(`${repo} ${sha}`));
+    }
+    if (isRunRerun(request.args) && this.rerunStartsAnyway) {
+      const [, runId = ''] = /^repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/rerun-failed-jobs$/u.exec(request.args[1] ?? '') ?? [];
+      const run = this.runs.get(Number(runId));
+      if (run !== undefined) {
+        this.runs.set(Number(runId), { ...run, status: 'queued', conclusion: null, run_attempt: Number(run['run_attempt']) + 1 });
+      }
     }
     if (isPullApprove(request.args) || isPullEnqueue(request.args) || isPullMerge(request.args) || isRunRerun(request.args)) {
       return this.writeFailure ?? { end: { kind: 'exited', code: 0 }, stdout: '{}', stderr: '' };

@@ -2,7 +2,21 @@ import type { ConfigLoad } from '../config/load.ts';
 import type { JsonRecord } from '../core/guards.ts';
 import { KIT_NAME } from '../core/home.ts';
 import type { HookEvent } from '../ports/host/index.ts';
-import type { Redaction } from '../secret-guard/redactor.ts';
+import { EnvAssignments } from '../secret-guard/env-assignments.ts';
+import { ToolOutputRedactor, type Redaction, type SecretFinder } from '../secret-guard/redactor.ts';
+import type { SecretRules } from '../secret-guard/rules.ts';
+
+/**
+ * The finders and redactor shared by `hook secret-redact` and `teamrig redact-exec`, so both paths redact the exact
+ * same secret shapes and variable assignments.
+ */
+export function secretFindersOf(rules: SecretRules): readonly SecretFinder[] {
+  return [rules.shapes, new EnvAssignments(rules.names)];
+}
+
+export function redactorOf(rules: SecretRules): ToolOutputRedactor {
+  return new ToolOutputRedactor(secretFindersOf(rules));
+}
 
 /**
  * The secret redactor (T1369 R7): after a tool runs, each secret its result holds is replaced before the model and the

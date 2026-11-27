@@ -19,6 +19,7 @@ const ALLOW_KEY = 'allow';
 const DENY_KEY = 'deny';
 const TOOL_PERMISSION_KEY = 'toolPermission';
 const BYPASS_VALUE = 'always-proceed';
+const BARE_COMMAND_ALLOW = 'command(*)';
 const NO_ROUTES = 'Antigravity CLI has no auto-mode routes';
 
 /**
@@ -46,6 +47,17 @@ function allowOf(permissions: JsonRecord): PermissionsAnswer<readonly string[]> 
   return isStringArray(allow) ? { ok: true, value: allow } : { ok: false, problem: `${PERMISSIONS_KEY}.${ALLOW_KEY} is not a list of texts` };
 }
 
+function bypassOf(settings: JsonRecord, allow: PermissionsAnswer<readonly string[]>): string | undefined {
+  const parts: string[] = [];
+  if (settings[TOOL_PERMISSION_KEY] === BYPASS_VALUE) {
+    parts.push(`${TOOL_PERMISSION_KEY} is ${BYPASS_VALUE}`);
+  }
+  if (allow.ok && allow.value.includes(BARE_COMMAND_ALLOW)) {
+    parts.push(`${PERMISSIONS_KEY}.${ALLOW_KEY} contains ${BARE_COMMAND_ALLOW}`);
+  }
+  return parts.length === 0 ? undefined : parts.join(', ');
+}
+
 function read(settings: JsonRecord): PermissionsReading {
   const permissions = settings[PERMISSIONS_KEY];
   const rules = isRecord(permissions) ? permissions : {};
@@ -53,8 +65,7 @@ function read(settings: JsonRecord): PermissionsReading {
   const deny = Array.isArray(list) ? list.filter((rule): rule is string => typeof rule === 'string') : [];
   const held = permissionsOf(settings);
   const allow = held.ok ? allowOf(held.value) : held;
-  const bypass = settings[TOOL_PERMISSION_KEY] === BYPASS_VALUE ? `${TOOL_PERMISSION_KEY} is ${BYPASS_VALUE}` : undefined;
-  return { allow, deny, bypass };
+  return { allow, deny, bypass: bypassOf(settings, allow) };
 }
 
 function writeAllow(settings: JsonRecord, allow: readonly string[]): PermissionsAnswer<JsonRecord> {

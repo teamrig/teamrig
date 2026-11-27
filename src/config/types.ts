@@ -7,6 +7,9 @@ import type { NeedKind } from '../tabs/need-kind.ts';
 import type { ServiceCommand } from '../permissions/service-commands.ts';
 import type { ChangeSourceId } from '../changes/ids.ts';
 import type { ImportScope } from '../sync/scope.ts';
+import type { LevelNamesSetting } from '../register/level-names.ts';
+import type { OwnerProofAdapterId } from '../owner-proof/port.ts';
+import type { PinnedKey } from '../owner-proof/pin.ts';
 
 /** The config format this code reads and writes. Older files are migrated in memory on load. */
 export const CONFIG_VERSION = 10;
@@ -228,6 +231,12 @@ export interface LockConfig {
 export interface ChangesConfig {
   /** The change sources to read, in the order their entries win; empty: every source that applies to the project. */
   readonly sources: readonly ChangeSourceId[];
+}
+
+/** What teamrig prints for each level of work (src/register/level-names.ts): labels only, never a command's words. */
+export interface LevelsConfig {
+  /** `auto` (the tracker connector's names, else the default set), a tracker preset's name, or a map of every level. */
+  readonly names: LevelNamesSetting;
 }
 
 /** Privileged commands a reviewer approved, run by `teamrig exec` (src/exec/). */
@@ -612,6 +621,24 @@ export interface UiConfig {
    * the UI itself. Absent: the released UI.
    */
   readonly path?: string;
+}
+
+/**
+ * How the owner proves an act is their own (T4758): a challenge signed by a key behind the OS's own gesture (Windows
+ * Hello, Touch ID, polkit, a security key), checked against the keys pinned here.
+ */
+export interface OwnerProofConfig {
+  /** The OS gesture that signs; none: no act asks for a proof, as before this key. */
+  readonly adapter: OwnerProofAdapterId;
+  /** How long a challenge stays signable, in seconds. */
+  readonly ttlSeconds: number;
+  /** The owner's enrolled public keys; a proof by any other key is refused. */
+  readonly pins: readonly PinnedKey[];
+}
+
+/** What only the team's owner holds. */
+export interface OwnerConfig {
+  readonly proof: OwnerProofConfig;
 }
 
 /**
@@ -1133,9 +1160,9 @@ export interface QueueConfig {
    * (`endFreeMb`) and commit charge (`commitMb`, `commitLimitMb`) at the kill; 0 samples nothing and records none.
    */
   readonly memorySampleSeconds: number;
-  /** A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host. */
+  /** A queued step, a merge or a deploy starts only while the host keeps this many MB free besides those held for it and for the small steps sharing the host; an eighth of the host's RAM when that is less. */
   readonly memoryFloorMb: number;
-  /** The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb. */
+  /** The MB held for a small step whose need is neither learned from its past runs in the ledger nor declared with --memory-mb; a seventh of the host's RAM when that is less. */
   readonly smallReserveMb: number;
   /**
    * The least MB held for a heavy queued step, a merge or a deploy besides memoryFloorMb: it takes the host lock only
@@ -1905,6 +1932,7 @@ export interface KitConfig {
   readonly ruleConflicts: readonly RuleConflict[];
   readonly messages: MessagesConfig;
   readonly register: RegisterConfig;
+  readonly levels: LevelsConfig;
   readonly skills: SkillsConfig;
   readonly contextFiles: ContextFilesConfig;
   readonly lock: LockConfig;
@@ -1963,6 +1991,7 @@ export interface KitConfig {
   readonly meeting: MeetingConfig;
   readonly turnLog: TurnLogConfig;
   readonly ui: UiConfig;
+  readonly owner: OwnerConfig;
   readonly meetingNotices: MeetingNoticesConfig;
   /** Lets a shell line that only reads run without a permission prompt; off by default. */
   readonly readonlyShell: ReadonlyShellConfig;

@@ -108,6 +108,12 @@ export type HostList =
       readonly issues: readonly HostIssue[];
       readonly notes: readonly string[];
       /**
+       * True when the read of open issues stopped at its cap with more on the tracker, so an issue missing from
+       * `issues` may still be open: the status push names it as cut off, not as closed (T5451). Left out, the read
+       * was whole, which keeps connectors written before it valid.
+       */
+      readonly cut?: boolean;
+      /**
        * The accounts the tracker counted as the team's people for a scoped list, as its issues name assignees (its
        * connector's `people` key and the signed-in account): the core's scope check counts them beside the request's.
        */
@@ -323,8 +329,20 @@ export interface Searchable {
   readonly search?: IssueSearch;
 }
 
+/** A tracker's reopen of a closed issue or pull request. */
+export interface IssueReopen {
+  /** Opens the closed issue or pull request again; one already open is left as it is. */
+  reopenIssue(target: IssueTarget): Promise<HostEnd>;
+}
+
+/** A tracker's reopen, when it has one. */
+export interface Reopenable {
+  /** A capability (plugin API 0.7.0), so a connector that cannot reopen leaves it out and `issue reopen` says so. */
+  readonly reopen?: IssueReopen;
+}
+
 /** A tracker: where a team's issues live, with every capability over them. */
-export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable {}
+export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable, Reopenable {}
 
 /** A code host's pull requests, read. */
 export interface PullRequests {

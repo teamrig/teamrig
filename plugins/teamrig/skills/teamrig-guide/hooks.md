@@ -4,6 +4,7 @@ The plugin's `hooks/hooks.json` registers thirty Claude Code hooks, one row each
 `node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
 they all stay silent, but `hook restore-track` and `hook tool-end` still record the session ([the restore tracker](#every-session-the-restore-tracker)) and `hook missing-cli` still answers a shell that [no longer finds the bare command](#after-a-shell-call-the-cli-by-its-path).
 Each hook line names the host it runs in with `--host <id>` after the hook's name (`hook stop --host claude-code`), so a team mixing hosts loads each session's own ports. A host whose hook JSON does not name its event (Antigravity's) also passes `--host-event <Event>`, as in `hook stop --host antigravity-cli --host-event Stop`. The `Flags: none.` lines below count neither: every command takes `--host`, and `--host-event` is the host's, not the hook's.
+When the team's `hosts` does not list the host a hook line names (a team made after `setup hooks`, or a second team on the machine), `hook session-start` says so once in the host's reply, naming the `hosts` line to add before a new session; the other hooks end cleanly and write nothing, and the guards still refuse, so every tool call stays blocked until the team lists the host.
 
 | Claude Code event | teamrig hook | What it does |
 | --- | --- | --- |
@@ -931,8 +932,8 @@ tool: while sessions and the runner share one account, it stops a slip, not a de
 ## Before a write or a shell command: the install guard
 
 Every session's guards run from teamrig's own install in the kit home (`versions`, `bin`, `current`, `current.json`
-and `installs.json`), and a host other than Claude Code starts them from its hook files (Codex CLI's `hooks.json` and
-`config.toml`). A session that rewrote either would turn every guard off for the whole team. Before Claude runs a
+and `installs.json`), and a host other than Claude Code starts them from its hook files (`teamrig skills step
+host.hooks-file` names them). A session that rewrote one would turn every guard off for the whole team. Before Claude runs a
 Write, Edit, MultiEdit or NotebookEdit call, `hook install-guard` refuses one whose file reaches a guarded place by any
 spelling (an 8.3 short name, trailing dots, a Git Bash drive, a link); before a Bash or PowerShell call, one whose line
 names a guarded place at all, its reads too, since a shell line's writes cannot be told from its reads. The kit's
@@ -1226,7 +1227,7 @@ A block or call line whose line before, or own line, says `read-only` is let by,
 on a colon with a past-tense verb for what a call gave back (`returned`, `printed`, `came back`, `answered`,
 `replied`, `responded`), says no `will`, `once`, `after` or `you`, and hands nothing over on either line (no `run`,
 `paste`, `add`, `set`, `write`, `copy`, `apply`, `use`, `try`, `change` and the like). That is a quote of a tool's
-result, which a reply on a host whose transcript teamrig does not read (Codex CLI) shows the human when asked what a
+result, which a reply on a host whose transcript teamrig does not read shows the human when asked what a
 call returned; a noun such as `output` or `results` marks nothing. A backticked short hex alone pins nothing: a commit id would match it. It asks once per stop (never on a stop a hook already sent back), after a
 dropped skill edit and before the rest of the turn's end. Outside a team, and in a tab that is no session of it, it
 says nothing.
@@ -1532,8 +1533,8 @@ the time if the line is still unseen.
 ### The idle pass
 
 With `open.idle.mode` not `off` (`on`, the default, or `dry-run`), `hook wake-check` also runs the team's
-idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by (Codex CLI's
-`codex queue`), `hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
+idle pass; in an AI CLI with no tab mod to run the wake check but a program to wake a session by
+`hook stop` runs it at each turn's end instead, under the same once-a-minute lock. The wake check runs it right after it finds the tab's session and before the meeting's and the restart's holds, since the pass is
 the team's and not this tab's wake; it needs `wake.enabled`. It runs at most once a minute across the team: the
 check that claims `state/idle-pass.lock` runs it, and no check waits for that lock. With nothing changed, an idle
 tab's mod asks every 10 minutes, so a quiet team's pass runs that often and its close comes up to 10 minutes past

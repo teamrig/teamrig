@@ -6,7 +6,7 @@ import type { RevisionParts, SessionPlace, TasksPage } from '../../interface/ind
 import type { Task } from '../../register/fold.ts';
 import type { RegisterEvent } from '../../register/events.ts';
 import type { StatsRange } from '../../register/stats.ts';
-import { MissingSegmentError, readHistory, readWorkingSet, type LayoutPaths } from '../../register/layout.ts';
+import { layoutPaths, MissingSegmentError, readHistory, readWorkingSet, type LayoutPaths } from '../../register/layout.ts';
 import { lacksEventsOf, type RegisterSnapshot } from '../../register/snapshot.ts';
 import type { Kit, LoadedConfig } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
@@ -181,7 +181,20 @@ export async function wholeHistoryOf(runtime: CliRuntime, folder: ServedFolder, 
 function damageOf(snapshot: RegisterSnapshot, folder: ServedFolder, path: string): string[] {
   const { orphans } = snapshot.state;
   const unowned = orphans > 0 ? [`${servedPathOf(folder, path)}: ${orphans} event(s) naming no task left out`] : [];
-  return [...skippedOf(folder, path, snapshot.read), ...unowned];
+  return [...skippedOf(folder, path, snapshot.read), ...unowned, ...snapshotSkipOf(snapshot, folder, path)];
+}
+
+/**
+ * A snapshot the read did not use, as a fixed text: its reason can quote the snapshot's own fields, which were never
+ * scanned for a secret, so it stays out of a served document.
+ */
+function snapshotSkipOf({ skippedSnapshot }: RegisterSnapshot, folder: ServedFolder, path: string): string[] {
+  if (skippedSnapshot === null) {
+    return [];
+  }
+  const name = servedPathOf(folder, layoutPaths(path).snapshot);
+  const fix = skippedSnapshot.newerVersion > 0 ? 'from a newer teamrig; update teamrig' : 'damaged or from an older teamrig';
+  return [`${name}: not used (${fix}), so the whole history was read`];
 }
 
 /**

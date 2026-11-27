@@ -18,6 +18,15 @@ describe('antigravityPermissions', () => {
       antigravityPermissions.read({ toolPermission: 'always-proceed', permissions: { allow: ['command(git *)'], deny: ['read_file(.env)', 42] } }),
       { allow: { ok: true, value: ['command(git *)'] }, deny: ['read_file(.env)'], bypass: 'toolPermission is always-proceed' },
     );
+    assert.deepEqual(
+      antigravityPermissions.read({ permissions: { allow: ['command(*)'] } }).bypass,
+      'permissions.allow contains command(*)',
+    );
+    assert.deepEqual(
+      antigravityPermissions.read({ toolPermission: 'always-proceed', permissions: { allow: ['command(*)'] } }).bypass,
+      'toolPermission is always-proceed, permissions.allow contains command(*)',
+    );
+    assert.equal(antigravityPermissions.read({ permissions: { allow: ['command(echo *)'] } }).bypass, undefined);
     assert.deepEqual(antigravityPermissions.read({ permissions: [] }).allow, { ok: false, problem: 'permissions is not an object' });
     assert.deepEqual(antigravityPermissions.read({ permissions: { allow: [1] } }).allow, { ok: false, problem: 'permissions.allow is not a list of texts' });
   });

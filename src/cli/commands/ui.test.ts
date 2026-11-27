@@ -10,6 +10,7 @@ import type { UiPin } from '../../ui/released.ts';
 import type { ParsedArgs } from '../args.ts';
 import { RefusedError } from '../runtime.ts';
 import type { Sleep } from '../../core/lock.ts';
+import type { UiIdleTicker } from '../ui-idle-ticker.ts';
 import { UI_START_WAIT_MS, uiCommand, uiStartedPath } from './ui.ts';
 
 const ENTRY = resolve('/', 'pane', 'out', 'ui', 'main.js');
@@ -33,6 +34,17 @@ describe('teamrig ui', () => {
     assert.deepEqual(processes.ran, [
       { command: NODE, args: [ENTRY], cwd: APP, env: { TEAMRIG_HOME: KIT, PATH: '/bin', TEAMRIG_TEAM: 'app', TEAMRIG_CLI: SCRIPT, TEAMRIG_NODE: NODE } },
     ]);
+  });
+
+  it('runs the idle ticker while the UI runs here, stopped once it ends (T5634)', async () => {
+    const { processes, probe } = world();
+    const steps: string[] = [];
+    const startTicker = (): UiIdleTicker => {
+      steps.push(`start, ${processes.ran.length} run`);
+      return { stop: () => steps.push(`stop, ${processes.ran.length} run`), ended: Promise.resolve() };
+    };
+    assert.equal(await uiCommand(undefined, startTicker)(argsOf(), new CliHarness(WITH_UI).runtime({ processes, probe })), 0);
+    assert.deepEqual(steps, ['start, 0 run', 'stop, 1 run']);
   });
 
   it('opens on the session --session names, by its id', async () => {

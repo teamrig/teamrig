@@ -1,4 +1,5 @@
 import { posix, win32 } from 'node:path';
+import { KIT_NAME } from '../core/home.ts';
 import type { GuardedPlace } from '../hooks/install-guard.ts';
 import {
   isUnsupported,
@@ -322,6 +323,19 @@ export function userHooksOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 
   throw new RefusedError(`no host named ${name} keeps a hooks file of yours teamrig writes into (${known})`);
 }
 
+/**
+ * The id of the shipped host adapter whose hooks file `setup hooks --host <name>` writes, as its lines name it in
+ * `--host <id>` and a team's `hosts` lists it; undefined for a name only the running, unshipped host keeps.
+ */
+export function userHooksHostId(runtime: Pick<CliRuntime, 'shippedHosts' | 'env' | 'platform'>, name: string): string | undefined {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const found = Object.entries(runtime.shippedHosts).find(([, shipped]) => {
+    const { userHooks } = shipped.ports(seen);
+    return !isUnsupported(userHooks) && userHooks.host === name;
+  });
+  return found?.[0];
+}
+
 /** A hooks file of the person's whose host's lines run the kit launcher, with how teamrig's lines come out of it. */
 export interface KitLauncherHooks {
   readonly port: HostUserHooks;
@@ -405,10 +419,20 @@ export function hostHomeIfKnown(runtime: Pick<CliRuntime, 'host' | 'env' | 'plat
   return pathsIfKnown(runtime)?.home(runtime.userHome);
 }
 
-/** The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know refuses, as `pathsOf` does. */
+/**
+ * The folder of the person's session transcripts, one folder per project. A host whose folders teamrig does not know
+ * refuses, as `pathsOf` does, and so does one whose transcripts folder it does not know.
+ */
 export function transcriptsFolderOf(runtime: Pick<CliRuntime, 'host' | 'env' | 'platform' | 'userHome'>): string {
-  return pathsOf(runtime).transcriptsFolder(runtime.userHome);
+  const folder = pathsOf(runtime).transcriptsFolder(runtime.userHome);
+  if (folder === undefined) {
+    throw new RefusedError(NO_TRANSCRIPTS_FOLDER);
+  }
+  return folder;
 }
+
+/** Why a command that reads the session transcripts cannot run on a host whose transcripts folder teamrig does not know. */
+export const NO_TRANSCRIPTS_FOLDER = `${KIT_NAME} does not know where this host keeps its session transcripts, so it cannot read them`;
 
 /**
  * The folder of the person's session transcripts, or undefined on a host whose folders teamrig does not know: for a

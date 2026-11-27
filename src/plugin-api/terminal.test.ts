@@ -4,7 +4,7 @@ import { PANE_STATES, TERMINAL_REQUESTS, isPaneState, isTerminalRequest } from '
 
 describe('the terminal port', () => {
   it('names the protocol requests as the wire does', () => {
-    assert.deepEqual(TERMINAL_REQUESTS, ['open', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list']);
+    assert.deepEqual(TERMINAL_REQUESTS, ['open', 'split', 'focus', 'close', 'restart', 'rename', 'deliver', 'isIdle', 'list']);
   });
 
   it('takes a request by its exact name only', () => {

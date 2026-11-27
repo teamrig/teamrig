@@ -53,6 +53,8 @@ describe('teamrig restart', () => {
       posted = text === undefined ? posted : JSON.parse(text);
       if ((await asks.ask(CLAUDE_SESSION)) !== undefined && (await asks.claim(CLAUDE_SESSION))) {
         await store.clearRestart('alpha');
+        // The /clear's new session: its SessionStart clear hook takes the refresh.
+        await store.setState('alpha', { phase: 'refreshed', task: 'T3', at: AT });
       }
     };
     const result = await kit.run(RESTART_ALPHA, { sessionProcesses: processes, platform: 'win32', sleep });

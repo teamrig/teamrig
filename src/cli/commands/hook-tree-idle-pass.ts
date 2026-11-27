@@ -4,9 +4,9 @@ import { errorMessage } from '../../core/guards.ts';
 import { SessionLog, type SessionLogRecord } from '../../sessions/log.ts';
 import type { SessionFolderOf } from '../idle-pass.ts';
 import { readIdlePassState } from '../idle-pass-check.ts';
-import { isTreePassDue } from '../idle-pass-log.ts';
+import { isTreePassDue, type IdlePassState } from '../idle-pass-log.ts';
 import { RefusedError, type CliRuntime } from '../runtime.ts';
-import { loadTree } from '../tree.ts';
+import { loadTree, type TreeTeam } from '../tree.ts';
 import { runIdlePass } from './hook-idle-pass.ts';
 import { projectOf } from './setup.ts';
 
@@ -45,17 +45,30 @@ function treeFoldersOf(runtime: CliRuntime, config: KitConfig, records: readonly
 export async function runTreeIdlePasses(runtime: CliRuntime, own: string): Promise<void> {
   const { tree, teams } = await loadTree(runtime);
   const now = runtime.clock.now();
-  for (const [team, { kit, config, roster }] of teams) {
-    if (team === own || !tree.sameTree(team, own)) {
-      continue;
+  for (const [team, loaded] of teams) {
+    if (team !== own && tree.sameTree(team, own)) {
+      await runTeamPassFrom(runtime, team, loaded, isTreePassDue, `team ${own}`, now);
     }
-    try {
-      if (isTreePassDue(await readIdlePassState(runtime.files, kit.paths), now)) {
-        const { records } = await new SessionLog(runtime.files, kit.paths.sessionLog).read();
-        await runIdlePass(runtime, kit, config, roster, treeFoldersOf(runtime, config, records));
-      }
-    } catch (error) {
-      runtime.out.stderr(`WARN the idle pass of team ${team}, run from team ${own}, failed: ${errorMessage(error)}; the next pass tries again`);
+  }
+}
+
+/** Whether a pass run from outside a team's own tabs runs that team's pass now, from its state and the time. */
+export type PassDue = (state: IdlePassState | undefined, now: number) => boolean;
+
+/**
+ * Runs `team`'s idle pass from outside its own tabs, `from` naming where (`team app`), when `due` says so, its
+ * sessions in the folders `treeFoldersOf` names. Whether the pass ran; a failure is warned on stderr, never thrown,
+ * so it costs the caller nothing and the other teams' passes go on.
+ */
+export async function runTeamPassFrom(runtime: CliRuntime, team: string, { kit, config, roster }: TreeTeam, due: PassDue, from: string, now: number): Promise<boolean> {
+  try {
+    if (!due(await readIdlePassState(runtime.files, kit.paths), now)) {
+      return false;
     }
+    const { records } = await new SessionLog(runtime.files, kit.paths.sessionLog).read();
+    return await runIdlePass(runtime, kit, config, roster, treeFoldersOf(runtime, config, records));
+  } catch (error) {
+    runtime.out.stderr(`WARN the idle pass of team ${team}, run from ${from}, failed: ${errorMessage(error)}; the next pass tries again`);
+    return false;
   }
 }

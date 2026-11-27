@@ -203,18 +203,18 @@ function agentLineOf(agent: ListedAgent): string {
 /** A Claude Code session id as it may appear in a file name: letters, digits and dashes only. */
 const CLAUDE_SESSION_ID = /^[A-Za-z0-9-]{1,64}$/;
 
-export function isHostSessionId(value: string): boolean {
+export function isClaudeSessionId(value: string): boolean {
   return CLAUDE_SESSION_ID.test(value);
 }
 
 /** The ask for one Claude Code session in the ask folder; undefined for an id unsafe in a file name. */
 export function askFileOf(dir: string, hostSession: string): string | undefined {
-  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.ask` : undefined;
+  return isClaudeSessionId(hostSession) ? `${dir}/${hostSession}.ask` : undefined;
 }
 
 /** How the ask was answered, `taken`, `held` or `withdrawn`, created once: the first writer wins and the other learns it lost. */
 export function outcomeFileOf(dir: string, hostSession: string): string | undefined {
-  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.outcome` : undefined;
+  return isClaudeSessionId(hostSession) ? `${dir}/${hostSession}.outcome` : undefined;
 }
 
 /**
@@ -222,7 +222,7 @@ export function outcomeFileOf(dir: string, hostSession: string): string | undefi
  * started under an older teamrig reads.
  */
 export function holdWhyFileOf(dir: string, hostSession: string): string | undefined {
-  return isHostSessionId(hostSession) ? `${dir}/${hostSession}.held` : undefined;
+  return isClaudeSessionId(hostSession) ? `${dir}/${hostSession}.held` : undefined;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

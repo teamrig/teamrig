@@ -4,12 +4,13 @@ import { endOf, type ShellEnd } from '../core/shell-end.ts';
 import { posixQuote } from '../open/quote.ts';
 
 export interface ShellRequest {
-  /** One command line, read by the platform's shell: `sh` on POSIX, `cmd.exe` on Windows. */
+  /** One command line, read by the platform's shell: `sh` on POSIX, `cmd.exe` on Windows, or `shell` when given. */
   readonly command: string;
   readonly cwd: string;
   readonly env: Env;
   /** Called with each piece of output as it arrives, stdout and stderr together, so a run that never ends still leaves what it printed (#719). */
   readonly onOutput?: (chunk: string) => void;
+  readonly shell?: string | undefined;
 }
 
 export interface ShellResult {
@@ -102,7 +103,7 @@ export function nodeShellRunner(graceMs: number = HELD_OUTPUT_GRACE_MS): ShellRu
     run: (request) =>
       new Promise((resolve, reject) => {
         const child = spawn(request.command, {
-          shell: true,
+          shell: request.shell ?? true,
           cwd: request.cwd,
           env: { ...request.env },
           stdio: ['ignore', 'pipe', 'pipe'],

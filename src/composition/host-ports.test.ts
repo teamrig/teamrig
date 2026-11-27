@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isUnsupported, unsupported, type HostDeps, type ProgramRunner } from '../plugin-api/index.ts';
+import { isUnsupported, portFeatureProblems, unsupported, type HostDeps, type ProgramRunner } from '../plugin-api/index.ts';
 import { HOST_PORT_NAMES } from '../ports/host/index.ts';
+import { hostDeps } from '../testing/adapter-deps.ts';
 import { hostDeclarationData } from '../testing/manifests.ts';
 import { DEFAULT_HOST, HOST_ADAPTERS } from './adapters.ts';
 import { loadHostPorts, loadShippedHosts } from './host-ports.ts';
@@ -115,6 +116,17 @@ describe('loadShippedHosts', () => {
     assert.deepEqual(sources.map((source) => isUnsupported(source({ env: {}, platform: 'linux' }).secrets)), sources.map(() => false));
   });
 
+  it('gives each shipped adapter that starts sessions a program name to tell its tab shell by (T5010)', async () => {
+    for (const [id, shipped] of Object.entries(await loadShippedHosts(run))) {
+      for (const platform of ['win32', 'linux', 'darwin'] as const) {
+        const { launcher } = shipped.ports({ env: {}, platform });
+        if (!isUnsupported(launcher)) {
+          assert.notEqual(launcher.program.trim(), '', `${id} on ${platform}: an empty program would name no tab shell`);
+        }
+      }
+    }
+  });
+
   it("gives each shipped host the session variables its declaration names, its ports built or not (T5188)", async () => {
     const sessionVariables = { marks: ['STANDIN_AGENT'], identity: ['STANDIN_SESSION'] };
     const importer: ModuleImporter = (specifier) => {
@@ -128,6 +140,14 @@ describe('loadShippedHosts', () => {
       const load = await loadHost(id);
       assert.ok(load.kind !== 'refused', `the shipped host adapter ${id} did not load`);
       assert.deepEqual(real[id]?.sessionVariables, load.value.declaration.sessionVariables, id);
+    }
+  });
+
+  it('gives no shipped host a built port whose every row its manifest says unsupported (T5559)', async () => {
+    for (const id of Object.keys(HOST_ADAPTERS)) {
+      const load = await loadHost(id);
+      assert.ok(load.kind !== 'refused', `the shipped host adapter ${id} did not load`);
+      assert.deepEqual(portFeatureProblems(load.value.declaration.manifest, load.value.create(hostDeps())), [], id);
     }
   });
 

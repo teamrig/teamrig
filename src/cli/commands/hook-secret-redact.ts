@@ -1,7 +1,5 @@
 import { secretGuardOf, secretPatternsOf } from '../../hooks/secret-guard.ts';
-import { redactableResultOf, redactedLine, rotationText, rotatorOf } from '../../hooks/secret-redact.ts';
-import { EnvAssignments } from '../../secret-guard/env-assignments.ts';
-import { ToolOutputRedactor } from '../../secret-guard/redactor.ts';
+import { redactableResultOf, redactedLine, redactorOf, rotationText, rotatorOf } from '../../hooks/secret-redact.ts';
 import { secretRulesOf } from '../../secret-guard/rules.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { secretFilesOf } from '../host.ts';
@@ -30,7 +28,7 @@ export async function secretRedact(args: ParsedArgs, runtime: CliRuntime): Promi
     return EXIT.ok;
   }
   const rules = secretRulesOf(config, runtime.userHome, runtime.platform, secretFilesOf(runtime), secretPatternsOf(guard.load));
-  const redaction = new ToolOutputRedactor([rules.shapes, new EnvAssignments(rules.names)]).redact(result.response);
+  const redaction = redactorOf(rules).redact(result.response);
   if (redaction.classes.length === 0) {
     return EXIT.ok;
   }

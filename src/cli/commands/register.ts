@@ -38,6 +38,7 @@ import { overSizeFlags } from '../../register/over-size.ts';
 import type { AddInput, AskInput, StatusInput, Verdict } from '../../register/policy.ts';
 import type { GoalTagsReader, Register, RotationOutcome, WriteResult } from '../../register/register.ts';
 import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID, type TaskStatus } from '../../register/model.ts';
+import { layoutPaths } from '../../register/layout.ts';
 import { lacksEventsOf, type RegisterSnapshot } from '../../register/snapshot.ts';
 import { readStopgapTags, stopgapFlags, stopgapTags } from '../../register/stopgap.ts';
 import { dueStartHolds, dueVerifyHold, heldStart, heldStartNotice, metStartNotice, startHolds, verifyQueue, watchQueue, type DueVerify } from '../../register/verify.ts';
@@ -62,6 +63,7 @@ import { transcriptsIfKept } from '../host.ts';
 import { idleFactsOf } from '../idle-check.ts';
 import { logSizeWarnings } from '../log-size-check.ts';
 import { githubLateWarnings } from '../github-late-check.ts';
+import { githubState } from '../github-state.ts';
 import { promptHoldWarnings } from '../prompt-hold-page.ts';
 import { restartStalledWarnings } from '../restart-stalled-check.ts';
 import { runsHostSession } from '../session-process.ts';
@@ -174,10 +176,19 @@ export function reportRotation(runtime: CliRuntime, rotation: RotationOutcome, p
   }
 }
 
-/** Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. */
+/**
+ * Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. A snapshot the read did
+ * not use is named by its own file and reason (#2584): it is no line of `path`, and it makes every read fold the
+ * whole history until the next archive writes a new one.
+ */
 export function warnDamage(runtime: CliRuntime, snapshot: RegisterSnapshot, path: string): void {
   const { unreadable, newer } = snapshot.read;
   const { orphans } = snapshot.state;
+  const skipped = snapshot.skippedSnapshot;
+  if (skipped !== null) {
+    const fix = skipped.newerVersion > 0 ? `update ${KIT_NAME}` : `the next archive writes a new one (${KIT_NAME} compact)`;
+    runtime.out.stderr(`WARN ${layoutPaths(path).snapshot}: not used, so every read folds the whole history; ${fix}: ${skipped.reason}`);
+  }
   if (unreadable + newer + orphans > 0) {
     runtime.out.stderr(
       `WARN ${path}: ${unreadable} unreadable line(s), ${newer} line(s) from a newer teamrig, ${orphans} event(s) naming no task`,
@@ -1244,7 +1255,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const off = await secretGuardOffWarnings(runtime.files, own.config.secretGuard, settings);
   const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
   const resets = resetExpiryWarnings(own.config.budget, zone, now.getTime());
-  const late = await githubLateWarnings(runtime.files, { clocks: own.paths.githubClocks, notices: own.paths.unownedNotices }, zone, now.getTime());
+  const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime());
   const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
   const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
   const logs = await logSizeWarnings(runtime.files, own.paths);

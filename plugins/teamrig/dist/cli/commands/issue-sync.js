@@ -31,6 +31,7 @@ import { githubOffBy, readSyncState, reportAutoSync } from "./issue-sync-auto.js
 import { leftOutLines, previewLines, pullTaskLines, refusedReason, resultLines, shown, stepLine, syncExit } from "./issue-sync-lines.js";
 import { fileReporterStore, fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from "./tracker-sync.js";
 import { githubWatcher } from "../../sync/watcher.js";
+import { githubState, openGithubState } from "../github-state.js";
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
  * `github.repos`, inbound; `--push` plans the outbound half instead (issue-push.ts). Each repository is listed through the issue host port (issues/host.ts; on GitHub
@@ -64,6 +65,7 @@ export async function issueSync(args, runtime) {
         throw new RefusedError('--auto reads every repository of github.repos, to know which still fail; leave out --repo');
     }
     const kit = await openTeamKit(runtime);
+    await openGithubState(runtime.files, kit.paths);
     const config = requireConfig(kit, runtime, write ? 'write' : 'read');
     const say = (line) => runtime.out.stdout(line);
     const register = teamRegister(runtime, kit.paths, config);
@@ -106,7 +108,7 @@ export async function issueSync(args, runtime) {
     const issueMarks = new Map();
     const issueRoutes = [];
     // Read once, without the lock: a follow made while this run reads is heard from the next run.
-    const followers = auto && config.github.activity ? followersOf(parseFollows((await runtime.files.read(kit.paths.githubFollows)) ?? '')) : new Map();
+    const followers = auto && config.github.activity ? followersOf(parseFollows((await runtime.files.read(githubState(kit.paths).follows)) ?? '')) : new Map();
     const ours = ourLogins(config.github);
     const watcher = githubWatcher(config);
     const routing = { ours, self: undefined, rules, watcher, secrets: new SecretScanner(config.register.secretPatterns) };
@@ -233,7 +235,7 @@ export async function issueSync(args, runtime) {
     const owners = new Map(finalTasks.map((task) => [task.id, task.owner]));
     const holders = refHolders(finalTasks);
     // Only --auto tells the news, so only it reads the failed jobs' logs for it and writes their excerpts.
-    const ci = auto ? await withCiExcerpts({ host: codeHost, files: runtime.files, dir: kit.paths.githubCi, now: new Date(runtime.clock.now()).toISOString(), ours }, pullNews) : { events: pullNews, lines: [] };
+    const ci = auto ? await withCiExcerpts({ host: codeHost, files: runtime.files, dir: githubState(kit.paths).ci, now: new Date(runtime.clock.now()).toISOString(), ours }, pullNews) : { events: pullNews, lines: [] };
     ci.lines.forEach(say);
     // Checks turning green, and the copies for a linked task's owner and the followers, are activity (github.activity).
     const heard = config.github.activity ? ci.events : ci.events.filter((event) => event.kind !== 'checks-passing');

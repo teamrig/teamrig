@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { CONFIG_VERSION } from '../../config/types.ts';
 import { describe, it } from 'node:test';
 import { loadShippedHosts, type HostSource } from '../../composition/host-ports.ts';
 import { isRecord } from '../../core/guards.ts';
 import { isUnsupported } from '../../ports/host/index.ts';
 import { hostDeps } from '../../testing/adapter-deps.ts';
-import { CliHarness, type RunOptions } from '../../testing/cli-harness.ts';
+import { CliHarness, CONFIG_PATH, TEAM, type RunOptions } from '../../testing/cli-harness.ts';
 import { seedKitHome } from '../../testing/kit-home.ts';
 import { cliLauncherPath } from '../../restore/cli-launcher.ts';
 import { kitCurrentPath } from '../../kit/kit-versions.ts';
@@ -198,6 +199,44 @@ describe('teamrig setup hooks --host codex', () => {
     assert.equal(kit.files.get(CODEX_PROFILE), '[features]\nunified_exec_tty = true\n');
   });
 
+  describe("against the team's hosts (T5354)", () => {
+    const TEAM_CONFIG = join(KIT_HOME, 'teams', 'app', 'config.json');
+    const both = async (): Promise<RunOptions> => {
+      const all = await loadShippedHosts(hostDeps().run);
+      return options({ shippedHosts: all });
+    };
+    const team = async (kit: CliHarness, hosts: readonly string[]): Promise<void> => {
+      await kit.files.write(TEAM_CONFIG, JSON.stringify({ configVersion: CONFIG_VERSION, sessions: ['lead'], roles: { lead: 'lead' }, hosts }));
+    };
+    const UNLISTED = /the team's hosts \(claude-code\) does not list codex-cli, which these lines name, so each would be refused in its sessions: add codex-cli to hosts in the team config first/u;
+
+    it("refuses --yes for a team whose hosts does not list the host its lines name, writing nothing", async () => {
+      const kit = await kitWithPlugin();
+      await team(kit, ['claude-code']);
+      const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], await both());
+      assert.equal(result.code, EXIT.refused, result.stdout.join('\n'));
+      assert.match(result.stdout[0] ?? '', UNLISTED);
+      assert.equal(kit.files.get(CODEX_HOOKS), undefined);
+      assert.equal(kit.files.get(CODEX_CONFIG), undefined);
+    });
+
+    it('previews the counts and names the hosts line to add', async () => {
+      const kit = await kitWithPlugin();
+      await team(kit, ['claude-code']);
+      const result = await kit.run(['setup', 'hooks', '--host', 'codex'], await both());
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.ok(result.stdout.some((line) => line.startsWith('  NOTE --yes is refused until the team lists the host: ') && UNLISTED.test(line)), result.stdout.join('\n'));
+    });
+
+    it('writes for a team that lists the host', async () => {
+      const kit = await kitWithPlugin();
+      await team(kit, ['claude-code', 'codex-cli']);
+      const result = await kit.run(['setup', 'hooks', '--host', 'codex', '--yes'], await both());
+      assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+      assert.match(result.stdout[0] ?? '', /^WROTE \/srv\/codex\/hooks\.json: /u);
+    });
+  });
+
   it('needs --host', async () => {
     const kit = await kitWithPlugin();
     const result = await kit.run(['setup', 'hooks'], options());
@@ -287,6 +326,8 @@ describe('teamrig setup hooks --host antigravity-cli', () => {
 
   it("writes the teamrig group beside the person's groups, keeps a backup, and prints UNCHANGED on a re-run", async () => {
     const kit = await kitWithPlugin();
+    // The harness team's hosts must list the host the lines name, or --yes is refused (T5354).
+    await kit.files.write(CONFIG_PATH, JSON.stringify({ ...TEAM, hosts: ['antigravity-cli'] }));
     await kit.files.write(AGY_HOOKS, JSON.stringify({ custom: { Stop: [{ type: 'command', command: 'echo mine', timeout: 5 }] } }));
     const first = await kit.run(['setup', 'hooks', '--host', 'antigravity-cli', '--yes'], agyOptions());
     assert.equal(first.code, EXIT.ok, first.stdout.join('\n'));

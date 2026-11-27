@@ -106,6 +106,10 @@ async function hookScripts(files, settingsPaths, at) {
     }
     return scripts;
 }
+/** The memory files below the host's memory folder of the project; none on a host whose memory folder teamrig does not know. */
+async function memoryFiles(files, probe, folder) {
+    return folder === undefined ? [] : markdownBelow(files, probe, folder);
+}
 /** The paths that are files, in order. */
 async function existing(probe, paths) {
     const kinds = await Promise.all(paths.map((path) => probe.kind(path)));
@@ -130,7 +134,7 @@ export async function findRulePlaces(files, probe, at) {
             ...(await markdownBelow(files, probe, paths.userRules(at.userHome))),
         ],
         skill: skillPaths,
-        memory: await markdownBelow(files, probe, paths.memoryFolder(at.userHome, at.project)),
+        memory: await memoryFiles(files, probe, paths.memoryFolder(at.userHome, at.project)),
         'team-rules': await existing(probe, at.teamRules),
         hook: await existing(probe, await hookScripts(files, settings, at)),
         settings,

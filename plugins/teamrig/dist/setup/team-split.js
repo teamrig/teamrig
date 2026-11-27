@@ -67,6 +67,7 @@ const CHILD_TAKES = {
     meeting: 'copy',
     turnLog: 'copy',
     ui: 'copy',
+    owner: 'copy',
     meetingNotices: 'copy',
     readonlyShell: 'copy',
     permissions: 'copy',
@@ -76,6 +77,7 @@ const CHILD_TAKES = {
     rush: 'copy',
     statusLine: 'copy',
     focus: 'copy',
+    levels: 'copy',
 };
 const TAKES = new Map(Object.entries(CHILD_TAKES));
 /**

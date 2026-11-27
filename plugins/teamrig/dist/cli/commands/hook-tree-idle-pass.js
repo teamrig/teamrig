@@ -40,18 +40,27 @@ function treeFoldersOf(runtime, config, records) {
 export async function runTreeIdlePasses(runtime, own) {
     const { tree, teams } = await loadTree(runtime);
     const now = runtime.clock.now();
-    for (const [team, { kit, config, roster }] of teams) {
-        if (team === own || !tree.sameTree(team, own)) {
-            continue;
+    for (const [team, loaded] of teams) {
+        if (team !== own && tree.sameTree(team, own)) {
+            await runTeamPassFrom(runtime, team, loaded, isTreePassDue, `team ${own}`, now);
         }
-        try {
-            if (isTreePassDue(await readIdlePassState(runtime.files, kit.paths), now)) {
-                const { records } = await new SessionLog(runtime.files, kit.paths.sessionLog).read();
-                await runIdlePass(runtime, kit, config, roster, treeFoldersOf(runtime, config, records));
-            }
+    }
+}
+/**
+ * Runs `team`'s idle pass from outside its own tabs, `from` naming where (`team app`), when `due` says so, its
+ * sessions in the folders `treeFoldersOf` names. Whether the pass ran; a failure is warned on stderr, never thrown,
+ * so it costs the caller nothing and the other teams' passes go on.
+ */
+export async function runTeamPassFrom(runtime, team, { kit, config, roster }, due, from, now) {
+    try {
+        if (!due(await readIdlePassState(runtime.files, kit.paths), now)) {
+            return false;
         }
-        catch (error) {
-            runtime.out.stderr(`WARN the idle pass of team ${team}, run from team ${own}, failed: ${errorMessage(error)}; the next pass tries again`);
-        }
+        const { records } = await new SessionLog(runtime.files, kit.paths.sessionLog).read();
+        return await runIdlePass(runtime, kit, config, roster, treeFoldersOf(runtime, config, records));
+    }
+    catch (error) {
+        runtime.out.stderr(`WARN the idle pass of team ${team}, run from ${from}, failed: ${errorMessage(error)}; the next pass tries again`);
+        return false;
     }
 }

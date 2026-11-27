@@ -50,6 +50,16 @@ export const STEPS = {
     doc: 'Where the host records why it refused a tool call: its settings, its rules, its classifier.',
     fallback: "Read the host's own record of the refusal (its settings' rules and its log of refused calls) before changing any rule.",
   },
+  'host.hooks-file': {
+    side: 'host',
+    doc: "Where `teamrig setup hooks` writes a host's hooks, the settings it changes beside them, and how the host comes to trust them.",
+    fallback: "Read the paths `teamrig setup hooks --host <name>` prints: they are the host's hooks file and the settings beside it. Start a new host session to load the hooks, and trust them where the host asks.",
+  },
+  'host.skills-folder': {
+    side: 'host',
+    doc: "Where `teamrig setup skills` copies teamrig's skills for a host, and when the host reads them.",
+    fallback: 'Read the folder `teamrig setup skills --host <name>` prints: the host reads its skills there. Start a new host session to load the copied ones.',
+  },
 } as const satisfies Readonly<Record<string, Step>>;
 
 export type StepId = keyof typeof STEPS;

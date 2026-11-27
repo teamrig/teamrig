@@ -9,6 +9,7 @@ export const TRACKER_FEATURES = {
   'tracker.comment': { kind: 'tracker', doc: 'a comment on an issue (`issue reply`)', byDefault: 'on' },
   'tracker.edit-body': { kind: 'tracker', doc: "rewriting an issue's body (`issue edit-body`)", byDefault: 'on' },
   'tracker.close': { kind: 'tracker', doc: 'closing an issue as completed, not planned or duplicate (`issue close`)', byDefault: 'on' },
+  'tracker.reopen': { kind: 'tracker', doc: 'reopening a closed issue or pull request (`issue reopen`)', byDefault: 'on' },
   'tracker.labels': { kind: 'tracker', doc: 'adding, removing and making labels (`issue label`)', byDefault: 'on' },
   'tracker.status-push': { kind: 'tracker', doc: 'a status label per active task, its owner as assignee (`issue push`)', byDefault: 'on' },
   'tracker.assign': { kind: 'tracker', doc: 'assigning and unassigning people (`issue assign`)', byDefault: 'on' },

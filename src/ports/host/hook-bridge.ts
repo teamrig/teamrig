@@ -1,4 +1,5 @@
 import type { JsonRecord } from '../../core/guards.ts';
+import type { ObservedPermission } from './permission-mode.ts';
 import type { ToolCall } from './tool-call.ts';
 
 /**
@@ -76,6 +77,8 @@ export interface HookEvent {
   readonly model: string | undefined;
   /** How hard the model is set to think, in the host's word. */
   readonly effort: string | undefined;
+  /** The permission mode the session runs in, as the host reported it on this call; undefined when it told none. */
+  readonly permission: ObservedPermission | undefined;
   /** The text of a form or a notice the event shows the human. */
   readonly message: string | undefined;
   /** What failed, on `stop-failed` and `tool-failed`. */
@@ -128,10 +131,14 @@ export interface HookBridge {
    * reads its own.
    */
   parse(raw: string, hostEvent?: string): HookEvent | undefined;
+  /**
+   * Why a hook input does not read as the event `hostEvent` its command line named; undefined when it reads. A guard
+   * hook refuses such a call rather than pass one it cannot judge. Optional (plugin API 0.8.0): a host whose input
+   * names its own event takes no `--host-event` and leaves it out.
+   */
+  unreadable?(raw: string, hostEvent: string): string | undefined;
   /** The text to write on standard output for `reply` to the event `on`; empty when there is nothing to write. */
   reply(on: HookEventName, reply: HookReply): string;
-  /** What the host does when a hook itself fails: `blocks` stops the moment, `passes` lets it go on. */
-  readonly failureRule: 'blocks' | 'passes';
   /** The switch that leaves the tab's title to hooks; undefined when the host writes no title of its own, so hooks always have it. */
   readonly titleSwitch: TitleSwitch | undefined;
 }

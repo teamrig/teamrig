@@ -14,8 +14,8 @@ import { CLAIM_REPLY, claimBudget, claimWrites, RELEASE_REPLY } from './commands
 import { EXIT } from './runtime.ts';
 
 const REPO = 'acme/web';
-const CLAIMS = join(TEAM_HOME, 'state', 'github-claims.json');
-const PUSH_HOUR = join(TEAM_HOME, 'state', 'github-push-hour.json');
+const CLAIMS = join(TEAM_HOME, 'state', 'connectors', 'github', 'claims.json');
+const PUSH_HOUR = join(TEAM_HOME, 'state', 'connectors', 'github', 'push-hour.json');
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

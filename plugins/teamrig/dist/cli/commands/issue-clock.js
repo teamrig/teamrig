@@ -6,6 +6,7 @@ import { GITHUB_ACTOR } from "../../register/policy.js";
 import { fileLockOf } from "../file-locks.js";
 import { teamZone } from "../kit.js";
 import { inboxDepsOf } from "./inbox.js";
+import { githubState } from "../github-state.js";
 /**
  * The response clock's part of a sync that writes (T3028, sync/clock.ts): from each repository it read, the open
  * threads (issues and pull requests) and who answers each, then the clocks kept in their own file under the sync's lock, and one unwoken inbox
@@ -51,9 +52,9 @@ export function pullThreads(pulls, recipientOf, ours) {
  */
 export async function recordClocks(runtime, kit, config, read, threads) {
     const now = runtime.clock.now();
-    const remind = await fileLockOf(runtime, kit.paths.githubSyncLock, config.lock).run(async () => {
-        const step = stepClocks(parseClocks((await runtime.files.read(kit.paths.githubClocks)) ?? ''), read, threads, now);
-        await runtime.files.write(kit.paths.githubClocks, formatClocks(step.clocks));
+    const remind = await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async () => {
+        const step = stepClocks(parseClocks((await runtime.files.read(githubState(kit.paths).clocks)) ?? ''), read, threads, now);
+        await runtime.files.write(githubState(kit.paths).clocks, formatClocks(step.clocks));
         return step.remind;
     });
     const inboxes = inboxDepsOf(runtime, kit.paths).inboxes;

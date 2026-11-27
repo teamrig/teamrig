@@ -29,6 +29,18 @@ describe('ending a tab', () => {
     assert.equal(await tabProcessOf(enderOf(new FakeSessionProcesses().add(TAB).add(CLAUDE), 'win32', []), CLAUDE), CLAUDE.pid, 'no host told, no tab shell');
   });
 
+  it("tells the tab shell only by a host's program named as a whole word", async () => {
+    const agy = ['agy'];
+    const strategy = new FakeSessionProcesses().add({ ...TAB, commandLine: 'pwsh -NoExit -Command strategy --resume 1' }).add(CLAUDE);
+    assert.equal(await tabProcessOf(enderOf(strategy, 'win32', agy), CLAUDE), CLAUDE.pid, 'agy inside strategy is not agy');
+    const byPath = new FakeSessionProcesses().add({ ...TAB, commandLine: 'pwsh -NoExit -Command "C:\\Tools\\Claude.exe" --resume 1' }).add(CLAUDE);
+    assert.equal(await tabProcessOf(enderOf(byPath), CLAUDE), TAB.pid, 'a quoted path ending in the program names it');
+    assert.equal(await tabProcessOf(enderOf(new FakeSessionProcesses().add(TAB).add(CLAUDE)), CLAUDE), TAB.pid, 'the bare name after -Command names it');
+    const longer = new FakeSessionProcesses().add({ ...TAB, commandLine: 'pwsh -NoExit -Command claude-helper.exe' }).add(CLAUDE);
+    assert.equal(await tabProcessOf(enderOf(longer), CLAUDE), CLAUDE.pid, 'a longer name starting with the program is another program');
+    assert.equal(await tabProcessOf(enderOf(new FakeSessionProcesses().add(TAB).add(CLAUDE), 'win32', ['']), CLAUDE), CLAUDE.pid, 'an empty program names nothing');
+  });
+
   it('asks first, forces a process that outlives the wait, and says when even that fails', async () => {
     const processes = new FakeSessionProcesses().add(CLAUDE).linger(CLAUDE.pid);
     const ender = enderOf(processes);

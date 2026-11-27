@@ -32,6 +32,9 @@ function storeOf(runtime) {
 async function installedOf(runtime) {
     const store = storeOf(runtime);
     const folder = pathsOf(runtime).pluginsFolder(runtime.userHome);
+    if (folder === undefined) {
+        throw new RefusedError(`${KIT_NAME} does not know where this host keeps its installed plugins, so not which channel it follows`);
+    }
     const listPath = join(folder, store.listFile);
     const installs = (store.installs((await runtime.files.read(listPath)) ?? '') ?? []).filter((each) => each.plugin === KIT_NAME);
     const install = installs.find((each) => each.reach.kind === 'every project') ?? installs[0];

@@ -7,7 +7,7 @@ import { windowsTerminalPort } from './port.ts';
 import { FOCUS_EXIT, FOCUS_TITLE_VAR } from './scripts.ts';
 
 /**
- * Windows Terminal itself, faked: `wt.exe -w <window> new-tab` read from its arguments, and the focus script read
+ * Windows Terminal itself, faked: `wt.exe -w <window> new-tab` and `wt.exe -w 0 split-pane` read from their arguments, and the focus script read
  * from the title it is handed. The contract opens with the focus taken, so the keep-focus script never runs here.
  */
 class FakeWindowsTerminal implements TerminalProcesses {
@@ -15,6 +15,9 @@ class FakeWindowsTerminal implements TerminalProcesses {
   private selected: string | undefined;
 
   async start(request: StartRequest): Promise<StartOutcome> {
+    if (request.args[2] === 'split-pane') {
+      return this.split(request);
+    }
     const [wFlag, window, verb, titleFlag, title, dFlag, folder, dashes, ...argv] = request.args;
     if (request.command !== 'wt.exe' || wFlag !== '-w' || verb !== 'new-tab' || titleFlag !== '--title' || dFlag !== '-d' || dashes !== '--') {
       return { kind: 'failed', error: `fake Windows Terminal cannot read ${request.args.join(' ')}` };
@@ -24,6 +27,21 @@ class FakeWindowsTerminal implements TerminalProcesses {
     }
     this.shown.push({ pane: title, title, folder, argv, window: window === '0' ? undefined : window });
     this.selected = title;
+    return { kind: 'started', end: 'exited' };
+  }
+
+  /** A split pane takes the focus in its window, as Windows Terminal gives it, whatever the request asked. */
+  private split(request: StartRequest): StartOutcome {
+    const [wFlag, window, , vertical, titleFlag, title, dFlag, folder, dashes, ...argv] = request.args;
+    if (request.command !== 'wt.exe' || wFlag !== '-w' || window !== '0' || vertical !== '--vertical' || titleFlag !== '--title' || dFlag !== '-d' || dashes !== '--') {
+      return { kind: 'failed', error: `fake Windows Terminal cannot read ${request.args.join(' ')}` };
+    }
+    if (title === undefined || folder === undefined) {
+      return { kind: 'failed', error: 'fake Windows Terminal misses an argument' };
+    }
+    const pane = `split-${this.shown.length}`;
+    this.shown.push({ pane, title, folder, argv, window: undefined });
+    this.selected = pane;
     return { kind: 'started', end: 'exited' };
   }
 
@@ -66,6 +84,7 @@ describeContracts({
   bound: [
     bind({
       contract: TERMINAL_CONTRACT,
+      without: { 'terminal.split-keeps-the-focus': 'Windows Terminal moves the focus to the pane it splits off' },
       make: () => {
         const terminal = new FakeWindowsTerminal();
         return { port: windowsTerminalPort(terminalDeps({ platform: 'win32', processes: terminal })), world: terminal.world() };

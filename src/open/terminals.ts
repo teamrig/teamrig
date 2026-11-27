@@ -1,6 +1,5 @@
 import type { TerminalChoice } from '../config/types.ts';
 import type { Env } from '../core/home.ts';
-import type { StartRequest } from './processes.ts';
 
 /** A terminal `teamrig open` can start a tab in. */
 export type Terminal = Exclude<TerminalChoice, 'auto' | 'print'>;
@@ -27,28 +26,6 @@ export function teamWindowOf(teamWindow: boolean, team: string): string | undefi
   return teamWindow ? `teamrig-${team}` : undefined;
 }
 
-export type TabCommand = { readonly kind: 'command'; readonly request: StartRequest } | { readonly kind: 'unusable'; readonly why: string };
-
-/**
- * Windows Terminal re-reads its command line: `;` starts its next command, and it may expand `%VAR%`
- * and re-quote `"`. The kit's own arguments (ids, base64url) never hold these; a path might.
- */
-const WINDOWS_TERMINAL_UNSAFE = /[;"%\p{Cc}]/u;
-
-function command(command: string, args: readonly string[], folder: string, mode: StartRequest['mode']): TabCommand {
-  return { kind: 'command', request: { command, args, cwd: folder, mode } };
-}
-
-/** The first argument Windows Terminal would misread, if any. */
-function windowsTerminalUnsafe(tab: TabRequest): string | undefined {
-  const { title, folder, window, argv } = tab;
-  return [title, folder, ...(window === undefined ? [] : [window]), ...argv].find((arg) => WINDOWS_TERMINAL_UNSAFE.test(arg));
-}
-
-function windowsTerminalRefusal(unsafe: string): TabCommand {
-  return { kind: 'unusable', why: `Windows Terminal would misread ${JSON.stringify(unsafe)} (it holds ; " % or a control character)` };
-}
-
 /** The terminals whose window can split to show a pane beside the one a run works in. */
 export type SplitTerminal = Extract<Terminal, 'tmux' | 'windows-terminal'>;
 
@@ -62,27 +39,6 @@ export function splittableTerminal(env: Env): SplitTerminal | undefined {
     return 'tmux';
   }
   return (env['WT_SESSION'] ?? '') === '' ? undefined : 'windows-terminal';
-}
-
-/**
- * The launcher call that splits the run's own terminal window and runs `argv` in the new pane, side by side (T5105).
- * tmux splits the pane the run works in (it names it in `TMUX_PANE`), and `-d` keeps the focus there; Windows
- * Terminal splits the active pane of its most recent window, the one the person is typing in, and `tab.window` is not
- * read: a split is of the window the run is in.
- */
-export function splitCommand(terminal: SplitTerminal, tab: TabRequest): TabCommand {
-  const { title, folder, argv, focus } = tab;
-  switch (terminal) {
-    case 'tmux':
-      return command('tmux', ['split-window', '-h', ...(focus === 'keep' ? ['-d'] : []), '-c', folder, ...argv], folder, 'exit');
-    case 'windows-terminal': {
-      const unsafe = windowsTerminalUnsafe({ ...tab, window: undefined });
-      if (unsafe !== undefined) {
-        return windowsTerminalRefusal(unsafe);
-      }
-      return command('wt.exe', ['-w', '0', 'split-pane', '--vertical', '--title', title, '-d', folder, '--', ...argv], folder, 'exit');
-    }
-  }
 }
 
 /** The terminals `auto` tries, in order: tmux inside tmux, then the platform's own. */

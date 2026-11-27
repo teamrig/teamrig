@@ -28,6 +28,24 @@ describe("Antigravity's hook bridge, given the event by the hook's command line 
     assert.equal(bridge.parse(JSON.stringify(preToolUseShell.input), 'UserPromptSubmit'), undefined);
     assert.equal(bridge.parse('[]', 'PreToolUse'), undefined);
   });
+
+  it('names why an input does not fit the named event, so a guard refuses it (T5574)', () => {
+    const noCall = Object.fromEntries(Object.entries(preToolUseShell.input).filter(([key]) => key !== 'toolCall'));
+    assert.match(bridge.unreadable?.(JSON.stringify(noCall), 'PreToolUse') ?? '', /toolCall/u);
+    assert.match(bridge.unreadable?.(JSON.stringify({ ...preToolUseShell.input, stepIdx: 'three' }), 'PreToolUse') ?? '', /stepIdx/u);
+    assert.equal(bridge.unreadable?.('{bad', 'PreToolUse'), 'the PreToolUse hook input is no JSON object');
+    assert.equal(bridge.unreadable?.('[]', 'PreToolUse'), 'the PreToolUse hook input is no JSON object');
+  });
+
+  it('names no reason for an input that fits its event', () => {
+    assert.equal(bridge.unreadable?.(JSON.stringify(preToolUseShell.input), 'PreToolUse'), undefined);
+  });
+
+  it('reads a Stop that is not fully idle as one a hook already continued, so a second block cannot loop', () => {
+    const { stop } = DOCS_BUILT_HOOK_INPUTS;
+    assert.equal(bridge.parse(JSON.stringify({ ...stop.input, fullyIdle: false }), 'Stop')?.stopActive, true);
+    assert.equal(bridge.parse(JSON.stringify({ ...stop.input, fullyIdle: true }), 'Stop')?.stopActive, false);
+  });
 });
 
 describe("Antigravity's hook bridge", () => {

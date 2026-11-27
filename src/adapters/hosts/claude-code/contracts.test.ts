@@ -2,6 +2,7 @@ import {
   bind,
   LAUNCHER_CONTRACT,
   MODELS_CONTRACT,
+  PERMISSION_MODE_CONTRACT,
   PERMISSIONS_CONTRACT,
   PLUGIN_CONTRACT,
   STATUS_LINE_CONTRACT,
@@ -10,6 +11,7 @@ import {
   USAGE_CONTRACT,
   type LauncherWorld,
   type ModelsWorld,
+  type PermissionModeWorld,
   type PermissionsWorld,
   type PluginWorld,
   type StatusLineWorld,
@@ -21,14 +23,18 @@ import {
 } from '../../../conformance/index.ts';
 import { isStringArray, recordField, stringField, type JsonRecord, type RateWindow } from '../../../plugin-api/index.ts';
 import { describeContracts } from '../../../testing/contracts.ts';
+import { FolderNames } from '../../../testing/folder-names.ts';
+import { inputsOf, loadRecording } from '../../../testing/recorded.ts';
 import { promptLine, resultsLine } from '../../../testing/transcript-lines.ts';
 import { declaration } from './declaration.ts';
+import { hookBridge } from './hook-bridge.ts';
 import { hostModels } from './models.ts';
 import { sessionLauncher } from './session-launcher.ts';
 import { hostSteps } from './steps.ts';
 import { hostPermissions } from './permissions.ts';
 import { hostPlugin } from './plugin.ts';
 import { statusLine } from './status-line.ts';
+import { toolCallShape } from './tool-call.ts';
 import { transcriptReader } from './transcript.ts';
 import { usageMeter } from './usage.ts';
 
@@ -136,6 +142,15 @@ const launcherWorld: LauncherWorld = {
   places: { tab: { startedAs: 'cli' }, background: { startedAs: 'cli', sessionKind: 'bg' }, elsewhere: { startedAs: 'sdk-ts' } },
 };
 
+const recording = loadRecording('claude-code', new FolderNames({ cwd: '/work/app', temp: '/tmp', home: '/u' }));
+
+/** Every recorded input that carries a permission mode: the session was recorded in Claude Code's default mode. */
+const permissionModeWorld: PermissionModeWorld = {
+  recorded: recording.inputs.filter(({ input }) => stringField(input, 'permission_mode') !== undefined).map(({ input }) => ({ input: JSON.stringify(input), mode: 'ask' })),
+  withWord: (word) => JSON.stringify({ ...inputsOf(recording, 'PreToolUse')[0]?.input, permission_mode: word }),
+  withoutMode: () => JSON.stringify(inputsOf(recording, 'SessionStart')[0]?.input),
+};
+
 const PLUGINS_FOLDER = '/home/me/.claude/plugins';
 
 /** An install's scope and project in `installed_plugins.json`: `user` for every project, `managed` for one teamrig does not know. */
@@ -196,5 +211,6 @@ describeContracts({
     bind({ contract: MODELS_CONTRACT, make: () => ({ port: hostModels, world: modelsWorld }) }),
     bind({ contract: STEPS_CONTRACT, make: () => ({ port: hostSteps, world: stepsWorld }) }),
     bind({ contract: LAUNCHER_CONTRACT, make: () => ({ port: sessionLauncher, world: launcherWorld }) }),
+    bind({ contract: PERMISSION_MODE_CONTRACT, make: () => ({ port: hookBridge(toolCallShape('win32')), world: permissionModeWorld }) }),
   ],
 });

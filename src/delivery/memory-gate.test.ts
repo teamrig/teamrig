@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import type { CommitCharge } from './memory.ts';
-import { FREE_READS, MemoryGate, READ_GAP_MS, shortText, tabsText, type LoadingTab, type MemoryGateConfig } from './memory-gate.ts';
+import { FREE_READS, hostFloorMb, MemoryGate, READ_GAP_MS, shortText, smallReserveOf, tabsText, type LoadingTab, type MemoryGateConfig } from './memory-gate.ts';
 
 const CONFIG: MemoryGateConfig = { floorMb: 4096, heavyReserveMb: 4096, commitMaxPct: 92 };
 
@@ -63,14 +63,32 @@ describe('MemoryGate.look', () => {
     assert.deepEqual(await gate.look(2048, 3000), { kind: 'memory', freeMb: 9000, heldMb: 3000, needMb: 6144, floorMb: 4096, reserveMb: 2048 });
   });
 
+  it('keeps free an eighth of a small host, so an 8 GB host runs a small step (T5676)', async () => {
+    const memory = new CountingMemory();
+    memory.total = 7168;
+    memory.free = 3038;
+    const { gate } = gateOf(memory);
+    assert.deepEqual(await gate.look(1024, 0), { kind: 'room', freeMb: 3038 }, '896 kept free + 1024 = 1920 MB of the 3038 free');
+    memory.free = 1900;
+    assert.deepEqual(await gate.look(1024, 0), { kind: 'memory', freeMb: 1900, heldMb: 0, needMb: 1920, floorMb: 896, reserveMb: 1024, floorOfHostMb: 7168 });
+  });
+
+  it('keeps the config floor on a host of 32 GB or more: a 65536 MB host still needs 6144 MB for a 2048 MB step', async () => {
+    const memory = new CountingMemory();
+    memory.total = 65_536;
+    memory.free = 6000;
+    const { gate } = gateOf(memory);
+    assert.deepEqual(await gate.look(2048, 0), { kind: 'memory', freeMb: 6000, heldMb: 0, needMb: 6144, floorMb: 4096, reserveMb: 2048 });
+  });
+
   it('needs at most half the host RAM, so a small host still runs a step', async () => {
     const memory = new CountingMemory();
     memory.total = 12000;
     memory.free = 6500;
     const { gate } = gateOf(memory);
-    assert.equal((await gate.look(4096, 0)).kind, 'room', 'the floor and the reserve (8192 MB) pass half of 12000 MB, so 6000 MB is needed');
+    assert.equal((await gate.look(6000, 0)).kind, 'room', 'the floor (an eighth, 1500 MB) and the reserve (7500 MB) pass half of 12000 MB, so 6000 MB is needed');
     memory.free = 5000;
-    assert.deepEqual(await gate.look(4096, 0), { kind: 'memory', freeMb: 5000, heldMb: 0, needMb: 6000, floorMb: 4096, reserveMb: 4096, hostMb: 12000 });
+    assert.deepEqual(await gate.look(6000, 0), { kind: 'memory', freeMb: 5000, heldMb: 0, needMb: 6000, floorMb: 1500, reserveMb: 6000, floorOfHostMb: 12000, hostMb: 12000 });
   });
 
   it('is short on a commit charge the reserve would push past its percent of the limit, and passes one at it exactly', async () => {
@@ -126,6 +144,15 @@ describe('MemoryGate.look', () => {
   });
 });
 
+describe('hostFloorMb and smallReserveOf', () => {
+  it('scale the floor to an eighth and the small reserve to a seventh of a small host, never past the config (T5676)', () => {
+    assert.deepEqual([hostFloorMb(4096, 7168), smallReserveOf(2048, 7168)], [896, 1024]);
+    assert.deepEqual([hostFloorMb(4096, 32_768), smallReserveOf(2048, 32_768)], [4096, 2048], 'a 32 GB host keeps the config');
+    assert.deepEqual([hostFloorMb(4096, 131_072), smallReserveOf(2048, 131_072)], [4096, 2048], 'never raised');
+    assert.deepEqual([hostFloorMb(500, 7168), smallReserveOf(300, 7168)], [500, 300], 'a config under the scale holds');
+  });
+});
+
 describe('shortText', () => {
   it('names the free memory, the need and how it is counted', () => {
     assert.equal(
@@ -138,6 +165,13 @@ describe('shortText', () => {
     const short = { kind: 'memory', freeMb: 7000, heldMb: 2048, needMb: 6144, floorMb: 4096, reserveMb: 2048 } as const;
     assert.equal(shortText(short, 1), 'host memory: 7000 MB free, 2048 MB held for it, 6144 MB needed (4096 kept free for the host + 2048 for this step)');
     assert.equal(shortText(short, 2), 'host memory: 7000 MB free, 2048 MB held for them, 6144 MB needed (4096 kept free for the host + 2048 for this step)');
+  });
+
+  it('names a floor scaled to a small host as an eighth of its RAM (T5676)', () => {
+    assert.equal(
+      shortText({ kind: 'memory', freeMb: 1900, heldMb: 0, needMb: 1920, floorMb: 896, reserveMb: 1024, floorOfHostMb: 7168 }, 0),
+      'host memory: 1900 MB free, 1920 MB needed (896 kept free for the host (an eighth of its 7168 MB) + 1024 for this step)',
+    );
   });
 
   it('names a need capped at half the host', () => {

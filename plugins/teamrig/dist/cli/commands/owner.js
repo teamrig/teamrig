@@ -28,7 +28,7 @@ const BUTTON = { note: 'Note', next: 'Next', wake: 'Wake', decide: 'an option, A
  * session runs as the same OS user as the owner.
  */
 export function refuseUnlessOwner(runtime, command) {
-    refuseUnlessPerson(runtime, `${KIT_NAME} owner ${command}`, (mark) => `${KIT_NAME} owner ${command} acts as the owner, so it is refused where Claude Code runs it (${mark} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`);
+    refuseUnlessPerson(runtime, `${KIT_NAME} owner ${command}`, (mark) => `${KIT_NAME} owner ${command} acts as the owner, so it is refused where an agent runs it (${mark} is set: an agent's tool call, a script it runs or a hook); the owner presses ${BUTTON[command]} in the pane or types /${KIT_NAME} owner ${command} in a tab`);
 }
 /** The team holding the task `text` names: the caller's own for `T12`, another team of the tree for `web/T12`. */
 async function targetOf(runtime, text, access) {

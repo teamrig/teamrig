@@ -21,9 +21,11 @@ import type {
   ExecConfig,
   HiringConfig,
   LockConfig,
+  LevelsConfig,
   LeadBoundaryConfig,
   LoopsConfig,
   OpenConfig,
+  OwnerConfig,
   PackageGuardConfig,
   PermissionsConfig,
   PromptsConfig,
@@ -48,6 +50,7 @@ import type {
   MeetingConfig,
 } from './types.ts';
 import { DEFAULT_CAPS, DEFAULT_SCOPE } from '../sync/scope.ts';
+import { AUTO_LEVEL_NAMES } from '../register/level-names.ts';
 
 /** Defaults for every key except the roster (`sessions`, `roles.lead`), which each team supplies. */
 export const DEFAULT_OWNER_GATES: readonly string[] = [
@@ -150,6 +153,9 @@ export const DEFAULT_LOCK: LockConfig = { ttlMs: 300_000, pollMs: 50, waitMs: 20
 
 /** No change sources named: `teamrig changes` reads every one that applies to the project. */
 export const DEFAULT_CHANGES: ChangesConfig = { sources: [] };
+
+/** `auto`: the team's tracker connector's level names when it declares them, else Goal / Feature / Task / Subtask. */
+export const DEFAULT_LEVELS: LevelsConfig = { names: AUTO_LEVEL_NAMES };
 
 /** No exec PATH: a privileged command names its program by absolute path until the team lists its tool folders. */
 export const DEFAULT_EXEC: ExecConfig = { path: [] };
@@ -266,6 +272,9 @@ export const DEFAULT_ALERTS: AlertsConfig = { persistentFailureHours: 24 };
 
 /** The UI shows in the terminal `teamrig ui` is run in, as it did before `ui.mode` (T5105). */
 export const DEFAULT_UI: UiConfig = { mode: 'terminal' };
+
+/** No owner proof: no act asks for one, as before `owner.proof` (T4758); 5 minutes is the verifier's usual life. */
+export const DEFAULT_OWNER: OwnerConfig = { proof: { adapter: 'none', ttlSeconds: 300, pins: [] } };
 
 /** The remote a repository's merge command merges into when `merge.remote` is unset. */
 export const DEFAULT_MERGE_REMOTE = 'origin';

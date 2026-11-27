@@ -1,4 +1,4 @@
-import { numberField, stringField } from '../../core/guards.ts';
+import { errorMessage, numberField, stringField } from '../../core/guards.ts';
 import { TRACE_ERROR_CHARS } from '../../mod/hand-watch.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -12,7 +12,8 @@ const HAND_CHARS = 40;
  * `hook hand-trace`: the mod's watch over its hands (src/mod/hand-watch.ts) reports a tick that threw or stayed
  * unsettled past its limit, and this appends one line for it to the team's `state/hand-trace.jsonl` (#920), so a
  * hand that stopped answering leaves a trace outside Claude Code's debug log. A tab that is no team session, or a
- * payload that names no hand or kind, logs nothing. It always exits 0: the mod never waits on its answer.
+ * payload that names no hand or kind, logs nothing. It always exits 0, a failed append included, which it names on
+ * stderr (#1820): the mod never waits on its answer, and a trace of a trace has nowhere better to go.
  */
 export async function handTrace(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
@@ -37,6 +38,10 @@ export async function handTrace(args: ParsedArgs, runtime: CliRuntime): Promise<
     return EXIT.ok;
   }
   const line = { v: 1, at: new Date(runtime.clock.now()).toISOString(), session: scope.id, tab: scope.tab, hand, kind, ...detail };
-  await runtime.files.append(scope.kit.paths.handTraceLog, `${JSON.stringify(line)}\n`);
+  try {
+    await runtime.files.append(scope.kit.paths.handTraceLog, `${JSON.stringify(line)}\n`);
+  } catch (error) {
+    runtime.out.stderr(`teamrig hook hand-trace: could not append to ${scope.kit.paths.handTraceLog}: ${errorMessage(error)}`);
+  }
   return EXIT.ok;
 }

@@ -34,18 +34,21 @@ describe("Antigravity's paths", () => {
     assert.equal(p.projectAgents(proj), win32.join(proj, '.agents', 'agents'));
   });
 
-  it('throws on unverified paths instead of guessing', () => {
+  it('answers undefined for an unverified place instead of throwing or guessing', () => {
     const p = hostPaths('linux');
     const home = posix.join('/', 'people', 'sam');
     const proj = posix.join('/', 'work', 'app');
-    assert.throws(() => p.worktrees(proj), /unsupported:/);
-    assert.throws(() => p.userAgents(home), /unsupported:/);
-    assert.throws(() => p.memoryFolder(home, proj), /unsupported:/);
-    assert.throws(() => p.memoryIndex(home, proj), /unsupported:/);
-    assert.throws(() => p.memoryFolders(home), /unsupported:/);
-    assert.throws(() => p.scratchpads(posix.join('/', 'tmp')), /unsupported:/);
-    assert.throws(() => p.scratchpadOf(posix.join('/', 'tmp', 't.jsonl'), posix.join('/', 'tmp')), /unsupported:/);
-    assert.throws(() => p.planFile(home, 'slug'), /unsupported:/);
-    assert.throws(() => p.shellSnapshots(home), /unsupported:/);
+    const tmp = posix.join('/', 'tmp');
+    assert.equal(p.worktrees(proj), undefined);
+    assert.equal(p.userAgents(home), undefined);
+    assert.equal(p.memoryFolder(home, proj), undefined);
+    assert.equal(p.memoryIndex(home, proj), undefined);
+    assert.equal(p.memoryFolders(home), undefined);
+    assert.equal(p.scratchpads(tmp), undefined);
+    assert.equal(p.scratchpadOf(posix.join(tmp, 't.jsonl'), tmp), undefined);
+    assert.equal(p.planFile(home, 'slug'), undefined);
+    assert.equal(p.shellSnapshots(home), undefined);
+    assert.equal(p.transcriptsFolder(home), undefined);
+    assert.equal(p.pluginsFolder(home), undefined);
   });
 });

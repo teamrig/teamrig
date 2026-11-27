@@ -81,7 +81,8 @@ async function newestFirst(source, projectsDir, since) {
  * any project on this machine, read newest first until `window.maxBytes`: a month of a busy machine's transcripts runs
  * to gigabytes. It reads each transcript `chunkBytes` at a time and parses only the lines that can name a use, and
  * the first one carrying a `cwd`, the folder the session started in, and what each context hook's runs printed: a project folder's name in `projectsDir` is a
- * lossy slug (`a/b-c` and `a-b/c` share one), so it cannot say where.
+ * lossy slug (`a/b-c` and `a-b/c` share one), so it cannot say where. Nothing used when `projectsDir` is undefined:
+ * a host whose transcripts folder teamrig does not know.
  */
 export async function readTranscriptUse(deps, projectsDir, window) {
     const skills = new Map();

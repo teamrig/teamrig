@@ -138,7 +138,8 @@ export function subTeamPlacesOf({ tree, teams }, team) {
  */
 export function leadPathsOf(runtime, kit, config, tree, taskOwners = new Map()) {
     const hostPaths = pathsIfKnown(runtime);
-    const ofHost = hostPaths === undefined ? [] : [hostPaths.memoryFolders(runtime.userHome), hostPaths.scratchpads(tmpdir())];
+    const told = hostPaths === undefined ? [] : [hostPaths.memoryFolders(runtime.userHome), hostPaths.scratchpads(tmpdir())];
+    const ofHost = told.filter((path) => path !== undefined);
     const { home, config: configFile, teamRules, state, tasks } = kit.paths;
     const subTeams = subTeamPlacesOf(tree, kit.paths.team);
     const places = { home, own: [configFile, teamRules, state], lead: config.roles.lead, sessions: config.sessions, subTeams, tasks, taskOwners };

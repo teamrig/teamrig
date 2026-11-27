@@ -5,7 +5,7 @@ import type { HostSource } from '../composition/host-ports.ts';
 import { bareHost } from '../testing/bare-host.ts';
 import { CliHarness, TEAM, USER_HOME, KIT, type CliResult } from '../testing/cli-harness.ts';
 import { FakeHooks } from '../testing/fake-hooks.ts';
-import { hostStarting, NO_SESSION_HOST, SHIPPED_HOST } from '../testing/host.ts';
+import { hostStarting, NO_SESSION_HOST, SHIPPED_HOST, UNKNOWN_PLACES_HOST } from '../testing/host.ts';
 import { MemoryPathProbe } from '../testing/memory-files.ts';
 import { EXIT } from './runtime.ts';
 
@@ -81,6 +81,14 @@ describe('runCli: hook update-check', () => {
     const kit = await installed('local');
     const hooks = new FakeHooks();
     assert.deepEqual(answerOf(await run(kit, 'update-check', hooks, '', bareHost)), { kind: 'notices', notices: [] });
+    assert.deepEqual(hooks.ran, []);
+    assert.equal(await kit.files.read(CHECK_FILE), undefined);
+  });
+
+  it('tells nothing on a host whose plugins folder teamrig does not know, asking nothing (T5582)', async () => {
+    const kit = await installed('local');
+    const hooks = new FakeHooks();
+    assert.deepEqual(answerOf(await run(kit, 'update-check', hooks, '', UNKNOWN_PLACES_HOST)), { kind: 'notices', notices: [] });
     assert.deepEqual(hooks.ran, []);
     assert.equal(await kit.files.read(CHECK_FILE), undefined);
   });

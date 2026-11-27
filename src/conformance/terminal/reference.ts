@@ -5,6 +5,7 @@ import {
   type PaneIdentity,
   type PaneState,
   type ShownPane,
+  type SplitAnswer,
   type TerminalFailure,
   type TerminalPort,
   type TerminalRequest,
@@ -100,6 +101,14 @@ export function referenceTerminal(options: ReferenceOptions = {}): TerminalSubje
         }
         return { kind: 'opened', pane: id };
       }),
+    split: (request) =>
+      answer<SplitAnswer>('split', { kind: 'split' }, () => {
+        const id = add({ title: request.title, folder: request.folder, argv: request.argv, window: undefined, identity: request.identity, token: request.wakeToken });
+        if (request.focus === 'take' || front === undefined) {
+          front = id;
+        }
+        return { kind: 'split' };
+      }),
     focus: (id) =>
       onPane('focus', id, () => {
         front = id;
@@ -162,6 +171,7 @@ export function nothingTerminal(): TerminalSubject {
     port: {
       capabilities: () => Promise.resolve({ requests: TERMINAL_REQUESTS, interfaces: ['1.0'], seesDraft: true }),
       open: fails,
+      split: fails,
       focus: fails,
       close: fails,
       restart: fails,

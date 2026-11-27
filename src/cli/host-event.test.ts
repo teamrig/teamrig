@@ -16,7 +16,6 @@ function eventNotingHost(): { readonly host: HostSource; readonly named: (string
       return shipped.parse(raw, hostEvent);
     },
     reply: (on, reply) => shipped.reply(on, reply),
-    failureRule: shipped.failureRule,
     titleSwitch: shipped.titleSwitch,
   };
   return { host: (given) => ({ ...SHIPPED_HOST(given), hooks }), named };

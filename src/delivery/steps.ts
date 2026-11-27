@@ -4,7 +4,7 @@ import type { Env } from '../core/home.ts';
 import { endOf, type ShellEnd } from '../core/shell-end.ts';
 import { constants } from 'node:os';
 import { lowerStep, NODE_PRIORITIES, STEP_PRIORITY, type Priorities } from './priority.ts';
-import { nodeTreeKill, type RunKill, type TreeKill } from './tree-kill.ts';
+import { nodeLeftoverKill, nodeTreeKill, type LeftoverKill, type RunKill, type TreeKill } from './tree-kill.ts';
 
 export interface StepRequest {
   /** One command line, read by the platform's shell: `sh` on POSIX, `cmd.exe` on Windows. */
@@ -131,16 +131,24 @@ export function startLimit(timeoutMs: number, awayMs: (() => Promise<number>) | 
 
 /**
  * The real runner: Node's `spawn` in the platform's shell, with inherited stdio, at below-normal priority
- * (`stepLaunchOf`); its time limit or its `stop` kills the tree. A killed step is reported once the kill is done, so
- * the next holder never shares the host with it.
+ * (`stepLaunchOf`); its time limit or its `stop` kills the tree. A step that ends by itself has what it left running
+ * ended too (`leftovers`, #1492): a step that should start a lasting service runs outside the queue. A step is
+ * reported once its kill or that end is done, so the next holder never shares the host with it.
  */
-export function nodeStepRunner(platform: NodeJS.Platform, kill: TreeKill = nodeTreeKill(platform), priorities: Priorities = NODE_PRIORITIES): StepRunner {
+export function nodeStepRunner(
+  platform: NodeJS.Platform,
+  kill: TreeKill = nodeTreeKill(platform),
+  priorities: Priorities = NODE_PRIORITIES,
+  leftovers: LeftoverKill = nodeLeftoverKill(platform),
+): StepRunner {
   return {
     run: (request) =>
       new Promise((resolve, reject) => {
         const launch = stepLaunchOf(platform, request.command, ownPriorityOf(priorities));
         // The child holds its own handle on the log; this process's copy closes once the child has it.
         const logFd = request.log === undefined ? undefined : openSync(request.log, 'a');
+        // Taken before the spawn, so it is at or before the step's start, as the Windows orphan sweep needs.
+        const startedMs = Date.now();
         let child;
         try {
           child = spawn(launch.file, launch.args, {
@@ -184,7 +192,9 @@ export function nodeStepRunner(platform: NodeJS.Platform, kill: TreeKill = nodeT
         child.once('close', (code, signal) => {
           settled();
           if (killed === undefined) {
-            resolve(endOf(code, signal));
+            const { pid } = child;
+            const ended = pid === undefined ? Promise.resolve() : leftovers(pid, startedMs, Date.now()).catch(() => undefined);
+            void ended.then(() => resolve(endOf(code, signal)));
           } else {
             const { why, done } = killed;
             void done.then(() => resolve({ kind: why }));

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { nothingLauncher, yesLauncher } from './launcher.ts';
 import { nothingModels, yesModels } from './models.ts';
+import { nothingPermissionMode, yesPermissionMode } from './permission-mode.ts';
 import { nothingSteps, yesSteps } from './steps.ts';
 
 /**
@@ -71,5 +72,21 @@ describe('the launcher liars', () => {
     assert.equal(launcher.isSessionProcess({ name: 'anything', commandLine: '' }), true);
     assert.equal(launcher.isForkOf('', 'session-one'), true);
     assert.equal(launcher.backgroundJobSession([]), launcher.backgroundJobSession(world.backgroundJob('session-one')));
+  });
+});
+
+describe('the permission-mode liars', () => {
+  it('nothingPermissionMode reads every input as an event with no mode', () => {
+    const { port, world } = nothingPermissionMode();
+    for (const raw of [world.withWord('default'), world.withoutMode(), 'not an input']) {
+      assert.equal(port.parse(raw)?.permission, undefined);
+    }
+  });
+
+  it('yesPermissionMode reads every input, one with no mode too, as auto', () => {
+    const { port, world } = yesPermissionMode();
+    for (const raw of [world.withWord('default'), world.withoutMode(), 'not an input']) {
+      assert.deepEqual(port.parse(raw)?.permission, { mode: 'auto', hostWord: 'auto' });
+    }
   });
 });

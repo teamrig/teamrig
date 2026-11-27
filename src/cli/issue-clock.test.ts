@@ -8,7 +8,7 @@ import { commentNode, FakeGh, ghIssue, ghPull, reviewNode } from '../testing/fak
 import { EXIT } from './runtime.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'], owners: { octocat: 'bravo' } } };
-const CLOCKS = join(TEAM_HOME, 'state', 'github-clocks.json');
+const CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
 const HOUR = 3_600_000;
 
 /** The lines of a session's inbox the sync posted, without their date. */

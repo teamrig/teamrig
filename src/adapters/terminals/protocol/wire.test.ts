@@ -12,6 +12,8 @@ import {
   paneAnswerOf,
   replyOf,
   requestLine,
+  splitAnswerOf,
+  splitParams,
 } from './wire.ts';
 
 const RESULT = { interface: '1.0', kind: 'done' };
@@ -26,6 +28,11 @@ describe('the terminal protocol wire', () => {
     const written = requestLine(7, 'open', open);
     assert.equal(written.endsWith('\n'), true);
     assert.deepEqual(JSON.parse(written), { jsonrpc: '2.0', id: 7, method: 'open', params: { title: 't', folder: '/w', argv: ['a'], window: null, focus: 'take', identity: { session: 's' }, wakeToken: 'k' } });
+  });
+
+  it('writes a split with no window, since its pane opens beside the one the person works in', () => {
+    const split = splitParams({ title: 't', folder: '/w', argv: ['a'], focus: 'keep', identity: { session: 's' }, wakeToken: 'k' });
+    assert.deepEqual(JSON.parse(requestLine(8, 'split', split)), { jsonrpc: '2.0', id: 8, method: 'split', params: { title: 't', folder: '/w', argv: ['a'], focus: 'keep', identity: { session: 's' }, wakeToken: 'k' } });
   });
 
   it('reads the result of the request it sent, whatever else the answer holds', () => {
@@ -66,6 +73,8 @@ describe('the terminal protocol wire', () => {
 
   it('reads each answer kind its request may give, and unserved or a quoted failure for any', () => {
     assert.deepEqual(openAnswerOf({ kind: 'opened', pane: 'p1', more: 1 }), { kind: 'opened', pane: 'p1' });
+    assert.deepEqual(splitAnswerOf({ kind: 'split', pane: 'p1' }), { kind: 'split' });
+    assert.deepEqual(splitAnswerOf({ kind: 'unserved' }), { kind: 'unserved' });
     assert.deepEqual(paneAnswerOf('close', { kind: 'gone' }), { kind: 'gone' });
     assert.deepEqual(paneAnswerOf('focus', { kind: 'selected' }), { kind: 'selected' });
     assert.deepEqual(deliverAnswerOf({ kind: 'held', why: 'draft' }), { kind: 'held', why: 'draft' });
@@ -79,7 +88,8 @@ describe('the terminal protocol wire', () => {
 
   const mismatched: readonly (readonly [string, () => { readonly kind: string }])[] = [
     ['an open with an empty pane id', () => openAnswerOf({ kind: 'opened', pane: '' })],
-    ['a pane request answered delivered', () => paneAnswerOf('focus', { kind: 'delivered' })],
+    ['a split answered opened, which only an open answers', () => splitAnswerOf({ kind: 'opened', pane: 'p1' })],
+    ['a pane request answered delivered',() => paneAnswerOf('focus', { kind: 'delivered' })],
     ['a close answered selected, which only a focus answers', () => paneAnswerOf('close', { kind: 'selected' })],
     ['a wake held by idle, which never holds one', () => deliverAnswerOf({ kind: 'held', why: 'idle' })],
     ['a wake held by a state the protocol lacks', () => deliverAnswerOf({ kind: 'held', why: 'sleepy' })],

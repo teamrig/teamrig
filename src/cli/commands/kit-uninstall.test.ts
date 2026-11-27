@@ -130,7 +130,7 @@ describe('teamrig kit uninstall', () => {
     assert.deepEqual(installed(), before);
   });
 
-  it('refuses its write where Claude Code runs it', async () => {
+  it('refuses its write where an agent runs it', async () => {
     const before = installed();
     const result = await kit.run(['kit', 'uninstall', '--yes'], options({ CLAUDECODE: '1' }));
     assert.deepEqual(result.stdout, [`REFUSED ${settingsWriteRefusal('kit uninstall', 'CLAUDECODE')}`]);

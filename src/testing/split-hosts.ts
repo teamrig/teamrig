@@ -35,6 +35,7 @@ export function trackerOnly(fake: FakeIssueHost): Tracker {
     addBlockedBy: (target, blockerId) => fake.addBlockedBy(target, blockerId),
     watch: (repo, marks) => fake.watch(repo, marks),
     ...(fake.fields === undefined ? {} : { fields: fake.fields }),
+    ...(fake.reopen === undefined ? {} : { reopen: fake.reopen }),
   };
 }
 

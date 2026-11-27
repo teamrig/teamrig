@@ -20,6 +20,7 @@ export const declaration = {
     name: 'headless',
     manifest: {
         'pane.open': SUPPORTED,
+        'pane.split': NO_WINDOW,
         'pane.window': NO_WINDOW,
         'pane.focus': WATCH,
         'pane.close': BY_LAUNCHER,

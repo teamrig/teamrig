@@ -329,7 +329,7 @@ export class JiraTracker {
         const { rule, notes } = await this.ruleOf(project);
         if (request === undefined || request.scope.all) {
             const searched = await this.searchPages(repo, project, rule, jql, closedFrom);
-            return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: [...notes, ...searched.notes] };
+            return searched.kind === 'failed' ? searched : { kind: 'listed', issues: searched.issues, notes: [...notes, ...searched.notes], cut: searched.cut };
         }
         const scoped = await this.scopedList(repo, project, rule, jql, closedFrom, request);
         return scoped.kind === 'listed' ? { ...scoped, notes: [...notes, ...scoped.notes] } : scoped;
@@ -349,7 +349,7 @@ export class JiraTracker {
         if (clause.kind === 'failed') {
             return clause;
         }
-        const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [] } : await this.searchPages(repo, project, rule, `${jql} AND (${clause.jql})`, closedFrom);
+        const searched = clause.kind === 'none' ? { kind: 'searched', issues: [], notes: [], cut: false } : await this.searchPages(repo, project, rule, `${jql} AND (${clause.jql})`, closedFrom);
         if (searched.kind === 'failed') {
             return searched;
         }
@@ -388,6 +388,7 @@ export class JiraTracker {
         return {
             kind: 'searched',
             issues,
+            cut: token !== undefined,
             notes: [
                 ...(token === undefined ? [] : [`the list reached ${MAX_PAGES * PAGE_SIZE} issues, so it may leave some out`]),
                 ...(unreadable > 0 ? [`${unreadable} item(s) Jira listed did not read as issues of ${project.key} and were left out`] : []),
@@ -429,6 +430,8 @@ export class JiraTracker {
         return {
             kind: 'searched',
             issues,
+            // Read by key, each held issue Jira still has is given whatever the search's cap.
+            cut: false,
             notes: [
                 ...(missing.length > 0 ? [`Jira gave no issue for ${missing.length} held key(s), deleted, moved or out of the sign-in's sight: ${named}`] : []),
                 ...(unreadable > 0 ? [`${unreadable} held item(s) Jira gave did not read as issues of ${project.key} and were left out`] : []),

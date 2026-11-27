@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CHECK_TIME_SCALE } from '../../src/core/time-limit.ts';
 import {
+  CHILD_COVERAGE_PRELOAD,
   SLOWEST_REPORTER,
   coverageFindings,
   coverageOptions,
@@ -182,6 +184,12 @@ describe('suiteArgs', () => {
     assert.equal(args[at + 1], '--test-reporter-destination=stdout');
     assert.ok(existsSync(fileURLToPath(SLOWEST_REPORTER)), SLOWEST_REPORTER);
   });
+
+  it('loads the child coverage router beside it in every process of the run (T5551)', () => {
+    const args = suiteArgs(POLICY, 'out.lcov', 'out.tap', 10);
+    assert.equal(args[3], `--import=${CHILD_COVERAGE_PRELOAD}`);
+    assert.ok(existsSync(fileURLToPath(CHILD_COVERAGE_PRELOAD)), CHILD_COVERAGE_PRELOAD);
+  });
 });
 
 describe('suiteWorkers', () => {
@@ -212,15 +220,21 @@ describe('coverageOptions', () => {
 
 describe('suiteEnv', () => {
   it('drops the parent test runner context and keeps the rest, coverage included', () => {
-    assert.deepEqual(suiteEnv({ NODE_TEST_CONTEXT: 'child-v8', NODE_V8_COVERAGE: '/srv/work/cov', PATH: '/usr/bin' }), {
+    assert.deepEqual(suiteEnv({ NODE_TEST_CONTEXT: 'child-v8', NODE_V8_COVERAGE: '/srv/work/cov', PATH: '/usr/bin', TEAMRIG_TIME_SCALE: '2' }), {
       NODE_V8_COVERAGE: '/srv/work/cov',
       PATH: '/usr/bin',
+      TEAMRIG_TIME_SCALE: '2',
     });
+  });
+
+  it("sets the check's time scale for the specs' child limits unless one is set (T5545)", () => {
+    assert.equal(suiteEnv({ PATH: '/usr/bin' })['TEAMRIG_TIME_SCALE'], String(CHECK_TIME_SCALE));
   });
 
   it("points every temporary folder, Node's coverage folder among them, at the run's own folder (#1585)", () => {
     assert.deepEqual(suiteEnv({ NODE_TEST_CONTEXT: 'child-v8', TMPDIR: '/tmp', PATH: '/usr/bin' }, '/var/u/.teamrig/tmp/coverage/run-7-a/tmp'), {
       PATH: '/usr/bin',
+      TEAMRIG_TIME_SCALE: String(CHECK_TIME_SCALE),
       TMPDIR: '/var/u/.teamrig/tmp/coverage/run-7-a/tmp',
       TMP: '/var/u/.teamrig/tmp/coverage/run-7-a/tmp',
       TEMP: '/var/u/.teamrig/tmp/coverage/run-7-a/tmp',

@@ -81,6 +81,28 @@ describe('unansweredOf (T3368)', () => {
     assert.equal(unansweredOf({ status: -1, signal: null }), 'ended with 0xFFFFFFFF, as a process that died starting does');
   });
 
+  it("stretches a run's limit by $TEAMRIG_TIME_SCALE (T5545)", () => {
+    const repo = new TempRepo('git-run-scale').init();
+    const before = process.env['TEAMRIG_TIME_SCALE'];
+    // A git alias that runs a child for 1.5 s, past the 500 ms limit as written and well inside 20 times it.
+    const slow = ['-c', 'alias.slow=!node -e "setTimeout(() => {}, 1500)"', 'slow'];
+    try {
+      process.env['TEAMRIG_TIME_SCALE'] = '1';
+      assert.notEqual(runGit(repo.dir, slow, 500).unanswered, undefined, 'stopped at the limit as written');
+      process.env['TEAMRIG_TIME_SCALE'] = '20';
+      const stretched = runGit(repo.dir, slow, 500);
+      assert.equal(stretched.unanswered, undefined, 'answered inside the stretched limit');
+      assert.equal(stretched.status, 0);
+    } finally {
+      if (before === undefined) {
+        delete process.env['TEAMRIG_TIME_SCALE'];
+      } else {
+        process.env['TEAMRIG_TIME_SCALE'] = before;
+      }
+      repo.remove();
+    }
+  });
+
   it('marks a run git gave no answer to, and none it answered', () => {
     const repo = new TempRepo('git-run').init();
     try {

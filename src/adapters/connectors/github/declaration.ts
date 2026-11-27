@@ -1,8 +1,8 @@
 import type { ConnectorDeclaration, Support } from '../../../plugin-api/index.ts';
 
 /**
- * What runs on GitHub today. A row with no proof yet shows unproved on the parity page until a live run on the
- * operating system it names is recorded.
+ * What runs on GitHub today. A row with no proof yet shows built, not proven live on the parity page, and a row
+ * proved on some operating systems shows unproved on the rest, until a live run there is recorded.
  */
 const SUPPORTED: Support = { kind: 'supported', proofs: [] };
 
@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.3.0',
+  apiVersion: '0.7.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
@@ -35,6 +35,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.comment': SUPPORTED,
     'tracker.edit-body': SUPPORTED,
     'tracker.close': SUPPORTED,
+    'tracker.reopen': SUPPORTED,
     'tracker.labels': SUPPORTED,
     'tracker.status-push': SUPPORTED,
     'tracker.assign': SUPPORTED,

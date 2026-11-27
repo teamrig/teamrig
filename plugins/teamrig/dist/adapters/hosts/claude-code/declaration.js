@@ -1,12 +1,17 @@
 import { SESSION_VARIABLES } from "./session-variables.js";
 /**
- * What teamrig does on Claude Code today: every feature but the two below. A row with no proof yet shows unproved on
- * the parity page until a live run on the operating system it names is recorded.
+ * What teamrig does on Claude Code today: every feature but the two below. A row with no proof yet shows built, not
+ * proven live on the parity page, and a row proved on some operating systems shows unproved on the rest, until a
+ * live run there is recorded.
  */
 const SUPPORTED = { kind: 'supported', proofs: [] };
-/** The live Windows runs recorded in docs/proofs/claude-code.md: the scan of 2026-11-20 and its re-run of 2026-11-23. */
+/**
+ * The live Windows runs recorded in docs/proofs/claude-code.md: the scan of 2026-11-20, its re-run of 2026-11-23 and
+ * one session's refresh and wakes of 2026-11-26.
+ */
 const SCAN = { toolVersion: '2.1.329', date: '2026-11-20' };
 const RESCAN = { toolVersion: '2.1.330', date: '2026-11-23' };
+const REFRESH_RUN = { toolVersion: '2.1.332', date: '2026-11-26' };
 /**
  * A feature proved on Windows, its record under the feature id's heading in docs/proofs/claude-code.md (a heading's
  * anchor drops the id's dot).
@@ -41,8 +46,8 @@ export const declaration = {
         'rules.session-start': provedOnWindows('rules.session-start', RESCAN),
         'rules.instruction-files': provedOnWindows('rules.instruction-files', SCAN),
         'rules.rules-folder': SUPPORTED,
-        'rules.memory': SUPPORTED,
-        'rules.start-size': SUPPORTED,
+        'rules.memory': provedOnWindows('rules.memory', REFRESH_RUN),
+        'rules.start-size': provedOnWindows('rules.start-size', REFRESH_RUN),
         'inbox.prompt-line': provedOnWindows('inbox.prompt-line', SCAN),
         'context.compact-hold': SUPPORTED,
         'context.size': provedOnWindows('context.size', SCAN),
@@ -71,7 +76,7 @@ export const declaration = {
         'tabs.waiting-state': SUPPORTED,
         'tabs.memory': SUPPORTED,
         'wake.api-retry': SUPPORTED,
-        'wake.cost': SUPPORTED,
+        'wake.cost': provedOnWindows('wake.cost', REFRESH_RUN),
         'skills.plugin': provedOnWindows('skills.plugin', RESCAN),
         'skills.team': provedOnWindows('skills.team', RESCAN),
         'skills.session-listing': provedOnWindows('skills.session-listing', RESCAN),
@@ -84,9 +89,9 @@ export const declaration = {
         'budget.transcripts': SUPPORTED,
         'budget.usage': SUPPORTED,
         'budget.model-share': SUPPORTED,
-        'budget.week-reading': SUPPORTED,
+        'budget.week-reading': provedOnWindows('budget.week-reading', REFRESH_RUN),
         'budget.five-hour': SUPPORTED,
-        'budget.status-line': SUPPORTED,
+        'budget.status-line': provedOnWindows('budget.status-line', REFRESH_RUN),
         'budget.helper-weight': SUPPORTED,
         'budget.pools': SUPPORTED,
         'budget.windows': SUPPORTED,

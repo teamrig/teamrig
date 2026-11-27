@@ -1,6 +1,7 @@
 import {
   HOOK_EVENTS,
   isRecord,
+  observedPermission,
   recordField,
   stringField,
   type HookBridge,
@@ -10,6 +11,8 @@ import {
   type HookReply,
   type HookVerdict,
   type JsonRecord,
+  type MappedPermissionMode,
+  type ObservedPermission,
   type ToolCall,
   type ToolCallShape,
 } from '../../../plugin-api/index.ts';
@@ -52,6 +55,20 @@ const TAKES_CONTEXT: ReadonlySet<HookEventName> = new Set<HookEventName>(['sessi
 
 /** Codex refuses a blank reason, and a refusal with no reason would then not refuse. */
 const UNEXPLAINED = 'A teamrig hook refused this and gave no reason.';
+
+/** Codex's permission_mode words, from the list its 0.170.0 hook input schemas publish (hook-input.ts). */
+const PERMISSION_WORDS: Readonly<Record<string, MappedPermissionMode>> = {
+  default: 'ask',
+  acceptEdits: 'accept-edits',
+  plan: 'plan',
+  dontAsk: 'no-prompts',
+  bypassPermissions: 'bypass',
+};
+
+function permissionModeOf(payload: JsonRecord): ObservedPermission | undefined {
+  const word = stringField(payload, 'permission_mode');
+  return word === undefined ? undefined : observedPermission(word, PERMISSION_WORDS);
+}
 
 function sessionOf(payload: JsonRecord): string | undefined {
   const id = stringField(payload, 'session_id');
@@ -104,6 +121,7 @@ function eventOf(payload: JsonRecord, shape: ToolCallShape): HookEvent {
     trigger: stringField(payload, 'trigger'),
     model: stringField(payload, 'model'),
     effort: undefined,
+    permission: permissionModeOf(payload),
     message: undefined,
     error: undefined,
   };
@@ -189,8 +207,6 @@ export function hookBridge(shape: ToolCallShape): HookBridge {
       return isRecord(payload) ? eventOf(payload, shape) : undefined;
     },
     reply: replyText,
-    // A hook that exits with any code but 2 is marked failed and the moment goes on (`hooks_src_events_pre_tool_use.rs`).
-    failureRule: 'passes',
     // Codex CLI turns its own tab title off by a config key (`tui.terminal_title`, `config_src_types.rs`), not an
     // environment switch, and its hook output has no title field, so there is no switch to name here.
     titleSwitch: undefined,

@@ -43,6 +43,8 @@ export {
   type WebCall,
 } from './tool-call.ts';
 export { isUnsupported, unsupported, type Unsupported } from './unsupported.ts';
+export { OBSERVED_FROM, UNKNOWN_WHY, hostCannotTell, knownFrom, type Known, type ObservedFrom, type UnknownWhy } from './known.ts';
+export { PERMISSION_MODES, effectiveOf, observedPermission, type EffectiveConfig, type MappedPermissionMode, type ObservedPermission, type PermissionMode } from './permission-mode.ts';
 export type { HostPermissions, PermissionsAnswer, PermissionsReading, TrustedRoutesPlan } from './permissions.ts';
 export type { ChannelAnswer, ChannelPlan, HostPlugin, InstallReach, MarketplaceRef, MarketplaceSource, PluginInstall } from './plugin.ts';
 export type { HostModels, RoutingOverride } from './models.ts';

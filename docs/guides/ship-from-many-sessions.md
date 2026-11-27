@@ -49,7 +49,8 @@ host memory is passed by later steps that fit: always while no queued step runs,
 That is the default `delivery.queue.admission: pipeline`; `serial` keeps the line in arrival order with no cap and one
 heavy step at a time. A step is refused once its line has not
 moved for `delivery.queue.waitMinutes` (60), and one that runs is killed, with every process it started, after
-`delivery.queue.maxRunMinutes` (45; `--max-minutes` for one step); when the host's process list cannot be read, only
+`delivery.queue.maxRunMinutes` (45; `--max-minutes` for one step). A step that exits by itself also has what it
+left running ended, so a lasting service (a dev server, a watcher) belongs outside the queue. When the host's process list cannot be read, only
 the step's own process ends, so no process that merely reuses an old id is hit. A test run wrapped in `teamrig test`, as
 above, gets both the lock and the short summary. The lock is `host.lock` in the kit home, one for every team on the
 host, unless `delivery.queue.lockPath` names another; a lock past `lockTtlMinutes` (150), or whose process is
@@ -60,11 +61,11 @@ and a deploy's commands and checks: your terminal and apps win the CPU while it 
 so a build on a busy host no longer freezes your screen.
 
 Every step, merge and deploy waits in its turn for host memory: it starts only while the host's free memory, less
-what the steps sharing the host and the tabs still loading hold, leaves `delivery.queue.memoryFloorMb` (4096) plus its
-own, and the commit charge stays under `open.headroom.commitMaxPct` (92) with its own counted, so a build no longer
+what the steps sharing the host and the tabs still loading hold, leaves `delivery.queue.memoryFloorMb` (4096, or an eighth of
+a smaller host's RAM) plus its own, and the commit charge stays under `open.headroom.commitMaxPct` (92) with its own counted, so a build no longer
 starts on a host about to run out of memory, nor just as a tab opened. A step's own is the most its process tree held in its latest 20 runs under the same session and
-`--what` (a commit id in it set aside), plus a quarter, one run more than twice the next highest set aside: at least `heavyReserveMb` (2048) for a heavy step, else `smallReserveMb` (2048) before it
-has a run.
+`--what` (a commit id in it set aside), plus a quarter, one run more than twice the next highest set aside: at least `heavyReserveMb` (2048) for a heavy step, else `smallReserveMb` (2048, or a seventh of a
+smaller host's RAM) before it has a run, so an 8 GB host still runs a small step.
 
 A small step, such as a spec run or a lint, runs with `--small`: it shares the host with other small steps instead
 of taking the lock, at most `delivery.queue.maxSmallParallel` (4) at once, and never waits behind a heavy step. A

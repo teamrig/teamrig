@@ -10,13 +10,16 @@ import { isMinuteInSpan, parseUtcDeadline, utcMinuteOf } from "../core/time.js";
 import { TimeZone } from "../core/zone.js";
 import { FOLLOWUP_STATUSES, isTaskStatus, LEGACY_WAITING_HINT, LEGACY_WAITING_STATUS, REVIEW_STATUSES, SESSION_NAME, TASK_ID, TASK_STATUSES, WORK_CLASS_NAME } from "../register/model.js";
 import { isItemType, ITEM_TYPES } from "../register/events.js";
+import { readLevelNamesSetting } from "../register/level-names.js";
 import { branchPatternProblem, isBranchType } from "../worktree/branch-name.js";
 import { KEEP_RULE_PATTERN } from "../permissions/allow-rules.js";
 import { isServiceCommand, SERVICE_COMMANDS, TEAM_HELD_COMMANDS } from "../permissions/service-commands.js";
 import { PREFIX_PATTERN } from "../readonly-shell/rules.js";
 import { CORE_RULE_KEYS, isCoreRuleKey } from "../rules/keys.js";
 import { isNeedKind, NEED_KINDS } from "../tabs/need-kind.js";
-import { DEFAULT_ALERTS, DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_COMMITS, DEFAULT_CONTEXT_FILES, DEFAULT_FREEZES, DEFAULT_DECISIONS, DEFAULT_DELIVERY_WAIT, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_PASS_ENV, DEFAULT_GITHUB, DEFAULT_SYNC, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_EXEC, DEFAULT_CHANGES, DEFAULT_LOCK, DEFAULT_LEAD_BOUNDARY, DEFAULT_TURN_LOG, DEFAULT_NEEDS_YOU, DEFAULT_MEETING_NOTICES, DEFAULT_LOOPS, DEFAULT_MERGE_REMOTE, DEFAULT_MESSAGES, DEFAULT_HEADROOM, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_OWNER_GATES, DEFAULT_SECURITY_GATES, DEFAULT_HOSTS, DEFAULT_COMMIT_GUARD, DEFAULT_DB_WRITE_GUARD, DEFAULT_SECRET_GUARD, DEFAULT_PACKAGE_GUARD, DEFAULT_PERMISSIONS, DEFAULT_PROMPTS, DEFAULT_PUSH_GUARD, DEFAULT_READONLY_SHELL, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_SCALE_OUT, DEFAULT_SESSION_SHARE, DEFAULT_SKILLS, DEFAULT_STATUS_LINE, DEFAULT_FOCUS, DEFAULT_STEPS, DEFAULT_TESTS, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_BRANCHES, DEFAULT_MEETING, QUEUE_TTL_MARGIN_MINUTES, DEFAULT_UI, } from "./defaults.js";
+import { DEFAULT_ALERTS, DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_COMMITS, DEFAULT_CONTEXT_FILES, DEFAULT_FREEZES, DEFAULT_DECISIONS, DEFAULT_DELIVERY_WAIT, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_PASS_ENV, DEFAULT_GITHUB, DEFAULT_SYNC, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_EXEC, DEFAULT_CHANGES, DEFAULT_LEVELS, DEFAULT_LOCK, DEFAULT_LEAD_BOUNDARY, DEFAULT_TURN_LOG, DEFAULT_NEEDS_YOU, DEFAULT_MEETING_NOTICES, DEFAULT_LOOPS, DEFAULT_MERGE_REMOTE, DEFAULT_MESSAGES, DEFAULT_HEADROOM, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_OWNER_GATES, DEFAULT_SECURITY_GATES, DEFAULT_HOSTS, DEFAULT_COMMIT_GUARD, DEFAULT_DB_WRITE_GUARD, DEFAULT_SECRET_GUARD, DEFAULT_PACKAGE_GUARD, DEFAULT_PERMISSIONS, DEFAULT_PROMPTS, DEFAULT_PUSH_GUARD, DEFAULT_READONLY_SHELL, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_SCALE_OUT, DEFAULT_SESSION_SHARE, DEFAULT_SKILLS, DEFAULT_STATUS_LINE, DEFAULT_FOCUS, DEFAULT_STEPS, DEFAULT_TESTS, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_BRANCHES, DEFAULT_MEETING, QUEUE_TTL_MARGIN_MINUTES, DEFAULT_UI, DEFAULT_OWNER, } from "./defaults.js";
+import { OWNER_PROOF_ADAPTERS, isOwnerProofAdapterId } from "../owner-proof/port.js";
+import { SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem } from "../owner-proof/pin.js";
 import { isEffort, isModel, isTerminalName } from "./launch.js";
 import { APPLY_FLAG_PATTERN, BUDGET_ACCOUNT_MAX_LENGTH, CLIENT_RECEIVER_PATTERN, CONNECTOR_LIMITS, CONFIG_LIMITS, DB_PROGRAM_NAME_PATTERN, DB_WRITE_ENTRYPOINT_LIMITS, DB_WRITE_NAME_LIMITS, GITHUB_LABEL_MAX_LENGTH, ISSUE_FIELD_NAME_MAX_LENGTH, MEETING_COLOUR_PATTERN, MEETING_HELD_TEXT_MAX_LENGTH, NODE_MODULE_PATTERN, REVIEW_PATH_LIMITS, RULE_CONFLICT_LIMITS, SERVICE_ROLE_LIMITS, } from "./limits.js";
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from "./migrate.js";
@@ -360,6 +363,7 @@ export function parseConfig(raw, above) {
             coldAfterMinutes: read.integer(messages, 'coldAfterMinutes', 'messages', DEFAULT_MESSAGES.coldAfterMinutes, CONFIG_LIMITS.coldAfterMinutes),
         },
         register: parseRegister(read, read.section(raw, 'register', '')),
+        levels: parseLevels(read, read.section(raw, 'levels', '')),
         skills: parseSkills(read, read.section(raw, 'skills', '')),
         contextFiles: parseContextFiles(read, read.section(raw, 'contextFiles', '')),
         lock: {
@@ -411,6 +415,7 @@ export function parseConfig(raw, above) {
         meeting: parseMeeting(read, read.section(raw, 'meeting', '')),
         turnLog: parseTurnLog(read, read.section(raw, 'turnLog', '')),
         ui: parseUi(read, read.section(raw, 'ui', '')),
+        owner: parseOwner(read, read.section(raw, 'owner', '')),
         meetingNotices: parseMeetingNotices(read, read.section(raw, 'meetingNotices', '')),
         readonlyShell: parseReadonlyShell(read, read.section(raw, 'readonlyShell', '')),
         permissions: parsePermissions(read, read.section(raw, 'permissions', '')),
@@ -1442,6 +1447,10 @@ function parseChanges(read, raw) {
     const sources = read.stringList(raw, 'sources', 'changes', DEFAULT_CHANGES.sources, (id) => (isChangeSourceId(id) ? undefined : known), CHANGE_SOURCE_IDS.length);
     return { sources: [...new Set(sources.filter(isChangeSourceId))] };
 }
+/** `levels`: a refused `names` is reported and reads as the default, so the output keeps its labels. */
+function parseLevels(read, raw) {
+    return { names: readLevelNamesSetting(read, raw['names'], 'levels.names') ?? DEFAULT_LEVELS.names };
+}
 function parseExec(read, raw) {
     const path = 'exec';
     const webhookEnv = read.optionalString(raw, 'webhookEnv', path, ENV_VARIABLE);
@@ -1459,6 +1468,50 @@ function parseUi(read, raw) {
     const mode = isUiMode(named) ? named : DEFAULT_UI.mode;
     const path = read.optionalString(raw, 'path', 'ui', isAbsoluteFile);
     return path === undefined ? { mode } : { mode, path };
+}
+/** A pin's key id: the name the adapter gives the key, one word, so a challenge names it plainly. */
+const KEY_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const keyIdCheck = (value) => (KEY_ID.test(value) ? undefined : 'expected letters, digits and . _ : - (at most 128)');
+/**
+ * `owner`: a bad adapter keeps none, so no act asks for a proof nobody can give; a bad pin is dropped, so no proof
+ * verifies by a key the owner did not enrol, and a key id pinned twice is an issue, since the verifier would pick one.
+ */
+function parseOwner(read, raw) {
+    const path = 'owner.proof';
+    const proof = read.section(raw, 'proof', 'owner');
+    const defaults = DEFAULT_OWNER.proof;
+    const named = read.string(proof, 'adapter', path, defaults.adapter, oneOf(OWNER_PROOF_ADAPTERS));
+    const pins = read.list(proof, 'pins', path, defaults.pins, (value, itemPath) => parsePin(read, value, itemPath), CONFIG_LIMITS.ownerProofPins.maxItems);
+    const seen = new Set();
+    for (const pin of pins) {
+        if (seen.has(pin.keyId))
+            read.report(`${path}.pins`, `pins the key id ${describe(pin.keyId)} twice`);
+        seen.add(pin.keyId);
+    }
+    return {
+        proof: {
+            adapter: isOwnerProofAdapterId(named) ? named : defaults.adapter,
+            ttlSeconds: read.integer(proof, 'ttlSeconds', path, defaults.ttlSeconds, CONFIG_LIMITS.ownerProofTtlSeconds),
+            pins,
+        },
+    };
+}
+function parsePin(read, value, itemPath) {
+    const item = read.objectItem(value, itemPath);
+    if (item === undefined)
+        return undefined;
+    // requiredString reads a missing or bad field as '', each with its issue.
+    const keyId = read.requiredString(item, 'keyId', itemPath, keyIdCheck);
+    const named = read.requiredString(item, 'algorithm', itemPath, oneOf(SIGNATURE_ALGORITHMS));
+    const publicKeyPem = read.requiredString(item, 'publicKeyPem', itemPath);
+    if (keyId === '' || publicKeyPem === '' || !isSignatureAlgorithm(named))
+        return undefined;
+    const problem = pinKeyProblem(publicKeyPem, named);
+    if (problem !== undefined) {
+        read.report(`${itemPath}.publicKeyPem`, problem);
+        return undefined;
+    }
+    return { keyId, algorithm: named, publicKeyPem };
 }
 function parseAlerts(read, raw) {
     const path = 'alerts';

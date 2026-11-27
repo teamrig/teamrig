@@ -1,5 +1,5 @@
 import { INTERFACE_VERSION } from "../../../plugin-api/index.js";
-import { capabilitiesOf, deliverAnswerOf, deliverParams, failed, idleAnswerOf, listAnswerOf, openAnswerOf, openParams, paneAnswerOf, replyOf, requestLine, speaksOurMajor, } from "./wire.js";
+import { capabilitiesOf, deliverAnswerOf, deliverParams, failed, idleAnswerOf, listAnswerOf, openAnswerOf, openParams, paneAnswerOf, replyOf, requestLine, speaksOurMajor, splitAnswerOf, splitParams, } from "./wire.js";
 /** What teamrig knows of a program that answered no capabilities: it serves nothing, so nothing is asked of it. */
 const NOTHING = { requests: [], interfaces: [], seesDraft: false };
 const UNSERVED = { kind: 'unserved' };
@@ -51,6 +51,7 @@ export function protocolTerminal(transport) {
             return state.kind === 'known' ? state.capabilities : NOTHING;
         },
         open: (request) => served('open', openParams(request), openAnswerOf),
+        split: (request) => served('split', splitParams(request), splitAnswerOf),
         focus: (pane) => served('focus', { pane }, (result) => paneAnswerOf('focus', result)),
         close: (pane) => served('close', { pane }, (result) => paneAnswerOf('close', result)),
         restart: (pane, resume) => served('restart', { pane, resume }, (result) => paneAnswerOf('restart', result)),

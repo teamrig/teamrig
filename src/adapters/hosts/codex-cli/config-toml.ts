@@ -109,6 +109,47 @@ function scan(lines: readonly string[], table: string, key: string): Found {
   return found;
 }
 
+/**
+ * Whether an inline table, `value` being its key line's text after `=`, may hold `key`: it names the key on that line,
+ * or it does not close there (TOML 1.1 lets an inline table span lines), so the key may sit on a line after it.
+ */
+function inlineMayHold(value: string, key: string): boolean {
+  return value.includes(key) || !closesOnLine(value);
+}
+
+/**
+ * Whether the inline table `value` opens closes on its own line: every `{` met by a `}`, counting neither braces in a
+ * quoted string nor those in a trailing comment. A string left open on the line reads as not closed, so a line it
+ * cannot read fails closed.
+ */
+function closesOnLine(value: string): boolean {
+  let depth = 0;
+  for (let at = 0; at < value.length; at += 1) {
+    const char = value[at];
+    if (char === '#') break;
+    if (char === '"' || char === "'") {
+      const end = stringEnd(value, at);
+      if (end === undefined) return false;
+      at = end;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+    }
+  }
+  return depth <= 0;
+}
+
+/** The index of the quote closing the string `value` opens at `start`, or undefined when it does not close there. */
+function stringEnd(value: string, start: number): number | undefined {
+  const quote = value[start];
+  for (let at = start + 1; at < value.length; at += 1) {
+    if (quote === '"' && value[at] === '\\') at += 1;
+    else if (value[at] === quote) return at;
+  }
+  return undefined;
+}
+
 /** Whether `value`, a key line's text after `=`, reads as the boolean `word`. */
 function reads(value: string, word: string): boolean {
   return new RegExp(`^${word}(?:\\s|#|$)`, 'u').test(value);
@@ -133,7 +174,7 @@ export function withBooleanKeyInEach(text: string, prefix: string, rest: string,
     () => undefined,
     ({ line, indent, written, value: current, path }) => {
       const under = path === prefix || path.startsWith(`${prefix}.`);
-      if (under && current.trimStart().startsWith('{') && current.includes(last)) inline ??= path;
+      if (under && current.trimStart().startsWith('{') && inlineMayHold(current, last)) inline ??= path;
       const name = path.startsWith(`${prefix}.`) && path.endsWith(`.${rest}`) ? path.slice(prefix.length + 1, -(rest.length + 1)) : '';
       if (name !== '' && !reads(current, word)) {
         edited[line] = `${indent}${written} = ${word}`;
@@ -164,7 +205,7 @@ export function withBooleanKeyWhereSet(text: string, table: string, key: string,
     edited[found.key.line] = `${found.key.indent}${found.key.written} = ${word}`;
     return { ok: true, text: edited.join(eol) };
   }
-  if (found.inline?.includes(key) === true) {
+  if (found.inline !== undefined && inlineMayHold(found.inline, key)) {
     return { ok: false, problem: `it sets ${table} as an inline table that may hold ${key}, which teamrig cannot edit line by line: write it as a [${table}] table, or set ${key} = ${word} in it by hand` };
   }
   return { ok: true, text: undefined };

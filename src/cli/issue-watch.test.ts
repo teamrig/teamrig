@@ -13,7 +13,7 @@ import { FakeProcesses } from '../testing/fake-processes.ts';
 import { EXIT } from './runtime.ts';
 
 const WATCH_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
-const LEASE = join(TEAM_HOME, 'state', 'github-watch.json');
+const LEASE = join(TEAM_HOME, 'state', 'connectors', 'github', 'watch.json');
 const MINUTE = 60_000;
 const CLAUDE_PID = 6100;
 const OTHER_WATCH_PID = 6200;
@@ -75,6 +75,18 @@ describe('the hooks start the GitHub watch', () => {
     kit.clock.advance(1);
     await stop(kit, processes, 'alpha');
     assert.equal(processes.hidden.length, 2);
+  });
+
+  it("moves the lease an older teamrig left in the team's state folder into GitHub's, where a held one starts no second watch", async () => {
+    const kit = new CliHarness(WATCH_TEAM);
+    const earlier = join(TEAM_HOME, 'state', 'github-watch.json');
+    const lease = formatWatchLease({ pid: undefined, kitVersion: KIT_VERSION, startedAt: kit.clock.now(), beatAt: kit.clock.now() });
+    await kit.files.write(earlier, lease);
+    const processes = new FakeProcesses();
+    await stop(kit, processes);
+    assert.deepEqual(started(processes), []);
+    assert.equal(kit.files.get(LEASE), lease);
+    assert.equal(kit.files.get(earlier), undefined);
   });
 
   it('SessionStart starts it too, so a team whose sessions all stopped gets its watch back before a turn ends', async () => {

@@ -19,8 +19,6 @@ Each session is a tab in the terminal you already have (PowerShell, bash or zsh)
 IDE, no desktop app, no server and no account: in our test, Windows Terminal with twelve session tabs used about
 250 MB of memory.
 
-> **Pre-release.** Nothing is stable yet and there is no release.
-
 ## Get started
 
 Install teamrig, and teamrig-pane to keep your tasks beside the conversation:
@@ -64,8 +62,9 @@ node Downloads/install-teamrig.ts --host codex --yes
 Run it from your home folder, not the downloads folder: on Windows it refuses a folder holding a git program. It clones the release under `~/.teamrig/install/teamrig`
 (a later run clones afresh and keeps the old install beside it, to delete once the new one works), writes each host's
 hooks file through `teamrig setup hooks` once `teamrig kit install` has copied it into the kit home those hooks run from,
-and prints the folder to put on your PATH; it edits no shell profile.
-Without `--yes` it only previews the hooks it would write. It needs git and Node.js 22.18 or later.
+and puts `teamrig` on your PATH itself (`~/.teamrig/bin`, added to the Windows user Path or to `~/.profile` and your
+shell's start files, every entry kept): open a new terminal after it to run `teamrig`.
+Without `--yes` it only previews what it would write. It needs git and Node.js 22.18 or later.
 
 ### Requirements
 

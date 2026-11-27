@@ -1,4 +1,16 @@
 import { KIT_NAME } from "../core/home.js";
+import { EnvAssignments } from "../secret-guard/env-assignments.js";
+import { ToolOutputRedactor } from "../secret-guard/redactor.js";
+/**
+ * The finders and redactor shared by `hook secret-redact` and `teamrig redact-exec`, so both paths redact the exact
+ * same secret shapes and variable assignments.
+ */
+export function secretFindersOf(rules) {
+    return [rules.shapes, new EnvAssignments(rules.names)];
+}
+export function redactorOf(rules) {
+    return new ToolOutputRedactor(secretFindersOf(rules));
+}
 /**
  * The result to redact: the answer of the event's call where its host takes a replacement for it (T1369), since the
  * replacement must keep the answer's shape; undefined for any other call's, which stays as it is.

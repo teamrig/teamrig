@@ -33,6 +33,7 @@ import { postUrgentLine } from '../urgent-line.ts';
 import { inboxDepsOf } from './inbox.ts';
 import { fileLockOf } from '../file-locks.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
+import { githubState } from '../github-state.ts';
 
 /**
  * The automatic GitHub sync's report: `issue watch` (issue-watch.ts) runs `issue sync --auto` when GitHub changed,
@@ -50,12 +51,12 @@ export function githubOffBy(env: Env): string | undefined {
 
 /** The lock around the sync state file, held while a finishing sync records its end. */
 function stateLock(runtime: CliRuntime, kit: Kit, config: KitConfig, waitMs: number): FileLock {
-  return fileLockOf(runtime, kit.paths.githubSyncLock, { ...config.lock, waitMs });
+  return fileLockOf(runtime, githubState(kit.paths).syncLock, { ...config.lock, waitMs });
 }
 
 /** The last sync's state, read without the lock: what a sync compares its pull request reads with. */
 export async function readSyncState(runtime: CliRuntime, kit: Kit): Promise<SyncState | undefined> {
-  return parseSyncState((await runtime.files.read(kit.paths.githubSync)) ?? '');
+  return parseSyncState((await runtime.files.read(githubState(kit.paths).sync)) ?? '');
 }
 
 /**
@@ -63,8 +64,8 @@ export async function readSyncState(runtime: CliRuntime, kit: Kit): Promise<Sync
  * teamrig still running in some tab never drops its fields: its hook starts no sync, its `issue sync --auto` fails.
  */
 async function writableState(runtime: CliRuntime, kit: Kit): Promise<SyncState | undefined> {
-  const text = await runtime.files.read(kit.paths.githubSync);
-  writableObject(kit.paths.githubSync, text, SYNC_STATE_FORMAT);
+  const text = await runtime.files.read(githubState(kit.paths).sync);
+  writableObject(githubState(kit.paths).sync, text, SYNC_STATE_FORMAT);
   return parseSyncState(text ?? '');
 }
 
@@ -88,7 +89,7 @@ export async function reportAutoSync(runtime: CliRuntime, kit: Kit, config: KitC
     // A question and a mention on the same item share its wake gap, so a busy thread wakes its owner once.
     const woken = wakeRoutes([...run.mentionRoutes, ...questions], state?.mentionWakes ?? new Map(), now);
     const finished = finishState(state, now, run, woken.lastWoken);
-    await runtime.files.write(kit.paths.githubSync, formatSyncState(finished));
+    await runtime.files.write(githubState(kit.paths).sync, formatSyncState(finished));
     return { before: state, after: finished, wakes: woken.wakes };
   });
   const posts = [...addedLines(run.added)].map(([to, text]) => ({ to, text, wake: false }));
