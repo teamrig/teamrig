@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LockBusyError } from '../core/lock.ts';
@@ -9,7 +9,16 @@ import { BusyMutex } from '../testing/busy-mutex.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { RecordingMark } from '../testing/recording-mark.ts';
 import { kitCurrentPath, kitCurrentRecordPath, kitVersionsFolder } from './kit-versions.ts';
-import { kitMarkedPaths, markedMutex, nodeInstallMark, windowsInstallMark, windowsMarkScript, type MarkedPath } from './install-mark.ts';
+import {
+  kitMarkedPaths,
+  markedMutex,
+  NO_INSTALL_MARK,
+  nodeInstallMark,
+  posixInstallMark,
+  windowsInstallMark,
+  windowsMarkScript,
+  type MarkedPath,
+} from './install-mark.ts';
 
 const PATHS: readonly MarkedPath[] = [{ path: 'a', tree: true }];
 
@@ -159,6 +168,61 @@ describe('windowsInstallMark', () => {
   it('throws when PowerShell was stopped by a signal', async () => {
     const mark = windowsInstallMark({ run: async () => ({ end: { kind: 'signal', signal: 'SIGTERM' }, stdout: '', stderr: '' }), systemRoot: 'C:\\Windows' });
     await assert.rejects(mark.set(PATHS), /could not be set: no output/);
+  });
+});
+
+describe('NO_INSTALL_MARK', () => {
+  it('lifts and sets nothing, and never fails', async () => {
+    await NO_INSTALL_MARK.lift(PATHS);
+    await NO_INSTALL_MARK.set(PATHS);
+  });
+});
+
+/** The write bits of a file's mode: a file's bits mean the same on every OS (Windows maps them to read-only). */
+async function writeBits(path: string): Promise<number> {
+  return (await stat(path)).mode & 0o222;
+}
+
+describe('posixInstallMark, on real files', () => {
+  let root = '';
+  const mark = posixInstallMark();
+
+  before(async () => {
+    root = await mkdtemp(join(tmpdir(), 'posix-mark-'));
+  });
+
+  after(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('a set takes every write bit off the files in a tree and a single file; a lift gives the owner its bit back', async () => {
+    const tree = join(root, 'versions');
+    const kept = join(tree, '1.0.0', 'teamrig.mjs');
+    const single = join(root, 'current');
+    await mkdir(join(tree, '1.0.0'), { recursive: true });
+    await writeFile(kept, 'kept');
+    await writeFile(single, '1.0.0');
+    const paths: readonly MarkedPath[] = [
+      { path: tree, tree: true },
+      { path: single, tree: false },
+      { path: join(root, 'missing.json'), tree: false },
+    ];
+    await mark.set(paths);
+    assert.equal(await writeBits(kept), 0);
+    assert.equal(await writeBits(single), 0);
+    await mark.lift(paths);
+    assert.equal((await writeBits(kept)) & 0o200, 0o200);
+    assert.equal((await writeBits(single)) & 0o200, 0o200);
+  });
+
+  it('marks only the folder itself, never what it holds, when the path is no tree', async () => {
+    const folder = join(root, 'plain');
+    const inside = join(folder, 'inside.txt');
+    await mkdir(folder);
+    await writeFile(inside, 'x');
+    await mark.set([{ path: folder, tree: false }]);
+    assert.equal((await writeBits(inside)) & 0o200, 0o200);
+    await mark.lift([{ path: folder, tree: false }]);
   });
 });
 
