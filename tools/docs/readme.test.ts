@@ -113,7 +113,8 @@ describe('README.md', () => {
   });
 
   it('links the task pane, teamrig-pane, and names its command', () => {
-    assert.ok(targets('link').includes('https://github.com/teamrig/teamrig-pane'));
+    // A whole link equal to the pane's URL, never a part of one (CodeQL reads a bare includes as a substring test).
+    assert.ok(targets('link').some((target) => target === 'https://github.com/teamrig/teamrig-pane'));
     assert.match(README, /\[teamrig-pane\]\([^)]+\) and run `\/teamrig-pane`/);
   });
 
