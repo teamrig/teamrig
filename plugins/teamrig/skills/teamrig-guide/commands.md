@@ -8847,9 +8847,11 @@ INBOX web, new in /home/you/.teamrig/teams/shop/state/inbox/web.md (each line is
 
 Before a tool call, runs the guards it names on the call in one process and prints their one answer: a refusal when
 any guard refuses, with every refusing guard's reason, else an allow when any allows, with every guard's notes. The
-plugin's hooks run each tool's guards this way, so a call starts one guard process, not one per guard. It names only
-`push-guard`, `package-guard`, `secret-guard`, `db-write-guard`, `exec-guard`, `pass-record-guard`, `install-guard`
-and `service-role-guard`, each once; any other name is a usage error. A guard that throws refuses the call, naming it.
+plugin's hooks run each tool's guards this way, with a shell line's allows and picker guard, so a call starts one
+process, not one per hook. It names only `push-guard`, `package-guard`, `secret-guard`, `db-write-guard`,
+`exec-guard`, `pass-record-guard`, `install-guard`, `service-role-guard`, `picker-guard`, `readonly-allow` and
+`route-allow`, each once; any other name is a usage error. A guard that throws refuses the call, naming it;
+`picker-guard`, `readonly-allow` and `route-allow` give no answer when they throw, as when they run alone.
 See [Hooks and permissions](hooks.md#a-guard-that-cannot-answer).
 
 Flags: none.
@@ -8862,6 +8864,25 @@ teamrig hook guards push-guard secret-guard < pre-tool-use.json
 
 Output: nothing when no guard has a word about the call; otherwise one JSON reply, its permission decision `deny`
 or `allow`.
+
+### teamrig hook after
+
+After a tool call, runs the `PostToolUse` hooks it names on the call in one process and prints their one reply: the
+replaced tool output `secret-redact` gives, and every hook's lines for the model, in the order named. The plugin's
+hooks run each tool's after-call hooks this way, so a shell call starts one process for them, not three. It names
+only `secret-redact`, `loop-nudge`, `missing-cli`, `failed-send` and `route-reminder`, each once; any other name is a
+usage error. A hook that throws gives no answer and leaves one stderr line naming it, so the others still answer.
+See [Hooks and permissions](hooks.md#hooks-and-permissions).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook after secret-redact loop-nudge missing-cli < post-tool-use.json
+```
+
+Output: nothing when no hook has a word about the call; otherwise one JSON reply to the event the call ended in.
 
 ### teamrig hook push-guard
 
