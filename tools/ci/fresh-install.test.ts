@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { delimiter, join } from 'node:path';
 import type { RunRequest, RunResult } from './dist-smoke.ts';
-import { cmdArg, freshInstall, inheritedValue, installEnv, installSteps, layoutOf, teamrigRequest, type InstallInput } from './fresh-install.ts';
+import { RecordingMark } from '../../src/testing/recording-mark.ts';
+import { cmdArg, freshInstall, inheritedValue, installEnv, installSteps, kitHomeUnder, layoutOf, removeScratchHome, teamrigRequest, type InstallInput } from './fresh-install.ts';
 
 const HOME = join('scratch', 'home');
 const { clone, plugin, project } = layoutOf(HOME);
@@ -227,5 +228,24 @@ describe('freshInstall', () => {
     assert.match(report.findings[0] ?? '', /^Stop: a hook is not exec form/);
     assert.equal(report.findings[1], 'SessionStart hook (hook session-start): exit 2: boom');
     assert.equal(report.log.at(-1), 'exit 0 PreToolUse hook (hook push-guard)');
+  });
+});
+
+describe('removeScratchHome', () => {
+  const kitHome = kitHomeUnder(HOME);
+  const marked = `lift ${join(kitHome, 'versions')} ${join(kitHome, 'current')} ${join(kitHome, 'current.json')}`;
+
+  it("lifts the kit home's install mark before it removes the scratch home, which the mark would refuse", async () => {
+    const log: string[] = [];
+    await removeScratchHome(HOME, new RecordingMark(log), (path) => log.push(`remove ${path}`));
+    assert.deepEqual(log, [marked, `remove ${HOME}`]);
+  });
+
+  it('still removes the scratch home when the lift fails, then throws the lift error', async () => {
+    const log: string[] = [];
+    const mark = new RecordingMark(log);
+    mark.failLift = true;
+    await assert.rejects(removeScratchHome(HOME, mark, (path) => log.push(`remove ${path}`)), /lift refused/);
+    assert.deepEqual(log, [marked, `remove ${HOME}`]);
   });
 });

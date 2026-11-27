@@ -5,7 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { DIST_DIR } from '../build/dist-dir.ts';
 import { EXIT_CLEAN, EXIT_FINDINGS } from '../lib/exit.ts';
 import { runMain } from '../lib/run-main.ts';
-import { freshInstall, inheritedValue, installEnv, type InstallInput, type InstallRunner } from './fresh-install.ts';
+import { nodeProgramRunner } from '../../src/core/program-runner.ts';
+import { INSTALL_MARK_TIMEOUT_MS, nodeInstallMark } from '../../src/kit/install-mark.ts';
+import { freshInstall, inheritedValue, installEnv, removeScratchHome, type InstallInput, type InstallRunner } from './fresh-install.ts';
 import { spawnRun } from './spawn-run.ts';
 
 /**
@@ -39,8 +41,9 @@ async function main(): Promise<number> {
     report.findings.forEach((finding) => console.log(`  ${finding}`));
     return EXIT_FINDINGS;
   } finally {
+    const mark = nodeInstallMark(process.platform, nodeProgramRunner(INSTALL_MARK_TIMEOUT_MS), process.env['SystemRoot']);
     // A hook's child may still hold a file for a moment on Windows.
-    rmSync(home, { recursive: true, force: true, maxRetries: 5 });
+    await removeScratchHome(home, mark, (path) => rmSync(path, { recursive: true, force: true, maxRetries: 5 }));
   }
 }
 

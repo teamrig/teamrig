@@ -1,4 +1,5 @@
 import { delimiter, join } from 'node:path';
+import { kitMarkedPaths, type InstallMark } from '../../src/kit/install-mark.ts';
 import { hookCommandsOf, type RunRequest, type RunResult } from './dist-smoke.ts';
 
 /**
@@ -68,6 +69,24 @@ export function inheritedValue(inherited: Readonly<Record<string, string | undef
   return (key === undefined ? undefined : inherited[key]) ?? fallback;
 }
 
+/** The kit home the run writes, inside the scratch home. */
+export function kitHomeUnder(home: string): string {
+  return join(home, '.teamrig');
+}
+
+/**
+ * Removes the scratch home once the run ends. The run's session start copies teamrig into the kit home and marks that
+ * install read-only to the account (src/kit/install-mark.ts), which refuses a plain removal, so the mark is lifted
+ * first; the removal runs even when the lift fails, and the lift's error is then thrown.
+ */
+export async function removeScratchHome(home: string, mark: InstallMark, remove: (path: string) => void): Promise<void> {
+  try {
+    await mark.lift(kitMarkedPaths(kitHomeUnder(home)));
+  } finally {
+    remove(home);
+  }
+}
+
 /**
  * The developer's environment: the scratch home for every tool, git with no system config and no login
  * prompt, a commit identity, and the plugin's bin folder first on PATH. Every other variable is left out, so
@@ -85,7 +104,7 @@ export function installEnv(input: InstallInput, inherited: Readonly<Record<strin
     HOME: input.home,
     USERPROFILE: input.home,
     PATH: [join(layoutOf(input.home).plugin, 'bin'), input.path].join(delimiter),
-    TEAMRIG_HOME: join(input.home, '.teamrig'),
+    TEAMRIG_HOME: kitHomeUnder(input.home),
     TEAMRIG_TEAM: TEAM,
     TEAMRIG_SESSION: LEAD,
     CLAUDE_CONFIG_DIR: join(input.home, '.claude'),

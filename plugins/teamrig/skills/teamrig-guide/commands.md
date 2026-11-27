@@ -5113,7 +5113,8 @@ kit's backups folder; then it removes the launcher (`<kit home>/bin/teamrig.mjs`
 runs too), `current`, `current.json` and every kept version. Your teams, the backups and the install clone stay. Without
 `--yes` it counts what would go and removes nothing. A hooks file it cannot edit refuses the run before anything is
 removed. It changes a host's hooks, so only the person runs it: `--yes` is refused where an agent runs it. A host's
-teamrig plugin copies teamrig back in at its next session start, so remove the plugin first.
+teamrig plugin copies teamrig back in at its next session start, so remove the plugin first. The install is read-only
+to your account (see `teamrig kit versions`), so deleting the kit home by hand is refused until this has run.
 
 Flags:
 
