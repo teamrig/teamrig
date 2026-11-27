@@ -38,7 +38,7 @@ async function everyGuardPassed(runtime: CliRuntime, guard: GuardLoad, event: Ho
  * a service role's call (hook-role-allow.ts), once every teamrig guard passed the same call; else none. Each allow is
  * logged by its route or its role.
  */
-async function routeAllowReplyOf(runtime: CliRuntime, event: HookEvent, deps: RouteAllowDeps): Promise<HookReply | undefined> {
+export async function routeAllowReplyOf(runtime: CliRuntime, event: HookEvent, deps: RouteAllowDeps): Promise<HookReply | undefined> {
   const guard = await guardLoadOf(event.cwd, runtime);
   const kit = guard?.kit;
   if (guard === undefined || kit === undefined || kit.load.status !== 'loaded') {
