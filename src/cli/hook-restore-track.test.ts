@@ -695,4 +695,20 @@ describe('hook restore-track: the old-version sweep (T5813)', () => {
     await hookRun(kit, processes, payload('UserPromptSubmit', { prompt: 'ship T1' }));
     assert.deepEqual([processes.hidden, await kit.files.read(oldKitSweepStampPath(KIT))], [[], undefined]);
   });
+
+  it('lets the turn go on, starting no sweep, when its claim cannot be written', async () => {
+    const kit = new CliHarness();
+    const processes = new FakeProcesses();
+    await seedKitHome(kit.files, KIT, KIT_VERSION);
+    const files = new FaultyFiles(kit.files).fail('write', oldKitSweepStampPath(KIT), systemError('EACCES'));
+    const result = await kit.run(['hook', 'restore-track'], {
+      stdin: payload('UserPromptSubmit', { prompt: 'ship T1' }),
+      env: LAUNCHED,
+      self: SELF,
+      kitTree: new MemoryKitTree(kit.files),
+      processes,
+      files,
+    });
+    assert.deepEqual([result.code, result.stdout, result.stderr, processes.hidden], [0, [], [], []]);
+  });
 });
