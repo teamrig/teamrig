@@ -5464,7 +5464,9 @@ shows the UI here too. When no window can open (say [open.terminal] is `print`) 
 the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
 or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
 the session works in, the focus left on the session's pane (`OPENED the UI in a split of this <terminal> window`);
-in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. An `OPENED`
+in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. When neither a
+split nor a window opens there, it is refused (`REFUSED the UI has nowhere to show`, exit 2) and runs no UI in place,
+since one there could never take a key; in `both` whose window opened, the window alone shows it. An `OPENED`
 line comes only once the UI in that window or split has started (it marks `ui/started.json` under the kit home): a
 terminal can take the window and run nothing in it, so with no UI started there within 20 s the run prints `FAILED
 <where> opened, but no UI started in it within 20 s; run teamrig ui --mode terminal in a terminal to see why` and
