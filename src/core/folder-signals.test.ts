@@ -27,6 +27,28 @@ function nextChange(): { readonly onChange: () => void; readonly told: Promise<v
   return { onChange: () => tell(), told };
 }
 
+/**
+ * Whether `changes()` passes `seen`, making a change with `act` before each 100 ms wait on a timer while it does not.
+ * A system watch may drop one change (macOS FSEvents coalesces a `mkdir -p`), so one bare await of a change could
+ * leave the loop with nothing to wait on; the timer holds it, and the next try is told.
+ */
+async function toldPast(
+  seen: number,
+  changes: () => number,
+  act: (tries: number) => Promise<void>,
+): Promise<boolean> {
+  for (let tries = 0; tries < 40; tries += 1) {
+    for (let waited = 0; changes() === seen && waited < 100; waited += 10) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    if (changes() > seen) {
+      return true;
+    }
+    await act(tries);
+  }
+  return changes() > seen;
+}
+
 describe('nodeFolderSignals', () => {
   let root = '';
   const open: FolderWatch[] = [];
@@ -56,24 +78,19 @@ describe('nodeFolderSignals', () => {
   it('watches a folder not there yet through the folder above it, and the folder itself once it is made', async () => {
     const folder = join(root, 'later', 'tasks');
     let changes = 0;
-    let tell: () => void = () => undefined;
     const watch = nodeFolderSignals.watch([folder], () => {
       changes += 1;
-      tell();
     });
     open.push(watch);
     assert.deepEqual(watch.unwatched(), []);
-    const made = new Promise<void>((resolve) => (tell = resolve));
     await mkdir(folder, { recursive: true });
-    await made;
+    // Should the system drop the made folders' change, a file written in the watched folder above is one more.
+    const made = await toldPast(0, () => changes, (tries) => writeFile(join(root, 'above.md'), `${tries}\n`));
+    assert.ok(made, 'no change told in the folder above the one not there yet');
     // Made: the folder's own watch now tells of a file in it, which the watch above it would not.
     const seen = changes;
-    const written = new Promise<void>((resolve) => (tell = resolve));
-    for (let tries = 0; changes === seen && tries < 40; tries += 1) {
-      await writeFile(join(folder, 'T1.json'), `${tries}\n`);
-      await Promise.race([written, new Promise((resolve) => setTimeout(resolve, 100))]);
-    }
-    assert.ok(changes > seen, 'no change told of a file in the folder made after the watch');
+    const written = await toldPast(seen, () => changes, (tries) => writeFile(join(folder, 'T1.json'), `${tries}\n`));
+    assert.ok(written, 'no change told of a file in the folder made after the watch');
   });
 
   it('names a folder the system refuses to watch for a reason other than its absence', () => {
