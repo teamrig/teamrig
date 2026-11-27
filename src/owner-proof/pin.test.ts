@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { describe, it } from 'node:test';
-import { SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem, type SignatureAlgorithm } from './pin.ts';
+import { RSA_MIN_MODULUS_BITS, SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem, type SignatureAlgorithm } from './pin.ts';
 
 function pem(key: KeyObject): string {
   return key.export({ type: 'spki', format: 'pem' }).toString();
@@ -97,5 +97,43 @@ describe('pinKeyProblem', () => {
   it('reads a long-form length, as an RSA key has', () => {
     assert.ok(der(rsa).length > 255);
     assert.equal(pinKeyProblem(armour(der(rsa)), 'rsa-pkcs1-sha256'), undefined);
+  });
+});
+
+describe('pinKeyProblem on an RSA modulus (T5792)', () => {
+  const rsaOf = (bits: number): KeyObject => generateKeyPairSync('rsa', { modulusLength: bits }).publicKey;
+
+  it(`takes an RSA key of ${RSA_MIN_MODULUS_BITS} bits or more`, () => {
+    assert.equal(RSA_MIN_MODULUS_BITS, 2048);
+    for (const key of [rsa, rsaOf(3072), rsaOf(4096)]) assert.equal(pinKeyProblem(pem(key), 'rsa-pkcs1-sha256'), undefined);
+  });
+
+  it('refuses an RSA key under 2048 bits and names its size, the bound itself counted exactly', () => {
+    for (const bits of [1024, 2040]) {
+      assert.equal(pinKeyProblem(pem(rsaOf(bits)), 'rsa-pkcs1-sha256'), `expected an RSA key of at least 2048 bits (got ${bits})`);
+    }
+  });
+
+  it('refuses an rsaEncryption identifier whose key is no RSAPublicKey: junk, a negative modulus, a third INTEGER', () => {
+    const rsaIdentifier = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00];
+    const spki = (key: readonly number[]): Uint8Array => {
+      const bits = [0x03, key.length + 1, 0x00, ...key];
+      const body = [...rsaIdentifier, ...bits];
+      return new Uint8Array([0x30, body.length, ...body]);
+    };
+    const sequence = (...items: readonly (readonly number[])[]): number[] => [0x30, items.flat().length, ...items.flat()];
+    const exponent = [0x02, 0x03, 0x01, 0x00, 0x01];
+    const shapes = [
+      [0x01],
+      sequence([0x02, 0x02, 0x80, 0x01], exponent),
+      sequence([0x02, 0x02, 0x00, 0x81], exponent, exponent),
+      sequence([0x02, 0x02, 0x00, 0x81]),
+    ];
+    for (const shape of shapes) assert.equal(pinKeyProblem(armour(spki(shape)), 'rsa-pkcs1-sha256'), 'expected a PEM public key');
+    assert.equal(
+      pinKeyProblem(armour(spki(sequence([0x02, 0x02, 0x00, 0x81], exponent))), 'rsa-pkcs1-sha256'),
+      'expected an RSA key of at least 2048 bits (got 8)',
+      'the same shape well formed reads its 8-bit modulus',
+    );
   });
 });

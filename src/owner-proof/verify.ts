@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify, type KeyObject } from 'node:crypto';
 import { challengeDigest, instantOf, type OwnerProofChallenge } from './challenge.ts';
 import { jcs } from './jcs.ts';
-import type { PinnedKey, SignatureAlgorithm } from './pin.ts';
+import { RSA_MIN_MODULUS_BITS, type PinnedKey, type SignatureAlgorithm } from './pin.ts';
 
 /** The act a proof must be for: what teamrig is about to run, from its own state, never from the proof. */
 export interface ActBinding {
@@ -70,11 +70,11 @@ function publicKey(pem: string): KeyObject | undefined {
   }
 }
 
-/** The key type and, for EC, the curve each algorithm's key must be. */
+/** The key type, for EC the curve and for RSA the smallest modulus each algorithm's key must have. */
 function keyFits(key: KeyObject, algorithm: SignatureAlgorithm): boolean {
   switch (algorithm) {
     case 'rsa-pkcs1-sha256':
-      return key.asymmetricKeyType === 'rsa';
+      return key.asymmetricKeyType === 'rsa' && (key.asymmetricKeyDetails?.modulusLength ?? 0) >= RSA_MIN_MODULUS_BITS;
     case 'ecdsa-p256-sha256':
       return key.asymmetricKeyType === 'ec' && key.asymmetricKeyDetails?.namedCurve === 'prime256v1';
     case 'ed25519':

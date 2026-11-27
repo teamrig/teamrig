@@ -14,8 +14,8 @@ function pem(key: KeyObject): string {
   return key.export({ type: 'spki', format: 'pem' }).toString();
 }
 
-function rsaKey(keyId: string): TestKey {
-  const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+function rsaKey(keyId: string, modulusLength = 2048): TestKey {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength });
   return { pin: { keyId, algorithm: 'rsa-pkcs1-sha256', publicKeyPem: pem(publicKey) }, sign: (data) => sign('sha256', data, privateKey) };
 }
 
@@ -157,5 +157,10 @@ describe('verifyProof', () => {
       sign: (data) => sign('sha256', data, privateKey),
     };
     assert.deepEqual(verifyProof(check(p384)), { ok: false, reason: 'bad-signature' });
+  });
+
+  it('refuses an RSA pin under 2048 bits, even with a good signature, so a pin past the config check still fails (T5792)', () => {
+    assert.deepEqual(verifyProof(check(rsaKey('key-rsa-1024', 1024))), { ok: false, reason: 'bad-signature' });
+    assert.deepEqual(verifyProof(check(rsaKey('key-rsa-2040', 2040))), { ok: false, reason: 'bad-signature' });
   });
 });

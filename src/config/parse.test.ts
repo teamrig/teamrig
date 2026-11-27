@@ -17,6 +17,7 @@ function paths(issues: readonly ConfigIssue[]): string[] {
 
 const PUBLIC_PEMS = {
   rsa: generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey,
+  rsa1024: generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey,
   ec: generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey,
   p384: generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey,
   ed25519: generateKeyPairSync('ed25519').publicKey,
@@ -407,12 +408,20 @@ describe('parseConfig', () => {
       [{ ...good, publicKeyPem: 'not a key' }, ['owner.proof.pins[0].publicKeyPem']],
       [{ ...good, algorithm: 'rsa-pkcs1-sha256' }, ['owner.proof.pins[0].publicKeyPem']],
       [{ ...good, algorithm: 'ecdsa-p256-sha256', publicKeyPem: publicPem('p384') }, ['owner.proof.pins[0].publicKeyPem']],
+      [{ ...good, algorithm: 'rsa-pkcs1-sha256', publicKeyPem: publicPem('rsa1024') }, ['owner.proof.pins[0].publicKeyPem']],
     ];
     for (const [pin, expected] of cases) {
       const { config, issues } = parseConfig({ ...ROSTER, owner: { proof: { adapter: 'polkit', pins: [pin, { ...good, keyId: 'k2' }] } } });
       assert.deepEqual(paths(issues), expected, JSON.stringify(pin));
       assert.deepEqual(config.owner.proof.pins.map((kept) => kept.keyId), ['k2'], JSON.stringify(pin));
     }
+  });
+
+  it('names the size of an owner.proof RSA pin under 2048 bits (T5792)', () => {
+    const pin = { keyId: 'hello-1', algorithm: 'rsa-pkcs1-sha256', publicKeyPem: publicPem('rsa1024') };
+    const { issues } = parseConfig({ ...ROSTER, owner: { proof: { pins: [pin] } } });
+    assert.deepEqual(paths(issues), ['owner.proof.pins[0].publicKeyPem']);
+    assert.match(issues[0]?.message ?? '', /expected an RSA key of at least 2048 bits \(got 1024\)/);
   });
 
   it('refuses an owner.proof key id pinned twice and a pin list past its cap (T4758)', () => {
