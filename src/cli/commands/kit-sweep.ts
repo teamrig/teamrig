@@ -51,7 +51,9 @@ export async function startOldKitSweep(
   const started = await runtime.processes.startHidden({
     command: runtime.self.node,
     args: [runtime.self.script, 'kit', 'sweep', `--${WRITE_SWITCH}`],
-    cwd: kitHome,
+    // Node's own folder, never the kit home: Windows refuses removing a folder a process runs in, so a sweep still
+    // running in the kit home would hold it from being removed or replaced (T5882).
+    cwd: dirname(runtime.self.node),
     env: runtime.env,
   });
   return started.kind === 'started';

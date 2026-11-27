@@ -683,7 +683,7 @@ describe('hook restore-track: the kit self-install (T5278)', () => {
 describe('hook restore-track: the old-version sweep (T5813)', () => {
   const PLUGIN_ROOT = '/plugins/teamrig';
   const SELF = { node: '/usr/bin/node', script: join(PLUGIN_ROOT, 'dist', 'cli', 'main.js'), execArgv: [] };
-  const SWEEP = { command: SELF.node, args: [SELF.script, 'kit', 'sweep', '--yes'], cwd: KIT, env: { TEAMRIG_HOME: KIT, ...LAUNCHED } };
+  const SWEEP = { command: SELF.node, args: [SELF.script, 'kit', 'sweep', '--yes'], cwd: '/usr/bin', env: { TEAMRIG_HOME: KIT, ...LAUNCHED } };
 
   async function hookRun(kit: CliHarness, processes: FakeProcesses, stdin: string): Promise<void> {
     const result = await kit.run(['hook', 'restore-track'], { stdin, env: LAUNCHED, self: SELF, kitTree: new MemoryKitTree(kit.files), processes });
@@ -697,6 +697,16 @@ describe('hook restore-track: the old-version sweep (T5813)', () => {
     await hookRun(kit, processes, payload('SessionStart', { source: 'startup' }));
     assert.deepEqual(processes.hidden, [SWEEP]);
     assert.equal(await kit.files.read(oldKitSweepStampPath(KIT)), `${kit.clock.now()}\n`);
+  });
+
+  it("starts the sweep from node's folder, never inside the kit home, so the kit home can be removed while it runs", async () => {
+    const kit = new CliHarness();
+    const processes = new FakeProcesses();
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await hookRun(kit, processes, payload('SessionStart', { source: 'startup' }));
+    const cwds = processes.hidden.map((request) => request.cwd);
+    assert.deepEqual(cwds, ['/usr/bin']);
+    assert.ok(cwds.every((cwd) => cwd !== KIT && !cwd.startsWith(`${KIT}/`)), 'a working folder inside the kit home pins it on Windows');
   });
 
   it('starts it again at a prompt or a turn end only once 10 minutes passed, and never at a tool call', async () => {
