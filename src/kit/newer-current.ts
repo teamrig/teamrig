@@ -1,6 +1,6 @@
 import type { Files } from '../core/files.ts';
 import { compareVersions, parseVersion } from '../core/release-version.ts';
-import { readKitCurrent } from './kit-versions.ts';
+import { kitCurrentPath, kitCurrentRecordPath, readKitCurrent } from './kit-versions.ts';
 
 /**
  * Whether a long-lived teamrig process is older than the version in use (T5813): `<kit home>/current` names the
@@ -17,6 +17,34 @@ export function newerVersion(current: string | undefined, running: string): stri
 /** The version `<kit home>/current` names, or undefined when there is none or its two records disagree. */
 export async function currentVersion(files: Pick<Files, 'read'>, kitHome: string): Promise<string | undefined> {
   return (await readKitCurrent(files, kitHome))?.version;
+}
+
+/**
+ * The version `<kit home>/current` names, for a process that asks again and again (the events follower, T5813): it
+ * stamps the two records each time and opens them only when a stamp moved, so a look that finds no install reads
+ * no file, as the rest of the follower's look does.
+ */
+export class CurrentVersionReader {
+  private readonly files: Pick<Files, 'read' | 'stamp'>;
+  private readonly kitHome: string;
+  private held: { readonly stamps: readonly (string | undefined)[]; readonly version: string | undefined } | undefined;
+
+  constructor(files: Pick<Files, 'read' | 'stamp'>, kitHome: string) {
+    this.files = files;
+    this.kitHome = kitHome;
+  }
+
+  /** The version current names now, or undefined when there is none or its two records disagree. */
+  async version(): Promise<string | undefined> {
+    const stamps = [await this.files.stamp(kitCurrentPath(this.kitHome)), await this.files.stamp(kitCurrentRecordPath(this.kitHome))];
+    const held = this.held;
+    if (held !== undefined && stamps.every((stamp, index) => stamp === held.stamps[index])) {
+      return held.version;
+    }
+    const version = await currentVersion(this.files, this.kitHome);
+    this.held = { stamps, version };
+    return version;
+  }
 }
 
 /** The version `current` names when it is newer than `running`; undefined when none is named, or it is not newer. */
