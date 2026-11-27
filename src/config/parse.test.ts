@@ -8,6 +8,7 @@ import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
 import { parseConfig } from './parse.ts';
 import { CONFIG_VERSION, type AccountBudget, type BudgetConfig } from './types.ts';
 import type { ConfigIssue } from './reader.ts';
+import { shortRsaPublicKey } from '../testing/short-rsa-key.ts';
 
 const ROSTER = { sessions: ['alpha', 'bravo'], roles: { lead: 'alpha' } };
 
@@ -17,7 +18,7 @@ function paths(issues: readonly ConfigIssue[]): string[] {
 
 const PUBLIC_PEMS = {
   rsa: generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey,
-  rsa1024: generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey,
+  rsa1024: shortRsaPublicKey(1024),
   ec: generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey,
   p384: generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey,
   ed25519: generateKeyPairSync('ed25519').publicKey,

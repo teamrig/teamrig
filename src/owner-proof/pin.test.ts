@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { RSA_MIN_MODULUS_BITS, SIGNATURE_ALGORITHMS, isSignatureAlgorithm, pinKeyProblem, type SignatureAlgorithm } from './pin.ts';
+import { shortRsaPublicKey } from '../testing/short-rsa-key.ts';
 
 function pem(key: KeyObject): string {
   return key.export({ type: 'spki', format: 'pem' }).toString();
@@ -110,7 +111,7 @@ describe('pinKeyProblem on an RSA modulus (T5792)', () => {
 
   it('refuses an RSA key under 2048 bits and names its size, the bound itself counted exactly', () => {
     for (const bits of [1024, 2040]) {
-      assert.equal(pinKeyProblem(pem(rsaOf(bits)), 'rsa-pkcs1-sha256'), `expected an RSA key of at least 2048 bits (got ${bits})`);
+      assert.equal(pinKeyProblem(pem(shortRsaPublicKey(bits)), 'rsa-pkcs1-sha256'), `expected an RSA key of at least 2048 bits (got ${bits})`);
     }
   });
 
