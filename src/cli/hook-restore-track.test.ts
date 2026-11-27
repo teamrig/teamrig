@@ -17,7 +17,7 @@ import { RESTORE_CHECK_LAUNCHER_SCRIPT } from '../restore/launcher.ts';
 import { LAUNCHER_RECORD_FORMAT, launcherRecordPath } from '../restore/launcher-refresh.ts';
 import { AUTH_FAILED, loginMarkerPath, parseLoginMarker, type LoginMarker } from '../restore/login.ts';
 import { RestoreRegistry, restoreLogPath, restoreSessionsDir } from '../restore/registry.ts';
-import { APP, CLAUDE_SESSION, CLI_PID, CliHarness, KIT, TEAM, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
+import { APP, CLAUDE_SESSION, CLI_PID, CliHarness, KIT, TEAM, TEAM_HOME, USER_HOME, type CliResult } from '../testing/cli-harness.ts';
 import { FakeUserPath, quietRestore } from '../testing/fake-restore.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { FakeWebhook } from '../testing/fake-webhook.ts';
@@ -31,6 +31,7 @@ import { InlineMutex } from '../testing/inline-mutex.ts';
 import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
 import { treeHarness } from '../testing/team-tree.ts';
+import { EXIT } from './runtime.ts';
 import { apiErrorLine, promptLine, transcript } from '../testing/transcript-lines.ts';
 
 const TRANSCRIPT = join(USER_HOME, '.claude', 'projects', 'work-app', `${CLAUDE_SESSION}.jsonl`);
@@ -128,6 +129,54 @@ describe('hook restore-track', () => {
     const entry = await entryOf(plain);
     assert.equal(entry?.state, 'working');
     assert.equal('host' in entry, false);
+  });
+
+  it('names a tab opened by hand in its log lines by the session that read its inbox there, and keeps that out of its entry (#820)', async () => {
+    const kit = new CliHarness();
+    const byHand: Env = { CLAUDE_PROJECT_DIR: APP, CLAUDE_CODE_ENTRYPOINT: 'cli' };
+    const read = await kit.run(['inbox', 'read', '--session', 'lead'], { env: { CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
+    assert.equal(read.code, EXIT.ok, read.stderr.join('\n'));
+    await track(kit, payload('StopFailure', { error: 'server_error' }), byHand);
+    const failed = await entryOf(kit);
+    assert.ok(failed?.apiError !== undefined, 'the failed turn records its error');
+    await new RestoreRegistry(kit.files, restoreSessionsDir(KIT)).write({ ...failed, apiError: { ...failed.apiError, retries: 3, retriedAt: kit.clock.now() } });
+    kit.clock.advance(MS_PER_HOUR);
+    await track(kit, payload('StopFailure', { error: 'server_error' }), byHand);
+    assert.deepEqual(await apiErrorLines(kit), [`api-error: gave up on app/lead (${CLAUDE_SESSION}): its turn ended on server_error after 3 retries`]);
+    const entry = await entryOf(kit);
+    assert.deepEqual([entry?.team, entry?.session], [undefined, undefined], 'its entry names no launch, so a restore resumes it as it ran');
+  });
+
+  it('still logs a tab opened by hand, by its Claude session alone, when finding its session fails (#820)', async () => {
+    const kit = new CliHarness();
+    const byHand: Env = { CLAUDE_PROJECT_DIR: APP, CLAUDE_CODE_ENTRYPOINT: 'cli' };
+    await track(kit, payload('StopFailure', { error: 'server_error' }), byHand);
+    const failed = await entryOf(kit);
+    assert.ok(failed?.apiError !== undefined, 'the failed turn records its error');
+    await new RestoreRegistry(kit.files, restoreSessionsDir(KIT)).write({ ...failed, apiError: { ...failed.apiError, retries: 3, retriedAt: kit.clock.now() } });
+    kit.clock.advance(MS_PER_HOUR);
+    const files = new FaultyFiles(kit.files).fail('read', join(TEAM_HOME, 'state', 'inbox-marks.jsonl'), systemError('EACCES'));
+    const result = await kit.run(['hook', 'restore-track'], { stdin: payload('StopFailure', { error: 'server_error' }), env: byHand, files });
+    assert.deepEqual([result.code, result.stdout, result.stderr], [0, [], []], 'a tracker never fails a turn');
+    assert.deepEqual(await apiErrorLines(kit), [`api-error: gave up on ${CLAUDE_SESSION}: its turn ended on server_error after 3 retries`]);
+    assert.equal((await entryOf(kit))?.apiError?.failedAt, kit.clock.now(), 'its entry is written');
+  });
+
+  it("looks for a hand-opened tab's team only when a log line or a login page needs it, never to write its entry (#820)", async () => {
+    const kit = new CliHarness();
+    const byHand: Env = { CLAUDE_PROJECT_DIR: APP, CLAUDE_CODE_ENTRYPOINT: 'cli' };
+    const marks = join(TEAM_HOME, 'state', 'inbox-marks.jsonl');
+    /** Whether a hook event read the inbox marks the lookup reads: a stalled read never lets the call end. */
+    const looks = async (stdin: string): Promise<boolean> => {
+      const files = new FaultyFiles(kit.files);
+      const looked = files.stall('read', marks).then(() => true);
+      const ended = kit.run(['hook', 'restore-track'], { stdin, env: byHand, files, sessionProcesses: new FakeSessionProcesses(7000) }).then(() => false);
+      return Promise.race([looked, ended]);
+    };
+    assert.equal(await looks(payload('UserPromptSubmit')), false, 'a first entry looks for nothing');
+    assert.equal(await looks(payload('Stop', { stop_hook_active: false })), false, 'a turn end that logs nothing looks for nothing');
+    assert.equal(await looks(payload('PostToolUse', { tool_name: 'Bash' })), false, 'a tool end looks for nothing');
+    assert.equal(await looks(payload('StopFailure', { error: AUTH_FAILED })), true, 'an expired login looks for the team to page');
   });
 
   it("leaves a session in a turn as it was at a compaction's start, which comes mid-turn", async () => {
@@ -475,6 +524,18 @@ describe("hook restore-track: the owner's page", () => {
     await failTurn(kit, webhook, { env: { CLAUDE_PROJECT_DIR: APP, TEAMRIG_TEAM: 'ui', TEAMRIG_SESSION: 'pixel' }, timeZone: 'Asia/Jerusalem' });
     assert.deepEqual(webhook.posts.map((post) => post.content), ['Claude login expired: ui/pixel ended its turn on Login expired at 12:00 IST. Run /login in any tab; teamrig holds the day-start wakes and retries the stuck tabs once the login works.']);
     assert.equal((await loginLines(kit)).at(-1), PAGED_BY_FILE);
+  });
+
+  it('pages for a tab opened by hand, naming it by the session that read its inbox there (#820)', async () => {
+    const kit = await pagedHarness();
+    const read = await kit.run(['inbox', 'read', '--session', 'lead'], { env: { CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION } });
+    assert.equal(read.code, EXIT.ok, read.stderr.join('\n'));
+    const webhook = new FakeWebhook();
+    await failTurn(kit, webhook, { env: { CLAUDE_PROJECT_DIR: APP } });
+    assert.match(webhook.posts[0]?.content ?? '', /^Claude login expired: app\/lead ended its turn on Login expired/);
+    assert.match((await loginLines(kit)).join('\n'), new RegExp(`app/lead \\(${CLAUDE_SESSION}\\)`), 'its login log line names it too');
+    const entry = await entryOf(kit);
+    assert.deepEqual([entry?.team, entry?.session], [undefined, undefined], 'its entry names no launch');
   });
 
   it('names a tab its launch gave no session as a tab of its team', async () => {

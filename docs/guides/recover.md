@@ -50,7 +50,8 @@ teamrig restore run      # reopen the sessions the last shutdown killed
   wakes no one while the login stays expired. A tab still listed under `stranded` with no such line (one that does
   not load teamrig's mod) needs a prompt by hand. So you hear of it away from the screen, set `alerts.pageWebhookFile` (the path of a one-line file holding a chat webhook
   URL, or of a secrets file with `alerts.pageWebhookKey` naming its key) or `alerts.pageWebhookEnv` (the name of a variable holding it) in the team's config, or a parent team's: the
-  first failure of each expiry posts one line to that chat, naming the tab and the time. Check it with
+  first failure of each expiry posts one line to that chat, naming the tab and the time. A tab started by hand, not
+  by `teamrig launch`, is named by the session whose inbox it last read, and pages that session's team's webhook. Check it with
   `teamrig page test`, which posts one line marked TEST; `teamrig doctor` flags a webhook that gives no URL.
 - A tab held on a permission prompt: a tab that has waited 10 minutes on a prompt nobody answered pages the same
   chat once, naming the tab, since when, the tool and the program it runs (no argument, which may hold a secret), and `teamrig check` lists it as

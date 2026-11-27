@@ -223,6 +223,23 @@ describe('teamrig restore run', () => {
     );
   });
 
+  it('reopens a tab opened by hand through restore resume after a session read its inbox there, as a tab of no launch (#820)', async () => {
+    const kit = await restoreKit([]);
+    okResult(await kit.run(['inbox', 'read', '--session', 'alpha'], { env: { CLAUDE_CODE_SESSION_ID: NOTES } }));
+    const stop = JSON.stringify({ hook_event_name: 'Stop', session_id: NOTES, cwd: APP, transcript_path: transcriptOf(NOTES), stop_hook_active: false });
+    okResult(await kit.run(['hook', 'restore-track'], { stdin: stop, env: { CLAUDE_PROJECT_DIR: APP, CLAUDE_CODE_ENTRYPOINT: 'cli' } }));
+    // As the shutdown left it: its last event before the shutdown, its Claude Code gone.
+    const registry = new RestoreRegistry(kit.files, restoreSessionsDir(KIT));
+    const tracked = await registry.read(NOTES);
+    assert.ok(tracked !== undefined, 'the hook wrote its entry');
+    await registry.write({ ...tracked, pid: undefined, updatedAt: SHUTDOWN - 60_000 });
+    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
+    okResult(await kit.run(['restore', 'run'], machine(kit, processes)));
+    const [args = []] = processes.started.map((request) => request.args);
+    assert.deepEqual(args.slice(args.indexOf(SCRIPT) + 1, args.indexOf(SCRIPT) + 3), ['restore', 'resume'], args.join(' '));
+    assert.ok(!args.includes('launch'), args.join(' '));
+  });
+
   it('reopens a team session on the effort its config sets after a config change, so the restore never brings back the old level (T2440)', async () => {
     const kit = await restoreKit(undefined, { ...TEAM, launch: { alpha: { effort: 'medium' } } });
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });

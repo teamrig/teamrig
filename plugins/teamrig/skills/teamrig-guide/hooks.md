@@ -1904,8 +1904,9 @@ runs in the background is not seen. No poke once the rush ends.
 in a team or not, and keeps one file per Claude Code session on the machine: `<home>/restore/sessions/<session
 id>.json`. It holds the folder the session started in (`$CLAUDE_PROJECT_DIR`, which a `cd` or a worktree does
 not move), its transcript, its Claude Code's process id, how it was started (`$CLAUDE_CODE_ENTRYPOINT`,
-`$CLAUDE_CODE_SESSION_KIND`), its team and session when `teamrig launch` started it, and what it was doing at
-its last event: `working` from a prompt to the end of that turn, `ready` after it, `error` after an API error.
+`$CLAUDE_CODE_SESSION_KIND`), its team and session when `teamrig launch` started it (a tab started by hand keeps
+none, so a restore resumes it as it ran), and what it was doing at its last event: `working` from a prompt to
+the end of that turn, `ready` after it, `error` after an API error.
 A compaction's start changes nothing, since it comes mid-turn. `hook tool-end` writes the file too at a tool call's
 end, at most every 5 minutes: a main-thread call marks the session `working`, and a helper's (which can run on past
 its turn's end) keeps the state, so the file's `updatedAt` stays within minutes of a long turn's transcript while
@@ -1958,8 +1959,10 @@ pinned an older one, the start keeps the newer copy but moves nothing, logs `kit
 <old>`, and says so at every start: `teamrig pinned at <old>; <new> is installed; teamrig kit use --latest moves to
 it.`
 
-The first failure of an expiry in a team's tab also pages the owner, once per expiry: one line naming the tab and the
-time on its team's clock, posted to the chat webhook of the tab's team or the first team above it that names one,
+The log lines name a tab by its team and session: a launched tab's own, and for a tab started by hand those of the
+session whose inbox it last read, the same session its title shows. The first failure of an expiry in a team's tab,
+one started by hand included, also pages the owner, once per expiry: one line naming the tab and the time on its
+team's clock, posted to the chat webhook of the tab's team or the first team above it that names one,
 read from the file [alerts.pageWebhookFile] names (it wins: its first non-empty line, or the value of the key
 [alerts.pageWebhookKey] names, so a secrets file of many keys is read in place) or the environment variable
 [alerts.pageWebhookEnv] names; a URL that is not https pages no one. The post goes out after the lock is let go, so a slow chat holds up no other tab, and

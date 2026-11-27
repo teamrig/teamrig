@@ -26,7 +26,7 @@ import { DEFAULT_HOST } from '../../composition/adapters.ts';
 import { hostIdOf, identityOf, transcriptsIfKept } from '../host.ts';
 import { loginPageLogLine, loginPageOf, sendLoginPage, type LoginPage } from '../login-page.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { readHookInput, writeReply } from './hook-input.ts';
+import { hookScopeOf, readHookInput, writeReply, type HookOrigin } from './hook-input.ts';
 
 /**
  * What a hook event reports to the tracker; undefined for one the tracker skips. A session start that follows a
@@ -67,11 +67,39 @@ function envId(runtime: CliRuntime, name: string): string | undefined {
   return value !== undefined && ID_PATTERN.test(value) ? value : undefined;
 }
 
+type TeamSession = Pick<TrackFacts, 'team' | 'session'>;
+
+/** Finds a hand-opened tab's team and session; called at most once per event, and only where one is needed. */
+type TeamLookup = () => Promise<TeamSession>;
+
+/**
+ * For a tab a person opened by hand, the team and session the tab title hook finds for it (its project's team, and
+ * the session that read its inbox from this tab), so its log lines name it and its login failure pages its team
+ * (#820); neither is set unless both are found. Only the page and the labels use them: the entry keeps the tab's own
+ * `$TEAMRIG_TEAM`/`$TEAMRIG_SESSION`, as a restore reopens an entry naming both through `teamrig launch`. It reads
+ * the team's files, so it runs once at most, and only when a log line or a login page needs the tab's team.
+ */
+function teamLookupOf(runtime: CliRuntime, origin: HookOrigin): TeamLookup {
+  let found: Promise<TeamSession> | undefined;
+  return () => {
+    found ??= hookScopeOf(runtime, origin)
+      .catch(() => undefined)
+      .then((scope) => (scope === undefined ? { team: undefined, session: undefined } : { team: scope.kit.paths.team, session: scope.id }));
+    return found;
+  };
+}
+
+/** The facts with the found team and session when `$TEAMRIG_TEAM` named none: a launched tab's environment wins. */
+async function namedFacts(facts: TrackFacts, lookup: TeamLookup): Promise<TrackFacts> {
+  return facts.team !== undefined ? facts : { ...facts, ...(await lookup()) };
+}
+
 /**
  * Writes the event into its session's restore entry, or removes the entry at an end the person chose. A turn that
- * failed on a transient API error with every retry spent (src/restore/api-error.ts) is logged as left for the person.
+ * failed on a transient API error with every retry spent (src/restore/api-error.ts) is logged as left for the person,
+ * named by the lookup's team and session when its environment names none.
  */
-async function trackEntry(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
+async function trackEntry(event: TrackEvent, facts: TrackFacts, lookup: TeamLookup, runtime: CliRuntime, kitHome: string): Promise<void> {
   const registry = new RestoreRegistry(runtime.files, restoreSessionsDir(kitHome));
   const change = applyEvent(await registry.read(facts.hostSession), event, facts);
   switch (change.kind) {
@@ -79,7 +107,8 @@ async function trackEntry(event: TrackEvent, facts: TrackFacts, runtime: CliRunt
       await registry.write(change.entry);
       const spentOn = event.kind === 'error' ? apiRetriesSpentOn(change.entry) : undefined;
       if (spentOn !== undefined) {
-        await runtime.files.append(restoreLogPath(kitHome), `${new Date(facts.at).toISOString()} ${apiGaveUpLine(tabLabelOf(facts), spentOn)}\n`);
+        const label = tabLabelOf(await namedFacts(facts, lookup));
+        await runtime.files.append(restoreLogPath(kitHome), `${new Date(facts.at).toISOString()} ${apiGaveUpLine(label, spentOn)}\n`);
       }
       return;
     }
@@ -117,7 +146,7 @@ function loginEventOf(event: TrackEvent, facts: TrackFacts): LoginEvent | undefi
   }
 }
 
-/** How the restore log names a tab: its team and session when `teamrig launch` started it, and its Claude session. */
+/** How the restore log names a tab: its team and session when they are known, and its Claude session. */
 function tabLabelOf(facts: TrackFacts): string {
   return facts.team === undefined || facts.session === undefined ? facts.hostSession : `${facts.team}/${facts.session} (${facts.hostSession})`;
 }
@@ -138,18 +167,18 @@ async function pageOf(event: LoginEvent, facts: TrackFacts, runtime: CliRuntime)
  * failure that claims an expiry's page posts it to the owner outside the marker's lock, a slow chat holding no other
  * tab, and gives the claim back when the post fails, so the next failure pages.
  */
-async function trackLogin(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
+async function trackLogin(event: TrackEvent, facts: TrackFacts, lookup: TeamLookup, runtime: CliRuntime, kitHome: string): Promise<void> {
   const loginEvent = loginEventOf(event, facts);
   if (loginEvent === undefined) {
     return;
   }
-  const page = await pageOf(loginEvent, facts, runtime);
+  const page = loginEvent.kind === 'auth-failed' ? await pageOf(loginEvent, await namedFacts(facts, lookup), runtime) : undefined;
   const path = loginMarkerPath(kitHome);
   const store = new LoginStore(runtime.files, path, fileLockOf(runtime, `${path}.lock`, LOGIN_LOCK));
   const { change, pageClaimed } = await store.apply(loginEvent, { claimPage: page !== undefined });
   const log = restoreLogPath(kitHome);
   if (change.kind === 'write' && change.note !== undefined) {
-    const line = loginLogLine(change.note, tabLabelOf(facts), change.marker);
+    const line = loginLogLine(change.note, tabLabelOf(await namedFacts(facts, lookup)), change.marker);
     await runtime.files.append(log, `${new Date(facts.at).toISOString()} ${line}\n`);
   }
   if (!pageClaimed || page === undefined) {
@@ -171,7 +200,7 @@ function dayProbeReplyOf(event: TrackEvent, facts: TrackFacts): DayProbeReply | 
 }
 
 /** Releases the day-start probe (src/restore/day-probe.ts) at a reply that shows the login works, and logs it. */
-async function trackDayProbe(event: TrackEvent, facts: TrackFacts, runtime: CliRuntime, kitHome: string): Promise<void> {
+async function trackDayProbe(event: TrackEvent, facts: TrackFacts, lookup: TeamLookup, runtime: CliRuntime, kitHome: string): Promise<void> {
   const reply = dayProbeReplyOf(event, facts);
   if (reply === undefined) {
     return;
@@ -179,7 +208,8 @@ async function trackDayProbe(event: TrackEvent, facts: TrackFacts, runtime: CliR
   const path = dayProbePath(kitHome);
   const released = await new DayProbeStore(runtime.files, path, fileLockOf(runtime, `${path}.lock`, LOGIN_LOCK)).release(reply);
   if (released !== undefined) {
-    await runtime.files.append(restoreLogPath(kitHome), `${new Date(facts.at).toISOString()} ${dayProbeReleaseLine(tabLabelOf(facts), reply, released)}\n`);
+    const label = tabLabelOf(await namedFacts(facts, lookup));
+    await runtime.files.append(restoreLogPath(kitHome), `${new Date(facts.at).toISOString()} ${dayProbeReleaseLine(label, reply, released)}\n`);
   }
 }
 
@@ -305,14 +335,15 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
     // So a restore reopens it in the host it ran in; the default host is left out, as in the session's record.
     ...(host === DEFAULT_HOST ? {} : { host }),
   };
+  const lookup = teamLookupOf(runtime, hook);
   const kitHome = resolveKitHome(runtime.env, runtime.userHome);
   const event = await codedEvent(reported, facts, runtime);
-  const login = trackLogin(event, facts, runtime, kitHome).catch(() => undefined);
-  const dayProbe = trackDayProbe(event, facts, runtime, kitHome).catch(() => undefined);
+  const login = trackLogin(event, facts, lookup, runtime, kitHome).catch(() => undefined);
+  const dayProbe = trackDayProbe(event, facts, lookup, runtime, kitHome).catch(() => undefined);
   const launchers = trackLaunchers(event, facts, runtime, kitHome).catch(() => undefined);
   const kit = trackKitVersion(event, runtime, kitHome).catch(() => undefined);
   try {
-    await trackEntry(event, facts, runtime, kitHome);
+    await trackEntry(event, facts, lookup, runtime, kitHome);
   } finally {
     await Promise.all([login, dayProbe, launchers, kit]);
   }
