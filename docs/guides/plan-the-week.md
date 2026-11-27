@@ -105,6 +105,9 @@ Week: 31.0% used at 12:00 IDT (status line); the pace line is at 28.6%: 2.4 poin
 - The security reviewer and the GitHub answerer (`github.watcher`, else the `issue close` service role's holder)
   are never held, cut or paused by the budget, as other sessions and outside contributors wait on them; only a
   leader's `teamrig budget cut --stop` holds them.
+- Once the week's use reaches `budget.targetPct`, the week's stop holds every session until the reset, those too:
+  only blocker-priority tasks run, wake a session or start a helper, so the last `budget.reservePct` stays for
+  incidents. A p0 waits for the reset unless you raise it to `blocker`.
 - A leader moves budget for a day: `teamrig budget lift` gives one session, or a sub-lead's group, a part of its
   parent's daily budget until a stop % (at most `budget.lift.maxStopPct`, 99.3), the end of the day or `--until`;
   the lead also tops up a session of a team under its own, `<team>/<session>`, from its own team's daily budget.
