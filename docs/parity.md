@@ -24,7 +24,7 @@ The AI CLIs a session runs in.
 | --- | --- | --- | --- | --- |
 | `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#rulessession-start); unproved on linux, macos |
 | `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | supported, proved on [windows](proofs/antigravity-cli.md#rulesinstruction-files); unproved on linux, macos |
-| `rules.rules-folder` | the rules folder of a project | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `rules.rules-folder` | the rules folder of a project | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: project .agents/rules/ folder loading on agy 1.5.14), proved on [windows](proofs/antigravity-cli.md#rulesrules-folder); unproved on linux, macos |
 | `rules.memory` | memory files kept between sessions | supported, proved on [windows](proofs/claude-code.md#rulesmemory); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
 | `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, proved on [windows](proofs/claude-code.md#rulesstart-size); unproved on linux, macos | partial (missing: the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled), built, not proven live | partial (missing: no live run yet), built, not proven live |
 
@@ -142,7 +142,7 @@ The AI CLIs a session runs in.
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
 | `os.windows-sessions` | native Windows sessions and Windows Terminal tabs | supported, proved on [windows](proofs/claude-code.md#oswindows-sessions); unproved on linux, macos | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
-| `os.windows-hooks` | hooks on Windows | supported, proved on [windows](proofs/claude-code.md#oswindows-hooks); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#oswindows-hooks); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `os.windows-hooks` | hooks on Windows | supported, proved on [windows](proofs/claude-code.md#oswindows-hooks); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#oswindows-hooks); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#oswindows-hooks); unproved on linux, macos |
 | `os.linux` | sessions and hooks on Linux and macOS | supported, built, not proven live | supported, built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ## Connectors

@@ -43,7 +43,19 @@ export const declaration: HostDeclaration = {
   manifest: {
     'rules.session-start': provedWin('rulessession-start', '2026-11-27'),
     'rules.instruction-files': provedWin('rulesinstruction-files', '2026-11-27'),
-    'rules.rules-folder': UNPROVED,
+    'rules.rules-folder': {
+      kind: 'partial',
+      missing: 'project .agents/rules/ folder loading on agy 1.5.14',
+      notice: 'agy 1.5.14 loads user ~/.gemini/config/rules/ into <user_rules>, but did not load .agents/rules/',
+      proofs: [
+        {
+          os: 'windows',
+          toolVersion: '1.5.14',
+          date: '2026-11-27',
+          evidence: 'proofs/antigravity-cli.md#rulesrules-folder',
+        },
+      ],
+    },
     'rules.memory': NO_HOST_SUPPORT('per-project memory index'),
     'rules.start-size': UNPROVED,
     'inbox.prompt-line': provedWin('inboxprompt-line', '2026-11-27'),
@@ -101,7 +113,7 @@ export const declaration: HostDeclaration = {
     'budget.tuning': NO_HOST_SUPPORT('model tuning'),
     'errors.kinds': NO_HOST_SUPPORT('StopFailure error kinds'),
     'os.windows-sessions': UNPROVED,
-    'os.windows-hooks': UNPROVED,
+    'os.windows-hooks': provedWin('oswindows-hooks', '2026-11-27'),
     'os.linux': UNPROVED,
   },
 };
