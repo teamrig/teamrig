@@ -27,7 +27,8 @@ const HUNG = 'a0000000-2222-4333-8444-555555555555';
 const PROJECTS = '/p';
 const WORKTREE = '/work/app/.claude/worktrees/fix';
 const NOTHING_LOST: LostWork = { background: 0, crons: 0, wake: false };
-const KILLED: EndFacts = { cause: 'killed', apiError: undefined };
+/** The world's sessions recorded no end and were seen last before its clean shutdown: the restart killed them (T1745). */
+const KILLED: EndFacts = { cause: 'shutdown', apiError: undefined };
 
 const turn = (effort: string): string => JSON.stringify({ type: 'assistant', effort, message: { model: 'claude-opus-5-5' } });
 

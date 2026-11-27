@@ -269,11 +269,17 @@ describe('summarizeRestore', () => {
 describe('endFactsOf', () => {
   const WINDOW = { start: SHUTDOWN, end: SHUTDOWN + 60_000 };
 
-  it('names the shutdown only for an end inside its span, a kill for no end, and a closed tab for any other end (T1745)', () => {
+  it('names the shutdown for an end inside its span, a kill for no end with no shutdown seen after it, and a closed tab for any other end (T1745)', () => {
     assert.deepEqual(endFactsOf(entry({ endedAt: SHUTDOWN + 30_000, endReason: 'other' }), WINDOW), { cause: 'shutdown', apiError: undefined });
-    assert.deepEqual(endFactsOf(entry({ endedAt: undefined }), WINDOW), { cause: 'killed', apiError: undefined });
+    assert.deepEqual(endFactsOf(entry({ endedAt: undefined }), undefined), { cause: 'killed', apiError: undefined });
+    assert.deepEqual(endFactsOf(entry({ endedAt: undefined, updatedAt: WINDOW.end + 1 }), WINDOW), { cause: 'killed', apiError: undefined });
     assert.deepEqual(endFactsOf(entry({ endedAt: SHUTDOWN - 3_600_000, endReason: 'other' }), WINDOW), { cause: 'closed', apiError: undefined });
     assert.deepEqual(endFactsOf(entry({ endedAt: SHUTDOWN + 30_000, endReason: 'other' }), undefined), { cause: 'closed', apiError: undefined });
+  });
+
+  it('names the shutdown for a tab with no end recorded, seen last before a clean restart ended it (11-20 reboot, T1745)', () => {
+    assert.deepEqual(endFactsOf(entry({ endedAt: undefined, updatedAt: SHUTDOWN - 60_000 }), WINDOW), { cause: 'shutdown', apiError: undefined });
+    assert.deepEqual(endFactsOf(entry({ endedAt: undefined, updatedAt: WINDOW.end }), WINDOW), { cause: 'shutdown', apiError: undefined });
   });
 
   it("carries the API error a last turn ended on, `unknown` when none was named, and none once a turn ended well", () => {

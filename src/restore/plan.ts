@@ -237,10 +237,15 @@ export function summarizeRestore(sessions: readonly RestoredSession[]): string {
  */
 export type EndCause = 'shutdown' | 'killed' | 'closed';
 
-/** The cause, from the same facts the verdict read: no end recorded, else an end inside the shutdown's span. */
+/**
+ * The cause, from the same facts the verdict read: an end inside the shutdown's span, else any other end. A session
+ * with no end recorded and seen last before a clean shutdown ended was alive when it ran: a restart ends Claude Code
+ * before its end hook writes, so it names the shutdown (11-20 reboot: 6 tabs were told they crashed, T1745). With
+ * no shutdown on record, or one seen after it, it names a kill.
+ */
 export function endCauseOf(entry: RestoreEntry, shutdown: ShutdownWindow | undefined): EndCause {
   if (entry.endedAt === undefined) {
-    return 'killed';
+    return shutdown !== undefined && entry.updatedAt <= shutdown.end ? 'shutdown' : 'killed';
   }
   return endedInShutdown(entry.endedAt, shutdown) ? 'shutdown' : 'closed';
 }
