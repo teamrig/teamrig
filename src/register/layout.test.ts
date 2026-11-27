@@ -142,6 +142,13 @@ describe('readSnapshotText', () => {
     assert.equal(read.read.lines.length, 1, 'a task line is no event line');
   });
 
+  it('reads a snapshot written before 0.508.0, its task lines holding no inProgressMs, as usable (#2584)', () => {
+    const { inProgressMs: _dropped, ...older } = lined('T1', 7);
+    const line = toJsonlLine({ v: TASK_LINES_LAYOUT_VERSION, type: TASK_LINE_TYPE, task: older });
+    const read = usable(readSnapshotText(snapshotText({ tasks: 1, events: 0 }, line)));
+    assert.deepEqual(read.tasks.get('T1'), { ...lined('T1', 7), inProgressMs: 0 });
+  });
+
   it('refuses a layout 5 snapshot with a damaged or repeated task line, or more or fewer than its header names (T4076)', () => {
     const torn = toJsonlLine({ v: TASK_LINES_LAYOUT_VERSION, type: TASK_LINE_TYPE, task: { ...lined('T1', 7), reparks: -1 } });
     assert.match(reason(readSnapshotText(snapshotText({ tasks: 1, events: 0 }, torn))), /a task line is damaged \(T1: reparks is not a count\)/);

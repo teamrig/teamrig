@@ -16,7 +16,10 @@ import { parseWaits } from './waits.ts';
  * events, so its size follows the tasks kept, not their history. The line holds the task whole, `{type: 'task', task}`
  * (the task has a `type` of its own), and reads back to exactly the task written. A line missing a field this code
  * folds is no task line: a snapshot written before a new fold field existed is then skipped for the history, which
- * folds it, until the next compaction writes the field.
+ * folds it, until the next compaction writes the field. The one exception is `inProgressMs` (#2584): a snapshot
+ * written before it existed (before 0.508.0) is only rewritten at the next archive, so skipping it folded the whole
+ * history on every read for days. Its absence reads as 0, which only drops in-progress stretches that ended before the
+ * snapshot (the current one counts from `statusAt`); `teamrig compact --from-history` restores them exactly.
  */
 
 /** The `type` of a task line. */
@@ -144,7 +147,9 @@ export function parseTaskLine(record: JsonRecord): Task | string {
   if (!isTaskLine(record) || !isRecord(task)) {
     return 'not a task line';
   }
-  const { id, status, reparks, inProgressMs } = task;
+  const { id, status, reparks } = task;
+  // Absent on a line written before 0.508.0 (#2584): read as none spent, see the file comment.
+  const inProgressMs = Object.hasOwn(task, 'inProgressMs') ? task['inProgressMs'] : 0;
   if (typeof id !== 'string' || !TASK_ID.test(id)) {
     return `id ${JSON.stringify(id)} is not a task id`;
   }
