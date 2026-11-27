@@ -3,6 +3,7 @@ import type { OwnerProofRecord } from '../owner-proof/record.ts';
 
 /** A stored proof record in form, for specs that keep or read one; its signature verifies by no key. */
 export const OWNER_PROOF_RECORD: OwnerProofRecord = {
+  actId: '00000000-0000-4000-8000-000000000001',
   challenge: {
     domain: PROOF_DOMAIN,
     keyId: 'key-1',

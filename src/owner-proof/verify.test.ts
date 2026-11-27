@@ -186,7 +186,7 @@ function recorded(key: TestKey, overrides: Partial<RecordedProofCheck> = {}, cha
     pins: [key.pin],
     expected: binding,
     nonce: spent,
-    decidedId: 'ev-decided-1',
+    actId: 'ev-decided-1',
     ...overrides,
   };
 }
@@ -199,7 +199,7 @@ describe('verifyRecordedProof', () => {
   });
 
   it('refuses the same signature on a second Decided event', () => {
-    assert.deepEqual(verifyRecordedProof(recorded(rsa, { decidedId: 'ev-decided-2' })), { ok: false, reason: 'nonce-spent-by-other' });
+    assert.deepEqual(verifyRecordedProof(recorded(rsa, { actId: 'ev-decided-2' })), { ok: false, reason: 'nonce-spent-by-other' });
   });
 
   it('refuses the same signature on another task, and on a head other than the one it was signed for', () => {

@@ -15,7 +15,7 @@ export interface ActBinding {
 
 /**
  * What the nonce ledger knows of a challenge's nonce: never issued, issued for an act (its digest) and unused, or
- * used, with the id of the register event that spent it.
+ * used, with the act id that spent it.
  */
 export type NonceState =
   | { readonly kind: 'unknown' }
@@ -141,12 +141,12 @@ function nonceRefusal(nonce: NonceState, expected: ActBinding): ProofRefusal | u
   return nonce.actDigest === actDigest(expected) ? undefined : 'nonce-other-act';
 }
 
-/** Why a recorded proof's nonce refuses it: it must have been spent, for this act, by this one Decided event. */
-function spentRefusal(nonce: NonceState, expected: ActBinding, decidedId: string): ProofRefusal | undefined {
+/** Why a recorded proof's nonce refuses it: it must have been spent, for this act, by the act id its record holds. */
+function spentRefusal(nonce: NonceState, expected: ActBinding, actId: string): ProofRefusal | undefined {
   if (nonce.kind === 'unknown') return 'nonce-unknown';
   if (nonce.kind === 'issued') return 'nonce-unspent';
   if (nonce.actDigest !== actDigest(expected)) return 'nonce-other-act';
-  return nonce.spentBy === decidedId ? undefined : 'nonce-spent-by-other';
+  return nonce.spentBy === actId ? undefined : 'nonce-spent-by-other';
 }
 
 /**
@@ -174,14 +174,14 @@ export interface RecordedProofCheck {
   readonly expected: ActBinding;
   /** The ledger's state of the challenge's nonce, read without spending it. */
   readonly nonce: NonceState;
-  /** The id of the Decided event that recorded the proof. */
-  readonly decidedId: string;
+  /** The act id the proof's record holds: what the ledger must name as having spent the nonce. */
+  readonly actId: string;
 }
 
 /**
  * Whether a proof a Decided event recorded still approves the act about to run (T4758 security read, O4): the key is
  * pinned and verified by the pin's algorithm; the challenge names this act; its nonce was spent, for this act, by
- * this Decided event and no other, so one signature never serves a second event or another task; its times are in
+ * the act id this record holds and no other, so one signature never serves a second record or another task; its times are in
  * form and within the lifetime ceiling; and the signature holds. Expiry is not checked: the act may run long after
  * the owner signed. This is its own check, never verifyProof with the nonce check turned off.
  */
@@ -190,7 +190,7 @@ export function verifyRecordedProof(check: RecordedProofCheck): ProofVerdict {
   if (pin === undefined) return { ok: false, reason: 'unknown-key' };
   if (!sameAct(check.challenge, check.expected)) return { ok: false, reason: 'other-act' };
   const lifetime = lifetimeOf(check.challenge);
-  const refusal = spentRefusal(check.nonce, check.expected, check.decidedId) ?? (typeof lifetime === 'string' ? lifetime : undefined);
+  const refusal = spentRefusal(check.nonce, check.expected, check.actId) ?? (typeof lifetime === 'string' ? lifetime : undefined);
   if (refusal !== undefined) return { ok: false, reason: refusal };
   if (!signatureHolds(pin, challengeDigest(check.challenge), check.signature)) return { ok: false, reason: 'bad-signature' };
   return { ok: true, keyId: pin.keyId };
