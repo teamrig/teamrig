@@ -118,9 +118,56 @@ export class TempRepo {
   }
 
   remove(): void {
-    // On Windows a folder that is a live process's cwd cannot be removed (EPERM/EBUSY). A spec that stops git at its time
-    // limit kills only git, so the child git started (an alias's node) can still be ending in the repo; the retries
-    // (about 5.5 s in all, the delay growing 100 ms each try) outlast it under load (T5814).
-    rmSync(this.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    removeHeldFolder(this.root);
   }
+}
+
+/**
+ * The codes Windows gives while a live process holds a folder or a file in it: a folder that is a process's cwd
+ * refuses removal with EBUSY or EPERM, and a removal racing a file still being closed leaves ENOTEMPTY.
+ */
+const HELD_CODES: ReadonlySet<string> = new Set(['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY']);
+
+/**
+ * About 10 s in all, the short waits first. A spec that stops git at its time limit kills only git on Windows, so the
+ * child git started (an alias's node) can still be ending in the repo; under host load it outlived 1 s (T5814).
+ */
+export const REMOVE_RETRY_DELAYS_MS: readonly number[] = [50, 100, 200, 400, ...Array.from({ length: 18 }, () => 500)];
+
+function errorCode(error: unknown): string | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function removeTree(path: string): void {
+  rmSync(path, { recursive: true, force: true });
+}
+
+/**
+ * Removes `path` and everything in it, repeating after each delay while a live process holds it; any other error, or a
+ * held one after the last delay, is thrown as it came. rmSync's own maxRetries cannot stand in: on Node 22 it retries
+ * only the top folder, so an EBUSY on a nested folder (the repo a child's cwd holds) is thrown at once (T5814).
+ */
+export function removeHeldFolder(
+  path: string,
+  remove: (path: string) => void = removeTree,
+  sleep: (ms: number) => void = sleepSync,
+  delays: readonly number[] = REMOVE_RETRY_DELAYS_MS,
+): void {
+  for (const delay of delays) {
+    try {
+      remove(path);
+      return;
+    } catch (error) {
+      const code = errorCode(error);
+      if (code === undefined || !HELD_CODES.has(code)) {
+        throw error;
+      }
+    }
+    sleep(delay);
+  }
+  remove(path);
 }
