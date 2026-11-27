@@ -201,6 +201,7 @@ const EXPECTED = {
   'hook cold-send': 'internal',
   'hook failed-send': 'internal',
   'hook guards': 'internal',
+  'hook after': 'internal',
   'hook hand-trace': 'internal',
   'hook missing-cli': 'internal',
   'hook route-reminder': 'internal',
