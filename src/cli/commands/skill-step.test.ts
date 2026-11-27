@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { STEPS } from '../../features/steps.ts';
 import { CliHarness, TEAM, type CliResult } from '../../testing/cli-harness.ts';
+import { NO_SESSION_HOST, SHIPPED_HOST, shippedHost } from '../../testing/host.ts';
 import { EXIT } from '../runtime.ts';
 import { stepLines } from './skill-step.ts';
 
@@ -18,6 +19,16 @@ describe('teamrig skills step', () => {
     assert.equal(lines[0], 'Claude Code:');
     assert.match(lines[1] ?? '', /`\/rename <new name>`/);
     assert.equal(lines.length, 2);
+  });
+
+  it('prints the text of the host --host names, not the default host, on a team listing it (T5862)', async () => {
+    const kit = new CliHarness({ ...TEAM, hosts: ['claude-code', 'codex-cli'] });
+    // Two distinct port sources, so the run's host tells which shipped adapter --host picked.
+    const options = { shippedHosts: { 'claude-code': shippedHost(SHIPPED_HOST), 'codex-cli': shippedHost(NO_SESSION_HOST) } };
+    const codex = printed(await kit.run(['skills', 'step', 'host.hooks-file', '--host', 'codex-cli'], options));
+    assert.equal(codex[0], 'Codex CLI:');
+    const claude = printed(await kit.run(['skills', 'step', 'host.hooks-file', '--host', 'claude-code'], options));
+    assert.deepEqual(claude, ['No host adapter in use here serves host.hooks-file; Codex CLI, Antigravity CLI would.', STEPS['host.hooks-file'].fallback]);
   });
 
   it('prints the text of each connector the team config uses', async () => {
