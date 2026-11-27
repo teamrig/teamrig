@@ -30,6 +30,9 @@ import { quietHost } from '../testing/quiet-host.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { kitReleaseMain, writeKitRelease } from '../testing/kit-release.ts';
 import { MemoryKitTree } from '../testing/memory-kit-tree.ts';
+import { FakeProcesses } from '../testing/fake-processes.ts';
+import { seedKitHome } from '../testing/kit-home.ts';
+import { oldKitSweepStampPath, OLD_KIT_SWEEP_EVERY_MS } from '../kit/old-kit-sweep.ts';
 import { treeHarness } from '../testing/team-tree.ts';
 import { apiErrorLine, promptLine, transcript } from '../testing/transcript-lines.ts';
 
@@ -649,5 +652,47 @@ describe('hook restore-track: the kit self-install (T5278)', () => {
       assert.ok((stdout[0] ?? '').includes(`teamrig pinned at ${older}; ${KIT_VERSION} is installed`), stdout[0]);
     }
     assert.equal(await kit.files.read(kitCurrentPath(KIT)), `${older}\n`);
+  });
+});
+
+describe('hook restore-track: the old-version sweep (T5813)', () => {
+  const PLUGIN_ROOT = '/plugins/teamrig';
+  const SELF = { node: '/usr/bin/node', script: join(PLUGIN_ROOT, 'dist', 'cli', 'main.js'), execArgv: [] };
+  const SWEEP = { command: SELF.node, args: [SELF.script, 'kit', 'sweep', '--yes'], cwd: KIT, env: { TEAMRIG_HOME: KIT, ...LAUNCHED } };
+
+  async function hookRun(kit: CliHarness, processes: FakeProcesses, stdin: string): Promise<void> {
+    const result = await kit.run(['hook', 'restore-track'], { stdin, env: LAUNCHED, self: SELF, kitTree: new MemoryKitTree(kit.files), processes });
+    assert.deepEqual([result.code, result.stderr], [0, []]);
+  }
+
+  it('starts the sweep hidden at the start whose install made this version current', async () => {
+    const kit = new CliHarness();
+    const processes = new FakeProcesses();
+    await writeKitRelease(kit.files, PLUGIN_ROOT, KIT_VERSION);
+    await hookRun(kit, processes, payload('SessionStart', { source: 'startup' }));
+    assert.deepEqual(processes.hidden, [SWEEP]);
+    assert.equal(await kit.files.read(oldKitSweepStampPath(KIT)), `${kit.clock.now()}\n`);
+  });
+
+  it('starts it again at a prompt or a turn end only once 10 minutes passed, and never at a tool call', async () => {
+    const kit = new CliHarness();
+    const processes = new FakeProcesses();
+    await seedKitHome(kit.files, KIT, KIT_VERSION);
+    await hookRun(kit, processes, payload('UserPromptSubmit', { prompt: 'ship T1' }));
+    await hookRun(kit, processes, payload('Stop'));
+    assert.equal(processes.hidden.length, 1, 'the first prompt swept; the turn end within 10 minutes did not');
+    kit.clock.advance(OLD_KIT_SWEEP_EVERY_MS);
+    await hookRun(kit, processes, payload('PostToolUse', { tool_name: 'Bash' }));
+    assert.equal(processes.hidden.length, 1, 'a tool call never sweeps');
+    await hookRun(kit, processes, payload('Stop'));
+    assert.deepEqual(processes.hidden, [SWEEP, SWEEP]);
+  });
+
+  it('starts none and takes no claim in an older version, so it never holds back the current one', async () => {
+    const kit = new CliHarness();
+    const processes = new FakeProcesses();
+    await seedKitHome(kit.files, KIT, '999.0.0');
+    await hookRun(kit, processes, payload('UserPromptSubmit', { prompt: 'ship T1' }));
+    assert.deepEqual([processes.hidden, await kit.files.read(oldKitSweepStampPath(KIT))], [[], undefined]);
   });
 });

@@ -27,6 +27,7 @@ import { hostIdOf, identityOf, transcriptsIfKept } from '../host.ts';
 import { loginPageLogLine, loginPageOf, sendLoginPage, type LoginPage } from '../login-page.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { readHookInput, writeReply } from './hook-input.ts';
+import { startOldKitSweep } from './kit-sweep.ts';
 
 /**
  * What a hook event reports to the tracker; undefined for one the tracker skips. A session start that follows a
@@ -248,7 +249,7 @@ async function trackLaunchers(event: TrackEvent, facts: TrackFacts, runtime: Cli
  * (src/kit/kit-self-install.ts), logging a change or refusal to the restore log. Returns the note of a pinned install,
  * which names the pin at every start.
  */
-async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: string): Promise<string | undefined> {
+async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: string): Promise<KitVersionTracked | undefined> {
   if (event.kind !== 'start') {
     return undefined;
   }
@@ -265,7 +266,25 @@ async function trackKitVersion(event: TrackEvent, runtime: CliRuntime, kitHome: 
   if (line !== undefined) {
     await runtime.files.append(restoreLogPath(kitHome), `${new Date(runtime.clock.now()).toISOString()} ${line}\n`);
   }
-  return kitSelfInstallNote(outcome);
+  return { note: kitSelfInstallNote(outcome), installed: outcome.kind === 'installed' };
+}
+
+/** What a start's self-install left: the note of a pinned install, and whether it made this version current. */
+interface KitVersionTracked {
+  readonly note: string | undefined;
+  readonly installed: boolean;
+}
+
+/**
+ * After a start, a prompt or a turn's end, starts the sweep of what an older version left running
+ * (`startOldKitSweep`): at once once the start's install made this version current, else at most every 10 minutes,
+ * so a tab an old pane still runs in is swept within that.
+ */
+async function trackOldKitSweep(event: TrackEvent, kit: Promise<KitVersionTracked | undefined>, runtime: CliRuntime, kitHome: string): Promise<boolean> {
+  if (event.kind !== 'start' && event.kind !== 'working' && event.kind !== 'ready') {
+    return false;
+  }
+  return startOldKitSweep(runtime, kitHome, (await kit)?.installed === true);
 }
 
 /** The start's notes joined one per line; undefined when it has none. */
@@ -311,12 +330,13 @@ export async function trackRestore(hook: HookEvent, runtime: CliRuntime): Promis
   const dayProbe = trackDayProbe(event, facts, runtime, kitHome).catch(() => undefined);
   const launchers = trackLaunchers(event, facts, runtime, kitHome).catch(() => undefined);
   const kit = trackKitVersion(event, runtime, kitHome).catch(() => undefined);
+  const sweep = trackOldKitSweep(event, kit, runtime, kitHome).catch(() => false);
   try {
     await trackEntry(event, facts, runtime, kitHome);
   } finally {
-    await Promise.all([login, dayProbe, launchers, kit]);
+    await Promise.all([login, dayProbe, launchers, kit, sweep]);
   }
-  return joinedNotes([await launchers, await kit]);
+  return joinedNotes([await launchers, (await kit)?.note]);
 }
 
 /**
