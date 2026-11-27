@@ -19,7 +19,7 @@ const GO = { kind: 'go' };
 /** The ask at a tool's result with the context at 130k and no ask before. */
 const ASK_130K =
   'teamrig: your context is 130k (refresh at 120k), so refresh within this turn: finish the step you are on and start no other. ' +
-  `Write your handover to ${HANDOVER}, replacing the whole file (your fresh start reads all of it), with what the register lacks, not task statuses, ` +
+  `Write your handover to ${HANDOVER}, replacing the whole file (your fresh start reads all of it), with only the state the register lacks (a how-to goes in a skill, a code map in a reference file it names), not task statuses, ` +
   'which your fresh start reads live from the register: a `## State` section (where things are; the scratchpad files, plan file and scheduled jobs the next session ' +
   'still needs; questions still open with the user) and a `## Next steps` section (the next step of each task in progress; what to check later, and when). ' +
   'Then end your turn: the turn end takes the handover as ready and the fresh start follows it.';

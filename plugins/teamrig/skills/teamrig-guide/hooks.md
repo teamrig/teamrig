@@ -1306,7 +1306,8 @@ is the point.
 At the end of every turn, the Stop hook measures your context from the transcript. At or over
 `refresh.contextTokens` (120,000 by default), at a task end after every `refresh.everyTasks` finished tasks (3) with the context at
 `refresh.everyTasksMinTokens` (80,000) or more, or when the lead asked with `teamrig refresh <id>`, it keeps you going with one instruction: write your handover to
-`<home>/teams/<team>/handover/<id>.md`, replacing the whole file, with what the register lacks, not task statuses (the fresh start
+`<home>/teams/<team>/handover/<id>.md`, replacing the whole file, with only the state the register lacks (a how-to goes
+in a skill, a code map in a reference file it names), not task statuses (the fresh start
 [lists them live](#session-start)), in a `## State` and a `## Next steps` section, then end your turn and start
 nothing new (mid-task it says `refresh now rather than at a task end`). The turn's end takes a handover written since
 the ask with both sections as ready, with no call. One that falls short is asked to be fixed once per version:
