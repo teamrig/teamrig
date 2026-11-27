@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LockBusyError } from '../core/lock.ts';
+import { powerShellRequest } from '../core/powershell.ts';
 import { nodeProgramRunner, type ProgramRequest, type ProgramResult } from '../core/program-runner.ts';
 import { BusyMutex } from '../testing/busy-mutex.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
@@ -118,18 +119,20 @@ describe('windowsMarkScript', () => {
 
   it('a set adds a deny entry for removal and writes, never SYNCHRONIZE or a generic Write', () => {
     const script = windowsMarkScript(paths, true);
-    assert.match(script, /RemoveAccessRuleAll/);
-    assert.match(script, /AddAccessRule/);
+    assert.match(script, /\$acl\.AddAccessRule\(\$rule\)/);
     assert.match(script, /'WriteData,AppendData,WriteExtendedAttributes,WriteAttributes,Delete,DeleteSubdirectoriesAndFiles'/);
     assert.match(script, /'ContainerInherit,ObjectInherit'/);
     assert.doesNotMatch(script, /Synchronize|'Write'|FullControl|Modify/);
     assert.match(script, /GetAccessControl\('Access'\)/);
   });
 
-  it('a lift only removes the deny entries', () => {
-    const script = windowsMarkScript(paths, false);
-    assert.match(script, /RemoveAccessRuleAll/);
-    assert.doesNotMatch(script, /AddAccessRule\(/);
+  it('a lift takes away only the rights of the entry a set adds, never every deny entry of the account', () => {
+    const lift = windowsMarkScript(paths, false);
+    const set = windowsMarkScript(paths, true);
+    assert.match(lift, /\[void\]\$acl\.RemoveAccessRule\(\$rule\)/);
+    assert.doesNotMatch(lift, /RemoveAccessRuleAll|RemoveAccessRuleSpecific|AddAccessRule/);
+    const ruleLines = (script: string): readonly string[] => script.split('\n').filter((line) => /\$(rights|inherit|rule) = /.test(line));
+    assert.deepEqual(ruleLines(lift), ruleLines(set));
   });
 });
 
@@ -288,4 +291,55 @@ describe('the mark of the running platform, on real files', () => {
     assert.equal(await readFile(kept, 'utf8'), 'changed');
     assert.equal(await readFile(current, 'utf8'), '2.0.0');
   });
+
+  it('a set leaves a kept CLI file readable and runnable, so node still loads it', async () => {
+    const cli = join(versions, '1.0.0', 'cli.mjs');
+    await writeFile(cli, "import { readFileSync } from 'node:fs';\nprocess.stdout.write('loaded ' + readFileSync(new URL('./data.txt', import.meta.url), 'utf8'));\n");
+    await writeFile(join(versions, '1.0.0', 'data.txt'), 'kept');
+    await mark.set(paths);
+    try {
+      const result = await nodeProgramRunner(60_000)({ program: process.execPath, args: [cli] });
+      assert.deepEqual(result.end, { kind: 'exited', code: 0 }, result.stderr);
+      assert.equal(result.stdout, 'loaded kept');
+    } finally {
+      await mark.lift(paths);
+    }
+  });
+
+  it('on Windows, a lift leaves a deny entry the person wrote themselves, also one .NET merged with the mark', async () => {
+    if (process.platform !== 'win32') {
+      return;
+    }
+    await windowsAcl(current, "$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, 'ExecuteFile', 'None', 'None', 'Deny')))");
+    try {
+      await mark.set(paths);
+      await mark.lift(paths);
+      assert.deepEqual(await windowsAcl(current, ''), ['ExecuteFile']);
+      await writeFile(current, '3.0.0');
+    } finally {
+      await windowsAcl(current, "[void]$acl.RemoveAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, 'ExecuteFile', 'None', 'None', 'Deny')))");
+    }
+  });
 });
+
+/**
+ * Runs `change` on the access list of `path` in Windows PowerShell (`$acl`, `$sid` the account running it), writes the
+ * list back, and returns the rights of each deny entry of that account written on the path itself, not inherited.
+ */
+async function windowsAcl(path: string, change: string): Promise<readonly string[]> {
+  const encoded = Buffer.from(path, 'utf8').toString('base64');
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$path = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))`,
+    '$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User',
+    '$item = Get-Item -LiteralPath $path -Force',
+    "$acl = $item.GetAccessControl('Access')",
+    change,
+    '$item.SetAccessControl($acl)',
+    "$item.GetAccessControl('Access').GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object { $_.AccessControlType -eq 'Deny' -and $_.IdentityReference -eq $sid } | ForEach-Object { $_.FileSystemRights.ToString() }",
+  ].join('\n');
+  const program = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const result = await nodeProgramRunner(60_000)({ program, args: powerShellRequest(script).args });
+  assert.deepEqual(result.end, { kind: 'exited', code: 0 }, result.stderr);
+  return result.stdout.split(/\r?\n/).filter((line) => line !== '');
+}

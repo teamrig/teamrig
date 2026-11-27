@@ -120,8 +120,12 @@ const TREE_DENY = `${FILE_DENY},DeleteSubdirectoriesAndFiles`;
 
 /**
  * The PowerShell script that lifts (`set` false) or sets the mark on the paths, given as base64 UTF-8 JSON so no path
- * needs quoting. Each path's deny entries for the account running it are removed, and for a set one is added; only the
- * access list is written, never the owner. A missing path is skipped.
+ * needs quoting. Each path gets the one deny entry the mark means (its rights and inheritance) for the account running
+ * it: a set adds it, a lift takes away only those rights, so a deny entry the person wrote themselves stays. .NET merges
+ * an added entry into one with the same account, type and inheritance, so a lift subtracts the rights
+ * (`RemoveAccessRule`) rather than matching a whole entry (`RemoveAccessRuleSpecific` would miss a merged one and leave
+ * the mark on); a right the person denied too in such an entry goes with it. Only the access list is written, never the
+ * owner. A missing path is skipped.
  */
 export function windowsMarkScript(paths: readonly MarkedPath[], set: boolean): string {
   const payload = Buffer.from(JSON.stringify(paths), 'utf8').toString('base64');
@@ -129,19 +133,14 @@ export function windowsMarkScript(paths: readonly MarkedPath[], set: boolean): s
     "$ErrorActionPreference = 'Stop'",
     "$marked = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + payload + "')) | ConvertFrom-Json",
     '$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User',
-    "$any = New-Object Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Deny')",
     'foreach ($m in $marked) {',
     '  if (-not (Test-Path -LiteralPath $m.path)) { continue }',
     '  $item = Get-Item -LiteralPath $m.path -Force',
+    `  $rights = if ($m.tree) { '${TREE_DENY}' } else { '${FILE_DENY}' }`,
+    "  $inherit = if ($m.tree -and $item.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }",
+    "  $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid, $rights, $inherit, 'None', 'Deny')",
     "  $acl = $item.GetAccessControl('Access')",
-    '  $acl.RemoveAccessRuleAll($any)',
-    ...(set
-      ? [
-          `  $rights = if ($m.tree) { '${TREE_DENY}' } else { '${FILE_DENY}' }`,
-          "  $inherit = if ($m.tree -and $item.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }",
-          "  $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, $rights, $inherit, 'None', 'Deny')))",
-        ]
-      : []),
+    set ? '  $acl.AddAccessRule($rule)' : '  [void]$acl.RemoveAccessRule($rule)',
     '  $item.SetAccessControl($acl)',
     '}',
   ].join('\n');
