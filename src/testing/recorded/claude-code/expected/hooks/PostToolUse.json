@@ -18,15 +18,7 @@
   {
     "event": "PostToolUse",
     "index": 1,
-    "hook": "hook secret-redact --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 1,
-    "hook": "hook loop-nudge --host claude-code",
+    "hook": "hook after secret-redact loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -58,15 +50,7 @@
   {
     "event": "PostToolUse",
     "index": 3,
-    "hook": "hook secret-redact --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 3,
-    "hook": "hook loop-nudge --host claude-code",
+    "hook": "hook after secret-redact loop-nudge --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -98,23 +82,7 @@
   {
     "event": "PostToolUse",
     "index": 5,
-    "hook": "hook secret-redact --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 5,
-    "hook": "hook loop-nudge --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 5,
-    "hook": "hook missing-cli --host claude-code",
+    "hook": "hook after secret-redact loop-nudge missing-cli --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -130,23 +98,7 @@
   {
     "event": "PostToolUse",
     "index": 6,
-    "hook": "hook secret-redact --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 6,
-    "hook": "hook loop-nudge --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PostToolUse",
-    "index": 6,
-    "hook": "hook missing-cli --host claude-code",
+    "hook": "hook after secret-redact loop-nudge missing-cli --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

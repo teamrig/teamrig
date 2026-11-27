@@ -71,13 +71,19 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|PowerShell|Read|Grep",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "secret-redact", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "secret-redact", "loop-nudge", "missing-cli", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch",
+        "matcher": "Read|Grep",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "secret-redact", "loop-nudge", "--host", "claude-code"], "timeout": 15 }
+        ]
+      },
+      {
+        "matcher": "Glob|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch",
         "hooks": [
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "loop-nudge", "--host", "claude-code"], "timeout": 15 }
         ]
@@ -85,14 +91,7 @@
       {
         "matcher": "SendMessage",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "failed-send", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "route-reminder", "--host", "claude-code"], "timeout": 15 }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "missing-cli", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "failed-send", "route-reminder", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {

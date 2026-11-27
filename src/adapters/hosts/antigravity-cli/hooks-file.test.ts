@@ -46,9 +46,10 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
       ...(group?.PreToolUse ?? []).flatMap((entry) => entry.hooks),
       ...(group?.PostToolUse ?? []).flatMap((entry) => entry.hooks),
     ].map((entry) => entry.command);
-    assert.ok(lines.length > 20);
+    // The file was read: hook sets (T5553, T5821) fold many hooks into one line, so the floor is low.
+    assert.ok(lines.length > 10, String(lines.length));
     for (const line of lines) {
-      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook (?:guards(?: [a-z-]+)+|[a-z-]+) --host antigravity-cli --host-event [A-Za-z]+$/u);
+      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook (?:(?:guards|after)(?: [a-z-]+)+|[a-z-]+) --host antigravity-cli --host-event [A-Za-z]+$/u);
       assert.equal(line.includes('${'), false);
     }
     assert.equal(group?.PreInvocation?.[0]?.command, 'node /opt/teamrig/plugin/dist/cli/main.js hook inbox-reminder --host antigravity-cli --host-event PreInvocation');
@@ -61,13 +62,13 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     );
   });
 
-  /** The hooks one command line runs: its `hook <name>`, or each guard of its `hook guards <name> ...` set (T5553). */
+  /** The hooks one command line runs: its `hook <name>`, or each member of its `hook guards|after <name> ...` set. */
   function hooksOf(command: string): readonly string[] {
     const words = command.split(' ');
     const after = words.slice(words.indexOf('hook') + 1);
     const end = after.findIndex((word) => word.startsWith('--'));
     const named = end === -1 ? after : after.slice(0, end);
-    return named[0] === 'guards' ? named.slice(1) : named.slice(0, 1);
+    return named[0] === 'guards' || named[0] === 'after' ? named.slice(1) : named.slice(0, 1);
   }
 
   /** The hooks agy runs before its tool `tool`, by name: what fires when its PreToolUse matcher matches. */
