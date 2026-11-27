@@ -1835,6 +1835,16 @@ gave the cut, and the model reads `you are past today's budget and the lead cut 
 the budget day)`. A stop (`--stop`) holds the session whatever its use: the wake check and the idle pass wake and
 reopen it for p0 work only from the day's start, and past its part the model reads `the lead stopped you until ...`.
 
+Once the week's use reaches `budget.targetPct` (99.5% by default), the week's stop holds every session until the
+weekly reset, the lead, the security reviewer and the tracker answerer too, whatever `budget.overAction` says: only
+blocker-priority tasks wake a session, keep its idle tab open or send it back to work, p0s and waited-on answers
+included in the wait, and a new helper launch is refused unless the session has blocker work. Each session reads it
+once a day: `Budget: The week passed its stop line: 99.6% used against budget.targetPct 99.5%, so until the reset at
+Wed 03:00 IST only blocker-priority tasks run, in every session. shop-web has no blocker work: it finishes a merge or
+release in hand and starts nothing else; new helpers only for blocker work. More: teamrig budget`. The last
+`budget.reservePct` of the week is kept for those blockers; to run other work past the line, raise the task to
+`blocker` or the line itself.
+
 A session held by the daily cap or a plain cut, never a stop, quiet hours or a short day's pause, still wakes for
 two kinds of task up to its configured wake priority, since a waited-on answer is never budget-held: a task another
 session's active task waits on (`--waits task:T<id>`, in this register or another of the team tree), and a task a

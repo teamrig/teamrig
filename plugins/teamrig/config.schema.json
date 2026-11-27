@@ -1241,7 +1241,7 @@
           }
         },
         "targetPct": {
-          "description": "Use the week up to this share of the weekly limit.",
+          "description": "Use the week up to this share of the weekly limit. From it on, only blocker-priority tasks run, in every session, until the weekly reset.",
           "type": "number",
           "minimum": 1,
           "maximum": 100,
