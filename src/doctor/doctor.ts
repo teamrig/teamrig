@@ -2,7 +2,7 @@ import { quietSpanOf } from '../budget/warn.ts';
 import { isDefaultModel } from '../config/launch.ts';
 import type { Roster } from '../config/roster.ts';
 import { describeNameClash, describeTreeProblem, type NameClash, type TreeProblem } from '../config/tree.ts';
-import type { BudgetConfig, ContextFilesConfig, KitConfig, LaunchConfig } from '../config/types.ts';
+import type { BudgetConfig, ContextFilesConfig, KitConfig, LaunchConfig, RefreshConfig } from '../config/types.ts';
 import type { Env } from '../core/home.ts';
 import { isReservedName, RESERVED_RULE } from '../core/ids.ts';
 import type { PathKind } from '../core/path-probe.ts';
@@ -15,6 +15,7 @@ import type { RoutingOverride } from '../ports/host/index.ts';
 import { wideAllowText } from '../permissions/report.ts';
 import type { WideAllow } from '../permissions/trim.ts';
 import { describeRequirement, type RequirementProblem } from '../requirements/requirements.ts';
+import { handoverSizeWarning } from '../refresh/decide.ts';
 import { CONTEXT_MAX_CHARS, TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
 import type { ContextFiles } from './context-files.ts';
 import { missingDenyLines, type SettingsDeny } from './deny-lines.ts';
@@ -68,7 +69,9 @@ export const UNREAD_INBOX_DAYS = 7;
  * - `page-webhook`: the page webhook the team's alerts (or a team's above) name gives no https URL, so an expired
  *   Claude login pages nobody until the day it is needed (T2349: host alerts dead 19 h unseen);
  * - `cli-path`: the kit home's bin folder is not on the user's PATH, so `teamrig` runs in no terminal of the user's
- *   own (T5095: the owner's `teamrig ui` was not found in PowerShell).
+ *   own (T5095: the owner's `teamrig ui` was not found in PowerShell);
+ * - `handover-long`: a session's handover past `refresh.handoverWarnBytes`, which its every fresh start reads whole,
+ *   most often as it holds how-tos or code maps that belong in skills and reference files (T2537).
  */
 export type FindingKind =
   | 'requirement'
@@ -96,7 +99,15 @@ export type FindingKind =
   | 'project-missing'
   | 'shell-history'
   | 'page-webhook'
-  | 'cli-path';
+  | 'cli-path'
+  | 'handover-long';
+
+/** A session's handover file and its size in bytes, as `doctor` weighs it against `refresh.handoverWarnBytes`. */
+export interface HandoverSize {
+  readonly session: string;
+  readonly path: string;
+  readonly bytes: number;
+}
 
 /** A project folder the team config names, and what is at its path on this machine. */
 export interface ConfiguredProject {
@@ -221,6 +232,8 @@ export interface DoctorInput {
   /** Why the page webhook the team's alerts name gives no URL (`pageCheckOf`); undefined when it resolves or none is named. */
   readonly page: PageProblem | undefined;
   readonly cliPath: CliPathState;
+  /** The handover each session on the team has written, and the team's `refresh.handoverWarnBytes` (0: off). */
+  readonly handovers: { readonly files: readonly HandoverSize[]; readonly warnBytes: RefreshConfig['handoverWarnBytes'] };
   /** The team's own budget switch and quiet hours: `quietHours` is no account key, so a child team is checked on its own. */
   readonly budget: Pick<BudgetConfig, 'enabled' | 'quietHours'>;
   readonly now: Date;
@@ -613,6 +626,14 @@ function cliPathFindings({ cliPath, command }: DoctorInput): Finding[] {
   return [{ kind: 'cli-path', detail: `${missing}: ${fix}` }];
 }
 
+/** Each session whose handover is past the warning size, named as the team knows it; the size note is the refresh's own. */
+function handoverFindings({ handovers: { files, warnBytes }, roster }: DoctorInput): Finding[] {
+  return files.flatMap(({ session, path, bytes }): Finding[] => {
+    const warning = handoverSizeWarning(bytes, path, warnBytes);
+    return warning === null ? [] : [{ kind: 'handover-long', detail: `${roster.nameOf(session) ?? session} (session ${session}): ${warning}` }];
+  });
+}
+
 /**
  * Quiet hours whose action is `ask`: in them a helper launch raises a permission prompt (`helperGate`), which nobody
  * at the host answers at night, so the tab waits until someone does (T1983: 222 minutes on 11-04). `block` refuses
@@ -641,7 +662,7 @@ function quietHoursFindings({ budget, now, zone }: DoctorInput): Finding[] {
  * inboxes nobody reads, rules too long to show, a lead's start past the cap or with a rules file cut to a pointer, text every call re-reads over its budget (files, and the lists the newest
  * session holds), a broken tree of teams or a session name two teams use, a variable that overrides every model or effort
  * choice, a launch with a model but no effort, local allow rules that approve a whole tool or program or hold a credential,
- * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, and a teamrig bin folder off the user's PATH.
+ * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, a teamrig bin folder off the user's PATH, and a handover past its warning size.
  * It reads only; every fix is the user's.
  */
 export function doctorFindings(input: DoctorInput): Finding[] {
@@ -664,6 +685,7 @@ export function doctorFindings(input: DoctorInput): Finding[] {
     ...shellHistoryFindings(input),
     ...pageFindings(input),
     ...cliPathFindings(input),
+    ...handoverFindings(input),
   ];
 }
 

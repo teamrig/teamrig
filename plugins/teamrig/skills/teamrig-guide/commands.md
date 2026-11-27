@@ -5354,7 +5354,9 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
 session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
-`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`.
+`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`,
+`handover-long` (a session's handover past [refresh.handoverWarnBytes], which each fresh start reads whole: move its
+how-tos to skills and its code maps to reference files it names).
 
 A `tree-parent` or `tree-role` finding of the session's own team also shows in each session start note, since what
 the team takes from the teams above (waits, roles, budget keys, rules) is missing until it is fixed: a home copied to

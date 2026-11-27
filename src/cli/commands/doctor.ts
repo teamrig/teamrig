@@ -5,7 +5,7 @@ import { KIT_NAME, resolveKitHome } from '../../core/home.ts';
 import type { PathProbe } from '../../core/path-probe.ts';
 import { readContextFiles } from '../../doctor/context-files.ts';
 import { readSettingsDeny } from '../../doctor/deny-lines.ts';
-import { doctorFindings, formatFinding, type CliPathState, type ConfiguredProject, type ContextInput, type PageProblem, type SecretDeny, type SessionLaunch } from '../../doctor/doctor.ts';
+import { doctorFindings, formatFinding, type CliPathState, type ConfiguredProject, type ContextInput, type HandoverSize, type PageProblem, type SecretDeny, type SessionLaunch } from '../../doctor/doctor.ts';
 import { readSessionLists } from '../../doctor/session-lists.ts';
 import { readSettingsEnv, sessionSettingsFiles } from '../../doctor/settings-env.ts';
 import { readShellHistory } from '../../doctor/shell-history.ts';
@@ -13,6 +13,7 @@ import { HiringLog } from '../../hiring/log.ts';
 import { retiredSessions } from '../../hiring/record.ts';
 import { inboxStatus } from '../../inbox/inbox.ts';
 import { JsonlRenameLog } from '../../names/log.ts';
+import { RefreshStore } from '../../refresh/store.ts';
 import { cliLauncherFolder } from '../../restore/cli-launcher.ts';
 import { readWideAllow } from '../allow-scope.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -53,6 +54,12 @@ async function configuredProjects(probe: PathProbe, config: KitConfig, ids: read
     }),
   ];
   return Promise.all(named.map(async (entry) => ({ ...entry, kind: await probe.kind(entry.path) })));
+}
+
+/** The handover each of `ids` has written and its size in bytes; a session with none is left out. */
+async function handoverSizes(store: RefreshStore, ids: readonly string[]): Promise<HandoverSize[]> {
+  const read = await Promise.all(ids.map(async (session) => ({ session, text: await store.handover(session) })));
+  return read.flatMap(({ session, text }) => (text === undefined ? [] : [{ session, path: store.handoverPath(session), bytes: Buffer.byteLength(text, 'utf8') }]));
 }
 
 /** The settings files a session started in `project` reads; none on a host whose folders teamrig does not know. */
@@ -180,6 +187,7 @@ export async function doctor(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
     shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
     page: pageProblemOf(await pageCheckOf(runtime, paths.team)),
     cliPath: await cliPathOf(runtime, config),
+    handovers: { files: await handoverSizes(new RefreshStore(runtime.files, paths), roster.ids), warnBytes: config.refresh.handoverWarnBytes },
     budget: config.budget,
     now: new Date(runtime.clock.now()),
     zone: teamZone(config, runtime),
