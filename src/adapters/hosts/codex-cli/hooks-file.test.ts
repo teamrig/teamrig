@@ -82,7 +82,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 
   it('accounts for every handler: each is in the Codex file or in the skipped list', () => {
     const inSource = TEAMRIG_HOOKS_TEXT.match(/"type": "command"/gu)?.length ?? 0;
-    assert.ok(inSource > 40);
+    assert.ok(inSource > 30, String(inSource));
     assert.equal(handlers.length + skipped.length, inSource);
   });
 
@@ -104,12 +104,11 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
     }
   });
 
-  it('keeps every guard of a shell call under the matcher it had, the set of guards as one handler (T5553)', () => {
+  it('keeps every PreToolUse hook of a shell call under the matcher it had, as one set handler (T5553, T5821)', () => {
     const shell = file.hooks.PreToolUse?.find((group) => group.matcher === 'Bash|PowerShell');
     const hooksOf = (command: string): readonly string[] => command.split(' hook ')[1]?.split(' --host ')[0]?.split(' ') ?? [];
     assert.deepEqual(shell?.hooks.map((handler) => hooksOf(handler.command)), [
-      ['guards', 'push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'pass-record-guard', 'install-guard', 'service-role-guard'],
-      ['readonly-allow'],
+      ['guards', 'push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'pass-record-guard', 'install-guard', 'service-role-guard', 'picker-guard', 'readonly-allow', 'route-allow'],
     ]);
   });
 
