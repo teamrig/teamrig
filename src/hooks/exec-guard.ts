@@ -54,6 +54,7 @@ export const OWNER_COMMANDS: ReadonlySet<string> = new Set(['note', 'next', 'wak
 
 /** Every `teamrig hook` command, by which a call through an unknown program reads as a teamrig call, not as `git hook run`. */
 export const HOOK_COMMANDS: ReadonlySet<string> = new Set([
+  'after',
   'clear-claim',
   'clear-dir',
   'cold-send',

@@ -160,6 +160,11 @@ const SAMPLES: Readonly<Record<string, Sample>> = {
     },
     check: quiet(),
   },
+  // Each after set hooks.json runs is quiet on a plain Read's result, which every named member loads and reads (T5821).
+  'hook after': {
+    payload: { hook_event_name: 'PostToolUse', session_id: SESSION_ID, tool_name: 'Read', tool_use_id: 'toolu_6', tool_input: { file_path: 'a.ts' } },
+    check: quiet(),
+  },
   'hook missing-cli': {
     payload: {
       hook_event_name: 'PostToolUseFailure',

@@ -19,6 +19,7 @@ export const HOOK_TIMEOUT_MS: Readonly<Record<string, number>> = {
   'cold-send': GUARD_LIMIT_MS,
   'helper-gate': GUARD_LIMIT_MS,
   'picker-guard': GUARD_LIMIT_MS,
+  after: 15_000,
   'failed-send': 15_000,
   'missing-cli': 15_000,
   'route-reminder': 15_000,
