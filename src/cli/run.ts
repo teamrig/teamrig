@@ -915,8 +915,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       --home reads that kit home, which a window or split this opens is handed;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
-      own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
-      Terminal window, else in a window; one that cannot open falls back and says so; OPENED only once
+      own (a session's shell), the terminal half shows in a split of the session's tmux pane or a
+      new tab of its Windows Terminal window, else in a window; one that cannot open falls back
+      and says so; OPENED only once
       the UI in it starts, else FAILED after 20 s; it runs the entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no

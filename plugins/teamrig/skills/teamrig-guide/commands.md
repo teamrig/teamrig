@@ -5462,10 +5462,11 @@ a terminal window of its own running the same UI, as [open.terminal] says (in Wi
 `teamrig-ui`, apart from any team's session window), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
 shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
 the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
-or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
-the session works in, the focus left on the session's pane (`OPENED the UI in a split of this <terminal> window`);
-in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. When neither a
-split nor a window opens there, it is refused (`REFUSED the UI has nowhere to show`, exit 2) and runs no UI in place,
+or `/teamrig`), the terminal half shows beside the session instead: in tmux, a split of the session's own pane, the focus left on it
+(`OPENED the UI in a split of this tmux window`); in Windows Terminal, whose split would be of the tab the person has
+in focus, not the session's, a new tab of its most recent window, the focus left where it was (`OPENED the UI in a
+new tab of this windows-terminal window`); in another terminal, which has neither to ask for, it opens a window and
+says why in a `NOTE` line. When nothing opens beside the session or in a window there, it is refused (`REFUSED the UI has nowhere to show`, exit 2) and runs no UI in place,
 since one there could never take a key; in `both` whose window opened, the window alone shows it. An `OPENED`
 line comes only once the UI in that window or split has started (it marks `ui/started.json` under the kit home): a
 terminal can take the window and run nothing in it, so with no UI started there within 20 s the run prints `FAILED

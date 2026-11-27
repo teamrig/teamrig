@@ -835,7 +835,7 @@ The dedicated UI that teamrig ui starts.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
+| `mode` | one of `"terminal"`, `"window"`, `"both"` | `"terminal"` | Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, beside the session, in a split of its tmux pane or a new tab of its Windows Terminal window; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run. |
 | `path` | string (matching `^(?:[A-Za-z]:)?[\\/][^\r\n]*$`) |  | The absolute path of a UI entry script to start in place of the released UI: a build of your own, for work on the UI itself. Node.js runs it as you, outside every Claude Code guard, so name only a script you trust and never one in a working tree a session edits. The owner's key: the config guard refuses a session changing it. Unset: the released UI. |
 
 ## `owner`
