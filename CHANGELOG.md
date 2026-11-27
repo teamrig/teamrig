@@ -1,5 +1,92 @@
 # Changelog
 
+## [0.511.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.510.0...teamrig-v0.511.0) (2026-11-27)
+
+
+### Features
+
+* **cli:** add redact-exec command to redact shell output ([27fc926](https://github.com/teamrig/teamrig/commit/27fc92626a481507c7211c55202ddbc3d3e4fb69))
+* **cli:** file rotations, preserve exit code, and add --shell/--encoded-command to redact-exec ([a4f5786](https://github.com/teamrig/teamrig/commit/a4f5786486424bc731ca04f294e2784c4b037d5f))
+* **cli:** issue reopen reopens an issue or pull request of the team's repositories (T5612) ([2686620](https://github.com/teamrig/teamrig/commit/268662010e63d2193734a79c3597631329dd052a))
+* **codex-cli:** record the six rows the live Windows run of 2026-11-24 proved (T5559) ([de0a993](https://github.com/teamrig/teamrig/commit/de0a9936e0de63e59ef639ea1e2b802a3b0e00e0))
+* **codex:** Codex CLI's declaration names its product's own words for the provider-word check (T5118) ([1d8e665](https://github.com/teamrig/teamrig/commit/1d8e6653dcead83434c9bf9641703bd2099c427b)), closes [#2311](https://github.com/teamrig/teamrig/issues/2311)
+* **config:** a person's own user.json sets their levels.names (T5205) ([96cb525](https://github.com/teamrig/teamrig/commit/96cb5256e8c9b5a3fa67e227893277690119bae4))
+* **config:** owner.proof names the owner's signing gesture, a challenge's life and the pinned keys (T4758) ([3be665f](https://github.com/teamrig/teamrig/commit/3be665f596901cbcbdd025ea24b435d22f60f062))
+* **config:** the team config names each level of work with levels.names (T5205) ([26893c9](https://github.com/teamrig/teamrig/commit/26893c9e244ae9a89182884cae9d30c1d1f5d0ae))
+* **core:** one time scale for the wall-clock limits on child programs (T5545) ([e0e55dd](https://github.com/teamrig/teamrig/commit/e0e55dd4b0c5af0b4f4c0eba00a10d4ab9c6318b))
+* **github:** GitHub's state opens in its own connector folder, moving what an older teamrig left (T5114) ([6eaddf2](https://github.com/teamrig/teamrig/commit/6eaddf20c55890771a48f6b244192f2e612b3e36))
+* **hosts:** a hook event carries the permission mode its host reported (T5082) ([b58ead8](https://github.com/teamrig/teamrig/commit/b58ead84fb5cf7bbaba9a485111935c79667ca2e))
+* **hosts:** a host-reported fact kept apart from what teamrig asked for, and the permission mode under teamrig's names (T5082) ([be47e48](https://github.com/teamrig/teamrig/commit/be47e4870ff9c5316dde506e62ad214d7ecab90a))
+* **install:** the one-file install leaves the PATH to kit install, with no hand step (T5734) ([68b2a6a](https://github.com/teamrig/teamrig/commit/68b2a6a79b46b90a9931331329cafa87e7bd4a0f))
+* **issues:** trackers reopen an issue or pull request, in plugin API 0.7.0 (T5612) ([8d8c4c5](https://github.com/teamrig/teamrig/commit/8d8c4c58bc0ff35fe2b165f98cac1a35fbf78a98))
+* **kit:** check a release's integrity list attestation with gh attestation verify (T5278) ([a5e2692](https://github.com/teamrig/teamrig/commit/a5e2692afb24c021588810c6e92306fcdf834ae6))
+* **kit:** kit install puts teamrig on the user's PATH as a session start does (T5734) ([8a8758c](https://github.com/teamrig/teamrig/commit/8a8758cb83066c738499fc48418c7b7e15b7777c))
+* **kit:** kit update checks the release's attestation with gh before it installs (T5278) ([290a270](https://github.com/teamrig/teamrig/commit/290a27054fdc5ea5bf0973a3e422ac5a03bf7ce3))
+* **owner-proof:** a nonce ledger that issues, spends once and prunes challenge nonces (T4758) ([53715be](https://github.com/teamrig/teamrig/commit/53715be277850e9f3274210a649ad418760df606))
+* **owner-proof:** RFC 8785 canonical JSON for the owner's signed challenge (T4758) ([a3f8228](https://github.com/teamrig/teamrig/commit/a3f8228cc1f988d9fdace6882fcac07461bf2609))
+* **owner-proof:** the challenge an owner's key signs for one owner-only act (T4758) ([1762185](https://github.com/teamrig/teamrig/commit/1762185215743350fce1011d32b5e2b60479b71e))
+* **owner-proof:** the owner-proof port, its fake and the contract every adapter passes (T4758) ([4f6e134](https://github.com/teamrig/teamrig/commit/4f6e13435ac8d3b53892af4961f6566a0a948468))
+* **owner-proof:** the team's nonce ledger file, read and written under a lock, refusing a damaged file (T4758) ([837d7b7](https://github.com/teamrig/teamrig/commit/837d7b7443b6281edd682ea31d7360a310ab534d))
+* **owner-proof:** verify an owner's signature against the pinned key and its algorithm (T4758) ([6e702b0](https://github.com/teamrig/teamrig/commit/6e702b01d23e4426e34231a3ab249cf48aac275e))
+* **plugin-api:** map each host port to the parity rows it serves, and find a built port all of whose rows say unsupported (T5559) ([1e9ec01](https://github.com/teamrig/teamrig/commit/1e9ec014b7c271ca4b60cf75fffe51ecd1dd5383))
+* **register:** a level names module with seven tracker presets (T5205) ([9a1017a](https://github.com/teamrig/teamrig/commit/9a1017a8bcccc2e929cb63587aef8808f272b736))
+* **steps:** host.hooks-file and host.skills-folder say where a host's own setup files are (T5728) ([fd43dd1](https://github.com/teamrig/teamrig/commit/fd43dd136ed2c851db1069014e379796f911be99)), closes [#2311](https://github.com/teamrig/teamrig/issues/2311)
+* **terminal:** a split request on the terminal protocol (T5236) ([f378d0d](https://github.com/teamrig/teamrig/commit/f378d0df7666a600f094881138cf4bee57b5c285))
+* **ui:** teamrig ui runs teamrig-pane 0.86.0's released UI, pinned by its sha256 (T5818) ([a58ba58](https://github.com/teamrig/teamrig/commit/a58ba580df8de990635842ddec2ce86b4fd59482))
+* **ui:** teamrig ui runs the teams' idle passes while it is up (T5634) ([7743a56](https://github.com/teamrig/teamrig/commit/7743a5676e4b8f3544ff490c785c75bad64c9831))
+
+
+### Bug Fixes
+
+* **antigravity:** report bare command(*) allow rule as bypass ([d2c5f4d](https://github.com/teamrig/teamrig/commit/d2c5f4d367339ccf4bbecff6faf1cb4d68238e2e))
+* **ci:** a coverage file a test's child leaves cut short is dropped, not the run's whole report (T5551) ([8bbd2d1](https://github.com/teamrig/teamrig/commit/8bbd2d11709cf9328875e9b2c82577d78f7f04fd))
+* **ci:** the check sets a time scale of 4 for the specs and the dist smoke (T5545) ([b0056a3](https://github.com/teamrig/teamrig/commit/b0056a364b2ac78cf29c42bbdf8fb8c33904fc06))
+* **cli:** keep ExitCode narrow, gate dynamic --shell, and prove config order ([a107d44](https://github.com/teamrig/teamrig/commit/a107d4433c2718907e81366b054973106325352c))
+* **cli:** owner, inbox --from and settings-writer refusals say where an agent runs them (T4989) ([170027a](https://github.com/teamrig/teamrig/commit/170027a0355cd989a8fcca17a0fcd6c08f0623ed))
+* **codex-cli:** claim only what the bound usage and launcher contracts hold (T5559) ([7e1b65e](https://github.com/teamrig/teamrig/commit/7e1b65eeacacc1fb71fc900f1281e7c6c3b73c26))
+* **codex-cli:** declare the rows its built ports serve, supported with no proofs or partial (T5559) ([b7b21d8](https://github.com/teamrig/teamrig/commit/b7b21d87fc8accc946b9b0a7f791d13b0c6318ef))
+* **codex-cli:** read an inline table as open past a nested close, a quoted brace or a comment (T5362) ([bbd0763](https://github.com/teamrig/teamrig/commit/bbd0763832daf557a9f90f946a09244edbd775ed))
+* **codex-cli:** setup hooks refuses an inline table that spans lines under the profiles (T5362) ([b955977](https://github.com/teamrig/teamrig/commit/b955977f4ba9ee27f1f94741fdae3751b555a177))
+* **conformance:** the permission-mode contract binds through the hooks port, and Codex CLI binds it (T5082) ([193b8f3](https://github.com/teamrig/teamrig/commit/193b8f3f917bc10276b28c1889f311fc96dad2ec))
+* **core:** the kit's git runs take the time scale on their limit (T5545) ([69b6650](https://github.com/teamrig/teamrig/commit/69b6650ab4e681c9c83b9b77a8bee4fe39ad6fd7))
+* **delivery:** a queued step that exits by itself ends what it left running ([#1492](https://github.com/teamrig/teamrig/issues/1492)) ([b053f4e](https://github.com/teamrig/teamrig/commit/b053f4e307fe2c628b35bc6e562a96185d814dd0))
+* **delivery:** the orphan sweep leaves alone what a later holder of the root's id started ([#1492](https://github.com/teamrig/teamrig/issues/1492)) ([677ed31](https://github.com/teamrig/teamrig/commit/677ed3131db287bd7ecb73746b74cf3435946ac0))
+* **github:** ci rerun reads the run again after an odd gh failure, so it says whether GitHub re-ran it (T5610) ([8fff260](https://github.com/teamrig/teamrig/commit/8fff260d07a0b25361057895c8a6de55c330ed59))
+* **github:** the open issue list reads up to 5000 issues, so a repository past 500 open issues keeps its newest ones in the sync and the status push (T4949) ([d099333](https://github.com/teamrig/teamrig/commit/d099333e5196702ec6d1832093d59c6615bddf47)), closes [#2191](https://github.com/teamrig/teamrig/issues/2191)
+* **github:** the status push names an issue missing from a cut-short open list as maybe open past the cap, not closed (T5451) ([ed1f733](https://github.com/teamrig/teamrig/commit/ed1f733a0bbc48562300e620149e69924167dc13))
+* **hooks:** a guard hook refuses an input its host named the event of but cannot read (T5574) ([5be059b](https://github.com/teamrig/teamrig/commit/5be059baa0c99e6cffdc028cafac46b79b6814b9))
+* **hooks:** a hook run on a host the team does not list says once what to add, not every hook failed (T5735) ([849c46d](https://github.com/teamrig/teamrig/commit/849c46d75a973c165ded926aaa5ff55e1d9703b1))
+* **hooks:** hand-trace exits 0 when its append fails, as its doc says ([#1820](https://github.com/teamrig/teamrig/issues/1820)) ([3980bec](https://github.com/teamrig/teamrig/commit/3980becbe380ea54ead88dcdb613e36a988f563b))
+* **hosts:** a host may answer it has no place for a path, and every caller handles it (T5582) ([efccf0e](https://github.com/teamrig/teamrig/commit/efccf0ecd1849e67c015f2a1213e6751b0ed0a41)), closes [#2498](https://github.com/teamrig/teamrig/issues/2498)
+* **hosts:** hook event literals carry both the permission mode and hostPrompt after the rebase (T5082) ([50c65aa](https://github.com/teamrig/teamrig/commit/50c65aa4b469ee2b5f6703a68b96072335f5eea7))
+* **hosts:** the Antigravity CLI paths answer unknown for the places it does not keep (T5582) ([9e080ab](https://github.com/teamrig/teamrig/commit/9e080ab4eda1b041cd8ac3777587908702902d30)), closes [#2498](https://github.com/teamrig/teamrig/issues/2498)
+* **kit:** kit update takes exactly one verified subject and only SLSA build provenance (T5278) ([1d09e7e](https://github.com/teamrig/teamrig/commit/1d09e7ef24ba18518f23f90c25b8f76597300454))
+* **kit:** launchers run the kit launcher on any AI CLI, else the Claude Code plugin's CLI (T5138) ([8e3223c](https://github.com/teamrig/teamrig/commit/8e3223c38ef158e2435a37375c6c9725f4132ff5)), closes [#2322](https://github.com/teamrig/teamrig/issues/2322)
+* **meeting:** the spotlight reads the met session's own terminal, not the team's (T5716) ([e44b9a3](https://github.com/teamrig/teamrig/commit/e44b9a3fc4492a156732e071cbed636a155c9c4e))
+* **mod:** the hand watch keeps at most four unsettled ticks per hand ([#1817](https://github.com/teamrig/teamrig/issues/1817)) ([8d8962f](https://github.com/teamrig/teamrig/commit/8d8962f1c74ab5ae018b92b1f78452a9ffc9d966))
+* **open:** a session opens in the host its last start names, not the caller's (T5061) ([b563a52](https://github.com/teamrig/teamrig/commit/b563a52739f041e3274a9d85d085185d5b08ccbc))
+* **open:** a tab shell counts as a session's only when its line names a host's program as a whole word (T5010) ([c34a45c](https://github.com/teamrig/teamrig/commit/c34a45c5a990467963c512b056b5105b45ba33d2))
+* **owner-proof:** a proof's times fail closed: ISO UTC only, expiry after issue, refused in the verifier too (T4758) ([a076e99](https://github.com/teamrig/teamrig/commit/a076e992afb2a30e3f995539e6bfd08207fea155))
+* **owner-proof:** the config checks a pinned key's kind with no node: module, so the read side stays Node-free (T4758) ([df9e2e5](https://github.com/teamrig/teamrig/commit/df9e2e5ef4dc6492857a093a90114b756aa10f06))
+* **plugin-api:** map the skills-folder port to its row, and Codex CLI's skills row is partial (T5559) ([314356b](https://github.com/teamrig/teamrig/commit/314356bdeada5abcb849b59bdf3c5a9528db6069))
+* **push-guard:** gate any dynamic word before -- in redact-exec ([ec265c8](https://github.com/teamrig/teamrig/commit/ec265c85f9f119136bbfcceed10184bcf7c91a70))
+* **push-guard:** harden --encoded-command with -- and multi-word --shell ([30962ae](https://github.com/teamrig/teamrig/commit/30962ae869e422a2337daf645187a55904a75721))
+* **push-guard:** the guard's state reads take the time scale on their limit (T5545) ([be12ace](https://github.com/teamrig/teamrig/commit/be12ace57c5205e5eea4f5fe53b98f3a8ed5371e))
+* **queue:** scale the memory floor and the small reserve to a small host (T5676) ([67711de](https://github.com/teamrig/teamrig/commit/67711deb7b949b7575ad55400340cf3fd4c1dd39))
+* **read:** the sessions document names each session's own host (T5061) ([6ee6034](https://github.com/teamrig/teamrig/commit/6ee6034e3f445fe3bd5475db0666b5ae20ddb85b))
+* **refresh:** a claimed /clear counts once the new session took the refresh ([#1819](https://github.com/teamrig/teamrig/issues/1819)) ([a651541](https://github.com/teamrig/teamrig/commit/a651541366ffe668092994c54a2a7ec5a685fa13))
+* **register:** a read that skips its snapshot names the snapshot and why, not an unreadable line of the log (T5787) ([08c7b3a](https://github.com/teamrig/teamrig/commit/08c7b3ac1cb85e4b28142d76954b6cb58a8bdd57))
+* **register:** a task line written before inProgressMs existed reads as none spent, so its snapshot stays usable (T5787) ([858b9d2](https://github.com/teamrig/teamrig/commit/858b9d2bf20f0ba44ba91977cea29d78e6dc77f6))
+* **register:** the youtrack preset holds YouTrack's own level words; teamrig's neutral set is the default preset (T5205) ([36c6e7a](https://github.com/teamrig/teamrig/commit/36c6e7a499e579098bb6b7f3ce8860b9abef6f6d))
+* **setup:** setup hooks refuses --yes while the team's hosts lacks the host its lines name (T5354) ([6759b16](https://github.com/teamrig/teamrig/commit/6759b16a7eaca19ec941102a304685b71ab8904a))
+* **ship:** repos.json merges teamrig through the merge queue its main ruleset requires (T5460) ([482273a](https://github.com/teamrig/teamrig/commit/482273af9e076bdc4b33c83a853fbc7473739913)), closes [#2153](https://github.com/teamrig/teamrig/issues/2153)
+* **ship:** repos.json takes teamrig off the merge queue, which meets main review's last-push approval (T5745) ([3f7f27b](https://github.com/teamrig/teamrig/commit/3f7f27b22d027c3280686cce5f3318f2b1afa616)), closes [#2153](https://github.com/teamrig/teamrig/issues/2153)
+
+
+### Performance Improvements
+
+* **read:** plan's revision stamps the week summary, not every status line snapshot (T5755) ([abf9953](https://github.com/teamrig/teamrig/commit/abf9953feb8f9587cc9b092af57b6e59ccc8c75f))
+
 ## [0.510.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.509.0...teamrig-v0.510.0) (2026-11-26)
 
 
