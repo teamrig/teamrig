@@ -17,6 +17,7 @@ import type { WaitReason } from './waits.ts';
 import { JERUSALEM } from '../testing/zone.ts';
 import { WATCH_USAGE } from './verify.ts';
 import { BLOCKER_PRIORITY_ID } from './model.ts';
+import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
 
 const EMPTY: RegisterState = foldEvents([]);
 const INPUT: AddInput = { title: 'Add a health check', description: 'what and why', owner: 'alpha', source: 'lead', priority: 2 };
@@ -2251,5 +2252,30 @@ describe('RegisterPolicy.ownerDecide: --read binds the answer to the card read (
   it('checks --read before the option number, so an edited card is named as such and not as a missing option', () => {
     const grown: DecisionCard = { ...TEST_OWNER_CARD, options: [...TEST_OWNER_CARD.options, 'Team at 99 dollars a month'] };
     assert.match(error(decide(onOwner(TEST_OWNER_CARD), cardDigest(grown), 3)), /^--read [0-9a-f]{8} is not T1's card as it stands/);
+  });
+});
+
+describe("RegisterPolicy.ownerDecide: the owner's proof goes on the Decided only for this task and the card read (T4758 C1)", () => {
+  const policy = new RegisterPolicy(testConfig());
+  const task = testTask({ status: 'waiting', waits: OWNER_DECISION, card: TEST_OWNER_CARD });
+  const read = cardDigest(TEST_OWNER_CARD);
+  const proof = { ...OWNER_PROOF_RECORD, challenge: { ...OWNER_PROOF_RECORD.challenge, act: ['owner', 'decide', 'alpha/T1', '--option', '1'], cardDigest: read } };
+
+  it('keeps a proof signed for this task and card', () => {
+    const decided = policy.ownerDecide(task, { kind: 'option', option: 1 }, read, proof);
+    assert.ok(decided.ok && decided.value.ownerProof === proof, JSON.stringify(decided));
+  });
+
+  it('refuses a proof signed for another task, another card, or with no --read', () => {
+    const other = { ...proof, challenge: { ...proof.challenge, act: ['owner', 'decide', 'alpha/T2', '--option', '1'] } };
+    assert.equal(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, read, other)), "the owner's proof was signed for alpha/T2, not T1");
+    const card = { ...proof, challenge: { ...proof.challenge, cardDigest: 'd'.repeat(64) } };
+    assert.match(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, read, card)), /signed for another card than the one read/);
+    assert.match(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, undefined, proof)), /signed for another card than the one read/);
+  });
+
+  it('writes no proof when none is given', () => {
+    const decided = policy.ownerDecide(task, { kind: 'option', option: 1 }, read);
+    assert.ok(decided.ok && decided.value.ownerProof === undefined);
   });
 });
