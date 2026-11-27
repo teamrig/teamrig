@@ -28,6 +28,7 @@ import { dueStartHolds, dueVerifyHold, heldStart, startHolds, WATCH_USAGE } from
 import { isPeerWait, isReady, sameWait, sameWaits, unfinishedAfter, waitContext, waitSpelling, type PersonWait, type PersonWaitKind, type WaitReason } from './waits.ts';
 import { wipHold } from './wip.ts';
 import { MIGRATE_COMMAND } from '../permissions/service-commands.ts';
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
 import { roleHolding } from '../permissions/service-roles.ts';
 
 /** Team policy, applied on WRITE only: the parser accepts any well-formed history. */
@@ -263,6 +264,8 @@ export interface DeferChange extends UpdateChange {
 /** A Decided (T1366): an update that changes no field, with what the owner decided and the waits left without the owner's. */
 export interface DecideChange extends DeferChange {
   readonly decided: true;
+  /** The owner's signed proof of this answer (T4758 C1), kept on the Decided while the proof is on. */
+  readonly ownerProof?: OwnerProofRecord;
 }
 
 /** An owner's action from the pane (T1298): an update written as `by`, the team's register.ownerSource. */
@@ -1051,11 +1054,12 @@ export class RegisterPolicy {
    * or no answers a wait on the owner's approval. With `read`, the digest of the card the owner read (cardDigest), only
    * while the card still has it, so an option number never lands on a card edited in between. A security-related card
    * needs its current verdict, as on its move to the owner (securityGap), since it may have changed while it sat on
-   * the owner (#1517).
+   * the owner (#1517). With `ownerProof`, the owner's signed proof of the answer (T4758 C1), kept on the Decided only
+   * when it was signed for this task and the card read, so a proof never lands on a card edited after it was signed.
    */
-  ownerDecide(task: Task, answer: OwnerAnswer, read?: string): Verdict<OwnerChange & DecideChange> {
+  ownerDecide(task: Task, answer: OwnerAnswer, read?: string, ownerProof?: OwnerProofRecord): Verdict<OwnerChange & DecideChange> {
     const by = this.config.register.ownerSource;
-    const held = this.ownerAnswerHeld(task, read);
+    const held = this.ownerAnswerHeld(task, read) ?? (ownerProof === undefined ? undefined : proofHeld(task, read, ownerProof));
     if (held !== undefined) {
       return refuse(held);
     }
@@ -1064,7 +1068,10 @@ export class RegisterPolicy {
       return note;
     }
     const decided = this.decideFrom(task, note.value);
-    return decided.ok ? ok({ ...decided.value, by }) : decided;
+    if (!decided.ok) {
+      return decided;
+    }
+    return ok({ ...decided.value, by, ...(ownerProof === undefined ? {} : { ownerProof }) });
   }
 
   /**
@@ -1842,4 +1849,16 @@ function blankToNull(text: string | undefined): string | null {
 /** Titles compare case- and space-insensitively when looking for duplicates. */
 export function normaliseTitle(title: string): string {
   return title.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Why an owner's proof may not go on this task's Decided: it was signed for another task, or another card than the one read. */
+function proofHeld(task: Task, read: string | undefined, proof: OwnerProofRecord): string | undefined {
+  const named = proof.challenge.act[2];
+  if (named === undefined || !named.endsWith(`/${task.id}`)) {
+    return `the owner's proof was signed for ${named ?? 'no task'}, not ${task.id}`;
+  }
+  if (read === undefined || proof.challenge.cardDigest !== read.toLowerCase()) {
+    return `the owner's proof was signed for another card than the one read: answer ${task.id} with --read and prove it again`;
+  }
+  return undefined;
 }
