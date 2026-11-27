@@ -85,7 +85,8 @@ describe('verifyProof', () => {
 
   it('refuses a nonce never issued, one already used, and one issued for another act', () => {
     assert.deepEqual(verifyProof(check(rsa, { nonce: { kind: 'unknown' } })), { ok: false, reason: 'nonce-unknown' });
-    assert.deepEqual(verifyProof(check(rsa, { nonce: { kind: 'used' } })), { ok: false, reason: 'nonce-used' });
+    const used: NonceState = { kind: 'used', actDigest: actDigest(binding), spentBy: 'ev-1' };
+    assert.deepEqual(verifyProof(check(rsa, { nonce: used })), { ok: false, reason: 'nonce-used' });
     const otherAct: NonceState = { kind: 'issued', actDigest: actDigest({ ...binding, act: ['merge', 'T13'] }) };
     assert.deepEqual(verifyProof(check(rsa, { nonce: otherAct })), { ok: false, reason: 'nonce-other-act' });
   });

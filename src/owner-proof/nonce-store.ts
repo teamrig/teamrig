@@ -5,8 +5,12 @@ import { isHex64 } from './challenge-shape.ts';
 import { issueNonce, newNonce, nonceState, pruneNonces, useNonce, type NonceEntry } from './nonces.ts';
 import type { NonceState } from './verify.ts';
 
-/** The version of the ledger file's shape; a file of another version is refused, never guessed at. */
-export const NONCE_LEDGER_VERSION = 1;
+/**
+ * The version of the ledger file's shape; a file of another version is refused, never guessed at. Version 2 records
+ * the event that spent each nonce; version 1 had only a used mark and was never written outside tests (the proof
+ * adapter shipped as none), so it is refused like any other.
+ */
+export const NONCE_LEDGER_VERSION = 2;
 
 /** A ledger file teamrig cannot read: every proof is refused while it stays so, since a lost "used" mark is a replay. */
 export class NonceLedgerError extends Error {
@@ -32,10 +36,10 @@ function entryOf(value: unknown): NonceEntry | undefined {
   const nonce = stringField(value, 'nonce');
   const actDigest = stringField(value, 'actDigest');
   const expires = numberField(value, 'expires');
-  const used = value['used'];
+  const spentBy = value['spentBy'];
   if (nonce === undefined || !isHex64(nonce) || actDigest === undefined || !isHex64(actDigest)) return undefined;
-  if (expires === undefined || typeof used !== 'boolean') return undefined;
-  return { nonce, actDigest, expires, used };
+  if (expires === undefined || !(spentBy === null || (typeof spentBy === 'string' && spentBy.length > 0))) return undefined;
+  return { nonce, actDigest, expires, spentBy };
 }
 
 /** The ledger's entries from its file's text; missing text is an empty ledger, anything unreadable throws. */
@@ -59,7 +63,7 @@ export function parseLedger(text: string | undefined, path: string): readonly No
 
 /** The ledger file's text. */
 export function ledgerText(entries: readonly NonceEntry[]): string {
-  const nonces: JsonRecord[] = entries.map((each) => ({ nonce: each.nonce, actDigest: each.actDigest, expires: each.expires, used: each.used }));
+  const nonces: JsonRecord[] = entries.map((each) => ({ nonce: each.nonce, actDigest: each.actDigest, expires: each.expires, spentBy: each.spentBy }));
   return `${JSON.stringify({ v: NONCE_LEDGER_VERSION, nonces })}\n`;
 }
 
@@ -83,14 +87,21 @@ export class NonceLedger {
   }
 
   /**
-   * What the ledger knew of the nonce, for `verifyProof`, with the nonce marked used and written back before this
-   * returns: a proof is checked against the state it had, and no second call can spend it, whatever the check says.
+   * What the ledger knew of the nonce, for `verifyProof`, with the nonce spent by `spentBy` (the id of the Decided
+   * event the proof is for) and written back before this returns: a proof is checked against the state it had, and
+   * no second call can spend it, whatever the check says.
    */
-  take(nonce: string): Promise<NonceState> {
+  take(nonce: string, spentBy: string): Promise<NonceState> {
     return this.change((entries) => {
       const state = nonceState(entries, nonce);
-      return { entries: useNonce(entries, nonce).entries, result: state };
+      return { entries: useNonce(entries, nonce, spentBy).entries, result: state };
     });
+  }
+
+  /** What the ledger knows of the nonce, changing nothing: for `verifyRecordedProof` when an approved act runs. */
+  read(nonce: string): Promise<NonceState> {
+    const { files, mutex, clock, path, graceMs } = this.deps;
+    return mutex.run(async () => nonceState(pruneNonces(parseLedger(await files.read(path), path), clock.now(), graceMs), nonce));
   }
 
   private change<T>(step: (entries: readonly NonceEntry[]) => { readonly entries: readonly NonceEntry[]; readonly result: T }): Promise<T> {
