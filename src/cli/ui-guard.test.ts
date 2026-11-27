@@ -4,7 +4,7 @@ import type { Sleep } from '../core/lock.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { seedKitHome } from '../testing/kit-home.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
-import { newerCurrent, startUiGuard, uiEndText, UI_GUARD_EVERY_MS, type UiGuard, type UiGuardPorts } from './ui-guard.ts';
+import { startUiGuard, uiEndText, UI_GUARD_EVERY_MS, type UiGuard, type UiGuardPorts } from './ui-guard.ts';
 
 const KIT_HOME = '/opt/team/.teamrig';
 const OWN_PID = 900;
@@ -48,18 +48,6 @@ async function guarded(
   const ports: UiGuardPorts = { files, kitHome: KIT_HOME, running, ownPid: OWN_PID, platform, processes, sleep: hand.sleep };
   return { guard: startUiGuard(ports), hand, ports };
 }
-
-describe('newerCurrent', () => {
-  it('names the version current names only when it is newer than the running one', async () => {
-    const files = new MemoryFiles();
-    assert.equal(await newerCurrent(files, KIT_HOME, '0.510.0'), undefined);
-    await seedKitHome(files, KIT_HOME, '0.511.0');
-    assert.equal(await newerCurrent(files, KIT_HOME, '0.510.0'), '0.511.0');
-    assert.equal(await newerCurrent(files, KIT_HOME, '0.511.0'), undefined);
-    assert.equal(await newerCurrent(files, KIT_HOME, '0.512.0'), undefined);
-    assert.equal(await newerCurrent(files, KIT_HOME, 'dev'), undefined);
-  });
-});
 
 describe('startUiGuard', () => {
   it('waits a look first, then ends the UI and its child once a newer version is current', async () => {

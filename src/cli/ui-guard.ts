@@ -2,10 +2,9 @@ import type { Files } from '../core/files.ts';
 import { errorMessage } from '../core/guards.ts';
 import { resolveKitHome } from '../core/home.ts';
 import type { Sleep } from '../core/lock.ts';
-import { compareVersions, parseVersion } from '../core/release-version.ts';
 import { KIT_VERSION } from '../core/version.ts';
 import { treeOf } from '../delivery/processes.ts';
-import { readKitCurrent } from '../kit/kit-versions.ts';
+import { newerCurrent } from '../kit/newer-current.ts';
 import type { ProcessInfo, SessionProcesses } from '../open/session-processes.ts';
 import type { CliRuntime } from './runtime.ts';
 
@@ -31,14 +30,6 @@ export function uiEndText(reason: UiEndReason): string {
   return reason.kind === 'superseded'
     ? `ENDED the UI: teamrig ${reason.current} is installed, and this UI ran ${KIT_VERSION}; run teamrig ui again`
     : `ENDED the UI: ${reason.gone.name} ${reason.gone.pid}, which it ran under, has ended`;
-}
-
-/** The version `current` names when it is newer than `running`; undefined when none is named, or it is not newer. */
-export async function newerCurrent(files: Pick<Files, 'read'>, kitHome: string, running: string): Promise<string | undefined> {
-  const current = (await readKitCurrent(files, kitHome))?.version;
-  const named = current === undefined ? undefined : parseVersion(current);
-  const own = parseVersion(running);
-  return current !== undefined && named !== undefined && own !== undefined && compareVersions(named, own) > 0 ? current : undefined;
 }
 
 export interface UiGuardPorts {
