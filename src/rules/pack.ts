@@ -288,8 +288,10 @@ export function coreRuleTexts(config: KitConfig, command: string, platform: Node
       // T2657: a budget hold on a review or a leader's answer stalls every session waiting on it, so
       // those answers go first past any budget, and a lead plans its cuts around them. T4388: p0 and blocker work go on
       // past it too. The unheld roles (budget/unheld.ts) are told by their own budget line, so the rule fits the cap.
+      // T5393: the rest of the week past the line is the incident reserve, so only blockers go on there; saying so
+      // in place of the reserve's own percent keeps the rule inside the cap.
       (budget.enabled
-        ? ` Pace the week to ${percent(budget.targetPct)} of the limit, ${percent(budget.reservePct)} kept for incidents [budget]; waited-on answers, p0s, blockers: never budget-held.`
+        ? ` Pace the week to ${percent(budget.targetPct)} of the limit, then blockers only [budget]; waited-on answers, p0s, blockers: never budget-held.`
         : ''),
     investigate:
       'Investigate first: frequency × impact, the cheapest fix for the symptom.' +
