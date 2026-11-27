@@ -1,3 +1,4 @@
+import { posix, win32 } from 'node:path';
 import {
   isRecord,
   isStringArray,
@@ -67,13 +68,32 @@ function noRoutes(): PermissionsAnswer<TrustedRoutesPlan> {
   return { ok: false, problem: NO_ROUTES };
 }
 
+function homeDenyLines(platform: NodeJS.Platform, userHome: string): readonly string[] {
+  const path = platform === 'win32' ? win32 : posix;
+  const ghHosts =
+    platform === 'win32'
+      ? path.join(userHome, 'AppData', 'Roaming', 'GitHub CLI', 'hosts.yml')
+      : path.join(userHome, '.config', 'gh', 'hosts.yml');
+  return [
+    `read_file(${path.join(userHome, '.npmrc')})`,
+    `read_file(${path.join(userHome, '.ssh', 'id_rsa')})`,
+    `read_file(${path.join(userHome, '.ssh', 'id_ed25519')})`,
+    `read_file(${path.join(userHome, '.aws', 'credentials')})`,
+    `read_file(${path.join(userHome, '.kube', 'config')})`,
+    `read_file(${path.join(userHome, '.docker', 'config.json')})`,
+    `read_file(${path.join(userHome, '.git-credentials')})`,
+    `read_file(${ghHosts})`,
+  ];
+}
+
 /** The permissions port of the Antigravity CLI adapter. */
 export const antigravityPermissions: HostPermissions = {
   allowSetting: `${PERMISSIONS_KEY}.${ALLOW_KEY}`,
   denySetting: `${PERMISSIONS_KEY}.${DENY_KEY}`,
   routesSetting: 'none (Antigravity CLI has no routes setting)',
   read,
-  denyLines: () => [...DENY_LINES],
+  denyLines: (platform, userHome) =>
+    userHome === undefined || userHome === '' ? [...DENY_LINES] : [...DENY_LINES, ...homeDenyLines(platform, userHome)],
   writeAllow,
   /** `agy 1.5.14` did not match trailing `*` (`command(echo *)`) in `allow` or `deny`, so prefix allow sync is empty. */
   prefixAllowRules: () => [],

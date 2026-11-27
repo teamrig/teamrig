@@ -34,8 +34,8 @@ export interface HostPermissions {
   readonly denySetting: string;
   readonly routesSetting: string;
   read(settings: JsonRecord): PermissionsReading;
-  /** The deny lines that keep a session's tools off the credential homes of this platform. */
-  denyLines(platform: NodeJS.Platform): readonly string[];
+  /** The deny lines that keep a session's tools off the credential homes of this platform (and `userHome` when given). */
+  denyLines(platform: NodeJS.Platform, userHome?: string): readonly string[];
   /** The settings with this allow list in place of the one they hold, every other setting as it was. */
   writeAllow(settings: JsonRecord, allow: readonly string[]): PermissionsAnswer<JsonRecord>;
   /**

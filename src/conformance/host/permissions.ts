@@ -99,10 +99,12 @@ const CASES: readonly PermissionsCase[] = [
     features: ['permissions.deny-lines'],
     run: ({ port, world }) => {
       for (const platform of PLATFORMS) {
-        const lines = port.denyLines(platform);
-        assert.ok(lines.length > 0, `${platform} has no deny line`);
-        assert.equal(new Set(lines).size, lines.length, `${platform} names a line twice`);
-        assert.deepEqual(port.read(world.settings({ deny: lines })).deny, lines, platform);
+        const home = platform === 'win32' ? 'C:\\people\\sam' : '/people/sam';
+        for (const lines of [port.denyLines(platform), port.denyLines(platform, home)]) {
+          assert.ok(lines.length > 0, `${platform} has no deny line`);
+          assert.equal(new Set(lines).size, lines.length, `${platform} names a line twice`);
+          assert.deepEqual(port.read(world.settings({ deny: lines })).deny, lines, platform);
+        }
       }
     },
   },

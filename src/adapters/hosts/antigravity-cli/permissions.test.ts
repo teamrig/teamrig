@@ -30,19 +30,33 @@ describe('antigravityPermissions', () => {
     assert.deepEqual(antigravityPermissions.writeAllow({ permissions: 'bad' }, []), { ok: false, problem: 'permissions is not an object' });
   });
 
-  it('produces proven denyLines with no ~ or *, empty prefixAllowRules, and refuses routes', () => {
+  it('produces proven denyLines with no ~ or *, adds absolute home lines when userHome is given, and refuses routes', () => {
     const denySupport = declaration.manifest['permissions.deny-lines'];
     assert.equal(denySupport.kind, 'partial');
     assert.ok(denySupport.notice.includes('~') && denySupport.notice.includes('*'));
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
-      const lines = antigravityPermissions.denyLines(platform);
-      assert.equal(lines.includes('read_file(.env)'), true);
-      assert.equal(lines.includes('command(set)'), true);
-      assert.deepEqual(
-        lines.filter((line) => line.includes('~') || line.includes('*')),
-        [],
-        `${platform} denyLines must not contain ~ or * while agy 1.5.14 does not match them`,
+      const home = platform === 'win32' ? 'C:\\people\\sam' : '/people/sam';
+      const base = antigravityPermissions.denyLines(platform);
+      const withHome = antigravityPermissions.denyLines(platform, home);
+      assert.equal(base.includes('read_file(.env)'), true);
+      assert.equal(base.includes('command(set)'), true);
+      assert.equal(antigravityPermissions.denyLines(platform, '').length, base.length);
+      assert.equal(withHome.length > base.length, true);
+      assert.equal(
+        withHome.includes(platform === 'win32' ? 'read_file(C:\\people\\sam\\AppData\\Roaming\\GitHub CLI\\hosts.yml)' : 'read_file(/people/sam/.config/gh/hosts.yml)'),
+        true,
       );
+      assert.equal(
+        withHome.includes(platform === 'win32' ? 'read_file(C:\\people\\sam\\.aws\\credentials)' : 'read_file(/people/sam/.aws/credentials)'),
+        true,
+      );
+      for (const lines of [base, withHome]) {
+        assert.deepEqual(
+          lines.filter((line) => line.includes('~') || line.includes('*')),
+          [],
+          `${platform} denyLines must not contain ~ or * while agy 1.5.14 does not match them`,
+        );
+      }
     }
     assert.deepEqual(antigravityPermissions.prefixAllowRules('teamrig list'), []);
     assert.equal(antigravityPermissions.installRoutes({}, 'tag:', ['a']).ok, false);
