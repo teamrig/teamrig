@@ -902,6 +902,18 @@ describe('teamrig read: what could not be read', () => {
     assert.deepEqual(problemsOf(answer), ['app/state/events.jsonl: 1 unreadable line(s) left out']);
   });
 
+  it('names a snapshot it did not use by its file, never its reason, which quotes the snapshot (#2584)', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Ship the gate', 'alpha');
+    await rotateRegister(kit.files, EVENTS_PATH, { now: new Date(kit.clock.now()) });
+    await kit.files.write(layoutPaths(EVENTS_PATH).snapshot, `{"note": "${SECRET}", torn\n`);
+    const result = await kit.run(READ_TASKS);
+    const answer = served(result);
+    assert.deepEqual(titlesOf(answer), ['Ship the gate']);
+    assert.deepEqual(problemsOf(answer), ['app/state/snapshot.jsonl: not used (damaged or from an older teamrig), so the whole history was read']);
+    assert.equal(result.stdout.join('\n').includes(SECRET), false);
+  });
+
   it('names a damaged register line by its file and a count, never by the parser\'s words, which quote the line', async () => {
     const kit = new CliHarness();
     await kit.files.append(EVENTS_PATH, `{"note": "${SECRET}", torn\n`);

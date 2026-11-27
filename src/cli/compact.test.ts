@@ -102,6 +102,17 @@ describe('teamrig compact', () => {
     assert.match((await kit.run(['show', 'T1'], AS_ALPHA)).stdout.join('\n'), /Old plan/);
   });
 
+  it('has a read that skips a damaged snapshot name the snapshot and why, not an unreadable line of the log (#2584)', async () => {
+    const kit = await twoTasks();
+    assert.equal((await kit.run(['compact'], AS_ALPHA)).code, EXIT.ok);
+    await kit.files.write(PATHS.snapshot, 'torn\n');
+    const listed = await kit.run(['list'], AS_ALPHA);
+    assert.deepEqual(ids(listed.stdout), ['T2'], 'the history still folds');
+    assert.deepEqual(listed.stderr, [
+      `WARN ${PATHS.snapshot}: not used, so every read folds the whole history; the next archive writes a new one (teamrig compact): its first line is no snapshot header`,
+    ]);
+  });
+
   it('refuses, with nothing written, when the segment it would write holds something else', async () => {
     const kit = await twoTasks();
     await kit.files.write(PATHS.segment(1), 'by hand\n');

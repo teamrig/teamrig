@@ -38,6 +38,7 @@ import { overSizeFlags } from '../../register/over-size.ts';
 import type { AddInput, AskInput, StatusInput, Verdict } from '../../register/policy.ts';
 import type { GoalTagsReader, Register, RotationOutcome, WriteResult } from '../../register/register.ts';
 import { ACTIVE_STATUSES, BLOCKER_PRIORITY_ID, type TaskStatus } from '../../register/model.ts';
+import { layoutPaths } from '../../register/layout.ts';
 import { lacksEventsOf, type RegisterSnapshot } from '../../register/snapshot.ts';
 import { readStopgapTags, stopgapFlags, stopgapTags } from '../../register/stopgap.ts';
 import { dueStartHolds, dueVerifyHold, heldStart, heldStartNotice, metStartNotice, startHolds, verifyQueue, watchQueue, type DueVerify } from '../../register/verify.ts';
@@ -175,10 +176,19 @@ export function reportRotation(runtime: CliRuntime, rotation: RotationOutcome, p
   }
 }
 
-/** Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. */
+/**
+ * Damaged or newer lines never stop a read; they are named on stderr so someone fixes them. A snapshot the read did
+ * not use is named by its own file and reason (#2584): it is no line of `path`, and it makes every read fold the
+ * whole history until the next archive writes a new one.
+ */
 export function warnDamage(runtime: CliRuntime, snapshot: RegisterSnapshot, path: string): void {
   const { unreadable, newer } = snapshot.read;
   const { orphans } = snapshot.state;
+  const skipped = snapshot.skippedSnapshot;
+  if (skipped !== null) {
+    const fix = skipped.newerVersion > 0 ? `update ${KIT_NAME}` : `the next archive writes a new one (${KIT_NAME} compact)`;
+    runtime.out.stderr(`WARN ${layoutPaths(path).snapshot}: not used, so every read folds the whole history; ${fix}: ${skipped.reason}`);
+  }
   if (unreadable + newer + orphans > 0) {
     runtime.out.stderr(
       `WARN ${path}: ${unreadable} unreadable line(s), ${newer} line(s) from a newer teamrig, ${orphans} event(s) naming no task`,

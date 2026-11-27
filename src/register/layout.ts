@@ -219,7 +219,7 @@ export function readSnapshotText(text: string | undefined): SnapshotRead {
 export interface ReadPlan {
   readonly base: UsableSnapshot | undefined;
   readonly segments: readonly number[];
-  /** A snapshot that is there and was not used; the read counts it with the lines it skipped. */
+  /** A snapshot that is there and was not used; the read names it as its skippedSnapshot. */
   readonly skipped: Extract<SnapshotRead, { kind: 'unusable' }> | undefined;
 }
 
@@ -261,21 +261,22 @@ export function assemble(plan: ReadPlan, segments: readonly EventLogRead[], tail
   const { base } = plan;
   const header = base?.header;
   const parts = [...(base === undefined ? [] : [base.read]), ...segments, tail];
-  const skippedNewer = plan.skipped !== undefined && plan.skipped.newerVersion > 0 ? 1 : 0;
-  const skippedDamaged = plan.skipped !== undefined && skippedNewer === 0 ? 1 : 0;
+  const { skipped } = plan;
   const read: EventLogRead = {
     events: parts.flatMap((part) => part.events),
     lines: parts.flatMap((part) => part.lines),
     seenIds: parts.flatMap((part) => part.seenIds),
-    unreadable: parts.reduce((sum, part) => sum + part.unreadable, (header?.unreadable ?? 0) + skippedDamaged),
-    newer: parts.reduce((sum, part) => sum + part.newer, (header?.newer ?? 0) + skippedNewer),
+    unreadable: parts.reduce((sum, part) => sum + part.unreadable, header?.unreadable ?? 0),
+    newer: parts.reduce((sum, part) => sum + part.newer, header?.newer ?? 0),
+    // A snapshot from a newer teamrig still blocks writes, as its lines would.
     newestVersion: Math.max(header?.newestVersion ?? 0, plan.skipped?.newerVersion ?? 0, ...parts.map((part) => part.newestVersion)),
     rotatedAfter: tail.rotatedAfter,
   };
   const from = base === undefined ? undefined : { tasks: new Map(base.tasks), orphans: base.header.orphans, nextId: base.header.nextId, moved: new Map<string, string>() };
   const retired = header === undefined || header.retired === 0 ? null : { count: header.retired, lastWeek: header.retiredLastWeek };
   const window: EventWindow | null = base === undefined || base.header.windowFrom === null ? null : { from: base.header.windowFrom, tasks: base.tasks };
-  return { state: foldEvents(read.events, read.seenIds, from), read, retired, window };
+  const skippedSnapshot = skipped === undefined ? null : { reason: skipped.reason, newerVersion: skipped.newerVersion };
+  return { state: foldEvents(read.events, read.seenIds, from), read, retired, window, skippedSnapshot };
 }
 
 /** Reads one file of the layout; undefined when it does not exist. */
