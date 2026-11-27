@@ -1,5 +1,5 @@
 import { readConnectorSteps, readHostSteps, type Load, type ServedSteps } from '../../composition/loader.ts';
-import type { KitConfig } from '../../config/types.ts';
+import { teamConnectors } from '../../composition/team-connectors.ts';
 import { STEPS, isStepId, type StepId } from '../../features/steps.ts';
 import type { ConnectorDeclaration, HostDeclaration } from '../../plugin-api/index.ts';
 import { UsageError, type ParsedArgs } from '../args.ts';
@@ -24,11 +24,6 @@ function serversOf<D extends HostDeclaration | ConnectorDeclaration>(loads: read
     const { declaration, texts } = load.value;
     return [{ id: load.id, name: declaration.name, text: texts.get(step), declaration }];
   });
-}
-
-/** The connector ids a team works with: GitHub while it imports any repository, and each section under `connectors`. */
-function teamConnectors(config: KitConfig): ReadonlySet<string> {
-  return new Set([...(config.github.repos.length > 0 ? ['github'] : []), ...Object.keys(config.connectors)]);
 }
 
 /** The connector a ref names by its prefix (`gh:owner/name#12`); a ref no connector's prefix starts is a usage error. */
