@@ -3,6 +3,7 @@ import type { HostSource, ShippedHosts } from '../composition/host-ports.ts';
 import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ConfigFormat } from '../config/migrate.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
+import type { OwnerProofAdapters } from '../owner-proof/port.ts';
 import type { HostMemory } from '../delivery/memory.ts';
 import type { TreeState } from '../delivery/push-pass.ts';
 import type { StarterWatch } from '../delivery/starter-watch.ts';
@@ -163,6 +164,8 @@ export interface CliRuntime {
   readonly exec: ExecPorts;
   /** The chat webhook `teamrig exec` posts its reviews and runs to, and an expired login's page goes to. */
   readonly webhook: ChatWebhook;
+  /** The OS-held key that signs an owner-only act after the owner's gesture, by the adapter `owner.proof.adapter` names. */
+  readonly ownerProof: OwnerProofAdapters;
   /** The config format the run reads and migrates to; default the shipped one (tests give a newer release's). */
   readonly configFormat?: ConfigFormat;
   /** When a hook's every file lock wait gives up (hook-timeouts.ts); runCli sets it for a `hook` command. */

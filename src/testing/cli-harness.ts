@@ -47,6 +47,7 @@ import { CONTEXT_MAX_CHARS, TEAM_RULES_MAX_CHARS } from '../rules/pack.ts';
 import type { ExecPorts } from '../exec/ports.ts';
 import type { TerminalPrograms } from '../composition/terminal-kit.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
+import type { OwnerProofAdapters } from '../owner-proof/port.ts';
 import type { PointerGit } from '../setup/pointer-ignore.ts';
 import { FakeClock } from './fake-clock.ts';
 import { FakeUserPath, quietRestore } from './fake-restore.ts';
@@ -235,6 +236,8 @@ export interface RunOptions {
   readonly terminalPrograms?: TerminalPrograms;
   /** The chat webhook posts go to; default one that keeps them and answers each as posted. */
   readonly webhook?: ChatWebhook;
+  /** The owner proof adapter for each id, such as `fakeOwnerProof`'s; default none proved, so a proof enrolled is turned down. */
+  readonly ownerProof?: OwnerProofAdapters;
   /** Where the CLI runs from and the node options it was started with; default the quiet world's, with none. */
   readonly self?: SelfLocation;
   /** The signal that the run's stdout reader is gone (`Output.closed`), which a spec aborts; default an output that never closes. */
@@ -336,6 +339,7 @@ export class CliHarness {
       ...(options.exec === undefined ? {} : { exec: options.exec }),
       ...(options.terminalPrograms === undefined ? {} : { terminalPrograms: options.terminalPrograms }),
       ...(options.webhook === undefined ? {} : { webhook: options.webhook }),
+      ...(options.ownerProof === undefined ? {} : { ownerProof: options.ownerProof }),
       ...(options.self === undefined ? {} : { self: options.self }),
       out,
       ...(options.configFormat === undefined ? {} : { configFormat: options.configFormat }),

@@ -43,3 +43,21 @@ export const NO_OWNER_PROOF: OwnerProofAdapter = {
   enrol: () => Promise.resolve({ kind: 'unavailable', why: 'the owner proof adapter is none' }),
   sign: () => Promise.resolve({ kind: 'unavailable', why: 'the owner proof adapter is none' }),
 };
+
+/** The adapter teamrig runs for the id `owner.proof.adapter` names. */
+export type OwnerProofAdapters = (id: OwnerProofAdapterId) => OwnerProofAdapter;
+
+/**
+ * An adapter not yet proved on its system: it answers not ready, so a proof enrolled for it is turned down and each
+ * owner-only act stays in the decision queue, never run unguarded.
+ */
+export function unprovedOwnerProof(id: OwnerProofAdapterId): OwnerProofAdapter {
+  if (id === 'none') return NO_OWNER_PROOF;
+  const why = `the ${id} owner proof adapter is not proved on this system yet`;
+  return {
+    id,
+    available: () => Promise.resolve(false),
+    enrol: () => Promise.resolve({ kind: 'unavailable', why }),
+    sign: () => Promise.resolve({ kind: 'unavailable', why }),
+  };
+}

@@ -495,7 +495,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       --read binds the answer to the card read (its cardDigest); refused on a task that waits on no
       decision or approval of the owner, an option its card lacks, yes or no to a decision, an option
       to an approval, a --read the card no longer matches, a security card without its current
-      verdict, and where Claude Code sets $CLAUDECODE
+      verdict, and where Claude Code sets $CLAUDECODE; once the owner enrolled a key (owner.proof), the
+      answer needs --read and the key's signature after the owner's gesture, kept on the decision, and a
+      proof not made, declined or not verified refuses it, the card staying in the decision queue
   owner later <[team/]T<id>> --until in-<n>h|tomorrow|monday|<time>   the owner puts a card off from
       the pane: to n hours from now, 09:00 on the team's clock tomorrow or next Monday, or a time; kept
       in the task's history as the owner's, the session told with no wake; refused on a task that

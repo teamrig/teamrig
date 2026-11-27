@@ -31,6 +31,7 @@ import { CONNECTOR_RUN_MAX_BYTES, CONNECTOR_RUN_TIMEOUT_MS } from '../plugin-api
 import { GIT_PULLS } from '../sync/pull-conflicts.ts';
 import { GIT_MERGE } from '../merge/git.ts';
 import { nodeProcesses } from '../open/processes.ts';
+import { unprovedOwnerProof } from '../owner-proof/port.ts';
 import { nodeSessionProcesses } from '../open/session-processes.ts';
 import { httpPackageRegistry } from '../package-guard/registry.ts';
 import { GIT_CLI, GIT_COMMIT_LOG } from '../push-guard/git.ts';
@@ -172,6 +173,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     packageRegistry: httpPackageRegistry(),
     exec: { spawner: nodeExecSpawner(process.platform), checkout: GIT_CHECKOUT },
     webhook: chatWebhook(),
+    ownerProof: unprovedOwnerProof,
     cmdShimLine,
     readStdin: entry.readStdin,
     newId: () => randomUUID(),

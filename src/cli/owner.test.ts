@@ -10,6 +10,8 @@ import { NO_MARK_HOST, NO_SESSION_HOST } from '../testing/host.ts';
 import { teamEventsOf, teamHomeOf, teamInboxOf, treeHarness } from '../testing/team-tree.ts';
 import { WakeAsks } from '../wake/asks.ts';
 import { TEST_CARD, TEST_CARD_FLAGS, TEST_OWNER_CARD, TEST_OWNER_CARD_FLAGS } from '../testing/card.ts';
+import { fakeOwnerProof, ownerProofWorld, type OwnerProofWorld } from '../testing/fake-owner-proof.ts';
+import { NO_OWNER_PROOF } from '../owner-proof/port.ts';
 import { ownerDecideLine, ownerLaterLine, ownerNextLeadLine, ownerNextLine, ownerNoteLine } from './commands/owner.ts';
 import { EXIT } from './runtime.ts';
 
@@ -229,6 +231,75 @@ describe('teamrig owner decide: a security card needs its current verdict (#1517
     );
     assert.equal(kit.files.get(EVENTS_PATH), before);
     assert.deepEqual(await asksOf(kit, 'alpha'), []);
+  });
+});
+
+/** `cards()` on a team whose owner enrolled a key with the fake adapter, the world answering its prompts. */
+async function provedCards(world: OwnerProofWorld = ownerProofWorld()): Promise<{ kit: CliHarness; options: RunOptions }> {
+  const kit = await cards();
+  const adapter = fakeOwnerProof(world);
+  const enrolled = await adapter.enrol('teamrig-owner');
+  if (enrolled.kind !== 'enrolled') throw new Error(`not enrolled: ${enrolled.kind}`);
+  world.prompts.length = 0;
+  await kit.files.write(CONFIG_PATH, formatConfig({ ...TEAM, owner: { proof: { adapter: 'windows-hello', ttlSeconds: 300, pins: [{ ...enrolled.key }] } } }));
+  return { kit, options: { ownerProof: (id) => (id === 'windows-hello' ? adapter : NO_OWNER_PROOF) } };
+}
+
+describe('teamrig owner decide with the owner proof (T4758)', () => {
+  const read = cardDigest(TEST_OWNER_CARD);
+
+  it("keeps the owner's signed proof of the answer on the Decided, bound to the task and the card read", async () => {
+    const world = ownerProofWorld();
+    const { kit, options } = await provedCards(world);
+    ok(await kit.run(['owner', 'decide', 'T1', '--option', '2', '--read', read], options));
+    assert.equal(world.prompts.length, 1);
+    const event = readEvents(kit.files.get(EVENTS_PATH) ?? '').events.at(-1);
+    assert.equal(event?.type, 'update');
+    if (event?.type !== 'update') return;
+    assert.equal(event.decided, true);
+    assert.deepEqual(event.ownerProof?.challenge.act, ['owner', 'decide', 'app/T1', '--option', '2']);
+    assert.equal(event.ownerProof?.challenge.cardDigest, read);
+  });
+
+  it('refuses an answer without --read while the proof is on, asking no gesture and writing nothing', async () => {
+    const world = ownerProofWorld();
+    const { kit, options } = await provedCards(world);
+    const before = kit.files.get(EVENTS_PATH);
+    assertRefused(await kit.run(['owner', 'decide', 'T1', '--option', '2'], options), /^REFUSED teamrig owner decide needs --read <cardDigest> while the owner proof is on/);
+    assert.deepEqual(world.prompts, []);
+    assert.equal(kit.files.get(EVENTS_PATH), before);
+  });
+
+  it('refuses a declined gesture, the card staying in the decision queue', async () => {
+    const world = ownerProofWorld();
+    const { kit, options } = await provedCards(world);
+    world.gesture = 'decline';
+    const before = kit.files.get(EVENTS_PATH);
+    assertRefused(
+      await kit.run(['owner', 'decide', 'T1', '--option', '2', '--read', read], options),
+      /^REFUSED the owner declined the proof at the prompt; T1 stays in the decision queue$/,
+    );
+    assert.equal(kit.files.get(EVENTS_PATH), before);
+    assert.match(await showOf(kit, 'T1'), /\(waiting: decision owner; pricing\)$/m);
+  });
+
+  it('refuses every answer while an enrolled key has no proved adapter to sign with (turned down, never off)', async () => {
+    const { kit } = await provedCards();
+    const before = kit.files.get(EVENTS_PATH);
+    assertRefused(
+      await kit.run(['owner', 'decide', 'T1', '--option', '2', '--read', read]),
+      /^REFUSED the owner proof is turned down: owner.proof.adapter's key cannot sign on this system now; T1 stays in the decision queue$/,
+    );
+    assert.equal(kit.files.get(EVENTS_PATH), before);
+  });
+
+  it('asks nothing and keeps no proof on a team with no key enrolled', async () => {
+    const world = ownerProofWorld();
+    const kit = await cards();
+    ok(await kit.run(['owner', 'decide', 'T1', '--option', '2'], { ownerProof: () => fakeOwnerProof(world) }));
+    assert.deepEqual(world.prompts, []);
+    const event = readEvents(kit.files.get(EVENTS_PATH) ?? '').events.at(-1);
+    assert.equal(event?.type === 'update' ? event.ownerProof : 'not an update', undefined);
   });
 });
 
