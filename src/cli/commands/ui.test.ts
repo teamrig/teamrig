@@ -10,6 +10,7 @@ import type { UiPin } from '../../ui/released.ts';
 import type { ParsedArgs } from '../args.ts';
 import { RefusedError } from '../runtime.ts';
 import type { Sleep } from '../../core/lock.ts';
+import type { UiGuard } from '../ui-guard.ts';
 import type { UiIdleTicker } from '../ui-idle-ticker.ts';
 import { UI_START_WAIT_MS, uiCommand, uiStartedPath } from './ui.ts';
 
@@ -45,6 +46,37 @@ describe('teamrig ui', () => {
     };
     assert.equal(await uiCommand(undefined, startTicker)(argsOf(), new CliHarness(WITH_UI).runtime({ processes, probe })), 0);
     assert.deepEqual(steps, ['start, 0 run', 'stop, 1 run']);
+  });
+
+  it('ends as ok, saying why, when its guard ended the UI, and prints the guard’s last problem (T5813)', async () => {
+    const { processes, probe } = world();
+    processes.onRun(NODE, { kind: 'exited', code: 1 });
+    let stops = 0;
+    const startGuard = (): UiGuard => ({
+      reason: () => ({ kind: 'superseded', current: '9.0.0' }),
+      problem: () => 'WARN the UI guard could not end 901: denied; the next look tries again',
+      stop: () => {
+        stops += 1;
+      },
+    });
+    const harness = new CliHarness(WITH_UI);
+    const out: string[] = [];
+    const err: string[] = [];
+    const runtime = { ...harness.runtime({ processes, probe }), out: { stdout: (line: string) => out.push(line), stderr: (line: string) => err.push(line) } };
+    const ticker = (): UiIdleTicker => ({ stop: () => undefined, ended: Promise.resolve() });
+    assert.equal(await uiCommand(undefined, ticker, startGuard)(argsOf(), runtime), 0);
+    assert.match(out.join('\n'), /^ENDED the UI: teamrig 9\.0\.0 is installed/);
+    assert.deepEqual(err, ['WARN the UI guard could not end 901: denied; the next look tries again']);
+    assert.equal(stops, 1);
+  });
+
+  it('keeps the UI’s own exit when its guard ended nothing', async () => {
+    const { processes, probe } = world();
+    processes.onRun(NODE, { kind: 'exited', code: 3 });
+    const startGuard = (): UiGuard => ({ reason: () => undefined, problem: () => undefined, stop: () => undefined });
+    const ticker = (): UiIdleTicker => ({ stop: () => undefined, ended: Promise.resolve() });
+    const runtime = new CliHarness(WITH_UI).runtime({ processes, probe });
+    assert.equal(await uiCommand(undefined, ticker, startGuard)(argsOf(), runtime), 1);
   });
 
   it('opens on the session --session names, by its id', async () => {

@@ -12,6 +12,7 @@ import { resolveKitHome } from '../../core/home.ts';
 import { LastTypedStore } from '../../sessions/last-typed.ts';
 import { foundTeamOf, lookForTeam, openKit, requireConfig, rosterOf, sessionIdOf, type Kit } from '../kit.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
+import { startCliUiGuard, uiEndText, type UiGuard } from '../ui-guard.ts';
 import { startUiIdleTicker, type UiIdleTicker } from '../ui-idle-ticker.ts';
 import { homeArgs, homeRuntimeOf } from './open.ts';
 
@@ -278,9 +279,14 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
  * (`placeUi`). A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec. While the UI runs here, `startTicker` runs
- * the teams' idle passes beside it (ui-idle-ticker.ts).
+ * the teams' idle passes beside it (ui-idle-ticker.ts), and `startGuard` ends it once a newer teamrig is installed or
+ * its terminal is gone (ui-guard.ts), which ends this run as ok.
  */
-export function uiCommand(pin: UiPin | undefined, startTicker: (runtime: CliRuntime) => UiIdleTicker = startUiIdleTicker): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
+export function uiCommand(
+  pin: UiPin | undefined,
+  startTicker: (runtime: CliRuntime) => UiIdleTicker = startUiIdleTicker,
+  startGuard: (runtime: CliRuntime) => UiGuard = startCliUiGuard,
+): (args: ParsedArgs, runtime: CliRuntime) => Promise<ExitCode> {
   return async (args, hostRuntime) => {
     noPositionals(args);
     // The window or split this command opens hands its kit home on as --home (homeArgs), as its own environment may not carry it.
@@ -303,9 +309,22 @@ export function uiCommand(pin: UiPin | undefined, startTicker: (runtime: CliRunt
     await markUiStarted(runtime, kit.paths.kitHome);
     // While it is up, the UI runs the teams' idle passes, for a host with no wake check between turns (T5634).
     const ticker = startTicker(runtime);
+    // An old UI, or one whose terminal closed, ran on for days (T5813): the guard ends it.
+    const guard = startGuard(runtime);
     try {
-      return uiExit(runtime, node, await runtime.processes.run(request));
+      const outcome = await runtime.processes.run(request);
+      const problem = guard.problem();
+      if (problem !== undefined) {
+        runtime.out.stderr(problem);
+      }
+      const reason = guard.reason();
+      if (reason !== undefined) {
+        runtime.out.stdout(uiEndText(reason));
+        return EXIT.ok;
+      }
+      return uiExit(runtime, node, outcome);
     } finally {
+      guard.stop();
       ticker.stop();
     }
   };
