@@ -31,3 +31,68 @@ Scope note: `antigravityUserHooks` writes `~/.gemini/config/hooks.json`. The `1.
   4. `command(echo *)` failed to match in both `allow` (auto-denied in headless mode) and `deny` (`echo trailing_star_deny` succeeded).
   5. `read_file(~/.agy-perm-canary.txt)` did not block `~/.agy-perm-canary.txt` (`~` did not expand; `HOME_CANARY=777` was returned), whereas the full path `read_file(<home>/.agy-perm-canary.txt)` denied `read_file`.
   6. `toolPermission: "always-proceed"` ran `echo bypass_ok` without a prompt (`bypass_ok`).
+
+
+## `rules.session-start`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Installed `~/.gemini/config/hooks.json` via `antigravityUserHooks('win32').merge` pointing at built `plugins/teamrig/dist/`, initialized a temp team `probe` with `--sessions lead,alpha`, and ran `agy --dangerously-skip-permissions --print=...` in the project folder.
+- **What was seen:** The `SessionStart` hook (`hook session-start --host antigravity-cli --host-event SessionStart`) injected `# Team rules (teamrig core)` (rules 1–16) and the session's team identity into the model's context.
+
+## `rules.instruction-files`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Placed `GEMINI.md` (`Always include INBOX_RULE_OK when replying.`) in the temp project root and ran `agy --dangerously-skip-permissions --print=...`.
+- **What was seen:** `agy` loaded `GEMINI.md` into `<user_rules>` and the model included `INBOX_RULE_OK` in its reply.
+
+## `inbox.prompt-line`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Posted `INBOX_DELIVERED_777` to `alpha` (`teamrig inbox add --session lead --to alpha --text INBOX_DELIVERED_777`) and ran `agy --dangerously-skip-permissions --print=...` with `TEAMRIG_SESSION=alpha`.
+- **What was seen:** The `PreInvocation` hook (`hook inbox-reminder --host antigravity-cli --host-event PreInvocation`) injected `2026-11-27 08:56 IST lead: INBOX_DELIVERED_777` into the turn and the model read it verbatim.
+
+## `hooks.pretool-guard`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Prompted `agy` (with `antigravityUserHooks`-generated `~/.gemini/config/hooks.json`) to run `git push --force origin main` via `run_command`.
+- **What was seen:** `PreToolUse` (`push-guard`) denied the call before `run_command` ran, and the model reported the exact guard refusal (`Force-pushing, mirroring or deleting a protected branch (main, master) is refused...`).
+
+## `hooks.file-guard`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Prompted `agy` (with `antigravityUserHooks`-generated `~/.gemini/config/hooks.json`) to call `read_file` on `.env` in the temp workspace.
+- **What was seen:** `PreToolUse` (`secret-guard`) denied the call before `read_file` ran, and the model reported the `teamrig secret guard` refusal.
+
+## `hooks.exec-review`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Prompted `agy` (with `antigravityUserHooks`-generated `~/.gemini/config/hooks.json`) to run `teamrig exec approve R1` via `run_command`.
+- **What was seen:** `PreToolUse` (`exec-guard`) denied the call before `run_command` ran, and the model reported the `teamrig exec guard` refusal.
+
+## `hooks.readonly-allow`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Prompted `agy` (with `antigravityUserHooks`-generated `~/.gemini/config/hooks.json`) to run `git status` via `run_command`.
+- **What was seen:** `PreToolUse` (`readonly-allow`) allowed `git status`, which ran and returned exit code `0`.
+
+## `hooks.prompt-secret`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-27`
+- **What was run:** Ran `agy --dangerously-skip-permissions --print="Echo <github-token>"` with `antigravityUserHooks`-generated `~/.gemini/config/hooks.json`.
+- **What was seen:** `PreInvocation` (`secret-guard`) terminated the turn before the model ran (`AGY_ERROR: {"short_error":"teamrig stopped this prompt before Claude read it: it looks like it holds a secret (GitHub token)...","retryable":false}`).

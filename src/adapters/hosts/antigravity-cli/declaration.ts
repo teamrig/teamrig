@@ -28,13 +28,6 @@ const UNPROVED: Support = {
   proofs: [],
 };
 
-const PROMPT_SECRET: Support = {
-  kind: 'partial',
-  missing: 'PreInvocation cannot take back a prompt that was already typed',
-  notice: 'blocks the turn before the model runs, but cannot remove the prompt from history',
-  proofs: [],
-};
-
 const NOT_YET = (what: string): Support => ({ kind: 'unsupported', notice: `${what} is not built yet` });
 const NO_HOST_SUPPORT = (what: string): Support => ({ kind: 'unsupported', notice: `Antigravity has no ${what}` });
 
@@ -48,23 +41,23 @@ export const declaration: HostDeclaration = {
     identity: ['ANTIGRAVITY_CONVERSATION_ID'],
   },
   manifest: {
-    'rules.session-start': UNPROVED,
-    'rules.instruction-files': UNPROVED,
+    'rules.session-start': provedWin('rulessession-start', '2026-11-27'),
+    'rules.instruction-files': provedWin('rulesinstruction-files', '2026-11-27'),
     'rules.rules-folder': UNPROVED,
     'rules.memory': NO_HOST_SUPPORT('per-project memory index'),
     'rules.start-size': UNPROVED,
-    'inbox.prompt-line': UNPROVED,
+    'inbox.prompt-line': provedWin('inboxprompt-line', '2026-11-27'),
     'context.compact-hold': NO_HOST_SUPPORT('PreCompact hook'),
     'context.size': NOT_YET('transcript context sizing'),
     'context.refresh': NO_HOST_SUPPORT('in-tab /clear mod'),
-    'hooks.pretool-guard': UNPROVED,
-    'hooks.file-guard': UNPROVED,
-    'hooks.exec-review': UNPROVED,
-    'hooks.readonly-allow': UNPROVED,
+    'hooks.pretool-guard': provedWin('hookspretool-guard', '2026-11-27'),
+    'hooks.file-guard': provedWin('hooksfile-guard', '2026-11-27'),
+    'hooks.exec-review': provedWin('hooksexec-review', '2026-11-27'),
+    'hooks.readonly-allow': provedWin('hooksreadonly-allow', '2026-11-27'),
     'hooks.ask-refuse': UNPROVED,
     'hooks.permission-refuse': NO_HOST_SUPPORT('PermissionRequest hook'),
-    'hooks.output-redact': NOT_YET('PreToolUse overwrite redact-exec wrapper'),
-    'hooks.prompt-secret': PROMPT_SECRET,
+    'hooks.output-redact': NO_HOST_SUPPORT('PreToolUse input rewrite or PostToolUse output rewrite'),
+    'hooks.prompt-secret': provedWin('hooksprompt-secret', '2026-11-27'),
     'hooks.tool-failure': UNPROVED,
     'permissions.deny-lines': {
       kind: 'partial',

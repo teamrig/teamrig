@@ -22,8 +22,8 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
-| `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
+| `rules.session-start` | team rules, identity and live tasks at a session start | supported, proved on [windows](proofs/claude-code.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#rulessession-start); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#rulessession-start); unproved on linux, macos |
+| `rules.instruction-files` | the rules files read on every turn | supported, proved on [windows](proofs/claude-code.md#rulesinstruction-files); unproved on linux, macos | unsupported: not built for Codex CLI yet | supported, proved on [windows](proofs/antigravity-cli.md#rulesinstruction-files); unproved on linux, macos |
 | `rules.rules-folder` | the rules folder of a project | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 | `rules.memory` | memory files kept between sessions | supported, proved on [windows](proofs/claude-code.md#rulesmemory); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no per-project memory index |
 | `rules.start-size` | the CLI's limits on the start text, a rules file and a skill's listing | supported, proved on [windows](proofs/claude-code.md#rulesstart-size); unproved on linux, macos | partial (missing: the AGENTS.md 32 KiB cap and the skill-listing limit are not modelled), built, not proven live | partial (missing: no live run yet), built, not proven live |
@@ -32,7 +32,7 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#inboxprompt-line); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
+| `inbox.prompt-line` | inbox lines, the digest and the budget line at each prompt | supported, proved on [windows](proofs/claude-code.md#inboxprompt-line); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#inboxprompt-line); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#inboxprompt-line); unproved on linux, macos |
 
 ### context
 
@@ -46,14 +46,14 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hookspretool-guard); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
-| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hooksfile-guard); unproved on linux, macos | partial (missing: no live run yet), built, not proven live |
-| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, built, not proven live | partial (missing: the owner's typed in-tab review runs only in Claude Code), built, not proven live | partial (missing: no live run yet), built, not proven live |
-| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | partial (missing: a read-only line skips the prompt only when asks are refused), built, not proven live | partial (missing: no live run yet), built, not proven live |
+| `hooks.pretool-guard` | the push, package, database-write and directory-hop guards on shell calls | supported, proved on [windows](proofs/claude-code.md#hookspretool-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hookspretool-guard); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#hookspretool-guard); unproved on linux, macos |
+| `hooks.file-guard` | the secret, service-role and pass-record guards on reads and edits | supported, proved on [windows](proofs/claude-code.md#hooksfile-guard); unproved on linux, macos | supported, proved on [windows](proofs/codex-cli.md#hooksfile-guard); unproved on linux, macos | supported, proved on [windows](proofs/antigravity-cli.md#hooksfile-guard); unproved on linux, macos |
+| `hooks.exec-review` | privileged commands run on review (`teamrig exec`) | supported, built, not proven live | partial (missing: the owner's typed in-tab review runs only in Claude Code), built, not proven live | supported, proved on [windows](proofs/antigravity-cli.md#hooksexec-review); unproved on linux, macos |
+| `hooks.readonly-allow` | read-only commands run without a prompt | supported, proved on [windows](proofs/claude-code.md#hooksreadonly-allow); unproved on linux, macos | partial (missing: a read-only line skips the prompt only when asks are refused), built, not proven live | supported, proved on [windows](proofs/antigravity-cli.md#hooksreadonly-allow); unproved on linux, macos |
 | `hooks.ask-refuse` | refusing a question to the person when asks are off | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: no live run yet), built, not proven live |
 | `hooks.permission-refuse` | refusing a permission prompt when asks are off | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity has no PermissionRequest hook |
-| `hooks.output-redact` | redacting a secret in tool output | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: PreToolUse overwrite redact-exec wrapper is not built yet |
-| `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, built, not proven live | supported, built, not proven live | partial (missing: PreInvocation cannot take back a prompt that was already typed), built, not proven live |
+| `hooks.output-redact` | redacting a secret in tool output | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity has no PreToolUse input rewrite or PostToolUse output rewrite |
+| `hooks.prompt-secret` | stopping a secret pasted in a prompt | supported, built, not proven live | supported, built, not proven live | supported, proved on [windows](proofs/antigravity-cli.md#hooksprompt-secret); unproved on linux, macos |
 | `hooks.tool-failure` | the status at a tool call end and the missing-command hint | supported, proved on [windows](proofs/claude-code.md#hookstool-failure); unproved on linux, macos | partial (missing: Codex has no tool-failure hook; only the missing-command hint runs), built, not proven live | partial (missing: no live run yet), built, not proven live |
 
 ### permissions
