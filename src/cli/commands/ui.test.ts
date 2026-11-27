@@ -8,11 +8,11 @@ import { normalisePath } from '../../testing/memory-files.ts';
 import { ARCHIVE_FORMAT, sha256Hex } from '../../ui/archive.ts';
 import type { UiPin } from '../../ui/released.ts';
 import type { ParsedArgs } from '../args.ts';
-import { RefusedError } from '../runtime.ts';
+import { EXIT, RefusedError } from '../runtime.ts';
 import type { Sleep } from '../../core/lock.ts';
 import type { UiGuard } from '../ui-guard.ts';
 import type { UiIdleTicker } from '../ui-idle-ticker.ts';
-import { UI_START_WAIT_MS, uiCommand, uiStartedPath } from './ui.ts';
+import { UI_NOWHERE, UI_START_WAIT_MS, uiCommand, uiStartedPath } from './ui.ts';
 
 const ENTRY = resolve('/', 'pane', 'out', 'ui', 'main.js');
 const NODE = '/usr/bin/node';
@@ -340,14 +340,37 @@ describe('teamrig ui', () => {
         assert.deepEqual(processes.ran, []);
       });
 
-      it('runs here, saying so, only when neither a split nor a window opens', async () => {
+      it('is refused, running no UI here, when neither a split nor a window opens (T5760)', async () => {
         const processes = new FakeProcesses();
         const result = await new CliHarness(IN_TMUX).run(['ui'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), interactive: false });
-        assert.deepEqual(result.stdout, [
-          'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
-          'NOTE no terminal window opened (tmux: tmux is not installed); the UI shows in this terminal',
-        ]);
-        assert.deepEqual(processes.ran.map((ran) => ran.args), [[ENTRY]]);
+        assert.deepEqual(result, {
+          code: EXIT.refused,
+          stdout: [
+            'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)',
+            'NOTE no terminal window opened (tmux: tmux is not installed); nothing else can show the UI from here',
+          ],
+          stderr: [UI_NOWHERE],
+        });
+        assert.deepEqual(processes.ran, []);
+      });
+
+      it('window is refused, running no UI here, when neither its window nor a split opens (T5760)', async () => {
+        const processes = new FakeProcesses();
+        const result = await new CliHarness(IN_TMUX).run(['ui', '--mode', 'window'], { processes, probe: new FakePathProbe({ files: [ENTRY] }), interactive: false });
+        assert.equal(result.code, EXIT.refused);
+        assert.deepEqual(result.stderr, [UI_NOWHERE]);
+        assert.deepEqual(processes.ran, []);
+      });
+
+      it('both is done with its window when no split opens, running no UI here (T5760)', async () => {
+        const { processes, probe } = opening();
+        const result = await starting(IN_TMUX).run(['ui', '--mode', 'both'], { processes, probe, interactive: false });
+        assert.deepEqual(result, {
+          code: 0,
+          stdout: ['OPENED the UI in a tmux window', 'NOTE no split of this terminal opened (this terminal is neither tmux nor Windows Terminal, the ones that split)'],
+          stderr: [],
+        });
+        assert.deepEqual(processes.ran, []);
       });
 
       it('both opens the window and the split, and runs nothing here', async () => {

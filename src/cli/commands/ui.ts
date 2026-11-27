@@ -239,12 +239,22 @@ async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session
 }
 
 /**
+ * What a run with no terminal of its own says when neither a split nor a window opened. It runs no UI in place: its
+ * input is no terminal a person types in (an AI CLI's shell tool ends it at once), so a UI there could never take a
+ * key and, before the UI exited on input end, stayed running for days (T5756, T5760).
+ */
+export const UI_NOWHERE =
+  'REFUSED the UI has nowhere to show: this run has no terminal a person types in, and neither a split nor a window opened; run teamrig ui in a terminal, or set open.terminal to one that opens a window';
+
+/**
  * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once its UI starts. The
  * terminal half then shows here when this run has a terminal a person types in; else in a split of the session's
- * terminal, else in a window when none was tried yet, saying so; only when none of these opens does it run here
- * anyway. A window or split that opened with no UI starting in it ends the run as `failed`.
+ * terminal, else in a window when none was tried yet, saying so. With no terminal here, a run where nothing opened is
+ * `refused` (`UI_NOWHERE`), and `both` whose window opened is done with it. A window or split that opened with no UI
+ * starting in it ends the run as `failed`.
  */
-async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: UiMode, start: UiTeam, session: string | undefined): Promise<'shown' | 'here' | 'failed'> {
+async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: UiMode, start: UiTeam, session: string | undefined): Promise<'shown' | 'here' | 'failed' | 'refused'> {
+  let windowOpened = false;
   if (mode !== 'terminal') {
     const otherwise = runtime.interactive ? 'the UI shows in this terminal' : 'the UI shows beside the session';
     const window = await openUiWindow(runtime, config, kit, start, session, otherwise);
@@ -254,6 +264,7 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
     if (window === 'opened' && mode === 'window') {
       return 'shown';
     }
+    windowOpened = window === 'opened';
   }
   if (runtime.interactive) {
     return 'here';
@@ -262,13 +273,17 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
   if (split !== 'none') {
     return split === 'opened' ? 'shown' : 'failed';
   }
+  if (windowOpened) {
+    return 'shown';
+  }
   if (mode === 'terminal') {
-    const window = await openUiWindow(runtime, config, kit, start, session, 'the UI shows in this terminal');
+    const window = await openUiWindow(runtime, config, kit, start, session, 'nothing else can show the UI from here');
     if (window !== 'none') {
       return window === 'opened' ? 'shown' : 'failed';
     }
   }
-  return 'here';
+  runtime.out.stderr(UI_NOWHERE);
+  return 'refused';
 }
 
 /**
@@ -276,7 +291,7 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
  * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
  * one running the same UI and returns; with both, it opens the window and then shows the UI here too. Run with no
  * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
- * (`placeUi`). A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
+ * (`placeUi`), and it is refused when neither opens. A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec. While the UI runs here, `startTicker` runs
  * the teams' idle passes beside it (ui-idle-ticker.ts), and `startGuard` ends it once a newer teamrig is installed or
@@ -302,7 +317,7 @@ export function uiCommand(
     const start: UiTeam = { team: kit.paths.team, pinned: args.flags.get('team') !== undefined || session !== undefined };
     const placed = await placeUi(runtime, config, kit, mode, start, session);
     if (placed !== 'here') {
-      return placed === 'shown' ? EXIT.ok : EXIT.failed;
+      return { shown: EXIT.ok, failed: EXIT.failed, refused: EXIT.refused }[placed];
     }
     const { node, script } = runtime.self;
     const request = uiRequest({ entry, node, script, ...start, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
