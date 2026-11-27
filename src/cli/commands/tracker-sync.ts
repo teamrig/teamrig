@@ -1,19 +1,17 @@
 import type { Files } from '../../core/files.ts';
 import { KIT_NAME, type TeamPaths } from '../../core/home.ts';
 import { SecretScanner } from '../../core/secrets.ts';
-import { formatScopeFile, gateScope, heldScopeLine, parseScopeFile, scopeMark, type PlaceScope, type ScopeRunKind } from '../../sync/scope-hold.ts';
+import { formatScopeFile, parseScopeFile, type PlaceScope, type ScopeRunKind } from '../../sync/scope-hold.ts';
+import { addsOf, heldAt, scopePlace, scopeRequestOf } from './import-scope.ts';
 import { connectorState } from '../connector-state.ts';
 import type { KitConfig } from '../../config/types.ts';
 import type { Register } from '../../register/register.ts';
 import { GITHUB_SOURCE, isImportSource, type ImportSource } from '../../register/model.ts';
 import { addedTasks, type AddedTask, type RepoFailure } from '../../sync/auto.ts';
 import type { ImportRules, ImportTracker } from '../../sync/map.ts';
-import { importedTasks, linkedRefs, planSync, type SyncPlan } from '../../sync/plan.ts';
-import { capPlan, scopeIssues, type CappedPlan, type ImportScope, type ScopeRequest } from '../../sync/scope.ts';
+import { importedTasks, linkedRefs, planSync } from '../../sync/plan.ts';
 import { formatReportersFile, insideReporters, parseReportersFile, reporterLines } from '../../sync/reporters.ts';
 import { ACTIVE_STATUSES } from '../../register/model.ts';
-import type { Task } from '../../register/fold.ts';
-import type { IssueTarget } from '../../issues/host.ts';
 import type { HostIssue } from '../../issues/issue.ts';
 import { plainLine } from '../../core/printable.ts';
 import { applySteps, type ImportWriter } from '../../sync/sync.ts';
@@ -231,33 +229,28 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
     return failed(read.reason);
   }
   read.notes.forEach((note) => say(`NOTE ${target}: ${note}`));
-  const counted: ScopeRequest = { ...request, people: read.people ?? [] };
-  const scoped = scopeIssues(read.issues, counted);
-  const planned = planSync(scoped.issues, imported, on.rules, on.tracker, linkedRefs(tasks));
-  // A preview writes nothing, so the adds this run already planned at earlier places count as held here.
-  const open = active.length + (run.kind === 'preview' ? on.planned.adds : 0);
-  const caps = { maxOpen: run.config.sync.maxOpen, maxNewPerSync: Math.max(0, run.config.sync.maxNewPerSync - on.planned.adds) };
-  const capped = capPlan(planned, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number }), counted, caps, open);
-  const gate = gateScope(run.kind, on.places.get(target), scopeMark(counted), capped.plan);
-  if (gate.place !== undefined) {
-    on.places.set(target, gate.place);
+  const refOf = (issue: HostIssue): string | undefined => on.tracker.refOf({ repo: target, number: issue.number });
+  const scoped = scopePlace(
+    { kind: run.kind, source: on.tracker.source, target, sync: run.config.sync, request: { ...request, people: read.people ?? [] }, taken: on.places.get(target), active: active.length, plannedAdds: on.planned.adds, refOf },
+    read.issues,
+    (issues) => planSync(issues, imported, on.rules, on.tracker, linkedRefs(tasks)),
+  );
+  if (scoped.place !== undefined) {
+    on.places.set(target, scoped.place);
   }
-  const plan = gate.plan;
-  on.planned.adds += plan.steps.filter((step) => step.kind === 'add').length;
-  // The adds the scope hold kept back are told by its own line, so no CAPPED line counts them as well.
-  const waiting = gate.held > 0 ? addsOf(planned) : 0;
+  const { plan, scopeHolds } = scoped;
+  on.planned.adds += addsOf(plan);
   // A ruled issue's TRUST line already says why it was kept out, so the LEFT OUT line names only the others.
   const ruled = new Set(scoped.issues.filter((issue) => issue.ruled !== undefined).map((issue) => issue.number));
   const inside = insideReporters(scoped.issues);
   inside.forEach((reporter) => on.reporters.add(reporter.id));
   const leftOut = [
-    ...scopeLines(target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
-    ...trustLines(target, scoped.issues, (issue) => on.tracker.refOf({ repo: target, number: issue.number })),
+    ...scoped.scopeLines,
+    ...trustLines(target, scoped.issues, refOf),
     ...reporterLines(target, inside, on.seen),
-    ...(waiting > 0 ? [`HELD ${target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : []),
+    ...scoped.heldLines,
     ...leftOutLine(target, plan.leftOut.filter((number) => !ruled.has(number)).flatMap((number) => on.tracker.refOf({ repo: target, number }) ?? [])),
   ];
-  const scopeHolds = gate.tell ? [heldScopeLine(on.tracker.source, target, waiting, run.config.sync.maxNewPerSync)] : [];
   if (run.kind === 'preview') {
     [...previewLines(target, plan), ...leftOut].forEach(say);
     return { end: 'ok', written: 0, added: [], failures: [], scopeHolds };
@@ -272,40 +265,6 @@ async function syncTarget(run: TrackerSyncRun, on: TrackerRun, target: string, s
     failures: refused === undefined ? [] : [{ repo: target, reason: refused }],
     scopeHolds,
   };
-}
-
-/** How many tasks `plan` adds. */
-function addsOf(plan: SyncPlan): number {
-  return plan.steps.filter((step) => step.kind === 'add').length;
-}
-
-/**
- * The request a place's list reads: the team's scope with the accept label always counted (an issue a person
- * accepted is always meant for the team), no people of the core's own (the connector names the tracker's), and
- * `held`, the issue numbers the register holds active tasks for there.
- */
-export function scopeRequestOf(scope: ImportScope, acceptLabel: string, held: readonly number[]): ScopeRequest {
-  const labels = scope.labels.some((label) => label.toLowerCase() === acceptLabel.toLowerCase()) ? scope.labels : [...scope.labels, acceptLabel];
-  return { scope: { ...scope, labels }, people: [], held };
-}
-
-/** The numbers of the issues at `target` that the `active` imported tasks hold, by their refs. */
-export function heldAt(target: string, active: readonly Task[], parseRef: (ref: string) => IssueTarget | undefined): number[] {
-  return active.flatMap((task) => {
-    const at = task.ref === null ? undefined : parseRef(task.ref);
-    return at !== undefined && at.repo === target ? [at.number] : [];
-  });
-}
-
-/**
- * The lines saying what the scope and the caps kept out of a place: a SCOPE line for the issues outside the scope the
- * tracker gave, a CAPPED line for the adds the caps held back, with the key that held them.
- */
-export function scopeLines(target: string, outside: number, capped: CappedPlan): string[] {
-  return [
-    ...(outside > 0 ? [`SCOPE ${target}: ${outside} issue(s) outside the import scope dropped; sync.scope widens it`] : []),
-    ...(capped.held > 0 && capped.key !== undefined ? [`CAPPED ${target}: ${capped.held} more in scope, held for a later run; raise sync.${capped.key} or narrow sync.scope`] : []),
-  ];
 }
 
 /**

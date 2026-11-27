@@ -11,14 +11,12 @@ import { RegisterPolicy } from '../register/policy.ts';
 import { NO_GOAL_RECORDS, NOTHING_ELSEWHERE, Register } from '../register/register.ts';
 import { JsonlEventLog } from '../register/store.ts';
 import { importRules } from '../sync/map.ts';
-import type { Task } from '../register/fold.ts';
-import { testTask } from '../testing/task.ts';
 import { testConfig } from '../testing/config.ts';
 import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { teamPaths } from '../core/home.ts';
-import { fileReporterStore, fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import { fileReporterStore, fileScopeStore, importConnectors, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
 import type { ConnectorLoader } from './issue-hosts.ts';
 import { connectorState } from './connector-state.ts';
 import { loadConnector } from '../composition/loader.ts';
@@ -373,29 +371,6 @@ describe('the import scope of another tracker (T5013)', () => {
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [ACCESS, ...TWO_TO_ADD, PREVIEW, NO_GITHUB]);
     assert.ok(http.requests.every((request) => request.url !== MYSELF));
-  });
-
-  it('counts the accept label in the scope, once, whatever its case', () => {
-    const scope = { all: false, assigned: 'team', labels: ['ops'] } as const;
-    assert.deepEqual(scopeRequestOf(scope, 'teamrig', [3]), { scope: { ...scope, labels: ['ops', 'teamrig'] }, people: [], held: [3] });
-    assert.deepEqual(scopeRequestOf({ ...scope, labels: ['TeamRig'] }, 'teamrig', []).scope.labels, ['TeamRig']);
-  });
-
-  it('holds the issues of the active tasks at the place, by their refs', () => {
-    const parse = (ref: string): { repo: string; number: number } | undefined => {
-      const found = /^jira:([A-Z]+)-(\d+)$/.exec(ref);
-      return found === null ? undefined : { repo: `acme/${(found[1] ?? '').toLowerCase()}`, number: Number(found[2]) };
-    };
-    const task = (ref: string | null): Task => testTask({ ref });
-    assert.deepEqual(heldAt('acme/eng', [task('jira:ENG-4'), task('jira:OPS-5'), task(null), task('gh:x/y#1'), task('jira:ENG-9')], parse), [4, 9]);
-  });
-
-  it('says how many adds the caps held back, and by which key', () => {
-    const plan = { steps: [], inserted: 0, changed: 0, unchanged: 0, leftOut: [] };
-    assert.deepEqual(scopeLines('acme/eng', 0, { plan, held: 0, key: undefined }), []);
-    assert.deepEqual(scopeLines('acme/eng', 0, { plan, held: 4, key: 'maxNewPerSync' }), [
-      'CAPPED acme/eng: 4 more in scope, held for a later run; raise sync.maxNewPerSync or narrow sync.scope',
-    ]);
   });
 });
 
