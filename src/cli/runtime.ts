@@ -9,6 +9,7 @@ import type { StarterWatch } from '../delivery/starter-watch.ts';
 import type { StepRunner } from '../delivery/steps.ts';
 import type { FileBytes } from '../core/file-bytes.ts';
 import type { Files } from '../core/files.ts';
+import type { FolderSignals } from '../core/folder-signals.ts';
 import type { Env } from '../core/home.ts';
 import type { HttpClient } from '../core/http.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
@@ -116,6 +117,8 @@ export interface CliRuntime {
   readonly cpu: HostCpu;
   /** The processes that started this one, so a queued step whose launching shell was ended stops too. */
   readonly starters: StarterWatch;
+  /** Tells when anything in a folder changes, so `teamrig events` looks at its files only then (T5758). */
+  readonly folderSignals: FolderSignals;
   /** Runs the command-line tool of a connector adapter, such as `gh`, each run held to the two connector limits of time and output (plugin-api/connector.ts). */
   readonly run: ProgramRunner;
   /** How `teamrig conformance terminal` stages and runs the pinned terminal program it checks: the protocol's limits. */

@@ -8,6 +8,7 @@ import { nodeTerminalPrograms } from '../composition/terminal-kit.ts';
 import { resolveKitHome } from '../core/home.ts';
 import { nodeFileBytes } from '../core/file-bytes.ts';
 import { nodeFiles } from '../core/files.ts';
+import { nodeFolderSignals } from '../core/folder-signals.ts';
 import { GIT_TREES } from '../delivery/git-tree.ts';
 import { nodeHostCpu } from '../delivery/cpu.ts';
 import { nodeHostMemory } from '../delivery/memory.ts';
@@ -130,6 +131,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     processes: nodeProcesses(),
     sessionProcesses,
     starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, isSessionProcess, nodeEvery),
+    folderSignals: nodeFolderSignals,
     shell: nodeShellRunner(),
     steps: nodeStepRunner(process.platform),
     memory: nodeHostMemory(process.platform),

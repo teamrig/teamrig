@@ -35,6 +35,7 @@ import type { KitTree } from '../kit/kit-tree.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
 import type { StarterWatch } from '../delivery/starter-watch.ts';
+import type { FolderSignals } from '../core/folder-signals.ts';
 import type { StepRunner } from '../delivery/steps.ts';
 import type { HookRunner } from '../deploy/hooks.ts';
 import type { PullGit } from '../sync/pull-conflicts.ts';
@@ -213,6 +214,8 @@ export interface RunOptions {
   readonly cpu?: HostCpu;
   /** The processes that started a `teamrig queue` run; default a shell and its Claude Code, which never end. */
   readonly starters?: StarterWatch;
+  /** The folder watches `teamrig events` looks again on, such as a `FakeFolderSignals`; default none can be watched. */
+  readonly folderSignals?: FolderSignals;
   /** The git `teamrig merge` drives; default the fake repository at /w/feat (testing/fake-merge-git.ts). */
   readonly mergeGit?: MergeGit;
   /** The git `teamrig pr conflicts` drives; default the fake clone of acme/web at /repo/web (testing/fake-pull-git.ts). */
@@ -320,6 +323,7 @@ export class CliHarness {
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),
       ...(options.starters === undefined ? {} : { starters: options.starters }),
+      ...(options.folderSignals === undefined ? {} : { folderSignals: options.folderSignals }),
       ...(options.mergeGit === undefined ? {} : { mergeGit: options.mergeGit }),
       ...(options.pulls === undefined ? {} : { pulls: options.pulls }),
       ...(options.trees === undefined ? {} : { trees: options.trees }),
