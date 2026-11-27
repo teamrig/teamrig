@@ -9,7 +9,8 @@ import { planLines, SHOWN_CHANGES } from './commands/issue-push.ts';
 import { USAGE } from './run.ts';
 import { EXIT } from './runtime.ts';
 
-const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
+// The push plans against imported tasks, so the import here reads every open issue, not only the team's (T5128).
+const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } }, sync: { scope: { all: true } } };
 const AS_LEAD = { env: { TEAMRIG_SESSION: 'lead' } };
 const AS_BRAVO = { env: { TEAMRIG_SESSION: 'bravo' } };
 

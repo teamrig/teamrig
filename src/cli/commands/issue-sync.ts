@@ -27,7 +27,11 @@ import { GITHUB_REPOS_HOST, type PullRequests, type ReviewPosts } from '../../is
 import type { HostPull } from '../../issues/pull.ts';
 import { sessionLogins } from '../../issues/status-push.ts';
 import type { Task } from '../../register/fold.ts';
-import { GITHUB_SOURCE } from '../../register/model.ts';
+import { ACTIVE_STATUSES, GITHUB_SOURCE } from '../../register/model.ts';
+import { parseRef } from '../../issues/ref.ts';
+import { formatScopeFile, type ScopeRunKind } from '../../sync/scope-hold.ts';
+import type { ScopeRequest } from '../../sync/scope.ts';
+import { addsOf, heldAt, scopePlace, scopeRequestOf } from './import-scope.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { hostsOf, reposOf } from '../issue-hosts.ts';
@@ -91,7 +95,9 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   const started = runtime.clock.now();
   const since = closedSince(new Date(started), config.github.closedDays);
   // --repo names one GitHub repository, so a run given it reads no other tracker.
-  const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, kind: auto ? 'auto' : write ? 'yes' : 'preview', scopes: fileScopeStore(runtime.files, kit.paths), reporters: fileReporterStore(runtime.files, kit.paths) }, say);
+  const runKind: ScopeRunKind = auto ? 'auto' : write ? 'yes' : 'preview';
+  const scopeStore = fileScopeStore(runtime.files, kit.paths);
+  const others = args.flags.has('repo') ? NO_TRACKER_SYNC : await syncTrackers({ runtime, config, register, rules, since, kind: runKind, scopes: scopeStore, reporters: fileReporterStore(runtime.files, kit.paths) }, say);
   const offBy = githubOffBy(runtime.env);
   if (offBy !== undefined) {
     say(`OFF ${offBy}=${CONNECTOR_OFF} turns the GitHub import off on this machine; nothing of it was read or written`);
@@ -135,6 +141,11 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   /** The open threads of the repositories read, for the response clock, and those repositories. */
   const threads: Thread[] = [];
   const clocked = new Set<string>();
+  // The scope each repository last took (scope-hold.ts), and the adds planned so far, which sync.maxNewPerSync counts across them.
+  const takenScopes = await scopeStore.read(GITHUB_SOURCE);
+  const places = new Map(takenScopes);
+  const planned = { adds: 0 };
+  const scopeHolds: string[] = [...others.scopeHolds];
   for (const repo of reposOf(config.github.repos, args.flags.get('repo'))) {
     const reach = await host.reach(repo, 'read');
     if (reach.kind === 'unreachable') {
@@ -148,6 +159,13 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
       told.add(reach.scope);
       say(`ACCESS ${reach.access}`);
     }
+    const tasks = [...(await register.snapshot()).state.tasks.values()];
+    const imported = importedTasks(tasks, GITHUB_SOURCE);
+    const active = [...imported.values()].filter((task) => ACTIVE_STATUSES.includes(task.status));
+    // GitHub names the team's people by the logins of github.owners, so the request carries them itself.
+    const request: ScopeRequest = { ...scopeRequestOf(config.sync.scope, rules.acceptLabel, heldAt(repo, active, parseRef)), people: [...ours] };
+    // The whole open list is read, never the scope's alone: answer clocks, claims, security and mentions follow every
+    // issue of the repository; the scope cuts only what the import plans (scopePlace).
     const read = await host.list(repo, since);
     if (read.kind === 'failed') {
       say(`FAILED ${repo}: ${read.reason}; its tasks stay as they are`);
@@ -157,9 +175,17 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
       continue;
     }
     read.notes.forEach((note) => say(`NOTE ${repo}: ${note}`));
-    const tasks = [...(await register.snapshot()).state.tasks.values()];
-    const imported = importedTasks(tasks, GITHUB_SOURCE);
-    const plan = planSync(read.issues, imported, rules, GITHUB_TRACKER, linkedRefs(tasks));
+    const scoped = scopePlace(
+      { kind: runKind, source: GITHUB_SOURCE, target: repo, sync: config.sync, request, taken: places.get(repo), active: active.length, plannedAdds: planned.adds, refOf: (issue) => issueRef(repo, issue.number) },
+      read.issues,
+      (issues) => planSync(issues, imported, rules, GITHUB_TRACKER, linkedRefs(tasks)),
+    );
+    if (scoped.place !== undefined) {
+      places.set(repo, scoped.place);
+    }
+    const { plan } = scoped;
+    planned.adds += addsOf(plan);
+    scopeHolds.push(...scoped.scopeHolds);
     // A security issue goes to its task's owner, else where the import would route it; an outsider's left-out report too.
     security.set(repo, securityIssues(read.issues, (issue) => imported.get(issueRef(issue.repo, issue.number))?.owner ?? issueOwner(issue, rules)));
     leftOut.set(repo, plan.leftOut);
@@ -172,7 +198,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
       issueRoutes.push(...marked.routes);
       marked.routes.forEach((route) => say(`ISSUE NEWS ${route.to}: ${route.ref} ${route.changes.join(', ')}`));
     }
-    const leftOutText = leftOutLines(repo, plan.leftOut, rules.acceptLabel);
+    const leftOutText = [...scoped.scopeLines, ...scoped.heldLines, ...leftOutLines(repo, plan.leftOut, rules.acceptLabel)];
     let end: RepoEnd = 'ok';
     let issueThreads: Thread[] = [];
     if (write) {
@@ -264,6 +290,9 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     const { text, wake } = pullNewsText(events, ours);
     say(`PULL NEWS ${to}${wake ? ' (wakes)' : ''}: ${text}`);
   }
+  if (write && formatScopeFile(places) !== formatScopeFile(takenScopes)) {
+    await scopeStore.write(GITHUB_SOURCE, places);
+  }
   if (write) {
     (await recordClocks(runtime, kit, config, clocked, threads)).forEach(say);
   }
@@ -303,7 +332,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     }
   }
   if (auto) {
-    (await reportAutoSync(runtime, kit, config, { added, failures, leftOut, pulls, pullNews: news, security, mentions, mentionRoutes, mentionCuts, activityRoutes: activity, issues: issueMarks, issueRoutes, scopeHolds: others.scopeHolds })).forEach(say);
+    (await reportAutoSync(runtime, kit, config, { added, failures, leftOut, pulls, pullNews: news, security, mentions, mentionRoutes, mentionCuts, activityRoutes: activity, issues: issueMarks, issueRoutes, scopeHolds })).forEach(say);
   } else if (news.size > 0) {
     say(`NOTE only ${KIT_NAME} issue sync --auto tells the pull request news and keeps what it read, so the next run names it again`);
   }

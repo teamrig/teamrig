@@ -56,7 +56,7 @@ export function scopePlace(run: PlaceScopeRun, issues: readonly HostIssue[], pla
     issues: scoped.issues,
     plan: gate.plan,
     place: gate.place,
-    scopeLines: scopeLines(run.target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped),
+    scopeLines: [...narrowLines(run.target, run.request.scope, run.taken), ...scopeLines(run.target, scoped.outside, gate.held > 0 ? { ...capped, held: 0 } : capped)],
     heldLines: waiting > 0 ? [`HELD ${run.target}: ${waiting} issue(s) of a new or wider import scope wait for ${KIT_NAME} issue sync --yes`] : [],
     scopeHolds: gate.tell ? [heldScopeLine(run.source, run.target, waiting, run.sync.maxNewPerSync)] : [],
   };
@@ -83,6 +83,23 @@ export function heldAt(target: string, active: readonly Task[], parseRef: (ref: 
     const at = task.ref === null ? undefined : parseRef(task.ref);
     return at !== undefined && at.repo === target ? [at.number] : [];
   });
+}
+
+/**
+ * The line a place gets until a person takes its scope with `--yes`: the import reads only the scope's issues, not
+ * every open one, and the key that reads them all. A place whose scope is already `all` gets none.
+ */
+export function narrowLines(target: string, scope: ImportScope, taken: PlaceScope | undefined): string[] {
+  if (scope.all || taken?.taken !== undefined) {
+    return [];
+  }
+  const parts = [
+    ...(scope.assigned === 'team' ? ["the team's people's issues"] : []),
+    ...(scope.labels.length > 0 ? [`those labelled ${scope.labels.join(', ')}`] : []),
+    'the issues its tasks hold',
+  ];
+  const reads = parts.length === 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}`;
+  return [`SCOPE ${target}: the import reads only ${reads}; "sync": { "scope": { "all": true } } in the team config reads every open issue`];
 }
 
 /**

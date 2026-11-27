@@ -9,7 +9,7 @@ import type { ScopeRequest } from '../../sync/scope.ts';
 import { testConfig } from '../../testing/config.ts';
 import { testHostIssue } from '../../testing/host-issue.ts';
 import { testTask } from '../../testing/task.ts';
-import { addsOf, heldAt, scopeLines, scopePlace, scopeRequestOf, type PlaceScopeRun } from './import-scope.ts';
+import { addsOf, heldAt, narrowLines, scopeLines, scopePlace, scopeRequestOf, type PlaceScopeRun } from './import-scope.ts';
 
 const RULES = importRules(testConfig());
 const plan = (issues: readonly HostIssue[]): SyncPlan => planSync(issues, new Map(), RULES, GITHUB_TRACKER);
@@ -28,13 +28,15 @@ const RUN: PlaceScopeRun = {
 };
 /** Issue 1 labelled, 2 assigned to ada, 3 a stranger's, 9 held. */
 const ISSUES = [testHostIssue(1, { labels: ['TeamRig'] }), testHostIssue(2, { assignees: ['Ada'] }), testHostIssue(3, { assignees: ['someone'] }), testHostIssue(9)];
+/** The line acme/web gets while no person took its scope. */
+const NARROW = `SCOPE acme/web: the import reads only the team's people's issues, those labelled teamrig and the issues its tasks hold; "sync": { "scope": { "all": true } } in the team config reads every open issue`;
 
 describe('scopePlace (T5128)', () => {
   it('keeps the labelled, the team-assigned and the held issues, and says how many it dropped', () => {
     const scoped = scopePlace(RUN, ISSUES, plan);
     assert.deepEqual(scoped.issues.map((issue) => issue.number), [1, 2, 9]);
     assert.equal(addsOf(scoped.plan), 3);
-    assert.deepEqual(scoped.scopeLines, ['SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it']);
+    assert.deepEqual(scoped.scopeLines, [NARROW, 'SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it']);
     assert.deepEqual(scoped.heldLines, []);
     assert.deepEqual(scoped.scopeHolds, []);
     assert.deepEqual(scoped.place, { taken: scopeMark(REQUEST), told: undefined });
@@ -43,7 +45,7 @@ describe('scopePlace (T5128)', () => {
   it('caps the adds by what earlier places of the run already planned', () => {
     const scoped = scopePlace({ ...RUN, sync: { maxOpen: 200, maxNewPerSync: 3 }, plannedAdds: 2 }, ISSUES, plan);
     assert.equal(addsOf(scoped.plan), 1);
-    assert.deepEqual(scoped.scopeLines.slice(1), ['CAPPED acme/web: 2 more in scope, held for a later run; raise sync.maxNewPerSync or narrow sync.scope']);
+    assert.deepEqual(scoped.scopeLines.slice(2), ['CAPPED acme/web: 2 more in scope, held for a later run; raise sync.maxNewPerSync or narrow sync.scope']);
   });
 
   it('counts the adds a preview planned at earlier places as open, since it writes none', () => {
@@ -55,7 +57,7 @@ describe('scopePlace (T5128)', () => {
   it('holds every add of a scope no person took on an automatic run, with a HELD line and one line for the lead', () => {
     const scoped = scopePlace({ ...RUN, kind: 'auto', sync: { maxOpen: 200, maxNewPerSync: 2 } }, ISSUES, plan);
     assert.equal(addsOf(scoped.plan), 0);
-    assert.deepEqual(scoped.scopeLines, ['SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it']);
+    assert.deepEqual(scoped.scopeLines, [NARROW, 'SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it']);
     assert.deepEqual(scoped.heldLines, ['HELD acme/web: 3 issue(s) of a new or wider import scope wait for teamrig issue sync --yes']);
     assert.equal(scoped.scopeHolds.length, 1);
     assert.match(scoped.scopeHolds[0] ?? '', /^github acme\/web: the import scope is new or wider; 3 issue\(s\) would be added \(2 a run at most\)/);
@@ -66,6 +68,28 @@ describe('scopePlace (T5128)', () => {
     assert.equal(addsOf(scoped.plan), 3);
     assert.deepEqual(scoped.heldLines, []);
     assert.deepEqual(scoped.scopeHolds, []);
+    assert.deepEqual(scoped.scopeLines, ['SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it'], 'a taken scope is not told as narrowed again');
+  });
+});
+
+describe('the narrowed-scope line (T5128)', () => {
+  const taken = { taken: scopeMark(REQUEST), told: undefined };
+
+  it('tells a place no person took a scope for what it reads, and the key that reads every open issue', () => {
+    assert.deepEqual(narrowLines('acme/web', REQUEST.scope, undefined), [NARROW]);
+    assert.deepEqual(narrowLines('acme/web', REQUEST.scope, { taken: undefined, told: scopeMark(REQUEST) }), [NARROW], 'a scope only the lead was told of is not taken');
+  });
+
+  it('names labels alone when the scope counts no assignees, and the held issues alone with no label either', () => {
+    assert.deepEqual(narrowLines('acme/web', { all: false, assigned: 'none', labels: ['ops', 'teamrig'] }, undefined), [
+      'SCOPE acme/web: the import reads only those labelled ops, teamrig and the issues its tasks hold; "sync": { "scope": { "all": true } } in the team config reads every open issue',
+    ]);
+    assert.match(narrowLines('acme/web', { all: false, assigned: 'none', labels: [] }, undefined)[0] ?? '', /reads only the issues its tasks hold;/);
+  });
+
+  it('says nothing once a person took the scope, or when the scope is every issue', () => {
+    assert.deepEqual(narrowLines('acme/web', REQUEST.scope, taken), []);
+    assert.deepEqual(narrowLines('acme/web', { ...REQUEST.scope, all: true }, undefined), []);
   });
 });
 

@@ -34,10 +34,12 @@ const SEARCH = 'https://acme.atlassian.net/rest/api/3/search/jql';
 const MYSELF = 'https://acme.atlassian.net/rest/api/3/myself';
 const CREDENTIAL = 'teamrig-jira-acme';
 const JIRA = { site: 'acme', projects: ['ENG'] };
+/** The test team with the import scope at every open issue, since most tests here are not about the scope (T5128). */
+const WIDE_TEAM: JsonRecord = { ...TEAM, sync: { scope: { all: true } } };
 /** A team that reads the Jira project ENG on site acme, and no GitHub repository. */
-const JIRA_TEAM: JsonRecord = { ...TEAM, connectors: { jira: JIRA } };
+const JIRA_TEAM: JsonRecord = { ...WIDE_TEAM, connectors: { jira: JIRA } };
 /** A team that reads ENG on Jira and acme/web on GitHub. */
-const BOTH_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'] }, connectors: { jira: JIRA } };
+const BOTH_TEAM: JsonRecord = { ...WIDE_TEAM, github: { repos: ['acme/web'] }, connectors: { jira: JIRA } };
 
 const ACCESS = `ACCESS acme: read with the API token saved as ${CREDENTIAL}`;
 const NO_GITHUB = 'OFF no repository to read: list them as "owner/name" under github.repos in the team config; nothing of GitHub was read or written';
@@ -346,12 +348,13 @@ describe('the import scope of another tracker (T5013)', () => {
 
   it("asks Jira only for the team's and the labelled issues, and drops what it gave outside the scope with a SCOPE line", async () => {
     const http = noEdits(signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2', 'a-stranger')] })), 'ENG-1');
-    const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
+    const result = await new CliHarness({ ...TEAM, connectors: { jira: JIRA } }).run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
     assert.deepEqual(result.stdout, [
       ACCESS,
       'REPO acme/eng: 1 to add, 0 to change, 0 unchanged',
       'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"',
+      `SCOPE acme/eng: the import reads only the team's people's issues, those labelled teamrig and the issues its tasks hold; "sync": { "scope": { "all": true } } in the team config reads every open issue`,
       'SCOPE acme/eng: 1 issue(s) outside the import scope dropped; sync.scope widens it',
       'TRUST acme/eng: 1 let in, the reporter matches inside (accountType atlassian): jira:ENG-1',
       'REPORTER acme/eng: a-reporter (Dana Reporter) let in 1 issue(s), NEW since the last --yes',

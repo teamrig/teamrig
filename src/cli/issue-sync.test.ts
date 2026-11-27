@@ -2,15 +2,19 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { JsonRecord } from '../core/guards.ts';
+import { teamPaths } from '../core/home.ts';
 import { isIssueQuery } from '../adapters/connectors/github/gh.ts';
 import { foldEvents, type Task } from '../register/fold.ts';
 import { readEvents } from '../register/snapshot.ts';
-import { CliHarness, EVENTS_PATH, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
+import { CliHarness, EVENTS_PATH, KIT, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { FakeCredentials } from '../testing/fake-credentials.ts';
 import { FakeGh, ghIssue, ghPull, ghRepoOf } from '../testing/fake-gh.ts';
+import { connectorState } from './connector-state.ts';
 import { EXIT } from './runtime.ts';
 
-const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
+/** The test team with the import scope at every open issue, since these tests are not about the scope (T5128). */
+const WIDE_TEAM: JsonRecord = { ...TEAM, sync: { scope: { all: true } } };
+const GITHUB_TEAM: JsonRecord = { ...WIDE_TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
 const AS_LEAD = { env: { TEAMRIG_SESSION: 'lead' } };
 const AS_BRAVO = { env: { TEAMRIG_SESSION: 'bravo' } };
 
@@ -225,7 +229,7 @@ describe('teamrig issue sync', () => {
     assert.equal(kit.files.get(EVENTS_PATH), log);
   });
   it("reads each owner's repositories with the token saved for that owner, picked once per repository, and never prints it", async () => {
-    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web', 'acme/api', 'globex/site'] } });
+    const kit = new CliHarness({ ...WIDE_TEAM, github: { repos: ['acme/web', 'acme/api', 'globex/site'] } });
     const gh = twoIssues().holds('globex/site', []);
     const credentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-read-token').saves('teamrig-gh-globex', 'globex-read-token');
     const result = await kit.run(['issue', 'sync'], { gh, credentials });
@@ -249,7 +253,7 @@ describe('teamrig issue sync', () => {
   });
 
   it('fails an owner with no saved token, running no gh for it, never the gh login, and reads the other owners on', async () => {
-    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web', 'globex/site'] } });
+    const kit = new CliHarness({ ...WIDE_TEAM, github: { repos: ['acme/web', 'globex/site'] } });
     const gh = twoIssues().holds('globex/site', [ghIssue('globex/site', 4)]);
     const credentials = new FakeCredentials().saves('teamrig-gh-acme', 'acme-read-token');
     const result = await kit.run(['issue', 'sync'], { gh, credentials, env: { HOME: '/u', GH_TOKEN: 'login-token' } });
@@ -264,7 +268,7 @@ describe('teamrig issue sync', () => {
   });
 
   it('fails an owner whose saved token the store cannot read, never reading it through the gh login, and reads the other owners on', async () => {
-    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web', 'globex/site'] } });
+    const kit = new CliHarness({ ...WIDE_TEAM, github: { repos: ['acme/web', 'globex/site'] } });
     const gh = twoIssues().holds('globex/site', [ghIssue('globex/site', 4)]);
     const credentials = new FakeCredentials().failsOn('teamrig-gh-acme', 'the keyring is locked').saves('teamrig-gh-globex', 'globex-read-token');
     const result = await kit.run(['issue', 'sync'], { gh, credentials });
@@ -278,7 +282,7 @@ describe('teamrig issue sync', () => {
   });
 
   it('says how to replace a token GitHub refuses, and reads the other owners on', async () => {
-    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web', 'globex/site'] } });
+    const kit = new CliHarness({ ...WIDE_TEAM, github: { repos: ['acme/web', 'globex/site'] } });
     const gh = new FakeGh()
       .answers('acme/web', { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 401: Bad credentials (https://api.github.com/graphql)\n' })
       .holds('globex/site', [ghIssue('globex/site', 4)]);
@@ -419,13 +423,71 @@ describe('teamrig issue sync', () => {
   });
 
   it('names at most twenty left-out issues by number in a preview, with the label the team set', async () => {
-    const kit = new CliHarness({ ...TEAM, github: { repos: ['acme/web'], acceptLabel: 'triaged' } });
+    const kit = new CliHarness({ ...WIDE_TEAM, github: { repos: ['acme/web'], acceptLabel: 'triaged' } });
     const strangers = Array.from({ length: 22 }, (_, index) => ghIssue('acme/web', 30 - index, { title: `Stranger ${index}`, authorAssociation: 'NONE', author: 'stranger' }));
     const numbers = Array.from({ length: 20 }, (_, index) => `#${index + 9}`).join(' ');
     assert.deepEqual(await expectRun(kit, ['issue', 'sync'], new FakeGh().holds('acme/web', strangers), EXIT.ok), [
       'REPO acme/web: 0 to add, 0 to change, 0 unchanged',
       `LEFT OUT acme/web: 22 open issue(s) by people outside the repository wait for someone to add the "triaged" label: ${numbers} and 2 more`,
       'PREVIEW nothing was written; teamrig issue sync --yes writes the above as github',
+    ]);
+  });
+});
+
+describe('the GitHub import scope (T5128)', () => {
+  /** The team with the default scope: its people's issues, those labelled teamrig, and the issues its tasks hold. */
+  const NARROW_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web', 'acme/api'], owners: { octocat: 'bravo' } } };
+  const narrowOf = (repo: string): string =>
+    `SCOPE ${repo}: the import reads only the team's people's issues, those labelled teamrig and the issues its tasks hold; "sync": { "scope": { "all": true } } in the team config reads every open issue`;
+  const SCOPE_FILE = connectorState(teamPaths(KIT, 'app', undefined), 'github').scope;
+  const leadScopeLines = (kit: CliHarness): string[] =>
+    (kit.files.get(join(TEAM_HOME, 'state', 'inbox', 'lead.md')) ?? '').split('\n').filter((line) => line.includes('import scope'));
+
+  it("previews only the team's issues, drops the rest with a SCOPE line, and says how to read every open issue", async () => {
+    const kit = new CliHarness(NARROW_TEAM);
+    const lines = await expectRun(kit, ['issue', 'sync'], twoIssues(), EXIT.ok);
+    assert.deepEqual(lines, [
+      'REPO acme/web: 1 to add, 0 to change, 0 unchanged',
+      'ADD new gh:acme/web#7 p1 bravo: "Fix login"',
+      narrowOf('acme/web'),
+      'SCOPE acme/web: 1 issue(s) outside the import scope dropped; sync.scope widens it',
+      'REPO acme/api: 0 to add, 0 to change, 0 unchanged',
+      narrowOf('acme/api'),
+      'PREVIEW nothing was written; teamrig issue sync --yes writes the above as github',
+    ]);
+    assert.equal(kit.files.get(SCOPE_FILE), undefined, 'a preview takes no scope');
+  });
+
+  it('takes the scope with --yes, after which a run no longer tells it as narrowed', async () => {
+    const kit = new CliHarness(NARROW_TEAM);
+    await expectRun(kit, ['issue', 'sync', '--yes'], twoIssues(), EXIT.ok);
+    assert.deepEqual([...register(kit).tasks.values()].map((task) => task.ref), ['gh:acme/web#7']);
+    assert.notEqual(kit.files.get(SCOPE_FILE), undefined);
+    const again = await expectRun(kit, ['issue', 'sync'], twoIssues(), EXIT.ok);
+    assert.ok(again.every((line) => !line.includes('the import reads only')), again.join('\n'));
+  });
+
+  it('holds the adds of a scope no person took on an automatic run, and tells the lead once', async () => {
+    const kit = new CliHarness(NARROW_TEAM);
+    for (const run of [1, 2]) {
+      const result = await kit.run(['issue', 'sync', '--auto'], { gh: twoIssues() });
+      assert.equal(result.code, EXIT.ok, `run ${run}: ${[...result.stdout, ...result.stderr].join('\n')}`);
+    }
+    assert.deepEqual([...register(kit).tasks.values()], []);
+    assert.equal(leadScopeLines(kit).length, 1, leadScopeLines(kit).join('\n'));
+  });
+
+  it("keeps a task's issue current once it falls outside the scope", async () => {
+    const kit = new CliHarness(NARROW_TEAM);
+    const labelled = new FakeGh().holds('acme/web', [ghIssue('acme/web', 8, { title: 'Add search', labels: ['teamrig'] })]).holds('acme/api', []);
+    await expectRun(kit, ['issue', 'sync', '--yes'], labelled, EXIT.ok);
+    const unlabelled = new FakeGh().holds('acme/web', [ghIssue('acme/web', 8, { title: 'Add the search' })]).holds('acme/api', []);
+    const result = await kit.run(['issue', 'sync', '--yes'], { gh: unlabelled });
+    assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
+    assert.ok(unlabelled.ran.every((request) => isIssueQuery(request.args)), 'gh was asked for more than issue reads');
+    assert.deepEqual(result.stdout.filter((line) => line.includes('acme/web')).slice(0, 2), [
+      'REPO acme/web: 0 added, 1 changed, 0 unchanged',
+      'UPDATE T1 gh:acme/web#8: title "Add the search"',
     ]);
   });
 });
