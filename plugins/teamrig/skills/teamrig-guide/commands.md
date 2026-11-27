@@ -4958,8 +4958,10 @@ removal is refused, and only teamrig's own changes (a session start's copy, `kit
 `kit update`, `kit uninstall`) lift the mark while they hold the install lock and set it again after. On Windows it is
 a deny entry for your account in each one's access list, on macOS and Linux the write bits off. A `NOTE ... the next
 teamrig kit change sets it again` line (or a restore log line at a session start) means the mark could not be set back
-after a change that did happen; the next change sets it. It guards against mistakes, not against a program that lifts
-it as teamrig does.
+after a change that did happen; the next change sets it. The mark guards what is inside `versions` and the records'
+contents, not the kit home folder itself: `versions` can still be renamed or replaced, and `current` or `current.json`
+deleted or replaced, by your account; the planned install integrity check (design #2617) is what finds those. It guards against mistakes, not against a
+program that lifts it as teamrig does.
 
 ### teamrig kit use
 

@@ -6,10 +6,12 @@ import type { ProgramRunner } from '../core/program-runner.ts';
 import { kitCurrentPath, kitCurrentRecordPath, kitVersionsFolder } from './kit-versions.ts';
 
 /**
- * The read-only mark on teamrig's install in the kit home (design #2617, step A): the kept versions and the records
- * naming the one in use refuse a write, a new file and a removal by the person's own account, so only teamrig's own
- * writers change them, each lifting the mark under the kit install lock and setting it again after. It hardens the
- * install against a stray edit; it is no boundary against a process that lifts it as teamrig does.
+ * The read-only mark on teamrig's install in the kit home (design #2617, step A): what `versions/` holds refuses a
+ * write, a new file and a removal by the person's own account, and so do the contents of the records naming the
+ * version in use, so only teamrig's own writers change them, each lifting the mark under the kit install lock and
+ * setting it again after. The kit home itself still grants delete-child, so `versions/` can still be renamed or
+ * replaced and `current` or `current.json` deleted or replaced; the integrity check (design #2617, step C) is to find those.
+ * It hardens the install against a stray edit; it is no boundary against a process that lifts it as teamrig does.
  */
 
 /** A path the mark covers: one file, or a folder with all it holds (`tree`). */
