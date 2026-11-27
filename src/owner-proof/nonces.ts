@@ -2,9 +2,9 @@ import { randomBytes } from 'node:crypto';
 import type { NonceState } from './verify.ts';
 
 /**
- * One nonce the ledger issued: the act it is for (actDigest), when it expires (ms since the epoch), and the id of the
- * register event that spent it, null while unused. The id lets an act check a recorded proof later: the proof holds
- * only for the one Decided event that spent its nonce (T4758 security read, O4).
+ * One nonce the ledger issued: the act it is for (actDigest), when it expires (ms since the epoch), and the act id
+ * that spent it (the one its proof record holds), null while unused. The id lets an act check a recorded proof later:
+ * the proof holds only for the one record that spent its nonce (T4758 security read, O4).
  */
 export interface NonceEntry {
   readonly nonce: string;
@@ -33,7 +33,7 @@ export function issueNonce(entries: readonly NonceEntry[], issued: Omit<NonceEnt
 }
 
 /**
- * The ledger with the nonce spent by the given register event, and whether this call spent it: false when it was
+ * The ledger with the nonce spent by the given act id, and whether this call spent it: false when it was
  * unknown or spent already. The caller writes the ledger back before the act runs, so a nonce is one use even when
  * the act then fails (T4758 security read, C3).
  */
@@ -42,7 +42,7 @@ export function useNonce(
   nonce: string,
   spentBy: string,
 ): { readonly entries: readonly NonceEntry[]; readonly used: boolean } {
-  if (spentBy.length === 0) throw new Error('a nonce is spent by a register event id, never an empty one');
+  if (spentBy.length === 0) throw new Error('a nonce is spent by an act id, never an empty one');
   const entry = entries.find((each) => each.nonce === nonce);
   if (entry === undefined || entry.spentBy !== null) return { entries, used: false };
   return { entries: entries.map((each) => (each === entry ? { ...each, spentBy } : each)), used: true };

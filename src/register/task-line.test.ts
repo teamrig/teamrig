@@ -172,7 +172,7 @@ describe('task lines', () => {
     assert.match(String(parseTaskLine(editedLine(richTask, { answer: { verdict: 'maybe', by: 'lead', at: '2030-01-08T10:00:00.000Z', note: null } }))), /^T42: bad answer /);
     assert.match(String(parseTaskLine(editedLine(richTask, { answer: { verdict: 'approved', at: '2030-01-08T10:00:00.000Z', note: null } }))), /^T42: bad answer /);
     assert.match(String(parseTaskLine(editedLine(richTask, { decided: { by: 'lead', at: '2030-01-08T11:00:00.000Z' } }))), /^T42: bad decision /);
-    const unsigned = { by: 'lead', at: '2030-01-08T11:00:00.000Z', note: 'yes', ownerProof: { challenge: OWNER_PROOF_RECORD.challenge } };
+    const unsigned = { by: 'lead', at: '2030-01-08T11:00:00.000Z', note: 'yes', ownerProof: { actId: OWNER_PROOF_RECORD.actId, challenge: OWNER_PROOF_RECORD.challenge } };
     assert.match(String(parseTaskLine(editedLine(richTask, { decided: unsigned }))), /^T42: bad decision: ownerProof has no base64 signature/);
     assert.match(String(parseTaskLine(editedLine(richTask, { audits: [{ path: 'steps/grant.ps1', sha256: 'a'.repeat(64), at: '2030-01-08T09:00:00.000Z' }] }))), /^T42: bad audit /);
     assert.match(String(parseTaskLine(editedLine(richTask, { securityVerdict: { text: 'PASS', read: { question: 'q', options: [], recommend: 'r' }, by: 'security' } }))), /^T42: bad security verdict /);

@@ -87,8 +87,8 @@ export class NonceLedger {
   }
 
   /**
-   * What the ledger knew of the nonce, for `verifyProof`, with the nonce spent by `spentBy` (the id of the Decided
-   * event the proof is for) and written back before this returns: a proof is checked against the state it had, and
+   * What the ledger knew of the nonce, for `verifyProof`, with the nonce spent by `spentBy` (the act id
+   * its proof record holds) and written back before this returns: a proof is checked against the state it had, and
    * no second call can spend it, whatever the check says.
    */
   take(nonce: string, spentBy: string): Promise<NonceState> {
