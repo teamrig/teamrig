@@ -791,6 +791,12 @@
                     "type": "string",
                     "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
                     "default": "origin"
+                  },
+                  "checks": {
+                    "description": "What the command is told to check before it merges, in TEAMRIG_MERGE_CHECKS: full, the whole suite; changed, only the changed files' checks, for a repository whose forge runs the whole suite as required checks before the merge, so the suite never runs twice. A plain push to the default branch has no required checks before it lands, so only a merge command takes it.",
+                    "type": "string",
+                    "enum": ["full", "changed"],
+                    "default": "full"
                   }
                 }
               },

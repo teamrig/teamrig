@@ -340,7 +340,7 @@ describe('merge holds a task with a design note and no decision record where the
 
   it('finishes a waiting merge without weighing it again, once a merge commit leaves the branch changing nothing', async () => {
     const MERGE = ['node', 'merge.ts'];
-    const world = await taskWorld({ ...recorded, merge: { command: MERGE, remote: 'origin' } }, ['src/app.ts', RECORD]);
+    const world = await taskWorld({ ...recorded, merge: { command: MERGE, remote: 'origin', checks: 'full' } }, ['src/app.ts', RECORD]);
     world.hooks.answer(MERGE, { end: 75, lines: ['https://forge/pr/7'] });
     assert.equal((await world.run()).kind, 'waiting');
     world.git.origin.set('main', 'mergecommit');
@@ -553,7 +553,7 @@ function squashedAs(world: World, commit: string): void {
 
 describe('merge goes through the repository’s merge command, where one is set', () => {
   const MERGE = ['node', 'merge.ts'];
-  const MERGING: DeliveryRepoConfig = { ...PLAIN, merge: { command: MERGE, remote: 'origin' } };
+  const MERGING: DeliveryRepoConfig = { ...PLAIN, merge: { command: MERGE, remote: 'origin', checks: 'full' } };
   const PENDING = join(PLACES.pendingMerges, 'app%2Ffeat.json');
   const WAITED: PendingMerge = { session: 'api', repo: 'app', branch: 'feat', head: 'rebased', base: 'base', since: '2030-01-08T10:00:00.000Z', note: 'https://forge/pr/7', merge: undefined };
 
@@ -582,7 +582,7 @@ describe('merge goes through the repository’s merge command, where one is set'
     const [run] = world.hooks.ran;
     assert.deepEqual(run?.argv, MERGE);
     assert.equal(run?.cwd, WORKTREE);
-    assert.deepEqual(run?.env, { PATH: '/bin', ...PROMPTS_OFF, TEAMRIG_HOST_LOCK: 'lock-1', TEAMRIG_MERGE_BRANCH: 'feat', TEAMRIG_MERGE_BASE: 'main', TEAMRIG_MERGE_HEAD: 'rebased', TEAMRIG_SESSION: 'api' });
+    assert.deepEqual(run?.env, { PATH: '/bin', ...PROMPTS_OFF, TEAMRIG_HOST_LOCK: 'lock-1', TEAMRIG_MERGE_BRANCH: 'feat', TEAMRIG_MERGE_BASE: 'main', TEAMRIG_MERGE_HEAD: 'rebased', TEAMRIG_MERGE_CHECKS: 'full', TEAMRIG_SESSION: 'api' });
     assert.deepEqual(during, { head: 'rebased', lockHeld: true });
     assert.deepEqual(world.steps.ran, [], 'nothing is pushed');
     assert.deepEqual(world.git.log, [
@@ -595,7 +595,7 @@ describe('merge goes through the repository’s merge command, where one is set'
       `deleteBranch ${WORKTREE} feat`,
       `updateLocalBranch ${WORKTREE} origin main`,
     ]);
-    assert.ok(world.said.includes('merging feat (rebased) into main through the merge command node merge.ts'));
+    assert.ok(world.said.includes('merging feat (rebased) into main through the merge command node merge.ts (checks: full)'));
     assert.ok(world.said.includes('  pull request https://forge/pr/7 merged'));
     const start = { type: 'heavy', id: 'step-1', session: 'api', what: 'merge app: merge feat into main', kind: 'merge', kit: KIT_VERSION, queuedAt: '2030-01-08T10:00:00.000Z', queueFreeMb: world.memory.free, startedAt: '2030-01-08T10:00:00.000Z', endedAt: null, exitCode: null };
     assert.deepEqual(world.records(PLACES.ledger), [
@@ -617,8 +617,16 @@ describe('merge goes through the repository’s merge command, where one is set'
     assert.ok(world.lockFree());
   });
 
+  it('tells the command its checks are the changed files’ only when merge.checks says the forge’s required checks run the suite (T3421)', async () => {
+    const world = new World({ repos: { app: { ...MERGING, merge: { command: MERGE, remote: 'origin', checks: 'changed' } } } });
+    world.hooks.answer(MERGE, { lines: ['merged'], during: async () => squashedAs(world, 'squashed') });
+    assert.equal((await world.run()).kind, 'done');
+    assert.equal(world.hooks.ran[0]?.env['TEAMRIG_MERGE_CHECKS'], 'changed');
+    assert.ok(world.said.includes('merging feat (rebased) into main through the merge command node merge.ts (checks: changed)'));
+  });
+
   it('merges into the merge remote beside origin: rebases onto it and confirms there, deletes the branch on origin, and moves the local main to it', async () => {
-    const world = new World({ repos: { app: { ...MERGING, merge: { command: MERGE, remote: 'upstream' } } } });
+    const world = new World({ repos: { app: { ...MERGING, merge: { command: MERGE, remote: 'upstream', checks: 'full' } } } });
     world.git.remotes.set('upstream', new Map([['main', 'base']]));
     world.hooks.answer(MERGE, {
       lines: ['pull request https://forge/pr/7 merged'],
@@ -645,7 +653,7 @@ describe('merge goes through the repository’s merge command, where one is set'
   });
 
   it('fails before the lock when the merge remote is not a remote of the checkout', async () => {
-    const world = new World({ repos: { app: { ...MERGING, merge: { command: MERGE, remote: 'upstream' } } } });
+    const world = new World({ repos: { app: { ...MERGING, merge: { command: MERGE, remote: 'upstream', checks: 'full' } } } });
     failed(await world.run(), /git fetch failed: 'upstream' does not appear to be a git repository/);
     assert.deepEqual(world.hooks.ran, []);
     assert.deepEqual(world.git.log, [`fetch ${WORKTREE} upstream`]);
@@ -1215,7 +1223,7 @@ describe('mergeBranch with the review gate', () => {
 
   it('holds a change of a repository with a merge command before the command runs', async () => {
     const MERGE = ['node', 'merge.ts'];
-    const world = gatedWorld({ merge: { command: MERGE, remote: 'origin' } });
+    const world = gatedWorld({ merge: { command: MERGE, remote: 'origin', checks: 'full' } });
     world.git.paths = ['package-lock.json'];
     refused(await world.run(ALPHA), /^review hold H\w+ keeps t9-feat \(base\.\.rebased\) off the default branch: .* --waits approval:bravo /);
     assert.deepEqual(world.hooks.ran, []);
@@ -1294,7 +1302,7 @@ describe('mergeBranch under pushToProtected: gated', () => {
 
   it('logs a change the merge command left waiting once a later run finds it merged, dated that run', async () => {
     const MERGE = ['node', 'merge.ts'];
-    const world = gatedWorld({ merge: { command: MERGE, remote: 'origin' } });
+    const world = gatedWorld({ merge: { command: MERGE, remote: 'origin', checks: 'full' } });
     await passed(world);
     world.hooks.answer(MERGE, { end: 75, lines: ['https://forge/pr/9'] });
     assert.equal((await world.run(ALPHA)).kind, 'waiting');

@@ -1286,7 +1286,17 @@ export interface MergeConfig {
    * fork. The branch itself is pushed to and deleted from origin either way.
    */
   readonly remote: string;
+  /**
+   * What the command is told to check before it merges, in `TEAMRIG_MERGE_CHECKS`: `full` (the whole suite) unless set;
+   * `changed` where the forge's required checks run the whole suite before the merge, so the command runs only the
+   * changed files' checks and the suite never runs twice (T3421). Only a merge command takes it: a plain push lands
+   * before any required check runs.
+   */
+  readonly checks: MergeChecks;
 }
+
+/** The checks a merge command runs before it merges: the whole suite, or only the changed files' (`MergeConfig.checks`). */
+export type MergeChecks = 'full' | 'changed';
 
 /** A check `teamrig deploy` asks before it deploys: a program and its arguments, run without a shell from the main checkout. */
 export interface DeployCheckConfig {
