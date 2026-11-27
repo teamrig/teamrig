@@ -4,6 +4,7 @@ import type { Env } from '../../core/home.ts';
 import { ID_PATTERN, ID_RULE } from '../../core/ids.ts';
 import { openSplit, openTab } from '../../open/open-tab.ts';
 import type { RunOutcome } from '../../open/processes.ts';
+import { tabbingTerminal, type Terminal } from '../../open/terminals.ts';
 import { RELEASED_UI } from '../../ui/pin.ts';
 import { releasedEntry, type UiPin } from '../../ui/released.ts';
 import { releasedEnv, uiRequest } from '../../ui/start.ts';
@@ -223,9 +224,9 @@ async function openUiWindow(runtime: CliRuntime, config: KitConfig, kit: Kit, st
 }
 
 /**
- * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, asking the
- * terminal to leave the focus on the session's pane (tmux does; Windows Terminal moves it to the split): terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
- * tool, whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
+ * Splits the tmux pane this run works in and shows the UI in the new pane, beside the session, the focus left on the
+ * session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell tool,
+ * whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
  */
 async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session: string | undefined): Promise<Placed> {
   const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' } as const;
@@ -239,17 +240,32 @@ async function openUiSplit(runtime: CliRuntime, kit: Kit, start: UiTeam, session
 }
 
 /**
- * What a run with no terminal of its own says when neither a split nor a window opened. It runs no UI in place: its
+ * Opens a new tab in the window of the terminal this run works in when that terminal cannot split the run's own pane
+ * (`tabbingTerminal`: Windows Terminal), the focus left on the tab the person reads (T5831); when none opens it says why.
+ */
+async function openUiTab(runtime: CliRuntime, kit: Kit, start: UiTeam, session: string | undefined, terminal: Terminal): Promise<Placed> {
+  const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' } as const;
+  const since = runtime.clock.now();
+  const outcome = await openTab(runtime, terminal, tab);
+  if (outcome.kind === 'opened') {
+    return confirmStarted(runtime, kit.paths.kitHome, since, `a new tab of this ${outcome.terminal} window`);
+  }
+  runtime.out.stdout(`NOTE no tab of this terminal opened (${outcome.reasons.join('; ')})`);
+  return 'none';
+}
+
+/**
+ * What a run with no terminal of its own says when nothing opened beside the session or in a window. It runs no UI in place: its
  * input is no terminal a person types in (an AI CLI's shell tool ends it at once), so a UI there could never take a
  * key and, before the UI exited on input end, stayed running for days (T5756, T5760).
  */
 export const UI_NOWHERE =
-  'REFUSED the UI has nowhere to show: this run has no terminal a person types in, and neither a split nor a window opened; run teamrig ui in a terminal, or set open.terminal to one that opens a window';
+  'REFUSED the UI has nowhere to show: this run has no terminal a person types in, and nothing opened beside the session or in a window; run teamrig ui in a terminal, or set open.terminal to one that opens a window';
 
 /**
  * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once its UI starts. The
- * terminal half then shows here when this run has a terminal a person types in; else in a split of the session's
- * terminal, else in a window when none was tried yet, saying so. With no terminal here, a run where nothing opened is
+ * terminal half then shows here when this run has a terminal a person types in; else beside the session: a split of
+ * its tmux pane, or a new tab of its Windows Terminal window, whose split would be of the focused tab (T5831); else in a window when none was tried yet, saying so. With no terminal here, a run where nothing opened is
  * `refused` (`UI_NOWHERE`), and `both` whose window opened is done with it. A window or split that opened with no UI
  * starting in it ends the run as `failed`.
  */
@@ -269,9 +285,10 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
   if (runtime.interactive) {
     return 'here';
   }
-  const split = await openUiSplit(runtime, kit, start, session);
-  if (split !== 'none') {
-    return split === 'opened' ? 'shown' : 'failed';
+  const tabbing = tabbingTerminal(runtime.env);
+  const beside = tabbing === undefined ? await openUiSplit(runtime, kit, start, session) : await openUiTab(runtime, kit, start, session, tabbing);
+  if (beside !== 'none') {
+    return beside === 'opened' ? 'shown' : 'failed';
   }
   if (windowOpened) {
     return 'shown';
@@ -290,7 +307,7 @@ async function placeUi(runtime: CliRuntime, config: KitConfig, kit: Kit, mode: U
  * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>] [--home <dir>]`: shows the dedicated UI where `--mode`,
  * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
  * one running the same UI and returns; with both, it opens the window and then shows the UI here too. Run with no
- * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
+ * terminal of its own (an AI CLI's shell tool), the terminal half shows beside the session instead, in a split of its tmux pane or a new tab of its Windows Terminal window
  * (`placeUi`), and it is refused when neither opens. A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec. While the UI runs here, `startTicker` runs

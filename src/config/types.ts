@@ -604,7 +604,7 @@ export interface TurnLogConfig {
 
 export const UI_MODES = ['terminal', 'window', 'both'] as const;
 /**
- * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, or a split beside the session when
+ * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, or beside the session (a tmux split, a Windows Terminal tab) when
  * that is no terminal a person types in, `window` in a window of its own, `both` in the two at once.
  */
 export type UiMode = (typeof UI_MODES)[number];

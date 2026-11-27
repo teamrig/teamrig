@@ -70,14 +70,14 @@ export async function openTab(deps: OpenTabDeps, choice: TerminalChoice, tab: Ta
 }
 
 /**
- * Splits the terminal window this run works in and runs the tab's command in the new pane (T5105, T5236): only tmux
- * and Windows Terminal split, found by their own variables (`splittableTerminal`), whatever `open.terminal` says, as
- * the split is of the run's own window. The terminal's port serves the split; how it keeps the focus is the port's own.
+ * Splits the pane this run works in and runs the tab's command in the new pane (T5105, T5236): only tmux splits the
+ * run's own pane, found by its own variable (`splittableTerminal`), whatever `open.terminal` says. The terminal's port
+ * serves the split; how it keeps the focus is the port's own.
  */
 export async function openSplit(deps: OpenTabDeps, tab: TabRequest): Promise<SplitOutcome> {
   const terminal = splittableTerminal(deps.env);
   if (terminal === undefined) {
-    return { kind: 'none', reasons: ['this terminal is neither tmux nor Windows Terminal, the ones that split'] };
+    return { kind: 'none', reasons: ['this terminal is not tmux, the one that splits the pane a run works in'] };
   }
   const reach = await terminalPortOf(terminal, { env: deps.env, platform: deps.platform, processes: deps.processes, cwd: deps.cwd }, deps.importer);
   if (reach.kind === 'refused') {

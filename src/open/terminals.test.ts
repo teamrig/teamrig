@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoTerminals, splittableTerminal, teamWindowOf } from './terminals.ts';
+import { autoTerminals, splittableTerminal, tabbingTerminal, teamWindowOf } from './terminals.ts';
 
 describe('teamWindowOf', () => {
   it("names the team's own window when the team keeps one (T1427), and none when it keeps its tabs with the others", () => {
@@ -10,11 +10,25 @@ describe('teamWindowOf', () => {
 });
 
 describe('splittableTerminal (T5105)', () => {
-  it('finds tmux before Windows Terminal by their pane variables, and none outside both', () => {
+  it('finds tmux by its pane variable, inside Windows Terminal too, and none outside it', () => {
     assert.equal(splittableTerminal({ TMUX: '/tmp/tmux-1/default,1,0', WT_SESSION: 'guid' }), 'tmux');
-    assert.equal(splittableTerminal({ TMUX: '', WT_SESSION: 'guid' }), 'windows-terminal');
-    assert.equal(splittableTerminal({ WT_SESSION: '' }), undefined);
+    assert.equal(splittableTerminal({ TMUX: '/tmp/tmux-1/default,1,0' }), 'tmux');
     assert.equal(splittableTerminal({}), undefined);
+  });
+
+  it("never names Windows Terminal, whose split is of the focused tab, not the run's own (T5831)", () => {
+    assert.equal(splittableTerminal({ TMUX: '', WT_SESSION: 'guid' }), undefined);
+    assert.equal(splittableTerminal({ WT_SESSION: 'guid' }), undefined);
+  });
+});
+
+describe('tabbingTerminal (T5831)', () => {
+  it('names Windows Terminal by WT_SESSION, and none outside it or inside tmux, which splits instead', () => {
+    assert.equal(tabbingTerminal({ WT_SESSION: 'guid' }), 'windows-terminal');
+    assert.equal(tabbingTerminal({ TMUX: '', WT_SESSION: 'guid' }), 'windows-terminal');
+    assert.equal(tabbingTerminal({ TMUX: '/tmp/tmux-1/default,1,0', WT_SESSION: 'guid' }), undefined);
+    assert.equal(tabbingTerminal({ WT_SESSION: '' }), undefined);
+    assert.equal(tabbingTerminal({}), undefined);
   });
 });
 
