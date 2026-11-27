@@ -182,6 +182,7 @@ const EXPECTED = {
   'key remove': 'internal',
   'key check': 'read',
   'kit prune': 'write',
+  'kit sweep': 'write',
   'kit install': 'write',
   'kit update': 'write',
   'kit uninstall': 'write',
