@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import type { KitConfig } from '../../config/types.ts';
 import { ENV } from '../../core/home.ts';
 import type { FileLock } from '../../core/lock.ts';
@@ -106,7 +107,9 @@ export async function ensureWatch(runtime: CliRuntime, kit: Kit, config: KitConf
     await runtime.processes.startHidden({
       command: runtime.self.node,
       args: [runtime.self.script, 'issue', 'watch'],
-      cwd: kit.paths.home,
+      // Node's own folder, never the team home: Windows refuses removing a folder a process runs in, and the watch
+      // runs for hours (T5882).
+      cwd: dirname(runtime.self.node),
       env: { ...runtime.env, [ENV.team]: kit.paths.team },
     });
   }
