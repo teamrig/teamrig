@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, fstatSync, mkdtempSync, openSync, readSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -25,14 +25,17 @@ describe('step handoff', () => {
   it('writes the plan to the real open file the pipe number names, by default', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'step-handoff-'));
     const path = join(dir, 'pipe');
-    const pipe = openSync(path, 'w');
+    // Read back through the same descriptor, never the path again: a reopen by path could see another file.
+    const pipe = openSync(path, 'w+');
     try {
       assert.deepEqual(await nodeStepHandoff({ [STEP_HANDOFF_VAR]: String(pipe) }).give(RUN), { kind: 'given' });
+      const written = Buffer.alloc(fstatSync(pipe).size);
+      readSync(pipe, written, 0, written.length, 0);
+      assert.deepEqual(JSON.parse(written.toString('utf8')), RUN);
     } finally {
       closeSync(pipe);
+      rmSync(dir, { recursive: true, force: true });
     }
-    assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), RUN);
-    rmSync(dir, { recursive: true, force: true });
   });
 
   it('writes nothing when no launcher started the step', async () => {
