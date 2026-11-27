@@ -13,8 +13,14 @@ export interface ActBinding {
   readonly cardDigest: string | null;
 }
 
-/** What the nonce ledger knows of a challenge's nonce: never issued, already used, or issued for an act (its digest). */
-export type NonceState = { readonly kind: 'unknown' } | { readonly kind: 'used' } | { readonly kind: 'issued'; readonly actDigest: string };
+/**
+ * What the nonce ledger knows of a challenge's nonce: never issued, issued for an act (its digest) and unused, or
+ * used, with the id of the register event that spent it.
+ */
+export type NonceState =
+  | { readonly kind: 'unknown' }
+  | { readonly kind: 'issued'; readonly actDigest: string }
+  | { readonly kind: 'used'; readonly actDigest: string; readonly spentBy: string };
 
 /** Why a proof is refused. */
 export type ProofRefusal =
