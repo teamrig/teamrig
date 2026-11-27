@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { ConfigReader, formatIssue } from '../config/reader.ts';
 import {
   DEFAULT_LEVEL_PRESET,
+  isLevelNames,
   LEVEL_PRESET_NAMES,
   LEVEL_PRESETS,
   levelLabel,
@@ -86,6 +87,28 @@ describe('readLevelNamesSetting', () => {
     const long = 'x'.repeat(41);
     assert.match(readValue({ ...OWN, goal: { singular: long, plural: 'Themes' } }).issues[0] ?? '', /^levels\.names\.goal\.singular: expected at most 40 characters/);
     assert.match(readValue({ ...OWN, goal: { singular: 'Two\nlines', plural: 'Themes' } }).issues[0] ?? '', /^levels\.names\.goal\.singular: expected a single line/);
+  });
+});
+
+describe('isLevelNames', () => {
+  it('takes every preset and a full map of labels', () => {
+    for (const preset of LEVEL_PRESET_NAMES) assert.equal(isLevelNames(LEVEL_PRESETS[preset]), true, preset);
+    assert.equal(isLevelNames(OWN), true);
+  });
+
+  it('refuses a level left out, a level that is none, and a label that is blank, too long or two lines', () => {
+    const { goal: _left, ...noGoal } = OWN;
+    const broken: readonly unknown[] = [
+      'jira',
+      null,
+      noGoal,
+      { ...OWN, epic: { singular: 'Epic', plural: 'Epics' } },
+      { ...OWN, goal: { singular: 'Theme' } },
+      { ...OWN, goal: { singular: ' ', plural: 'Themes' } },
+      { ...OWN, goal: { singular: 'x'.repeat(41), plural: 'Themes' } },
+      { ...OWN, goal: { singular: 'Two\nlines', plural: 'Themes' } },
+    ];
+    for (const value of broken) assert.equal(isLevelNames(value), false, JSON.stringify(value));
   });
 });
 

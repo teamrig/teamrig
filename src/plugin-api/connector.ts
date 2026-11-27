@@ -6,6 +6,7 @@ import type { ProgramRunner } from '../core/program-runner.ts';
 import type { SecretScanner } from '../core/secrets.ts';
 import { featuresOf, isConnectorKind, type ConnectorKind } from '../features/registry.ts';
 import type { CodeHost, IssueTarget, Tracker } from '../issues/host.ts';
+import { MAX_LEVEL_LABEL, NAMED_LEVELS, isLevelNames, type LevelNames } from '../register/level-names.ts';
 import { adapterEntry, declarationProblems, type AdapterDeclaration } from './declaration.ts';
 import { isSupport } from './support.ts';
 
@@ -20,6 +21,12 @@ export interface ConnectorDeclaration extends AdapterDeclaration<'connector'> {
    * what it holds; empty for a connector that reads none. A key of the section not listed here is reported.
    */
   readonly configKeys: Readonly<Record<string, string>>;
+  /**
+   * What the tracker calls each level of work (goal, feature, task, subtask), as a label for one item and for several:
+   * a team whose `levels.names` is `auto` prints them when this is the one tracker it uses that names its levels.
+   * Left out, the team sees teamrig's default set. Labels only: commands and fields keep the neutral words.
+   */
+  readonly levelNames?: LevelNames;
 }
 
 /**
@@ -168,6 +175,9 @@ export function connectorDeclarationProblems(value: unknown): readonly string[] 
     ...(kinds === undefined ? ['its kinds must list tracker, codehost or both, each once'] : strayKindProblems(kinds, value['manifest'])),
     ...(refPrefix !== undefined && REF_PREFIX.test(refPrefix) ? [] : ['its refPrefix must be a lower-case word ending in a colon']),
     ...(isConfigKeys(value['configKeys']) ? [] : ['its configKeys must name each config key in camelCase beside one line on what it holds']),
+    ...(value['levelNames'] === undefined || isLevelNames(value['levelNames'])
+      ? []
+      : [`its levelNames must name each of ${NAMED_LEVELS.join(', ')} with a singular and a plural, each one line of at most ${MAX_LEVEL_LABEL} characters`]),
   ];
 }
 

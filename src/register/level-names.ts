@@ -48,7 +48,7 @@ export const LEVEL_PRESET_NAMES: readonly LevelPreset[] = ['default', 'youtrack'
 /** The set shown when nothing names one: no key, `auto` with no tracker that names its levels. */
 export const DEFAULT_LEVEL_PRESET: LevelPreset = 'default';
 
-/** `auto`: the team's tracker connector's names when it declares them, else the default set. */
+/** `auto`: the names of the one tracker in use that declares them (composition/team-connectors.ts), else the default set. */
 export const AUTO_LEVEL_NAMES = 'auto';
 
 /** What a `levels.names` key holds: `auto`, a preset's name, or a map of every level. */
@@ -61,6 +61,20 @@ const isLabel = shortLine(MAX_LEVEL_LABEL);
 
 export function isLevelPreset(value: unknown): value is LevelPreset {
   return LEVEL_PRESET_NAMES.some((preset) => preset === value);
+}
+
+/** Whether `value` is a label a level may print: one line, not blank, of at most MAX_LEVEL_LABEL characters. */
+export function isLevelLabel(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '' && isLabel(value) === undefined;
+}
+
+/** Whether `value` names every level and nothing else, each with a label for one item and one for several. */
+export function isLevelNames(value: unknown): value is LevelNames {
+  if (!isRecord(value) || !Object.keys(value).every((key) => NAMED_LEVELS.some((level) => level === key))) return false;
+  return NAMED_LEVELS.every((level) => {
+    const entry = value[level];
+    return isRecord(entry) && isLevelLabel(entry['singular']) && isLevelLabel(entry['plural']);
+  });
 }
 
 /**
