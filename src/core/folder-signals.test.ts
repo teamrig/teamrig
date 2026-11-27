@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { nodeFolderSignals, type FolderWatch } from './folder-signals.ts';
+import {
+  folderSignalsOver,
+  nodeFolderSignals,
+  type FolderWatch,
+  type SystemWatcher,
+  type WatchFolder,
+} from './folder-signals.ts';
 
 /** The longest a change may take to be told of; the system's watches tell within milliseconds. */
 const TOLD_WITHIN_MS = 4_000;
@@ -70,6 +76,13 @@ describe('nodeFolderSignals', () => {
     assert.ok(changes > seen, 'no change told of a file in the folder made after the watch');
   });
 
+  it('names a folder the system refuses to watch for a reason other than its absence', () => {
+    const refused = join(root, 'bad\0name');
+    const watch = nodeFolderSignals.watch([refused], () => undefined);
+    open.push(watch);
+    assert.deepEqual(watch.unwatched(), [refused]);
+  });
+
   it('tells nothing once closed', async () => {
     const folder = join(root, 'closed');
     await mkdir(folder);
@@ -81,5 +94,80 @@ describe('nodeFolderSignals', () => {
     await writeFile(join(folder, 'one.md'), 'x');
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(changes, 0);
+  });
+});
+
+/** A system watch a spec drives by hand: a change, an error, and whether it was closed. */
+class HandWatcher implements SystemWatcher {
+  readonly folder: string;
+  readonly onEvent: () => void;
+  closes = 0;
+  private onError: ((error: Error) => void) | undefined;
+
+  constructor(folder: string, onEvent: () => void) {
+    this.folder = folder;
+    this.onEvent = onEvent;
+  }
+
+  on(event: 'error', listener: (error: Error) => void): this {
+    this.onError = listener;
+    return this;
+  }
+
+  close(): void {
+    this.closes += 1;
+  }
+
+  fail(): void {
+    this.onError?.(new Error('watch ended'));
+  }
+}
+
+describe('folderSignalsOver', () => {
+  function handWatches(): { readonly started: HandWatcher[]; readonly watchFolder: WatchFolder } {
+    const started: HandWatcher[] = [];
+    return {
+      started,
+      watchFolder: (folder, onEvent) => {
+        const watcher = new HandWatcher(folder, onEvent);
+        started.push(watcher);
+        return watcher;
+      },
+    };
+  }
+
+  it('names a folder whose watch ended with an error, closes that watch and tells of it once', () => {
+    const { started, watchFolder } = handWatches();
+    let changes = 0;
+    const watch = folderSignalsOver(watchFolder).watch(['/t/a', '/t/b'], () => {
+      changes += 1;
+    });
+    started[0]?.fail();
+    assert.deepEqual(watch.unwatched(), ['/t/a']);
+    assert.equal(started[0]?.closes, 1);
+    assert.equal(changes, 1);
+  });
+
+  it('tells nothing of a change or an error the system delivers after close, and closes twice safely', () => {
+    const { started, watchFolder } = handWatches();
+    let changes = 0;
+    const watch = folderSignalsOver(watchFolder).watch(['/t/a'], () => {
+      changes += 1;
+    });
+    watch.close();
+    watch.close();
+    started[0]?.onEvent();
+    started[0]?.fail();
+    assert.equal(changes, 0);
+    assert.deepEqual(watch.unwatched(), []);
+    assert.equal(started[0]?.closes, 1);
+  });
+
+  it('names a folder none of whose folders above it can be watched', () => {
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const watch = folderSignalsOver(() => {
+      throw missing;
+    }).watch(['/t/a'], () => undefined);
+    assert.deepEqual(watch.unwatched(), ['/t/a']);
   });
 });
