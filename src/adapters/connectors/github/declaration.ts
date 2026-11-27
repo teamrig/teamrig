@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.9.0',
+  apiVersion: '0.10.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
@@ -27,6 +27,13 @@ export const declaration: ConnectorDeclaration = {
   steps: ['tracker.link-child', 'codehost.private-report', 'codehost.fetch-outside-change'],
   // GitHub's keys are still the team config's own `github` section, which the commands read.
   configKeys: {},
+  // The words GitHub's own docs give each level (11-25): the same as the `github` preset of levels.names.
+  levelNames: {
+    goal: { singular: 'Milestone', plural: 'Milestones' },
+    feature: { singular: 'Feature', plural: 'Features' },
+    task: { singular: 'Issue', plural: 'Issues' },
+    subtask: { singular: 'Sub-issue', plural: 'Sub-issues' },
+  },
   manifest: {
     'tracker.issue-import': provedOnWindows('tracker.issue-import'),
     'tracker.issue-read': SUPPORTED,
