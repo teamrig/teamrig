@@ -107,7 +107,7 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     for (const matcher of matchers) {
       assert.doesNotMatch(matcher, /Bash|PowerShell|Read|Grep|Write|Edit|SendMessage|Agent|Task|AskUserQuestion/u);
     }
-    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['run_command', 'run_command']);
+    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['run_command', 'view_file|read_file|grep_search']);
     assert.ok(group?.PostToolUse?.some((entry) => entry.matcher === '*'));
   });
 

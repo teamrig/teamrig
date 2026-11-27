@@ -118,11 +118,11 @@ describe('pluginHooks', () => {
     }
   });
 
-  it('wires the guards of a Bash call as one set, so a recorded call meets each guard through it (T5553)', () => {
+  it('wires the PreToolUse hooks of a Bash call as one set, so a recorded call meets each through it (T5553, T5821)', () => {
     const bash = hooks.filter((wired) => hookMatches(wired, { hook_event_name: 'PreToolUse', tool_name: 'Bash' }));
     assert.deepEqual(
       bash.map(({ argv }) => argv[1]),
-      ['guards', 'readonly-allow', 'route-allow', 'picker-guard'],
+      ['guards'],
     );
   });
 
