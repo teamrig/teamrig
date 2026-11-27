@@ -5455,6 +5455,17 @@ fetch the released UI:
 REFUSED the UI 0.86.0 could not be fetched: <why>
 ```
 
+Every 15 s it also looks whether it should still run. Once `kit install` or `kit use` made a newer teamrig the
+current one, or the terminal process it ran under has ended (taken at its first look, so a launcher that only opened
+the window does not count), it ends the UI's process tree, prints an `ENDED` line and exits 0, so no UI of an old
+version or of a closed terminal stays running. A look that cannot list the processes tries again at the next one, and
+the run prints why on stderr once the UI has ended:
+
+```text
+ENDED the UI: teamrig 0.512.0 is installed, and this UI ran 0.511.0; run teamrig ui again
+ENDED the UI: WindowsTerminal.exe 17460, which it ran under, has ended
+```
+
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
 
 ### teamrig page test
