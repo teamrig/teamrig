@@ -2,6 +2,7 @@ import { formatAddress } from '../../core/address.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { LATER_FORMS, MAX_LATER_HOURS, namedLaterTime } from '../../core/later-time.ts';
 import { storedDeadline, storedText, typedTimeHint } from '../../core/time.ts';
+import type { OwnerProofRecord } from '../../owner-proof/record.ts';
 import { isCardDigest } from '../../register/card-digest.ts';
 import type { Task } from '../../register/fold.ts';
 import type { OwnerAnswer } from '../../register/policy.ts';
@@ -10,6 +11,7 @@ import { refuseUnlessPerson } from '../agent-run.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
 import { taskRefOf, type TypedTimes } from '../inputs.ts';
 import { findTeam, openKit, type Access, type Kit } from '../kit.ts';
+import { proveOwnerAct, proveRefusalText, teamProofState } from '../owner-proof-act.ts';
 import { EXIT, RefusedError, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { postUrgentLine } from '../urgent-line.ts';
 import { report } from './register.ts';
@@ -216,13 +218,41 @@ function untilOf(text: string, times: TypedTimes): string {
   return until;
 }
 
+/** The answer's words in the act the owner's proof signs: `--approve`, `--decline` or `--option <n>`. */
+function answerArgs(answer: OwnerAnswer): readonly string[] {
+  return answer.kind === 'option' ? ['--option', String(answer.option)] : [`--${answer.kind}`];
+}
+
+/**
+ * The owner's proof of this answer (T4758 C1 design pick 2), or undefined while no key was ever enrolled. The act is
+ * `owner decide <team>/T<id> <answer>` bound to the card read (`--read`, required while the proof is on); a proof
+ * not made throws, so nothing is written.
+ */
+async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: OwnerAnswer, read: string | undefined): Promise<OwnerProofRecord | undefined> {
+  const { paths } = target.kit;
+  const { config } = target.team;
+  const state = await teamProofState(runtime, config);
+  if (state.kind === 'on' && read === undefined) {
+    throw new RefusedError(`${KIT_NAME} owner decide needs --read <cardDigest> while the owner proof is on: the proof signs the card that was read`);
+  }
+  const act = ['owner', 'decide', `${paths.team}/${target.id}`, ...answerArgs(answer)];
+  const outcome = await proveOwnerAct(runtime, paths, config, state, { team: paths.team, act, commit: null, cardDigest: read ?? null });
+  if (outcome.kind === 'off') return undefined;
+  if (outcome.kind === 'refused') {
+    throw new RefusedError(`${proveRefusalText(outcome.refusal)}; ${target.names.task(target.id)} stays in the decision queue`);
+  }
+  return outcome.record;
+}
+
 /**
  * `owner decide <[team/]T<id>> --option <n>|--approve|--decline [--read <digest>]`: the owner answers a card from the
  * pane's Decisions tab (T4078). It is kept in the task's history as the owner's Decided, naming the option chosen or yes or no, which drops
  * the task's waits on the owner, and wakes the task's session to go on from it. Refused on a task that waits on no
  * decision or approval of the owner, on an option the card lacks, on yes or no to a decision or an option to an
  * approval, on a `--read` digest the card no longer has, on a security-related card without its current verdict, and
- * under CLAUDECODE.
+ * under CLAUDECODE. Once the owner enrolled a key (`owner.proof`), the answer is signed by it after the owner's
+ * gesture and kept on the Decided (T4758 C1); it then needs `--read`, and a proof not made, declined or not verified
+ * refuses it, the card staying in the decision queue.
  */
 export async function ownerDecide(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   refuseUnlessOwner(runtime, 'decide');
@@ -230,7 +260,8 @@ export async function ownerDecide(args: ParsedArgs, runtime: CliRuntime): Promis
   const read = readDigestOf(args);
   const target = await targetOf(runtime, onePositional(args, '[team/]T<id>'), 'write');
   const { team, names } = target;
-  const written = await team.register.ownerDecide(target.id, answer, read);
+  const proof = await decideProof(runtime, target, answer, read);
+  const written = await team.register.ownerDecide(target.id, answer, read, proof);
   const code = report(runtime, written, 'DECIDED', team, target.label);
   if (written.ok) {
     const { task } = written.value;

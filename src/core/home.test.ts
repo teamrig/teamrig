@@ -74,6 +74,8 @@ describe('teamPaths', () => {
     assert.equal(paths.renamesLock, join(TEAM_HOME, 'state', 'renames.lock'));
     assert.equal(paths.stepBackups, join(TEAM_HOME, 'state', 'step-backups.jsonl'));
     assert.equal(paths.stepBackupsLock, join(TEAM_HOME, 'state', 'step-backups.lock'));
+    assert.equal(paths.ownerProofNonces, join(TEAM_HOME, 'state', 'owner-proof-nonces.json'));
+    assert.equal(paths.ownerProofNoncesLock, join(TEAM_HOME, 'state', 'owner-proof-nonces.lock'));
     assert.equal(paths.skills, HOST_SKILLS);
     assert.equal(paths.refresh, join(TEAM_HOME, 'state', 'refresh'));
     assert.equal(paths.handover, join(TEAM_HOME, 'handover'));
