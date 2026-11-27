@@ -1,4 +1,5 @@
 import { isNonNegativeInteger, isRecord, type JsonRecord } from '../core/guards.ts';
+import { parseOwnerProofRecord } from '../owner-proof/record.ts';
 import { parseCard, type DecisionCard } from './card.ts';
 import { parseDescriptionCut } from './description-cut.ts';
 import { diskPriority, isApprovalVerdict, parseCompleteTaskFields, parseFollowups, parseSizeBase, type SizeBase } from './events.ts';
@@ -101,7 +102,12 @@ function parseDecided(value: unknown): OwnerDecision | null | string {
   if (by === undefined || note === undefined) {
     return `bad decision ${JSON.stringify(value)}`;
   }
-  return { ...by, note };
+  const stored = isRecord(value) ? value['ownerProof'] : undefined;
+  if (stored === undefined) {
+    return { ...by, note };
+  }
+  const ownerProof = parseOwnerProofRecord(stored);
+  return typeof ownerProof === 'string' ? `bad decision: ${ownerProof}` : { ...by, note, ownerProof };
 }
 
 function parseCardOrNull(value: unknown): DecisionCard | null | string {

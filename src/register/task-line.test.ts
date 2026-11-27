@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
+import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
 import { testTask } from '../testing/task.ts';
 import { cutTask, textHash } from './description-cut.ts';
 import { BLOCKER_FIELD } from './events.ts';
@@ -69,7 +70,7 @@ const richTask: Task = testTask({
     security: true,
   },
   answer: { verdict: 'approved', by: 'lead', at: '2030-01-08T10:00:00.000Z', note: 'checked the diff' },
-  decided: { by: 'lead', at: '2030-01-08T11:00:00.000Z', note: 'the owner said yes' },
+  decided: { by: 'lead', at: '2030-01-08T11:00:00.000Z', note: 'the owner said yes', ownerProof: OWNER_PROOF_RECORD },
   proof: 'the health check answers',
   watch: 'a sighting in the log',
   reparks: 2,
@@ -171,6 +172,8 @@ describe('task lines', () => {
     assert.match(String(parseTaskLine(editedLine(richTask, { answer: { verdict: 'maybe', by: 'lead', at: '2030-01-08T10:00:00.000Z', note: null } }))), /^T42: bad answer /);
     assert.match(String(parseTaskLine(editedLine(richTask, { answer: { verdict: 'approved', at: '2030-01-08T10:00:00.000Z', note: null } }))), /^T42: bad answer /);
     assert.match(String(parseTaskLine(editedLine(richTask, { decided: { by: 'lead', at: '2030-01-08T11:00:00.000Z' } }))), /^T42: bad decision /);
+    const unsigned = { by: 'lead', at: '2030-01-08T11:00:00.000Z', note: 'yes', ownerProof: { challenge: OWNER_PROOF_RECORD.challenge } };
+    assert.match(String(parseTaskLine(editedLine(richTask, { decided: unsigned }))), /^T42: bad decision: ownerProof has no base64 signature/);
     assert.match(String(parseTaskLine(editedLine(richTask, { audits: [{ path: 'steps/grant.ps1', sha256: 'a'.repeat(64), at: '2030-01-08T09:00:00.000Z' }] }))), /^T42: bad audit /);
     assert.match(String(parseTaskLine(editedLine(richTask, { securityVerdict: { text: 'PASS', read: { question: 'q', options: [], recommend: 'r' }, by: 'security' } }))), /^T42: bad security verdict /);
   });

@@ -2,6 +2,7 @@ import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { ID_PATTERN } from '../core/ids.ts';
 import type { JsonlRecord } from '../core/jsonl.ts';
 import { parseIsoStamp, parseUtcDeadline } from '../core/time.ts';
+import { parseOwnerProofRecord, type OwnerProofRecord } from '../owner-proof/record.ts';
 import { BLOCKER_PRIORITY_ID, isTaskStatus, LEGACY_WAITING_STATUS, TASK_ID, WAIT_STATUSES, WORK_CLASS_NAME, type TaskStatus } from './model.ts';
 import { parseCard, type DecisionCard } from './card.ts';
 import { GOAL_TAG, isSlice } from './goals.ts';
@@ -216,6 +217,8 @@ export interface UpdateEvent extends EventBase {
   readonly waits?: readonly WaitReason[];
   /** A Decided (T1366): the owner's decision on the task's card, which its note says, recorded by `by`; only `decide` writes it. */
   readonly decided?: true;
+  /** The owner's signed proof of a Decided (T4758 C1), written only beside `decided` while the proof is on. */
+  readonly ownerProof?: OwnerProofRecord;
   /** What the task had cost on the UTC day its size was set, when it was set (T649); only an update that gives a size writes it. */
   readonly sizeBase?: SizeBase;
   /** A hand step file a session other than the task's owner audited for it, pinned at its sha256 (T2312); only `audit` writes it. */
@@ -396,6 +399,13 @@ export function parseEvent(line: JsonlRecord): EventParse {
       if (decided !== undefined && decided !== true) {
         return unreadable(`decided is ${JSON.stringify(decided)}, not true`);
       }
+      const ownerProof = record['ownerProof'] === undefined ? undefined : parseOwnerProofRecord(record['ownerProof']);
+      if (typeof ownerProof === 'string') {
+        return unreadable(ownerProof);
+      }
+      if (ownerProof !== undefined && decided !== true) {
+        return unreadable('ownerProof is only kept on a Decided');
+      }
       const sizeBase = record['sizeBase'] === undefined ? undefined : parseSizeBase(record['sizeBase']);
       if (typeof sizeBase === 'string') {
         return unreadable(sizeBase);
@@ -416,6 +426,7 @@ export function parseEvent(line: JsonlRecord): EventParse {
         ...(verdict === undefined ? {} : { verdict }),
         ...(waits === undefined ? {} : { waits }),
         ...(decided === undefined ? {} : { decided }),
+        ...(ownerProof === undefined ? {} : { ownerProof }),
         ...(sizeBase === undefined ? {} : { sizeBase }),
         ...(audit === undefined ? {} : { audit }),
         ...(securityVerdict === undefined ? {} : { securityVerdict }),

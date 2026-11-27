@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { BLOCKER_PRIORITY_ID } from './model.ts';
 import { TEST_CARD } from '../testing/card.ts';
+import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
 import { EVENT_VERSION, eventRecord, parseEvent, TASK_LINE_VERSION, type EventParse, type RegisterEvent } from './events.ts';
 
 const BASE = { id: 'T3', at: '2030-01-07T09:00:00.000Z', by: 'alpha' };
@@ -460,6 +461,20 @@ describe('parseEvent: the waits a Later gives a task (T1295)', () => {
     assert.deepEqual(eventRecord(event), event);
     const plain = parse({ ...BASE, type: 'update', changes: {}, note: 'context' }, 2);
     assert.ok(plain.kind === 'event' && !('decided' in plain.event));
+  });
+
+  it("reads a Decided's proof record (T4758 C1), and writes it as it is", () => {
+    const record = { ...BASE, type: 'update', changes: {}, note: 'owner approved', waits: [], decided: true, ownerProof: OWNER_PROOF_RECORD };
+    const event: RegisterEvent = { ...BASE, v: 2, type: 'update', changes: {}, note: 'owner approved', waits: [], decided: true, ownerProof: OWNER_PROOF_RECORD };
+    assert.deepEqual(parse(record, 2), { kind: 'event', event });
+    assert.deepEqual(eventRecord(event), event);
+  });
+
+  it('cannot read a proof record out of form, or one on an update that is no Decided', () => {
+    const bad = parse({ ...BASE, type: 'update', changes: {}, note: 'n', waits: [], decided: true, ownerProof: { ...OWNER_PROOF_RECORD, signature: '' } }, 2);
+    assert.ok(bad.kind === 'unreadable' && /ownerProof has no base64 signature/.test(bad.reason), JSON.stringify(bad));
+    const loose = parse({ ...BASE, type: 'update', changes: {}, note: 'n', ownerProof: OWNER_PROOF_RECORD }, 2);
+    assert.ok(loose.kind === 'unreadable' && /ownerProof is only kept on a Decided/.test(loose.reason), JSON.stringify(loose));
   });
 
   it('cannot read a decided mark other than true', () => {
