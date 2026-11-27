@@ -7,10 +7,10 @@ import { assignIssue, loginRefusal, type AssignEnd, type AssignWrite } from './a
 const TARGET = { repo: 'acme/web', number: 7 };
 const SHOWN = 'acme/web#7';
 
-/** Runs `write` on `host`, giving how it ended and the lines it said. */
-async function assign(host: FakeIssueHost, write: Omit<AssignWrite, 'target'>): Promise<{ end: AssignEnd; lines: string[] }> {
+/** Runs `write` on `host`, no design assignees unless it lists some, giving how it ended and the lines it said. */
+async function assign(host: FakeIssueHost, write: Omit<AssignWrite, 'target' | 'designAssignees'> & Partial<Pick<AssignWrite, 'designAssignees'>>): Promise<{ end: AssignEnd; lines: string[] }> {
   const lines: string[] = [];
-  const end = await assignIssue(host, { target: TARGET, ...write }, (line) => lines.push(line));
+  const end = await assignIssue(host, { target: TARGET, designAssignees: [], ...write }, (line) => lines.push(line));
   return { end, lines };
 }
 
@@ -46,6 +46,25 @@ describe('assignIssue', () => {
     const { end, lines } = await assign(host, { add: ['octocat'], remove: ['mallory'] });
     assert.equal(end, 'refused');
     assert.equal(lines.at(-1), `REFUSED ${SHOWN}: it is a design issue, talk and not work to take, so no one is assigned until it is agreed and the "design" label comes off; nothing was changed`);
+    assert.deepEqual(host.calls, []);
+  });
+
+  it('assigns a login listed in designAssignees to a design issue, case aside (T5461)', async () => {
+    const host = new FakeIssueHost().labelsItem(TARGET, 'design').spells('OwnerLogin');
+    const { end, lines } = await assign(host, { add: ['ownerlogin'], remove: [], designAssignees: ['OwnerLogin'] });
+    assert.equal(end, 'done');
+    assert.equal(lines.at(-1), `ASSIGNED ${SHOWN}: OwnerLogin`);
+    assert.deepEqual(host.calls, [{ kind: 'assign', target: TARGET, logins: ['OwnerLogin'] }]);
+  });
+
+  it('still refuses a design issue add naming any login outside designAssignees, sending no write (T5461)', async () => {
+    const host = new FakeIssueHost().labelsItem(TARGET, 'design');
+    const { end, lines } = await assign(host, { add: ['ownerlogin', 'octocat'], remove: [], designAssignees: ['ownerlogin'] });
+    assert.equal(end, 'refused');
+    assert.equal(
+      lines.at(-1),
+      `REFUSED ${SHOWN}: it is a design issue, talk and not work to take, so no one but github.designAssignees (ownerlogin) is assigned until it is agreed and the "design" label comes off, and octocat is not one of them; nothing was changed`,
+    );
     assert.deepEqual(host.calls, []);
   });
 
@@ -85,7 +104,7 @@ describe('assignIssue', () => {
   it('assigns and takes off with a tracker that is no code host (T4619)', async () => {
     const host = new FakeIssueHost();
     const lines: string[] = [];
-    assert.equal(await assignIssue(trackerOnly(host), { target: TARGET, add: ['octocat'], remove: ['mallory'] }, (line) => lines.push(line)), 'done');
+    assert.equal(await assignIssue(trackerOnly(host), { target: TARGET, add: ['octocat'], remove: ['mallory'], designAssignees: [] }, (line) => lines.push(line)), 'done');
     assert.deepEqual(lines, ['ACCESS acme: writes as the test', `ASSIGNED ${SHOWN}: octocat`, `UNASSIGNED ${SHOWN}: mallory`]);
     assert.deepEqual(
       host.calls.map((call) => call.kind),

@@ -256,7 +256,7 @@ export async function issueLabel(args: ParsedArgs, runtime: CliRuntime): Promise
  * `issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]` (T3228): adds assignees to and takes
  * them off one issue or pull request of the team's repositories, through the same host and caller checks as `issue
  * label`. Each login to add is read as one the host may assign to that item, and an add to a design issue is
- * refused (issues/assign.ts). Refused before anything runs: neither list, a login in both or no login at all, or more
+ * refused but for the logins in github.designAssignees (issues/assign.ts). Refused before anything runs: neither list, a login in both or no login at all, or more
  * than MAX_ASSIGN_LOGINS together. Exit 2 when refused, 1 when the host failed, else 0.
  */
 export async function issueAssign(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
@@ -273,11 +273,13 @@ export async function issueAssign(args: ParsedArgs, runtime: CliRuntime): Promis
   if (add.length + remove.length > MAX_ASSIGN_LOGINS) {
     throw new RefusedError(`issue assign takes at most ${MAX_ASSIGN_LOGINS} logins in all, not ${add.length + remove.length}: an item goes to its takers`);
   }
-  const hosts = await hostsFor(args, runtime, target.repo, undefined);
+  const checked = await checkedRepo(args, runtime, target.repo);
+  const hosts = await hostsAfter(checked, runtime, undefined);
   if (hosts === undefined) {
     return EXIT.ok;
   }
-  const end = await assignIssue(hosts.tracker, { target, add, remove }, (line) => runtime.out.stdout(line));
+  const { designAssignees } = checked.config.github;
+  const end = await assignIssue(hosts.tracker, { target, add, remove, designAssignees }, (line) => runtime.out.stdout(line));
   return end === 'done' ? EXIT.ok : end === 'refused' ? EXIT.refused : EXIT.failed;
 }
 

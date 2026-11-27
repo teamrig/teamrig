@@ -815,6 +815,11 @@ export interface GithubConfig {
    */
   readonly acceptLabel: string;
   /**
+   * The GitHub logins (lowercase) `issue assign` may add to a design issue before it is agreed, such as the team owner
+   * every design issue goes to (T5461); every other login stays refused there. Empty, the default: none.
+   */
+  readonly designAssignees: readonly string[];
+  /**
    * The score, from 0 to 1, at which a mirrored issue counts as a duplicate candidate of a new one: the cosine of
    * their TF-IDF word vectors (src/issues/similar.ts). Higher lists fewer, closer candidates.
    */

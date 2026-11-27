@@ -859,6 +859,7 @@ function parseGithub(read: ConfigReader, raw: JsonRecord, sessions: readonly str
     statusPush: read.boolean(raw, 'statusPush', 'github', DEFAULT_GITHUB.statusPush),
     fields: parseIssueFields(read, read.section(raw, 'fields', 'github')),
     acceptLabel: read.string(raw, 'acceptLabel', 'github', DEFAULT_GITHUB.acceptLabel, shortLine(GITHUB_LABEL_MAX_LENGTH)),
+    designAssignees: readDesignAssignees(read, raw),
     similarThreshold: read.number(raw, 'similarThreshold', 'github', DEFAULT_GITHUB.similarThreshold, CONFIG_LIMITS.similarThreshold),
     activity: read.boolean(raw, 'activity', 'github', DEFAULT_GITHUB.activity),
     followMax: read.integer(raw, 'followMax', 'github', DEFAULT_GITHUB.followMax, CONFIG_LIMITS.githubFollowMax),
@@ -1133,6 +1134,21 @@ function readServiceHolders(read: ConfigReader, entry: JsonRecord, path: string,
     }
   });
   return holders.length === value.length ? holders : undefined;
+}
+
+/** `github.designAssignees` (T5461): GitHub logins kept in lowercase, as GitHub matches them; one listed twice is reported and kept once. */
+function readDesignAssignees(read: ConfigReader, raw: JsonRecord): string[] {
+  const login = (value: string): string | undefined => (GITHUB_LOGIN.test(value) ? undefined : 'expected a GitHub login: letters, digits or -, at most 39 characters');
+  const logins: string[] = [];
+  for (const listed of read.stringList(raw, 'designAssignees', 'github', DEFAULT_GITHUB.designAssignees, login, CONFIG_LIMITS.githubDesignAssignees.maxItems)) {
+    const key = listed.toLowerCase();
+    if (logins.includes(key)) {
+      read.report('github.designAssignees', `${describe(listed)} is listed twice`);
+      continue;
+    }
+    logins.push(key);
+  }
+  return logins;
 }
 
 /** `github.owners`: a session for each GitHub login; a wrong login or a session not on the team is reported and left out. */

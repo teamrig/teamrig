@@ -352,7 +352,7 @@ export const DEFAULT_ISSUE_FIELDS: IssueFieldsConfig = {
  * per further hundred open, or recently changed closed, issues). An outsider's issue waits for the `teamrig` label,
  * named after the tool so it does not clash with a repository's own triage labels.
  */
-export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS };
+export const DEFAULT_GITHUB: GithubConfig = { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', designAssignees: [], similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS };
 
 /**
  * The import a team gets with no setup (T5013): its people's issues and those labelled `teamrig`, at most 200 open

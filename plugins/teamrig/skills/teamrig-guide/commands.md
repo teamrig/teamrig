@@ -1969,7 +1969,7 @@ reply`: use it once someone says they take the item, such as a commenter asking 
 comma-separated lists of the tracker's logins (a leading `@` is dropped); give at least one, no login in both, and at most 3
 logins in all. Before any change it reads the item's labels and each login to add: an add to a design issue (one
 labelled `design`, talk not yet agreed) is refused, as no one takes design talk until it is agreed and the label
-comes off; and a login the tracker would drop is refused, as it assigns only someone with access to the repository or
+comes off, but for the logins in [github.designAssignees], such as the team owner every design issue goes to; and a login the tracker would drop is refused, as it assigns only someone with access to the repository or
 someone who took part in the item (a comment counts). The logins to add go in one call, as the tracker spells them, then
 each login to remove comes off in turn; the first failure stops it, and a `FAILED` line after a change says what it
 already did. It prints `ASSIGNED <target>: <logins>` and `UNASSIGNED <target>: <login>`. Exit 1 when it failed, 2

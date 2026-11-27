@@ -1019,7 +1019,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,
-      such as a comment asking to take it), at most 3 logins in all; refused on a design issue
+      such as a comment asking to take it), at most 3 logins in all; refused on a design issue but
+      for the logins in github.designAssignees
   issue intake <owner/name#n> --priority <p> [--due <when>] [--goals <tags>]   takes in an outside
       pull request of the team's repositories: reads its changed paths once (one page of 100), asks the
       session owning each area it changes (github.areaPaths, owned through github.areaOwners) a

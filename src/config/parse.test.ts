@@ -45,7 +45,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.steps, { backupDays: 7 });
-    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
+    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', designAssignees: [], similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
@@ -705,6 +705,7 @@ describe('parseConfig', () => {
       statusPush: false,
       fields: DEFAULT_ISSUE_FIELDS,
       acceptLabel: 'teamrig',
+      designAssignees: [],
       similarThreshold: 0.35,
       activity: true,
       followMax: 20,
@@ -799,6 +800,20 @@ describe('parseConfig', () => {
       const parsed = parseConfig({ ...ROSTER, github: { acceptLabel: wrong } });
       assert.deepEqual(paths(parsed.issues), ['github.acceptLabel'], JSON.stringify(wrong));
       assert.equal(parsed.config.github.acceptLabel, 'teamrig');
+    }
+  });
+
+  it('reads the github design assignees as GitHub logins in lowercase, each once, else keeps none (T5461)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, github: { designAssignees: ['OwnerLogin', 'x'.repeat(39)] } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.github.designAssignees, ['ownerlogin', 'x'.repeat(39)]);
+    const twice = parseConfig({ ...ROSTER, github: { designAssignees: ['ownerlogin', 'OwnerLogin'] } });
+    assert.deepEqual(paths(twice.issues), ['github.designAssignees']);
+    assert.deepEqual(twice.config.github.designAssignees, ['ownerlogin']);
+    for (const wrong of [[''], ['owner login'], ['x'.repeat(40)], ['-owner'], [7], 'ownerlogin', Array.from({ length: 11 }, (_, at) => `owner${at}`)]) {
+      const parsed = parseConfig({ ...ROSTER, github: { designAssignees: wrong } });
+      assert.ok(paths(parsed.issues).every((path) => path.startsWith('github.designAssignees')) && parsed.issues.length > 0, JSON.stringify(wrong));
+      assert.ok(parsed.config.github.designAssignees.every((login) => /^[a-z0-9][a-z0-9-]{0,38}$/u.test(login)), JSON.stringify(wrong));
     }
   });
 

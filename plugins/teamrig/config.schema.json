@@ -1682,6 +1682,17 @@
           "maxLength": 50,
           "pattern": "^[^\\r\\n]+$",
           "default": "teamrig"
+        },
+        "designAssignees": {
+          "description": "The GitHub logins teamrig issue assign may add to a design issue before it is agreed, such as the team owner every design issue goes to; matched without case. Every other login stays refused on a design issue until its design label comes off. Empty, the default: no one.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$",
+            "maxLength": 39
+          },
+          "maxItems": 10,
+          "default": []
         }
       }
     },

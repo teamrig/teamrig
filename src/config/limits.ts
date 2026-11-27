@@ -76,6 +76,8 @@ export const CONFIG_LIMITS = {
   githubProbeSeconds: { min: 0, max: 3600 },
   similarThreshold: { min: 0, max: 1 },
   githubFollowMax: { min: 0, max: 100 },
+  /** A few people own design talk; a GitHub login is at most 39 characters. */
+  githubDesignAssignees: { maxItems: 10, maxLength: 39 },
   /** A label name up to the longest tracker cap (255), past the shortest (50): one list serves every tracker. */
   syncScopeLabels: { maxItems: 20, maxLength: 255 },
   syncMaxOpen: { min: 0, max: 5000 },

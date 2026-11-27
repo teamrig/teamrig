@@ -451,7 +451,8 @@ unmerged. `--reason completed`, `not-planned` or `duplicate` says why it closed 
 original. `teamrig issue edit` replaces the body (the description) with the text of a file, so a spec of many lines
 keeps its shape; the title, state and labels stay, and GitHub keeps the old body in the edit history. `teamrig issue
 assign` gives one to its takers, at most 3 logins added and taken off together: it reads the item's labels and
-refuses an add to a design issue, and reads each login as one GitHub may assign to that item (someone with access to
+refuses an add to a design issue but for the logins in `github.designAssignees` (such as the team owner every design
+issue goes to), and reads each login as one GitHub may assign to that item (someone with access to
 the repository, or someone who took part in it, such as a commenter asking to take it), refusing one it would drop.
 Each names its target as `owner/name#number`.
 
