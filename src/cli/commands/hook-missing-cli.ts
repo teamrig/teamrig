@@ -1,5 +1,6 @@
 import { KIT_NAME } from '../../core/home.ts';
 import { missingCliLine, missingCliOf } from '../../hooks/missing-cli.ts';
+import type { HookEvent, HookReply } from '../../ports/host/index.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { stepsIfKnown } from '../host.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
@@ -15,7 +16,16 @@ export async function missingCli(args: ParsedArgs, runtime: CliRuntime): Promise
   const { event } = await readHookInput(runtime);
   const on = event === undefined ? undefined : missingCliOf(event);
   if (on !== undefined) {
-    writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) });
+    writeReply(runtime, on, missingCliReply(runtime));
   }
   return EXIT.ok;
+}
+
+/** The missing-cli hook's reply to this call, alone or in a `hook after` set: the line to run the CLI by its path, or none. */
+export function missingCliReplyOf(runtime: CliRuntime, event: HookEvent): HookReply | undefined {
+  return missingCliOf(event) === undefined ? undefined : missingCliReply(runtime);
+}
+
+function missingCliReply(runtime: CliRuntime): HookReply {
+  return { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) };
 }

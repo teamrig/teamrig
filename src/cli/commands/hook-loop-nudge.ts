@@ -4,7 +4,7 @@ import type { KitConfig } from '../../config/types.ts';
 import { leadNudgeLine, leadWorkOf, taskOwnersOf } from '../../hooks/lead-boundary.ts';
 import { chainOf, nudgeLine, turnTasksOf, turnToolsOf } from '../../hooks/loop-nudge.ts';
 import { TRANSCRIPT_TAIL_BYTES } from '../../names/title.ts';
-import type { HookEvent } from '../../ports/host/index.ts';
+import type { HookEvent, HookReply } from '../../ports/host/index.ts';
 import { JsonlEventLog } from '../../register/store.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
 import { transcriptsOf, usageIfMetered } from '../host.ts';
@@ -12,7 +12,7 @@ import { openKit, rosterOf, type Kit } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { meterTabMidTurn } from './hook-budget.ts';
 import { loadTree } from '../tree.ts';
-import { readHookInput, sessionTeam, teamSessionOf, turnLeadPathsOf, writeReply, type HookInput } from './hook-input.ts';
+import { readHookInput, sessionTeam, teamSessionOf, turnLeadPathsOf, writeReply } from './hook-input.ts';
 
 /** The tool the hook fires for, from the event's call; undefined for an event with no call or a call with no id. */
 function currentToolOf(event: HookEvent): ToolUse | undefined {
@@ -58,12 +58,12 @@ async function leadBoundaryLine(runtime: CliRuntime, kit: Kit, config: KitConfig
 }
 
 /**
- * The lines for this hook input: the chain nudge and, on the lead's tab, the lead-boundary nudge; none for a
+ * The lines for this call: the chain nudge and, on the lead's tab, the lead-boundary nudge; none for a
  * helper's call, outside a loaded team or with both off.
  */
-async function loopNudgeLines({ event }: HookInput, runtime: CliRuntime): Promise<readonly string[]> {
-  const transcript = event?.transcript;
-  if (event === undefined || transcript === undefined || event.helper?.id !== undefined) {
+async function loopNudgeLines(event: HookEvent, runtime: CliRuntime): Promise<readonly string[]> {
+  const transcript = event.transcript;
+  if (transcript === undefined || event.helper?.id !== undefined) {
     return [];
   }
   const found = await sessionTeam(event.cwd, runtime);
@@ -104,9 +104,13 @@ async function loopNudgeLines({ event }: HookInput, runtime: CliRuntime): Promis
  */
 export async function loopNudge(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
-  const lines = await loopNudgeLines(await readHookInput(runtime), runtime).catch((): readonly string[] => []);
-  if (lines.length > 0) {
-    writeReply(runtime, 'tool-end', { context: lines.join('\n') });
-  }
+  const { event } = await readHookInput(runtime);
+  writeReply(runtime, 'tool-end', event === undefined ? undefined : await loopNudgeReplyOf(runtime, event));
   return EXIT.ok;
+}
+
+/** The loop-nudge hook's reply to this call, alone or in a `hook after` set: its lines, or none, on any error too. */
+export async function loopNudgeReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookReply | undefined> {
+  const lines = await loopNudgeLines(event, runtime).catch((): readonly string[] => []);
+  return lines.length === 0 ? undefined : { context: lines.join('\n') };
 }
