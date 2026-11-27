@@ -118,6 +118,9 @@ export class TempRepo {
   }
 
   remove(): void {
-    rmSync(this.root, { recursive: true, force: true });
+    // On Windows a folder that is a live process's cwd cannot be removed (EPERM/EBUSY). A spec that stops git at its time
+    // limit kills only git, so the child git started (an alias's node) can still be ending in the repo; the retries
+    // (about 5.5 s in all, the delay growing 100 ms each try) outlast it under load (T5814).
+    rmSync(this.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }

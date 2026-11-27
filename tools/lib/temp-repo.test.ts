@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TempRepo } from './temp-repo.ts';
 
@@ -41,6 +42,20 @@ describe('TempRepo.copyFrom (T5032)', () => {
       assert.deepEqual(children.filter((line) => line.includes('"maintenance"')), []);
     } finally {
       repo.remove();
+    }
+  });
+});
+
+describe('TempRepo.remove (T5814)', () => {
+  it('removes its folder while a child process ending there still holds it as its cwd', async () => {
+    const repo = new TempRepo('held-cwd').init();
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 800)'], { cwd: repo.dir, stdio: 'ignore', windowsHide: true });
+    try {
+      await once(child, 'spawn');
+      repo.remove();
+      assert.equal(existsSync(repo.dir), false);
+    } finally {
+      if (child.exitCode === null) await once(child, 'exit');
     }
   });
 });
