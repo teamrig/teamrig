@@ -864,7 +864,7 @@ The owner's enrolled public keys, one per device they sign from; a proof by any 
 | --- | --- | --- | --- |
 | `keyId` (required) | string (matching `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`) |  | The name the adapter gives the key: letters, digits and . \_ : -, at most 128 characters. |
 | `algorithm` (required) | one of `"rsa-pkcs1-sha256"`, `"ecdsa-p256-sha256"`, `"ed25519"` |  | The key's signature scheme: rsa-pkcs1-sha256 (Windows Hello), ecdsa-p256-sha256 (a Secure Enclave key), ed25519 (a root-owned helper's key). |
-| `publicKeyPem` (required) | string |  | The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key). |
+| `publicKeyPem` (required) | string |  | The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key; for rsa-pkcs1-sha256, a modulus of at least 2048 bits). |
 
 ## `meetingNotices`
 

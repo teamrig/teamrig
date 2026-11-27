@@ -2034,7 +2034,7 @@
                     "enum": ["rsa-pkcs1-sha256", "ecdsa-p256-sha256", "ed25519"]
                   },
                   "publicKeyPem": {
-                    "description": "The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key).",
+                    "description": "The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key; for rsa-pkcs1-sha256, a modulus of at least 2048 bits).",
                     "type": "string"
                   }
                 }
