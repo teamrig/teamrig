@@ -8,6 +8,8 @@ import { recordConfigDir } from '../../budget/config-dir.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { KIT_NAME, resolveKitHome } from '../../core/home.ts';
 import type { TimeZone } from '../../core/zone.ts';
+import { clipEnd } from '../../core/clip.ts';
+import { lineOnClock, readSinceOf } from '../../inbox/inbox.ts';
 import { routeReminderOf } from '../../inbox/route.ts';
 import { boundPromptNote, boundStartNote, tabTitleFor } from '../../hooks/bind.ts';
 import { modelCheckLine } from '../../hooks/model-check.ts';
@@ -54,6 +56,7 @@ import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 import { hostSessionAbove } from '../session-process.ts';
 import { keptRulesAboveOf, readTeamRules } from '../team-rules.ts';
 import { loadTree } from '../tree.ts';
+import { inboxDepsOf } from './inbox.ts';
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle, type TitleRead } from './hook-bind.ts';
 import { helperGateReply, promptBudgetLine, stopBudgetLines } from './hook-budget.ts';
 import { ensureWatch } from './issue-watch.ts';
@@ -682,6 +685,37 @@ async function carryRecordAt(runtime: CliRuntime, store: RefreshStore, id: strin
   }
 }
 
+/** The most inbox lines a fresh start lists again, newest kept, and the most characters it gives each. */
+const READ_SINCE_CAPS = { maxLines: 10, maxChars: 500 };
+
+/**
+ * The inbox lines the session marked read after its handover was written (the file's time, else when it was marked
+ * ready), which the handover may not hold, for the fresh start after a refresh (#835); none when it read none. Says,
+ * never throws, when it cannot read them.
+ */
+async function readSinceNoteOf(runtime: CliRuntime, kit: Kit, store: RefreshStore, id: string, readyAt: string | undefined, zone: TimeZone): Promise<readonly string[]> {
+  const deps = inboxDepsOf(runtime, kit.paths);
+  try {
+    const since = (await runtime.files.modifiedAt(store.handoverPath(id))) ?? (readyAt === undefined ? undefined : Date.parse(readyAt));
+    if (since === undefined || Number.isNaN(since)) {
+      return [];
+    }
+    const lines = await readSinceOf(deps, id, new Date(since));
+    if (lines.length === 0) {
+      return [];
+    }
+    const kept = lines.slice(-READ_SINCE_CAPS.maxLines);
+    const older = lines.length - kept.length;
+    return [
+      `Your old session read ${lines.length} inbox line(s) after your handover was written, so it may not hold them; act on them as on new ones:`,
+      ...kept.map((line) => clipEnd(lineOnClock(line, zone), READ_SINCE_CAPS.maxChars)),
+      ...(older === 0 ? [] : [`(${older} older one(s) left out: read them in ${deps.inboxes.pathOf(id)})`]),
+    ];
+  } catch (error) {
+    return [`${KIT_NAME} could not list the inbox lines your old session read (${errorMessage(error)}): check the end of ${deps.inboxes.pathOf(id)} against your handover.`];
+  }
+}
+
 /** What a start says about the context refresh: its note, and whether this is the fresh start a handover was written for. */
 interface RefreshStart {
   readonly note: string | undefined;
@@ -720,7 +754,8 @@ async function refreshStartOf(runtime: CliRuntime, kit: Kit, config: KitConfig, 
       state?.phase === 'ready' && state.transcript !== null
         ? await carriedLinesOf(runtime, store, id, state.transcript, start, teamZone(config, runtime))
         : [await carryRecordAt(runtime, store, id, start)].filter((line) => line !== undefined);
-    return { note: [decision.note, ...carried].join('\n'), refreshed: true };
+    const read = await readSinceNoteOf(runtime, kit, store, id, state?.phase === 'ready' ? state.at : undefined, teamZone(config, runtime));
+    return { note: [decision.note, ...carried, ...read].join('\n'), refreshed: true };
   } catch (error) {
     return { note: `${KIT_NAME} could not check for a refresh handover (${errorMessage(error)}); if you wrote one before a /clear, read it first.`, refreshed: false };
   }
