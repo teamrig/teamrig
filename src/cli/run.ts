@@ -252,7 +252,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
   'idle-open': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleOpen },
   who: { effect: 'read', flags: [], load: async () => (await teamCommands()).who },
-  read: { effect: 'read', flags: ['session', 'team', 'owner', 'since', 'conversation', 'unless', 'interface', 'task', 'range', 'max-bytes', 'after'], switches: ['json'], load: async () => (await readCommand()).read },
+  read: { effect: 'read', flags: ['session', 'team', 'owner', 'since', 'conversation', 'unless', 'interface', 'task', 'range', 'max-bytes', 'after', 'finished-within'], switches: ['json'], load: async () => (await readCommand()).read },
   // A follower a program starts and reads until one of the two ends: `/teamrig` would wait on it for good, so it is no `read`.
   events: { effect: 'internal', flags: ['documents', 'session', 'team', 'owner', 'since', 'conversation', 'task', 'range'], switches: ['json'], load: async () => (await eventsCommand()).events },
   sessions: { effect: 'read', flags: ['project'], switches: ['pass'], load: async () => (await sessionsCommands()).sessions },
@@ -824,7 +824,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   who [<id|name|role|team/id>] the name to message a session by (no argument: every session of yours)
   read <document>... --json [--session <id|name>] [--conversation <id>] [--team <id>] [--owner <id|name>]
       [--task T<id>] [--range 7d|30d|90d|180d|1y|all] [--since <hours>]
-      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]]
+      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]] [--finished-within <days>]
       [--interface <major.minor>]   the public interface's read side, for a program: each document
       asked is one JSON line on stdout, in the order asked, with its revision and what could not be
       served (problems); a refusal goes to stderr, so stdout holds answers only.
@@ -856,6 +856,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       time, as many tasks as fit in that many bytes of their JSON and at least one; next names the
       last task served while more remain, null on the last page. --after: the next a page gave, the
       task the next page starts after; every page carries the same revision while nothing changed.
+      --finished-within: serve tasks with only the done and dropped tasks of the last that many whole
+      days, counted from the start of today's UTC day; finishedSince names that moment.
       --interface: the version you speak, refused when this teamrig does not serve it. It writes nothing
   events --json [--documents <document>[,...]] [--session <id|name>] [--conversation <id>] [--team <id>]
       [--owner <id|name>] [--since <hours>] [--task <id>] [--range <days>]   the public interface's

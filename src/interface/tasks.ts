@@ -126,8 +126,17 @@ export interface TasksBody {
    * asked after (`--after`); null on the last page and on a read that asks for no page.
    */
   readonly next: string | null;
+  /**
+   * Since 1.12: on a read asked for recent finished tasks only (`--finished-within`), the moment a done or dropped
+   * task's `statusAt` must reach to be served; an older one is left out of `tasks`, though it stays in the register.
+   * Null on a read that serves every finished task.
+   */
+  readonly finishedSince: string | null;
   readonly cuts: readonly Cut[];
 }
+
+/** The statuses `finishedSince` reaches: a verifying task still waits on its proof, so it is always served. */
+const FINISHED: ReadonlySet<string> = new Set(['done', 'dropped']);
 
 /**
  * One page of the `tasks` document: the tasks served after `after` (from the first when null), as many as fit in
@@ -165,18 +174,22 @@ export interface TasksInput {
   readonly names: SourceNames;
   /** The one page to serve; null serves every task in one answer. */
   readonly page: TasksPage | null;
+  /** An ISO instant: a done or dropped task whose `statusAt` is before it is left out; null serves every one. */
+  readonly finishedSince: string | null;
 }
 
 /**
  * The `tasks` document's body. Each task is scanned with its own `ServedText`, so `cuts` lists the cuts of the
- * tasks served and no other's: a task left out by `owner`, or outside the page asked, adds no cut. A page is
+ * tasks served and no other's: a task left out by `owner` or `finishedSince`, or outside the page asked, adds no
+ * cut, and a page's `after` must name a task those two serve. A page is
  * measured in the UTF-8 bytes of its tasks' JSON with the commas between them, so a reader whose run output is
  * capped asks for pages that fit under its cap with room for the rest of the answer.
  * @throws UnknownCursorError when the page's `after` names no task served.
  */
 export function tasksBody(input: TasksInput): TasksBody {
-  const owned = [...input.tasks].filter((task) => input.owner === null || task.owner === input.owner);
+  const owned = [...input.tasks].filter((task) => (input.owner === null || task.owner === input.owner) && recentEnough(task, input.finishedSince));
   const from = firstServedIndex(owned, input.page?.after ?? null);
+  const finishedSince = input.finishedSince;
   const tasks: ServedTask[] = [];
   const cuts: Cut[] = [];
   let bytes = 0;
@@ -190,13 +203,21 @@ export function tasksBody(input: TasksInput): TasksBody {
     if (input.page !== null) {
       bytes += UTF8.encode(JSON.stringify(built)).byteLength + (last === undefined ? 0 : 1);
       if (last !== undefined && bytes > input.page.maxBytes) {
-        return { tasks, retired: input.retired, next: last.id, cuts };
+        return { tasks, retired: input.retired, next: last.id, finishedSince, cuts };
       }
     }
     tasks.push(built);
     cuts.push(...served.cuts);
   }
-  return { tasks, retired: input.retired, next: null, cuts };
+  return { tasks, retired: input.retired, next: null, finishedSince, cuts };
+}
+
+/**
+ * Whether a task is served under `finishedSince`: every unfinished one is, and a finished one whose status moved at
+ * or after it. Both are ISO instants in UTC as the register writes them, so they compare as text.
+ */
+function recentEnough(task: Task, finishedSince: string | null): boolean {
+  return finishedSince === null || !FINISHED.has(task.status) || task.statusAt >= finishedSince;
 }
 
 /** Where a page starts among the tasks served: just past `after`, or the first when null. */

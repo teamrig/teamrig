@@ -276,6 +276,44 @@ describe('teamrig read tasks --max-bytes', () => {
   });
 });
 
+describe('teamrig read tasks --finished-within', () => {
+  const DAY_MS = 24 * HOUR_MS;
+
+  async function drop(kit: CliHarness, id: string): Promise<void> {
+    const dropped = await kit.run(['set', id, '--status', 'dropped', '--note', 'no longer wanted', '--session', 'alpha']);
+    assert.equal(dropped.code, EXIT.ok, dropped.stderr.join('\n'));
+  }
+
+  it('leaves out a task finished before the window and serves the rest, naming where the window starts', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Old drop', 'alpha');
+    await add(kit, 'New drop', 'alpha');
+    await add(kit, 'Still open', 'alpha');
+    await drop(kit, 'T1');
+    kit.clock.advance(3 * DAY_MS);
+    await drop(kit, 'T2');
+
+    const recent = served(await kit.run([...READ_TASKS, '--finished-within', '2']));
+    const whole = served(await kit.run(READ_TASKS));
+
+    const startOfToday = Math.floor(kit.clock.now() / DAY_MS) * DAY_MS;
+    assert.deepEqual([titlesOf(recent), recent['finishedSince']], [['New drop', 'Still open'], new Date(startOfToday - 2 * DAY_MS).toISOString()]);
+    assert.deepEqual([titlesOf(whole), whole['finishedSince']], [['Old drop', 'New drop', 'Still open'], null]);
+  });
+
+  it('gives the window its own revision, which moves when the UTC day turns though no file changed', async () => {
+    const kit = new CliHarness();
+    await add(kit, 'Ship the gate', 'alpha');
+    const whole = served(await kit.run(READ_TASKS))['revision'];
+    const today = served(await kit.run([...READ_TASKS, '--finished-within', '7']))['revision'];
+    assert.equal(served(await kit.run([...READ_TASKS, '--finished-within', '7']))['revision'], today);
+    kit.clock.advance(DAY_MS);
+    const tomorrow = served(await kit.run([...READ_TASKS, '--finished-within', '7']))['revision'];
+
+    assert.deepEqual([today === whole, tomorrow === today, served(await kit.run(READ_TASKS))['revision'] === whole], [false, false, true]);
+  });
+});
+
 describe('teamrig read inbox', () => {
   it('serves a session that never read its inbox every line as unread, with no count', async () => {
     const kit = new CliHarness();
@@ -755,6 +793,9 @@ describe('teamrig read: what is asked', () => {
     ['a --max-bytes that is no count', [...READ_TASKS, '--max-bytes', '1MB'], /--max-bytes takes a whole number of bytes, such as 1000000; got "1MB"/],
     ['a --max-bytes of 0', [...READ_TASKS, '--max-bytes', '0'], /--max-bytes takes a whole number of bytes/],
     ['an --after that is no task id', [...READ_TASKS, '--max-bytes', '1000', '--after', '../T1'], /--after takes a task id, such as T12; got "\.\.\/T1"/],
+    ['--finished-within on a run that asks no tasks', [...READ_SESSIONS, '--finished-within', '7'], /--finished-within narrows tasks, and this run does not ask for tasks/],
+    ['a --finished-within that is no count', [...READ_TASKS, '--finished-within', '7d'], /--finished-within takes whole days, such as 7; got "7d"/],
+    ['a --finished-within of 0', [...READ_TASKS, '--finished-within', '0'], /--finished-within takes whole days, such as 7; got "0"/],
   ];
 
   for (const [what, argv, message] of USAGE_ERRORS) {

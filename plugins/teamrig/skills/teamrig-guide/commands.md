@@ -2807,7 +2807,7 @@ answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.10`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.12`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
@@ -2848,6 +2848,13 @@ longer serves is refused, so start again from the first page. Every page carries
 moved: a page whose revision differs from the first one's was read after a change, so read from the first page again.
 `retired` counts the whole archive on every page. `--max-bytes` needs `tasks` among the documents asked and pages it alone, the others served whole; `--after` needs
 `--max-bytes`.
+
+Since interface 1.12 `tasks` can leave out the team's past: `--finished-within <days>` serves every task that is not
+done or dropped, and only the done and dropped ones whose `statusAt` falls in the last `days` whole UTC days, counted
+from the start of today's; `tasks` then also has `finishedSince`, that moment, and `null` on a read without the flag.
+A task left out stays in the register, `history` still serves it, and `retired` still counts the archive. The
+`revision` moves once a day as finished tasks leave the window, and with `--max-bytes` an `--after` must name a task the
+window serves.
 
 `plan` (since interface 1.1) adds `at`, `validUntil`, `week`, `tasks`, `finished` and `ownerCards`: where each task
 stands in the team's plan, as `teamrig list` orders it, so a program ranks nothing itself. It holds ids, numbers,
@@ -3119,6 +3126,8 @@ Flags:
   usage error.
 - `--after T<id>`: the page after that task, the `next` the page before gave. It needs `--max-bytes`; an id the
   working set no longer serves is refused, so read again from the first page.
+- `--finished-within <days>`: serves `tasks` with only the done and dropped tasks of the last `days` whole UTC days,
+  1 or more; every other task is served. Giving it without asking `tasks` is a usage error.
 - `--unless <document>=<revision>[,<document>=<revision>...]`: the revision you already hold of a document this run
   asks, one entry a document, in one flag. A document still at that revision is answered `{ "interface", "document",
   "revision", "unchanged": true }` and nothing more, from the stamps of its files alone: nothing is folded, so
