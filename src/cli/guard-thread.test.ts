@@ -36,6 +36,14 @@ function keptEntry(input = '{}'): { readonly entry: NodeEntry; readonly stdout: 
   return { entry: { out: { stdout: (line) => stdout.push(line), stderr: (line) => stderr.push(line) }, script: 'main.js', readStdin: () => Promise.resolve(input) }, stdout, stderr };
 }
 
+/** How long the entry's own thread is held, far past what a stand-in thread needs to answer and fail. */
+const HELD_MS = 200;
+
+/** Holds this thread for `ms`, so the messages sent to it wait. */
+function holdThread(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 const ANSWERING = `
 post({ kind: 'loaded' });
 port.once('message', async (run) => {
@@ -72,6 +80,25 @@ describe('threadGuardLoad', () => {
       const script = threadScript(name, `post({ kind: 'loaded' });\nport.once('message', () => { ${onRun} });`);
       const main = await threadGuardLoad(script)();
       await assert.rejects(main(['hook', 'push-guard'], keptEntry().entry), why, name);
+    }
+  });
+
+  it('keeps an answer the thread posted before it failed, when the failure reaches a busy entry first', async (t) => {
+    // What a thread prints past its messages comes by the port its failure comes by. The entry is held in that line while
+    // the thread answers and fails, so the failure is the next message it takes, ahead of the answer on the other port.
+    t.mock.method(process.stderr, 'write', () => {
+      holdThread(HELD_MS);
+      return true;
+    });
+    const failures: readonly [string, string][] = [
+      ['answered-throws', "throw new Error('late throw');"],
+      ['answered-exits', 'process.exit(3);'],
+    ];
+    for (const [name, onEnd] of failures) {
+      const wait = `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${String(HELD_MS / 4)});`;
+      const script = threadScript(name, `post({ kind: 'loaded' });\nport.once('message', () => { process.stderr.write('stray'); ${wait} post({ kind: 'answered', code: 2 }); ${onEnd} });`);
+      const main = await threadGuardLoad(script)();
+      assert.equal(await main(['hook', 'push-guard'], keptEntry().entry), 2, name);
     }
   });
 

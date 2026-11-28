@@ -67,7 +67,13 @@ export function threadGuardLoad(workerScript: URL): () => Promise<GuardMain> {
             return;
         }
       });
-      worker.on('error', fail);
-      worker.on('exit', (code: number) => fail(new Error(`its thread ended with exit ${code} before it answered`)));
+      // A thread that throws emits 'error', which may overtake an answer it posted first (they come by two ports); Node
+      // delivers every message a thread sent before its 'exit'. So an error only notes its cause, and the exit fails
+      // what is still waiting with it: a posted answer always counts, and a thread with none is still a block.
+      let thrown: { readonly cause: unknown } | undefined;
+      worker.on('error', (cause: unknown) => {
+        thrown = { cause };
+      });
+      worker.on('exit', (code: number) => fail(thrown === undefined ? new Error(`its thread ended with exit ${code} before it answered`) : thrown.cause));
     });
 }
