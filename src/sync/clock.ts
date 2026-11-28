@@ -1,9 +1,9 @@
 /**
- * The response clock on GitHub threads (T3021 section 4, slice E): how long an outsider has waited for an answer of
+ * The response clock on a tracker's threads (T3021 section 4, slice E; tracker-neutral since T5796): how long an outsider has waited for an answer of
  * ours in words, against the team's target per kind of thread [replies.targetHours]. Code keeps it at 0 tokens: at
  * REMIND_SHARE of the target the owning session gets one unwoken inbox line, at the target `teamrig check` raises
  * GH-LATE for the lead. Pure: the sync reads the threads and keeps the clocks in their own state file
- * (src/cli/commands/issue-clock.ts). The targets are read at each step, not kept on a clock, so a changed target
+ * (src/cli/commands/issue-clock.ts, src/cli/replies-state.ts). The targets are read at each step, not kept on a clock, so a changed target
  * moves the clocks already running.
  */
 
@@ -25,14 +25,18 @@ const HOUR_MS = 3_600_000;
 /** The share of its target a thread waits before its owner is reminded, once. */
 export const REMIND_SHARE = 0.75;
 
-/** One post on a thread, its opening post too: when, and whether we wrote it. A bot's post is none: it neither starts nor stops a clock. */
+/** One post on a thread, its opening post too: when, who, and whether we wrote it. A bot's post is none: it neither starts nor stops a clock. */
 export interface ThreadPost {
   readonly at: number;
   readonly ours: boolean;
+  /** Its author's login on the tracker. */
+  readonly login: string;
 }
 
 /** An open thread as one read saw it. */
 export interface Thread {
+  /** The connector that read it, such as `github`. */
+  readonly tracker: string;
   /** `owner/name`. */
   readonly repo: string;
   /** As the task list names it (sync/map.ts issueRef). */
@@ -40,15 +44,23 @@ export interface Thread {
   readonly kind: ThreadKind;
   /** The session that answers it. */
   readonly owner: string;
+  /** As the tracker has it, outside input. */
+  readonly title: string;
   readonly posts: readonly ThreadPost[];
 }
 
 /** A running clock: the thread has waited since `since` for an answer of ours. */
 export interface Clock {
+  readonly tracker: string;
   readonly repo: string;
   readonly ref: string;
   readonly kind: ThreadKind;
   readonly owner: string;
+  readonly title: string;
+  /** The login of the post the wait started at. */
+  readonly author: string;
+  /** The person of ours the thread is assigned to, empty for none. */
+  readonly assignedTo: string;
   readonly since: number;
   /** When its owner was reminded; undefined until then. */
   readonly remindedAt: number | undefined;
@@ -59,9 +71,14 @@ export interface Clock {
  * last or no outsider posted. The oldest, not the newest: a "any news?" follow-up must not restart the wait.
  */
 export function waitingSince(posts: readonly ThreadPost[]): number | undefined {
+  return waitingPost(posts)?.at;
+}
+
+/** The post waitingSince starts at, so its author is named too. */
+function waitingPost(posts: readonly ThreadPost[]): ThreadPost | undefined {
   const ordered = [...posts].sort((a, b) => a.at - b.at);
   const lastOurs = ordered.findLastIndex((post) => post.ours);
-  return ordered.slice(lastOurs + 1).find((post) => !post.ours)?.at;
+  return ordered.slice(lastOurs + 1).find((post) => !post.ours);
 }
 
 /** A clock's target in milliseconds. */
@@ -84,19 +101,21 @@ export interface ClockStep {
  * The clocks after a read of the repositories in `read`: each open thread waiting on us keeps its clock (and whether
  * it was reminded) while the wait it times is the same one, else starts a fresh one; a thread answered, closed or
  * gone stops its clock. A repository not read this time (it failed) keeps its clocks as they were. A clock past
- * REMIND_SHARE of its target that was never reminded is reminded now, once.
+ * REMIND_SHARE of its target that was never reminded is reminded now, once. Whom it is assigned to is kept.
  */
 export function stepClocks(before: ReadonlyMap<string, Clock>, read: ReadonlySet<string>, threads: readonly Thread[], now: number, targets: ReplyTargetHours): ClockStep {
   const clocks = new Map([...before].filter(([, clock]) => !read.has(clock.repo)));
   const remind: Clock[] = [];
   for (const thread of threads) {
-    const since = waitingSince(thread.posts);
-    if (since === undefined) {
+    const waiting = waitingPost(thread.posts);
+    if (waiting === undefined) {
       continue;
     }
+    const since = waiting.at;
     const kept = before.get(thread.ref);
     const remindedAt = kept?.since === since ? kept.remindedAt : undefined;
-    const clock: Clock = { repo: thread.repo, ref: thread.ref, kind: thread.kind, owner: thread.owner, since, remindedAt };
+    const { tracker, repo, ref, kind, owner, title } = thread;
+    const clock: Clock = { tracker, repo, ref, kind, owner, title, author: waiting.login, assignedTo: kept?.assignedTo ?? '', since, remindedAt };
     if (clock.remindedAt === undefined && now - since >= targetMs(clock.kind, targets) * REMIND_SHARE) {
       const reminded = { ...clock, remindedAt: now };
       remind.push(reminded);
@@ -113,12 +132,12 @@ export function stepClocks(before: ReadonlyMap<string, Clock>, read: ReadonlySet
  * answers it. Its kind by label (`security`, then `bug`, matched without case), else a comment on a thread we hold
  * (`held`: a task of ours tracks it), else a feature ask or question. Undefined for a closed one.
  */
-export function issueThread(issue: HostIssue, ref: string, owner: string, held: boolean, ours: OurLogins): Thread | undefined {
+export function issueThread(tracker: string, issue: HostIssue, ref: string, owner: string, held: boolean, ours: OurLogins): Thread | undefined {
   if (issue.state !== 'open') {
     return undefined;
   }
   const opening = issue.createdAt === undefined ? [] : [{ at: issue.createdAt, login: issue.author, authorAssociation: issue.authorAssociation, authorKind: issue.authorKind }];
-  return { repo: issue.repo, ref, kind: issueKind(issue.labels, held), owner, posts: threadPosts([...opening, ...issue.comments], ours) };
+  return { tracker, repo: issue.repo, ref, kind: issueKind(issue.labels, held), owner, title: issue.title, posts: threadPosts([...opening, ...issue.comments], ours) };
 }
 
 /**
@@ -126,12 +145,12 @@ export function issueThread(issue: HostIssue, ref: string, owner: string, held: 
  * by postIsOurs, as on an issue; `owner` answers it. Undefined for a merged or closed one, and for a draft: it asks
  * nobody to look yet, so its wait starts once it is marked ready.
  */
-export function pullThread(pull: HostPull, ref: string, owner: string, ours: OurLogins): Thread | undefined {
+export function pullThread(tracker: string, pull: HostPull, ref: string, owner: string, ours: OurLogins): Thread | undefined {
   if (pull.state !== 'open' || pull.draft) {
     return undefined;
   }
   const opening = { at: pull.createdAt, login: pull.author, authorAssociation: pull.authorAssociation, authorKind: pull.authorKind };
-  return { repo: pull.repo, ref, kind: 'pull', owner, posts: threadPosts([opening, ...pull.posts], ours) };
+  return { tracker, repo: pull.repo, ref, kind: 'pull', owner, title: pull.title, posts: threadPosts([opening, ...pull.posts], ours) };
 }
 
 /**
@@ -149,7 +168,7 @@ const BOT = 'Bot';
 
 /** A thread's posts with a bot's left out, each ours by postIsOurs. */
 function threadPosts(posts: readonly IssueComment[], ours: OurLogins): ThreadPost[] {
-  return posts.filter((post) => post.authorKind !== BOT).map((post) => ({ at: Date.parse(post.at), ours: postIsOurs(post.authorAssociation, post.login, ours) }));
+  return posts.filter((post) => post.authorKind !== BOT).map((post) => ({ at: Date.parse(post.at), ours: postIsOurs(post.authorAssociation, post.login, ours), login: post.login }));
 }
 
 function issueKind(labels: readonly string[], held: boolean): ThreadKind {
@@ -163,18 +182,26 @@ function issueKind(labels: readonly string[], held: boolean): ThreadKind {
   return held ? 'comment' : 'feature';
 }
 
-/** The format of the clocks file this code writes; a file in another format, or damaged, reads as no clock running. */
-export const CLOCK_STATE_FORMAT = 1;
+/**
+ * The format of the replies file this code writes: 2, each row naming its tracker, title, waiting author and
+ * assignee (T5796). Format 1 was GitHub's clocks file: its rows read as GitHub's with those left empty, so an upgrade
+ * keeps every running clock. A file in another format, or damaged, reads as no clock running.
+ */
+export const CLOCK_STATE_FORMAT = 2;
+
+/** The only tracker format 1 ever kept clocks for. */
+const FORMAT_1_TRACKER = 'github';
 
 /** The clocks a file holds by ref; a damaged entry is left out, a damaged file reads as none. */
 export function parseClocks(text: string): Map<string, Clock> {
   const record = parseObject(text.trim());
-  const list = record?.[VERSION_FIELD] === CLOCK_STATE_FORMAT ? record['clocks'] : undefined;
-  const clocks = Array.isArray(list) ? list.flatMap(clockOf) : [];
+  const format = record?.[VERSION_FIELD];
+  const list = format === 1 || format === CLOCK_STATE_FORMAT ? record?.['clocks'] : undefined;
+  const clocks = Array.isArray(list) ? list.flatMap((value) => clockOf(value, format === 1)) : [];
   return new Map(clocks.map((clock) => [clock.ref, clock]));
 }
 
-function clockOf(value: unknown): Clock[] {
+function clockOf(value: unknown, formatOne: boolean): Clock[] {
   if (!isRecord(value)) {
     return [];
   }
@@ -183,7 +210,18 @@ function clockOf(value: unknown): Clock[] {
   if (typeof repo !== 'string' || typeof ref !== 'string' || typeof owner !== 'string' || !isThreadKind(kind) || !time(since)) {
     return [];
   }
-  return [{ repo, ref, kind, owner, since, remindedAt: time(remindedAt) ? remindedAt : undefined }];
+  const text = (field: string): string | undefined => {
+    const found = value[field];
+    return typeof found === 'string' ? found : undefined;
+  };
+  const tracker = formatOne ? FORMAT_1_TRACKER : text('tracker');
+  const title = formatOne ? '' : text('title');
+  const author = formatOne ? '' : text('author');
+  const assignedTo = formatOne ? '' : text('assignedTo');
+  if (tracker === undefined || title === undefined || author === undefined || assignedTo === undefined) {
+    return [];
+  }
+  return [{ tracker, repo, ref, kind, owner, title, author, assignedTo, since, remindedAt: time(remindedAt) ? remindedAt : undefined }];
 }
 
 function isThreadKind(value: unknown): value is ThreadKind {
@@ -193,7 +231,18 @@ function isThreadKind(value: unknown): value is ThreadKind {
 export function formatClocks(clocks: ReadonlyMap<string, Clock>): string {
   return toJsonlLine({
     [VERSION_FIELD]: CLOCK_STATE_FORMAT,
-    clocks: [...clocks.values()].map(({ repo, ref, kind, owner, since, remindedAt }) => ({ repo, ref, kind, owner, since, ...(remindedAt === undefined ? {} : { remindedAt }) })),
+    clocks: [...clocks.values()].map(({ tracker, repo, ref, kind, owner, title, author, assignedTo, since, remindedAt }) => ({
+      tracker,
+      repo,
+      ref,
+      kind,
+      owner,
+      title,
+      author,
+      assignedTo,
+      since,
+      ...(remindedAt === undefined ? {} : { remindedAt }),
+    })),
   });
 }
 

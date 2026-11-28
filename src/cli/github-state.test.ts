@@ -22,7 +22,6 @@ describe('openGithubState', () => {
     const files = new MemoryFiles({
       [earlier('github-sync.json')]: 'sync',
       [earlier('github-push-hour.json')]: 'hour',
-      [earlier('github-clocks.json')]: 'clocks',
       [earlier('github-watch.json')]: 'watch',
       [earlier('github-claims.json')]: 'claims',
       [earlier('github-follows.json')]: 'follows',
@@ -30,8 +29,8 @@ describe('openGithubState', () => {
     });
     await openGithubState(files, paths);
     assert.deepEqual(
-      [github.sync, github.pushHour, github.clocks, github.watch, github.claims, github.follows, join(github.ci, 'o-n-1.md')].map((path) => files.get(path)),
-      ['sync', 'hour', 'clocks', 'watch', 'claims', 'follows', 'ci'],
+      [github.sync, github.pushHour, github.watch, github.claims, github.follows, join(github.ci, 'o-n-1.md')].map((path) => files.get(path)),
+      ['sync', 'hour', 'watch', 'claims', 'follows', 'ci'],
     );
     assert.deepEqual(
       files.paths().filter((path) => !path.includes('/connectors/')),
@@ -48,11 +47,11 @@ describe('openGithubState', () => {
   });
 
   it('keeps the newer file when both are there, and leaves the older one untouched', async () => {
-    const files = new MemoryFiles({ [earlier('github-claims.json')]: 'old', [github.claims]: 'new', [earlier('github-clocks.json')]: 'clocks' });
+    const files = new MemoryFiles({ [earlier('github-claims.json')]: 'old', [github.claims]: 'new', [earlier('github-watch.json')]: 'watch' });
     await openGithubState(files, paths);
     assert.equal(files.get(github.claims), 'new');
     assert.equal(files.get(earlier('github-claims.json')), 'old');
-    assert.equal(files.get(github.clocks), 'clocks');
+    assert.equal(files.get(github.watch), 'watch');
   });
 
   it("leaves the team's other state files alone", async () => {

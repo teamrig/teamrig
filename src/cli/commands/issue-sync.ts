@@ -46,7 +46,7 @@ import { githubOffBy, readSyncState, reportAutoSync } from './issue-sync-auto.ts
 import { leftOutLines, previewLines, pullTaskLines, refusedReason, resultLines, shown, stepLine, syncExit, type RepoEnd } from './issue-sync-lines.ts';
 import { fileReporterStore, fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from './tracker-sync.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
-import { githubState, openGithubState } from '../github-state.ts';
+import { GITHUB_CONNECTOR_ID, githubState, openGithubState } from '../github-state.ts';
 
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
@@ -178,7 +178,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     if (write) {
       const outcomes = await writeSteps(plan.steps);
       // Against the tasks as written, so an issue the import just took is held by its new task.
-      issueThreads = repoThreads(read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
+      issueThreads = repoThreads(GITHUB_CONNECTOR_ID, read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
       claimRead.set(repo, read.issues);
       [...resultLines(repo, plan, outcomes), ...leftOutText].forEach(say);
       written += outcomes.filter((outcome) => outcome.result.ok).length;
@@ -207,7 +207,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     const ownerOf = (id: string): string | undefined => taskOwners.get(id);
     if (write) {
       // Only once both reads are in: a repository whose pull requests could not be read keeps every clock it had.
-      threads.push(...issueThreads, ...pullThreads(watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), ours));
+      threads.push(...issueThreads, ...pullThreads(GITHUB_CONNECTOR_ID, watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), ours));
       clocked.add(repo);
     }
     const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules, targetHours: config.replies.targetHours.pull });

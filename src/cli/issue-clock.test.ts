@@ -8,7 +8,8 @@ import { commentNode, FakeGh, ghIssue, ghPull, reviewNode } from '../testing/fak
 import { EXIT } from './runtime.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'], owners: { octocat: 'bravo' } } };
-const CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
+const CLOCKS = join(TEAM_HOME, 'state', 'replies.json');
+const OLDER_CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
 const HOUR = 3_600_000;
 
 /** The lines of a session's inbox the sync posted, without their date. */
@@ -35,6 +36,8 @@ describe('the response clock in issue sync (T3028)', () => {
 
     await sync(kit, bug());
     assert.deepEqual([...parseClocks(kit.files.get(CLOCKS) ?? '').keys()], ['gh:acme/web#9']);
+    const row = parseClocks(kit.files.get(CLOCKS) ?? '').get('gh:acme/web#9');
+    assert.deepEqual(row && { tracker: row.tracker, author: row.author, assignedTo: row.assignedTo }, { tracker: 'github', author: 'stranger', assignedTo: '' });
     assert.deepEqual(githubLines(kit, 'lead'), [], 'no reminder before 18 h');
 
     kit.clock.advance(18 * HOUR);
@@ -154,6 +157,20 @@ describe('the response clock in issue sync (T3028)', () => {
     const failed = await kit.run(['issue', 'sync', '--yes'], { gh: new FakeGh().holds('acme/web', []).failsPulls('acme/web', { end: { kind: 'exited', code: 1 }, stdout: '', stderr: 'HTTP 502\n' }) });
     assert.equal(failed.code, EXIT.failed);
     assert.deepEqual([...parseClocks(kit.files.get(CLOCKS) ?? '').keys()].sort(), ['gh:acme/web#12', 'gh:acme/web#9']);
+  });
+
+  it("keeps every clock of an older teamrig's format 1 file, and writes the replies file in format 2 (T5796)", async () => {
+    const kit = new CliHarness(GITHUB_TEAM);
+    const since = kit.clock.now();
+    kit.clock.advance(18 * HOUR);
+    await kit.files.write(OLDER_CLOCKS, JSON.stringify({ v: 1, clocks: [{ repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'lead', since, remindedAt: since + HOUR }] }));
+    const issue = ghIssue('acme/web', 9, { labels: ['bug'], authorAssociation: 'NONE', author: 'stranger', createdAt: new Date(since).toISOString() });
+    const out = await sync(kit, new FakeGh().holds('acme/web', [issue]));
+    assert.deepEqual(out.filter((line) => line.startsWith('REMINDED')), [], 'its reminder was kept, so it is not reminded again');
+    const text = kit.files.get(CLOCKS) ?? '';
+    assert.match(text, /"v":2/);
+    const row = parseClocks(text).get('gh:acme/web#9');
+    assert.deepEqual(row && { since: row.since, remindedAt: row.remindedAt, tracker: row.tracker, author: row.author }, { since, remindedAt: since + HOUR, tracker: 'github', author: 'stranger' });
   });
 
   it('keeps no clock on a preview, nor for a repository it could not read', async () => {

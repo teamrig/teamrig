@@ -390,7 +390,7 @@ submitted; a draft waits on nobody until it is marked ready for review. The targ
 - `teamrig stats` shows the W your GitHub-linked tasks used on its `GITHUB` line. That number stays in teamrig:
   nothing is posted to GitHub.
 
-The clocks live in `state/connectors/github/clocks.json` in the team's folder. Reading them costs no GitHub call: `check` reads
+The clocks live in `state/replies.json` in the team's folder, one row per thread naming its tracker; a clocks file an older teamrig kept is read until the next sync writes it. Reading them costs no GitHub call: `check` reads
 what the last sync kept.
 
 `"probeSeconds": 0` turns the automatic sync off, and stops a running watch at its next round. `TEAMRIG_GITHUB=off`

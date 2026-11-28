@@ -11,9 +11,11 @@ const TARGETS = DEFAULT_REPLIES.targetHours;
 /** A team whose `github.owners` names no login: a post is ours by its tie to the repository. */
 const NO_ONE: ReadonlySet<string> = new Set();
 const T0 = Date.UTC(2026, 10, 15, 8);
-const outside = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: false });
-const ours = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: true });
-const thread = (number: number, posts: readonly ThreadPost[], kind: Thread['kind'] = 'bug'): Thread => ({ repo: 'acme/app', ref: `acme/app#${number}`, kind, owner: 'alpha', posts });
+const outside = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: false, login: `ada${hours}` });
+const ours = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: true, login: 'octocat' });
+const thread = (number: number, posts: readonly ThreadPost[], kind: Thread['kind'] = 'bug'): Thread => ({ tracker: 'github', repo: 'acme/app', ref: `acme/app#${number}`, kind, owner: 'alpha', title: 'Crash', posts });
+/** A clock of acme/app#1 as stepClocks starts it from `thread`. */
+const stepped = (since: number, author: string, remindedAt: number | undefined = undefined): Clock => ({ tracker: 'github', repo: 'acme/app', ref: 'acme/app#1', kind: 'bug', owner: 'alpha', title: 'Crash', author, assignedTo: '', since, remindedAt });
 
 describe('waitingSince', () => {
   it('starts at the oldest outside post after our newest one, so a follow-up does not restart the wait', () => {
@@ -39,7 +41,7 @@ describe('the answer targets', () => {
 
   it("times each clock by the team's own target, in the reminder text too (T5796)", () => {
     const team = { ...TARGETS, bug: 8 };
-    const clock: Clock = { repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', since: T0, remindedAt: undefined };
+    const clock: Clock = { tracker: 'github', repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', title: '', author: '', assignedTo: '', since: T0, remindedAt: undefined };
     assert.equal(isLate(clock, T0 + 8 * HOUR, team), true);
     assert.equal(isLate(clock, T0 + 8 * HOUR, TARGETS), false);
     assert.deepEqual(stepClocks(new Map(), new Set(['acme/app']), [thread(1, [outside(0)])], T0 + 6 * HOUR, team).remind.map((one) => one.ref), ['acme/app#1']);
@@ -58,7 +60,7 @@ describe('stepClocks', () => {
   it('starts a clock on a thread waiting on us, and none on one we answered', () => {
     const step = stepClocks(new Map(), read, [thread(1, [outside(0)]), thread(2, [outside(0), ours(1)])], T0 + HOUR, TARGETS);
     assert.deepEqual([...step.clocks.keys()], ['acme/app#1']);
-    assert.deepEqual(step.clocks.get('acme/app#1'), { repo: 'acme/app', ref: 'acme/app#1', kind: 'bug', owner: 'alpha', since: T0, remindedAt: undefined });
+    assert.deepEqual(step.clocks.get('acme/app#1'), stepped(T0, 'ada0'));
     assert.deepEqual(step.remind, []);
   });
 
@@ -77,13 +79,13 @@ describe('stepClocks', () => {
   });
 
   it('starts afresh, reminder cleared, once we answered and the outsider posts again', () => {
-    const before: ReadonlyMap<string, Clock> = new Map([['acme/app#1', { repo: 'acme/app', ref: 'acme/app#1', kind: 'bug', owner: 'alpha', since: T0, remindedAt: T0 + 18 * HOUR }]]);
+    const before: ReadonlyMap<string, Clock> = new Map([['acme/app#1', { ...stepped(T0, 'ada0', T0 + 18 * HOUR), assignedTo: 'octocat' }]]);
     const step = stepClocks(before, read, [thread(1, [outside(0), ours(20), outside(21)])], T0 + 22 * HOUR, TARGETS);
-    assert.deepEqual(step.clocks.get('acme/app#1'), { repo: 'acme/app', ref: 'acme/app#1', kind: 'bug', owner: 'alpha', since: T0 + 21 * HOUR, remindedAt: undefined });
+    assert.deepEqual(step.clocks.get('acme/app#1'), { ...stepped(T0 + 21 * HOUR, 'ada21'), assignedTo: 'octocat' }, 'the assignee is kept, the author is the new wait\'s');
   });
 
   it('stops the clock of a thread answered, closed or gone from a repository read, and keeps those of one not read', () => {
-    const clock = (ref: string): Clock => ({ repo: ref.slice(0, ref.indexOf('#')), ref, kind: 'bug', owner: 'alpha', since: T0, remindedAt: undefined });
+    const clock = (ref: string): Clock => ({ ...stepped(T0, 'ada0'), repo: ref.slice(0, ref.indexOf('#')), ref });
     const before = new Map([['acme/app#1', clock('acme/app#1')], ['acme/app#2', clock('acme/app#2')], ['acme/docs#3', clock('acme/docs#3')]]);
     const step = stepClocks(before, read, [thread(1, [outside(0), ours(1)])], T0 + 2 * HOUR, TARGETS);
     assert.deepEqual([...step.clocks.keys()], ['acme/docs#3']);
@@ -103,21 +105,23 @@ describe('issueThread', () => {
         { at: at(3), login: 'ada', authorAssociation: 'CONTRIBUTOR', authorKind: 'User' },
       ],
     });
-    assert.deepEqual(issueThread(issue, 'gh:acme/web#4', 'alpha', false, NO_ONE), {
+    assert.deepEqual(issueThread('github', issue, 'gh:acme/web#4', 'alpha', false, NO_ONE), {
+      tracker: 'github',
       repo: 'acme/web',
       ref: 'gh:acme/web#4',
       kind: 'feature',
       owner: 'alpha',
+      title: issue.title,
       posts: [
-        { at: T0, ours: false },
-        { at: T0 + HOUR, ours: true },
-        { at: T0 + 3 * HOUR, ours: false },
+        { at: T0, ours: false, login: issue.author },
+        { at: T0 + HOUR, ours: true, login: 'maintainer' },
+        { at: T0 + 3 * HOUR, ours: false, login: 'ada' },
       ],
     });
   });
 
   it('names the kind by label, security before bug, else comment on a held thread, else feature', () => {
-    const kind = (labels: readonly string[], held: boolean): string | undefined => issueThread(testHostIssue(1, { labels }), 'r', 'alpha', held, NO_ONE)?.kind;
+    const kind = (labels: readonly string[], held: boolean): string | undefined => issueThread('github', testHostIssue(1, { labels }), 'r', 'alpha', held, NO_ONE)?.kind;
     assert.equal(kind(['Bug', 'Security'], false), 'security');
     assert.equal(kind(['BUG'], true), 'bug');
     assert.equal(kind([], true), 'comment');
@@ -125,7 +129,7 @@ describe('issueThread', () => {
   });
 
   it('gives no thread for a closed issue', () => {
-    assert.equal(issueThread(testHostIssue(1, { state: 'closed' }), 'r', 'alpha', false, NO_ONE), undefined);
+    assert.equal(issueThread('github', testHostIssue(1, { state: 'closed' }), 'r', 'alpha', false, NO_ONE), undefined);
   });
 
   it("reads a post as ours by the team's logins when it names any, so an outside collaborator still waits on us (T3380)", () => {
@@ -139,7 +143,7 @@ describe('issueThread', () => {
       ],
     });
     assert.deepEqual(
-      issueThread(issue, 'r', 'alpha', false, new Set(['octocat']))?.posts.map((post) => post.ours),
+      issueThread('github', issue, 'r', 'alpha', false, new Set(['octocat']))?.posts.map((post) => post.ours),
       [false, false, true],
     );
   });
@@ -162,21 +166,27 @@ describe('postIsOurs (T3380)', () => {
 });
 
 describe('the clocks file', () => {
+  it("reads a format 1 file, GitHub's clocks file, as GitHub's rows with every clock kept (T5796)", () => {
+    const rows = parseClocks('{"v":1,"clocks":[{"repo":"a","ref":"a#1","kind":"bug","owner":"x","since":1,"remindedAt":2}]}');
+    assert.deepEqual([...rows.values()], [{ tracker: 'github', repo: 'a', ref: 'a#1', kind: 'bug', owner: 'x', title: '', author: '', assignedTo: '', since: 1, remindedAt: 2 }]);
+  });
+
   it('reads back what it wrote, a reminder time too, and reads a damaged file or entry as none', () => {
     const clocks = new Map<string, Clock>([
-      ['a#1', { repo: 'a', ref: 'a#1', kind: 'security', owner: 'alpha', since: T0, remindedAt: T0 + HOUR }],
-      ['a#2', { repo: 'a', ref: 'a#2', kind: 'feature', owner: 'bravo', since: T0, remindedAt: undefined }],
+      ['a#1', { tracker: 'github', repo: 'a', ref: 'a#1', kind: 'security', owner: 'alpha', title: '', author: 'ada', assignedTo: '', since: T0, remindedAt: T0 + HOUR }],
+      ['a#2', { ...{ tracker: 'github', repo: 'a', ref: 'a#2', kind: 'feature', owner: 'bravo', title: '', author: '', assignedTo: '', since: T0, remindedAt: undefined }, tracker: 'jira', title: 'Ask', assignedTo: 'octocat' }],
     ]);
     assert.deepEqual(parseClocks(formatClocks(clocks)), clocks);
     assert.equal(parseClocks('not json').size, 0);
-    assert.equal(parseClocks('{"v":2,"clocks":[]}').size, 0);
+    assert.equal(parseClocks('{"v":3,"clocks":[]}').size, 0);
+    assert.deepEqual([...parseClocks('{"v":2,"clocks":[{"repo":"a","ref":"a#1","kind":"bug","owner":"x","since":1}]}').keys()], [], 'a format 2 row naming no tracker is damaged');
     assert.deepEqual([...parseClocks('{"v":1,"clocks":[{"repo":"a","ref":"a#1","kind":"urgent","owner":"x","since":1},{"repo":"a","ref":"a#2","kind":"bug","owner":"x","since":1}]}').keys()], ['a#2']);
   });
 });
 
 describe('the texts', () => {
   const zone = TimeZone.UTC;
-  const clock: Clock = { repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', since: T0, remindedAt: undefined };
+  const clock: Clock = { tracker: 'github', repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', title: '', author: '', assignedTo: '', since: T0, remindedAt: undefined };
 
   it("words the owner's reminder and the lead's GH-LATE line, times zone-marked", () => {
     assert.equal(

@@ -1,6 +1,6 @@
 import type { KitConfig } from '../../config/types.ts';
 import { SecretScanner } from '../../core/secrets.ts';
-import { formatClocks, issueThread, parseClocks, pullThread, remindersText, stepClocks, type Clock, type Thread } from '../../sync/clock.ts';
+import { formatClocks, issueThread, pullThread, remindersText, stepClocks, type Clock, type Thread } from '../../sync/clock.ts';
 import { issueOwner, issueRef, type ImportRules } from '../../sync/map.ts';
 import type { OurLogins } from '../../sync/trust.ts';
 import { postLine } from '../../inbox/inbox.ts';
@@ -13,18 +13,19 @@ import { teamZone, type Kit } from '../kit.ts';
 import type { CliRuntime } from '../runtime.ts';
 import { inboxDepsOf } from './inbox.ts';
 import { githubState } from '../github-state.ts';
+import { readReplies } from '../replies-state.ts';
 
 /**
  * The response clock's part of a sync that writes (T3028, sync/clock.ts): from each repository it read, the open
- * threads (issues and pull requests) and who answers each, then the clocks kept in their own file under the sync's lock, and one unwoken inbox
+ * threads (issues and pull requests) and who answers each, then the clocks kept in the team's replies file under the sync's lock, and one unwoken inbox
  * line to each owner whose thread reached 75% of its answer target. GH-LATE at 100% is `check`'s (issue-clock-check.ts).
  */
 
 /**
- * The open issues of one repository read as threads: one a task tracks is held and answered by that task's owner, any
+ * The open issues of one repository of `tracker` read as threads: one a task tracks is held and answered by that task's owner, any
  * other by the import's owner rule. A post is ours by `ours`, the team's logins (sync/clock.ts postIsOurs).
  */
-export function repoThreads(issues: readonly HostIssue[], tasks: readonly Task[], rules: ImportRules, ours: OurLogins): Thread[] {
+export function repoThreads(tracker: string, issues: readonly HostIssue[], tasks: readonly Task[], rules: ImportRules, ours: OurLogins): Thread[] {
   const holders = new Map<string, string>();
   for (const task of tasks) {
     if (task.ref !== null && !holders.has(task.ref)) {
@@ -34,16 +35,16 @@ export function repoThreads(issues: readonly HostIssue[], tasks: readonly Task[]
   return issues.flatMap((issue) => {
     const ref = issueRef(issue.repo, issue.number);
     const holder = holders.get(ref);
-    return issueThread(issue, ref, holder ?? issueOwner(issue, rules), holder !== undefined, ours) ?? [];
+    return issueThread(tracker, issue, ref, holder ?? issueOwner(issue, rules), holder !== undefined, ours) ?? [];
   });
 }
 
 /**
- * The open pull requests of one repository read as `pull` threads, each once, answered by whom its news goes to: the
+ * The open pull requests of one repository of `tracker` read as `pull` threads, each once, answered by whom its news goes to: the
  * owner of the task one of our own branches names, else `watcher` (sync/pull-news.ts pullRecipient). Give it the
  * open read's pull requests: only that read carries their posts (adapters/connectors/github/queries.ts).
  */
-export function pullThreads(pulls: readonly HostPull[], recipientOf: (pull: HostPull) => string, ours: OurLogins): Thread[] {
+export function pullThreads(tracker: string, pulls: readonly HostPull[], recipientOf: (pull: HostPull) => string, ours: OurLogins): Thread[] {
   const seen = new Set<string>();
   return pulls.flatMap((pull) => {
     const ref = issueRef(pull.repo, pull.number);
@@ -51,7 +52,7 @@ export function pullThreads(pulls: readonly HostPull[], recipientOf: (pull: Host
       return [];
     }
     seen.add(ref);
-    return pullThread(pull, ref, recipientOf(pull), ours) ?? [];
+    return pullThread(tracker, pull, ref, recipientOf(pull), ours) ?? [];
   });
 }
 
@@ -63,8 +64,8 @@ export function pullThreads(pulls: readonly HostPull[], recipientOf: (pull: Host
 export async function recordClocks(runtime: CliRuntime, kit: Kit, config: KitConfig, read: ReadonlySet<string>, threads: readonly Thread[]): Promise<string[]> {
   const now = runtime.clock.now();
   const remind = await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async (): Promise<readonly Clock[]> => {
-    const step = stepClocks(parseClocks((await runtime.files.read(githubState(kit.paths).clocks)) ?? ''), read, threads, now, config.replies.targetHours);
-    await runtime.files.write(githubState(kit.paths).clocks, formatClocks(step.clocks));
+    const step = stepClocks(await readReplies(runtime.files, kit.paths), read, threads, now, config.replies.targetHours);
+    await runtime.files.write(kit.paths.replies, formatClocks(step.clocks));
     return step.remind;
   });
   const inboxes = inboxDepsOf(runtime, kit.paths).inboxes;

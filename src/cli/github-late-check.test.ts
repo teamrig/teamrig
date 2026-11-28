@@ -8,7 +8,7 @@ import { EXIT } from './runtime.ts';
 
 const AS_ALPHA: RunOptions = { env: { TEAMRIG_SESSION: 'alpha' } };
 const AS_LEAD: RunOptions = { env: { TEAMRIG_SESSION: 'lead' } };
-const CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
+const CLOCKS = join(TEAM_HOME, 'state', 'replies.json');
 
 function clocks(...list: readonly Clock[]): string {
   return formatClocks(new Map(list.map((clock) => [clock.ref, clock])));
@@ -21,7 +21,7 @@ async function lateRows(kit: CliHarness): Promise<string[]> {
 }
 
 describe('check GH-LATE (T3028)', () => {
-  const bug = (since: number): Clock => ({ repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', since, remindedAt: undefined });
+  const bug = (since: number): Clock => ({ tracker: 'github', repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', title: 'Crash', author: 'ada', assignedTo: '', since, remindedAt: undefined });
 
   it('flags a thread past its target for the lead, not one inside it, nor with no clocks file', async () => {
     const kit = new CliHarness(TEAM);
@@ -42,6 +42,16 @@ describe('check GH-LATE (T3028)', () => {
     const rows = await lateRows(kit);
     assert.equal(rows.length, 1, rows.join('\n'));
     assert.match(rows[0] ?? '', /past its 48 h target/);
+  });
+
+  it("reads the clocks file an older teamrig kept in GitHub's folder while no replies file is written (T5796)", async () => {
+    const kit = new CliHarness(TEAM);
+    const now = kit.clock.now();
+    const older = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
+    await kit.files.write(older, JSON.stringify({ v: 1, clocks: [{ repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'alpha', since: now - 25 * MS_PER_HOUR }] }));
+    assert.equal((await lateRows(kit)).length, 1);
+    await kit.files.write(CLOCKS, clocks());
+    assert.deepEqual(await lateRows(kit), [], 'once the replies file exists, the older one is not read');
   });
 
   it('tells the lead once a wait, and again for a fresh wait', async () => {
