@@ -22,6 +22,7 @@ import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
 import type { Processes } from '../open/processes.ts';
 import type { SessionProcesses } from '../open/session-processes.ts';
+import type { StepHandoff } from '../open/step-handoff.ts';
 import type { CommitLog } from '../push-guard/commit-size.ts';
 import type { ChangeGit } from '../changes/source.ts';
 import type { RepoState } from '../push-guard/push.ts';
@@ -166,6 +167,8 @@ export interface RunOptions {
   readonly timeZone?: string;
   /** The programs the CLI starts; default none is installed. */
   readonly processes?: Processes;
+  /** The session launcher a `launch --step` hands its plan to; default none started the run. */
+  readonly stepHandoff?: StepHandoff;
   /** Whether stdin and stdout are a terminal a person types in; default true, false as under an AI CLI's shell tool. */
   readonly interactive?: boolean;
   /** The running session's processes; default the kit's own (`CliHarness.sessionProcesses`). */
@@ -309,6 +312,7 @@ export class CliHarness {
       ...(options.secretsGit === undefined ? {} : { secretsGit: options.secretsGit }),
       ...(options.platform === undefined ? {} : { platform: options.platform }),
       ...(options.processes === undefined ? {} : { processes: options.processes }),
+      ...(options.stepHandoff === undefined ? {} : { stepHandoff: options.stepHandoff }),
       ...(options.interactive === undefined ? {} : { interactive: options.interactive }),
       sessionProcesses: options.sessionProcesses ?? this.sessionProcesses,
       ...(options.shell === undefined ? {} : { shell: options.shell }),

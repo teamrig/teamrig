@@ -234,7 +234,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'owner decide': { effect: 'write', flags: ['option', 'read'], switches: ['approve', 'decline'], load: async () => (await ownerCommands()).ownerDecide },
   'owner later': { effect: 'write', flags: ['until'], load: async () => (await ownerCommands()).ownerLater },
   'owner wake': { effect: 'write', flags: ['terminal', 'project'], load: async () => (await ownerWakeCommands()).ownerWake },
-  launch: { effect: 'internal', flags: ['team', 'project', 'home', 'encoded-prompt', 'resume', 'effort'], switches: ['no-prompt'], load: async () => (await openCommands()).launch },
+  launch: { effect: 'internal', flags: ['team', 'project', 'home', 'encoded-prompt', 'resume', 'effort', 'ended', 'started-at'], switches: ['no-prompt', 'step'], load: async () => (await openCommands()).launch },
   restore: { effect: 'read', flags: [], load: async () => (await restoreCommands()).restorePreview },
   'restore run': { effect: 'write', flags: ['since', 'terminal', 'home'], switches: ['tab'], load: async () => (await restoreCommands()).restoreRun },
   'restore check': { effect: 'write', flags: ['terminal', 'home'], load: async () => (await restoreCommands()).restoreCheck },
@@ -1419,8 +1419,8 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       (run by the plugin's mod: asks for the handover within a long turn, and holds a compaction while it is due)
   hook slash-command
       (run by the plugin's mod: /teamrig <command> typed in a Claude Code tab; /teamrig alone tells what it runs)
-  launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>]
-      (run by the tab that open starts: sets the session and starts Claude Code)
+  launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>] [--step [--ended <how> --started-at <ms>]]
+      (run by the tab that open starts: sets the session and starts Claude Code; --step hands one start to the session launcher)
   restore resume <claude-session> --project <dir> [--home <dir>] [--effort <level>] [--encoded-prompt <text>]
       (run by the tab restore run starts for a session outside any team: resumes it in Claude Code)
   restart <id> --team <team> --at <time> --project <dir>

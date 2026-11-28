@@ -28,10 +28,11 @@ export interface LauncherCensus {
 
 const NODE_PROGRAM = /^node(\.exe)?$/i;
 /**
- * The CLI's entry script, as `open` names it in a tab's command line (`runtime.self.script`). Its word is read with
+ * The script a tab's command line names: the session launcher `open` writes (src/open/session-launcher.ts), or the
+ * CLI's entry script (`runtime.self.script`), as tabs opened before it, or where it could not be written, run. Its word is read with
  * the win32 path rules, which split both `\` and `/`: a Windows command line must match on a POSIX host too.
  */
-const CLI_SCRIPT = /^main\.[cm]?js$/i;
+const CLI_SCRIPT = /^(main\.[cm]?js|session-launch\.mjs)$/i;
 
 /** A command line's words, quotes dropped: the system shows a Windows command line as one string. */
 function wordsOf(commandLine: string): readonly string[] {
@@ -46,7 +47,8 @@ export function launchOf(name: string, commandLine: string): { readonly session:
   const words = wordsOf(commandLine);
   const script = words.findIndex((word, i) => CLI_SCRIPT.test(win32.basename(word)) && words[i + 1] === 'launch');
   const session = script < 0 ? undefined : words[script + 2];
-  if (session === undefined || session.startsWith('-')) {
+  // A `--step` is the session launcher's short-lived child, one per start: the launcher is the tab's root (T5757).
+  if (session === undefined || session.startsWith('-') || words.includes('--step', script + 3)) {
     return undefined;
   }
   const team = words.indexOf('--team', script + 3);

@@ -24,6 +24,11 @@ describe('launchOf', () => {
     assert.equal(launchOf('node.exe', 'node C:\\kit\\main.js launch'), undefined);
     assert.equal(launchOf('node.exe', 'node other.js launch alpha'), undefined);
   });
+
+  it("reads the session launcher's launch, and none from its short-lived --step child (T5757)", () => {
+    assert.deepEqual(launchOf('node.exe', 'node C:\\kit\\bin\\session-launch.mjs launch alpha --team app --no-prompt'), { session: 'alpha', team: 'app' });
+    assert.equal(launchOf('node.exe', 'node C:\\kit\\dist\\cli\\main.js launch alpha --team app --no-prompt --step'), undefined);
+  });
 });
 
 describe('launcherCensus', () => {

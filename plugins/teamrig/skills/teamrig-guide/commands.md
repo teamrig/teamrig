@@ -4673,7 +4673,9 @@ name, model and effort. You do not run it yourself; `open` writes it. When the a
 Claude Code for a fresh start, launch starts it again in the same tab, fresh, with a prompt to read its handover
 first. Claude Code starts without the credential variables (see [teamrig queue](#teamrig-queue)) but its own login
 (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`) and those [delivery.passEnv] names, as the
-session's tools run the team's code.
+session's tools run the team's code. The tab runs it through a small session launcher, which `open` writes as
+`bin/session-launch.mjs` in the kit home, so only that launcher stays in the tab while Claude Code runs; when it
+cannot be written, `open` warns and the tab runs teamrig itself.
 
 Flags:
 
@@ -4684,6 +4686,9 @@ Flags:
 - `--no-prompt`: start with no first prompt, as the restore after a reboot reopens an idle session; not with `--encoded-prompt`.
 - `--resume <session>`: the Claude Code session to resume, as `open --resume` gives it; on its first start only.
 - `--effort <level>`: the effort to start on instead of the configured one, as the restore reopens a session at its last.
+- `--step`: the session launcher's call: hand it one start of Claude Code to run, then exit.
+- `--ended <how>`: with `--step`, how the last start ended, as the session launcher saw it.
+- `--started-at <ms>`: with `--ended`, when that start began, in milliseconds since 1970.
 
 Example:
 

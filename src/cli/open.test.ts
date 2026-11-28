@@ -7,6 +7,7 @@ import type { JsonRecord } from '../core/guards.ts';
 import type { RunOutcome, RunRequest } from '../open/processes.ts';
 import { decodePrompt, defaultPrompt, encodePrompt, refreshPrompt } from '../open/prompt.ts';
 import { shellCommand } from '../open/quote.ts';
+import { SESSION_LAUNCHER_SCRIPT, sessionLauncherPath } from '../open/session-launcher.ts';
 import type { SessionStart } from '../ports/host/index.ts';
 import { hostDeps } from '../testing/adapter-deps.ts';
 import { FakeHostMemory } from '../testing/fake-host-memory.ts';
@@ -20,12 +21,16 @@ import { SessionLog, type CloseRecord } from '../sessions/log.ts';
 import { SessionRecordStore } from '../sessions/record.ts';
 import { APP, CLAUDE_SESSION, CliHarness, CONFIG_PATH, KIT, SKILLS_DIR, TEAM, TEAM_HOME, USER_HOME, type RunOptions } from '../testing/cli-harness.ts';
 import { teamConfigOf, teamHomeOf, treeHarness } from '../testing/team-tree.ts';
-import { CLOSE_LOG_WAIT_MS } from './commands/open.ts';
+import { FakeStepHandoff } from '../testing/fake-step-handoff.ts';
+import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
+import { CLOSE_LOG_WAIT_MS, endedFlag } from './commands/open.ts';
 import { EXIT } from './runtime.ts';
 import { WakePrompts, type WakePrompt } from '../wake/prompts.ts';
 
 const NODE = '/usr/bin/node';
 const SCRIPT = '/opt/teamrig/dist/cli/main.js';
+/** The session launcher a tab runs launch through, in the kit home's bin folder (T5757), resolved from the command's folder. */
+const TAB_SCRIPT = sessionLauncherPath(resolve(APP, KIT));
 const FOLDERS = new FakePathProbe({ folders: [APP] });
 const MB = 2 ** 20;
 /** Every team's tabs still loading, beside the host lock the harness's teams share. */
@@ -34,7 +39,7 @@ const ADMIT_FILE = join(KIT, 'host.lock.admit');
 
 /** What `open alpha` hands the new tab to run, with the default prompt. */
 function launchArgv(project: string = APP, prompt: string = defaultPrompt('app', 'alpha')): string[] {
-  return [NODE, SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', project, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(prompt)];
+  return [NODE, TAB_SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', project, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(prompt)];
 }
 
 function openAlpha(processes: FakeProcesses, options: RunOptions = {}, extra: readonly string[] = []) {
@@ -67,6 +72,28 @@ describe('teamrig open', () => {
     assert.deepEqual(processes.started, [
       { command: 'wt.exe', args: ['-w', '0', 'new-tab', '--title', '[app] alpha', '-d', APP, '--', ...launchArgv()], cwd: APP, mode: 'exit' },
     ]);
+  });
+
+  it('writes the session launcher into the kit home for the tab, and leaves one with the same text unwritten (T5757)', async () => {
+    const kit = new CliHarness(TEAM);
+    const first = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes: new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' }) });
+    assert.equal(first.code, EXIT.ok, first.stdout.join('\n'));
+    assert.equal(await kit.files.read(TAB_SCRIPT), SESSION_LAUNCHER_SCRIPT);
+    const files = new FaultyFiles(kit.files).fail('write', TAB_SCRIPT, systemError('EACCES'));
+    const processes = new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' });
+    const again = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes, files });
+    assert.deepEqual(again.stderr, []);
+    assert.deepEqual(processes.started[0]?.args.slice(3), launchArgv());
+  });
+
+  it('runs launch through the CLI itself, with a warning, when the session launcher cannot be written (T5757)', async () => {
+    const kit = new CliHarness(TEAM);
+    const files = new FaultyFiles(kit.files).fail('write', TAB_SCRIPT, systemError('EACCES'));
+    const processes = new FakeProcesses().onStart('gnome-terminal', { kind: 'started', end: 'exited' });
+    const result = await kit.run(['open', 'alpha'], { probe: FOLDERS, processes, files });
+    assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
+    assert.deepEqual(result.stderr, [`WARN the session launcher ${TAB_SCRIPT} could not be written (EACCES: simulated): the tab runs teamrig itself`]);
+    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, SCRIPT, ...launchArgv().slice(2)]);
   });
 
   it('passes the host the run named with --host on to the launch line, so the session starts in that host (T5006)', async () => {
@@ -383,7 +410,7 @@ describe('teamrig open', () => {
       processes,
     });
     assert.equal(result.code, EXIT.ok, result.stdout.join('\n'));
-    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, SCRIPT, 'launch', 'alpha', '--team', 'app', '--project', elsewhere, '--encoded-prompt', encodePrompt(defaultPrompt('app', 'alpha'))]);
+    assert.deepEqual(processes.started[0]?.args.slice(3), [NODE, sessionLauncherPath(resolve(APP, USER_HOME, '.teamrig')), 'launch', 'alpha', '--team', 'app', '--project', elsewhere, '--encoded-prompt', encodePrompt(defaultPrompt('app', 'alpha'))]);
   });
 
   it("opens in the session's own folder, else the team's over the pointer's, and in the --project folder over both", async () => {
@@ -448,7 +475,7 @@ describe('teamrig open <team>/<id>', () => {
     const result = await kit.run(['open', 'web/front'], { probe: FOLDERS, processes, platform: 'win32' });
     assert.deepEqual(result.stdout, [`OPENED web-front (session front) in a new Windows Terminal tab in ${APP}, on the default model and effort`]);
     assert.deepEqual(processes.started[0]?.args.slice(8), [
-      NODE, SCRIPT, 'launch', 'front', '--team', 'web', '--project', APP, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(defaultPrompt('web', 'front')),
+      NODE, TAB_SCRIPT, 'launch', 'front', '--team', 'web', '--project', APP, '--home', resolve(APP, KIT), '--encoded-prompt', encodePrompt(defaultPrompt('web', 'front')),
     ]);
     const own = await kit.run(['open', 'app/alpha'], { probe: FOLDERS, processes, platform: 'win32' });
     assert.equal(own.code, EXIT.ok);
@@ -612,6 +639,70 @@ describe('teamrig launch', () => {
       ['Build it', refreshPrompt('app', 'alpha', processes.store.handoverPath('alpha'))],
     );
     assert.equal(await processes.store.restart('alpha'), undefined);
+  });
+
+  describe('a step of the session launcher (T5757)', () => {
+    const STEP = [...LAUNCH, '--step'];
+
+    it('hands the launcher the first start and runs nothing itself, so the CLI does not stay resident', async () => {
+      const processes = new FakeProcesses();
+      const stepHandoff = new FakeStepHandoff();
+      const result = await launch(processes, ['--step', '--encoded-prompt', encodePrompt('Build it')], { stepHandoff });
+      assert.deepEqual(result, { code: EXIT.ok, stdout: [`Starting Claude Code as app-alpha (session alpha of team app) in ${APP}, on the default model and effort`], stderr: [] });
+      assert.deepEqual(stepHandoff.given, [{ command: CLAUDE, args: ['--name', 'app-alpha', '--', 'Build it'], cwd: APP, env: SESSION_ENV }]);
+      assert.deepEqual(processes.ran, []);
+    });
+
+    it('ends the tab with no plan when the host program exited and no restart ended it', async () => {
+      const stepHandoff = new FakeStepHandoff();
+      const result = await launch(new FakeProcesses(), ['--step', '--ended', 'exited:0', '--started-at', '0'], { stepHandoff });
+      assert.deepEqual(result, { code: EXIT.ok, stdout: [], stderr: [] });
+      assert.deepEqual(stepHandoff.given, []);
+    });
+
+    it('reports how the host program ended when it did not exit cleanly', async () => {
+      const result = await launch(new FakeProcesses(), ['--step', '--ended', 'exited:3', '--started-at', '0'], { stepHandoff: new FakeStepHandoff() });
+      assert.deepEqual(result, { code: EXIT.failed, stdout: [], stderr: ['FAILED Claude Code exited with code 3'] });
+    });
+
+    it('hands the launcher a fresh start sent to its handover once the automatic restart ended the host program', async () => {
+      const kit = new CliHarness(TEAM);
+      const store = new RefreshStore(kit.files, { refresh: join(TEAM_HOME, 'state', 'refresh'), handover: join(TEAM_HOME, 'handover') });
+      await store.setRestart('alpha', ENDING);
+      const stepHandoff = new FakeStepHandoff();
+      const result = await kit.run([...STEP, '--ended', 'exited:0', '--started-at', '0'], { probe: ON_PATH, processes: new FakeProcesses(), env: { PATH: '/usr/local/bin' }, stepHandoff });
+      assert.deepEqual(result, { code: EXIT.ok, stdout: ['Starting Claude Code again as app-alpha with a fresh context: it reads its handover first'], stderr: [] });
+      assert.deepEqual(stepHandoff.given.map((run) => run.args.at(-1)), [refreshPrompt('app', 'alpha', store.handoverPath('alpha'))]);
+      assert.equal(await store.restart('alpha'), undefined);
+    });
+
+    it('refuses a step no session launcher started, and says when the launcher did not take it', async () => {
+      const none = await launch(new FakeProcesses(), ['--step'], { stepHandoff: new FakeStepHandoff({ kind: 'none' }) });
+      assert.equal(none.code, EXIT.refused);
+      assert.deepEqual(none.stdout.at(-1), 'REFUSED launch --step runs only under the session launcher; run teamrig open alpha');
+      const failed = await launch(new FakeProcesses(), ['--step'], { stepHandoff: new FakeStepHandoff({ kind: 'failed', error: 'EPIPE' }) });
+      assert.equal(failed.code, EXIT.failed);
+      assert.deepEqual(failed.stderr, ['FAILED the session launcher did not take the start: EPIPE']);
+    });
+
+    it('reads --ended without --step, a bad --ended and a missing --started-at as usage errors', async () => {
+      const cases: readonly (readonly [readonly string[], RegExp])[] = [
+        [['--ended', 'exited:0', '--started-at', '0'], /--ended and --started-at go only with --step/],
+        [['--step', '--ended', 'gone', '--started-at', '0'], /--ended "gone" is not exited:<code>, missing or failed:<why>/],
+        [['--step', '--ended', 'exited:0'], /--ended needs --started-at <milliseconds since 1970>/],
+      ];
+      for (const [extra, message] of cases) {
+        const result = await launch(new FakeProcesses(), extra, { stepHandoff: new FakeStepHandoff() });
+        assert.equal(result.code, EXIT.usage, extra.join(' '));
+        assert.match(result.stderr.join('\n'), message);
+      }
+    });
+
+    it('reads how --ended says the host program ended', () => {
+      assert.deepEqual(endedFlag('exited:-1'), { kind: 'exited', code: -1 });
+      assert.deepEqual(endedFlag('missing'), { kind: 'missing' });
+      assert.deepEqual(endedFlag('failed:spawn EACCES'), { kind: 'failed', error: 'spawn EACCES' });
+    });
   });
 
   it("starts again at the config's effort level as it is at the restart, not at --effort's (T2444)", async () => {

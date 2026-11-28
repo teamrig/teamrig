@@ -7,6 +7,7 @@ import { FakePluginStore } from './fake-plugin-store.ts';
 import { quietRestore } from './fake-restore.ts';
 import { FakeSessionProcesses } from './fake-session-processes.ts';
 import { FakeShell } from './fake-shell.ts';
+import { FakeStepHandoff } from './fake-step-handoff.ts';
 import { MemoryTranscripts } from './memory-transcripts.ts';
 
 /** The machine a run works on: the AI CLI host and its sessions, the operating system, its programs and stdin. */
@@ -18,6 +19,7 @@ export type HostWorld = Pick<
   | 'host'
   | 'shippedHosts'
   | 'processes'
+  | 'stepHandoff'
   | 'sessionProcesses'
   | 'shell'
   | 'probe'
@@ -50,6 +52,7 @@ export function quietHost(stdin: string): HostWorld {
       run: async () => ({ kind: 'missing' }),
       startHidden: async () => ({ kind: 'missing' }),
     },
+    stepHandoff: new FakeStepHandoff({ kind: 'none' }),
     sessionProcesses: new FakeSessionProcesses(),
     shell: new FakeShell(),
     probe: { kind: async () => 'none' },

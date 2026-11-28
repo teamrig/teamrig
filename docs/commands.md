@@ -983,8 +983,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       (run by the plugin's mod: asks for the handover within a long turn, and holds a compaction while it is due)
   hook slash-command
       (run by the plugin's mod: /teamrig <command> typed in a Claude Code tab; /teamrig alone tells what it runs)
-  launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>]
-      (run by the tab that open starts: sets the session and starts Claude Code)
+  launch <id> --team <team> --project <dir> [--home <dir>] [--encoded-prompt <text> | --no-prompt] [--resume <session>] [--effort <level>] [--step [--ended <how> --started-at <ms>]]
+      (run by the tab that open starts: sets the session and starts Claude Code; --step hands one start to the session launcher)
   restore resume <claude-session> --project <dir> [--home <dir>] [--effort <level>] [--encoded-prompt <text>]
       (run by the tab restore run starts for a session outside any team: resumes it in Claude Code)
   restart <id> --team <team> --at <time> --project <dir>
