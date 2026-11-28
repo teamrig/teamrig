@@ -795,7 +795,8 @@ that file's remedy (compact for the register and the hooks' aged logs, none yet 
 file, OVER-CAP: the team has more tabs open than [open.headroom.maxTabs], naming the sessions `teamrig close` closes
 first, lowest-ranked work first; it is raised once while the team stands over its cap, and a team with no cap never
 shows it, GH-LATE: a GitHub issue or pull request has waited past its answer target
-(security 4 h, bug, pull request or a comment on an issue a task tracks 24 h, else 72 h) for an answer of ours, by the clocks the
+in [replies.targetHours] (by default security 4 h, bug, pull request or a comment on an issue a task tracks 24 h,
+else 72 h) for an answer of ours, by the clocks the
 last writing `teamrig issue sync` kept; one GH-LATE names every late thread, with their count and the oldest three,
 and is raised once, and again only when a newer wait goes late, and from
 the restore's record (`<kit home>/bin/launchers.json`, written by [restore install](#teamrig-restore-install),

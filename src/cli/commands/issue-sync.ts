@@ -210,7 +210,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
       threads.push(...issueThreads, ...pullThreads(watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), ours));
       clocked.add(repo);
     }
-    const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules });
+    const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules, targetHours: config.replies.targetHours.pull });
     if (pullSteps.length > 0 && write) {
       const outcomes = await writeSteps(pullSteps);
       pullTaskLines(repo, outcomes).forEach(say);

@@ -238,7 +238,7 @@ describe('pullNewsText', () => {
 describe('pullTasks', () => {
   const ownerOf = (task: string): string | undefined => (task === 'T12' ? 'bravo' : undefined);
   const RULES = { maxTitle: 50, priorities: [1, 2, 3], secrets: new SecretScanner(['tok_[a-z0-9]{8}']) };
-  const at = (held: readonly string[] = []): PullTaskRules => ({ ours: OURS, ownerOf, watcher: 'watch', held: new Set(held), rules: RULES });
+  const at = (held: readonly string[] = []): PullTaskRules => ({ ours: OURS, ownerOf, watcher: 'watch', held: new Set(held), rules: RULES, targetHours: 24 });
   const opened = (one: HostPull): PullEvent => ({ kind: 'opened', pull: one });
   const OUTSIDE = 'Its title stays on GitHub: its author is outside the repository.';
 

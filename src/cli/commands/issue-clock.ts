@@ -63,7 +63,7 @@ export function pullThreads(pulls: readonly HostPull[], recipientOf: (pull: Host
 export async function recordClocks(runtime: CliRuntime, kit: Kit, config: KitConfig, read: ReadonlySet<string>, threads: readonly Thread[]): Promise<string[]> {
   const now = runtime.clock.now();
   const remind = await fileLockOf(runtime, githubState(kit.paths).syncLock, config.lock).run(async (): Promise<readonly Clock[]> => {
-    const step = stepClocks(parseClocks((await runtime.files.read(githubState(kit.paths).clocks)) ?? ''), read, threads, now);
+    const step = stepClocks(parseClocks((await runtime.files.read(githubState(kit.paths).clocks)) ?? ''), read, threads, now, config.replies.targetHours);
     await runtime.files.write(githubState(kit.paths).clocks, formatClocks(step.clocks));
     return step.remind;
   });
@@ -76,7 +76,7 @@ export async function recordClocks(runtime: CliRuntime, kit: Kit, config: KitCon
     byOwner.set(clock.owner, [...(byOwner.get(clock.owner) ?? []), clock]);
   }
   for (const [owner, clocks] of byOwner) {
-    const problem = await postLine(inboxes, secrets, { to: owner, from: GITHUB_ACTOR, text: remindersText(clocks, now, zone), now: new Date(now) });
+    const problem = await postLine(inboxes, secrets, { to: owner, from: GITHUB_ACTOR, text: remindersText(clocks, now, zone, config.replies.targetHours), now: new Date(now) });
     const what = clocks.length === 1 ? `${clocks[0]?.ref} waits` : `${clocks.length} GitHub threads wait`;
     lines.push(problem === undefined ? `REMINDED ${owner}: ${what} on an answer` : `INBOX ${owner}: not posted: ${problem}`);
   }

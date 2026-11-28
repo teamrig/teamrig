@@ -33,6 +33,17 @@ describe('check GH-LATE (T3028)', () => {
     assert.match(rows[0] ?? '', /GH-LATE gh:acme\/web#2 \(security, bravo\) has waited 4 h for an answer of ours since .+, past its 4 h target: have bravo answer it on GitHub/);
   });
 
+  it('times each thread by the team\'s [replies.targetHours], not a fixed 24 h for a bug (T5796)', async () => {
+    const kit = new CliHarness({ ...TEAM, replies: { targetHours: { bug: 48 } } });
+    const now = kit.clock.now();
+    await kit.files.write(CLOCKS, clocks(bug(now - 25 * MS_PER_HOUR)));
+    assert.deepEqual(await lateRows(kit), []);
+    await kit.files.write(CLOCKS, clocks(bug(now - 48 * MS_PER_HOUR)));
+    const rows = await lateRows(kit);
+    assert.equal(rows.length, 1, rows.join('\n'));
+    assert.match(rows[0] ?? '', /past its 48 h target/);
+  });
+
   it('tells the lead once a wait, and again for a fresh wait', async () => {
     const kit = new CliHarness(TEAM);
     const now = kit.clock.now();

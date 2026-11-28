@@ -1257,7 +1257,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const drift = await hookDriftWarnings(runtime, own.config.hosts, own.team);
   const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
   const resets = resetExpiryWarnings(own.config.budget, zone, now.getTime());
-  const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime());
+  const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime(), own.config.replies.targetHours);
   const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
   const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
   const logs = await logSizeWarnings(runtime.files, own.paths);
