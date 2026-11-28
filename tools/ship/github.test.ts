@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { type CheckOutcome, type Gh, type GhSpawn, type Job, type Run, evaluate, ghWithToken, newestRuns, parseJobs, parseRuns, parseStatuses, plannedOut, readChecks, rerunFailedJobs, settleJobs, verdictOf } from './github.ts';
+import { type CheckOutcome, type Gh, type GhSpawn, type Job, type Run, evaluate, ghWithToken, heldRunsOf, newestRuns, parseJobs, parseRuns, parseStatuses, plannedOut, readChecks, rerunFailedJobs, settleJobs, verdictOf } from './github.ts';
 
 const TOKEN = ['github', '_pat_', 'secret_value'].join('');
 const REPO = 'Owner/repo';
@@ -118,6 +118,22 @@ test('a re-run posts rerun-failed-jobs for the run', () => {
   const gh = mock.fn<Gh>(() => '');
   rerunFailedJobs(gh, REPO, 7);
   assert.deepEqual(gh.mock.calls[0]?.arguments[0], ['api', `repos/${REPO}/actions/runs/7/rerun-failed-jobs`, '-X', 'POST']);
+});
+
+test('lists the links of the sha\'s pull_request runs held for approval, and no other run (T5915)', () => {
+  const gh = mock.fn<Gh>(() =>
+    JSON.stringify({
+      workflow_runs: [
+        { id: 30, conclusion: 'action_required' },
+        { id: 31, conclusion: 'success' },
+        { id: 32, conclusion: null },
+        { id: 33, conclusion: 'action_required' },
+      ],
+    }),
+  );
+  assert.deepEqual(heldRunsOf(gh, REPO, SHA), [`https://github.com/${REPO}/actions/runs/30`, `https://github.com/${REPO}/actions/runs/33`]);
+  assert.deepEqual(gh.mock.calls[0]?.arguments[0], ['api', `repos/${REPO}/actions/runs?head_sha=${SHA}&event=pull_request&per_page=100`]);
+  assert.deepEqual(heldRunsOf(() => '{"workflow_runs":[]}', REPO, SHA), [], 'no run held: nothing to push again');
 });
 
 test('reads the newest runs\' latest jobs and the commit statuses of the sha', () => {

@@ -304,6 +304,16 @@ export function rerunFailedJobs(gh: Gh, repo: string, runId: number): void {
 }
 
 /**
+ * The links of `sha`'s `pull_request` runs GitHub holds for a maintainer's approval (conclusion `action_required`):
+ * a push by a workflow's token, as the release tool's, starts runs that wait there, and their checks never report
+ * until someone approves them (T5915). Empty when none is held.
+ */
+export function heldRunsOf(gh: Gh, repo: string, sha: string): readonly string[] {
+  const runs = listAt(gh(['api', `repos/${repo}/actions/runs?head_sha=${sha}&event=pull_request&per_page=100`]), 'workflow_runs', 'actions runs');
+  return runs.filter(run => run['conclusion'] === 'action_required').map(run => `https://github.com/${repo}/actions/runs/${numberAt(run, 'id', 'run')}`);
+}
+
+/**
  * Every listed check of a commit on `branch`, read from the Actions jobs and the commit statuses. Only the runs of
  * that branch count: the same sha re-shipped under a new branch name (the route after a cancelled job) still carries
  * the old branch's runs, and before the new branch's run exists those were all there was, so its cancel failed the
