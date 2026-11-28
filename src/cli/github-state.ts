@@ -9,13 +9,13 @@ export const GITHUB_CONNECTOR_ID = 'github';
 /**
  * Each file GitHub kept straight in the team's state folder before it had its own (T5114), with the path that holds
  * it now. The two locks are left where they are: a lock lives only while its holder runs, and moving one would take
- * it from a teamrig of the older version that still holds it.
+ * it from a teamrig of the older version that still holds it. The clocks are left too: the team's replies file holds
+ * them now, and its reader takes an older clocks file wherever it lies (replies-state.ts).
  */
 const EARLIER_NAMES: ReadonlyArray<readonly [string, keyof ConnectorState]> = [
   ['github-sync.json', 'sync'],
   ['github-ci', 'ci'],
   ['github-push-hour.json', 'pushHour'],
-  ['github-clocks.json', 'clocks'],
   ['github-watch.json', 'watch'],
   ['github-claims.json', 'claims'],
   ['github-follows.json', 'follows'],

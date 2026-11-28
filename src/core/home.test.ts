@@ -86,6 +86,7 @@ describe('teamPaths', () => {
     assert.equal(paths.leaderDigest, join(TEAM_HOME, 'state', 'leader-digest'));
     assert.equal(paths.effortWriteback, join(TEAM_HOME, 'state', 'effort-writeback'));
     assert.equal(paths.effortChanges, join(TEAM_HOME, 'state', 'effort-changes.jsonl'));
+    assert.equal(paths.replies, join(TEAM_HOME, 'state', 'replies.json'));
     assert.equal(paths.unownedNotices, join(TEAM_HOME, 'state', 'unowned-notices.json'));
     assert.equal(paths.unownedNoticesLock, join(TEAM_HOME, 'state', 'unowned-notices.lock'));
     assert.equal(paths.checkSeen, join(TEAM_HOME, 'state', 'check-seen'));

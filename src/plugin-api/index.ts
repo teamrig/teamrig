@@ -285,6 +285,9 @@ export {
   type IssueSearch,
   type IssueTarget,
   type LabelSpec,
+  type Clocked,
+  type PostMark,
+  type PostMarks,
   type PullLanding,
   type PullStand,
   type Reopenable,
@@ -298,6 +301,8 @@ export type { AssignedScope, ImportScope, ScopeRequest } from '../sync/scope.ts'
 export { judgeTrust, resolveTrust } from '../sync/trust-rule.ts';
 export type { ResolvedTrust, SiteTrust, TrustAuthor, TrustDefaults, TrustEditors, TrustEdits, TrustFacts, TrustLevel, TrustMatcher, TrustVerdict } from '../sync/trust-rule.ts';
 export { NO_TRUST_RULE, parseTrustRule, type TrustSyntax } from '../sync/trust-config.ts';
+// GitHub's author ties: who is inside a repository, and who of them the team named, for a tracker's post marks.
+export { isInsideAuthor, isOurAuthor, type OurLogins } from '../sync/trust.ts';
 export type { HostIssue, IssueComment, IssueState, IssueThread, LabelEvent, LinkedIssue, ReadComment } from '../issues/issue.ts';
 // A repository's label file, and the labels teamrig keeps: the only labels a tracker may make.
 export { LABEL_FILE, parseLabelFile } from '../issues/label-file.ts';

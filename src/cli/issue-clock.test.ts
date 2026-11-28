@@ -6,9 +6,13 @@ import { parseClocks } from '../sync/clock.ts';
 import { CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { commentNode, FakeGh, ghIssue, ghPull, reviewNode } from '../testing/fake-gh.ts';
 import { EXIT } from './runtime.ts';
+import { clockMarking } from './commands/issue-clock.ts';
+import type { IssueComment } from '../issues/issue.ts';
+import { FakeIssueHost } from '../testing/fake-issue-host.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'], owners: { octocat: 'bravo' } } };
-const CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
+const CLOCKS = join(TEAM_HOME, 'state', 'replies.json');
+const OLDER_CLOCKS = join(TEAM_HOME, 'state', 'connectors', 'github', 'clocks.json');
 const HOUR = 3_600_000;
 
 /** The lines of a session's inbox the sync posted, without their date. */
@@ -35,6 +39,8 @@ describe('the response clock in issue sync (T3028)', () => {
 
     await sync(kit, bug());
     assert.deepEqual([...parseClocks(kit.files.get(CLOCKS) ?? '').keys()], ['gh:acme/web#9']);
+    const row = parseClocks(kit.files.get(CLOCKS) ?? '').get('gh:acme/web#9');
+    assert.deepEqual(row && { tracker: row.tracker, author: row.author, assignedTo: row.assignedTo }, { tracker: 'github', author: 'stranger', assignedTo: '' });
     assert.deepEqual(githubLines(kit, 'lead'), [], 'no reminder before 18 h');
 
     kit.clock.advance(18 * HOUR);
@@ -156,6 +162,20 @@ describe('the response clock in issue sync (T3028)', () => {
     assert.deepEqual([...parseClocks(kit.files.get(CLOCKS) ?? '').keys()].sort(), ['gh:acme/web#12', 'gh:acme/web#9']);
   });
 
+  it("keeps every clock of an older teamrig's format 1 file, and writes the replies file in format 2 (T5796)", async () => {
+    const kit = new CliHarness(GITHUB_TEAM);
+    const since = kit.clock.now();
+    kit.clock.advance(18 * HOUR);
+    await kit.files.write(OLDER_CLOCKS, JSON.stringify({ v: 1, clocks: [{ repo: 'acme/web', ref: 'gh:acme/web#9', kind: 'bug', owner: 'lead', since, remindedAt: since + HOUR }] }));
+    const issue = ghIssue('acme/web', 9, { labels: ['bug'], authorAssociation: 'NONE', author: 'stranger', createdAt: new Date(since).toISOString() });
+    const out = await sync(kit, new FakeGh().holds('acme/web', [issue]));
+    assert.deepEqual(out.filter((line) => line.startsWith('REMINDED')), [], 'its reminder was kept, so it is not reminded again');
+    const text = kit.files.get(CLOCKS) ?? '';
+    assert.match(text, /"v":2/);
+    const row = parseClocks(text).get('gh:acme/web#9');
+    assert.deepEqual(row && { since: row.since, remindedAt: row.remindedAt, tracker: row.tracker, author: row.author }, { since, remindedAt: since + HOUR, tracker: 'github', author: 'stranger' });
+  });
+
   it('keeps no clock on a preview, nor for a repository it could not read', async () => {
     const kit = new CliHarness(GITHUB_TEAM);
     const issue = ghIssue('acme/web', 9, { authorAssociation: 'NONE', createdAt: new Date(kit.clock.now()).toISOString() });
@@ -182,5 +202,25 @@ describe('the response clock in issue sync (T3028)', () => {
     assert.match(lines[0] ?? '', /^50 GitHub threads wait for an answer of ours: gh:acme\/web#1 \(bug, by .+\), gh:acme\/web#2 \(bug, by .+\), gh:acme\/web#3 \(bug, by .+\) and 47 more; /);
     await sync(kit, gh());
     assert.equal(githubLines(kit, 'lead').length, 1, 'reminded once');
+  });
+});
+
+describe('clockMarking (T5796)', () => {
+  const post = (login: string, authorAssociation: string): IssueComment => ({ at: '2030-01-08T10:00:00.000Z', login, authorAssociation, authorKind: 'User' });
+
+  it("reads each post by the tracker's own marking, with the team's logins bound", () => {
+    const marking = clockMarking(new FakeIssueHost(), new Set(['octocat']));
+    assert.equal(marking.kind, 'marks');
+    if (marking.kind === 'marks') {
+      assert.equal(marking.mark(post('octocat', 'MEMBER')), 'ours');
+      assert.equal(marking.mark(post('stranger', 'NONE')), 'theirs');
+    }
+  });
+
+  it("times nothing on a tracker that cannot tell the team's posts from others', and says so by its name", () => {
+    assert.deepEqual(clockMarking(new FakeIssueHost().withoutClocks(), new Set(['octocat'])), {
+      kind: 'off',
+      line: "OFF response clock: the test host cannot tell the team's posts from others', so no thread's wait is timed",
+    });
   });
 });

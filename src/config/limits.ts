@@ -115,6 +115,7 @@ export const CONFIG_LIMITS = {
   burstMaxHelpers: { min: 0, max: 20 },
   burstMaxHires: { min: 0, max: 20 },
   rushPokeAfterMinutes: { min: 1, max: 120 },
+  repliesTargetHours: { min: 1, max: 720 },
   queueLockTtlMinutes: { min: 11, max: 1440 },
   queueMaxRunMinutes: { min: 1, max: 1430 },
   queueSmallMaxRunMinutes: { min: 1, max: 1430 },

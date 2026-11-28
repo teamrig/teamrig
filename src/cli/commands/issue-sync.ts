@@ -37,7 +37,7 @@ import { teamRegister } from '../team-register.ts';
 import type { Thread } from '../../sync/clock.ts';
 import type { HostIssue } from '../../issues/issue.ts';
 import { claimBudget, recordClaims } from './issue-claim.ts';
-import { pullThreads, recordClocks, repoThreads } from './issue-clock.ts';
+import { clockMarking, pullThreads, recordClocks, repoThreads } from './issue-clock.ts';
 import { fieldRunOf } from './issue-field-push.ts';
 import { reserveHour, settleHour } from './issue-push-hour.ts';
 import { issuePush, pushEndLine, pushRepos } from './issue-push.ts';
@@ -46,7 +46,7 @@ import { githubOffBy, readSyncState, reportAutoSync } from './issue-sync-auto.ts
 import { leftOutLines, previewLines, pullTaskLines, refusedReason, resultLines, shown, stepLine, syncExit, type RepoEnd } from './issue-sync-lines.ts';
 import { fileReporterStore, fileScopeStore, NO_TRACKER_SYNC, syncTrackers } from './tracker-sync.ts';
 import { githubWatcher } from '../../sync/watcher.ts';
-import { githubState, openGithubState } from '../github-state.ts';
+import { GITHUB_CONNECTOR_ID, githubState, openGithubState } from '../github-state.ts';
 
 /**
  * `issue sync [--repo <owner/name>] [--yes]`: brings the task list in step with the GitHub issues of the team's
@@ -135,6 +135,12 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
   /** The open threads of the repositories read, for the response clock, and those repositories. */
   const threads: Thread[] = [];
   const clocked = new Set<string>();
+  // The tracker marks whose post is the team's answer (tracker.clocks); one that cannot keeps every clock as it was.
+  const marking = clockMarking(host, ours);
+  if (write && marking.kind === 'off') {
+    say(marking.line);
+  }
+  const mark = marking.kind === 'marks' ? marking.mark : undefined;
   for (const repo of reposOf(config.github.repos, args.flags.get('repo'))) {
     const reach = await host.reach(repo, 'read');
     if (reach.kind === 'unreachable') {
@@ -178,7 +184,7 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     if (write) {
       const outcomes = await writeSteps(plan.steps);
       // Against the tasks as written, so an issue the import just took is held by its new task.
-      issueThreads = repoThreads(read.issues, [...(await register.snapshot()).state.tasks.values()], rules, ours);
+      issueThreads = mark === undefined ? [] : repoThreads(GITHUB_CONNECTOR_ID, read.issues, [...(await register.snapshot()).state.tasks.values()], rules, mark);
       claimRead.set(repo, read.issues);
       [...resultLines(repo, plan, outcomes), ...leftOutText].forEach(say);
       written += outcomes.filter((outcome) => outcome.result.ok).length;
@@ -205,12 +211,12 @@ export async function issueSync(args: ParsedArgs, runtime: CliRuntime): Promise<
     // One owner lookup, so the answer clocks and the pull request tasks route to the same people.
     const taskOwners = new Map(tasks.map((task) => [task.id, task.owner]));
     const ownerOf = (id: string): string | undefined => taskOwners.get(id);
-    if (write) {
+    if (write && mark !== undefined) {
       // Only once both reads are in: a repository whose pull requests could not be read keeps every clock it had.
-      threads.push(...issueThreads, ...pullThreads(watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), ours));
+      threads.push(...issueThreads, ...pullThreads(GITHUB_CONNECTOR_ID, watch.open, (pull) => pullRecipient(pull, ours, ownerOf, watcher), mark));
       clocked.add(repo);
     }
-    const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules });
+    const pullSteps = pullTasks(watch.events, { ours, ownerOf, watcher, held: new Set(tasks.flatMap((task) => (task.ref === null ? [] : [task.ref]))), rules, targetHours: config.replies.targetHours.pull });
     if (pullSteps.length > 0 && write) {
       const outcomes = await writeSteps(pullSteps);
       pullTaskLines(repo, outcomes).forEach(say);

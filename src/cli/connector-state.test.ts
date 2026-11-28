@@ -18,7 +18,6 @@ describe('connectorState', () => {
         syncLock: join(state.dir, 'sync.lock'),
         ci: join(state.dir, 'ci'),
         pushHour: join(state.dir, 'push-hour.json'),
-        clocks: join(state.dir, 'clocks.json'),
         watch: join(state.dir, 'watch.json'),
         watchLock: join(state.dir, 'watch.lock'),
         follows: join(state.dir, 'follows.json'),

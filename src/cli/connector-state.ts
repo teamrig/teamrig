@@ -20,8 +20,6 @@ export interface ConnectorState {
   readonly ci: string;
   /** The automatic status push's writes per minute over the last hour. */
   readonly pushHour: string;
-  /** The response clock of each thread waiting on an answer of ours. */
-  readonly clocks: string;
   /** The lease of the team's one watch of this connector: its pid and last beat. */
   readonly watch: string;
   /** Held while a hook claims the watch or the watch claims, renews or drops its lease. */
@@ -52,7 +50,6 @@ export function connectorState(paths: TeamPaths, id: string): ConnectorState {
     syncLock: join(dir, 'sync.lock'),
     ci: join(dir, 'ci'),
     pushHour: join(dir, 'push-hour.json'),
-    clocks: join(dir, 'clocks.json'),
     watch: join(dir, 'watch.json'),
     watchLock: join(dir, 'watch.lock'),
     follows: join(dir, 'follows.json'),

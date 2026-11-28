@@ -1,6 +1,9 @@
+import type { ReplyTargetHours } from '../config/types.ts';
 import type { Files } from '../core/files.ts';
+import type { TeamPaths } from '../core/home.ts';
 import type { TimeZone } from '../core/zone.ts';
-import { dueAt, isLate, lateGroupText, newestLate, parseClocks } from '../sync/clock.ts';
+import { dueAt, isLate, lateGroupText, newestLate } from '../sync/clock.ts';
+import { readReplies } from './replies-state.ts';
 import { parseUnownedNotices, UNOWNED_SEEN_REFRESH_MS, type ToldWarnings } from './unowned-notices.ts';
 import type { UnownedWarning } from './unowned.ts';
 
@@ -46,13 +49,20 @@ function toldHighWater(told: ToldWarnings, now: number): { key: string; due: num
  * answered while others stay late), whose key it keeps. So the lead is told once, and again only when a newer wait
  * goes late (a fresh wait after our answer included), not when any one is answered.
  */
-export async function githubLateWarnings(files: Pick<Files, 'read'>, paths: { clocks: string; notices: string }, zone: TimeZone, now: number): Promise<UnownedWarning[]> {
-  const late = [...parseClocks((await files.read(paths.clocks)) ?? '').values()].filter((clock) => isLate(clock, now));
-  const newest = newestLate(late);
+export async function githubLateWarnings(
+  files: Pick<Files, 'read'>,
+  paths: TeamPaths,
+  zone: TimeZone,
+  now: number,
+  targets: ReplyTargetHours,
+): Promise<UnownedWarning[]> {
+  const late = [...(await readReplies(files, paths)).values()].filter((clock) => isLate(clock, now, targets));
+  const newest = newestLate(late, targets);
   if (newest === undefined) {
     return [];
   }
-  const told = toldHighWater(parseUnownedNotices((await files.read(paths.notices)) ?? '') ?? new Map(), now);
-  const key = told !== undefined && told.due >= dueAt(newest) ? told.key : lateKey(dueAt(newest), newest.ref);
-  return [{ key, source: 'the response clock [github]', text: lateGroupText(late, now, zone) }];
+  const due = dueAt(newest, targets);
+  const told = toldHighWater(parseUnownedNotices((await files.read(paths.unownedNotices)) ?? '') ?? new Map(), now);
+  const key = told !== undefined && told.due >= due ? told.key : lateKey(due, newest.ref);
+  return [{ key, source: 'the response clock [replies.targetHours]', text: lateGroupText(late, now, zone, targets) }];
 }

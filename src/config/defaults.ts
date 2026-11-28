@@ -8,6 +8,7 @@ import type {
   BudgetConfig,
   BurstConfig,
   RushConfig,
+  RepliesConfig,
   CommitGuardConfig,
   CommitsConfig,
   ContextFilesConfig,
@@ -510,6 +511,12 @@ export const DEFAULT_BURST: BurstConfig = { policy: 'owner', surplusHours: 48, m
 
 /** The owner's bar for a rush: a tab with work left that sits idle 5 minutes is poked. */
 export const DEFAULT_RUSH: RushConfig = { pokeAfterMinutes: 5 };
+
+/**
+ * How long a thread may wait for an answer of ours: a security report 4 h; a bug from outside, a contributor's pull
+ * request and a comment on a thread we hold 24 h; a feature ask or a question 72 h.
+ */
+export const DEFAULT_REPLIES: RepliesConfig = { targetHours: { security: 4, bug: 24, pull: 24, comment: 24, feature: 72 } };
 
 /**
  * An area's pace is the tasks it finished over the last week, counted once it finished at least 3; the dated

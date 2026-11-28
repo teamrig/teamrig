@@ -115,6 +115,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   hiring: 'copy',
   burst: 'copy',
   rush: 'copy',
+  replies: 'copy',
   statusLine: 'copy',
   focus: 'copy',
   levels: 'copy',

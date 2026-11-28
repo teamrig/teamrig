@@ -142,6 +142,8 @@ export interface TeamPaths {
   readonly effortWriteback: string;
   /** One line per effort a typed `/effort` wrote back to the config: who, from, to, and the old config's copy. */
   readonly effortChanges: string;
+  /** The response clock of each tracker thread waiting on an answer of ours (sync/clock.ts, T5796). */
+  readonly replies: string;
   /** The warnings no session owns the lead was told of, with when a start last saw each, so each is told once while it stands (T951). */
   readonly unownedNotices: string;
   /** Held while a start tells the lead of those warnings, so two starts never tell one twice. */
@@ -328,6 +330,7 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     leaderDigest: join(state, 'leader-digest'),
     effortWriteback: join(state, 'effort-writeback'),
     effortChanges: join(state, 'effort-changes.jsonl'),
+    replies: join(state, 'replies.json'),
     unownedNotices: join(state, 'unowned-notices.json'),
     unownedNoticesLock: join(state, 'unowned-notices.lock'),
     checkSeen: join(state, 'check-seen'),

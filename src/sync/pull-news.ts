@@ -1,10 +1,9 @@
 import { plainLine } from '../core/printable.ts';
-import { formatUtcMinute } from '../core/time.ts';
+import { formatUtcMinute, MS_PER_HOUR } from '../core/time.ts';
 import type { HostPull, PullChecks, PullMergeable, PullReview } from '../issues/pull.ts';
 import type { ImportInput } from '../register/policy.ts';
 import { cut } from '../register/views.ts';
 import { branchTaskOf } from '../worktree/owner.ts';
-import { ANSWER_TARGET_HOURS, targetMs } from './clock.ts';
 import { cutTitle, issuePriority, issueRef, type ImportRules } from './map.ts';
 import type { SyncStep } from './plan.ts';
 import { isInsideAuthor, isOurAuthor, type OurLogins } from './trust.ts';
@@ -151,6 +150,8 @@ export interface PullTaskRules {
   /** Every ref a task of the register holds: a pull request one holds gets no second task. */
   readonly held: ReadonlySet<string>;
   readonly rules: Pick<ImportRules, 'maxTitle' | 'priorities' | 'secrets'>;
+  /** A contributor's pull request's answer target, in hours [replies.targetHours.pull]. */
+  readonly targetHours: number;
 }
 
 /**
@@ -181,7 +182,7 @@ export function pullTasks(events: readonly PullEvent[], at: PullTaskRules): Sync
  */
 function pullTaskInput(pull: HostPull, ref: string, at: PullTaskRules): ImportInput {
   const opened = Date.parse(pull.createdAt);
-  const due = formatUtcMinute(new Date(opened + targetMs('pull')));
+  const due = formatUtcMinute(new Date(opened + at.targetHours * MS_PER_HOUR));
   const by = pull.author === '' ? 'a deleted account' : pull.author;
   const inside = isInsideAuthor(pull.authorAssociation);
   const title = plainLine(pull.title);
@@ -189,7 +190,7 @@ function pullTaskInput(pull: HostPull, ref: string, at: PullTaskRules): ImportIn
   const where = [...(isOurAuthor(pull.authorAssociation, pull.author, at.ours) ? [] : ['outside']), ...(pull.fork ? ['fork'] : [])];
   const description = [
     `Pull request ${pull.url} opened by ${by}${where.length > 0 ? ` (${where.join(', ')})` : ''} at ${formatUtcMinute(new Date(opened))} UTC:`,
-    `answer it on GitHub by ${due} UTC, its ${ANSWER_TARGET_HOURS.pull} h target.${inside ? '' : ' Its title stays on GitHub: its author is outside the repository.'}`,
+    `answer it on GitHub by ${due} UTC, its ${at.targetHours} h target.${inside ? '' : ' Its title stays on GitHub: its author is outside the repository.'}`,
   ].join(' ');
   return { title: cutTitle(shown, at.rules.maxTitle), description, owner: at.watcher, ref, priority: issuePriority([], at.rules.priorities), due };
 }
