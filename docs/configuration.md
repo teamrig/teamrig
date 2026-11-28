@@ -70,6 +70,7 @@ Team settings for the teamrig plugin. Only the roster (sessions, roles.lead) is 
 | `hiring` | [object](#hiring) |  | Hiring sessions with teamrig hire, each a worker the leader is sure the team needs: who decides. No cap counts hires: the host's room bounds who is at the office, and the leader decides who is hired. A hire is written into sessions, names and launch, and logged with its reason and review date; its part of the team's daily budget follows its share and queued work, like any session's. |
 | `burst` | [object](#burst) |  | Bursts with teamrig burst: a time-boxed scale-out onto helpers and hired sessions that spends more of the week, for a surplus the week would leave unused at the reset or for a deadline. A person always starts one by command; nothing starts one on its own. |
 | `rush` | [object](#rush) |  | Rushes (teamrig burst start rush): a team works one goal at full speed until a set time; the owner starts each one. |
+| `replies` | [object](#replies) |  | The replies list: tracker threads (issues, pull requests, comments) waiting for an answer of ours in words. At 75% of its target a thread's owner gets one unwoken reminder; at the target the lead's check says it is late. |
 | `paths` | [object](#paths) |  | Folders moved from their defaults; a relative path is resolved against the team's folder (\<kit home>/teams/\<team>). Unset, state and inbox stay under the team's folder and skills is the skills folder of Claude Code's folder ($CLAUDE\_CONFIG\_DIR, else \~/.claude). |
 
 ## `team`
@@ -1077,6 +1078,26 @@ Rushes (teamrig burst start rush): a team works one goal at full speed until a s
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `pokeAfterMinutes` | integer (1 to 120) | `5` | The poke: while a rush is on, a tab idle this many minutes since its last turn, with a task of its own it can go on with (open or in progress, not waiting) and no queued step of its own running, is woken once to start or continue its top task. A step only waiting in the queue counts as idle, but a task that a queued run of the session is for (the task id its label names), waiting or running, is passed over, since that run's end wakes the tab anyway. One poke per idle stretch; none once the rush ends. |
+
+## `replies`
+
+The replies list: tracker threads (issues, pull requests, comments) waiting for an answer of ours in words. At 75% of its target a thread's owner gets one unwoken reminder; at the target the lead's check says it is late.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `targetHours` | [object](#repliestargethours) |  | How many hours each kind of thread may wait for an answer of ours. |
+
+## `replies.targetHours`
+
+How many hours each kind of thread may wait for an answer of ours.
+
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `security` | integer (1 to 720) | `4` | A thread labelled security. |
+| `bug` | integer (1 to 720) | `24` | A thread labelled bug. |
+| `pull` | integer (1 to 720) | `24` | A contributor's pull request, once it is marked ready. |
+| `comment` | integer (1 to 720) | `24` | A comment on a thread a task of ours tracks. |
+| `feature` | integer (1 to 720) | `72` | Any other thread: a feature ask or a question. |
 
 ## `paths`
 

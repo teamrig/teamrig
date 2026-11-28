@@ -38,6 +38,8 @@ export const LEAD_KEYS: ReadonlySet<string> = new Set([
   'meeting.panel.enabled', 'meeting.spotlight.enabled', 'meeting.spotlight.dim', 'meeting.spotlight.breakthroughSeconds',
   'meeting.statusLine.enabled', 'meeting.statusLine.colour', 'meeting.statusLine.heldText',
   'turnLog.enabled', 'turnLog.keepHours',
+  'replies.targetHours.security', 'replies.targetHours.bug', 'replies.targetHours.pull', 'replies.targetHours.comment',
+  'replies.targetHours.feature',
   'meetingNotices.enabled', 'meetingNotices.beforeMinutes', 'meetingNotices.atStart', 'meetingNotices.missedAfterMinutes',
   'meetingNotices.osToast', 'meetingNotices.tabToast', 'meetingNotices.leadInbox',
   'open.terminal', 'open.teamWindow', 'ui.mode',

@@ -187,6 +187,7 @@ const LIMIT_PATHS: { readonly [Name in keyof typeof CONFIG_LIMITS]: string } = {
   searchNudgeAt: 'leadBoundary.searchNudgeAt',
   turnLogKeepHours: 'turnLog.keepHours',
   rushPokeAfterMinutes: 'rush.pokeAfterMinutes',
+  repliesTargetHours: 'replies.targetHours.security',
   meetingBeforeMinutes: 'meetingNotices.beforeMinutes',
   meetingMissedMinutes: 'meetingNotices.missedAfterMinutes',
   wakePriority: 'wake.priority',

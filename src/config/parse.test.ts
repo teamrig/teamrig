@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_OWNER } from './defaults.ts';
+import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_REPLIES,DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_OWNER } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
 import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
@@ -2147,6 +2147,19 @@ describe('parseConfig', () => {
       const bad = parseConfig({ ...ROSTER, rush: { pokeAfterMinutes } });
       assert.deepEqual(paths(bad.issues), ['rush.pokeAfterMinutes'], String(pokeAfterMinutes));
       assert.deepEqual(bad.config.rush, DEFAULT_RUSH);
+    }
+  });
+
+  it('reads replies.targetHours per kind of thread, the design table by default, and refuses one under an hour or past 30 days', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.replies, DEFAULT_REPLIES);
+    assert.deepEqual(DEFAULT_REPLIES.targetHours, { security: 4, bug: 24, pull: 24, comment: 24, feature: 72 });
+    const set = parseConfig({ ...ROSTER, replies: { targetHours: { bug: 8, feature: 168 } } });
+    assert.deepEqual(set.issues, []);
+    assert.deepEqual(set.config.replies.targetHours, { security: 4, bug: 8, pull: 24, comment: 24, feature: 168 });
+    for (const bug of [0, 721, 'soon']) {
+      const bad = parseConfig({ ...ROSTER, replies: { targetHours: { bug } } });
+      assert.deepEqual(paths(bad.issues), ['replies.targetHours.bug'], String(bug));
+      assert.deepEqual(bad.config.replies, DEFAULT_REPLIES);
     }
   });
 

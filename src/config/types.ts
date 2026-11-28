@@ -1619,6 +1619,24 @@ export interface RushConfig {
 }
 
 /**
+ * How many hours each kind of tracker thread may wait for an answer of ours in words: a security report, a bug from
+ * outside, a contributor's pull request, a comment on a thread we hold, a feature ask or a question (src/sync/clock.ts).
+ */
+export interface ReplyTargetHours {
+  readonly security: number;
+  readonly bug: number;
+  readonly pull: number;
+  readonly comment: number;
+  readonly feature: number;
+}
+
+/** The replies list: the threads that wait on the team for an answer, and how long each may wait. */
+export interface RepliesConfig {
+  /** Past 75% of its target a thread's owner is reminded once; past the target the lead is told it is late. */
+  readonly targetHours: ReplyTargetHours;
+}
+
+/**
  * Where `teamrig open` opens a session's tab: `auto` picks tmux inside tmux, else the platform's
  * terminal; `headless` runs the session with no window, an opt-in `auto` never picks (T5093); `print` opens nothing
  * and prints the command to run.
@@ -2018,6 +2036,7 @@ export interface KitConfig {
   readonly hiring: HiringConfig;
   readonly burst: BurstConfig;
   readonly rush: RushConfig;
+  readonly replies: RepliesConfig;
   /** How `teamrig open` starts a session in a new terminal tab. */
   readonly open: OpenConfig;
   /** What `teamrig statusline` shows. */

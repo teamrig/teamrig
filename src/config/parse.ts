@@ -22,6 +22,7 @@ import {
   DEFAULT_BUDGET,
   DEFAULT_BURST,
   DEFAULT_RUSH,
+  DEFAULT_REPLIES,
   DEFAULT_COMMITS,
   DEFAULT_CONTEXT_FILES,
   DEFAULT_FREEZES,
@@ -175,6 +176,7 @@ import {
   type BurstConfig,
   type BranchesConfig,
   type RushConfig,
+  type RepliesConfig,
   type DeliveryConfig,
   type DeliveryRepoConfig,
   type QueueConfig,
@@ -713,6 +715,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     hiring: parseHiring(read, read.section(raw, 'hiring', '')),
     burst: parseBurst(read, read.section(raw, 'burst', '')),
     rush: parseRush(read, read.section(raw, 'rush', '')),
+    replies: parseReplies(read, read.section(raw, 'replies', '')),
     open: parseOpen(read, read.section(raw, 'open', ''), sessions),
     statusLine: parseStatusLine(read, read.section(raw, 'statusLine', '')),
     focus: parseFocus(read, read.section(raw, 'focus', '')),
@@ -2517,6 +2520,15 @@ function parseBurst(read: ConfigReader, raw: JsonRecord): BurstConfig {
 /** `rush`: when a rush pokes an idle tab. */
 function parseRush(read: ConfigReader, raw: JsonRecord): RushConfig {
   return { pokeAfterMinutes: read.integer(raw, 'pokeAfterMinutes', 'rush', DEFAULT_RUSH.pokeAfterMinutes, CONFIG_LIMITS.rushPokeAfterMinutes) };
+}
+
+/** `replies`: how many hours each kind of thread may wait for an answer of ours. */
+function parseReplies(read: ConfigReader, raw: JsonRecord): RepliesConfig {
+  const path = 'replies.targetHours';
+  const hours = read.section(raw, 'targetHours', 'replies');
+  const target = (kind: keyof RepliesConfig['targetHours']): number =>
+    read.integer(hours, kind, path, DEFAULT_REPLIES.targetHours[kind], CONFIG_LIMITS.repliesTargetHours);
+  return { targetHours: { security: target('security'), bug: target('bug'), pull: target('pull'), comment: target('comment'), feature: target('feature') } };
 }
 
 function parsePaths(read: ConfigReader, raw: JsonRecord): PathsConfig {

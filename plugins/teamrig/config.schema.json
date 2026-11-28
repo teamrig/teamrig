@@ -2484,6 +2484,23 @@
         }
       }
     },
+    "replies": {
+      "description": "The replies list: tracker threads (issues, pull requests, comments) waiting for an answer of ours in words. At 75% of its target a thread's owner gets one unwoken reminder; at the target the lead's check says it is late.",
+      "type": "object",
+      "properties": {
+        "targetHours": {
+          "description": "How many hours each kind of thread may wait for an answer of ours.",
+          "type": "object",
+          "properties": {
+            "security": { "description": "A thread labelled security.", "type": "integer", "minimum": 1, "maximum": 720, "default": 4 },
+            "bug": { "description": "A thread labelled bug.", "type": "integer", "minimum": 1, "maximum": 720, "default": 24 },
+            "pull": { "description": "A contributor's pull request, once it is marked ready.", "type": "integer", "minimum": 1, "maximum": 720, "default": 24 },
+            "comment": { "description": "A comment on a thread a task of ours tracks.", "type": "integer", "minimum": 1, "maximum": 720, "default": 24 },
+            "feature": { "description": "Any other thread: a feature ask or a question.", "type": "integer", "minimum": 1, "maximum": 720, "default": 72 }
+          }
+        }
+      }
+    },
     "paths": {
       "description": "Folders moved from their defaults; a relative path is resolved against the team's folder (<kit home>/teams/<team>). Unset, state and inbox stay under the team's folder and skills is the skills folder of Claude Code's folder ($CLAUDE_CONFIG_DIR, else ~/.claude).",
       "type": "object",
