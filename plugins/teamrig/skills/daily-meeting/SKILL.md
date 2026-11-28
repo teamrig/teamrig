@@ -136,7 +136,9 @@ teamrig update T7 --priority p1 --session lead
 READY and sets its next status, even one that closed before the meeting ended; it takes the note alone, so change a
 priority, due date or week in a second `update`. The note is what `meeting end` tells the task's owner; a plain
 `update --note` or a changed field is no answer and reaches no one. A task of a team under yours takes its row's name and the note alone: `teamrig update web/T2 --decided
---note "owner decided: ..." --session lead`; its fields stay that team's. A new order
+--note "owner decided: ..." --session lead`; its fields stay that team's. Once the owner has enrolled a key (the owner
+proof), `--decided` is refused: ask the human to answer each card with `teamrig owner decide <id> --option <n> --read
+<digest>` (or `--approve`/`--decline`), which their key signs. A new order
 of the human's that creates work is a new task: `teamrig add --session lead --owner <id> --source owner ...`. When a
 decision changes what a session works on right now, send it one CRITICAL message; anything else waits for the end.
 

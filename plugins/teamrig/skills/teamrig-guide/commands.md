@@ -401,7 +401,9 @@ Flags:
   marked decided: its list row says `owner decided, by <who>`, `show` prints a `decided:` line, check flags it READY
   and the next prompt of its session says so, until its owner acts on it and sets its next status. It goes with a
   `--note` alone, only on a task waiting on the owner's decision or approval, by its owner or a leader above it, or as
-  `<team>/<id>` by the lead who asks the owner that team's decisions.
+  `<team>/<id>` by the lead who asks the owner that team's decisions. Once an owner key is enrolled (the owner proof
+  on or turned down) it is refused, from a session or a lead above alike: a session's Decided would clear an owner gate
+  with no proof, so the owner answers the card with `owner decide`, signed by the owner's key.
 - `--note "<text>"`: records a note with the change; with `--later` or `--decided`, the only flags with `<team>/<id>`.
 
 Example:

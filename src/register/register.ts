@@ -6,6 +6,7 @@ import { EVENT_VERSION, TASK_LINE_VERSION, type ApprovalVerdict, type CreateEven
 import { foldEvents, taskNumber, type RegisterState, type Task } from './fold.ts';
 import { NO_SLICED_GOALS, type SlicedGoal } from './focus.ts';
 import { NO_GOAL_TAGS } from './goals.ts';
+import type { ProofState } from '../owner-proof/state.ts';
 import { NO_SKILL, type AddInput, type AskInput, type AuditChange, type AuditSubject, type DecideChange, type DeferChange, type ImportChanges, type ImportInput, type OwnerAnswer, type OwnerChange, type RegisterPolicy, type SignedAnswer, type StatusContext, type StatusInput, type TriageChanges, type UpdateChange, type Verdict } from './policy.ts';
 import { ACTIVE_STATUSES, type ImportSource } from './model.ts';
 import type { TaskNumbering } from './numbering.ts';
@@ -445,15 +446,16 @@ export class Register {
 
   /**
    * `update <id> --decided`: the owner's answer to a card (T1366), an update that changes no field, drops the task's
-   * wait on the owner and marks it decided for its session to act on.
+   * wait on the owner and marks it decided for its session to act on; refused while `proof`, the team's owner proof
+   * state, is not off (RegisterPolicy.decideFrom).
    */
-  decide(caller: string, id: string, note: string | undefined): Promise<Verdict<WriteResult>> {
-    return this.commit(caller, (snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, caller, this.deps.policy.decide(task, caller, note)))));
+  decide(caller: string, id: string, note: string | undefined, proof: ProofState['kind']): Promise<Verdict<WriteResult>> {
+    return this.commit(caller, (snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, caller, this.deps.policy.decide(task, caller, note, proof)))));
   }
 
   /** A Decided from the lead above who asks the owner this team's decisions, `asker` being its `<team>/<id>`, as in deferFrom. */
-  decideFrom(asker: string, id: string, note: string | undefined): Promise<Verdict<WriteResult>> {
-    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, asker, this.deps.policy.decideFrom(task, note)))));
+  decideFrom(asker: string, id: string, note: string | undefined, proof: ProofState['kind']): Promise<Verdict<WriteResult>> {
+    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, asker, this.deps.policy.decideFrom(task, note, proof)))));
   }
 
   /**

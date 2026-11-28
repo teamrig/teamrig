@@ -57,6 +57,7 @@ import { handStepPin, readRunFiles } from '../hand-step-file.ts';
 import { KitTreeGoals } from '../tree-goals.ts';
 import { addInputOf, callerOf, changesOf, criticalOf, deadlineOf, dropApprovalOf, exemptOf, listFilterOf, NONE, oneCommitOf, pinOf, setInputOf, taskIdOf, taskRefOf, weekOf, withSecurityCard, type TypedTimes } from '../inputs.ts';
 import { findTeam, openKit, pastOrPresentIdOf, projectFolder, sessionIdOf, teamZone } from '../kit.ts';
+import { teamProofState } from '../owner-proof-act.ts';
 import { checkLines, listLines, SHORT_TITLE_CHARS, waitingOnLines, type CheckReport, type CheckSection, type LeadDecisions, type TaskRow } from '../reports.ts';
 import { fiveHourWarnings } from '../five-hour-check.ts';
 import { transcriptsIfKept } from '../host.ts';
@@ -774,7 +775,8 @@ async function noteBelow(args: ParsedArgs, runtime: CliRuntime, caller: string, 
   const target = await teamOf(runtime, await openKit(runtime, below), 'write');
   const by = formatAddress(from);
   if (decided) {
-    return report(runtime, await target.register.decideFrom(by, id, note), 'UPDATED', target, below);
+    const proof = await teamProofState(runtime, target.config);
+    return report(runtime, await target.register.decideFrom(by, id, note, proof.kind), 'UPDATED', target, below);
   }
   const later = laterOf(args, typedTimes(runtime, target.zone));
   const written = later === undefined ? await target.register.noteFrom(by, id, note) : await target.register.deferFrom(by, id, later, note);
@@ -791,7 +793,8 @@ export async function update(args: ParsedArgs, runtime: CliRuntime): Promise<Exi
   const team = await openTeam(runtime, 'write');
   const by = sessionIdOf(team.roster, caller);
   if (decidedOf(args)) {
-    return report(runtime, await team.register.decide(by, id, args.flags.get('note')), 'UPDATED', team);
+    const proof = await teamProofState(runtime, team.config);
+    return report(runtime, await team.register.decide(by, id, args.flags.get('note'), proof.kind), 'UPDATED', team);
   }
   const later = laterOf(args, typedTimes(runtime, team.zone));
   if (later !== undefined) {
