@@ -1,4 +1,4 @@
-import { withoutCredentials } from '../core/child-env.ts';
+import { withoutListedCredentials } from '../core/child-env.ts';
 import { ENV, type Env } from '../core/home.ts';
 import { envKey, pathList } from '../core/path-search.ts';
 
@@ -61,7 +61,7 @@ export function sessionEnv(env: Env, identity: SessionIdentity, platform: NodeJS
  * as no team config names what it needs.
  */
 export function sessionCredentialFree(env: Env, pass: readonly string[], login: readonly string[]): Env {
-  return withoutCredentials(env, [...login, ...pass]);
+  return withoutListedCredentials(env, [...login, ...pass]);
 }
 
 /**
