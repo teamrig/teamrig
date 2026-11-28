@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.512.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.511.0...teamrig-v0.512.0) (2026-11-28)
+
+
+### Features
+
+* **acts:** an act log module keeps each team's write commands in state/acts.jsonl, archived after 30 days (T4813) ([9626f59](https://github.com/teamrig/teamrig/commit/9626f59db0a6245afeead2f764aa78efc0c4fda3))
+* **check:** teamrig check flags HOOK-DRIFT when a host's hooks file or config left what setup hooks wrote (T5829) ([127362a](https://github.com/teamrig/teamrig/commit/127362aa8ed21550ca1026745373f42e008b7e62)), closes [#2617](https://github.com/teamrig/teamrig/issues/2617)
+* **cli:** every write command, its refusals too, is logged as an act; a dry run is not (T4813) ([813e3a0](https://github.com/teamrig/teamrig/commit/813e3a0c3a4721e8337cd9e1fb5b009389eefce1))
+* **cli:** teamrig ui ends its UI once a newer teamrig is current or its terminal is gone (T5813) ([bb78440](https://github.com/teamrig/teamrig/commit/bb78440b11974f9fab8a98862fa17370e2a6321e))
+* **cli:** the CLI runtime carries folder signals, a fake for specs (T5758) ([a5948f2](https://github.com/teamrig/teamrig/commit/a5948f272d9810d514991287a7a3779fb4ccfa19))
+* **config:** github.areaPaths names the paths each area label holds ([fd2e655](https://github.com/teamrig/teamrig/commit/fd2e655ea5477ebb7c2d9f43605361c47be96168))
+* **config:** refresh.handoverWarnBytes sets the size past which a handover is called long (T2537) ([9865e16](https://github.com/teamrig/teamrig/commit/9865e1670eb0f55550fa87b0c708ed06f25a9842))
+* **config:** the area map names every session owning an area of a repository (T3187) ([a708eb1](https://github.com/teamrig/teamrig/commit/a708eb123b96f61dbfdd1dd5713b8c8219db5d2b))
+* **conformance:** a tracker-reads contract holds a tracker's issue read and search, bound by GitHub and Jira (T5554) ([81d65be](https://github.com/teamrig/teamrig/commit/81d65be17c4d4ed0de0bdd82d468b372e293a76c))
+* **core:** a folder-signals port tells when anything in a folder changes (T5758) ([f12215a](https://github.com/teamrig/teamrig/commit/f12215aa15de2ae23f6daf8a70ed187bcd8843ce))
+* **core:** record each folder a files read reaches, one entry per folder whatever its separators (T5758) ([7e40630](https://github.com/teamrig/teamrig/commit/7e406306f37bce2f0aed1d0a8893989489a46272))
+* **doctor:** doctor reports a handover past refresh.handoverWarnBytes as handover-long (T2537) ([872227c](https://github.com/teamrig/teamrig/commit/872227c2646dfc5bb9e4d48f5b05e72c9fd295fb))
+* **events:** an events follower ends itself once a newer teamrig is current (T5813) ([90b4370](https://github.com/teamrig/teamrig/commit/90b43703e6012a68cb4685d3b39a88275d54952f))
+* **features:** tracker.issue-read and tracker.search name a tracker's reads (T5554) ([5c57b2d](https://github.com/teamrig/teamrig/commit/5c57b2dcd42107f037b82b18457e223b33769c8f))
+* **github:** plan an outside pull request's intake from the paths it changes ([8689b40](https://github.com/teamrig/teamrig/commit/8689b402d704dc1c5aa3f64e86d0ef554f14951b))
+* **github:** read one page of a pull request's changed paths ([0598e8a](https://github.com/teamrig/teamrig/commit/0598e8afbe96eafa10f4dfa10c2ce32a3775d5cc))
+* **hooks:** combine the replies of guards run on one call into one, as a host combines separate hooks (T5553) ([6a54461](https://github.com/teamrig/teamrig/commit/6a54461381711deb774e4cf4c043f1e34864aa32))
+* **hooks:** hook after runs a tool call's PostToolUse hooks in one process (T5821) ([a0bddfd](https://github.com/teamrig/teamrig/commit/a0bddfdfea4703fcaf626dcfe4212cd22602afb4))
+* **hooks:** hook guards also runs picker-guard, readonly-allow and route-allow (T5821) ([3f77b75](https://github.com/teamrig/teamrig/commit/3f77b756267c595f54db94e0f7643f49d711ba51))
+* **hooks:** hook guards runs the named guards on one call in one process (T5553) ([37ffc12](https://github.com/teamrig/teamrig/commit/37ffc123037a2baba7b20d0e7a59cba48a312c45))
+* **hooks:** one PostToolUse process per tool call beside tool-end (T5821) ([06b8da7](https://github.com/teamrig/teamrig/commit/06b8da71cf1864c16316e77b8e86bde25cb154cf))
+* **hooks:** one PreToolUse process on a shell call runs every guard and allow (T5821) ([b5a7e1b](https://github.com/teamrig/teamrig/commit/b5a7e1bfb888bf8d533ebcb0c3be02316bcab18f))
+* **hooks:** session hooks start the old-version sweep once the kit is current (T5813) ([c4e530c](https://github.com/teamrig/teamrig/commit/c4e530c2787b02c495f8e3d3209dafe6684b3615))
+* **hooks:** the fail-closed guard runner accepts a set of guards (T5553) ([45f96d1](https://github.com/teamrig/teamrig/commit/45f96d12a0a9c253c127c2ec47621c35c4d8d99d))
+* **hooks:** the install guard keeps each Codex &lt;name&gt;.config.toml profile (T5542) ([b394f70](https://github.com/teamrig/teamrig/commit/b394f7013bf7677a632bbe7988c5d1e6f2a48358))
+* **issues:** issue assign lets the logins in github.designAssignees take a design issue before it is agreed ([f08ea7c](https://github.com/teamrig/teamrig/commit/f08ea7cc9d2c573c479e8b7f822e305b041925b4))
+* **issue:** teamrig issue intake asks each area owner of an outside pull request ([a9a7ccc](https://github.com/teamrig/teamrig/commit/a9a7ccc52da4caa206d44292e00f82d12d7626e0))
+* **kit:** kit changes and the session-start self-install keep the install marked (T5828) ([17a8b0c](https://github.com/teamrig/teamrig/commit/17a8b0c59e06474b3b109c1157a01b58bffbb36e))
+* **kit:** mark the teamrig install read-only between locked kit changes (T5828) ([34355d8](https://github.com/teamrig/teamrig/commit/34355d807aa008af0c626d90bc271087b55419ed))
+* **kit:** plan and end the sweep of an older version's watchers and UIs, each with its tree (T5813) ([09ca98a](https://github.com/teamrig/teamrig/commit/09ca98a03686e96425a7892e6d5310865949e696))
+* **kit:** teamrig kit sweep ends the old versions' events and ui processes (T5813) ([bc9445f](https://github.com/teamrig/teamrig/commit/bc9445f1945a65674f56d272314b7ca26b3ffada))
+* **kit:** tell the events watchers and UIs an older teamrig version runs, by entry path and version (T5813) ([78d00cf](https://github.com/teamrig/teamrig/commit/78d00cfb8cb39ddbbad686c9b82c2f51f0cb2de0))
+* **owner-proof:** owner.proof refuses an RSA pin under 2048 bits (T5792) ([5ed48a5](https://github.com/teamrig/teamrig/commit/5ed48a5a7951b237ce625354dabb5ebd14209795))
+* **plugin-api:** a pull request's changed files are an optional code host capability, codehost.pull-files (T3187) ([35f07af](https://github.com/teamrig/teamrig/commit/35f07afcd0683f9bf56f5faf9d4828d40e6839b7))
+* **refresh:** a handover past refresh.handoverWarnBytes is told to move procedures into skills (T2537) ([182a1f5](https://github.com/teamrig/teamrig/commit/182a1f5fdfd4b492364e33bdd7e4a2b76de018f0))
+* **ship:** read a pull request note's reach and its plugin carrier (T3417) ([f30263b](https://github.com/teamrig/teamrig/commit/f30263b4993523bcd1304571225df1ff5978e3b8)), closes [#1402](https://github.com/teamrig/teamrig/issues/1402)
+* **ship:** ship.ts pr and merge refuse a note whose reach is unclear (T3417) ([42dfb51](https://github.com/teamrig/teamrig/commit/42dfb518da898622c96aaf6ff6012d663d29248d)), closes [#1402](https://github.com/teamrig/teamrig/issues/1402)
+
+
+### Bug Fixes
+
+* **acts:** the act log redacts the words joined too and keeps an encoded value by its length (T4813) ([4ed042c](https://github.com/teamrig/teamrig/commit/4ed042c90c5c720b82b5fb9e0a569ee6df2659f7))
+* **ci:** the fresh-install run lifts the kit home's install mark before it removes its scratch home (T5828) ([a23d419](https://github.com/teamrig/teamrig/commit/a23d4197045cbbc1f0143a08777d2554d375ebe0)), closes [#2639](https://github.com/teamrig/teamrig/issues/2639)
+* **events:** an idle watcher looks at its files only when a watched folder signals, else every 30 s (T5758) ([b709efd](https://github.com/teamrig/teamrig/commit/b709efd96cd68295b32886ac6bdb88ffb11c1ec7))
+* **github:** each area review's title names its owner, so the register takes them all ([66ca7a7](https://github.com/teamrig/teamrig/commit/66ca7a7e8f134f1d12665f5993193699cfd9e02f))
+* **github:** the issue watch runs from node's folder, never inside the team home (T5882) ([764d92e](https://github.com/teamrig/teamrig/commit/764d92ed0d21bcd35afa6995a4967ddb6036fbb0))
+* **hooks:** the exec guard reads a call through an unknown program to hook guards as a teamrig hook (T5553) ([d1cf5d5](https://github.com/teamrig/teamrig/commit/d1cf5d5824f5bf73b570e4a02f2cb097686caa58))
+* **hooks:** the gh guard reads teamrig issue intake as teamrig's, like every issue command (T3187) ([a42b013](https://github.com/teamrig/teamrig/commit/a42b0133fb744e6ec6bc7a09759c5546b282c19b))
+* **intake:** ask the security review whenever the read could not see every file ([6f20a20](https://github.com/teamrig/teamrig/commit/6f20a2082e22e22a79ba110666c57dc4dc2f5a72))
+* **intake:** route a renamed file by its earlier path too ([056c1bc](https://github.com/teamrig/teamrig/commit/056c1bca59118e5cce8b7d0c3a225c1a760786b9))
+* **issue:** an intake again after a dropped reply keeps its open reviews ([71427ab](https://github.com/teamrig/teamrig/commit/71427abcf3df0570461ec8db1bfa0d413e90551b))
+* **kit:** a Windows lift takes away only the mark's own deny rights, keeping the person's own deny entries (T5828) ([549dd70](https://github.com/teamrig/teamrig/commit/549dd705c5a7f0165af17708d3c8e411453c0430))
+* **kit:** the old-version sweep runs from node's folder, never inside the kit home (T5882) ([df31286](https://github.com/teamrig/teamrig/commit/df312863675d79655870ebdda443dffc0c52f674))
+* **queue:** the log header and ledger name the folder a step's leading cd moves to (T5550) ([1ce3308](https://github.com/teamrig/teamrig/commit/1ce33085e0e19154f3811dd36b7da4be65255585))
+* **skills:** skills step prints the running host's text of a host step, not the default host's (T5862) ([77a0299](https://github.com/teamrig/teamrig/commit/77a0299cf28191789dacefda7549a9a3814c3b54))
+* **sync:** a held-back issue body names the tracker to read it on, not GitHub for every one (T5301) ([8df4f9d](https://github.com/teamrig/teamrig/commit/8df4f9daf41a3938c0d1362f73a5d3fa56ee1daf))
+* **ui:** teamrig ui from a session's shell opens a new tab in Windows Terminal, never a split of the focused tab (T5831) ([5c2369a](https://github.com/teamrig/teamrig/commit/5c2369a81fd1afdee9dddb96b2d7cf5c0466b3b4))
+* **ui:** teamrig ui with no terminal is refused when no split or window opens (T5760) ([64bcbf3](https://github.com/teamrig/teamrig/commit/64bcbf3bb2a43a514ba1947e2280bbb549ce07ae)), closes [#2611](https://github.com/teamrig/teamrig/issues/2611)
+
+
+### Performance Improvements
+
+* **hooks:** a Bash call starts 2 guard processes, not 9: hooks.json runs its guards as one set (T5553) ([44a4b37](https://github.com/teamrig/teamrig/commit/44a4b3751d0c75810748a619ea3fbc7ae96756a6))
+
 ## [0.511.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.510.0...teamrig-v0.511.0) (2026-11-27)
 
 
