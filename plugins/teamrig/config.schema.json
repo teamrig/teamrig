@@ -446,7 +446,7 @@
       "type": "object",
       "properties": {
         "names": {
-          "description": "auto: the team's tracker connector's names when it declares them, else the default set. A preset: default (Goal / Feature / Task / Subtask, teamrig's own), youtrack (Epic / User Story / Task / Subtask), jira (Initiative / Epic / Story / Sub-task), azure-devops (Epic / Feature / User Story / Task), linear (Initiative / Project / Issue / Sub-issue), github (Milestone / Feature / Issue / Sub-issue), asana (Goal / Project / Task / Subtask), clickup (Goal / List / Task / Subtask). Or a map naming each of goal, feature, task and subtask with a singular and a plural, each one line of at most 40 characters.",
+          "description": "auto: the names the team's tracker connector declares (GitHub and Jira do, as their presets below), when it is the one tracker in use that declares any; else the default set. A preset: default (Goal / Feature / Task / Subtask, teamrig's own), youtrack (Epic / User Story / Task / Subtask), jira (Initiative / Epic / Story / Sub-task), azure-devops (Epic / Feature / User Story / Task), linear (Initiative / Project / Issue / Sub-issue), github (Milestone / Feature / Issue / Sub-issue), asana (Goal / Project / Task / Subtask), clickup (Goal / List / Task / Subtask). Or a map naming each of goal, feature, task and subtask with a singular and a plural, each one line of at most 40 characters.",
           "anyOf": [
             { "enum": ["auto", "default", "youtrack", "jira", "azure-devops", "linear", "github", "asana", "clickup"] },
             {

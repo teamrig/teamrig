@@ -154,7 +154,7 @@ export const DEFAULT_LOCK: LockConfig = { ttlMs: 300_000, pollMs: 50, waitMs: 20
 /** No change sources named: `teamrig changes` reads every one that applies to the project. */
 export const DEFAULT_CHANGES: ChangesConfig = { sources: [] };
 
-/** `auto`: the team's tracker connector's level names when it declares them, else Goal / Feature / Task / Subtask. */
+/** `auto`: the level names of the one tracker in use that declares them, else Goal / Feature / Task / Subtask. */
 export const DEFAULT_LEVELS: LevelsConfig = { names: AUTO_LEVEL_NAMES };
 
 /** No exec PATH: a privileged command names its program by absolute path until the team lists its tool folders. */

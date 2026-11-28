@@ -30,13 +30,20 @@ function unsupported(notice: string): Support {
 const ONE_ASSIGNEE: Support = partial('a second assignee', 'a Jira issue holds one assignee, named by its account id, so an assign replaces who held it');
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.3.0',
+  apiVersion: '0.10.0',
   id: 'jira',
   name: 'Jira',
   kinds: ['tracker'],
   refPrefix: 'jira:',
   terms: ['Jira', 'JQL'],
   configKeys: CONFIG_KEYS,
+  // The words Jira's own docs give each level (11-25): the same as the `jira` preset of levels.names.
+  levelNames: {
+    goal: { singular: 'Initiative', plural: 'Initiatives' },
+    feature: { singular: 'Epic', plural: 'Epics' },
+    task: { singular: 'Story', plural: 'Stories' },
+    subtask: { singular: 'Sub-task', plural: 'Sub-tasks' },
+  },
   manifest: {
     'tracker.issue-import': partial(
       "a description's formatting, and the reporter's tie to the project",

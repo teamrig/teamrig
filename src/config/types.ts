@@ -235,7 +235,7 @@ export interface ChangesConfig {
 
 /** What teamrig prints for each level of work (src/register/level-names.ts): labels only, never a command's words. */
 export interface LevelsConfig {
-  /** `auto` (the tracker connector's names, else the default set), a tracker preset's name, or a map of every level. */
+  /** `auto` (the one tracker in use that declares names, else the default set), a tracker preset's name, or a map of every level. */
   readonly names: LevelNamesSetting;
 }
 

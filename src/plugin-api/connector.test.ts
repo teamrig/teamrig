@@ -12,6 +12,7 @@ const NOT_DEFINED = 'its entry is not made by defineConnector: it needs a declar
 const CONFIG_KEYS = 'its configKeys must name each config key in camelCase beside one line on what it holds';
 const KINDS = 'its kinds must list tracker, codehost or both, each once';
 const REF_PREFIX = 'its refPrefix must be a lower-case word ending in a colon';
+const LEVEL_NAMES = 'its levelNames must name each of goal, feature, task, subtask with a singular and a plural, each one line of at most 40 characters';
 
 describe('a connector declaration', () => {
   it('adds the kinds of connector it is and the prefix of its refs', () => {
@@ -56,6 +57,21 @@ describe('a connector declaration', () => {
     }
     for (const configKeys of [undefined, 'site', ['site'], { Site: 'the site' }, { 'issue-type': 'the type' }, { site: '' }, { site: ' ' }, { site: 7 }, { site: 'the site\nand more' }]) {
       assert.deepEqual(connectorDeclarationProblems(connectorDeclarationData({ configKeys })), [CONFIG_KEYS], JSON.stringify(configKeys));
+    }
+  });
+
+  it('may name each level of work in its own words, or leave them out', () => {
+    const levelNames = {
+      goal: { singular: 'Theme', plural: 'Themes' },
+      feature: { singular: 'Epic', plural: 'Epics' },
+      task: { singular: 'Ticket', plural: 'Tickets' },
+      subtask: { singular: 'Step', plural: 'Steps' },
+    };
+    assert.deepEqual(connectorDeclarationProblems(connectorDeclarationData({ levelNames })), []);
+    assert.deepEqual(connectorDeclarationProblems(connectorDeclarationData()), []);
+    const { subtask: _left, ...missingOne } = levelNames;
+    for (const broken of ['jira', missingOne, { ...levelNames, epic: { singular: 'Epic', plural: 'Epics' } }, { ...levelNames, task: { singular: 'Ticket' } }]) {
+      assert.deepEqual(connectorDeclarationProblems(connectorDeclarationData({ levelNames: broken })), [LEVEL_NAMES], JSON.stringify(broken));
     }
   });
 });
