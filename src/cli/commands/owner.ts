@@ -2,10 +2,9 @@ import { formatAddress } from '../../core/address.ts';
 import { KIT_NAME } from '../../core/home.ts';
 import { LATER_FORMS, MAX_LATER_HOURS, namedLaterTime } from '../../core/later-time.ts';
 import { storedDeadline, storedText, typedTimeHint } from '../../core/time.ts';
-import type { OwnerProofRecord } from '../../owner-proof/record.ts';
 import { isCardDigest } from '../../register/card-digest.ts';
 import type { Task } from '../../register/fold.ts';
-import type { OwnerAnswer } from '../../register/policy.ts';
+import { ownerDecideAct, type OwnerAnswer, type SignedAnswer } from '../../register/policy.ts';
 import type { OwnerNextPreview } from '../../register/register.ts';
 import { refuseUnlessPerson } from '../agent-run.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
@@ -221,30 +220,25 @@ function untilOf(text: string, times: TypedTimes): string {
   return until;
 }
 
-/** The answer's words in the act the owner's proof signs: `--approve`, `--decline` or `--option <n>`. */
-function answerArgs(answer: OwnerAnswer): readonly string[] {
-  return answer.kind === 'option' ? ['--option', String(answer.option)] : [`--${answer.kind}`];
-}
-
 /**
  * The owner's proof of this answer (T4758 C1 design pick 2), or undefined while no key was ever enrolled. The act is
  * `owner decide <team>/T<id> <answer>` bound to the card read (`--read`, required while the proof is on); a proof
  * not made throws, so nothing is written.
  */
-async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: OwnerAnswer, read: string | undefined): Promise<OwnerProofRecord | undefined> {
+async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: OwnerAnswer, read: string | undefined): Promise<SignedAnswer | undefined> {
   const { paths } = target.kit;
   const { config } = target.team;
   const state = await teamProofState(runtime, config);
   if (state.kind === 'on' && read === undefined) {
     throw new RefusedError(`${KIT_NAME} owner decide needs --read <cardDigest> while the owner proof is on: the proof signs the card that was read`);
   }
-  const act = ['owner', 'decide', `${paths.team}/${target.id}`, ...answerArgs(answer)];
+  const act = ownerDecideAct(paths.team, target.id, answer);
   const outcome = await proveOwnerAct(runtime, paths, config, state, { team: paths.team, act, commit: null, cardDigest: read ?? null });
   if (outcome.kind === 'off') return undefined;
   if (outcome.kind === 'refused') {
     throw new RefusedError(`${proveRefusalText(outcome.refusal)}; ${target.names.task(target.id)} stays in the decision queue`);
   }
-  return outcome.record;
+  return { team: paths.team, record: outcome.record };
 }
 
 /**

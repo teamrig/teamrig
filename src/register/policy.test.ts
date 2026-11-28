@@ -10,7 +10,7 @@ import type { DecisionCard } from './card.ts';
 import { cutTask } from './description-cut.ts';
 import { cardDigest } from './card-digest.ts';
 import { NO_SLICED_GOALS } from './focus.ts';
-import { BLOCKER_WHY, CARD_USAGE, DESCRIPTION_NEEDED, GITHUB_ACTOR, normaliseTitle, PROOF_WAITS_USAGE, RegisterPolicy, type AddInput, type AskInput, type AuditSubject, type ImportInput, type StatusContext, type StatusInput, type Verdict } from './policy.ts';
+import { BLOCKER_WHY, CARD_USAGE, DESCRIPTION_NEEDED, GITHUB_ACTOR, normaliseTitle, ownerDecideAct, PROOF_WAITS_USAGE, RegisterPolicy, type AddInput, type AskInput, type AuditSubject, type ImportInput, type OwnerAnswer, type SignedAnswer, type StatusContext, type StatusInput, type Verdict } from './policy.ts';
 import type { ProblemReview } from './review.ts';
 import { NO_TASKS_ELSEWHERE, type TasksElsewhere } from './tree.ts';
 import type { WaitReason } from './waits.ts';
@@ -18,6 +18,7 @@ import { JERUSALEM } from '../testing/zone.ts';
 import { WATCH_USAGE } from './verify.ts';
 import { BLOCKER_PRIORITY_ID } from './model.ts';
 import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
 
 const EMPTY: RegisterState = foldEvents([]);
 const INPUT: AddInput = { title: 'Add a health check', description: 'what and why', owner: 'alpha', source: 'lead', priority: 2 };
@@ -2259,19 +2260,36 @@ describe("RegisterPolicy.ownerDecide: the owner's proof goes on the Decided only
   const policy = new RegisterPolicy(testConfig());
   const task = testTask({ status: 'waiting', waits: OWNER_DECISION, card: TEST_OWNER_CARD });
   const read = cardDigest(TEST_OWNER_CARD);
-  const proof = { ...OWNER_PROOF_RECORD, challenge: { ...OWNER_PROOF_RECORD.challenge, act: ['owner', 'decide', 'alpha/T1', '--option', '1'], cardDigest: read } };
+  const optionOne: OwnerAnswer = { kind: 'option', option: 1 };
+  const proof = { ...OWNER_PROOF_RECORD, challenge: { ...OWNER_PROOF_RECORD.challenge, act: ownerDecideAct('alpha', 'T1', optionOne), cardDigest: read } };
+  const signedWith = (record: OwnerProofRecord, team = 'alpha'): SignedAnswer => ({ team, record });
+  const withAct = (act: readonly string[]): OwnerProofRecord => ({ ...proof, challenge: { ...proof.challenge, act } });
 
-  it('keeps a proof signed for this task and card', () => {
-    const decided = policy.ownerDecide(task, { kind: 'option', option: 1 }, read, proof);
+  it('keeps a proof signed on this team for this task, answer and card', () => {
+    const decided = policy.ownerDecide(task, optionOne, read, signedWith(proof));
     assert.ok(decided.ok && decided.value.ownerProof === proof, JSON.stringify(decided));
   });
 
   it('refuses a proof signed for another task, another card, or with no --read', () => {
-    const other = { ...proof, challenge: { ...proof.challenge, act: ['owner', 'decide', 'alpha/T2', '--option', '1'] } };
-    assert.equal(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, read, other)), "the owner's proof was signed for alpha/T2, not T1");
+    assert.equal(error(policy.ownerDecide(task, optionOne, read, signedWith(withAct(['owner', 'decide', 'alpha/T2', '--option', '1'])))), "the owner's proof was signed for alpha/T2, not alpha/T1");
     const card = { ...proof, challenge: { ...proof.challenge, cardDigest: 'd'.repeat(64) } };
-    assert.match(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, read, card)), /signed for another card than the one read/);
-    assert.match(error(policy.ownerDecide(task, { kind: 'option', option: 1 }, undefined, proof)), /signed for another card than the one read/);
+    assert.match(error(policy.ownerDecide(task, optionOne, read, signedWith(card))), /signed for another card than the one read/);
+    assert.match(error(policy.ownerDecide(task, optionOne, undefined, signedWith(proof))), /signed for another card than the one read/);
+  });
+
+  it('refuses a proof signed for another answer to the same task (T5912)', () => {
+    assert.equal(
+      error(policy.ownerDecide(task, { kind: 'option', option: 2 }, read, signedWith(proof))),
+      `the owner's proof was signed for "owner decide alpha/T1 --option 1", not this answer "owner decide alpha/T1 --option 2"`,
+    );
+    assert.match(error(policy.ownerDecide(task, optionOne, read, signedWith(withAct([...ownerDecideAct('alpha', 'T1', optionOne), '--extra'])))), /^the owner's proof was signed for "owner decide alpha\/T1 --option 1 --extra"/);
+  });
+
+  it("refuses a proof for another team's task of the same id, or signed on another team (T5912)", () => {
+    const beta = { ...proof, challenge: { ...proof.challenge, team: 'beta', act: ownerDecideAct('beta', 'T1', optionOne) } };
+    assert.equal(error(policy.ownerDecide(task, optionOne, read, signedWith(beta))), "the owner's proof was signed on team beta, not alpha");
+    assert.equal(error(policy.ownerDecide(task, optionOne, read, signedWith(withAct(ownerDecideAct('beta', 'T1', optionOne))))), "the owner's proof was signed for beta/T1, not alpha/T1");
+    assert.equal(error(policy.ownerDecide(task, optionOne, read, signedWith(proof, 'beta'))), "the owner's proof was signed on team alpha, not beta");
   });
 
   it('writes no proof when none is given', () => {

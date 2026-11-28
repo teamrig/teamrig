@@ -276,6 +276,21 @@ export interface OwnerChange extends UpdateChange {
 /** The owner's answer to a card from the pane (T4078): one of its options by its number (from 1), or yes or no to an approval. */
 export type OwnerAnswer = { readonly kind: 'option'; readonly option: number } | { readonly kind: 'approve' } | { readonly kind: 'decline' };
 
+/** The owner's signed proof of an answer (T4758 C1), with the team whose `owner decide` asked for it. */
+export interface SignedAnswer {
+  readonly team: string;
+  readonly record: OwnerProofRecord;
+}
+
+/**
+ * The act the owner's proof of an answer signs: `owner decide <team>/T<id>` and `--approve`, `--decline` or
+ * `--option <n>`. The one builder both the proof's request and its check use, so the two never drift apart (T5912).
+ */
+export function ownerDecideAct(team: string, id: string, answer: OwnerAnswer): readonly string[] {
+  const words = answer.kind === 'option' ? ['--option', String(answer.option)] : [`--${answer.kind}`];
+  return ['owner', 'decide', `${team}/${id}`, ...words];
+}
+
 /**
  * An audit: an update that changes no field and pins either a hand step file for the task at its sha256 (T2312) or
  * the security reviewer's verdict on the task's card, with the card parts it read (T2761).
@@ -1054,12 +1069,14 @@ export class RegisterPolicy {
    * or no answers a wait on the owner's approval. With `read`, the digest of the card the owner read (cardDigest), only
    * while the card still has it, so an option number never lands on a card edited in between. A security-related card
    * needs its current verdict, as on its move to the owner (securityGap), since it may have changed while it sat on
-   * the owner (#1517). With `ownerProof`, the owner's signed proof of the answer (T4758 C1), kept on the Decided only
-   * when it was signed for this task and the card read, so a proof never lands on a card edited after it was signed.
+   * the owner (#1517). With `signed`, the owner's signed proof of the answer (T4758 C1), kept on the Decided only when
+   * it was signed on this team for this exact act (task and answer) and the card read, so a proof never lands on
+   * another answer, another team's task or a card edited after it was signed (T5912).
    */
-  ownerDecide(task: Task, answer: OwnerAnswer, read?: string, ownerProof?: OwnerProofRecord): Verdict<OwnerChange & DecideChange> {
+  ownerDecide(task: Task, answer: OwnerAnswer, read?: string, signed?: SignedAnswer): Verdict<OwnerChange & DecideChange> {
     const by = this.config.register.ownerSource;
-    const held = this.ownerAnswerHeld(task, read) ?? (ownerProof === undefined ? undefined : proofHeld(task, read, ownerProof));
+    const ownerProof = signed?.record;
+    const held = this.ownerAnswerHeld(task, read) ?? (signed === undefined ? undefined : proofHeld(task, answer, read, signed));
     if (held !== undefined) {
       return refuse(held);
     }
@@ -1851,14 +1868,30 @@ export function normaliseTitle(title: string): string {
   return title.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** Why an owner's proof may not go on this task's Decided: it was signed for another task, or another card than the one read. */
-function proofHeld(task: Task, read: string | undefined, proof: OwnerProofRecord): string | undefined {
-  const named = proof.challenge.act[2];
-  if (named === undefined || !named.endsWith(`/${task.id}`)) {
-    return `the owner's proof was signed for ${named ?? 'no task'}, not ${task.id}`;
+/**
+ * Why an owner's proof may not go on this task's Decided: it was signed on another team, for another task or answer
+ * (its whole act is compared to the one rebuilt from team, task and answer), or for another card than the one read.
+ */
+function proofHeld(task: Task, answer: OwnerAnswer, read: string | undefined, signed: SignedAnswer): string | undefined {
+  const { challenge } = signed.record;
+  if (challenge.team !== signed.team) {
+    return `the owner's proof was signed on team ${challenge.team}, not ${signed.team}`;
   }
-  if (read === undefined || proof.challenge.cardDigest !== read.toLowerCase()) {
+  const expected = ownerDecideAct(signed.team, task.id, answer);
+  const named = challenge.act[2];
+  if (named !== expected[2]) {
+    return `the owner's proof was signed for ${named ?? 'no task'}, not ${expected[2]}`;
+  }
+  if (!sameWords(challenge.act, expected)) {
+    return `the owner's proof was signed for "${challenge.act.join(' ')}", not this answer "${expected.join(' ')}"`;
+  }
+  if (read === undefined || challenge.cardDigest !== read.toLowerCase()) {
     return `the owner's proof was signed for another card than the one read: answer ${task.id} with --read and prove it again`;
   }
   return undefined;
+}
+
+/** True when two argvs hold the same words in the same order. */
+function sameWords(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((word, index) => word === right[index]);
 }
