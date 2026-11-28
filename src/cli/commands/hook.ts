@@ -43,7 +43,9 @@ import {
 import type { HookEvent, HookReply, HostModels } from '../../ports/host/index.ts';
 import { ownerTurnsLine, ownerTurnsText, type OwnerTurn } from '../../refresh/owner-turns.ts';
 import { carryLines, carryStartOf, readCarry, type CarriedCron, type Carry, type CarryPlaces, type CarryStart } from '../../refresh/carry.ts';
+import { promptOriginText, type RestartResult } from '../../refresh/restart.ts';
 import { firedBySchedule, type PromptSeen } from '../../refresh/scheduled-prompt.ts';
+import type { PromptOrigin } from '../../refresh/state.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { readContextTokens } from '../../refresh/usage.ts';
 import { noPositionals, type ParsedArgs } from '../args.ts';
@@ -51,7 +53,7 @@ import { hookLogOf } from '../hook-logs.ts';
 import { contextSourceIfTold, hostHomeIfKnown, leadLaunchFrom, modelsIfKnown, pathsIfKnown, transcriptsIfKept, transcriptsOf } from '../host.ts';
 import { openKit, renameDepsOf, rosterOf, rulesClockOf, teamZone, type Kit } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
-import { hostSessionAbove } from '../session-process.ts';
+import { hostSessionLookup } from '../session-process.ts';
 import { keptRulesAboveOf, readTeamRules } from '../team-rules.ts';
 import { loadTree } from '../tree.ts';
 import { bindAfterClear, bindHintOnce, bindNamedTab, bindTab, inboxLinesFor, readTitle, type TitleRead } from './hook-bind.ts';
@@ -87,7 +89,7 @@ import { recordSessionStart } from './hook-session-record.ts';
 import { envSession, hookScopeOf, readHookInput, sessionScopeOf, sessionTeam, startSessionOf, teamScopeOf, teamSessionOf, turnLeadPathsOf, writeReply, type SessionScope, type TeamScope } from './hook-input.ts';
 import { recordTabNeed } from './hook-tab-need.ts';
 import { tabStatusOn, tabTitleOf } from './hook-tab-status.ts';
-import { logPrompt, logReply, logStart, noteLastTyped, sentPromptOf } from './hook-turn-log.ts';
+import { logPrompt, logReply, logStart, noteLastTyped, promptOriginOf, sentPromptOf } from './hook-turn-log.ts';
 import { keepWorkingReasonOf } from './keep-working.ts';
 import { lastTaskAskReasonOf } from './last-task-ask.ts';
 import { verifyByLinesOf, verifyStartNoteOf } from './verify-queue.ts';
@@ -265,23 +267,39 @@ async function scheduledPrompt(runtime: CliRuntime, kit: Kit, id: string, seen: 
 /**
  * A prompt typed while the automatic restart waits for the session to be idle, or is held back until a wake brings it
  * work (T1383), cancels it, so the session keeps its context; one line tells the model, with the context growth
- * (`growth` tokens) that asks again. None when no restart waits, or one is already ending the session.
+ * (`growth` tokens) that asks again. None when no restart waits, or one is already ending the session. Where the
+ * prompt came from (#706) goes to the restart log: a pending restart's runner logs it from the cancel record, written
+ * before the request is cleared so the runner finds it; a held-back one has no runner, so its row is written here.
  */
-async function cancelledRestartLine(runtime: CliRuntime, kit: Kit, id: string, refresh: Pick<RefreshSettings, 'contextTokens'>): Promise<string | undefined> {
+async function cancelledRestartLine(
+  runtime: CliRuntime,
+  kit: Kit,
+  id: string,
+  refresh: Pick<RefreshSettings, 'contextTokens'>,
+  origin: PromptOrigin,
+): Promise<string | undefined> {
   const store = new RefreshStore(runtime.files, kit.paths);
-  const parked = (await store.parked(id)) !== undefined;
-  const pending = (await store.restart(id))?.phase === 'pending';
-  if (parked) {
+  const parked = await store.parked(id);
+  const request = await store.restart(id);
+  const pending = request?.phase === 'pending' ? request : undefined;
+  if (parked !== undefined) {
     await store.clearParked(id);
+    const result: RestartResult = { kind: 'cancelled', why: `${promptOriginText(origin)}, so the restart held back for work was cancelled`, by: origin };
+    await store
+      .restartLog()
+      .record({ session: id, at: parked.at, endedAt: new Date(runtime.clock.now()).toISOString(), result })
+      .catch(() => undefined);
   }
-  if (pending) {
+  if (pending !== undefined) {
+    await store.setCancel(id, { at: pending.at, origin });
     await store.clearRestart(id);
   }
-  if (!parked && !pending) {
+  if (parked === undefined && pending === undefined) {
     return undefined;
   }
   const growth = reaskGrowth(refresh);
-  return `${KIT_NAME}: the user typed, so the automatic restart is cancelled and you keep this context; a new handover is asked at your next task end, or once your context grew ${thousands(growth)} more`;
+  const who = origin.kind === 'person' ? 'the user typed' : promptOriginText(origin);
+  return `${KIT_NAME}: ${who}, so the automatic restart is cancelled and you keep this context; a new handover is asked at your next task end, or once your context grew ${thousands(growth)} more`;
 }
 
 /**
@@ -335,8 +353,11 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
   const hint = await bindHintOnce(runtime, kit, binding, hostSession);
   // Found like a rename: `$TEAMRIG_SESSION` first, so a session is shown its lines before its first `inbox read`.
   const session = await teamSessionOf(runtime, kit, own.roster, hostSession);
-  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => undefined);
-  if (session !== undefined && sent !== undefined) {
+  // Taken once: teamrig's wake is known by the text it kept for the tab, which marks one prompt only.
+  // A prompt whose wake record cannot be read is told as unknown (null), not as a person's.
+  const sent = session === undefined ? undefined : await sentPromptOf(runtime, kit.paths.wake, session, event).catch(() => null);
+  const origin: PromptOrigin = sent === null ? { kind: 'unknown' } : promptOriginOf(sent);
+  if (session !== undefined && sent !== undefined && sent !== null) {
     // Apart, so a log that cannot be written still leaves the UI following the person.
     await logPrompt(runtime, { config, paths: kit.paths, id: session }, sent).catch(() => undefined);
     await noteLastTyped(runtime, kit.paths, session, sent).catch(() => undefined);
@@ -344,7 +365,7 @@ export async function inboxReminder(args: ParsedArgs, runtime: CliRuntime): Prom
   // A scheduled job's prompt is no one typing: it leaves the restart armed, which waits for the turn it starts to end.
   const waits = session !== undefined && (await restartWaits(runtime, kit, session));
   const scheduled = session !== undefined && waits && (await scheduledPrompt(runtime, kit, session, { transcript: event.transcript, prompt: event.prompt }));
-  const cancelled = session === undefined || !waits || scheduled ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session)).catch(() => undefined);
+  const cancelled = session === undefined || !waits || scheduled ? undefined : await cancelledRestartLine(runtime, kit, session, sessionRefreshOf(config, session), origin).catch(() => undefined);
   const budgetLine = session === undefined ? undefined : await promptBudgetLine(runtime, { kit, config, roster: own.roster, id: session }).catch(() => undefined);
   // Like the inbox lines below, reading the digest moves its cursor, so it is read late; only a leader gets one.
   const digest = session === undefined ? undefined : await leaderDigestText(runtime, kit.paths, config, session).catch(() => undefined);
@@ -811,10 +832,11 @@ async function refreshDecisionOf(runtime: CliRuntime, scope: SessionScope, event
     facts !== undefined && measured.kind === 'measure' ? decideStop(state, context, { ...facts, due: await dueFactsAt(runtime, store, id, event.transcript) }) : measured;
   // Looked up once for the restart and the state: each look at a process starts a PowerShell on Windows, and a Stop
   // hook past Claude Code's timeout is killed with every process it started.
-  const claude = decided.kind === 'notice' ? await hostSessionAbove(runtime) : undefined;
+  const looked = decided.kind === 'notice' ? await hostSessionLookup(runtime) : undefined;
+  const claude = looked?.kind === 'found' ? looked.pid : undefined;
   const decision =
-    decided.kind === 'notice' && decided.restart && target !== undefined
-      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, claude }, decided, { paths: kit.paths, config })
+    looked !== undefined && decided.kind === 'notice' && decided.restart && target !== undefined
+      ? await restartOrPark(runtime, store, { team: kit.paths.team, id, context, target, lookup: looked }, decided, { paths: kit.paths, config })
       : decided;
   switch (decision.kind) {
     case 'write':

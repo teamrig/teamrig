@@ -78,7 +78,8 @@ function rowText(row: RestartRow | undefined, zone: TimeZone): string {
   }
   const ended = Date.parse(row.endedAt);
   const when = Number.isNaN(ended) ? row.endedAt : zone.clock(new Date(ended));
-  return `${row.kind} at ${when}${row.why === null ? '' : ` (${row.why})`}`;
+  const reasons = [...(row.why === null ? [] : [row.why]), ...(row.lookupFailure === null ? [] : [`lookup: ${row.lookupFailure}`])];
+  return `${row.kind} at ${when}${reasons.length === 0 ? '' : ` (${reasons.join('; ')})`}`;
 }
 
 /**

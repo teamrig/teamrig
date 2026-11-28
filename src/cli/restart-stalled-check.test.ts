@@ -52,6 +52,14 @@ describe('RESTART-STALLED (#705)', () => {
     ]);
   });
 
+  it("names why the session's process lookup failed when the last row is a restart that lookup stopped", async () => {
+    const { kit } = await harness();
+    const why = "its session's process could not be looked up, so no restart was armed";
+    await new RestartLog(kit.files, PATHS).record({ session: 'bravo', at: '2030-01-08T09:30:00.000Z', endedAt: '2030-01-08T09:30:00.000Z', result: { kind: 'failed', why }, lookupFailure: 'the listing took longer than 10 s' });
+    const [line] = await stalledLines(kit);
+    assert.match(line ?? '', new RegExp(`; last restart-log row: failed at 09:30 UTC \\(${why}; lookup: the listing took longer than 10 s\\); type /clear`));
+  });
+
   it('says so when the restart log has no row of the session', async () => {
     const { kit } = await harness();
     const [line] = await stalledLines(kit);

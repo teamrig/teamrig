@@ -612,8 +612,9 @@ export async function wakeAnswerOf(runtime: CliRuntime, scope: WakeTarget, cwd: 
 }
 
 /**
- * A wake, its text kept first, so the prompt it submits is told teamrig's: by the turn log when it is on, and always
- * by the last-typed mark a UI follows, which must not move to a woken tab (T5388).
+ * A wake, its text kept first, so the prompt it submits is told teamrig's: by the turn log when it is on, always by
+ * the last-typed mark a UI follows, which must not move to a woken tab (T5388), and in the restart log when it
+ * cancels a restart, which runs with the turn log off too. The text is teamrig's own, not the person's.
  */
 async function rememberWake(runtime: CliRuntime, scope: WakeTarget, value: Extract<WakeAnswer, { kind: 'wake' }>): Promise<WakeAnswer> {
   await new WakePrompts(runtime.files, scope.kit.paths.wake).remember(scope.id, { tab: scope.tab, text: value.text });

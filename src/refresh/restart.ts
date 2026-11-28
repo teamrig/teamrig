@@ -9,7 +9,7 @@ import type { TranscriptReader } from '../ports/host/index.ts';
 import type { RestoreRegistry } from '../restore/registry.ts';
 import type { ClearAsks } from './clear-asks.ts';
 import { readRunningWork } from './running.ts';
-import type { RestartRequest } from './state.ts';
+import type { PromptOrigin, RestartRequest } from './state.ts';
 import type { RefreshStore } from './store.ts';
 import { TURN_TAIL_BYTES, turnRunning } from './turn.ts';
 
@@ -63,7 +63,12 @@ export function personHoldOf(refresh: Pick<RefreshConfig, 'countdownSeconds' | '
 
 export type RestartResult =
   /** Nothing to do any more: the user typed, the session was refreshed by hand, its process ended, or a later request replaced this one. */
-  | { readonly kind: 'cancelled'; readonly why: string }
+  | {
+      readonly kind: 'cancelled';
+      readonly why: string;
+      /** Where the prompt that cancelled it came from, when the prompt hook recorded it (#706); absent from older rows. */
+      readonly by?: PromptOrigin;
+    }
   /** The tab's mod ran /clear, which runs Claude Code's own SessionEnd and SessionStart `clear` hooks. */
   | { readonly kind: 'cleared' }
   | { readonly kind: 'restarted'; readonly where: 'same tab' | 'new tab'; readonly endCommand: FeedOutcome | undefined }
@@ -90,6 +95,26 @@ export function restartMayAct(request: RestartRequest | undefined, now: number):
 const QUIET_TAIL_BYTES = 4_096;
 /** The user typed (the prompt hook cleared the request) or a later notice replaced it. */
 const CANCELLED: RestartResult = { kind: 'cancelled', why: 'the restart was cancelled or replaced' };
+
+/** Who typed or sent a prompt, for a line. */
+export function promptOriginText(origin: PromptOrigin): string {
+  switch (origin.kind) {
+    case 'person':
+      return 'a person typed';
+    case 'wake':
+      return "teamrig's wake of the tab arrived";
+    case 'peer':
+      return origin.from === null ? "a peer's message arrived" : `a message from ${origin.from} arrived`;
+    case 'unknown':
+      return 'a prompt teamrig could not trace arrived';
+  }
+}
+
+/** CANCELLED, naming where the prompt that cancelled this run's request came from when the prompt hook recorded it (#706). */
+async function cancelledOf(deps: RestartDeps, plan: RestartPlan): Promise<RestartResult> {
+  const cancel = await deps.store.takeCancel(plan.id, plan.at);
+  return cancel === undefined ? CANCELLED : { kind: 'cancelled', why: `${promptOriginText(cancel.origin)}, so the restart was cancelled`, by: cancel.origin };
+}
 
 /** How long the tab's mod has to claim the ask before the session is ended instead: it looks every second. */
 export const CLAIM_WAIT_MS = 10_000;
@@ -180,7 +205,7 @@ async function waitForQuiet(deps: RestartDeps, plan: RestartPlan, transcript: st
     await deps.sleep(wait);
     const request = await pendingOf(deps, plan);
     if (request === undefined) {
-      return CANCELLED;
+      return cancelledOf(deps, plan);
     }
     if ((await deps.store.state(plan.id))?.phase !== 'ready') {
       await deps.store.clearRestart(plan.id);
@@ -314,7 +339,7 @@ async function endSession(deps: RestartDeps, plan: RestartPlan, request: Restart
   }
   // A second look takes a moment: a prompt typed meanwhile still cancels.
   if ((await pendingOf(deps, plan)) === undefined) {
-    return CANCELLED;
+    return cancelledOf(deps, plan);
   }
   await deps.store.setRestart(plan.id, { ...request, phase: 'ending' });
   if (request.supervised) {
@@ -401,7 +426,7 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
     }
     // That look takes a moment: a prompt typed meanwhile still cancels.
     if ((await pendingOf(deps, plan)) === undefined) {
-      return CANCELLED;
+      return cancelledOf(deps, plan);
     }
     if (!isClaudeSessionId(request.hostSession)) {
       return endSession(deps, plan, request, claude);
@@ -418,7 +443,7 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
         // The end claim leaves the request pending, so a prompt typed since still cancels the end.
         return endSession(deps, plan, request, claude);
       case 'cancelled':
-        return CANCELLED;
+        return cancelledOf(deps, plan);
       case 'held': {
         // A helper may still run, which the transcript may not show: busy, never ended, however idle the transcript looks.
         modHeld = true;
@@ -445,7 +470,7 @@ export async function runRestart(deps: RestartDeps, plan: RestartPlan): Promise<
       continue;
     }
     if ((await pendingOf(deps, plan)) === undefined) {
-      return CANCELLED;
+      return cancelledOf(deps, plan);
     }
     return endSession(deps, plan, request, claude);
   }

@@ -808,8 +808,8 @@ hold, and only a person at that tab can answer it, and RESTART-STALLED: a sessio
 (`refresh.autoRestart`) sits quiet with its handover ready and noticed, no restart pending or parked, for longer than
 `refresh.restartDelaySeconds` plus 10 minutes (a prompt cancelled its restart, or its runner died where no hook
 re-arms it), its Claude Code still running (with its tab gone, its next start takes the handover); the row names how
-long it sat and its last row in the restart log (`refresh/restarts.jsonl`), it is raised once a handover, and typing
-/clear in its tab gives it its fresh start.
+long it sat and its last row in the restart log (`refresh/restarts.jsonl`), with why the process lookup failed when
+that stopped the restart, it is raised once a handover, and typing /clear in its tab gives it its fresh start.
 Each row names the check it came from; the
 lead fixes it, hands it on (`teamrig add --owner <session>`) or settles the check. The lead's `start` shows them
 too, and any session's `start` posts the lead one inbox line per warning it was not told of yet, at most 5 per
@@ -5190,7 +5190,13 @@ is told to type `/clear`, which keeps it. A prompt typed before then cancels it.
 One that ended without a word (its process was killed) is started again from the session's tab by `hook wake-check`,
 70 minutes after it was asked, once no restart could still act on its request.
 Every outcome (cleared, restarted, cancelled, failed) is one JSON line in the team's `state/refresh/restarts.jsonl`
-(`session`, `at`, `endedAt`, `result`): the record to judge a trial or a week of automatic restarts by.
+(`session`, `at`, `endedAt`, `result`): the record to judge a trial or a week of automatic restarts by. A cancelled
+row names where the prompt that cancelled it came from in its `why` and in `result.by` (`person`, `wake` for teamrig's
+own wake of the tab, with the turn log on or off, `peer` with the sender in `from`, or `unknown` when the prompt hook
+could not tell); a restart held back for work that a prompt drops gets such a
+row too. A restart a failed lookup of the session's process stopped before it was armed gets a `failed` row with
+`lookupFailure`, the listing's reason: its time limit, its exit code and the first line of its error output, or why it
+could not start.
 
 Flags:
 
