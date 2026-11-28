@@ -49,6 +49,21 @@ describe('hooks: the tab file', () => {
     assert.deepEqual(await tabOf(kit), { ...WORKING, state: 'ready' });
   });
 
+  it('records ready after an automatic compaction that started on an empty prompt, and working after one inside a turn (#1065)', async () => {
+    const kit = new CliHarness(TEAM);
+    const compact = async (): Promise<void> => {
+      await kit.run(['hook', 'tab-status'], { stdin: payload('PreCompact', { trigger: 'auto' }), env: ALPHA });
+      assert.equal((await tabOf(kit))?.state, 'compacting');
+      await kit.run(['hook', 'tab-status'], { stdin: payload('PostCompact', { trigger: 'auto' }), env: ALPHA });
+    };
+    await kit.run(['hook', 'stop'], { stdin: payload('Stop', { stop_hook_active: false }), env: ALPHA });
+    await compact();
+    assert.equal((await tabOf(kit))?.state, 'ready');
+    await kit.run(['hook', 'tab-status'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }), env: ALPHA });
+    await compact();
+    assert.equal((await tabOf(kit))?.state, 'working');
+  });
+
   it('keeps the file for an event that changes nothing, and writes none for a tab that is no session or on an error', async () => {
     const kit = new CliHarness(TEAM);
     await kit.run(['hook', 'tab-status'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }), env: ALPHA });

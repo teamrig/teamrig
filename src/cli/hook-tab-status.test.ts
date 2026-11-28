@@ -132,6 +132,51 @@ describe('hook tab-status', () => {
     assert.equal(titleOf(started), `${TAB_CIRCLES.ready} fix the build`, "a resumed session's helpers died with its old process");
   });
 
+  describe('an automatic compaction (#1065)', () => {
+    const env = { ...TITLE_OFF, TEAMRIG_SESSION: 'alpha' };
+    const compact = async (kit: CliHarness): Promise<string | undefined> => {
+      await kit.run(['hook', 'tab-status'], { stdin: payload('PreCompact', { trigger: 'auto' }), env });
+      return titleOf(await kit.run(['hook', 'tab-status'], { stdin: payload('PostCompact', { trigger: 'auto' }), env }));
+    };
+    const notes = (kit: CliHarness): string[] => kit.files.paths().filter((path) => path.includes('idle-compactions'));
+
+    it('ends ready when it started on an empty prompt, as no turn end follows it', async () => {
+      const kit = await teamWith();
+      await kit.run(['hook', 'stop'], { stdin: payload('Stop', { stop_hook_active: false }), env });
+      assert.equal((await compact(kit))?.startsWith(TAB_CIRCLES.ready), true);
+      assert.deepEqual(notes(kit), [], 'its end takes the note its start left');
+    });
+
+    it('ends working when it started inside a turn, or on an empty prompt while a helper still runs', async () => {
+      const kit = await teamWith();
+      await kit.run(['hook', 'tab-status'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }), env });
+      assert.equal((await compact(kit))?.startsWith(TAB_CIRCLES.working), true);
+      const busy = await teamWith(ON_TEAM, HELPER);
+      await busy.run(['hook', 'stop'], { stdin: payload('Stop', { stop_hook_active: false }), env });
+      assert.equal((await compact(busy))?.startsWith(TAB_CIRCLES.working), true);
+    });
+
+    it('ends working in a tab that is no session of the team, which keeps no tab file, as before', async () => {
+      const kit = await teamWith();
+      await kit.run(['hook', 'stop'], { stdin: payload('Stop', { stop_hook_active: false }), env: TITLE_OFF });
+      await kit.run(['hook', 'tab-status'], { stdin: payload('PreCompact', { trigger: 'auto' }), env: TITLE_OFF });
+      const ended = await kit.run(['hook', 'tab-status'], { stdin: payload('PostCompact', { trigger: 'auto' }), env: TITLE_OFF });
+      assert.equal(titleOf(ended), `${TAB_CIRCLES.working} fix the build`);
+    });
+
+    it("leaves no note once the session ends mid-compaction, so a later compaction inside a turn ends working", async () => {
+      const kit = await teamWith();
+      await kit.run(['hook', 'stop'], { stdin: payload('Stop', { stop_hook_active: false }), env });
+      await kit.run(['hook', 'tab-status'], { stdin: payload('PreCompact', { trigger: 'auto' }), env });
+      assert.equal(notes(kit).length, 1);
+      await kit.run(['hook', 'tab-status'], { stdin: payload('SessionEnd'), env });
+      assert.deepEqual(notes(kit), []);
+      await kit.run(['hook', 'tab-status'], { stdin: payload('UserPromptSubmit', { prompt: 'go' }), env });
+      const ended = await kit.run(['hook', 'tab-status'], { stdin: payload('PostCompact', { trigger: 'auto' }), env });
+      assert.equal(titleOf(ended)?.startsWith(TAB_CIRCLES.working), true);
+    });
+  });
+
   it("prints nothing with Claude Code's own title on, tab status off, outside a team, for input that is no payload, or on an error", async () => {
     const event = payload('UserPromptSubmit', { prompt: 'go' });
     assert.deepEqual((await (await teamWith()).run(['hook', 'tab-status'], { stdin: event })).stdout, []);

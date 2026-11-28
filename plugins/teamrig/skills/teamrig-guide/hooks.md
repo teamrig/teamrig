@@ -1977,8 +1977,8 @@ each tab of the team shows a colored circle before its title for what its sessio
 
 | Circle | State | Set by |
 | --- | --- | --- |
-| green | ready for a prompt | a session's start (not a compaction's), a slash command typed (most end with no turn), a turn's end with no helper running, a `/compact` typed |
-| yellow | working | a prompt, a tool call's end, a helper's start, an automatic compaction's end, and a turn's end while a helper or workflow it started still runs |
+| green | ready for a prompt | a session's start (not a compaction's), a slash command typed (most end with no turn), a turn's end with no helper running, a `/compact` typed, and in a team session's tab the end of an automatic compaction that started on an empty prompt (no turn end follows it) |
+| yellow | working | a prompt, a tool call's end, a helper's start, an automatic compaction's end inside a turn (or in a tab that is no team session), and a turn's end while a helper or workflow it started still runs |
 | orange | waiting on you | a permission prompt, a question (`AskUserQuestion`, not one the picker guard refuses), a plan to approve (`ExitPlanMode`), an MCP server's request (`Elicitation`) |
 | blue | waiting on your decision | a turn's end whose last message has a line that starts `Decision needed:` (see below), until your next prompt |
 | red | an API error | `StopFailure` |

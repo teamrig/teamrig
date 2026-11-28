@@ -106,6 +106,13 @@ describe('tabChangeOf', () => {
     }
   });
 
+  it('ends an automatic compaction that started on an empty prompt as ready, since no turn end follows it (#1065)', () => {
+    assert.equal(tabChangeOf(event('PostCompact', { trigger: 'auto' }), true), 'ready');
+    assert.equal(tabChangeOf(event('PostCompact', { trigger: 'manual' }), true), 'ready');
+    assert.equal(tabChangeOf(event('PreCompact'), true), 'compacting');
+    assert.equal(tabChangeOf(event('Stop'), true), 'ready');
+  });
+
   it('shows a slash command as ready, since most run with no turn to end', () => {
     assert.equal(tabChangeOf(event('UserPromptSubmit', { prompt: '/reload-plugins' })), 'ready');
     assert.equal(tabChangeOf(event('UserPromptSubmit', { prompt: '/teamrig:guide how' })), 'ready');

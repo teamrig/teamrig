@@ -863,7 +863,7 @@ async function stopTabTitleOf(runtime: CliRuntime, team: TeamScope, roster: Rost
     return undefined;
   }
   const own = { team: team.kit.paths.team, roster: roster ?? (await rosterOf(runtime, team.kit, team.config)) };
-  return tabTitleOf(runtime, event, own, decision.kind === 'notice' ? decision.title : undefined).catch((): string | undefined => undefined);
+  return tabTitleOf(runtime, event, own, { label: decision.kind === 'notice' ? decision.title : undefined }).catch((): string | undefined => undefined);
 }
 
 /**

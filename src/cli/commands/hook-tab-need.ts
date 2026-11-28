@@ -10,10 +10,10 @@ import { hookScopeOf, type SessionScope } from './hook-input.ts';
  * (T2510) finds it. The session's end removes the file; an event that changes nothing, a tab that is no team session,
  * and a file that already shows the same leave it. Its Claude Code process is this hook's parent, as Claude Code
  * starts its hooks itself. The event also finds the session; `scope` is the caller's when it has one, so the Stop hook
- * reads the roster once.
+ * reads the roster once. `idle`: the compaction this event ends started on an empty prompt (`tabChangeOf`).
  */
-export async function recordTabNeed(runtime: CliRuntime, event: HookEvent, scope?: SessionScope): Promise<void> {
-  const change = tabChangeOf(event);
+export async function recordTabNeed(runtime: CliRuntime, event: HookEvent, scope?: SessionScope, idle = false): Promise<void> {
+  const change = tabChangeOf(event, idle);
   if (change === undefined) {
     return;
   }

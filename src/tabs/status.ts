@@ -65,8 +65,11 @@ const CONTROLS = /[\u0000-\u001f\u007f-\u009f]/g;
 /** What the tab's state reads of a hook event. */
 export type TabEvent = Pick<HookEvent, 'name' | 'source' | 'prompt' | 'call' | 'lastReply' | 'trigger'>;
 
-/** What a hook event does to the tab, from its name and the fields that event carries. */
-export function tabChangeOf(event: TabEvent): TabChange {
+/**
+ * What a hook event does to the tab, from its name and the fields that event carries. `idle`: the compaction this
+ * event ends started on an empty prompt, as the note its start left says (idle-compaction.ts).
+ */
+export function tabChangeOf(event: TabEvent, idle = false): TabChange {
   switch (event.name) {
     case 'session-start':
       return OPENING_SOURCES.has(event.source ?? '') ? 'ready' : undefined;
@@ -90,8 +93,9 @@ export function tabChangeOf(event: TabEvent): TabChange {
     case 'compact-start':
       return 'compacting';
     case 'compact-end':
-      // A /compact the user typed ends there; an automatic one carries on with the turn it interrupted.
-      return event.trigger === 'manual' ? 'ready' : 'working';
+      // A /compact the user typed ends there, and so does an automatic one that started on an empty prompt, as no turn
+      // end follows it (#1065); an automatic one inside a turn carries on with the turn it interrupted.
+      return event.trigger === 'manual' || idle ? 'ready' : 'working';
     case 'session-end':
       return 'reset';
     case 'helper-stop':
