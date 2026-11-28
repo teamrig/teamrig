@@ -1,6 +1,7 @@
 {
   "$comment": "The provider-word check (tools/ci/provider-words-cli.ts): how many host or tool words each skill names. A count may fall, never rise; `--write` records the counts and refuses a rise.",
   "skills": {
+    ".claude/skills/dev-add-adapter": 13,
     ".claude/skills/dev-add-command": 2,
     ".claude/skills/dev-add-config-key": 2,
     ".claude/skills/dev-design-issue": 3,
@@ -14,8 +15,8 @@
     "plugins/teamrig/skills/hire": 1,
     "plugins/teamrig/skills/security": 4,
     "plugins/teamrig/skills/ship-change": 0,
-    "plugins/teamrig/skills/team-setup": 18,
-    "plugins/teamrig/skills/teamrig-guide": 865,
+    "plugins/teamrig/skills/team-setup": 17,
+    "plugins/teamrig/skills/teamrig-guide": 862,
     "plugins/teamrig/skills/write-issue": 9
   }
 }

@@ -40,6 +40,7 @@ project skills in `.claude/skills/` hold the steps of each repeated job.
 
 | Skill | Use it for |
 | --- | --- |
+| `dev-add-adapter` | a new connector, AI CLI host or terminal, or a port or choice on one: behind the interface, the user decides |
 | `dev-add-command` | a new CLI command, or a flag on one |
 | `dev-add-config-key` | a new key in the team config |
 | `dev-update-docs` | the docs a change must update, and the checks that hold them to the code |
