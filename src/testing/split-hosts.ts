@@ -36,6 +36,7 @@ export function trackerOnly(fake: FakeIssueHost): Tracker {
     watch: (repo, marks) => fake.watch(repo, marks),
     ...(fake.fields === undefined ? {} : { fields: fake.fields }),
     ...(fake.reopen === undefined ? {} : { reopen: fake.reopen }),
+    ...(fake.clocks === undefined ? {} : { clocks: fake.clocks }),
   };
 }
 

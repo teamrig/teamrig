@@ -11,9 +11,9 @@ import type { ReplyTargetHours } from '../config/types.ts';
 import { isRecord } from '../core/guards.ts';
 import { parseObject, toJsonlLine, VERSION_FIELD } from '../core/jsonl.ts';
 import type { TimeZone } from '../core/zone.ts';
+import type { PostMark } from '../issues/host.ts';
 import type { HostIssue, IssueComment } from '../issues/issue.ts';
 import type { HostPull } from '../issues/pull.ts';
-import { isInsideAuthor, isOurAuthor, type OurLogins } from './trust.ts';
 
 /** The kinds of thread, each with its own answer target. */
 export const THREAD_KINDS = ['security', 'bug', 'pull', 'comment', 'feature'] as const;
@@ -127,48 +127,41 @@ export function stepClocks(before: ReadonlyMap<string, Clock>, read: ReadonlySet
   return { clocks, remind };
 }
 
+/** What a post is to the clock, as the tracker that read it marks it (issues/host.ts PostMarks), the team's logins bound. */
+export type MarkPost = (post: IssueComment) => PostMark;
+
 /**
- * An open issue as a thread: its opening post and its comments read, a bot's left out, each ours by postIsOurs; `owner`
- * answers it. Its kind by label (`security`, then `bug`, matched without case), else a comment on a thread we hold
- * (`held`: a task of ours tracks it), else a feature ask or question. Undefined for a closed one.
+ * An open issue as a thread: its opening post and its comments read, each as `mark` has it, one marked none left
+ * out; `owner` answers it. Its kind by label (`security`, then `bug`, matched without case), else a comment on a
+ * thread we hold (`held`: a task of ours tracks it), else a feature ask or question. Undefined for a closed one.
  */
-export function issueThread(tracker: string, issue: HostIssue, ref: string, owner: string, held: boolean, ours: OurLogins): Thread | undefined {
+export function issueThread(tracker: string, issue: HostIssue, ref: string, owner: string, held: boolean, mark: MarkPost): Thread | undefined {
   if (issue.state !== 'open') {
     return undefined;
   }
   const opening = issue.createdAt === undefined ? [] : [{ at: issue.createdAt, login: issue.author, authorAssociation: issue.authorAssociation, authorKind: issue.authorKind }];
-  return { tracker, repo: issue.repo, ref, kind: issueKind(issue.labels, held), owner, title: issue.title, posts: threadPosts([...opening, ...issue.comments], ours) };
+  return { tracker, repo: issue.repo, ref, kind: issueKind(issue.labels, held), owner, title: issue.title, posts: threadPosts([...opening, ...issue.comments], mark) };
 }
 
 /**
- * An open pull request as a `pull` thread: its opening and its comments and reviews read, a bot's left out, each ours
- * by postIsOurs, as on an issue; `owner` answers it. Undefined for a merged or closed one, and for a draft: it asks
- * nobody to look yet, so its wait starts once it is marked ready.
+ * An open pull request as a `pull` thread: its opening and its comments and reviews read, each as `mark` has it, as
+ * on an issue; `owner` answers it. Undefined for a merged or closed one, and for a draft: it asks nobody to look
+ * yet, so its wait starts once it is marked ready.
  */
-export function pullThread(tracker: string, pull: HostPull, ref: string, owner: string, ours: OurLogins): Thread | undefined {
+export function pullThread(tracker: string, pull: HostPull, ref: string, owner: string, mark: MarkPost): Thread | undefined {
   if (pull.state !== 'open' || pull.draft) {
     return undefined;
   }
   const opening = { at: pull.createdAt, login: pull.author, authorAssociation: pull.authorAssociation, authorKind: pull.authorKind };
-  return { tracker, repo: pull.repo, ref, kind: 'pull', owner, title: pull.title, posts: threadPosts([opening, ...pull.posts], ours) };
+  return { tracker, repo: pull.repo, ref, kind: 'pull', owner, title: pull.title, posts: threadPosts([opening, ...pull.posts], mark) };
 }
 
-/**
- * Whether a post is the team's answer. With `github.owners` naming the team's people, only their logins and the
- * repository's owner answer (isOurAuthor): an outside contributor given collaborator access still waits on us, and
- * their follow-up is no answer. A team that named no one falls back to the author's tie to the repository
- * (isInsideAuthor).
- */
-export function postIsOurs(association: string, login: string, ours: OurLogins): boolean {
-  return ours.size === 0 ? isInsideAuthor(association) : isOurAuthor(association, login, ours);
-}
-
-/** An app's or a workflow's account kind: its posts are no one's answer and no one's ask. */
-const BOT = 'Bot';
-
-/** A thread's posts with a bot's left out, each ours by postIsOurs. */
-function threadPosts(posts: readonly IssueComment[], ours: OurLogins): ThreadPost[] {
-  return posts.filter((post) => post.authorKind !== BOT).map((post) => ({ at: Date.parse(post.at), ours: postIsOurs(post.authorAssociation, post.login, ours), login: post.login }));
+/** A thread's posts as `mark` has them, one marked none (it neither starts nor stops a clock) left out. */
+function threadPosts(posts: readonly IssueComment[], mark: MarkPost): ThreadPost[] {
+  return posts.flatMap((post) => {
+    const marked = mark(post);
+    return marked === 'none' ? [] : [{ at: Date.parse(post.at), ours: marked === 'ours', login: post.login }];
+  });
 }
 
 function issueKind(labels: readonly string[], held: boolean): ThreadKind {

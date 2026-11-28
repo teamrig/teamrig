@@ -1,6 +1,7 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPullFiles, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueReopen, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullFileRead, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPullFiles, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueReopen, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PostMark, type PostMarks, type PullFileRead, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
-import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
+import type { HostIssue, IssueComment, IssueThread, LinkedIssue } from '../issues/issue.ts';
+import { isInsideAuthor, isOurAuthor } from '../sync/trust.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
 import type { HostPull } from '../issues/pull.ts';
 import type { ScopeRequest } from '../sync/scope.ts';
@@ -94,6 +95,25 @@ export class FakeIssueHost implements IssueHost {
       return Promise.resolve(this.reopenEnd);
     },
   };
+
+  /**
+   * Its posts marked as GitHub marks them (a bot's none; the team's logins, else an inside tie, ours), until a test
+   * takes them away (withoutClocks).
+   */
+  clocks?: PostMarks = {
+    markPost: (post: IssueComment, team: ReadonlySet<string>): PostMark => {
+      if (post.authorKind === 'Bot') {
+        return 'none';
+      }
+      return (team.size === 0 ? isInsideAuthor(post.authorAssociation) : isOurAuthor(post.authorAssociation, post.login, team)) ? 'ours' : 'theirs';
+    },
+  };
+
+  /** From now on, it marks no post, as a tracker that cannot tell the team's posts from others' (or one built before plugin API 0.10.0). */
+  withoutClocks(): this {
+    delete this.clocks;
+    return this;
+  }
 
   /** From now on, it has no reopen, as a connector built before plugin API 0.4.0 has none. */
   withoutReopen(): this {

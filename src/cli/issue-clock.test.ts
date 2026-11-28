@@ -6,6 +6,9 @@ import { parseClocks } from '../sync/clock.ts';
 import { CliHarness, TEAM, TEAM_HOME } from '../testing/cli-harness.ts';
 import { commentNode, FakeGh, ghIssue, ghPull, reviewNode } from '../testing/fake-gh.ts';
 import { EXIT } from './runtime.ts';
+import { clockMarking } from './commands/issue-clock.ts';
+import type { IssueComment } from '../issues/issue.ts';
+import { FakeIssueHost } from '../testing/fake-issue-host.ts';
 
 const GITHUB_TEAM: JsonRecord = { ...TEAM, github: { repos: ['acme/web'], owners: { octocat: 'bravo' } } };
 const CLOCKS = join(TEAM_HOME, 'state', 'replies.json');
@@ -199,5 +202,25 @@ describe('the response clock in issue sync (T3028)', () => {
     assert.match(lines[0] ?? '', /^50 GitHub threads wait for an answer of ours: gh:acme\/web#1 \(bug, by .+\), gh:acme\/web#2 \(bug, by .+\), gh:acme\/web#3 \(bug, by .+\) and 47 more; /);
     await sync(kit, gh());
     assert.equal(githubLines(kit, 'lead').length, 1, 'reminded once');
+  });
+});
+
+describe('clockMarking (T5796)', () => {
+  const post = (login: string, authorAssociation: string): IssueComment => ({ at: '2030-01-08T10:00:00.000Z', login, authorAssociation, authorKind: 'User' });
+
+  it("reads each post by the tracker's own marking, with the team's logins bound", () => {
+    const marking = clockMarking(new FakeIssueHost(), new Set(['octocat']));
+    assert.equal(marking.kind, 'marks');
+    if (marking.kind === 'marks') {
+      assert.equal(marking.mark(post('octocat', 'MEMBER')), 'ours');
+      assert.equal(marking.mark(post('stranger', 'NONE')), 'theirs');
+    }
+  });
+
+  it("times nothing on a tracker that cannot tell the team's posts from others', and says so by its name", () => {
+    assert.deepEqual(clockMarking(new FakeIssueHost().withoutClocks(), new Set(['octocat'])), {
+      kind: 'off',
+      line: "OFF response clock: the test host cannot tell the team's posts from others', so no thread's wait is timed",
+    });
   });
 });

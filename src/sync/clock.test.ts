@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { testHostIssue } from '../testing/host-issue.ts';
 import { TimeZone } from '../core/zone.ts';
 import { DEFAULT_REPLIES } from '../config/defaults.ts';
-import { formatClocks, isLate, issueThread, lateGroupText, lateText, postIsOurs, parseClocks, remindersText, reminderText, REMIND_SHARE, stepClocks, waitingSince, type Clock, type Thread, type ThreadPost } from './clock.ts';
+import { formatClocks, isLate, issueThread, lateGroupText, lateText, parseClocks, remindersText, reminderText, REMIND_SHARE, stepClocks, waitingSince, type Clock, type MarkPost, type Thread, type ThreadPost } from './clock.ts';
 
 const HOUR = 3_600_000;
 /** A team that set no `replies.targetHours`: the design table. */
 const TARGETS = DEFAULT_REPLIES.targetHours;
-/** A team whose `github.owners` names no login: a post is ours by its tie to the repository. */
-const NO_ONE: ReadonlySet<string> = new Set();
+/** A tracker's marks as a test states them: a bot's none, a member's ours, any other's theirs. */
+const BY_TIE: MarkPost = (post) => (post.authorKind === 'Bot' ? 'none' : post.authorAssociation === 'MEMBER' ? 'ours' : 'theirs');
 const T0 = Date.UTC(2026, 10, 15, 8);
 const outside = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: false, login: `ada${hours}` });
 const ours = (hours: number): ThreadPost => ({ at: T0 + hours * HOUR, ours: true, login: 'octocat' });
@@ -105,7 +105,7 @@ describe('issueThread', () => {
         { at: at(3), login: 'ada', authorAssociation: 'CONTRIBUTOR', authorKind: 'User' },
       ],
     });
-    assert.deepEqual(issueThread('github', issue, 'gh:acme/web#4', 'alpha', false, NO_ONE), {
+    assert.deepEqual(issueThread('github', issue, 'gh:acme/web#4', 'alpha', false, BY_TIE), {
       tracker: 'github',
       repo: 'acme/web',
       ref: 'gh:acme/web#4',
@@ -121,7 +121,7 @@ describe('issueThread', () => {
   });
 
   it('names the kind by label, security before bug, else comment on a held thread, else feature', () => {
-    const kind = (labels: readonly string[], held: boolean): string | undefined => issueThread('github', testHostIssue(1, { labels }), 'r', 'alpha', held, NO_ONE)?.kind;
+    const kind = (labels: readonly string[], held: boolean): string | undefined => issueThread('github', testHostIssue(1, { labels }), 'r', 'alpha', held, BY_TIE)?.kind;
     assert.equal(kind(['Bug', 'Security'], false), 'security');
     assert.equal(kind(['BUG'], true), 'bug');
     assert.equal(kind([], true), 'comment');
@@ -129,39 +129,26 @@ describe('issueThread', () => {
   });
 
   it('gives no thread for a closed issue', () => {
-    assert.equal(issueThread('github', testHostIssue(1, { state: 'closed' }), 'r', 'alpha', false, NO_ONE), undefined);
+    assert.equal(issueThread('github', testHostIssue(1, { state: 'closed' }), 'r', 'alpha', false, BY_TIE), undefined);
   });
 
-  it("reads a post as ours by the team's logins when it names any, so an outside collaborator still waits on us (T3380)", () => {
+  it("takes each post's mark from the tracker alone, whatever its tie, opening post first (T5796)", () => {
     const issue = testHostIssue(4, {
-      authorAssociation: 'COLLABORATOR',
-      author: 'contrib',
+      authorAssociation: 'OWNER',
+      author: 'acme',
       createdAt: at(0),
-      comments: [
-        { at: at(1), login: 'contrib', authorAssociation: 'COLLABORATOR', authorKind: 'User' },
-        { at: at(2), login: 'OctoCat', authorAssociation: 'MEMBER', authorKind: 'User' },
-      ],
+      comments: [{ at: at(1), login: 'jira-user', authorAssociation: '', authorKind: '' }],
     });
+    const asked: string[] = [];
+    const byLogin: MarkPost = (post) => {
+      asked.push(post.login);
+      return post.login === 'jira-user' ? 'ours' : 'theirs';
+    };
     assert.deepEqual(
-      issueThread('github', issue, 'r', 'alpha', false, new Set(['octocat']))?.posts.map((post) => post.ours),
-      [false, false, true],
+      issueThread('jira', issue, 'r', 'alpha', false, byLogin)?.posts.map((post) => post.ours),
+      [false, true],
     );
-  });
-});
-
-describe('postIsOurs (T3380)', () => {
-  const TEAM_LOGINS = new Set(['octocat']);
-
-  it("counts the team's logins, whatever their case, and the repository's owner, and no other tie", () => {
-    assert.equal(postIsOurs('NONE', 'OctoCat', TEAM_LOGINS), true);
-    assert.equal(postIsOurs('OWNER', 'acme', TEAM_LOGINS), true);
-    assert.equal(postIsOurs('COLLABORATOR', 'contrib', TEAM_LOGINS), false);
-    assert.equal(postIsOurs('MEMBER', '', TEAM_LOGINS), false);
-  });
-
-  it('falls back to the tie to the repository when the team names no login', () => {
-    assert.equal(postIsOurs('COLLABORATOR', 'contrib', NO_ONE), true);
-    assert.equal(postIsOurs('CONTRIBUTOR', 'ada', NO_ONE), false);
+    assert.deepEqual(asked, ['acme', 'jira-user']);
   });
 });
 

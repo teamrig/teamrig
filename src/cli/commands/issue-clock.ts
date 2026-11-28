@@ -1,6 +1,7 @@
 import type { KitConfig } from '../../config/types.ts';
 import { SecretScanner } from '../../core/secrets.ts';
-import { formatClocks, issueThread, pullThread, remindersText, stepClocks, type Clock, type Thread } from '../../sync/clock.ts';
+import { formatClocks, issueThread, pullThread, remindersText, stepClocks, type Clock, type MarkPost, type Thread } from '../../sync/clock.ts';
+import type { Clocked } from '../../issues/host.ts';
 import { issueOwner, issueRef, type ImportRules } from '../../sync/map.ts';
 import type { OurLogins } from '../../sync/trust.ts';
 import { postLine } from '../../inbox/inbox.ts';
@@ -21,11 +22,27 @@ import { readReplies } from '../replies-state.ts';
  * line to each owner whose thread reached 75% of its answer target. GH-LATE at 100% is `check`'s (issue-clock-check.ts).
  */
 
+/** How the response clock reads a tracker's posts: by its marking, or not at all, with the line a writing sync says. */
+export type ClockMarking = { readonly kind: 'marks'; readonly mark: MarkPost } | { readonly kind: 'off'; readonly line: string };
+
+/**
+ * The response clock's reading of `tracker`'s posts, with the team's logins `ours` bound (issues/host.ts PostMarks).
+ * A tracker without `clocks` cannot tell the team's posts from others', so the clock times none of its threads and
+ * keeps every clock it holds as it was.
+ */
+export function clockMarking(tracker: Clocked & { readonly name: string }, ours: OurLogins): ClockMarking {
+  const marks = tracker.clocks;
+  if (marks === undefined) {
+    return { kind: 'off', line: `OFF response clock: ${tracker.name} cannot tell the team's posts from others', so no thread's wait is timed` };
+  }
+  return { kind: 'marks', mark: (post) => marks.markPost(post, ours) };
+}
+
 /**
  * The open issues of one repository of `tracker` read as threads: one a task tracks is held and answered by that task's owner, any
- * other by the import's owner rule. A post is ours by `ours`, the team's logins (sync/clock.ts postIsOurs).
+ * other by the import's owner rule. Each post is what `mark`, the tracker's marking (clockMarking), makes it.
  */
-export function repoThreads(tracker: string, issues: readonly HostIssue[], tasks: readonly Task[], rules: ImportRules, ours: OurLogins): Thread[] {
+export function repoThreads(tracker: string, issues: readonly HostIssue[], tasks: readonly Task[], rules: ImportRules, mark: MarkPost): Thread[] {
   const holders = new Map<string, string>();
   for (const task of tasks) {
     if (task.ref !== null && !holders.has(task.ref)) {
@@ -35,7 +52,7 @@ export function repoThreads(tracker: string, issues: readonly HostIssue[], tasks
   return issues.flatMap((issue) => {
     const ref = issueRef(issue.repo, issue.number);
     const holder = holders.get(ref);
-    return issueThread(tracker, issue, ref, holder ?? issueOwner(issue, rules), holder !== undefined, ours) ?? [];
+    return issueThread(tracker, issue, ref, holder ?? issueOwner(issue, rules), holder !== undefined, mark) ?? [];
   });
 }
 
@@ -44,7 +61,7 @@ export function repoThreads(tracker: string, issues: readonly HostIssue[], tasks
  * owner of the task one of our own branches names, else `watcher` (sync/pull-news.ts pullRecipient). Give it the
  * open read's pull requests: only that read carries their posts (adapters/connectors/github/queries.ts).
  */
-export function pullThreads(tracker: string, pulls: readonly HostPull[], recipientOf: (pull: HostPull) => string, ours: OurLogins): Thread[] {
+export function pullThreads(tracker: string, pulls: readonly HostPull[], recipientOf: (pull: HostPull) => string, mark: MarkPost): Thread[] {
   const seen = new Set<string>();
   return pulls.flatMap((pull) => {
     const ref = issueRef(pull.repo, pull.number);
@@ -52,7 +69,7 @@ export function pullThreads(tracker: string, pulls: readonly HostPull[], recipie
       return [];
     }
     seen.add(ref);
-    return pullThread(tracker, pull, ref, recipientOf(pull), ours) ?? [];
+    return pullThread(tracker, pull, ref, recipientOf(pull), mark) ?? [];
   });
 }
 

@@ -6,7 +6,7 @@
  */
 
 import type { IssueFields } from './fields.ts';
-import type { HostIssue, IssueState, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
+import type { HostIssue, IssueComment, IssueState, IssueThread, LinkedIssue, ReadComment } from './issue.ts';
 import type { HostPosts } from './post.ts';
 import type { HostPull, PullChecks, PullState } from './pull.ts';
 import type { ScopeRequest } from '../sync/scope.ts';
@@ -351,8 +351,26 @@ export interface Reopenable {
   readonly reopen?: IssueReopen;
 }
 
+/** What a post is to the response clock: the team's answer, an ask waiting on one, or neither (an app's or a workflow's). */
+export type PostMark = 'ours' | 'theirs' | 'none';
+
+/** A tracker's marking of a thread's posts, by the ties to the place it alone knows. */
+export interface PostMarks {
+  /** What `post` is to the response clock; `team` holds the logins the team named, in lowercase, empty for none. */
+  markPost(post: IssueComment, team: ReadonlySet<string>): PostMark;
+}
+
+/** A tracker's post marking, when it can tell the team's posts from others'. */
+export interface Clocked {
+  /**
+   * A capability (plugin API 0.10.0, feature `tracker.clocks`), so a tracker that cannot tell the team's posts from
+   * others' leaves it out and the response clock reads none of its threads.
+   */
+  readonly clocks?: PostMarks;
+}
+
 /** A tracker: where a team's issues live, with every capability over them. */
-export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable, Reopenable {}
+export interface Tracker extends HostAccess, IssueStore, Comments, Labels, Assignees, IssueLinks, IssueEvents, StatusFields, Searchable, Reopenable, Clocked {}
 
 /** A code host's pull requests, read. */
 export interface PullRequests {

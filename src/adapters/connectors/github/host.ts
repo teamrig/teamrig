@@ -50,6 +50,7 @@ import {
   type IssueTarget,
   type IssueThread,
   type LabelSpec,
+  type PostMarks,
   type PullStand,
   type SecretScanner,
   type WatchMarks,
@@ -106,6 +107,7 @@ import { readFields } from './fields.ts';
 import { searchIn } from './search.ts';
 import { failedLogExcerpt } from './job-log.ts';
 import { listLinks } from './links.ts';
+import { githubPostMarks } from './post-marks.ts';
 import { readPosts } from './posts.ts';
 import { pullStandIn } from './pull-stand.ts';
 import { COMMIT_FILES_MAX, COMPARE_COMMITS_MAX, commitIn, compareIn } from './pull-work.ts';
@@ -456,6 +458,9 @@ export class GitHubIssueHost implements IssueHost {
     const comments = readCommentsIn(read.stdout);
     return comments === undefined ? { kind: 'failed', reason: `gh printed no comment list for ${shown}` } : { kind: 'read', comments };
   }
+
+  /** Its posts marked for the response clock (tracker.clocks): the team's by its logins or the tie to the repository. */
+  readonly clocks: PostMarks = githubPostMarks;
 
   /** The changed files of a pull request (codehost.pull-files), read as pullFiles reads them. */
   readonly changedFiles: PullFileRead = { pullFiles: (target) => this.pullFiles(target) };
