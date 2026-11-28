@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.513.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.512.0...teamrig-v0.513.0) (2026-11-28)
+
+
+### Features
+
+* **core:** a random host id kept under the kit home names this machine to an owner's proof (T4758) ([2a911a9](https://github.com/teamrig/teamrig/commit/2a911a95acd2402674456ba29465d5609b876e60))
+* **owner-proof:** a proof record names the act id that spent its nonce (T4758) ([faabfe4](https://github.com/teamrig/teamrig/commit/faabfe4246091b846b6920485510e1d6824f2ad9))
+* **owner-proof:** an enrolled proof that cannot sign is turned down, never off (T4758) ([58f1185](https://github.com/teamrig/teamrig/commit/58f11852473adb4a1f26d6a03b7c4c92b42fe782))
+* **owner-proof:** check a recorded proof again when its approved act runs (T4758) ([3de305c](https://github.com/teamrig/teamrig/commit/3de305c6438fd00905cb544d14d718b563c91f82))
+* **owner-proof:** proveAct asks the owner's key to sign one act and verifies it at once (T4758) ([a12fcef](https://github.com/teamrig/teamrig/commit/a12fcefcf65f8e8631cb5fac32b6e0872d61126f))
+* **owner-proof:** the nonce ledger records the register event that spent each nonce (T4758) ([a824f76](https://github.com/teamrig/teamrig/commit/a824f764c6b65b6755aa916be433bdd6dd2fbeb7))
+* **owner-proof:** the proof record an owner's act keeps, read with no node: module (T4758) ([cfd6adf](https://github.com/teamrig/teamrig/commit/cfd6adff9224958e339e1e92b23300f7a716edad))
+* **owner:** owner decide asks the owner's enrolled key to sign the answer (T4758) ([173f5fe](https://github.com/teamrig/teamrig/commit/173f5fe3bc9f5fc2154dc6366c4afffd09217b40))
+* **register:** a Decided keeps the owner's signed proof of it (T4758) ([56ee07c](https://github.com/teamrig/teamrig/commit/56ee07c476e0cc75ed8a471ae7ad70113043aff3))
+* **register:** the owner's Decided keeps a proof only when it was signed for that task and card (T4758) ([8282e08](https://github.com/teamrig/teamrig/commit/8282e086b2355e3747191df7156e4b4a21e8b397))
+* **ship:** list a commit's pull_request runs held for approval (T5915) ([d32d258](https://github.com/teamrig/teamrig/commit/d32d2584d3c3e8b3ed76c5c1882b0c7f41549653))
+
+
+### Bug Fixes
+
+* **owner:** owner decide lower-cases the --read digest before the proof signs it (T5911) ([d25c88d](https://github.com/teamrig/teamrig/commit/d25c88d32792b6cf624d058a760e87e116cd5cf7))
+* **register:** an owner's proof goes on a Decided only for this team's exact act (T5912) ([6d1c15e](https://github.com/teamrig/teamrig/commit/6d1c15e1d4d267c921edac496bc9ac198e4e6b8e))
+* **ship:** merge --release pushes a head whose runs GitHub holds again, once (T5915) ([42e8344](https://github.com/teamrig/teamrig/commit/42e834455c29fea3a316106087163ad711699e8a))
+* **ship:** push a held release head again, rebased with a new sha and the same diff (T5915) ([cb38b47](https://github.com/teamrig/teamrig/commit/cb38b4730fd9d86b735cf7554a8e3203ebf3fd0d))
+
+
+### Performance Improvements
+
+* **mod:** the needs-you hand asks again only when a file its answer read changed ([#2305](https://github.com/teamrig/teamrig/issues/2305)) ([2807cb7](https://github.com/teamrig/teamrig/commit/2807cb734c83207fdb8fa527a737581f50b53061))
+
 ## [0.512.0](https://github.com/teamrig/teamrig/compare/teamrig-v0.511.0...teamrig-v0.512.0) (2026-11-28)
 
 
