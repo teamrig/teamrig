@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
   "bootstrap-sha": "84111627c6198caca23b8bc76a199193c47d4e90",
-  "signoff": "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+  "signoff": "teamrig-release[bot] <359619066+teamrig-release[bot]@users.noreply.github.com>",
   "packages": {
     ".": {
       "release-type": "simple",

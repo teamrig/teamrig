@@ -16,10 +16,13 @@ import { isRecord, type JsonRecord } from '../lib/guards.ts';
 
 /** GitHub Actions' own App: the only one whose `every check passed` run counts (T4712 C7). */
 export const ACTIONS_APP_ID = 15368;
-/** Who the release workflow's token opens the release pull request as: a filter, never a control (C6). */
-export const RELEASE_AUTHOR = 'github-actions[bot]';
-/** The event release.yml starts ci with on the release branch, as its own token's pull request starts none. */
-export const RELEASE_CI_EVENT = 'workflow_dispatch';
+/** Who release.yml opens the release pull request as, with the teamrig-release App's token: a filter, never a control (C6). */
+export const RELEASE_AUTHOR = 'teamrig-release[bot]';
+/**
+ * The events a ci run on the release branch may come from: the App's pull request starts ci as `pull_request`, and
+ * release-slot.yml's hourly nudge starts it as `workflow_dispatch` when a held release gets no new run (T5390).
+ */
+export const RELEASE_CI_EVENTS: readonly string[] = ['pull_request', 'workflow_dispatch'];
 /** Pages of check runs read at most: 1000 runs, far past ci.yml's dozen, so a larger count is refused as odd. */
 const MAX_CHECK_PAGES = 10;
 const PAGE = 100;
@@ -218,10 +221,10 @@ export function lastMergeOf(closed: readonly JsonRecord[]): Date | null {
   return last;
 }
 
-/** Why the ci run is not a passed run of release.yml's dispatch on the release branch of this repository, or null. */
+/** Why the ci run is not a passed pull request or dispatched run on the release branch of this repository, or null. */
 function ciRunRefusal(run: JsonRecord, target: GateTarget): string | null {
   const event = fieldString(run, 'event', 'run');
-  if (event !== RELEASE_CI_EVENT) return `the ci run was started by ${codeSpan(event)}, not by the release workflow's ${codeSpan(RELEASE_CI_EVENT)}`;
+  if (!RELEASE_CI_EVENTS.includes(event)) return `the ci run was started by ${codeSpan(event)}, not by ${RELEASE_CI_EVENTS.map(codeSpan).join(' or ')}`;
   if (fieldString(run, 'status', 'run') !== 'completed' || run['conclusion'] !== 'success') return 'the ci run did not pass';
   if (fieldString(fieldRecord(run, 'head_repository', 'run'), 'full_name', 'run.head_repository') !== target.repo) return 'the ci run is on another repository';
   if (fieldString(run, 'head_branch', 'run') !== target.head) return 'the ci run is not on the release branch';
@@ -345,29 +348,41 @@ export function mergeComment(target: MergeTarget): string {
 }
 
 /**
- * Merges the release pull request at the gate's sha with an installation token of the App narrowed to this repository
- * and to contents and pull requests, leaves the gate comment, then revokes the token. A merge GitHub refuses (the head
- * moved, a rule unmet) is a refusal; a comment that fails after the merge is reported, never retried as a merge.
+ * An installation token of the App for `repo` (`owner/name`) alone, with contents and pull requests write and nothing
+ * else, valid for GitHub's hour unless `revokeAppToken` ends it first. Rejects when GitHub refuses or answers oddly.
  */
-export async function mergeRelease(target: MergeTarget, key: AppKey, deps: MergeDeps): Promise<MergeOutcome> {
+export async function mintAppToken(repo: string, key: AppKey, deps: MergeDeps): Promise<string> {
   const jwt = appJwt(key.appId, key.privateKey, deps.nowSeconds());
-  const installation = recordOf(await deps.api({ method: 'GET', path: `/repos/${target.repo}/installation`, token: jwt }), 'installation');
+  const installation = recordOf(await deps.api({ method: 'GET', path: `/repos/${repo}/installation`, token: jwt }), 'installation');
   const minted = recordOf(
     await deps.api({
       method: 'POST',
       path: `/app/installations/${fieldNumber(installation, 'id', 'installation')}/access_tokens`,
       token: jwt,
-      body: { repositories: [target.repo.split('/')[1] ?? target.repo], permissions: { contents: 'write', pull_requests: 'write' } },
+      body: { repositories: [repo.split('/')[1] ?? repo], permissions: { contents: 'write', pull_requests: 'write' } },
     }),
     'access token',
   );
-  const token = fieldString(minted, 'token', 'access token');
-  const landed = await mergeWith(target, deps.api, token);
-  const revoked = await deps.api({ method: 'DELETE', path: '/installation/token', token }).then(
+  return fieldString(minted, 'token', 'access token');
+}
+
+/** Ends an installation token at once; false when GitHub refused, as the token then lapses within the hour anyway. */
+export async function revokeAppToken(api: GitHubApi, token: string): Promise<boolean> {
+  return api({ method: 'DELETE', path: '/installation/token', token }).then(
     () => true,
     () => false,
   );
-  return { ...landed, revoked };
+}
+
+/**
+ * Merges the release pull request at the gate's sha with an installation token of the App narrowed to this repository
+ * and to contents and pull requests, leaves the gate comment, then revokes the token. A merge GitHub refuses (the head
+ * moved, a rule unmet) is a refusal; a comment that fails after the merge is reported, never retried as a merge.
+ */
+export async function mergeRelease(target: MergeTarget, key: AppKey, deps: MergeDeps): Promise<MergeOutcome> {
+  const token = await mintAppToken(target.repo, key, deps);
+  const landed = await mergeWith(target, deps.api, token);
+  return { ...landed, revoked: await revokeAppToken(deps.api, token) };
 }
 
 type Landed = { readonly kind: 'merged'; readonly sha: string; readonly commented: boolean } | { readonly kind: 'refused'; readonly reason: string };

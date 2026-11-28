@@ -19,11 +19,12 @@ jobs:
   gate:
     name: release merge gate
     # ci also ends on fork pull requests, and every workflow_run job runs on main's ref, so the run is narrowed here,
-    # before any step: release.yml's own dispatch of ci on this repository's release branch, passed. Inert until the
-    # teamrig-release App's id is set. The gate re-checks all of it from the API.
+    # before any step: a passed ci run on this repository's release branch, started by the App's release pull request or
+    # by release-slot.yml's dispatch. Inert until the teamrig-release App's id is set. The gate re-checks all of it
+    # from the API.
     if: >-
       vars.RELEASE_APP_ID != '' &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
+      contains(fromJSON('["pull_request", "workflow_dispatch"]'), github.event.workflow_run.event) &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_branch == 'release-please--branches--main--components--teamrig'
@@ -64,7 +65,7 @@ jobs:
     if: >-
       needs.gate.outputs.pass == 'true' &&
       vars.RELEASE_APP_ID != '' &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
+      contains(fromJSON('["pull_request", "workflow_dispatch"]'), github.event.workflow_run.event) &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_branch == 'release-please--branches--main--components--teamrig'

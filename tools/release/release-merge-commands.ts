@@ -58,7 +58,8 @@ export interface MergeCommandDeps {
   readonly err: (line: string) => void;
 }
 
-function envValue(env: Env, name: string, pattern?: RegExp): string {
+/** `name`'s value in `env`, which must be set, not empty, and match `pattern` when one is given; else it throws. */
+export function envValue(env: Env, name: string, pattern?: RegExp): string {
   const value = env[name];
   if (value === undefined || value === '') throw new Error(`${name} is not set`);
   if (pattern !== undefined && !pattern.test(value)) throw new Error(`${name} is not in the form ${pattern.source}`);

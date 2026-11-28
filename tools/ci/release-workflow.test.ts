@@ -56,18 +56,31 @@ describe('release.yml', () => {
   it('keeps the release pull request on main, with only the writes it needs', () => {
     const text = job('release-please');
     assert.match(text, /^ {4}if: \$\{\{ !github\.event\.repository\.private && github\.ref == 'refs\/heads\/main' && !inputs\.main-as-is \}\}$/m);
-    assert.deepEqual(permissionsOf(text), ['actions: write', 'contents: write', 'pull-requests: write']);
+    assert.deepEqual(permissionsOf(text), ['contents: read', 'pull-requests: read']);
     assert.match(text, /^ {10}config-file: release-please-config\.json\n {10}manifest-file: \.release-please-manifest\.json$/m);
   });
 
-  it('runs ci.yml on the release pull request, which the job token cannot start by opening it', () => {
-    assert.match(job('release-please'), /run: gh workflow run ci\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$\(node -p 'JSON\.parse\(process\.env\.PR\)\.headBranchName'\)"\n/);
+  it("writes the release pull request with the teamrig-release App's token, whose pull request runs GitHub never holds (T5390)", () => {
+    const text = job('release-please');
+    assert.match(text, /^ {4}environment: release-merge$/m);
+    assert.match(
+      text,
+      /^ {6}- id: token\n {8}run: node tools\/release\/app-token-cli\.ts mint\n {8}env:\n {10}APP_ID: \$\{\{ vars\.RELEASE_APP_ID \}\}\n {10}APP_KEY: \$\{\{ secrets\.RELEASE_APP_KEY \}\}\n/m,
+    );
+    assert.match(text, /^ {8}with:\n {10}token: \$\{\{ steps\.token\.outputs\.token \}\}\n/m);
+    assert.ok(text.indexOf('id: token') < text.indexOf('id: release'), 'the token is minted before release-please');
+    // The gate reads with the job's token alone, so the App's key reaches no step before the mint.
+    assert.ok(text.indexOf('id: gate') < text.indexOf('id: token'), 'the gate runs before the mint');
   });
 
-  it('takes the release pull request in as a plain value, so a run that opens none still passes', () => {
-    // A step's env is read even when its `if` skips it, and fromJSON of an empty output fails the job (run 44371173015).
+  it('revokes the App token after release-please, even when it failed', () => {
     const text = job('release-please');
-    assert.match(text, /^ {10}PR: \$\{\{ steps\.release\.outputs\.pr \}\}$/m);
+    assert.match(text, /^ {6}- if: \$\{\{ always\(\) && steps\.token\.outputs\.token != '' \}\}\n {8}run: node tools\/release\/app-token-cli\.ts revoke\n {8}env:\n {10}TOKEN: \$\{\{ steps\.token\.outputs\.token \}\}\n/m);
+    assert.ok(text.indexOf('id: release') < text.indexOf('app-token-cli.ts revoke'), 'the revoke runs last');
+  });
+
+  it('starts no ci run by hand, as the App-written pull request starts its own', () => {
+    assert.doesNotMatch(workflow, /gh workflow run/);
     assert.doesNotMatch(workflow, /fromJSON\(/);
   });
 
@@ -132,7 +145,9 @@ describe('release.yml', () => {
     const text = job('publish');
     assert.match(text, /^ {4}environment: release$/m);
     assert.match(text, /^ {10}ssh-key: \$\{\{ secrets\.RELEASE_DEPLOY_KEY \}\}$/m);
-    for (const [id, other] of jobs) if (id !== 'publish') assert.doesNotMatch(other, /secrets\.|environment:/, id);
+    // The release pull request job holds the App's key alone, in its own environment (T5390); build holds no secret.
+    assert.doesNotMatch(job('release-please'), /secrets\.(?!RELEASE_APP_KEY\b)|environment: (?!release-merge$)/m);
+    assert.doesNotMatch(job('build'), /secrets\.|environment:/);
   });
 
   it('keeps the push key only in the publish job: every other checkout drops its credentials', () => {
@@ -174,8 +189,9 @@ describe('release-please-config.json', () => {
     assert.equal(root['bump-patch-for-minor-pre-major'], undefined);
   });
 
-  it('signs off its commits as the Actions bot, which the DCO gate reads as their author', () => {
-    assert.equal(stringField(config, 'signoff'), 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>');
+  it("signs off its commits as the teamrig-release App's bot, which writes them and the DCO gate reads as their author", () => {
+    // 359619066 is the bot's user id (GET /users/teamrig-release[bot]), not the App's id.
+    assert.equal(stringField(config, 'signoff'), 'teamrig-release[bot] <359619066+teamrig-release[bot]@users.noreply.github.com>');
   });
 
   it('starts from a commit of main, not from the whole history', () => {

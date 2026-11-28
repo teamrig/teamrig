@@ -20,7 +20,7 @@ const NOW = new Date('2026-11-22T07:30:00Z');
 
 const OPEN = `/pulls?state=open&base=main&head=${encodeURIComponent(`acme:${HEAD}`)}&per_page=100`;
 const CLOSED = `/pulls?state=closed&base=main&head=${encodeURIComponent(`acme:${HEAD}`)}&sort=updated&direction=desc&per_page=100`;
-const RUNS = `/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(HEAD)}&event=workflow_dispatch&per_page=1`;
+const RUNS = `/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(HEAD)}&per_page=1`;
 
 /** A fake repository reader answering by path, recording each path read. */
 function reader(answers: Readonly<Record<string, unknown>>) {

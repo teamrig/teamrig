@@ -314,7 +314,10 @@ matrix.
 - Nothing is pushed to `main` directly, and release tags are set only by the release workflow.
 - The `release` workflow (`.github/workflows/release.yml`, run on each push to `main`, hourly and by hand) keeps one
   release pull request open through release-please (`release-please-config.json`): it raises the version in the
-  plugin's `plugin.json` and `src/core/version.ts` and writes the notes. The pull request takes main's new commits
+  plugin's `plugin.json` and `src/core/version.ts` and writes the notes. It writes the pull request with a short-lived
+  token of the `teamrig-release` App (contents and pull requests only), minted in the `release-merge` environment and
+  revoked when the job ends, so its ci and CodeQL runs start like any pull request's; runs a job token's pull request
+  starts wait for a click (T5390). The pull request takes main's new commits
   only once per preview slot: on the first push or hourly run that finds its head older than the slot's start, or on
   a run by hand (`tools/release/pull-update.ts`); any later push in the slot only tags and publishes a release that
   merged, and a dropped or late hourly run never leaves it behind. So between slots

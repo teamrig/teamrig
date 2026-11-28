@@ -10,7 +10,9 @@ import {
   fetchGitHubApi,
   mergeComment,
   mergeRelease,
+  mintAppToken,
   releaseGate,
+  revokeAppToken,
   requiredChecksOf,
   type ApiRequest,
   type CheckRun,
@@ -45,7 +47,7 @@ class FakeGitHub {
 }
 
 const run = (over: JsonRecord = {}): JsonRecord => ({
-  event: 'workflow_dispatch',
+  event: 'pull_request',
   status: 'completed',
   conclusion: 'success',
   head_sha: SHA,
@@ -59,7 +61,7 @@ const pull = (over: JsonRecord = {}): JsonRecord => ({
   state: 'open',
   draft: false,
   commits: 1,
-  user: { login: 'github-actions[bot]' },
+  user: { login: 'teamrig-release[bot]' },
   base: { ref: 'main', repo: { full_name: REPO } },
   head: { ref: TARGET.head, sha: SHA, repo: { full_name: REPO } },
   ...over,
@@ -118,8 +120,13 @@ describe('releaseGate', () => {
     assert.ok(github.calls.every((call) => call.method === 'GET' && call.token === 'read-token'));
   });
 
+  it("passes a ci run the release slot's hourly nudge dispatched, as for the pull request's own run", async () => {
+    const outcome = await gateOf(passing().on('GET', `/repos/${REPO}/actions/runs/7`, run({ event: 'workflow_dispatch' })));
+    assert.equal(outcome.kind, 'pass', JSON.stringify(outcome));
+  });
+
   for (const [what, over, expected] of [
-    ['another event', { event: 'pull_request' }, /started by `pull_request`/],
+    ['another event', { event: 'push' }, /started by `push`, not by `pull_request` or `workflow_dispatch`/],
     ['a failed run', { conclusion: 'failure' }, /did not pass/],
     ['a run still going', { status: 'in_progress', conclusion: null }, /did not pass/],
     ['a fork', { head_repository: { full_name: 'evil/tool' } }, /another repository/],
@@ -184,7 +191,8 @@ describe('releaseGate', () => {
     ['another base', { base: { ref: 'next', repo: { full_name: REPO } } }, /does not go into `main`/],
     ['a base in another repository', { base: { ref: 'main', repo: { full_name: 'evil/tool' } } }, /does not go into `main`/],
     ['a head in a fork', { head: { ref: TARGET.head, sha: SHA, repo: { full_name: 'evil/tool' } } }, /head is not this repository's release branch/],
-    ['another author', { user: { login: 'someone' } }, /not opened by `github-actions\[bot\]`/],
+    ['another author', { user: { login: 'someone' } }, /not opened by `teamrig-release\[bot\]`/],
+    ['one opened by the job token', { user: { login: 'github-actions[bot]' } }, /not opened by `teamrig-release\[bot\]`/],
     ['two commits', { commits: 2 }, /holds 2 commits/],
   ] as const) {
     it(`refuses ${what}`, async () => {
@@ -344,6 +352,22 @@ describe('mergeRelease', () => {
     const github = app().on('POST', `/repos/${REPO}/issues/12/comments`, new Error('500')).on('DELETE', '/installation/token', new Error('500'));
     assert.deepEqual(await merge(github), { kind: 'merged', sha: 'c'.repeat(40), commented: false, revoked: false });
     assert.equal(github.calls.filter((call) => call.method === 'PUT').length, 1);
+  });
+
+  it('mints a token alone for another caller, and revokes it apart', async () => {
+    const github = app();
+    assert.equal(await mintAppToken(REPO, key, { api: github.api, nowSeconds: () => 1_000 }), 'install-token');
+    assert.equal(await revokeAppToken(github.api, 'install-token'), true);
+    assert.deepEqual(
+      github.calls.map((call) => `${call.method} ${call.path}`),
+      [`GET /repos/${REPO}/installation`, 'POST /app/installations/9/access_tokens', 'DELETE /installation/token'],
+    );
+    assert.equal(await revokeAppToken(app().on('DELETE', '/installation/token', new Error('500')).api, 'install-token'), false);
+  });
+
+  it('rejects a mint GitHub answers without a token', async () => {
+    const github = app().on('POST', '/app/installations/9/access_tokens', { expires_at: 'soon' });
+    await assert.rejects(mintAppToken(REPO, key, { api: github.api, nowSeconds: () => 1_000 }), /GitHub's access token\.token is not a string/);
   });
 
   it('names the head, the paths and the checks in code spans in its comment', () => {
