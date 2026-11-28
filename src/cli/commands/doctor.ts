@@ -80,7 +80,7 @@ export async function readSecretDeny(runtime: CliRuntime, project: string): Prom
     return undefined;
   }
   const paths = sessionSettingsFiles({ paths: host, userHome: runtime.userHome }, project);
-  return { files: await readSettingsDeny(permissions, runtime.files, paths), lines: permissions.denyLines(runtime.platform), pasteInto: host.userSettings(runtime.userHome) };
+  return { files: await readSettingsDeny(permissions, runtime.files, paths), lines: permissions.denyLines(runtime.platform, runtime.userHome), pasteInto: host.userSettings(runtime.userHome) };
 }
 
 /** The doctor's view of a page check: only a page webhook that gives no URL is a finding. */
