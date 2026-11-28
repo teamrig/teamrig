@@ -17,6 +17,7 @@ const CONTEXT: RouteContext = {
   ownsTask: async (task) => task === 'T1',
   isRemote: async (_folders, name) => name === 'origin',
   pushesToSameName: async () => true,
+  mayPushBranch: async () => true,
   protectedBranches: ['main', 'master'],
   /** Every session here has a leader but `lead`, the root team's lead. */
   approversOf: async (named) => (named === 'lead' ? [] : ['lead']),

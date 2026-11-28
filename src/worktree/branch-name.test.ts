@@ -23,6 +23,16 @@ describe('branchPatternRefusal (#1433)', () => {
     }
   });
 
+  it('takes a retry suffix after a pattern that ends at {id} or {issue}, and nothing else after it', () => {
+    const branches: BranchesConfig = { ...DEFAULT_BRANCHES, pattern: '{type}/{id}', typePatterns: { hotfix: 'hotfix/gh{issue}' } };
+    for (const branch of ['feat/t12', 'feat/t12-2', 'feat/t12-999', 'hotfix/gh933-3']) {
+      assert.equal(branchPatternRefusal(branch, branches), undefined, branch);
+    }
+    for (const branch of ['feat/t12-0', 'feat/t12-1000', 'feat/t12-x', 'feat/t12-2-3', 'feat/t12-', 'hotfix/gh933-retry']) {
+      assert.ok(branchPatternRefusal(branch, branches) !== undefined, branch);
+    }
+  });
+
   it('refuses a new branch in another style, naming the pattern and an example', () => {
     for (const branch of ['t12-parser', 'my-fix', 'feat/t12', 'feature/T12-parser', 'feat/t012-parser', 'feat/t12-Parser', 'feat/t12_parser', 'Feat/t12-parser', 'x/feat/t12-a']) {
       assert.equal(

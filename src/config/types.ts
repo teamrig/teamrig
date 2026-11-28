@@ -1413,7 +1413,10 @@ export interface BranchesConfig {
   readonly classes: Readonly<Record<string, string>>;
   /** The slug, made from the task's title, is cut at a word to at most this many characters. */
   readonly slugMax: number;
-  /** A new branch whose name matches none of the patterns is refused (T1433), so a project never mixes styles. */
+  /**
+   * A new branch whose name matches none of the patterns is refused (T1433), so a project never mixes styles: by
+   * `worktree add`, and by the git push route and a queued ship unless origin has the branch already.
+   */
   readonly enforce: boolean;
 }
 

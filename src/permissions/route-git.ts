@@ -19,6 +19,12 @@ export interface GitContext {
    * another (git's map_refspec), such as the `origin/main` a worktree branch cut from it tracks.
    */
   readonly pushesToSameName: (folders: readonly string[], remote: string) => Promise<boolean>;
+  /**
+   * True when `branch` may go to `remote` (#1433): it matches the team's branch pattern (`delivery.branches`), or the
+   * remote has it already, as the repository's remote-tracking ref says, so a branch made before the pattern still
+   * pushes. Read from the local refs alone: a hook asks no remote.
+   */
+  readonly mayPushBranch: (folders: readonly string[], remote: string, branch: string) => Promise<boolean>;
   readonly protectedBranches: readonly string[];
 }
 
@@ -144,7 +150,7 @@ const BRANCH_NAME = /^[\w./-]+$/;
  * <remote> <branch>`, the remote one the repository names, the branch one of a task the caller owns (`t<id>-...`, or
  * `feat/t<id>-...` with the id starting a part: owner.ts `branchTaskOf`) and no protected branch, a lease naming only
  * that same branch, and git's config pushing it to the remote branch of its own name (else a protected branch could
- * be where it lands).
+ * be where it lands), and the branch one the team's pattern names or the remote has (#1433).
  */
 export async function matchesGitPush(words: readonly string[], context: GitContext): Promise<boolean> {
   const line = gitLineOf(words, 'push');
@@ -159,7 +165,12 @@ export async function matchesGitPush(words: readonly string[], context: GitConte
   if (!line.args.filter((word) => word.startsWith('-')).every((word) => isPushOption(word, branch))) {
     return false;
   }
-  return (await context.ownsTask(task)) && (await context.isRemote(line.folders, remote)) && context.pushesToSameName(line.folders, remote);
+  return (
+    (await context.ownsTask(task)) &&
+    (await context.isRemote(line.folders, remote)) &&
+    (await context.pushesToSameName(line.folders, remote)) &&
+    context.mayPushBranch(line.folders, remote, branch ?? '')
+  );
 }
 
 function isPushOption(word: string, branch: string): boolean {
