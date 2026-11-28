@@ -3,6 +3,7 @@ import type { ConfigLoad } from '../config/load.ts';
 import type { SecretGuardConfig, SecretReads, SecretWrites } from '../config/types.ts';
 import type { EditCall, HookEvent, HookReply, SearchCall } from '../ports/host/index.ts';
 import { resolveDir } from '../push-guard/location.ts';
+import { gitWorkTree } from '../secret-guard/credential-reads.ts';
 import { describeFinding, uniqueFindings, type SecretFinding } from '../secret-guard/findings.ts';
 import { braceAlternatives } from '../secret-guard/glob.ts';
 import { literalFindings, writtenFindings } from '../secret-guard/literals.ts';
@@ -48,7 +49,7 @@ export function secretFindingsOf(event: HookEvent, cwd: string, rules: SecretRul
   const dir = event.cwd ?? cwd;
   switch (call?.kind) {
     case 'shell': {
-      const context = { cwd: dir, home: rules.home, dialect: call.dialect };
+      const context = { cwd: dir, home: rules.home, dialect: call.dialect, inWorkTree: gitWorkTree };
       return call.readings.flatMap((text) => [...literalFindings(text, rules.shapes), ...shellFindings(text, context, rules)]);
     }
     case 'read':
