@@ -35,6 +35,7 @@ the rules that apply on every turn, and the project skills in `.claude/skills/` 
 
 | Skill | Use it for |
 | --- | --- |
+| [`dev-add-adapter`](.claude/skills/dev-add-adapter/SKILL.md) | a new connector, AI CLI host or terminal, or a port or choice on one: behind the interface, the user decides |
 | [`dev-add-command`](.claude/skills/dev-add-command/SKILL.md) | a new CLI command, or a flag on one |
 | [`dev-add-config-key`](.claude/skills/dev-add-config-key/SKILL.md) | a new key in the team config |
 | [`dev-update-docs`](.claude/skills/dev-update-docs/SKILL.md) | the docs a change must update, and the checks that hold them to the code |
