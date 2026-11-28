@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { TempRepo } from '../lib/temp-repo.ts';
-import { catchUpRelease, releaseMoveRefusal } from './release-catch-up.ts';
+import { catchUpRelease, releaseMoveRefusal, repushHeldRelease } from './release-catch-up.ts';
 
 const RELEASE = 'release-please--branches--main';
 
@@ -42,6 +42,10 @@ describe('release catch-up (T5055)', () => {
     git('push', '-q', 'origin', 'main');
     git('switch', '-q', '-c', RELEASE);
     commit('CHANGELOG.md', '# Changelog\n\n## 1.1.0\n\n- a\n', 'chore(main): release 1.1.0');
+    // The release tool's commit is older than any test's rebase, as it is live: a rebase within its second could
+    // write the same sha again (T5915).
+    git('commit', '-q', '--amend', '--no-edit', '--date', '2026-01-01T00:00:00Z');
+    git('rebase', '-q', '--force-rebase', '--committer-date-is-author-date', 'HEAD^');
     git('push', '-q', 'origin', RELEASE);
     git('switch', '-q', 'main');
     git('branch', '-q', '-D', RELEASE);
@@ -153,5 +157,37 @@ describe('release catch-up (T5055)', () => {
     assert.match(caught.reason, /pushing it rebased to release-please--branches--main failed/);
     assert.equal(onOrigin(RELEASE), rewritten);
     assert.equal(git('rev-parse', '--abbrev-ref', 'HEAD'), 'main');
+  });
+
+  const HELD = ['https://github.com/o/r/actions/runs/1'];
+  const repush = (sha: string, tip: string) => repushHeldRelease({ git, log: (line) => logged.push(line) }, { head: RELEASE, sha, tip, main: 'main', held: HELD });
+
+  it('pushes a held head already on main again as a new sha with the same diff, on the same branch, and goes back (T5915)', () => {
+    const sha = onOrigin(RELEASE);
+    const tip = git('rev-parse', 'main');
+    assert.equal(git('rev-parse', `${sha}^`), tip, 'the head sits on main already');
+
+    const pushed = repush(sha, tip);
+
+    assert.ok(pushed.kind === 'rebased');
+    assert.notEqual(pushed.sha, sha, 'a new sha, so GitHub starts its runs again');
+    assert.equal(onOrigin(RELEASE), pushed.sha);
+    assert.equal(git('rev-parse', `${pushed.sha}^`), tip);
+    assert.equal(git('diff', tip, pushed.sha), git('diff', tip, sha), 'the same diff as the approved head');
+    assert.equal(git('rev-parse', '--abbrev-ref', 'HEAD'), 'main');
+    assert.match(logged.join('\n'), /holds the release pull request's head \w+'s runs for a maintainer's approval \(https:\/\/github\.com\/o\/r\/actions\/runs\/1\)/);
+  });
+
+  it('pushes a held head main moved past by hidden commits rebased onto main, and refuses one moved by a shown commit (T5915)', () => {
+    const { sha, tip } = moveMain(['.github/ci.yml', 'on: push\n', 'ci: cache downloads']);
+    const pushed = repush(sha, tip);
+    assert.ok(pushed.kind === 'rebased');
+    assert.equal(git('rev-parse', `${pushed.sha}^`), tip);
+
+    const shown = moveMain(['src/b.ts', 'export const b = 2;\n', 'feat: b']);
+    const refused = repush(shown.sha, shown.tip);
+    assert.ok(refused.kind === 'refused');
+    assert.match(refused.reason, /its type feat shows in the changelog/);
+    assert.equal(onOrigin(RELEASE), pushed.sha);
   });
 });
