@@ -16,6 +16,7 @@ const URL = 'https://github.com/acme/web/issues/7';
 
 function register(): Register {
   return new Register({
+    team: 'alpha',
     log: new JsonlEventLog(new MemoryFiles(), 'register/events.jsonl'),
     mutex: new InlineMutex(),
     numbering: OWN_NUMBERS,

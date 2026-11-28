@@ -379,6 +379,7 @@ function busyTail(count: number): string {
 /** A register over `files`; `autoArchive` stands for the team's `register.autoArchive`, on by default as in the config. */
 function registerOn(files: MemoryFiles | FaultyFiles, autoArchive = true): Register {
   return new Register({
+    team: 'alpha',
     log: new JsonlEventLog(files, LOG),
     mutex: new InlineMutex(),
     numbering: OWN_NUMBERS,

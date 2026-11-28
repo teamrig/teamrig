@@ -97,6 +97,7 @@ function importer(load: ConnectorLoader): { readonly files: MemoryFiles; readonl
   const config = testConfig({ connectors: { jira: JIRA } });
   const files = new MemoryFiles();
   const register = new Register({
+    team: 'alpha',
     log: new JsonlEventLog(new MemoryFiles(), 'register/events.jsonl'),
     mutex: new InlineMutex(),
     numbering: OWN_NUMBERS,

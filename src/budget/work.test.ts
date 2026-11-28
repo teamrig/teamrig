@@ -254,6 +254,7 @@ describe('cachedWork', () => {
 
   function registerOn(files: MemoryFiles): Omit<Team, 'files'> {
     const register = new Register({
+      team: 'alpha',
       log: new JsonlEventLog(files, PATH),
       mutex: new InlineMutex(),
       numbering: OWN_NUMBERS,
