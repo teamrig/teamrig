@@ -277,6 +277,21 @@ describe('planPush (T2682)', () => {
     }
   });
 
+  it('lets an active imported task speak over finished team tasks, and a finished team task over a finished imported one (T5906)', () => {
+    const tasks = [holding('T2', 7, { status: 'done' }), holding('T5', 7, { source: 'github', status: 'in-progress' })];
+    for (const order of [tasks, [...tasks].reverse()]) {
+      assert.deepEqual(
+        planPush(REPO, [testHostIssue(7, { labels: ['status:open'] })], order).changes.map((change) => change.task),
+        ['T5'],
+      );
+    }
+    const finished = [holding('T2', 7, { status: 'done' }), holding('T5', 7, { source: 'github', status: 'done' })];
+    assert.deepEqual(
+      planPush(REPO, [testHostIssue(7, { labels: ['status:open'] })], finished).changes.map((change) => change.task),
+      ['T2'],
+    );
+  });
+
   it('names only the active team tasks of an issue it leaves shared (#1449)', () => {
     const tasks = [holding('T1', 7, { status: 'done' }), holding('T3', 7), holding('T9', 7, { status: 'waiting' })];
     const plan = planPush(REPO, [testHostIssue(7)], tasks);

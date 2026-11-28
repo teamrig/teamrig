@@ -605,8 +605,8 @@ PREVIEW nothing was written; a push would send 7 write(s) now, at most 40 a run,
 - **One team task speaks for an issue.** When a team task and an imported one hold the same issue, the team task
   speaks for it. When two or more active team tasks (open, in progress, waiting, verifying) hold it, none does: the
   push writes nothing to it and a `SHARED` line names them, so a person gives the ref to one of them. A finished task
-  often keeps its ref, so one active team task speaks over finished ones; with none active, the newest finished one
-  speaks.
+  often keeps its ref, so one active team task speaks over finished ones; with none active, an active imported task
+  speaks, else the newest finished team task.
 - **A pull request is left as it is.** A task whose ref is an open pull request gets a `PULL` line and is counted on the
   `PUSH` line: the push writes only issues. A task on a closed pull request stays `UNLISTED`.
 - **A taker's issue stays theirs.** A done or dropped task closes its issue only when the issue is unassigned or
