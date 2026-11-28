@@ -31,3 +31,14 @@ export const OWNER_GATED_KEYS: readonly (readonly string[])[] = [
   // Which keys prove the owner's own acts, and how: a session that could change them could sign as the owner (T4758).
   ['owner', 'proof'],
 ];
+
+/**
+ * Keys this teamrig no longer reads that an older teamrig still acts on, so the config guard alone keeps refusing a
+ * session's write of them: after a rollback, the older teamrig would act on the value a session wrote. `teamrig config
+ * get` does not list them, as they are no setting of this teamrig. `ui.path` named the UI entry script an older
+ * `teamrig ui` runs in the person's own terminal, outside every guard (T5129).
+ */
+export const RETIRED_GUARDED_KEYS: readonly (readonly string[])[] = [['ui', 'path']];
+
+/** Every key the config guard refuses a session's write of: the owner-gated keys and the retired ones. */
+export const CONFIG_GUARD_KEYS: readonly (readonly string[])[] = [...OWNER_GATED_KEYS, ...RETIRED_GUARDED_KEYS];

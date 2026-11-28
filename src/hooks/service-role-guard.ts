@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path';
-import { OWNER_GATED_KEYS } from '../config/owner-gated.ts';
+import { CONFIG_GUARD_KEYS } from '../config/owner-gated.ts';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import type { ProgramsContext } from '../package-guard/programs.ts';
 import type { EditCall, EditedFile, HookEvent, HookReply, TextChange, TextReplacement } from '../ports/host/index.ts';
@@ -13,7 +13,8 @@ import { heldBack, refusal } from './permission.ts';
  * past every permission check, so who holds one is a permission, an owner gate. A session's `teamrig roles grant` or
  * `revoke` therefore always asks the owner, whatever `--yes` says (refused when asks are off), and the route allow
  * never lets one through, as it allows only what every guard passed. A session's own write of an owner-gated key
- * (OWNER_GATED_KEYS: `serviceRoles`, the roles, the guards and allow rules, the commands teamrig runs; T3083)
+ * (CONFIG_GUARD_KEYS: `serviceRoles`, the roles, the guards and allow rules, the commands teamrig runs, T3083; and
+ * the retired keys an older teamrig still acts on, T5129)
  * is refused: a file tool whose result changes one in any team's config, or cannot be read, by any spelling that
  * reaches the file (T2984), and a shell line naming a team config file at all, since a shell line's writes cannot be
  * told from its reads (the Read tool stays open). The config's other keys stay a session's to edit. Like
@@ -117,7 +118,7 @@ function valueAt(config: JsonRecord | undefined, keyPath: readonly string[]): st
 /** The owner-gated keys whose value differs between two config texts, dotted. */
 export function changedGatedKeys(before: string | undefined, after: string): string[] {
   const [old, next] = [configOf(before), configOf(after)];
-  return OWNER_GATED_KEYS.filter((keyPath) => valueAt(old, keyPath) !== valueAt(next, keyPath)).map((keyPath) => keyPath.join('.'));
+  return CONFIG_GUARD_KEYS.filter((keyPath) => valueAt(old, keyPath) !== valueAt(next, keyPath)).map((keyPath) => keyPath.join('.'));
 }
 
 /** The text after the replacements, or undefined when one finds nothing to replace, so the guard cannot tell the result. */
@@ -178,7 +179,7 @@ const ROLE_CHANGE_ASK =
 
 function editRefusalOf(reach: string): string {
   return (
-    `teamrig config guard: ${reach}. Its owner-gated keys (${OWNER_GATED_KEYS.map((keyPath) => keyPath.join('.')).join(', ')}) ` +
+    `teamrig config guard: ${reach}. Its owner-gated keys (${CONFIG_GUARD_KEYS.map((keyPath) => keyPath.join('.')).join(', ')}) ` +
     'are permissions or owner gates, the owner\'s to change: a service role\'s holders with `teamrig roles grant` or ' +
     '`revoke`, which ask the owner, the rest in the owner\'s own editor. Change the config\'s other keys without touching ' +
     'them, read it with the Read tool, and do not retry this or route around it: the lead puts the change to the owner.'

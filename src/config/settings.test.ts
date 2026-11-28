@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isRecord, type JsonRecord } from '../core/guards.ts';
 import { LEAD_KEYS } from './lead-keys.ts';
-import { OWNER_GATED_KEYS } from './owner-gated.ts';
+import { OWNER_GATED_KEYS, RETIRED_GUARDED_KEYS } from './owner-gated.ts';
 import { definitionsOf, entryRows, resolvedNode, rowsUnder, settingNodes, settingRows, type SettingRow } from './settings.ts';
 
 const SCHEMA: JsonRecord = {
@@ -293,6 +293,13 @@ describe('settingRows over the shipped schema', async () => {
     }
     // A map's entries are under its key: one repository's ship tool is as gated as the map of them.
     assert.deepEqual([rowAt(rows, 'delivery.repos').gatedBy, rowAt(rows, 'delivery.passEnv').gatedBy, rowAt(rows, 'github.owners').gatedBy], ['permissions', 'permissions', 'permissions']);
+  });
+
+  it('shows no row for a retired key the config guard still refuses, as it is no setting of this teamrig (T5129)', () => {
+    assert.ok(RETIRED_GUARDED_KEYS.length > 0);
+    for (const keyPath of RETIRED_GUARDED_KEYS) {
+      assert.deepEqual(rowsUnder(rows, keyPath.join('.')), [], keyPath.join('.'));
+    }
   });
 
   it('keeps the folders teamrig keeps records in read-only', () => {
