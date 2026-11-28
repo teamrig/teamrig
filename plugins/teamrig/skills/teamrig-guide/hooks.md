@@ -331,7 +331,8 @@ the guard cannot read (`--script-shell=node`, or a variable) is refused as a dou
   "Force-pushing, mirroring or deleting a protected branch (main, master) is refused: it can overwrite other
   sessions' commits. Push your own branch, or use --force-with-lease if you truly mean it."
 - **Refuses, in doubt**: when it cannot read part of the line (an unclosed quote, a branch or alias only known when
-  the line runs, a push held in quoted text such as `x='$(git push)'`, which bash runs if `${x@P}` or `$((x))`
+  the line runs, a branch, push target or config read in a folder off this host's drives, such as `//host/share`,
+  where the guard runs no git, a push held in quoted text such as `x='$(git push)'`, which bash runs if `${x@P}` or `$((x))`
   reads it again, in any word, though not quoted backticks that never close, which run nothing; other quoted text
   it cannot read counts only where bash may read it again: an assignment, a builtin's argument, a word a redirection
   other than to `/dev/null`, a pipe into `tee` or an in-place edit (`sed -i`) writes for a later line, never a plain
