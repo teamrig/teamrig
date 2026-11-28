@@ -1,5 +1,5 @@
 import { basename, dirname } from 'node:path';
-import type { DeliveryConfig, DeliveryRepoConfig } from '../config/types.ts';
+import type { DeliveryConfig, DeliveryRepoConfig, MergeConfig } from '../config/types.ts';
 import { coveringFreezes, freezeText, readFreezes } from '../delivery/freezes.ts';
 import { refusalOf, takeWhenClear, type Readiness } from '../delivery/clearance.ts';
 import { underLock, type HostLock, type HostLockInfo } from '../delivery/host-lock.ts';
@@ -57,8 +57,12 @@ import type { ReviewHolds } from './review-holds.ts';
 const MINUTE_MS = 60_000;
 /** A push origin rejects because its default branch moved meanwhile is rebased and pushed again, this many times in all. */
 export const PUSH_ATTEMPTS = 3;
-/** What a merge command is told beside `TEAMRIG_SESSION`: the branch, the default branch it merges into, and the rebased commit. */
-export const MERGE_ENV = { branch: 'TEAMRIG_MERGE_BRANCH', base: 'TEAMRIG_MERGE_BASE', head: 'TEAMRIG_MERGE_HEAD' } as const;
+/**
+ * What a merge command is told beside `TEAMRIG_SESSION`: the branch, the default branch it merges into, the rebased
+ * commit, and the checks it runs before it merges (`merge.checks`: `full`, or `changed` when the forge's required checks
+ * run the whole suite).
+ */
+export const MERGE_ENV = { branch: 'TEAMRIG_MERGE_BRANCH', base: 'TEAMRIG_MERGE_BASE', head: 'TEAMRIG_MERGE_HEAD', checks: 'TEAMRIG_MERGE_CHECKS' } as const;
 /** Branch names never merged, whatever origin's default branch is. */
 const PROTECTED_BRANCHES: readonly string[] = ['main', 'master'];
 
@@ -537,7 +541,8 @@ function mergedAt(git: MergeGit, top: string, onto: string, base: string, head: 
  * remote, 75 leaves a pending merge for the next run, anything else fails. The command's lines show redacted; its
  * last one is the reason given.
  */
-async function mergeByCommand(setup: MergeSetup, ports: MergePorts, plan: Plan, taking: Taking, argv: readonly string[]): Promise<MergeOutcome> {
+async function mergeByCommand(setup: MergeSetup, ports: MergePorts, plan: Plan, taking: Taking, merging: MergeConfig): Promise<MergeOutcome> {
+  const { command: argv, checks } = merging;
   const { git } = ports;
   const { top, branch, remote, defaultBranch, repo, pending } = plan;
   const onto = `${remote}/${defaultBranch}`;
@@ -571,7 +576,7 @@ async function mergeByCommand(setup: MergeSetup, ports: MergePorts, plan: Plan, 
     return checked;
   }
   const command = argv.join(' ');
-  ports.say(`merging ${branch} (${short(head)}) into ${defaultBranch} through the merge command ${command}`);
+  ports.say(`merging ${branch} (${short(head)}) into ${defaultBranch} through the merge command ${command} (checks: ${checks})`);
   let last: string | undefined;
   const end = await recordQueuedStep(
     ports,
@@ -581,7 +586,7 @@ async function mergeByCommand(setup: MergeSetup, ports: MergePorts, plan: Plan, 
       ports.hooks.run({
         argv,
         cwd: top,
-        env: { ...underLock(gitEnvironment(ports.env), taking.lock), [MERGE_ENV.branch]: branch, [MERGE_ENV.base]: defaultBranch, [MERGE_ENV.head]: head, [ENV.session]: taking.session },
+        env: { ...underLock(gitEnvironment(ports.env), taking.lock), [MERGE_ENV.branch]: branch, [MERGE_ENV.base]: defaultBranch, [MERGE_ENV.head]: head, [MERGE_ENV.checks]: checks, [ENV.session]: taking.session },
         timeoutMs: setup.delivery.queue.maxRunMinutes * MINUTE_MS,
         onLine: (line) => {
           const shown = shownLine(ports.scanner, line);
@@ -612,8 +617,8 @@ async function mergeByCommand(setup: MergeSetup, ports: MergePorts, plan: Plan, 
 
 /** Merges the branch: through the repository's merge command when it has one, else by the push. */
 async function pushOrMerge(setup: MergeSetup, ports: MergePorts, plan: Plan, taking: Taking): Promise<MergeOutcome> {
-  const command = plan.repo.config.merge?.command;
-  return command === undefined ? mergeByPush(setup, ports, plan, taking) : mergeByCommand(setup, ports, plan, taking, command);
+  const merging = plan.repo.config.merge;
+  return merging === undefined ? mergeByPush(setup, ports, plan, taking) : mergeByCommand(setup, ports, plan, taking, merging);
 }
 
 /** Removes the merged branch on origin and here, and moves the local default branch to its remote's, as far as each step goes; a failed step is a warning. */

@@ -32,6 +32,7 @@ import type {
   SecretGuardConfig,
   PushGuardConfig,
   UiConfig,
+  MergeChecks,
   ReadonlyShellConfig,
   RefreshConfig,
   RegisterConfig,
@@ -278,6 +279,9 @@ export const DEFAULT_OWNER: OwnerConfig = { proof: { adapter: 'none', ttlSeconds
 
 /** The remote a repository's merge command merges into when `merge.remote` is unset. */
 export const DEFAULT_MERGE_REMOTE = 'origin';
+
+/** A merge command runs the whole suite unless `merge.checks` says the forge's required checks do (T3421). */
+export const DEFAULT_MERGE_CHECKS: MergeChecks = 'full';
 
 /** A repository's docs folder when `docsFolder` is unset: `docs` at its root, where most projects keep theirs. */
 export const DEFAULT_DOCS_FOLDER = 'docs';

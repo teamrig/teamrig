@@ -44,6 +44,7 @@ import {
   DEFAULT_MEETING_NOTICES,
   DEFAULT_LOOPS,
   DEFAULT_MERGE_REMOTE,
+  DEFAULT_MERGE_CHECKS,
   DEFAULT_MESSAGES,
   DEFAULT_HEADROOM,
   DEFAULT_IDLE,
@@ -179,6 +180,7 @@ import {
   type DeliveryRepoConfig,
   type QueueConfig,
   type MergeConfig,
+  type MergeChecks,
   type DeployConfig,
   type DeployCheckConfig,
   type CommitsConfig,
@@ -1440,7 +1442,15 @@ function parseMerge(read: ConfigReader, raw: unknown, path: string): MergeConfig
   }
   const command = read.stringListItem(entry['command'], `${path}.command`, HOOK_ARGV_MAX_ITEMS);
   const remote = read.string(entry, 'remote', path, DEFAULT_MERGE_REMOTE, isRemoteName);
-  return command === undefined ? undefined : { command, remote };
+  const checks = read.string(entry, 'checks', path, DEFAULT_MERGE_CHECKS, oneOf(MERGE_CHECKS));
+  return command === undefined ? undefined : { command, remote, checks: isMergeChecks(checks) ? checks : DEFAULT_MERGE_CHECKS };
+}
+
+/** The values `merge.checks` takes. */
+const MERGE_CHECKS: readonly MergeChecks[] = ['full', 'changed'];
+
+function isMergeChecks(value: string): value is MergeChecks {
+  return MERGE_CHECKS.some((checks) => checks === value);
 }
 
 /** A git remote's name, as `git remote add` takes it; it never starts with `-`, so git cannot read it as an option. */

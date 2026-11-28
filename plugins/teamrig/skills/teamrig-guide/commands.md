@@ -7180,8 +7180,8 @@ The repository is the entry of `delivery.repos` whose `mainCheckout` is this che
 - `merge`: a merge command run in place of the push, such as `{ "command": ["node", "tools/merge.ts"] }` for a
   repository that merges through pull requests (a sketch below). It runs like the `dependencyCheck`, after it and the
   review gate, with
-  `TEAMRIG_MERGE_BRANCH`, `TEAMRIG_MERGE_BASE` (the default branch), `TEAMRIG_MERGE_HEAD` (the rebased commit) and
-  `TEAMRIG_SESSION` set; its last line is the reason shown. Exit 0: it merged, and `teamrig merge` fetches to confirm it: a
+  `TEAMRIG_MERGE_BRANCH`, `TEAMRIG_MERGE_BASE` (the default branch), `TEAMRIG_MERGE_HEAD` (the rebased commit),
+  `TEAMRIG_MERGE_CHECKS` and `TEAMRIG_SESSION` set; its last line is the reason shown. Exit 0: it merged, and `teamrig merge` fetches to confirm it: a
   commit on origin's default branch must hold every file the branch changed as at its head (a rebase, a squash and a
   merge commit all do), else FAILED and the branch is kept. 75: the merge waits, say on the pull request's checks or
   review: WAITING with its last line, exit 75, the branch kept and the lock freed; run `teamrig merge` again later, and once
@@ -7190,6 +7190,10 @@ The repository is the entry of `delivery.repos` whose `mainCheckout` is this che
   merges into, origin unless set: where origin is your fork and pull requests merge into the project's repository,
   set `"remote": "upstream"`. `teamrig merge` then fetches and rebases onto upstream's default branch, confirms the merge
   there and moves the local default branch to upstream's; the branch is still pushed to and deleted from origin.
+  `merge.checks` [delivery.repos.<name>.merge.checks] is what the command finds in `TEAMRIG_MERGE_CHECKS` and the
+  `merging ...` line shows: `full` unless set, the whole suite; `changed` where the forge's required checks run the whole
+  suite on the pull request before it merges, so the command runs only the changed files' checks and the suite never
+  runs twice. A plain push has no such checks before it lands, so the key is only for a merge command.
 
 A repository not listed gets a NOTE and none of these. Then `teamrig merge` waits up to `delivery.wait.maxMinutes` (60),
 looking every `delivery.wait.pollSeconds` (30), for the freezes and the host lock (see `teamrig queue`; longer while its line moves), fetches,

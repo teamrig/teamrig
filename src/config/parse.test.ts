@@ -1292,7 +1292,7 @@ describe('parseConfig', () => {
     };
     const { config, issues } = parseConfig({ ...ROSTER, delivery: { repos } });
     assert.deepEqual(paths(issues).sort(), ['delivery.repos.bare.merge', 'delivery.repos.empty.merge.command', 'delivery.repos.text.merge.command']);
-    assert.deepEqual(config.delivery.repos['forge'], { mainCheckout: 'repos/forge', deploysOnPush: [], dependencyGate: false, reviewGate: false, decisionRecordGate: false, updateMainCheckout: false, merge: { command, remote: 'origin' } });
+    assert.deepEqual(config.delivery.repos['forge'], { mainCheckout: 'repos/forge', deploysOnPush: [], dependencyGate: false, reviewGate: false, decisionRecordGate: false, updateMainCheckout: false, merge: { command, remote: 'origin', checks: 'full' } });
     assert.equal(config.delivery.repos['push']?.merge, undefined);
     assert.equal(config.delivery.repos['text']?.merge, undefined);
     assert.equal(config.delivery.repos['empty']?.merge, undefined);
@@ -1311,9 +1311,28 @@ describe('parseConfig', () => {
     const { config, issues } = parseConfig({ ...ROSTER, delivery: { repos } });
     assert.deepEqual(paths(issues).sort(), ['delivery.repos.option.merge.remote', 'delivery.repos.range.merge.remote', 'delivery.repos.spaced.merge.remote']);
     assert.match(issues.find((issue) => issue.path === 'delivery.repos.option.merge.remote')?.message ?? '', /expected a git remote name/);
-    assert.deepEqual(config.delivery.repos['fork']?.merge, { command, remote: 'upstream' });
-    assert.deepEqual(config.delivery.repos['dotted']?.merge, { command, remote: 'my.Remote_2' });
-    assert.deepEqual(config.delivery.repos['option']?.merge, { command, remote: 'origin' });
+    assert.deepEqual(config.delivery.repos['fork']?.merge, { command, remote: 'upstream', checks: 'full' });
+    assert.deepEqual(config.delivery.repos['dotted']?.merge, { command, remote: 'my.Remote_2', checks: 'full' });
+    assert.deepEqual(config.delivery.repos['option']?.merge, { command, remote: 'origin', checks: 'full' });
+  });
+
+  it('reads the checks a merge command runs, full unless set, and refuses any other value (T3421)', () => {
+    const command = ['node', 'tools/merge.ts'];
+    const repos = {
+      unset: { mainCheckout: 'repos/unset', merge: { command } },
+      full: { mainCheckout: 'repos/full', merge: { command, checks: 'full' } },
+      changed: { mainCheckout: 'repos/changed', merge: { command, checks: 'changed' } },
+      odd: { mainCheckout: 'repos/odd', merge: { command, checks: 'none' } },
+      number: { mainCheckout: 'repos/number', merge: { command, checks: 1 } },
+    };
+    const { config, issues } = parseConfig({ ...ROSTER, delivery: { repos } });
+    assert.deepEqual(paths(issues).sort(), ['delivery.repos.number.merge.checks', 'delivery.repos.odd.merge.checks']);
+    assert.match(issues.find((issue) => issue.path === 'delivery.repos.odd.merge.checks')?.message ?? '', /expected one of full, changed/);
+    assert.equal(config.delivery.repos['unset']?.merge?.checks, 'full');
+    assert.equal(config.delivery.repos['full']?.merge?.checks, 'full');
+    assert.equal(config.delivery.repos['changed']?.merge?.checks, 'changed');
+    assert.equal(config.delivery.repos['odd']?.merge?.checks, 'full');
+    assert.equal(config.delivery.repos['number']?.merge?.checks, 'full');
   });
 
   it('reads a repository’s deploy, its checks and afterPull hooks from their defaults', () => {
