@@ -10,13 +10,13 @@ import type { WorkCommit } from '../../src/merge/work-commits.ts';
 import { type ClearMerge, type ClearTaskMerge, type MergeClearance, approvedRebase, clearMergeFrom, clearTaskMergeFrom, teamrigShipWritesOf, workCommitsOf } from './approval.ts';
 import { buildScriptOf, buildSteps } from './build-steps.ts';
 import { type CatchUp, type CatchUpRequest, catchUp } from './catch-up.ts';
-import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
+import { type CheckOutcome, type Gh, type RequiredChecks, ghWithToken, heldRunsOf, readChecks, rerunFailedJobs, verdictOf } from './github.ts';
 import { type Credential, SHIP_TOKEN_TARGET, readCredential, windowsPowerShell } from './keychain.ts';
 import { type MergeOutcome, type PullRequest, findOpenPull, openPull, rebaseMerge } from './pulls.ts';
 import { type MergedHead, pullsOfHead, sweepAfterMerge } from './leftovers.ts';
 import { type GateDeps, proveTree, realGateDeps } from './local-gate.ts';
 import { type LandingTurn, processLandingTurn } from './landing-turn.ts';
-import { type ReleaseCatchUpRequest, catchUpRelease } from './release-catch-up.ts';
+import { type HeldReleaseRequest, type ReleaseCatchUpRequest, catchUpRelease, repushHeldRelease } from './release-catch-up.ts';
 import { releaseRefusal } from './release-pull.ts';
 import { queueLanding } from './merge-queue.ts';
 import { reachGate } from './reach.ts';
@@ -608,6 +608,8 @@ export interface MergeDeps {
   catchUp: (request: CatchUpRequest) => CatchUp;
   /** The release pull request's head main moved past only by commits its changelog hides, rebased and pushed (release-catch-up.ts, T5055). */
   releaseCatchUp: (request: ReleaseCatchUpRequest) => CatchUp;
+  /** The release pull request's head whose runs GitHub holds for approval, rebased onto main and pushed again (release-catch-up.ts, T5915). */
+  releaseRepush: (request: HeldReleaseRequest) => CatchUp;
   /** The work commits `rev` carries over origin's main, with their patch ids (approval.ts `workCommitsOf`). */
   workOf: (rev: string) => readonly WorkCommit[];
   /** The register's task of a head branch, which dresses its pull request (pull-task.ts, T4796). */
@@ -631,6 +633,16 @@ function checkedOutBranch(git: MergeDeps['git']): string {
 export type MergeExit = { kind: 'done'; code: number } | ({ kind: 'moved' } & MainMove);
 
 const done = (code: number): MergeExit => ({ kind: 'done', code });
+
+/** A release head whose `pull_request` runs GitHub holds for a maintainer's approval, with their links (T5915). */
+interface HeldHead {
+  readonly kind: 'held';
+  readonly sha: string;
+  readonly runs: readonly string[];
+}
+
+/** How one merge run ended: a MergeExit, or a release head whose runs are held, which runMerge pushes again. */
+export type RunExit = MergeExit | HeldHead;
 
 /**
  * Why the merge of `head` at `sha` may not go on, or null when it may. Checked once the head is pushed, before any
@@ -771,6 +783,23 @@ function catchUpReleaseHead(deps: MergeDeps, gate: ReleaseGate, move: MainMove):
   return deps.releaseCatchUp({ head: profile.release.head, sha, tip: move.tip, main: profile.main });
 }
 
+/**
+ * Pushes the release head `held` names again, rebased onto main's tip, so runs this merge's credentials start replace
+ * the ones GitHub holds (release-catch-up.ts `repushHeldRelease`, T5915). A head this run pushed itself and still held
+ * is refused with its runs' links: a second push would be held the same way.
+ */
+function repushReleaseHead(deps: MergeDeps, held: HeldHead, pushed: ReadonlySet<string>): CatchUp {
+  const links = held.runs.join(', ');
+  if (pushed.has(held.sha)) {
+    return { kind: 'refused', reason: `the release pull request's head ${held.sha.slice(0, 7)}, which this merge pushed, still has runs waiting for a maintainer's approval: ${links}` };
+  }
+  const profile = profileFor(deps.profiles, slugOf(deps.git('remote', 'get-url', 'origin')));
+  // mergeRun reads held runs only for a release head, after releaseHead refused a repo that lists none.
+  if (profile.release === null) throw new Error('held runs were read for a repo that lists no release pull request');
+  const tip = deps.git('rev-parse', `refs/remotes/origin/${profile.main}`);
+  return deps.releaseRepush({ head: profile.release.head, sha: held.sha, tip, main: profile.main, held: held.runs });
+}
+
 /** Catches up the change branch `args` merges onto main's tip `move` names (catch-up.ts, T2809). */
 function catchUpChangeHead(args: MergeArgs, deps: MergeDeps, move: MainMove): CatchUp {
   // The checkout has not changed since the run read it, and a catch-up that main moved past put it back.
@@ -805,11 +834,28 @@ export async function runMerge(args: MergeArgs, deps: MergeDeps): Promise<number
   const started = deps.waiter.now();
   let move: MainMove | null = null;
   let moves = 0;
+  // The release heads this run pushed because GitHub held their runs: one held again is refused, never pushed again.
+  const repushed = new Set<string>();
   for (;;) {
     if (move === null) {
       const exit = await mergeRun(current, deps, gate);
       if (exit.kind === 'done') return exit.code;
-      move = exit;
+      if (exit.kind === 'held') {
+        const pushed = repushReleaseHead(deps, exit, repushed);
+        if (pushed.kind === 'refused') {
+          deps.err(`REFUSED ${pushed.reason}`);
+          return 1;
+        }
+        if (pushed.kind === 'rebased') {
+          repushed.add(pushed.sha);
+          // mergeRun reads held runs only with --release, so its gate is the release one.
+          release?.carry(pushed.sha);
+          continue;
+        }
+        move = pushed;
+      } else {
+        move = exit;
+      }
     }
     moves += 1;
     const ranMs = deps.waiter.now() - started;
@@ -865,7 +911,7 @@ function releaseHead(deps: MergeDeps, profile: RepoProfile, repo: string): Merge
 }
 
 /** The merge itself; prints every outcome but a move of main past the head, which it returns to the caller. */
-export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate): Promise<MergeExit> {
+export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate): Promise<RunExit> {
   const { git } = deps;
   const repo = slugOf(git('remote', 'get-url', 'origin'));
   const profile = profileFor(deps.profiles, repo);
@@ -895,6 +941,11 @@ export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate
     return done(1);
   }
   const gh = deps.ghFor(credential.secret);
+  // The release tool's push starts runs GitHub may hold for approval; their checks would never report (T5915).
+  if (args.release !== null) {
+    const held = heldRunsOf(gh, repo, sha);
+    if (held.length > 0) return { kind: 'held', sha, runs: held };
+  }
   const polling = { timeoutMs: args.timeoutMin * 60_000, intervalMs: args.intervalS * 1000 };
   const main = mainBranchOf(git, profile.main);
   const checks = (): Proof => ciProof(gh, repo, head, { names: profile.checks, summary: profile.summary, flaky: profile.flaky, conditional: profile.conditional, checkMinutes: profile.checkMinutes }, deps.waiter, polling);
@@ -981,6 +1032,7 @@ export function realMergeDeps(dir: string): MergeDeps {
         request,
       ),
     releaseCatchUp: request => catchUpRelease({ git, log: out }, request),
+    releaseRepush: request => repushHeldRelease({ git, log: out }, request),
     workOf: rev => {
       const profile = profileFor(readProfiles(), slugOf(git('remote', 'get-url', 'origin')));
       return workCommitsOf(runGit, rev, `refs/remotes/origin/${profile.main}`, teamrigShipWritesOf(profile.regenerated));
@@ -1014,5 +1066,12 @@ export function mergeCommand(argv: readonly string[], depsFor: (dir: string) => 
 
 /** The merge a ship runs (ship.ts): like `mergeCommand`, but a move of main past the branch comes back to the ship. */
 export function mergeBranch(argv: readonly string[], depsFor: (dir: string) => MergeDeps = realMergeDeps): Promise<MergeExit> {
-  return fromArgv(argv, depsFor, (args, deps) => mergeRun(args, deps, CLEARED_BY_SHIP), done(1));
+  return fromArgv(argv, depsFor, async (args, deps) => shipExit(await mergeRun(args, deps, CLEARED_BY_SHIP), deps), done(1));
+}
+
+/** A ship's merge run as the ship reads it: a ship never merges the release pull request, so no head of it is held. */
+function shipExit(exit: RunExit, deps: MergeDeps): MergeExit {
+  if (exit.kind !== 'held') return exit;
+  deps.err(`REFUSED ${exit.sha.slice(0, 7)}'s runs wait for a maintainer's approval: ${exit.runs.join(', ')}`);
+  return done(1);
 }
