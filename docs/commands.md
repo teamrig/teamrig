@@ -386,7 +386,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   who [<id|name|role|team/id>] the name to message a session by (no argument: every session of yours)
   read <document>... --json [--session <id|name>] [--conversation <id>] [--team <id>] [--owner <id|name>]
       [--task T<id>] [--range 7d|30d|90d|180d|1y|all] [--since <hours>]
-      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]]
+      [--unless <document>=<revision>[,...]] [--max-bytes <n> [--after T<id>]] [--finished-within <days>]
       [--interface <major.minor>]   the public interface's read side, for a program: each document
       asked is one JSON line on stdout, in the order asked, with its revision and what could not be
       served (problems); a refusal goes to stderr, so stdout holds answers only.
@@ -418,6 +418,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       time, as many tasks as fit in that many bytes of their JSON and at least one; next names the
       last task served while more remain, null on the last page. --after: the next a page gave, the
       task the next page starts after; every page carries the same revision while nothing changed.
+      --finished-within: serve tasks with only the done and dropped tasks of the last that many whole
+      days, counted from the start of today's UTC day; finishedSince names that moment.
       --interface: the version you speak, refused when this teamrig does not serve it. It writes nothing
   events --json [--documents <document>[,...]] [--session <id|name>] [--conversation <id>] [--team <id>]
       [--owner <id|name>] [--since <hours>] [--task <id>] [--range <days>]   the public interface's

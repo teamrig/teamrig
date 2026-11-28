@@ -48,6 +48,12 @@ import { configProblemsOf, once, skippedOf, stampsOf, workingSetOf, type Documen
 /** How far back `inbox` serves the lines already read, when `--since` names no other reach. */
 const READ_LINES_HOURS = 24;
 const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** The start of the UTC day `days` days before the one `now` falls in: where `--finished-within <days>` reaches back to. */
+function finishedSinceOf(now: number, days: number): string {
+  return new Date(Math.floor(now / DAY_MS) * DAY_MS - days * DAY_MS).toISOString();
+}
 
 /** What one run of `read` was asked for, checked as far as the command line and the environment alone allow. */
 export interface ReadRequest {
@@ -65,6 +71,8 @@ export interface ReadRequest {
   readonly range: StatsRange;
   /** The one page of `tasks` asked (`--max-bytes`, `--after`); null serves every task in one answer. */
   readonly page: TasksPage | null;
+  /** How many days back `tasks` serves done and dropped tasks (`--finished-within`); null serves every one. */
+  readonly finishedWithinDays: number | null;
   /** The revision the reader already holds of a document, for each it named with `--unless`. */
   readonly unless: ReadonlyMap<DocumentName, string>;
   readonly speaks: InterfaceVersion | undefined;
@@ -151,14 +159,33 @@ export function scopeFlagsOf(args: ParsedArgs, env: Env): ScopeFlags {
 }
 
 /** What one document is asked of: the flags only a run naming that document takes, at their defaults when not given. */
-export type DocumentFlags = Pick<ReadRequest, 'task' | 'range' | 'page'>;
+export type DocumentFlags = Pick<ReadRequest, 'task' | 'range' | 'page' | 'finishedWithinDays'>;
 
 export function documentFlagsOf(args: ParsedArgs, documents: readonly DocumentName[]): DocumentFlags {
   return {
     task: taskOf(args.flags.get('task'), documents),
     range: statsRangeOf(args.flags.get('range'), documents),
     page: pageOf(args.flags.get('max-bytes'), args.flags.get('after'), documents),
+    finishedWithinDays: finishedWithinOf(args.flags.get('finished-within'), documents),
   };
+}
+
+/**
+ * `--finished-within <days>`: serve `tasks` with only the done and dropped tasks of the last that many days, so a
+ * reader drawing what is in hand does not fold the team's whole past. Refused on a run that does not ask for `tasks`,
+ * as `--max-bytes` is.
+ */
+function finishedWithinOf(typed: string | undefined, documents: readonly DocumentName[]): number | null {
+  if (typed === undefined) {
+    return null;
+  }
+  if (!documents.includes('tasks')) {
+    throw new UsageError('--finished-within narrows tasks, and this run does not ask for tasks');
+  }
+  if (!/^[1-9]\d{0,4}$/.test(typed)) {
+    throw new UsageError(`--finished-within takes whole days, such as 7; got "${typed}"`);
+  }
+  return Number(typed);
 }
 
 /**
@@ -378,6 +405,7 @@ async function scopeOf(request: ReadRequest, runtime: CliRuntime, own: string): 
     task: request.task ?? null,
     range: request.range,
     page: request.page,
+    finishedWithinDays: request.finishedWithinDays,
     warnings: configProblemsOf(kit.paths, load),
   };
 }
@@ -397,10 +425,13 @@ export function revisionOf(parts: RevisionParts): string {
  * name, so one that went missing and came back changes the revision as it changes the answer: a segment is written
  * once, and a folder's own stamp does not move with its entries on every file system. A page asked is no part of
  * the revision: every page carries the whole set's, so a reader paging through knows the set moved between pages.
+ * `--finished-within` is, by the moment it reaches back to: the start of a UTC day, so the answer and its revision
+ * move once a day as old tasks leave it, never on every read.
  */
 function tasksSource(scope: ReadScope): DocumentSource {
   const { runtime, kit, config, roster } = scope;
   const layout = layoutPaths(kit.paths.events);
+  const finishedSince = scope.finishedWithinDays === null ? null : finishedSinceOf(runtime.clock.now(), scope.finishedWithinDays);
   return {
     async parts() {
       return {
@@ -408,6 +439,7 @@ function tasksSource(scope: ReadScope): DocumentSource {
         args: [
           ['team', kit.paths.team],
           ['owner', scope.owner],
+          ['finishedSince', finishedSince],
         ],
         stamps: [
           ...(await stampsOf(runtime, [kit.load.path, kit.paths.renames, layout.snapshot, layout.tail])),
@@ -426,6 +458,7 @@ function tasksSource(scope: ReadScope): DocumentSource {
           connectors: DOCUMENT_CONNECTORS,
           names: { owner: config.register.ownerSource, connectors: DOCUMENT_CONNECTORS, nameOf: (session) => roster.nameOf(session) },
           page: scope.page,
+          finishedSince,
         });
         return { body, problems: register.problems };
       } catch (error) {

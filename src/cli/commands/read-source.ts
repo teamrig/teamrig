@@ -40,6 +40,8 @@ export interface ReadScope {
   readonly range: StatsRange;
   /** The one page of `tasks` asked (`--max-bytes`, `--after`); null serves every task, which only `tasks` minds. */
   readonly page: TasksPage | null;
+  /** How many days back `tasks` serves done and dropped tasks (`--finished-within`); null serves every one. */
+  readonly finishedWithinDays: number | null;
   /** What the config's own read has to tell: every document is read through it, so each carries these. */
   readonly warnings: readonly string[];
 }

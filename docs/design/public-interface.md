@@ -99,7 +99,8 @@ task fields the pane folded itself, `tasks`' `card`, `descriptionCut`, `sizeBase
 and `waitsAt`; 1.8 added `tasks`' `retired`, the count of finished tasks left to the archive, and each `sessions`
 team's `week`; 1.9: `steps`; 1.10 added paging, `tasks` read a page of `--max-bytes` at a time with `--after`,
 each page's `next` naming the task the next one starts after, so a reader with a capped run reads a large register
-whole); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
+whole; 1.12 added `--finished-within`, `tasks` with only the done and dropped tasks of the last days asked, and its
+`finishedSince`); [the commands page](../commands.md) has its usage and the plugin's guide describes every field. What
 the design above left open is settled this way:
 
 - **One line a document.** Each document asked is one JSON object on one line of stdout, in the order asked, and

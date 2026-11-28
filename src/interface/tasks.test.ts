@@ -66,8 +66,8 @@ const SERVED_FIELDS = [
   'waitsAt',
 ];
 
-function bodyOf(tasks: readonly Task[], owner: string | null = null, page: TasksPage | null = null): TasksBody {
-  return tasksBody({ tasks, retired: 0, owner, shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page });
+function bodyOf(tasks: readonly Task[], owner: string | null = null, page: TasksPage | null = null, finishedSince: string | null = null): TasksBody {
+  return tasksBody({ tasks, retired: 0, owner, shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page, finishedSince });
 }
 
 function only(body: TasksBody): ServedTask {
@@ -323,7 +323,7 @@ describe('the tasks document', () => {
   });
 
   it('serves the count of retired tasks it was given, whatever the owner asked', () => {
-    const body = tasksBody({ tasks: [testTask({ id: 'T1', owner: 'alpha' })], retired: 3, owner: 'bravo', shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page: null });
+    const body = tasksBody({ tasks: [testTask({ id: 'T1', owner: 'alpha' })], retired: 3, owner: 'bravo', shapes: new SecretScanner(), connectors: [TRACKER], names: NAMES, page: null, finishedSince: null });
 
     assert.deepEqual([body.tasks, body.retired], [[], 3]);
   });
@@ -368,6 +368,31 @@ describe('the tasks document', () => {
 
     assert.throws(() => bodyOf(tasks, null, { after: 'T9', maxBytes: 1 }), UnknownCursorError);
     assert.throws(() => bodyOf(tasks, 'alpha', { after: 'T2', maxBytes: 1 }), (error: unknown) => error instanceof UnknownCursorError && error.after === 'T2');
+  });
+
+  it('leaves out a done or dropped task finished before finishedSince, and serves every other one', () => {
+    const since = '2030-01-07T00:00:00.000Z';
+    const tasks = [
+      testTask({ id: 'T1', status: 'done', statusAt: '2030-01-06T23:59:59.999Z' }),
+      testTask({ id: 'T2', status: 'dropped', statusAt: '2030-01-01T00:00:00.000Z' }),
+      testTask({ id: 'T3', status: 'done', statusAt: since }),
+      testTask({ id: 'T4', status: 'verifying', statusAt: '2029-01-01T00:00:00.000Z' }),
+      testTask({ id: 'T5', status: 'open', statusAt: '2029-01-01T00:00:00.000Z' }),
+    ];
+
+    const recent = bodyOf(tasks, null, null, since);
+    const all = bodyOf(tasks);
+
+    assert.deepEqual([recent.tasks.map((task) => task.id), recent.finishedSince], [['T3', 'T4', 'T5'], since]);
+    assert.deepEqual([all.tasks.map((task) => task.id), all.finishedSince], [['T1', 'T2', 'T3', 'T4', 'T5'], null]);
+  });
+
+  it('adds no cut for a task finishedSince leaves out, and refuses a page after one', () => {
+    const tasks = [testTask({ id: 'T1', status: 'done', statusAt: '2030-01-01T00:00:00.000Z', note: SECRET }), testTask({ id: 'T2' })];
+    const since = '2030-01-07T00:00:00.000Z';
+
+    assert.deepEqual(bodyOf(tasks, null, null, since).cuts, []);
+    assert.throws(() => bodyOf(tasks, null, { after: 'T1', maxBytes: 1 }, since), UnknownCursorError);
   });
 
   it('keeps the order it was given and has no cuts for clean tasks', () => {
