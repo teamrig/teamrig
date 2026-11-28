@@ -212,4 +212,88 @@ describe('sqlWritesIn', () => {
     assert.deepEqual(sqlWritesIn('REPLACE INTO t VALUES (1); MERGE INTO u USING v ON (1=1)'), ['REPLACE', 'MERGE']);
     assert.deepEqual(sqlWritesIn("SELECT replace(name, 'a', 'b'), created_at, updated FROM t ORDER BY updated_at"), []);
   });
+
+  // #2536: the guard reads prose as SQL unless comments and psql's echo text are skipped first.
+  it('names no write for one that only appears in a comment or an echo line', () => {
+    assert.deepEqual(sqlWritesIn('-- report after a cut listing create\nSELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('/* DROP TABLE x */ SELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('\\echo == 1 create issued, not confirmed\nSELECT 1;'), []);
+    assert.deepEqual(sqlWritesIn('\\qecho DROP TABLE x\n'), []);
+    assert.deepEqual(sqlWritesIn('\\warn truncate later\n'), []);
+  });
+
+  it('keeps reading what the server really runs', () => {
+    assert.deepEqual(sqlWritesIn("SELECT 'DROP TABLE x' \\gexec"), ['DROP']);
+    assert.deepEqual(sqlWritesIn('DO $$ BEGIN UPDATE t SET a = 1; END $$'), ['UPDATE']);
+    assert.deepEqual(sqlWritesIn('\\echo hi \\\\ DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/*! DROP TABLE x */'), ['DROP']);
+    assert.deepEqual(sqlWritesIn("SELECT '-- x', 'DROP TABLE y' \\gexec"), ['DROP']);
+  });
+
+  // #2536: an echo line ends with its line, so the statement under it is still read.
+  it('ends an echo line at its newline, so a write on the next line is still named', () => {
+    assert.deepEqual(sqlWritesIn('\\echo 1 create issued\nDROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('\\qecho done\nUPDATE t SET a = 1'), ['UPDATE']);
+    assert.deepEqual(sqlWritesIn('\\warn later\nDELETE FROM t'), ['DELETE']);
+    assert.deepEqual(sqlWritesIn('\\echo one\n\\echo two\nCREATE TABLE t (a int)'), ['CREATE']);
+    assert.deepEqual(sqlWritesIn('\\echo no newline at all'), []);
+  });
+
+  // #2536: MySQL starts a `--` comment only when a space or control character follows it, so `1--1` is arithmetic there
+  // and a write after it runs; by the rule above, a span is skipped only where every reading agrees.
+  it('reads a -- with no space after it as arithmetic, because MySQL does', () => {
+    assert.deepEqual(sqlWritesIn('SELECT 1--1; DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('SELECT 5-3--2'), []);
+    assert.deepEqual(sqlWritesIn('-- DROP TABLE x\nSELECT 1'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1;\t-- DELETE FROM t'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1-- a comment MySQL also reads\nDROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a dollar-quote tag that holds digits whole, as PostgreSQL allows', () => {
+    assert.deepEqual(sqlWritesIn('DO $tag1$ BEGIN UPDATE t SET a = 1; END $tag1$'), ['UPDATE']);
+    // The body stays as it is, so a write inside it names even where it reads like a comment: a tag left unrecognized
+    // would end the body early and lose it.
+    assert.deepEqual(sqlWritesIn('DO $a1b2$ SELECT 1; -- DROP TABLE x\n$a1b2$'), ['DROP']);
+    // A tag may not start with a digit, so `$1$` is no dollar quote.
+    assert.deepEqual(sqlWritesIn('DO $1$ SELECT 1; -- DROP TABLE x\n$1$'), []);
+  });
+
+  // The rule a reading is held to: a span is blanked only where every server agrees it never runs. Six spans that some
+  // server executes were blanked, so a write after each one went unnamed.
+  it('reads a MariaDB executable comment, so a write after it names', () => {
+    assert.deepEqual(sqlWritesIn('/*M!100100 DROP TABLE x */ SELECT 1'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/*M! DROP TABLE x */'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('/* plain prose */ SELECT 1'), []);
+  });
+
+  it('reads a double-quoted string whose closing quote is escaped, as MySQL reads it', () => {
+    assert.deepEqual(sqlWritesIn('SELECT "a\\" -- DROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a backtick identifier whole, so a `--` inside it starts nothing', () => {
+    // Blanked from `a` to end of line as a comment, the write after it went unnamed.
+    assert.deepEqual(sqlWritesIn('SELECT `a` FROM t; DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('SELECT `a; DROP TABLE x'), ['DROP']);
+  });
+
+  it('reads a bracket identifier whole, so a `--` inside it starts nothing', () => {
+    // The `[` branch does not exist before this change, so it blanked from `a]` to end of line and lost the write.
+    assert.deepEqual(sqlWritesIn('SELECT [a] FROM t; DROP TABLE x'), ['DROP']);
+    // An unclosed `[` is not blanked, so a write after it still names.
+    assert.deepEqual(sqlWritesIn('SELECT [a; DROP TABLE x'), ['DROP']);
+  });
+
+  it('opens a dollar quote only where an identifier cannot go on', () => {
+    // `a$b$` is an identifier and `$c` follows it, so no quote opens there and the `--` after it is a real comment:
+    // read as a quote, it would end the quote early and take the comment's text as body.
+    assert.deepEqual(sqlWritesIn('SELECT a$b$c; -- DROP TABLE x'), []);
+    assert.deepEqual(sqlWritesIn('SELECT 1$x$y; -- DELETE FROM t'), []);
+    // A tag after `;`, where no identifier can go on, still opens: its body is read, and its text names.
+    assert.deepEqual(sqlWritesIn('DO $$ UPDATE t SET a = 1; $$'), ['UPDATE']);
+  });
+
+  it('leaves an echo line read when it holds a backquoted shell command', () => {
+    assert.deepEqual(sqlWritesIn('\\echo `date` DROP TABLE x'), ['DROP']);
+    assert.deepEqual(sqlWritesIn('\\echo no command here'), []);
+  });
 });
