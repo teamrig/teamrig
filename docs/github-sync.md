@@ -206,12 +206,16 @@ REPORTER acme/eng: 5b10a2844c20165700ede21g (Dana Reporter) let in 2 issue(s), N
 
 `teamrig issue sync --yes` takes the reporters it lists, so the next preview marks only reporters who are new since.
 
-Another tracker's import reads only the team's issues by default: those assigned to the signed-in account or to a
-person `connectors.jira.people` names, and those carrying a label of `sync.scope.labels` (`teamrig`) or the accept
-label. The issues of the team's active tasks there are always read, so a narrower scope never closes a task. A
-`SCOPE` line counts the issues the tracker gave outside the scope. `sync.maxOpen` (200) caps the open tasks one
-tracker's import holds and `sync.maxNewPerSync` (50) the adds of one run; past either, a `CAPPED` line says how many
-wait for a later run. To read every open issue of a project, as before, set `"sync": { "scope": { "all": true } }`.
+Every import, GitHub's and each other tracker's, makes tasks only of the team's issues by default: those assigned to
+one of the team's people (on GitHub the logins `github.owners` maps, on Jira the accounts `connectors.jira.people`
+names, else the signed-in account), and those carrying a label of `sync.scope.labels` (`teamrig`) or the accept label.
+GitHub still reads its whole open list, as before, since answer clocks, claims, security and mentions need every
+issue; the scope cuts only what becomes a task. The issues of the team's active tasks there are always kept, so a
+narrower scope never closes a task. A `SCOPE` line counts the issues the tracker gave outside the scope, which were
+dropped, and until a person takes a place's scope, another says what it reads and the key that reads every open
+issue. `sync.maxOpen` (200) caps the open tasks one tracker's import holds and
+`sync.maxNewPerSync` (50) the adds of one run, across its repositories or projects; past either, a `CAPPED` line says
+how many wait for a later run. To import every open issue, as before, set `"sync": { "scope": { "all": true } }`.
 
 A person takes each place's scope: an automatic run (`--auto`) adds no task at a place whose scope is new or wider
 than the one last taken, says `HELD` with how many issues wait, and gives the lead one inbox line per scope; the

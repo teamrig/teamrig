@@ -1391,10 +1391,13 @@ left out (a `LEFT OUT` line names them by key). A section the connector refuses 
 cannot read a `FAILED` line, and the repositories' import runs on either way; `TEAMRIG_CONNECTOR_<ID>=off` turns one
 tracker's import off on a machine, and `--repo` reads that one repository alone, no other tracker.
 
-Import scope: by default another tracker's import reads only the team's issues, those assigned to the signed-in
-account or to a person its connector section lists as the team's people, and those carrying a label of
-`sync.scope.labels` or the accept label; the issues of the team's active tasks there are read too, so a narrower scope
-never closes a task. A `SCOPE` line counts the issues the tracker gave outside the scope, which were dropped.
+Import scope: by default every import, the repositories' and each other tracker's, makes tasks only of the team's
+issues, those assigned to one of the team's people (the logins `github.owners` maps on GitHub, the people a connector
+section lists elsewhere, else the signed-in account) and those carrying a label of `sync.scope.labels` or the accept
+label; the issues of the team's active tasks there are kept too, so a narrower scope never closes a task. GitHub
+still reads its whole open list for answer clocks, claims, security and mentions. A `SCOPE` line counts the issues
+the tracker gave outside the scope, which were dropped, and until a person takes a place's scope, another says what it
+reads and names `sync.scope.all`.
 `sync.maxOpen` (200) caps the open imported tasks and `sync.maxNewPerSync` (50) the adds of one run, across a
 tracker's places; a `CAPPED` line says how many adds waited for a later run and which key held them. The one line back
 to the whole project is `sync.scope.all: true`. An `--auto` run adds nothing at a place whose scope is new or wider
