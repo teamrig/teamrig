@@ -6,8 +6,7 @@ import { EVENT_VERSION, TASK_LINE_VERSION, type ApprovalVerdict, type CreateEven
 import { foldEvents, taskNumber, type RegisterState, type Task } from './fold.ts';
 import { NO_SLICED_GOALS, type SlicedGoal } from './focus.ts';
 import { NO_GOAL_TAGS } from './goals.ts';
-import type { OwnerProofRecord } from '../owner-proof/record.ts';
-import { NO_SKILL, type AddInput, type AskInput, type AuditChange, type AuditSubject, type DecideChange, type DeferChange, type ImportChanges, type ImportInput, type OwnerAnswer, type OwnerChange, type RegisterPolicy, type StatusContext, type StatusInput, type TriageChanges, type UpdateChange, type Verdict } from './policy.ts';
+import { NO_SKILL, type AddInput, type AskInput, type AuditChange, type AuditSubject, type DecideChange, type DeferChange, type ImportChanges, type ImportInput, type OwnerAnswer, type OwnerChange, type RegisterPolicy, type SignedAnswer, type StatusContext, type StatusInput, type TriageChanges, type UpdateChange, type Verdict } from './policy.ts';
 import { ACTIVE_STATUSES, type ImportSource } from './model.ts';
 import type { TaskNumbering } from './numbering.ts';
 import { isWritable, type RegisterSnapshot } from './snapshot.ts';
@@ -376,10 +375,10 @@ export class Register {
 
   /**
    * The owner's answer to a card from the pane (T4078): a Decided naming the option chosen, or yes or no, written as in
-   * ownerNote.
+   * ownerNote; `signed`, the owner's proof of it, kept only for this team's exact act (RegisterPolicy.ownerDecide).
    */
-  ownerDecide(id: string, answer: OwnerAnswer, read?: string, ownerProof?: OwnerProofRecord): Promise<Verdict<WriteResult>> {
-    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.ownerEvent(task, this.deps.policy.ownerDecide(task, answer, read, ownerProof)))));
+  ownerDecide(id: string, answer: OwnerAnswer, read?: string, signed?: SignedAnswer): Promise<Verdict<WriteResult>> {
+    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.ownerEvent(task, this.deps.policy.ownerDecide(task, answer, read, signed)))));
   }
 
   /** The owner's Later from the pane (T4078): the card put off to `until` (stored form), written as in ownerNote. */
