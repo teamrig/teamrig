@@ -81,14 +81,24 @@ describe("reading a Jira issue's edit history", () => {
     for (let page = 0; page < MAX_CHANGELOG_PAGES; page += 1) {
       endless.answers('GET', changelog(page), 200, history([change(['status'])], { isLast: false }));
     }
-    assert.deepEqual(await readEditors(client(endless), project(), 'ENG-1'), { kind: 'unread', why: `ENG-1's edit history runs past the ${MAX_CHANGELOG_PAGES * CHANGELOG_PAGE} changes one read takes` });
-    assert.deepEqual(await readEditors(client(new FakeHttp().answers('GET', changelog(0), 404)), project(), 'ENG-1'), { kind: 'unread', why: 'Jira gave no edit history of ENG-1' });
+    assert.deepEqual(await readEditors(client(endless), project(), 'ENG-1'), { kind: 'unread', why: `the edit history runs past the ${MAX_CHANGELOG_PAGES * CHANGELOG_PAGE} changes one read takes` });
+    assert.deepEqual(await readEditors(client(new FakeHttp().answers('GET', changelog(0), 404)), project(), 'ENG-1'), { kind: 'unread', why: 'Jira gave no edit history' });
     const broken = await readEditors(client(new FakeHttp().answers('GET', changelog(0), 500)), project(), 'ENG-1');
     assert.equal(broken.kind, 'unread');
-    assert.match(broken.kind === 'unread' ? broken.why : '', /^the read of ENG-1's edit history failed: Jira answered 500/);
-    const notChanges = { kind: 'unread', why: "Jira's answer for ENG-1's edit history did not read as a list of changes" };
+    assert.match(broken.kind === 'unread' ? broken.why : '', /^the edit history read failed: Jira answered 500/);
+    const notChanges = { kind: 'unread', why: "Jira's edit history answer did not read as a list of changes" };
     assert.deepEqual(await readEditors(client(new FakeHttp().answers('GET', changelog(0), 200, '{"values":"x"}')), project(), 'ENG-1'), notChanges);
     assert.deepEqual(await readEditors(client(new FakeHttp().answers('GET', changelog(0), 200, '{"values":[{"items":"x"}]}')), project(), 'ENG-1'), notChanges);
+  });
+
+  it('gives two issues failing the same way the same reason, naming neither, so their TRUST line is one (T5302)', async () => {
+    const http = new FakeHttp()
+      .answers('GET', changelog(0), 500)
+      .answers('GET', `${API}/issue/ENG-2/changelog?startAt=0&maxResults=${CHANGELOG_PAGE}`, 500);
+    const first = await readEditors(client(http), project(), 'ENG-1');
+    const second = await readEditors(client(http), project(), 'ENG-2');
+    assert.deepEqual(first, second);
+    assert.doesNotMatch(first.kind === 'unread' ? first.why : 'ENG-', /ENG-/);
   });
 });
 
@@ -106,7 +116,7 @@ describe('judging a Jira issue', () => {
       failed: undefined,
     });
     const gone = await judgeIssue(client(new FakeHttp().answers('GET', changelog(0), 404)), closedDefault(), project(), 'ENG-1', COLLEAGUE);
-    assert.deepEqual(gone, { trusted: false, why: 'its edit history could not be read whole', failed: 'Jira gave no edit history of ENG-1' });
+    assert.deepEqual(gone, { trusted: false, why: 'its edit history could not be read whole', failed: 'Jira gave no edit history' });
   });
 
   it("reads no history for an outsider's issue, nor when edits by anyone keep trust", async () => {

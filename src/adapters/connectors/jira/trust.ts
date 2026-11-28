@@ -89,6 +89,10 @@ function pageEditors(values: readonly unknown[]): TrustAuthor[] | undefined {
   return editors;
 }
 
+/**
+ * Why an edit history could not be read, naming no issue: the TRUST line it lands on names the refs, and a key here
+ * would make each issue's reason its own and its line its own (T5302).
+ */
 function unread(why: string): TrustEditors {
   return { kind: 'unread', why };
 }
@@ -106,12 +110,12 @@ export async function readEditors(client: JiraClient, project: JiraProject, key:
   for (let page = 0; page < MAX_CHANGELOG_PAGES; page += 1) {
     const answer = await client.get(project.site, `/issue/${key}/changelog?startAt=${startAt}&maxResults=${CHANGELOG_PAGE}`);
     if (answer.kind !== 'ok') {
-      return unread(answer.kind === 'missing' ? `Jira gave no edit history of ${key}` : `the read of ${key}'s edit history failed: ${answer.reason}`);
+      return unread(answer.kind === 'missing' ? 'Jira gave no edit history' : `the edit history read failed: ${answer.reason}`);
     }
     const values: unknown = isRecord(answer.body) ? answer.body['values'] : undefined;
     const read = Array.isArray(values) ? pageEditors(values) : undefined;
     if (!isRecord(answer.body) || !Array.isArray(values) || read === undefined) {
-      return unread(`Jira's answer for ${key}'s edit history did not read as a list of changes`);
+      return unread("Jira's edit history answer did not read as a list of changes");
     }
     editors.push(...read);
     startAt += values.length;
@@ -119,7 +123,7 @@ export async function readEditors(client: JiraClient, project: JiraProject, key:
       return { kind: 'read', editors };
     }
   }
-  return unread(`${key}'s edit history runs past the ${MAX_CHANGELOG_PAGES * CHANGELOG_PAGE} changes one read takes`);
+  return unread(`the edit history runs past the ${MAX_CHANGELOG_PAGES * CHANGELOG_PAGE} changes one read takes`);
 }
 
 /**

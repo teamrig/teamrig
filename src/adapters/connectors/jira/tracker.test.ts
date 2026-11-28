@@ -578,7 +578,7 @@ describe("judging a listed Jira issue's trust (T5012)", () => {
     const listed = await tracker.list(REPO, '2026-11-10', { scope: { all: false, assigned: 'team', labels: [] }, people: [], held: [1] });
     const ruled = listed.kind === 'listed' ? listed.issues[0]?.ruled : undefined;
     assert.equal(ruled?.trusted, false);
-    assert.match(ruled !== undefined && !ruled.trusted ? (ruled.failed ?? '') : '', /^the read of ENG-1's edit history failed: Jira answered 500/);
+    assert.match(ruled !== undefined && !ruled.trusted ? (ruled.failed ?? '') : '', /^the edit history read failed: Jira answered 500/);
   });
 });
 

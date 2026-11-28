@@ -51,7 +51,7 @@ const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD ne
 const PREVIEW = 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira';
 /** The TRUST line, standing for the LEFT OUT one, of an issue the rule kept out because Jira gave no edit history. */
 function unreadHistory(key: string): string {
-  return `TRUST acme/eng: 1 kept out, its edit history could not be read whole (the read of ${key}'s edit history failed: Jira gave no answer: no answer is queued for GET https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100): jira:${key}`;
+  return `TRUST acme/eng: 1 kept out, its edit history could not be read whole (the edit history read failed: Jira gave no answer: no answer is queued for GET https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100): jira:${key}`;
 }
 
 /** A Jira issue `key`, open, as the search answers it, assigned to `assignee` (the signed-in account by default). */
