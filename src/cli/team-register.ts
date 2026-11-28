@@ -19,6 +19,7 @@ import { fileLockOf } from './file-locks.ts';
 export function teamRegister(runtime: CliRuntime, paths: TeamPaths, config: KitConfig, above?: SessionAddress): Register {
   const { files, clock } = runtime;
   return new Register({
+    team: paths.team,
     log: new JsonlEventLog(files, paths.events),
     mutex: fileLockOf(runtime, paths.eventsLock, config.lock),
     numbering: new KitTreeNumbering(runtime, paths.team, config),

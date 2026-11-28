@@ -282,7 +282,8 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       meeting's DECISIONS and the batches until then (its owner or a leader above it); none brings it back
   update <id> --decided --note "<owner> decided: .."   records the owner's answer to a card: drops its wait on
       the owner, so it leaves the agenda, and marks it decided (READY) for its owner to act on and set its next
-      status (its owner or a leader above it)
+      status (its owner or a leader above it); refused once an owner key is enrolled: the owner answers with
+      owner decide
   update <team>/<id> --note .. [--later <date>|none|--decided]   the lead at a team tree's root, who asks the
       owner the decisions of the teams under it, notes their tasks, puts a card off or records the owner's answer,
       named as its batch prints them: web/T12

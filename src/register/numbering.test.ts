@@ -44,6 +44,7 @@ class FixedNumber implements NumberSource {
 
 function registerOn(files: MemoryFiles, path: string, numbering: TaskNumbering): Register {
   return new Register({
+    team: 'alpha',
     log: new JsonlEventLog(files, path),
     mutex: new InlineMutex(),
     numbering,

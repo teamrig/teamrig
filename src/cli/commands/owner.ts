@@ -4,7 +4,8 @@ import { LATER_FORMS, MAX_LATER_HOURS, namedLaterTime } from '../../core/later-t
 import { storedDeadline, storedText, typedTimeHint } from '../../core/time.ts';
 import { isCardDigest } from '../../register/card-digest.ts';
 import type { Task } from '../../register/fold.ts';
-import { ownerDecideAct, type OwnerAnswer, type SignedAnswer } from '../../register/policy.ts';
+import type { OwnerProofRecord } from '../../owner-proof/record.ts';
+import { ownerDecideAct, type OwnerAnswer } from '../../register/policy.ts';
 import type { OwnerNextPreview } from '../../register/register.ts';
 import { refuseUnlessPerson } from '../agent-run.ts';
 import { onePositional, requiredFlag, UsageError, type ParsedArgs } from '../args.ts';
@@ -225,7 +226,7 @@ function untilOf(text: string, times: TypedTimes): string {
  * `owner decide <team>/T<id> <answer>` bound to the card read (`--read`, required while the proof is on); a proof
  * not made throws, so nothing is written.
  */
-async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: OwnerAnswer, read: string | undefined): Promise<SignedAnswer | undefined> {
+async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: OwnerAnswer, read: string | undefined): Promise<OwnerProofRecord | undefined> {
   const { paths } = target.kit;
   const { config } = target.team;
   const state = await teamProofState(runtime, config);
@@ -238,7 +239,7 @@ async function decideProof(runtime: CliRuntime, target: OwnerTarget, answer: Own
   if (outcome.kind === 'refused') {
     throw new RefusedError(`${proveRefusalText(outcome.refusal)}; ${target.names.task(target.id)} stays in the decision queue`);
   }
-  return { team: paths.team, record: outcome.record };
+  return outcome.record;
 }
 
 /**

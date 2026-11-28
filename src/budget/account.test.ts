@@ -61,6 +61,7 @@ class NoSkills implements SkillCatalog {
 /** An open task for `owner` in the register at `eventsPath`. */
 async function addTask(files: MemoryFiles, eventsPath: string, owner: string, priority: number): Promise<void> {
   const register = new Register({
+    team: 'alpha',
     log: new JsonlEventLog(files, eventsPath),
     mutex: new InlineMutex(),
     numbering: OWN_NUMBERS,

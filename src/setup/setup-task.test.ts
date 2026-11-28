@@ -26,6 +26,7 @@ import type { Checked } from './team-create.ts';
 /** A register on memory files for the team `lead`, `alpha`, `bravo`. */
 function memoryRegister(): Register {
   return new Register({
+    team: 'alpha',
     log: new JsonlEventLog(new MemoryFiles(), 'register/events.jsonl'),
     mutex: new InlineMutex(),
     numbering: OWN_NUMBERS,

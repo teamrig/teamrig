@@ -302,6 +302,16 @@ describe('teamrig owner decide with the owner proof (T4758)', () => {
     assert.equal(kit.files.get(EVENTS_PATH), before);
   });
 
+  it("refuses a session's update --decided once a key was enrolled, on or turned down, so the owner's own answer clears the gate (T5908 G2)", async () => {
+    const { kit, options } = await provedCards();
+    const before = kit.files.get(EVENTS_PATH);
+    const refusal = /^REFUSED the owner proof is (on|turned down), so no session records a Decided on T1: the owner answers its card with owner decide/;
+    assertRefused(await kit.run(['update', 'T1', '--decided', '--note', 'owner decided: go', '--session', 'lead'], options), refusal);
+    assertRefused(await kit.run(['update', 'T1', '--decided', '--note', 'owner decided: go', '--session', 'lead']), refusal);
+    assert.equal(kit.files.get(EVENTS_PATH), before);
+    ok(await kit.run(['owner', 'decide', 'T1', '--option', '2', '--read', read], options));
+  });
+
   it('asks nothing and keeps no proof on a team with no key enrolled', async () => {
     const world = ownerProofWorld();
     const kit = await cards();

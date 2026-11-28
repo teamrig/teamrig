@@ -2035,35 +2035,43 @@ describe('RegisterPolicy.decide: a Decided (T1366)', () => {
   const asking = testTask({ status: 'waiting', waits: [...OWNER_DECISION, { kind: 'approval', who: 'owner' }, peer, later, after] });
 
   it("drops the owner's waits and a waiting task's time waits, keeps the rest, the note trimmed", () => {
-    assert.deepEqual(policy.decide(asking, 'alpha', ' human: ship it '), { ok: true, value: { changes: {}, note: 'human: ship it', waits: [peer, after], decided: true } });
+    assert.deepEqual(policy.decide(asking, 'alpha', ' human: ship it ', 'off'), { ok: true, value: { changes: {}, note: 'human: ship it', waits: [peer, after], decided: true } });
     const alone = testTask({ status: 'waiting', waits: OWNER_DECISION });
-    assert.deepEqual(policy.decide(alone, 'alpha', 'go'), { ok: true, value: { changes: {}, note: 'go', waits: [], decided: true } });
+    assert.deepEqual(policy.decide(alone, 'alpha', 'go', 'off'), { ok: true, value: { changes: {}, note: 'go', waits: [], decided: true } });
   });
 
   it("keeps a verifying task's time and task waits, which say when its proof runs", () => {
     const proof = testTask({ status: 'verifying', waits: [{ kind: 'approval', who: 'owner' }, later, after] });
-    assert.deepEqual(policy.decide(proof, 'alpha', 'approved'), { ok: true, value: { changes: {}, note: 'approved', waits: [later, after], decided: true } });
+    assert.deepEqual(policy.decide(proof, 'alpha', 'approved', 'off'), { ok: true, value: { changes: {}, note: 'approved', waits: [later, after], decided: true } });
   });
 
   it('lets the owner of the task or a leader above it record one, no peer', () => {
-    assert.equal(error(policy.decide(asking, 'lead', 'go')), 'allowed');
-    assert.equal(error(policy.decide(asking, 'bravo', 'go')), 'only the owner (alpha) or the lead (lead) records a decision on T1');
+    assert.equal(error(policy.decide(asking, 'lead', 'go', 'off')), 'allowed');
+    assert.equal(error(policy.decide(asking, 'bravo', 'go', 'off')), 'only the owner (alpha) or the lead (lead) records a decision on T1');
     const tree = new RegisterPolicy(testConfig({ sessions: ['lead', 'alpha', 'bravo', 'charlie', 'delta'], leads: { alpha: ['bravo'], charlie: ['delta'] } }));
     const bravos = testTask({ owner: 'bravo', status: 'waiting', waits: OWNER_DECISION });
-    assert.equal(error(tree.decide(bravos, 'alpha', 'go')), 'allowed', 'its sub-lead');
-    assert.equal(error(tree.decide(bravos, 'charlie', 'go')), 'only the owner (bravo) or a leader above bravo (alpha or lead) records a decision on T1');
+    assert.equal(error(tree.decide(bravos, 'alpha', 'go', 'off')), 'allowed', 'its sub-lead');
+    assert.equal(error(tree.decide(bravos, 'charlie', 'go', 'off')), 'only the owner (bravo) or a leader above bravo (alpha or lead) records a decision on T1');
   });
 
   it("refuses a task that waits on no decision or approval of the owner's", () => {
     const refusal = 'T1 waits on no decision or approval of owner: only such a card is decided';
-    assert.equal(error(policy.decide(TASK, 'alpha', 'go')), refusal);
-    assert.equal(error(policy.decide(testTask({ status: 'waiting', waits: [peer, later] }), 'alpha', 'go')), refusal, "the lead's decision is no owner card");
+    assert.equal(error(policy.decide(TASK, 'alpha', 'go', 'off')), refusal);
+    assert.equal(error(policy.decide(testTask({ status: 'waiting', waits: [peer, later] }), 'alpha', 'go', 'off')), refusal, "the lead's decision is no owner card");
   });
 
   it('needs a note, checked like any other', () => {
-    assert.equal(error(policy.decide(asking, 'alpha', undefined)), 'a Decided needs --note: what owner decided');
-    assert.equal(error(policy.decide(asking, 'alpha', '  ')), 'a Decided needs --note: what owner decided');
-    assert.notEqual(error(policy.decide(asking, 'alpha', credentialUrl())), 'allowed');
+    assert.equal(error(policy.decide(asking, 'alpha', undefined, 'off')), 'a Decided needs --note: what owner decided');
+    assert.equal(error(policy.decide(asking, 'alpha', '  ', 'off')), 'a Decided needs --note: what owner decided');
+    assert.notEqual(error(policy.decide(asking, 'alpha', credentialUrl(), 'off')), 'allowed');
+  });
+
+  it("refuses a session's Decided once a key was enrolled, so only the owner's signed answer clears the gate (T5908 G2)", () => {
+    const owners = "so no session records a Decided on T1: the owner answers its card with owner decide, signed by the owner's key";
+    assert.equal(error(policy.decide(asking, 'alpha', 'go', 'on')), `the owner proof is on, ${owners}`);
+    assert.equal(error(policy.decide(asking, 'lead', 'go', 'turned-down')), `the owner proof is turned down, ${owners}`);
+    assert.equal(error(policy.decideFrom(asking, 'go', 'on')), `the owner proof is on, ${owners}`, 'the lead above too');
+    assert.equal(error(policy.decideFrom(asking, 'go', 'off')), 'allowed');
   });
 });
 

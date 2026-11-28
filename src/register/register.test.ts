@@ -15,7 +15,10 @@ import { EVENT_VERSION, TASK_LINE_VERSION } from './events.ts';
 import type { SlicedGoal } from './focus.ts';
 import { layoutPaths } from './layout.ts';
 import { OWN_NUMBERS, type TaskNumbering } from './numbering.ts';
-import { RegisterPolicy, type AuditSubject, type Verdict } from './policy.ts';
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
+import { OWNER_PROOF_RECORD } from '../testing/owner-proof-record.ts';
+import { cardDigest } from './card-digest.ts';
+import { ownerDecideAct, RegisterPolicy, type AuditSubject, type OwnerAnswer, type Verdict } from './policy.ts';
 import { NO_GOAL_RECORDS, NOTHING_ELSEWHERE, Register, type ElsewhereReader, type GoalTagsReader, type SkillCatalog, type WriteResult } from './register.ts';
 import { readEvents } from './snapshot.ts';
 import { JsonlEventLog } from './store.ts';
@@ -113,6 +116,7 @@ function setup(
   const mutex = new InlineMutex();
   const skills = new FakeSkills(['web-deploy']);
   const register = new Register({
+    team: 'alpha',
     log: new JsonlEventLog(files, LOG),
     mutex,
     numbering,
@@ -762,6 +766,35 @@ describe('Register.audit and auditFrom: a hand step file pinned for a task (T231
   });
 });
 
+describe("Register.ownerDecide: the owner's proof is judged against this register's own team (T5910)", () => {
+  const optionOne: OwnerAnswer = { kind: 'option', option: 1 };
+  const read = cardDigest(TEST_OWNER_CARD);
+  const signedOn = (team: string): OwnerProofRecord => ({
+    ...OWNER_PROOF_RECORD,
+    challenge: { ...OWNER_PROOF_RECORD.challenge, team, act: ownerDecideAct(team, 'T1', optionOne), cardDigest: read },
+  });
+
+  async function asking() {
+    const kit = setup();
+    written(await kit.register.add('lead', { title: 'Ship it', description: 'what and why', owner: 'alpha', source: 'lead', priority: 1 }));
+    written(await kit.register.setStatus('alpha', 'T1', { status: 'waiting', waits: [{ kind: 'decision', who: 'owner' }], note: 'ship the export', card: TEST_OWNER_CARD }));
+    return kit;
+  }
+
+  it("keeps a proof signed on the register's team on the Decided", async () => {
+    const { register } = await asking();
+    const proof = signedOn('alpha');
+    assert.equal(written(await register.ownerDecide('T1', optionOne, read, proof)).task.decided?.ownerProof, proof);
+  });
+
+  it('refuses a proof signed on another team, its act naming that team, and writes nothing', async () => {
+    const { files, register } = await asking();
+    const before = files.get(LOG);
+    assert.equal(errorOf(await register.ownerDecide('T1', optionOne, read, signedOn('beta'))), "the owner's proof was signed on team beta, not alpha");
+    assert.equal(files.get(LOG), before);
+  });
+});
+
 describe('Register.defer and deferFrom: a Later (T1295)', () => {
   const OWNER = { kind: 'decision', who: 'owner' } as const;
   const LATER = { kind: 'time', at: '2030-01-09 09:00' } as const;
@@ -806,23 +839,23 @@ describe('Register.defer and deferFrom: a Later (T1295)', () => {
   it('writes a Decided as one update line that drops the wait on the owner and marks the task decided (T1366)', async () => {
     const { files, register } = await asking();
     const appended = files.get(LOG)?.length ?? 0;
-    const { task, event } = written(await register.decide('lead', 'T1', 'human decided: ship it'));
+    const { task, event } = written(await register.decide('lead', 'T1', 'human decided: ship it', 'off'));
     assert.deepEqual(readEvents((files.get(LOG) ?? '').slice(appended)).events, [event]);
     assert.deepEqual(event, { v: TASK_LINE_VERSION, type: 'update', id: 'T1', at: START, by: 'lead', changes: {}, note: 'human decided: ship it', waits: [], decided: true });
     assert.deepEqual([task.status, task.note, task.waits, task.decided], ['waiting', 'ship the export', [], { by: 'lead', at: START, note: 'human decided: ship it' }]);
     const before = files.get(LOG);
-    assert.equal(errorOf(await register.decide('lead', 'T1', 'again')), 'T1 waits on no decision or approval of owner: only such a card is decided');
-    assert.equal(errorOf(await register.decide('bravo', 'T1', 'go')), 'only the owner (alpha) or the lead (lead) records a decision on T1');
-    assert.match(errorOf(await register.decide('app/lead', 'T1', 'go')), /app.lead is not a session on this team/);
+    assert.equal(errorOf(await register.decide('lead', 'T1', 'again', 'off')), 'T1 waits on no decision or approval of owner: only such a card is decided');
+    assert.equal(errorOf(await register.decide('bravo', 'T1', 'go', 'off')), 'only the owner (alpha) or the lead (lead) records a decision on T1');
+    assert.match(errorOf(await register.decide('app/lead', 'T1', 'go', 'off')), /app.lead is not a session on this team/);
     assert.equal(files.get(LOG), before);
   });
 
   it('writes a Decided by the lead above, on no roster here and past the caller check, still judged on its content', async () => {
     const { files, register } = await asking();
     const before = files.get(LOG);
-    assert.equal(errorOf(await register.decideFrom('app/lead', 'T1', ' ')), 'a Decided needs --note: what owner decided');
+    assert.equal(errorOf(await register.decideFrom('app/lead', 'T1', ' ', 'off')), 'a Decided needs --note: what owner decided');
     assert.equal(files.get(LOG), before);
-    const { task, event } = written(await register.decideFrom('app/lead', 'T1', 'human decided: ship it'));
+    const { task, event } = written(await register.decideFrom('app/lead', 'T1', 'human decided: ship it', 'off'));
     assert.deepEqual(event, { v: TASK_LINE_VERSION, type: 'update', id: 'T1', at: START, by: 'app/lead', changes: {}, note: 'human decided: ship it', waits: [], decided: true });
     assert.equal(task.decided?.by, 'app/lead');
   });

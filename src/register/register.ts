@@ -6,6 +6,8 @@ import { EVENT_VERSION, TASK_LINE_VERSION, type ApprovalVerdict, type CreateEven
 import { foldEvents, taskNumber, type RegisterState, type Task } from './fold.ts';
 import { NO_SLICED_GOALS, type SlicedGoal } from './focus.ts';
 import { NO_GOAL_TAGS } from './goals.ts';
+import type { OwnerProofRecord } from '../owner-proof/record.ts';
+import type { ProofState } from '../owner-proof/state.ts';
 import { NO_SKILL, type AddInput, type AskInput, type AuditChange, type AuditSubject, type DecideChange, type DeferChange, type ImportChanges, type ImportInput, type OwnerAnswer, type OwnerChange, type RegisterPolicy, type SignedAnswer, type StatusContext, type StatusInput, type TriageChanges, type UpdateChange, type Verdict } from './policy.ts';
 import { ACTIVE_STATUSES, type ImportSource } from './model.ts';
 import type { TaskNumbering } from './numbering.ts';
@@ -53,6 +55,8 @@ export const NO_GOAL_RECORDS: GoalTagsReader = {
 };
 
 export interface RegisterDeps {
+  /** The team whose register this is: the team an owner's proof must have been signed on to go on a Decided here. */
+  readonly team: string;
   readonly log: EventLog;
   readonly mutex: Mutex;
   /** Where a new task's number comes from: the register alone, or every register of the team's tree. */
@@ -375,9 +379,12 @@ export class Register {
 
   /**
    * The owner's answer to a card from the pane (T4078): a Decided naming the option chosen, or yes or no, written as in
-   * ownerNote; `signed`, the owner's proof of it, kept only for this team's exact act (RegisterPolicy.ownerDecide).
+   * ownerNote; `proof`, the owner's signed proof of it, kept only for this team's exact act (RegisterPolicy.ownerDecide).
+   * The team it is judged against is this register's own, never one the caller names, so a proof signed on another
+   * team cannot be carried here by naming that team.
    */
-  ownerDecide(id: string, answer: OwnerAnswer, read?: string, signed?: SignedAnswer): Promise<Verdict<WriteResult>> {
+  ownerDecide(id: string, answer: OwnerAnswer, read?: string, proof?: OwnerProofRecord): Promise<Verdict<WriteResult>> {
+    const signed: SignedAnswer | undefined = proof === undefined ? undefined : { team: this.deps.team, record: proof };
     return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.ownerEvent(task, this.deps.policy.ownerDecide(task, answer, read, signed)))));
   }
 
@@ -445,15 +452,16 @@ export class Register {
 
   /**
    * `update <id> --decided`: the owner's answer to a card (T1366), an update that changes no field, drops the task's
-   * wait on the owner and marks it decided for its session to act on.
+   * wait on the owner and marks it decided for its session to act on; refused while `proof`, the team's owner proof
+   * state, is not off (RegisterPolicy.decideFrom).
    */
-  decide(caller: string, id: string, note: string | undefined): Promise<Verdict<WriteResult>> {
-    return this.commit(caller, (snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, caller, this.deps.policy.decide(task, caller, note)))));
+  decide(caller: string, id: string, note: string | undefined, proof: ProofState['kind']): Promise<Verdict<WriteResult>> {
+    return this.commit(caller, (snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, caller, this.deps.policy.decide(task, caller, note, proof)))));
   }
 
   /** A Decided from the lead above who asks the owner this team's decisions, `asker` being its `<team>/<id>`, as in deferFrom. */
-  decideFrom(asker: string, id: string, note: string | undefined): Promise<Verdict<WriteResult>> {
-    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, asker, this.deps.policy.decideFrom(task, note)))));
+  decideFrom(asker: string, id: string, note: string | undefined, proof: ProofState['kind']): Promise<Verdict<WriteResult>> {
+    return this.write((snapshot, elsewhere) => onTask(snapshot, elsewhere, id, (task) => single(this.noFieldEvent(task, asker, this.deps.policy.decideFrom(task, note, proof)))));
   }
 
   /**

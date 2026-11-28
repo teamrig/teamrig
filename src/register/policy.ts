@@ -29,6 +29,7 @@ import { isPeerWait, isReady, sameWait, sameWaits, unfinishedAfter, waitContext,
 import { wipHold } from './wip.ts';
 import { MIGRATE_COMMAND } from '../permissions/service-commands.ts';
 import type { OwnerProofRecord } from '../owner-proof/record.ts';
+import type { ProofState } from '../owner-proof/state.ts';
 import { roleHolding } from '../permissions/service-roles.ts';
 
 /** Team policy, applied on WRITE only: the parser accepts any well-formed history. */
@@ -1026,11 +1027,11 @@ export class RegisterPolicy {
    * A Decided (T1366): the owner answered a card, a task's wait on the owner's decision or approval, at the meeting or
    * in a decision batch. Its owner or a leader above it records the answer, as {@link decideFrom} judges it.
    */
-  decide(task: Task, caller: string, note: string | undefined): Verdict<DecideChange> {
+  decide(task: Task, caller: string, note: string | undefined, proof: ProofState['kind']): Verdict<DecideChange> {
     if (caller !== task.owner && caller !== this.tree.lead && !this.tree.leads(caller, task.owner)) {
       return refuse(`only the owner (${task.owner}) or ${this.approversText(task.owner)} records a decision on ${task.id}`);
     }
-    return this.decideFrom(task, note);
+    return this.decideFrom(task, note, proof);
   }
 
   /**
@@ -1038,9 +1039,20 @@ export class RegisterPolicy {
    * caller the tree decides): only a task waiting on the owner is decided, always with a note saying what the owner
    * decided. The owner's decision and approval waits go; a waiting task's time waits go with them, as a time beside
    * the owner's wait is a Later (deferFrom), while a verifying task keeps its time and task waits, which say when its
-   * proof runs. The task stays in its status, marked decided (fold.ts), for its session to act on.
+   * proof runs. The task stays in its status, marked decided (fold.ts), for its session to act on. Once a key was
+   * enrolled (`proof` on or turned down), a session's Decided would clear an owner gate with no proof, a second way
+   * past the owner's gesture, so only the owner's own answer ({@link ownerDecide}) records one then (T5908 G2).
    */
-  decideFrom(task: Task, note: string | undefined): Verdict<DecideChange> {
+  decideFrom(task: Task, note: string | undefined, proof: ProofState['kind']): Verdict<DecideChange> {
+    if (proof !== 'off') {
+      const state = proof === 'on' ? 'on' : 'turned down';
+      return refuse(`the owner proof is ${state}, so no session records a Decided on ${task.id}: the owner answers its card with owner decide, signed by the owner's key`);
+    }
+    return this.decidedChange(task, note);
+  }
+
+  /** The Decided itself, as {@link decideFrom} describes it, for a session's record and the owner's own answer alike. */
+  private decidedChange(task: Task, note: string | undefined): Verdict<DecideChange> {
     const { ownerSource } = this.config.register;
     if (!waitsOnOwner(task, ownerSource)) {
       return refuse(`${task.id} waits on no decision or approval of ${ownerSource}: only such a card is decided`);
@@ -1065,7 +1077,7 @@ export class RegisterPolicy {
   /**
    * The owner's answer to a card from the pane (T4078), written as the owner (register.ownerSource): a Decided whose
    * note says which option of the card the owner chose, or that the owner approved or declined, judged as
-   * {@link decideFrom} judges one. An option answers a wait on the owner's decision whose card has that option; yes
+   * {@link decidedChange} judges one, with or without the proof. An option answers a wait on the owner's decision whose card has that option; yes
    * or no answers a wait on the owner's approval. With `read`, the digest of the card the owner read (cardDigest), only
    * while the card still has it, so an option number never lands on a card edited in between. A security-related card
    * needs its current verdict, as on its move to the owner (securityGap), since it may have changed while it sat on
@@ -1084,7 +1096,7 @@ export class RegisterPolicy {
     if (!note.ok) {
       return note;
     }
-    const decided = this.decideFrom(task, note.value);
+    const decided = this.decidedChange(task, note.value);
     if (!decided.ok) {
       return decided;
     }
