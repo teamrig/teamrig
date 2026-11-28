@@ -2807,7 +2807,7 @@ answered.
 
 Every document carries:
 
-- `interface`: the interface version that wrote it (`1.10`). Ignore fields you do not know: a minor version adds some.
+- `interface`: the interface version that wrote it (`1.12`). Ignore fields you do not know: a minor version adds some.
 - `document`: its name.
 - `revision`: 16 characters that stay the same while the files the document is read from, what you asked and the
   teamrig version stay the same. Compare it with the one you hold to know whether to draw again; it has no other
