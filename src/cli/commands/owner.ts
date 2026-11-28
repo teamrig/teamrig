@@ -200,13 +200,16 @@ function answerOf(args: ParsedArgs): OwnerAnswer {
   return approve ? { kind: 'approve' } : { kind: 'decline' };
 }
 
-/** The digest `owner decide --read` was given (cardDigest), if any. */
+/**
+ * The digest `owner decide --read` was given (cardDigest), if any, in lower case: isCardDigest takes either case, and
+ * the proof signs and later compares this one form, so an upper-case digest would cost a gesture and then be refused.
+ */
 function readDigestOf(args: ParsedArgs): string | undefined {
   const read = args.flags.get('read');
   if (read !== undefined && !isCardDigest(read)) {
     throw new UsageError(`--read takes the digest of the card that was read, 64 hex characters (cardDigest in teamrig's read entry), not "${read}"`);
   }
-  return read;
+  return read?.toLowerCase();
 }
 
 /** `--until in-1h|tomorrow|monday|<time>`: when a card put off comes back, in the stored form of a deadline. */

@@ -261,6 +261,15 @@ describe('teamrig owner decide with the owner proof (T4758)', () => {
     assert.equal(event.ownerProof?.challenge.cardDigest, read);
   });
 
+  it('takes an upper-case --read as the same digest, signing it in lower case with one gesture (T5911)', async () => {
+    const world = ownerProofWorld();
+    const { kit, options } = await provedCards(world);
+    ok(await kit.run(['owner', 'decide', 'T1', '--option', '2', '--read', read.toUpperCase()], options));
+    assert.equal(world.prompts.length, 1);
+    const event = readEvents(kit.files.get(EVENTS_PATH) ?? '').events.at(-1);
+    assert.equal(event?.type === 'update' ? event.ownerProof?.challenge.cardDigest : 'not an update', read);
+  });
+
   it('refuses an answer without --read while the proof is on, asking no gesture and writing nothing', async () => {
     const world = ownerProofWorld();
     const { kit, options } = await provedCards(world);
