@@ -10,7 +10,8 @@ import { mainMovedPast } from './sync.ts';
  * on that main is its head rebased: this rebases it there, holds its diff equal to the one approved (catch-up.ts
  * `ownDiff`), and pushes it to the same branch and pull request with a lease on the approved sha, so a head
  * release-please wrote meanwhile is never overwritten. Its checks then run as any head's. Any other move is refused,
- * as release-please must write the notes it adds.
+ * as release-please must write the notes it adds. A head whose runs GitHub holds for approval is pushed again the same
+ * way, so the merge's own push starts them (`repushHeldRelease`, T5915).
  */
 
 /**
@@ -101,9 +102,45 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
  * pre-push gate proves the pushed tree there, as it is checked out (local-gate.ts `provePush`).
  */
 export function catchUpRelease(deps: Pick<CatchUpDeps, 'git' | 'log'>, request: ReleaseCatchUpRequest): CatchUp {
+  const { sha, tip, main } = request;
+  return pushRebased(deps, request, {
+    why: `${main} moved to ${tip.slice(0, 7)}, which the release pull request's head ${sha.slice(0, 7)} does not contain`,
+    pushed: 'only by commits its changelog hides: rebased it with the same diff',
+  });
+}
+
+export interface HeldReleaseRequest extends ReleaseCatchUpRequest {
+  /** The links of the head's `pull_request` runs GitHub holds for a maintainer's approval (github.ts `heldRunsOf`). */
+  readonly held: readonly string[];
+}
+
+/**
+ * Pushes the release head again, rebased onto main's tip, when GitHub holds its `pull_request` runs for a maintainer's
+ * approval (T5915). The release tool pushes its branch with the workflow's token, and GitHub holds the runs that push
+ * starts at `action_required`, so the required checks never report and the merge would wait on them for nothing. A
+ * push by the merge's own credentials starts runs nobody must approve. A head already on main's tip is rebased with
+ * `--force-rebase`, which writes its commit again with a new committer stamp, so the pushed sha is new and its runs
+ * start; the same move, diff and lease checks as a catch-up hold it to the approved release.
+ */
+export function repushHeldRelease(deps: Pick<CatchUpDeps, 'git' | 'log'>, request: HeldReleaseRequest): CatchUp {
+  const { sha, tip, main, held } = request;
+  return pushRebased(deps, request, {
+    why: `GitHub holds the release pull request's head ${sha.slice(0, 7)}'s runs for a maintainer's approval (${held.join(', ')})`,
+    pushed: `rebased it with the same diff onto ${main} ${tip.slice(0, 7)}`,
+  });
+}
+
+/** What a push of the rebased release head says: why it runs, and what its done line says it did. */
+interface PushWords {
+  readonly why: string;
+  readonly pushed: string;
+}
+
+/** The rebase and leased push catchUpRelease and repushHeldRelease share; `words` say why it runs. */
+function pushRebased(deps: Pick<CatchUpDeps, 'git' | 'log'>, request: ReleaseCatchUpRequest, words: PushWords): CatchUp {
   const { git, log } = deps;
   const { head, sha, tip, main } = request;
-  const past = `${main} moved to ${tip.slice(0, 7)}, which the release pull request's head ${sha.slice(0, 7)} does not contain`;
+  const past = words.why;
   const refuse = (why: string): CatchUp => ({ kind: 'refused', reason: `${past}, and ${why}` });
   const moves = releaseMoveRefusal(git, sha, tip);
   if (moves !== null) return refuse(`${moves}: the release tool rewrites that head, so once its new head's checks pass, ask approval of that head and merge again`);
@@ -116,13 +153,18 @@ export function catchUpRelease(deps: Pick<CatchUpDeps, 'git' | 'log'>, request: 
   const own = ownDiff(git, git('merge-base', sha, tip), sha);
   git('switch', '--quiet', '--detach', sha);
   try {
-    git('rebase', '--quiet', tip);
+    // --force-rebase writes the commit again even on a head already on tip, so a held head gets a new sha (T5915).
+    git('rebase', '--quiet', '--force-rebase', tip);
   } catch {
     git('rebase', '--abort');
     restore();
     return refuse('rebasing it onto that tip conflicts: the release tool must write it again');
   }
   const rebased = git('rev-parse', 'HEAD');
+  if (rebased === sha) {
+    restore();
+    return refuse('rebasing it wrote the same sha, so a push would start no runs: merge again in a second');
+  }
   if (ownDiff(git, tip, rebased) !== own) {
     restore();
     return refuse('its diff changes when rebased onto that tip: the release tool must write it again');
@@ -136,7 +178,7 @@ export function catchUpRelease(deps: Pick<CatchUpDeps, 'git' | 'log'>, request: 
     return { kind: 'moved', tip: moved.tip, reason: `the release pull request's head ${sha.slice(0, 7)} was caught up, and ${main} moved again to ${moved.tip.slice(0, 7)} while it was pushed: ${messageOf(error)}` };
   }
   restore();
-  log(`${past}, only by commits its changelog hides: rebased it with the same diff and pushed it to ${head} ${rebased.slice(0, 7)}; merging that`);
+  log(`${past}, ${words.pushed} and pushed it to ${head} ${rebased.slice(0, 7)}; merging that`);
   return { kind: 'rebased', head, sha: rebased };
 }
 
