@@ -25,7 +25,7 @@ function count(text: string, part: string): number {
 
 describe('stampFooter', () => {
   it('names teamrig with its link and version, then the hidden marker on its own line', () => {
-    assert.equal(stampFooter('0.422.0'), '<sub>Made with [teamrig](https://github.com/GeneralA6/teamrig) 0.422.0</sub>\n<!-- teamrig-stamp -->');
+    assert.equal(stampFooter('0.422.0'), '<sub>Made with [teamrig](https://github.com/teamrig/teamrig) 0.422.0</sub>\n<!-- teamrig-stamp -->');
     assert.ok(stampFooter().includes(` ${KIT_VERSION}</sub>`));
   });
 

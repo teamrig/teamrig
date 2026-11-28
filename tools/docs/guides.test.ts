@@ -57,7 +57,7 @@ describe('docs/guides', () => {
     const missing = GUIDES.flatMap(({ name }) => [
       ...(readme.includes(`](docs/guides/${name})`) ? [] : [`README.md -> ${name}`]),
       ...(HOW_IT_WORKS.includes(`](guides/${name})`) ? [] : [`docs/how-it-works.md -> ${name}`]),
-      ...(llms.includes(`](https://github.com/GeneralA6/teamrig/blob/main/docs/guides/${name})`) ? [] : [`llms.txt -> ${name}`]),
+      ...(llms.includes(`](https://github.com/teamrig/teamrig/blob/main/docs/guides/${name})`) ? [] : [`llms.txt -> ${name}`]),
     ]);
     assert.deepEqual(missing, []);
   });

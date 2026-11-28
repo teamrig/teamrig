@@ -715,7 +715,7 @@ function realWorld(prefix: string): { repo: TempRepo; worktree: string; modules:
 
 /**
  * The git CLI with room for each real git query here, far past its 10 s: under the full gate on a loaded host a query
- * took longer, read as unknown, and failed the spec (GeneralA6/teamrig#844). Steps with their own limit keep it.
+ * took longer, read as unknown, and failed the spec (teamrig/teamrig#844). Steps with their own limit keep it.
  */
 const REAL: WorktreePorts = { git: worktreeGit((dir, args, timeout = 120_000) => runGit(dir, args, timeout)), files: NODE_WORKTREE_FILES };
 

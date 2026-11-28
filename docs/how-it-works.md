@@ -364,7 +364,7 @@ every other adapter of its kind.
 A terminal or editor plugs in as a host program that speaks the terminal protocol, with no change to teamrig's code:
 its own guide is [Build your own terminal host](guides/build-a-terminal-host.md).
 
-A program that only shows the team's files, such as the [teamrig-pane](https://github.com/GeneralA6/teamrig-pane)
+A program that only shows the team's files, such as the [teamrig-pane](https://github.com/teamrig/teamrig-pane)
 task pane, reads them through `src/read/index.ts`: the same parse and replay every teamrig command uses, with no
 `node:` import anywhere behind it, so it runs where Node's built-in modules do not. It takes the text of the task
 list, an inbox, the inbox read marks, the config and a turn-log line, and gives back the tasks, the unread lines and the counts

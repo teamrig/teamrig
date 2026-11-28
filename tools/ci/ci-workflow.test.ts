@@ -251,7 +251,7 @@ describe('ci.yml', () => {
   });
 
   it("lists each test leg's name in the ship profile, as a check to wait on, re-run once and leave out by plan (T5030)", () => {
-    const profile = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const profile = profileFor(readProfiles(), 'teamrig/teamrig');
     const names = [...legsOf(jobs.get('test') ?? '', TEST_SYSTEMS)].flatMap(([os, parts]) => parts.map((part) => legName(os, part)));
     assert.deepEqual(profile.checks.filter((name) => name.startsWith('test (')), names);
     assert.deepEqual(profile.flaky, names, 'a test leg that fails under load is re-run once');

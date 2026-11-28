@@ -1637,7 +1637,7 @@ test("realMergeDeps reads a head's work by the shipped repos.json, whose release
     repo.git('add', '-A');
     repo.git('commit', '-q', '-m', 'a');
     repo.git('update-ref', 'refs/remotes/origin/main', repo.git('rev-parse', 'HEAD').trim());
-    repo.git('remote', 'add', 'origin', 'https://github.com/GeneralA6/teamrig.git');
+    repo.git('remote', 'add', 'origin', 'https://github.com/teamrig/teamrig.git');
     repo.write('b.txt', 'b\n');
     repo.git('add', '-A');
     repo.git('commit', '-q', '-m', 'core: b');

@@ -179,8 +179,8 @@ test("a main edit within git's 3 context lines of the change changes its own dif
 test('regenerationFor makes teamrig\'s version files and dist again only for exactly that list (T2988)', () => {
   assert.equal(regenerationFor(listedPaths(TEAMRIG_REGENERATION)), TEAMRIG_REGENERATION);
   assert.equal(regenerationFor([...listedPaths(TEAMRIG_REGENERATION)].reverse()), TEAMRIG_REGENERATION);
-  assert.equal(regenerationFor(profileFor(readProfiles(), 'GeneralA6/teamrig').regenerated), TEAMRIG_REGENERATION, 'the shipped repos.json');
-  assert.equal(regenerationFor(profileFor(readProfiles(), 'GeneralA6/teamrig-pane').regenerated), null, 'teamrig-pane raises its plugin.json by hand');
+  assert.equal(regenerationFor(profileFor(readProfiles(), 'teamrig/teamrig').regenerated), TEAMRIG_REGENERATION, 'the shipped repos.json');
+  assert.equal(regenerationFor(profileFor(readProfiles(), 'teamrig/teamrig-pane').regenerated), null, 'teamrig-pane raises its plugin.json by hand');
   assert.equal(regenerationFor([]), null);
   assert.equal(regenerationFor(['plugins/teamrig/dist/', 'src/core/version.ts']), null);
 });

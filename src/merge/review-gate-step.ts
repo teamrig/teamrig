@@ -84,7 +84,7 @@ const HITS_SHOWN = 5;
 /**
  * The task a branch is named after (`t828-gate` and `feat/T828-gate` are T828); undefined when it names none. Read as
  * the worktree owner check reads it (`branchTaskOf`), so the gates and the owner check tie a branch to the same task:
- * only a part of the name that starts with the id counts, so `fix-t12-thing` names none (GeneralA6/teamrig#1315).
+ * only a part of the name that starts with the id counts, so `fix-t12-thing` names none (teamrig/teamrig#1315).
  */
 export function taskOfBranch(branch: string): string | undefined {
   return branchTaskOf(branch);

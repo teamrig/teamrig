@@ -2,13 +2,13 @@ import { KIT_NAME } from './home.ts';
 import { KIT_VERSION } from './version.ts';
 
 /**
- * The "made with teamrig" stamp (GeneralA6/teamrig#1102): credit on what teamrig writes, and a way for a reader to
+ * The "made with teamrig" stamp (teamrig/teamrig#1102): credit on what teamrig writes, and a way for a reader to
  * find the project, as Claude Code's "Generated with" line does. This module is the one place its text is built;
  * every writer calls it rather than formatting its own, so the wording changes in one place.
  */
 
 /** The project's home, the link of the footer; a test holds it to the plugin manifest's `repository`. */
-export const STAMP_LINK = 'https://github.com/GeneralA6/teamrig';
+export const STAMP_LINK = 'https://github.com/teamrig/teamrig';
 
 /**
  * The hidden line that ends every footer. It is how a later write finds an earlier footer, whatever its version

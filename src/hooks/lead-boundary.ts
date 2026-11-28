@@ -40,7 +40,7 @@ function spelled(text: string, home: string): string {
 
 /**
  * A path with `.` and `..` resolved, so the hook places the folder the path reaches and not the ones it names on the
- * way (GeneralA6/teamrig#1278).
+ * way (teamrig/teamrig#1278).
  */
 function normalized(path: string, home: string): string {
   const text = spelled(path, home);
@@ -63,7 +63,7 @@ function resolvedWord(word: string): string {
 }
 
 /**
- * A command with each path word's `.` and `..` resolved and its spelling kept otherwise (GeneralA6/teamrig#1278): a
+ * A command with each path word's `.` and `..` resolved and its spelling kept otherwise (teamrig/teamrig#1278): a
  * `..` steps through its own word's path only, never through the word before it, and a URL is no path to step
  * through.
  */
@@ -262,7 +262,7 @@ export class TeamFolders {
     return undefined;
   }
 
-  /** The register gives the lead task `id`: a file named for it is the lead's own (GeneralA6/teamrig#751). */
+  /** The register gives the lead task `id`: a file named for it is the lead's own (teamrig/teamrig#751). */
   leadsTask(id: string): boolean {
     return this.taskOwners.get(id)?.toLowerCase() === this.lead;
   }
@@ -361,7 +361,7 @@ function callWorkOf(tool: ToolUse, paths: LeadPaths): CallWork | undefined {
   }
   const path = tool.path;
   // A path named for a task the lead holds (a backup it made for it, its worktree) is its own; the task rides on the
-  // work so the register is read for its owner (tasksSearched) before the lead is flagged (GeneralA6/teamrig#751).
+  // work so the register is read for its owner (tasksSearched) before the lead is flagged (teamrig/teamrig#751).
   const task = path === undefined ? undefined : paths.team.taskNamed(path);
   const mine = path !== undefined && (paths.own.owns(path) || (task !== undefined && paths.team.leadsTask(task)));
   const name = path === undefined ? 'shell' : basename(path.replace(/\\/g, '/'));
@@ -388,7 +388,7 @@ export function leadWorkOf(tool: ToolUse, paths: LeadPaths): LeadWork | undefine
 }
 
 /**
- * The tasks whose folders the calls search as research, or whose named files they flag (GeneralA6/teamrig#751), each
+ * The tasks whose folders the calls search as research, or whose named files they flag (teamrig/teamrig#751), each
  * once: the register is read for their owners only when there are some (T1467), since `paths` without an owner reads
  * the lead's own task's places as hand-off work too.
  */

@@ -195,7 +195,7 @@ describe('the lead boundary', () => {
     assert.deepEqual(TEAM.researchOf('~/.teamrig/teams/app/tasks/T01'), { name: 'tasks/t01', owner: undefined }, 'no register id');
   });
 
-  it("reads a file named for the lead's own task as its own, and one named for another session's task as hand-off work (GeneralA6/teamrig#751)", () => {
+  it("reads a file named for the lead's own task as its own, and one named for another session's task as hand-off work (teamrig/teamrig#751)", () => {
     const own = tool('Read', { path: 'D:/backups/t1-register/events.sql' }, 'b1');
     const other = tool('Read', { path: 'D:/backups/t2-register/events.sql' }, 'b2');
     assert.equal(leadWorkOf(own, PATHS), undefined, "a backup the lead made for its own task");
@@ -207,7 +207,7 @@ describe('the lead boundary', () => {
     assert.deepEqual(tasksSearched([own, other], unknown), ['T1', 'T2'], 'the register is read for their owners');
   });
 
-  it('resolves . and .. in a path before placing it (GeneralA6/teamrig#1278)', () => {
+  it('resolves . and .. in a path before placing it (teamrig/teamrig#1278)', () => {
     assert.equal(
       leadWorkOf(tool('Edit', { path: '~/.teamrig/teams/app/tasks/T1/../../../outside/a.ts' }), PATHS),
       'edit',
@@ -225,12 +225,12 @@ describe('the lead boundary', () => {
     );
   });
 
-  it('keeps a URL whole, since a scheme is no path to step through (GeneralA6/teamrig#1278)', () => {
+  it('keeps a URL whole, since a scheme is no path to step through (teamrig/teamrig#1278)', () => {
     assert.equal(commandNormalized('curl https://example.com/x', 'D:/team/lee'), 'curl https://example.com/x');
     assert.equal(commandNormalized('rg --glob=https://example.com//x', 'D:/team/lee'), 'rg --glob=https://example.com//x');
   });
 
-  it('keeps a .. in the word that spells it, not the word before (GeneralA6/teamrig#1278)', () => {
+  it('keeps a .. in the word that spells it, not the word before (teamrig/teamrig#1278)', () => {
     assert.equal(commandNormalized('cd ~/ops/lead && cat ../../x', 'D:/team/lee'), 'cd d:/team/lee/ops/lead && cat ../../x');
     assert.equal(OWN.named('cd ~/ops/lead && cat ../../x'), true, 'the command still names the lead own folder');
   });

@@ -140,7 +140,7 @@ describe('clearMerge', () => {
     assert.equal(
       reasonOf(await clearMerge(caller, value, 'cli-fix', HEAD, HEAD)),
       'branch cli-fix names no task: a merged branch is t<id>-<name>, after any type folder (fix/t<id>-<name>)',
-      'the refusal names both shapes taskOfBranch reads (GeneralA6/teamrig#1306)',
+      'the refusal names both shapes taskOfBranch reads (teamrig/teamrig#1306)',
     );
     assert.match(reasonOf(await clearMerge({ ...caller, session: undefined }, value, 't1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
     assert.match(reasonOf(await clearMerge({ ...caller, team: '' }, value, 't1-cli', HEAD, HEAD)), /TEAMRIG_SESSION and TEAMRIG_TEAM/);
@@ -215,7 +215,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("masks the shipped repos.json's release manifest, which a catch-up sets again, and needs it known to (T4298)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(
       shipWritesOf(regenerated, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_RELEASE_STAMPS).versionFiles.map((file) => file.path),
       [...TEAMRIG_VERSION_FILES, TEAMRIG_RELEASE_MANIFEST].map((file) => file.path),
@@ -224,7 +224,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("teamrigShipWritesOf, which the ship and the merge both read work by, knows the shipped repos.json's every path (T4298)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(teamrigShipWritesOf(regenerated), shipWritesOf(regenerated, TEAMRIG_SHIP_VERSION_FILES, TEAMRIG_RELEASE_STAMPS));
   });
 
@@ -238,7 +238,7 @@ describe('shipWritesOf: how an approval reads the paths a ship writes again (T29
   });
 
   it("keeps only the release stamps whose version file the profile names, so a repo with no src/core/version.ts has none (T5320)", () => {
-    const { regenerated } = profileFor(readProfiles(), 'GeneralA6/teamrig');
+    const { regenerated } = profileFor(readProfiles(), 'teamrig/teamrig');
     assert.deepEqual(teamrigShipWritesOf(regenerated).releaseStamps, TEAMRIG_RELEASE_STAMPS);
     assert.deepEqual(teamrigShipWritesOf(['dist/', 'plugins/teamrig-pane/.claude-plugin/plugin.json', TEAMRIG_RELEASE_MANIFEST.path]).releaseStamps, []);
   });

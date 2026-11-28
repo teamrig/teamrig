@@ -21,10 +21,10 @@ This page is the model and the daily loop. The detail lives beside it:
 | [requirements.md](requirements.md) | What teamrig needs: Claude Code, Node.js, git, terminals, operating systems |
 
 The task pane, a separate plugin that shows a session's tasks beside the conversation, has its own guide:
-[teamrig-pane guide](https://github.com/GeneralA6/teamrig-pane/blob/main/plugins/teamrig-pane/skills/teamrig-pane-guide/SKILL.md).
-The design notes are in [how it works](https://github.com/GeneralA6/teamrig/blob/main/docs/how-it-works.md).
+[teamrig-pane guide](https://github.com/teamrig/teamrig-pane/blob/main/plugins/teamrig-pane/skills/teamrig-pane-guide/SKILL.md).
+The design notes are in [how it works](https://github.com/teamrig/teamrig/blob/main/docs/how-it-works.md).
 To update an installed teamrig, follow
-[Updating the plugin](https://github.com/GeneralA6/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin).
+[Updating the plugin](https://github.com/teamrig/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin).
 
 ## The model
 

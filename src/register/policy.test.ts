@@ -77,7 +77,7 @@ describe('RegisterPolicy.add', () => {
     assert.equal(error(own.add({ ...INPUT, workClass: 'Roadmap' }, EMPTY)), 'class Roadmap is not one of focus.classes (Product, Upkeep)');
   });
 
-  it('matches a class in any case and keeps the configured spelling (GeneralA6/teamrig#845)', () => {
+  it('matches a class in any case and keeps the configured spelling (teamrig/teamrig#845)', () => {
     const verdict = policy.add({ ...INPUT, workClass: 'maintenance' }, EMPTY);
     assert.equal(verdict.ok ? verdict.value.workClass : error(verdict), 'Maintenance');
     assert.equal(error(policy.add({ ...INPUT, workClass: 'chores' }, EMPTY)), 'class chores is not one of focus.classes (Roadmap, Maintenance, Improvements)');
@@ -134,7 +134,7 @@ describe('RegisterPolicy.add', () => {
     assert.match(error(policy.update(TASK, 'alpha', { title: 'Add two health checks' }, `see ${token}`, EMPTY)), /^note looks like it holds a secret/);
   });
 
-  it("takes a description that names a key word and a colon in plain prose (GeneralA6/teamrig#852)", () => {
+  it("takes a description that names a key word and a colon in plain prose (teamrig/teamrig#852)", () => {
     const description = `Move the ${['api', '_key'].join('')}: to the vault, then rotate it`;
     assert.equal(error(policy.add({ ...INPUT, description }, EMPTY)), 'allowed');
     assert.match(error(policy.add({ ...INPUT, description: `${['pass', 'word'].join('')}: hunter2` }, EMPTY)), /^description looks like it holds a secret/);
@@ -741,7 +741,7 @@ describe('RegisterPolicy.setStatus to verifying', () => {
     assert.deepEqual(kept.ok ? kept.value.waits : undefined, passed.waits);
   });
 
-  it("clears a verifying task's waits on --waits none, unless its proof must name when it runs (GeneralA6/teamrig#682)", () => {
+  it("clears a verifying task's waits on --waits none, unless its proof must name when it runs (teamrig/teamrig#682)", () => {
     const held: Task = { ...VERIFYING, waits: [{ kind: 'approval', who: 'lead' }, ...RUN_TONIGHT] };
     const none = { status: 'verifying' as const, note: 'approval dropped', waits: [], followups: [] };
     const relaxed = new RegisterPolicy(testConfig({ register: { requireProofOnVerifying: false } }));
@@ -1094,7 +1094,7 @@ describe('RegisterPolicy.update', () => {
     assert.equal(policy.update(stale, 'alpha', { workClass: 'Roadmap' }, undefined, EMPTY).ok, true, 'one of the classes');
   });
 
-  it('matches a class in any case on update and keeps the configured spelling (GeneralA6/teamrig#845)', () => {
+  it('matches a class in any case on update and keeps the configured spelling (teamrig/teamrig#845)', () => {
     const verdict = policy.update(TASK, 'alpha', { workClass: 'ROADMAP' }, undefined, EMPTY);
     assert.deepEqual(verdict.ok ? verdict.value.changes : error(verdict), { workClass: 'Roadmap' });
   });
@@ -1258,7 +1258,7 @@ describe('RegisterPolicy.triage (T2086)', () => {
     assert.deepEqual(policy.triage(TASK, 'alpha', ROW, EMPTY), { ok: true, value: { changes: ROW, note: null } });
   });
 
-  it('matches a row class in any case and keeps the configured spelling (GeneralA6/teamrig#845)', () => {
+  it('matches a row class in any case and keeps the configured spelling (teamrig/teamrig#845)', () => {
     assert.deepEqual(policy.triage(TASK, 'alpha', { ...ROW, workClass: 'roadmap' }, EMPTY), { ok: true, value: { changes: ROW, note: null } });
   });
 

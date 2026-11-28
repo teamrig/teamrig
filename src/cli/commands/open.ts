@@ -211,7 +211,7 @@ export interface OpenRequest {
   readonly urgent?: readonly WakeAsk[];
   /** A new Claude Code session whatever the session's state, never a resumed one: `meet`'s small context (T1295). */
   readonly fresh?: boolean;
-  /** Whether `project` came from `--project`, which then wins over the folder a closed session ran in (GeneralA6/teamrig#819). */
+  /** Whether `project` came from `--project`, which then wins over the folder a closed session ran in (teamrig/teamrig#819). */
   readonly projectGiven?: boolean;
 }
 
@@ -309,7 +309,7 @@ interface ClosedReopen {
  * A closed session's reopen. It resumes in the folder its close recorded, which holds its transcript (T1408), or the
  * project for a close that recorded none; a recorded folder since removed (a worktree) opens it fresh in the project.
  * A `--project` (`given`) other than that folder opens it fresh there: a session once opened in the wrong folder
- * must be movable, and its transcript resumes only in the folder it ran in (GeneralA6/teamrig#819).
+ * must be movable, and its transcript resumes only in the folder it ran in (teamrig/teamrig#819).
  */
 async function reopenOf(runtime: CliRuntime, config: KitConfig, closed: CloseRecord, project: string, given: boolean): Promise<ClosedReopen> {
   const folder = closed.folder ?? project;
@@ -357,7 +357,7 @@ async function resumeOf(runtime: CliRuntime, paths: TeamPaths, config: KitConfig
       return reopen.hostSession;
     }
     if (asked) {
-      // A bare `open` would resume in the folder it ran in, so the fresh open named keeps a given --project (GeneralA6/teamrig#819).
+      // A bare `open` would resume in the folder it ran in, so the fresh open named keeps a given --project (teamrig/teamrig#819).
       const again = projectGiven ? `${KIT_NAME} open ${id} --project ${project}` : `${KIT_NAME} open ${id}`;
       throw new RefusedError(`not resumed: ${reopen.detail}; ${again} opens it fresh`);
     }

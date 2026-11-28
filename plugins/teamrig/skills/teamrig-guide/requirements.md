@@ -26,12 +26,12 @@ can say so; below 2.1.120 the version is unknown and nothing is said. Outside a 
 No Claude Code setting has to be turned on for teamrig in auto mode. In default mode, the allow rules
 `teamrig automode install` adds save a question before each command that touches only the team's files:
 [hooks.md](hooks.md#permissions). The GitHub CLI (`gh`) is needed only for `teamrig issue sync`, which reads GitHub
-issues: [GitHub sync](https://github.com/GeneralA6/teamrig/blob/main/docs/github-sync.md).
+issues: [GitHub sync](https://github.com/teamrig/teamrig/blob/main/docs/github-sync.md).
 
 ## Install and update
 
 ```sh
-claude plugin marketplace add GeneralA6/teamrig
+claude plugin marketplace add teamrig/teamrig
 claude plugin install teamrig@teamrig
 ```
 
@@ -49,7 +49,7 @@ there first keeps its place: on Windows the `Path` value of
 where they exist (`~/.zshrc` always on macOS). A terminal opened before that keeps its old PATH: open a new one. The
 start that adds the folder says so once, to you and the model; the step is logged in `~/.teamrig/restore/restore.log`. A team that sets [cliOnPath.enabled] false writes neither, so an
 entry you removed stays removed; `teamrig doctor` names the folder when it is not on your PATH (`cli-path`). Each change to the plugin raises its version; to take the newest one, follow
-[Updating the plugin](https://github.com/GeneralA6/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin).
+[Updating the plugin](https://github.com/teamrig/teamrig/blob/main/docs/how-it-works.md#updating-the-plugin).
 
 ## Terminals for `teamrig open`
 
@@ -97,4 +97,4 @@ uninstall` takes it back out. You can instead have your own status line write th
 ## The task pane (optional)
 
 The teamrig-pane plugin shows a session's tasks beside the conversation. It has its own requirements:
-[teamrig-pane guide](https://github.com/GeneralA6/teamrig-pane/blob/main/plugins/teamrig-pane/skills/teamrig-pane-guide/SKILL.md).
+[teamrig-pane guide](https://github.com/teamrig/teamrig-pane/blob/main/plugins/teamrig-pane/skills/teamrig-pane-guide/SKILL.md).

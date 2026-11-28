@@ -24,10 +24,10 @@ IDE, no desktop app, no server and no account: in our test, Windows Terminal wit
 Install teamrig, and teamrig-pane to keep your tasks beside the conversation:
 
 ```sh
-claude plugin marketplace add GeneralA6/teamrig
+claude plugin marketplace add teamrig/teamrig
 claude plugin install teamrig@teamrig
 
-claude plugin marketplace add GeneralA6/teamrig-pane
+claude plugin marketplace add teamrig/teamrig-pane
 claude plugin install teamrig-pane@teamrig-pane
 ```
 
@@ -39,7 +39,7 @@ Open Claude Code in your project (in a tab already open, type `/reload-plugins` 
 lead what you want done. No config files to write. The first session start lists the secret deny lines your Claude
 settings lack, for you to paste: teamrig never writes your permissions.
 
-- **Your tasks in view:** install [teamrig-pane](https://github.com/GeneralA6/teamrig-pane) and run `/teamrig-pane`
+- **Your tasks in view:** install [teamrig-pane](https://github.com/teamrig/teamrig-pane) and run `/teamrig-pane`
   in a tab. It shows the session's tasks beside the conversation and makes no model calls, so it costs no tokens.
 - **A command by hand:** type it after `/teamrig`, such as `/teamrig budget`. It runs on your machine and shows what
   it printed, also with no model call.

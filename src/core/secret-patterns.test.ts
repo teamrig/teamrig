@@ -150,7 +150,7 @@ const CASES: ReadonlyArray<{ readonly id: string; readonly hits: readonly string
       join('api', '_key', ': ', 'sk_live then retry'),
       join('pass', 'word', ': ', 'hunter\nuser: bob'),
       join('db_', 'secret', ':  letters\n\tport: 5432'),
-      // A passphrase of plain words is a value: only a few prose words start a sentence (GeneralA6/teamrig#852).
+      // A passphrase of plain words is a value: only a few prose words start a sentence (teamrig/teamrig#852).
       join('pass', 'word', ': ', 'correct horse battery staple'),
       join('api', '_key', ': ', 'purple monkey dishwasher'),
     ],
@@ -164,7 +164,7 @@ const CASES: ReadonlyArray<{ readonly id: string; readonly hits: readonly string
       join('.worktrees/t550-api-', 'key', ': removed'),
       join('moved config/DB_', 'PASSWORD', ': to the vault'),
 
-      // A colon then plain words is prose, not a value (GeneralA6/teamrig#852).
+      // A colon then plain words is prose, not a value (teamrig/teamrig#852).
       join('Move the api', '_key', ': to the vault, then rotate it'),
       join('the pass', 'word', ': none yet'),
       join('MYSQL_', 'PASSWD', ': see the runbook'),

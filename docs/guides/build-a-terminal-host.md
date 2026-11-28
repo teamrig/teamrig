@@ -177,6 +177,6 @@ fails with the request's name, so the kit can guide the work.
 ## A tool that shows the team instead
 
 A program that shows the team's tasks or reacts to them (a sidebar, a dashboard, a pane like
-[teamrig-pane](https://github.com/GeneralA6/teamrig-pane)) is not a host: it reads with `teamrig read <document>
+[teamrig-pane](https://github.com/teamrig/teamrig-pane)) is not a host: it reads with `teamrig read <document>
 --json` ([Every command](../commands.md)), the same documents and interface version a host's answers carry. Events
 and acts for such tools come next, in the order [the design](../design/public-interface.md#order-of-work) sets.

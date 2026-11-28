@@ -257,7 +257,7 @@ describe('statusInputOf', () => {
     assert.deepEqual(waitsOf('time:2030-01-09', TIMES), [{ kind: 'time', at: '2030-01-09' }]);
   });
 
-  it('reads none as no waits, to clear them (GeneralA6/teamrig#682)', () => {
+  it('reads none as no waits, to clear them (teamrig/teamrig#682)', () => {
     assert.deepEqual(waitsOf('none', TIMES), []);
     assert.deepEqual(waitsOf(' none ', TIMES), []);
     assert.throws(() => waitsOf('none,time:2030-01-09', TIMES), /--waits "none" is not one of/);
