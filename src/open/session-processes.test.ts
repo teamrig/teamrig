@@ -5,13 +5,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StartedProcess, SweepHost } from '../delivery/tree-kill.ts';
-import type { ProgramRequest, ProgramResult } from '../core/program-runner.ts';
+import { nodeProgramRunner, type ProgramRequest, type ProgramResult } from '../core/program-runner.ts';
 import { FakeSessionProcesses } from '../testing/fake-session-processes.ts';
 import { FakeSweepHost } from '../testing/fake-sweep-host.ts';
 import { FakeWindowsPowerShell } from '../testing/fake-windows-powershell.ts';
 import {
   EXEC_STUB_MS,
   lineageOf,
+  LOOKUP_TIMEOUT_MS,
   nodeSessionProcesses,
   parsePosixChildren,
   parsePosixListing,
@@ -397,9 +398,16 @@ describe('nodeSessionProcesses with a scripted system', () => {
   });
 });
 
+/**
+ * How long these specs give one real lookup. A hook's lookup stops at LOOKUP_TIMEOUT_MS, as its host kills a slow hook
+ * anyway; a spec checks what the system lists, not how fast. While the gate runs every suite at once a PowerShell start
+ * took past those 20 s and the lookup read as nothing, twice (T5783: 20.6 s and 25.4 s).
+ */
+const SPEC_LOOKUP_MS = 3 * LOOKUP_TIMEOUT_MS;
+
 /** Real processes, each a short node script. */
 describe('nodeSessionProcesses on this machine', () => {
-  const processes = nodeSessionProcesses();
+  const processes = nodeSessionProcesses({ run: nodeProgramRunner(SPEC_LOOKUP_MS) });
 
   it('knows its parent, and describes this process', async () => {
     assert.equal(processes.parentPid, process.ppid);
