@@ -221,6 +221,7 @@ describe('ci.yml', () => {
       { does: `node tools/ci/boundaries-cli.ts ${BASE_FLAG}`, when: CODE_CHECK },
       { does: `node tools/ci/provider-words-cli.ts ${BASE_FLAG}`, when: CODE_CHECK },
       { does: 'node tools/docs/doc-check-cli.ts', when: `\${{ ${NOT_SHARD} }}` },
+      { does: 'node tools/release/stamp-cli.ts --check', when: `\${{ ${NOT_SHARD} }}` },
     ]);
   });
 

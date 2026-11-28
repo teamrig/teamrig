@@ -252,6 +252,9 @@ jobs:
       # docs/design/ is Markdown a reader follows.
       - run: node tools/docs/doc-check-cli.ts
         if: ${{ !contains(matrix.part, '/') }}
+      # A release stamp still to set (since next, a migration's firstRelease) sits only where the release sets it.
+      - run: node tools/release/stamp-cli.ts --check
+        if: ${{ !contains(matrix.part, '/') }}
 
   summary:
     name: every check passed
