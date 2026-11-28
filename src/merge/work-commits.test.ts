@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { type WorkCommit, workChanges } from './work-commits.ts';
+import { landedRun, type WorkCommit, workChanges } from './work-commits.ts';
 
 describe('workChanges: how a head differs from the approved one, commit for commit (T2913)', () => {
   const commit = (sha: string, subject: string, patch: string, merge = false): WorkCommit => ({ sha, subject, merge, patch });
@@ -23,5 +23,28 @@ describe('workChanges: how a head differs from the approved one, commit for comm
     const merge = commit('mmmmmmmmmm', 'merge main', '', true);
     assert.deepEqual(workChanges([A], [A, merge]), ['merge commit mmmmmmmmm "merge main": rebase it away']);
     assert.deepEqual(workChanges([A, merge], [A]), ['merge commit mmmmmmmmm "merge main": rebase it away']);
+  });
+});
+
+describe("landedRun: a stacked branch's leading commits main holds under other shas (T3343)", () => {
+  const commit = (sha: string, patch: string, merge = false): WorkCommit => ({ sha, subject: sha, merge, patch });
+  const P = commit('p', 'pp');
+  const Q = commit('q', 'pq');
+  const C = commit('c', 'pc');
+  const main = [commit('p2', 'pp'), commit('q2', 'pq'), commit('m', 'pm')];
+
+  it('is the leading run of commits whose patch main carries', () => {
+    assert.deepEqual(landedRun([P, Q, C], main), [P, Q]);
+    assert.deepEqual(landedRun([C, P], main), [], 'a landed commit after the own work stays the branch\'s own');
+    assert.deepEqual(landedRun([P, commit('x', '', true), Q, C], main), [P], 'a merge commit ends the run');
+  });
+
+  it('is empty when every commit is landed, as no work of the branch is left to approve', () => {
+    assert.deepEqual(landedRun([P, Q], main), []);
+    assert.deepEqual(landedRun([], main), []);
+  });
+
+  it("never matches a main merge commit's empty patch", () => {
+    assert.deepEqual(landedRun([commit('e', ''), C], [commit('mm', '', true)]), []);
   });
 });

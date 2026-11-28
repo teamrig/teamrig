@@ -623,6 +623,8 @@ interface RunFixture {
   task?: PullTask | null;
   /** The labels the repo has (T4796); none unless given, so no label is added. */
   repoLabels?: readonly string[];
+  /** Each head's leading work commits main holds under other shas (work-commits.ts `landedRun`); none unless given. */
+  landed?: Readonly<Record<string, readonly WorkCommit[]>>;
 }
 
 /** The queue's merge commit of the pull request, which main on origin holds once it landed. */
@@ -855,6 +857,7 @@ function runFixture(fixture: RunFixture = {}): {
     releaseCatchUp,
     releaseRepush,
     workOf: (rev) => (fixture.work ?? { [SHA]: APPROVED_WORK, [REBASED]: REBASED_WORK })[rev] ?? [],
+    landedOf: (rev) => fixture.landed?.[rev] ?? [],
     share: {
       away: () => {
         shareCalls.push(`away after ${catchUp.mock.callCount()} catch-up(s)`);
@@ -1080,6 +1083,22 @@ test('a merge run again on the head its catch-up pushed, after GitHub failed the
   assert.equal(out[0], `merge of ${NEXT} rebased0c: carries the approved abc1234de's 2 work commit(s), patch for patch, approved by lead`);
   assert.equal(out.at(-1), 'MERGED #3 into main, now at main999');
   assert.equal(catchUp.mock.callCount(), 0);
+});
+
+test("a head stacked on a parent that merged first, caught up past the parent's work, clears on the approval of the stacked head (T3343)", async () => {
+  const parent: WorkCommit = { sha: 'ffff6666ffff', subject: 'core: parent', merge: false, patch: 'patch-p' };
+  const { deps, out, err, clearMerge } = runFixture({ mainTip: MOVED, work: { [SHA]: [parent, ...APPROVED_WORK], [REBASED]: REBASED_WORK }, landed: { [SHA]: [parent] } });
+  assert.equal(await runMerge({ ...ARGS, head: NEXT, approved: 'abc1234' }, deps), 0, err.join('\n'));
+  assert.deepEqual(clearMerge.mock.calls.map(call => call.arguments), [[NEXT, SHA, 'abc1234']]);
+  assert.equal(out[0], `merge of ${NEXT} rebased0c: carries the approved abc1234de's 2 work commit(s), patch for patch, approved by lead`);
+});
+
+test("a stacked head's parent commit that main does not hold still counts, so a head without it is refused (T3343)", async () => {
+  const parent: WorkCommit = { sha: 'ffff6666ffff', subject: 'core: parent', merge: false, patch: 'patch-p' };
+  const { deps, err, clearMerge } = runFixture({ mainTip: MOVED, work: { [SHA]: [parent, ...APPROVED_WORK], [REBASED]: REBASED_WORK } });
+  assert.equal(await runMerge({ ...ARGS, head: NEXT, approved: 'abc1234' }, deps), 1);
+  assert.deepEqual(err, ['REFUSED the head rebased0c is not the approved abc1234de rebased: dropped ffff6666f "core: parent". Ask for approval of the new head, naming it']);
+  assert.equal(clearMerge.mock.callCount(), 0);
 });
 
 test('a commit added on top of the head a catch-up pushed is refused before any clearance or GitHub call (#1450)', async () => {
