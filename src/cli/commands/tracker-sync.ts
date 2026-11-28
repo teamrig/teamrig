@@ -311,26 +311,52 @@ export function scopeLines(target: string, outside: number, capped: CappedPlan):
 /**
  * Why the tracker's own trust rule (sync/trust-rule.ts) let in or kept out each open issue of a place, one TRUST line
  * per verdict and block, by ref only (the text is the issue's, never shown here), at most SHOWN_LEFT_OUT refs a line,
- * then how many more; lines that let in come first. A verdict whose fact could not be read says so. An issue judged by
- * its authors' ties (no `ruled`) gets no line: the LEFT OUT line tells those.
+ * then how many more; lines that let in come first. A verdict whose fact could not be read says so: the issues that
+ * failed for one block share a line, its distinct reasons each shown once with a count, at most SHOWN_FAILED_REASONS,
+ * so a site whose reads fail in many ways still prints one line a block. An issue judged by its authors' ties (no
+ * `ruled`) gets no line: the LEFT OUT line tells those.
  */
 export function trustLines(target: string, issues: readonly HostIssue[], refOf: (issue: HostIssue) => string | undefined): string[] {
-  const groups = new Map<string, string[]>();
+  const groups = new Map<string, { refs: string[]; failed: Map<string, number> }>();
   for (const issue of issues) {
     const ref = refOf(issue);
     if (issue.state !== 'open' || issue.ruled === undefined || ref === undefined) {
       continue;
     }
     const { ruled } = issue;
-    const key = ruled.trusted ? `let in, ${plainLine(ruled.why)}` : `kept out, ${plainLine(ruled.why)}${ruled.failed === undefined ? '' : ` (${plainLine(ruled.failed)})`}`;
-    groups.set(key, [...(groups.get(key) ?? []), ref]);
+    const key = `${ruled.trusted ? 'let in' : 'kept out'}, ${plainLine(ruled.why)}`;
+    const group = groups.get(key) ?? { refs: [], failed: new Map<string, number>() };
+    group.refs.push(ref);
+    if (!ruled.trusted && ruled.failed !== undefined) {
+      const reason = plainLine(ruled.failed);
+      group.failed.set(reason, (group.failed.get(reason) ?? 0) + 1);
+    }
+    groups.set(key, group);
   }
   return [...groups]
     .sort(([a], [b]) => Number(b.startsWith('let in')) - Number(a.startsWith('let in')))
-    .map(([why, refs]) => {
+    .map(([why, { refs, failed }]) => {
       const more = refs.length - SHOWN_LEFT_OUT;
-      return `TRUST ${target}: ${refs.length} ${why}: ${refs.slice(0, SHOWN_LEFT_OUT).join(' ')}${more > 0 ? ` and ${more} more` : ''}`;
+      return `TRUST ${target}: ${refs.length} ${why}${failedReasons(failed)}: ${refs.slice(0, SHOWN_LEFT_OUT).join(' ')}${more > 0 ? ` and ${more} more` : ''}`;
     });
+}
+
+/** How many distinct failure reasons one TRUST line shows before it counts the rest. */
+export const SHOWN_FAILED_REASONS = 3;
+
+/**
+ * The distinct reasons a block's reads failed, as ` (reason)` for one issue, else each reason with its count, the most
+ * frequent first, at most SHOWN_FAILED_REASONS, then how many more; empty when no read failed.
+ */
+function failedReasons(failed: ReadonlyMap<string, number>): string {
+  if (failed.size === 0) {
+    return '';
+  }
+  const ranked = [...failed].sort(([a, x], [b, y]) => y - x || a.localeCompare(b));
+  const single = ranked.length === 1 && ranked[0]?.[1] === 1;
+  const shown = ranked.slice(0, SHOWN_FAILED_REASONS).map(([reason, count]) => (single ? reason : `${reason} x${count}`));
+  const more = ranked.length - SHOWN_FAILED_REASONS;
+  return ` (${shown.join('; ')}${more > 0 ? `; and ${more} more` : ''})`;
 }
 
 /**

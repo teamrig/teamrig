@@ -196,11 +196,13 @@ says so and no default applies, so only a rule the team wrote lets anyone in. `c
 An anonymous or hidden reporter is always kept out, and so is an issue whose edit history could not be read whole: a
 fact the import cannot read never lets an issue in. A wrong `trust` key is refused and reads as nothing inside, never
 as the wider default. The preview says what the rule did with one `TRUST` line per reason and a `REPORTER` line for
-each reporter it let in, marking `NEW` those no `--yes` took yet:
+each reporter it let in, marking `NEW` those no `--yes` took yet. The issues whose history could not be read share
+one line, each distinct failure shown once with its count, at most three:
 
 ```text
 TRUST acme/eng: 2 let in, the reporter matches inside (accountType atlassian): jira:ENG-1 jira:ENG-2
 TRUST acme/eng: 1 kept out, the reporter matches never (accounts): jira:ENG-3
+TRUST acme/eng: 3 kept out, its edit history could not be read whole (Jira answered 500 x2; a page past the cap x1): jira:ENG-4 jira:ENG-5 jira:ENG-6
 REPORTER acme/eng: 5b10a2844c20165700ede21g (Dana Reporter) let in 2 issue(s), NEW since the last --yes
 ```
 

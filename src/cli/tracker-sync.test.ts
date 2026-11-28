@@ -18,7 +18,7 @@ import { FakeClock } from '../testing/fake-clock.ts';
 import { InlineMutex } from '../testing/inline-mutex.ts';
 import { MemoryFiles } from '../testing/memory-files.ts';
 import { teamPaths } from '../core/home.ts';
-import { fileReporterStore, fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
+import { fileReporterStore, fileScopeStore, heldAt, importConnectors, scopeLines, scopeRequestOf, SHOWN_FAILED_REASONS, syncTrackers, trustLines, type TrackerSyncRun } from './commands/tracker-sync.ts';
 import type { ConnectorLoader } from './issue-hosts.ts';
 import { connectorState } from './connector-state.ts';
 import { loadConnector } from '../composition/loader.ts';
@@ -50,8 +50,8 @@ const NEW_REPORTER = 'REPORTER acme/eng: a-reporter (Dana Reporter) let in 2 iss
 const TWO_TO_ADD = ['REPO acme/eng: 2 to add, 0 to change, 0 unchanged', 'ADD new jira:ENG-1 p2 lead: "Issue ENG-1"', 'ADD new jira:ENG-2 p2 lead: "Issue ENG-2"', LET_IN, NEW_REPORTER];
 const PREVIEW = 'PREVIEW nothing was written; teamrig issue sync --yes writes the above as jira';
 /** The TRUST line, standing for the LEFT OUT one, of an issue the rule kept out because Jira gave no edit history. */
-function unreadHistory(key: string): string {
-  return `TRUST acme/eng: 1 kept out, its edit history could not be read whole (the edit history read failed: Jira gave no answer: no answer is queued for GET https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100): jira:${key}`;
+function unreadReason(key: string): string {
+  return `the edit history read failed: Jira gave no answer: no answer is queued for GET https://acme.atlassian.net/rest/api/3/issue/${key}/changelog?startAt=0&maxResults=100`;
 }
 
 /** A Jira issue `key`, open, as the search answers it, assigned to `assignee` (the signed-in account by default). */
@@ -260,7 +260,13 @@ describe('teamrig issue sync of another tracker', () => {
     const http = signedIn().answers('POST', SEARCH, 200, JSON.stringify({ issues: [jiraIssue('ENG-1'), jiraIssue('ENG-2')] }));
     const result = await new CliHarness(JIRA_TEAM).run(['issue', 'sync'], { http, credentials: savedToken() });
     assert.equal(result.code, EXIT.ok, [...result.stdout, ...result.stderr].join('\n'));
-    assert.deepEqual(result.stdout, [ACCESS, 'REPO acme/eng: 0 to add, 0 to change, 0 unchanged', unreadHistory('ENG-1'), unreadHistory('ENG-2'), PREVIEW, NO_GITHUB]);
+    assert.deepEqual(result.stdout, [
+      ACCESS,
+      'REPO acme/eng: 0 to add, 0 to change, 0 unchanged',
+      `TRUST acme/eng: 2 kept out, its edit history could not be read whole (${unreadReason('ENG-1')} x1; ${unreadReason('ENG-2')} x1): jira:ENG-1 jira:ENG-2`,
+      PREVIEW,
+      NO_GITHUB,
+    ]);
   });
 
   it('reads nothing of Jira when the machine turns it off', async () => {
@@ -421,6 +427,26 @@ describe('trustLines (T5012)', () => {
     assert.deepEqual(trustLines('acme/eng', [testHostIssue(4, { repo: ENG, ruled: failed })], refOf), [
       'TRUST acme/eng: 1 kept out, its edit history could not be read whole (Jira answered 500): jira:ENG-4',
     ]);
+  });
+
+  it('puts the issues whose reads failed for one block on one line, each distinct reason once with its count (T5302)', () => {
+    const why = 'its edit history could not be read whole';
+    const issues = [
+      testHostIssue(4, { repo: ENG, ruled: { trusted: false, why, failed: 'a page past the cap' } }),
+      testHostIssue(5, { repo: ENG, ruled: { trusted: false, why, failed: 'Jira answered 500' } }),
+      testHostIssue(6, { repo: ENG, ruled: { trusted: false, why, failed: 'Jira answered 500' } }),
+    ];
+    assert.deepEqual(trustLines('acme/eng', issues, refOf), [
+      `TRUST acme/eng: 3 kept out, ${why} (Jira answered 500 x2; a page past the cap x1): jira:ENG-4 jira:ENG-5 jira:ENG-6`,
+    ]);
+  });
+
+  it(`shows at most ${SHOWN_FAILED_REASONS} failure reasons, then how many more`, () => {
+    const why = 'its edit history could not be read whole';
+    const issues = Array.from({ length: SHOWN_FAILED_REASONS + 2 }, (_, at) => testHostIssue(at + 1, { repo: ENG, ruled: { trusted: false, why, failed: `Jira answered 50${at}` } }));
+    const [line, ...rest] = trustLines('acme/eng', issues, refOf);
+    assert.deepEqual(rest, []);
+    assert.match(line ?? '', /\(Jira answered 500 x1; Jira answered 501 x1; Jira answered 502 x1; and 2 more\):/);
   });
 
   it('skips closed issues, issues with no ref and issues judged by their authors ties', () => {
