@@ -480,8 +480,9 @@ export function issueSpeakers(repo: string, tasks: Iterable<Task>): { readonly s
  * The tasks holding each issue number of `repo`: in `speakers`, the one task speaking for it, else the first one the
  * import added; in `shared`, the ids of an issue two or more active team tasks hold, which none speaks for.
  * A team task speaks when it is the only active one holding the issue: a finished task often keeps its ref, so a done
- * task beside its open follow-up never freezes the issue. With none active, the newest finished one speaks (the last
- * word on the issue), so old finished tasks never name an issue SHARED on every push.
+ * task beside its open follow-up never freezes the issue. With none active, an active imported task speaks, so a done
+ * review task never takes a pull request from the task still working it (T5906); else the newest finished team task
+ * speaks (the last word on the issue), so old finished tasks never name an issue SHARED on every push.
  */
 function holders(repo: string, tasks: Iterable<Task>): { speakers: Map<number, Task>; shared: Map<number, string[]> } {
   const team = new Map<number, Task[]>();
@@ -500,9 +501,13 @@ function holders(repo: string, tasks: Iterable<Task>): { speakers: Map<number, T
   const speakers = new Map(imported);
   const shared = new Map<number, string[]>();
   for (const [number, held] of team) {
-    speakers.delete(number);
     const byId = [...held].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
     const active = byId.filter((task) => ACTIVE_STATUSES.includes(task.status));
+    const fromImport = imported.get(number);
+    if (active.length === 0 && fromImport !== undefined && ACTIVE_STATUSES.includes(fromImport.status)) {
+      continue;
+    }
+    speakers.delete(number);
     const speaker = active.length === 0 ? byId.at(-1) : active.length === 1 ? active[0] : undefined;
     if (speaker !== undefined) {
       speakers.set(number, speaker);

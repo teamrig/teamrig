@@ -1483,7 +1483,7 @@ Flags:
   sends the push itself when `github.statusPush` is on. When a team task
   and an imported one hold the same issue, the team task speaks for it; when two or more active team tasks hold it,
   the push writes nothing to it and a `SHARED` line names them. One active team task speaks over finished ones; with
-  none active, the newest finished one speaks.
+  none active, an active imported task speaks, else the newest finished team task.
   After the labels it sets each held open issue's fields and type, one way from the task list, on a repository
   that has them ([github.fields]): the priority as an option of the `Priority` field (`P<n>`, else Urgent, High,
   Medium or Low by level, [github.fields.priorityOptions]), the day the task
