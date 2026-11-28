@@ -17,6 +17,14 @@ describe('httpWebhook', () => {
   let server: Server;
   let base = '';
 
+  /**
+   * The paths heard among `paths` only. The server records a request when its body read ends, so under load a
+   * sibling spec's `/slow` post, which its client gave up on at 50 ms, can land after the next spec clears `heard`.
+   */
+  function heardAt(...paths: readonly string[]): string[] {
+    return heard.map((request) => request.path).filter((path) => paths.includes(path));
+  }
+
   before(async () => {
     server = createServer((request, response) => {
       void readBody(request).then((text) => {
@@ -63,7 +71,7 @@ describe('httpWebhook', () => {
   it('follows no redirect: the post fails and the address it points to hears nothing', async () => {
     heard.length = 0;
     assert.match((await httpWebhook().post(`${base}/moved`, 'RAN R1')) ?? '', /^the webhook could not be reached/);
-    assert.deepEqual(heard.map((request) => request.path), ['/moved']);
+    assert.deepEqual(heardAt('/moved', '/elsewhere'), ['/moved']);
   });
 
   it('never quotes the URL when it is not one or cannot be reached', async () => {
@@ -81,7 +89,7 @@ describe('httpWebhook', () => {
     for (const url of [`${base}/hook-token`, 'ftp://chat.example/hook-token', 'not a url/hook-token']) {
       assert.equal(await chatWebhook().post(url, 'RAN R1'), 'the webhook address is not an https URL', url);
     }
-    assert.deepEqual(heard, []);
+    assert.deepEqual(heardAt('/hook-token'), []);
   });
 });
 
