@@ -552,7 +552,7 @@ export async function wakeAnswerOf(runtime: CliRuntime, scope: WakeTarget, cwd: 
     return waitAnswer(scope, null);
   }
   const restarts = new RefreshStore(runtime.files, kit.paths);
-  const rearm: RearmScope = { team: kit.paths.team, id, tab, refresh: { enabled: config.refresh.enabled, autoRestart: autoRestartOf(config, id) }, cwd };
+  const rearm: RearmScope = { team: kit.paths.team, id, tab, refresh: { enabled: config.refresh.enabled, autoRestart: autoRestartOf(config, id) }, cwd, paths: kit.paths, ids: scope.roster.ids };
   if (await restartHoldsWake(runtime, restarts, rearm)) {
     return waitAnswer(scope, runtime.clock.now() + RESTART_RECHECK_MS);
   }

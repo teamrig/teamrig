@@ -303,9 +303,10 @@ so it never loses work to a compaction.
    tab when `teamrig open` started it, else in a new tab. While a background shell runs (a background command or
    a monitor), it ends nothing and your inbox says to type `/clear`, which keeps the shell. With no work you can
    start, the title reads `[shop] web: waits for work`: the restart waits for a wake that brings you some, and that
-   work wakes the fresh session.
-   If the user sends a prompt first, the restart is cancelled and you keep this context. When the restart
-   cannot start, the title reads `[shop] web: type /clear`: ask the user to type `/clear`.
+   work wakes the fresh session. When the turn ended in a forked worker the host runs outside the tab (a fork of this
+   conversation), the worker arms no restart and gives no notice: the tab's own Stop hook does, for the tab. If the
+   user sends a prompt first, the restart is cancelled and you keep this context. When the restart cannot start, the
+   title reads `[shop] web: type /clear`: ask the user to type `/clear`.
 5. After the fresh start, the session-start context says `You were refreshed after T2; read your handover first:
    <path>`, and that a file needs a Read-tool read before an Edit or Write (Claude Code keeps no read from before
    the refresh, and a read by `cat` does not count), then the scheduled jobs (to make again when CronList does not show them), the

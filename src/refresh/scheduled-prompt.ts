@@ -24,8 +24,8 @@ export interface PromptSeen {
 
 /**
  * Whether the prompt was fired by a scheduled job: its transcript ends with a fire (`endsWithScheduledFire`) and the
- * prompt is a live job's (`carryOf` through `reader` at `now`, counting the jobs a /clear left in the process: `inherited`). Claude
- * Code also writes a fire entry when it folds fires that ran nothing, so a transcript can end with one while a person
+ * prompt is a live job's (`carryOf` through `reader` at `now`, counting the jobs a /clear left in the process: `inherited`). The
+ * host also writes a fire entry when it folds fires that ran nothing, so a transcript can end with one while a person
  * types; their prompt matches no live job and stays typed. False when the transcript is unknown or missing; a read that
  * fails throws, and the hook takes the prompt as typed.
  */

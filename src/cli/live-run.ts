@@ -76,10 +76,18 @@ export async function isLiveRunOwn(runtime: HandOffRuntime, live: LiveRun, pid: 
   if (live.tree.has(pid)) {
     return true;
   }
-  if (sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.hostSession)) {
+  if (await isForkedWorker(runtime, live, pid)) {
     return true;
   }
   return isHandedOffJob(runtime, live, pid);
+}
+
+/**
+ * Whether the host process `pid` is a forked worker of the live run's conversation (`--fork-session --resume
+ * <the record's session or transcript>`), read from its command line alone: no transcript, no process lineage.
+ */
+export async function isForkedWorker(runtime: HandOffRuntime, live: LiveRun, pid: number): Promise<boolean> {
+  return sessionCommandLinesOf(runtime).isForkOf((await runtime.sessionProcesses.describe(pid))?.commandLine, live.record.hostSession);
 }
 
 /**

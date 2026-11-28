@@ -340,6 +340,8 @@ function systemOf(base: Base, entry: JsonRecord): TranscriptEntry | undefined {
     return { ...base, kind: 'compact' };
   }
   if (subtype === 'scheduled_task_fire') {
+    // Written before the UserPromptSubmit hook runs and before the fired prompt's entry: seen so on Claude Code 2.1.325
+    // to 2.1.330 (150 fires, each followed by its hook's output, then the prompt).
     return { ...base, kind: 'scheduled-fire' };
   }
   return subtype !== undefined && TURN_END_MARKS.has(subtype) ? { ...base, kind: 'turn-end' } : modelSwitchOf(base, entry);

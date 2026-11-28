@@ -216,7 +216,7 @@ export interface TitleEntry extends EntryBase {
 /**
  * A scheduled job's fire: the host writes it as the job's prompt starts a turn, before the UserPromptSubmit hook runs
  * and before that prompt's own entry, so a transcript that ends with one is read while the fired prompt is under way.
- * Seen so on Claude Code 2.1.325 to 2.1.330 (150 fires, each followed by its hook's output, then the prompt). A host
+ * Seen so on 150 fires, each followed by its hook's output, then the prompt (the host adapter names the versions). A host
  * that wrote the prompt first would make every scheduled prompt read as typed, so it would cancel the restart again.
  * The host also writes one when it folds fires that ran nothing (`firedBySchedule` guards that case); none of those
  * 150 fires was one.

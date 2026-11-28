@@ -7,6 +7,8 @@ import { MeetingSchedule } from '../meeting/schedule.ts';
 import { HOOKS_ONLY_HOST, hostTelling, NO_SESSION_HOST } from '../testing/host.ts';
 import type { RestartRequest } from '../refresh/state.ts';
 import { RefreshStore } from '../refresh/store.ts';
+import { SessionRecordStore } from '../sessions/record.ts';
+import { FakeHostMemory } from '../testing/fake-host-memory.ts';
 import { CONTEXT_MAX_CHARS } from '../rules/pack.ts';
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { FakeProcesses } from '../testing/fake-processes.ts';
@@ -337,6 +339,47 @@ describe('runCli: context refresh', () => {
     };
     assert.deepEqual(await waiterOf(hostTelling({ projectDir: started }), APP), [started, ['--project', started]]);
     assert.deepEqual(await waiterOf(NO_SESSION_HOST, started), [APP, ['--project', APP]], 'a host telling no start folder');
+  });
+
+  it("arms nothing when the Stop hook runs in a forked worker outside the tab, and the tab's own Stop hook arms the tab's request", async () => {
+    const kit = new CliHarness(AUTO_RESTART_TEAM);
+    const store = await handoverWritten(kit);
+    await openTask(kit, 'alpha');
+    // The tab's Claude Code (6800) is alpha's live run; Claude Code ran a turn in a forked worker (6900) outside its tree.
+    const tab = 6800;
+    const worker = 6900;
+    const FORK_SESSION = '0123abcd-0000-4000-8000-00000000000f';
+    await new SessionRecordStore(kit.files, { sessions: join(TEAM_HOME, 'state', 'sessions') }).write('alpha', {
+      claudePid: tab,
+      hostSession: CLAUDE_SESSION,
+      transcript: TRANSCRIPT,
+      at: '2030-01-08T09:00:00.000Z',
+    });
+    const memory = new FakeHostMemory().lists([
+      { pid: tab, parent: 1, bytes: 1, startedMs: Date.parse('2030-01-08T08:59:00Z') },
+      { pid: worker, parent: 1, bytes: 1, startedMs: Date.parse('2030-01-08T09:59:00Z') },
+    ]);
+    const forked = new FakeSessionProcesses(7000)
+      .add({ pid: 7000, parentPid: worker, name: 'bash.exe', commandLine: 'bash -c "node main.js hook stop"' })
+      .add({ pid: worker, parentPid: 1, name: 'claude.exe', commandLine: `claude --session-id ${FORK_SESSION} --fork-session --resume ${TRANSCRIPT}` })
+      .add({ pid: tab, parentPid: 1, name: 'claude.exe', commandLine: 'claude' });
+    const forkTranscript = join(USER_HOME, '.claude', 'projects', 'app', `${FORK_SESSION}.jsonl`);
+    await kit.files.write(forkTranscript, transcript(300_000));
+    const processes = new FakeProcesses();
+    const env = { TEAMRIG_SESSION: 'alpha', CLAUDE_PROJECT_DIR: APP, TEAMRIG_LAUNCHED: 'alpha' };
+    const fork = await kit.run(['hook', 'stop'], { env, stdin: stopPayload(true, { session_id: FORK_SESSION, transcript_path: forkTranscript }), sessionProcesses: forked, processes, memory });
+    assert.deepEqual(fork, SILENT, 'the worker gives no notice, which would keep the tab from giving its own');
+    assert.deepEqual([await store.restart('alpha'), await store.parked('alpha')], [undefined, undefined], 'no request carries the worker');
+    assert.deepEqual(processes.hidden.filter((run) => run.args[1] === 'restart'), []);
+
+    // The tab's own Stop hook, under its Claude Code, arms the request for the tab: its pid, session and transcript.
+    const inTab = new FakeSessionProcesses(7100)
+      .add({ pid: 7100, parentPid: tab, name: 'bash.exe', commandLine: 'bash -c "node main.js hook stop"' })
+      .add({ pid: tab, parentPid: 1, name: 'claude.exe', commandLine: 'claude' });
+    stopJson(await kit.run(['hook', 'stop'], { env, stdin: stopPayload(true), sessionProcesses: inTab, processes, memory }));
+    const request = await store.restart('alpha');
+    assert.ok(request, 'the tab arms its own restart');
+    assert.deepEqual(request, { phase: 'pending', at: request.at, pid: tab, hostSession: CLAUDE_SESSION, transcript: TRANSCRIPT, cwd: APP, supervised: true, effort: null });
   });
 
   it('records the level the turn ran at in the restart request, so the restart can tell a changed launch level (T2444)', async () => {
