@@ -11,26 +11,11 @@ import {
   type WatchFolder,
 } from './folder-signals.ts';
 
-/** The longest a change may take to be told of; the system's watches tell within milliseconds. */
-const TOLD_WITHIN_MS = 4_000;
-
-/** Resolves at the next change `watchOf`'s watch tells of; rejects past {@link TOLD_WITHIN_MS}. */
-function nextChange(): { readonly onChange: () => void; readonly told: Promise<void> } {
-  let tell: () => void = () => undefined;
-  const told = new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`no change told within ${TOLD_WITHIN_MS} ms`)), TOLD_WITHIN_MS);
-    tell = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-  });
-  return { onChange: () => tell(), told };
-}
-
 /**
  * Whether `changes()` passes `seen`, making a change with `act` before each 100 ms wait on a timer while it does not.
- * A system watch may drop one change (macOS FSEvents coalesces a `mkdir -p`), so one bare await of a change could
- * leave the loop with nothing to wait on; the timer holds it, and the next try is told.
+ * A system watch may drop one change (macOS FSEvents coalesces a `mkdir -p`, and may miss a write made just as its
+ * stream starts), so one bare await of a change could leave the loop with nothing to wait on; the timer holds it, and
+ * the next try is told.
  */
 async function toldPast(
   seen: number,
@@ -67,12 +52,14 @@ describe('nodeFolderSignals', () => {
   it('tells of a file written in a watched folder', async () => {
     const folder = join(root, 'inbox');
     await mkdir(folder);
-    const { onChange, told } = nextChange();
-    const watch = nodeFolderSignals.watch([folder, folder], onChange);
+    let changes = 0;
+    const watch = nodeFolderSignals.watch([folder, folder], () => {
+      changes += 1;
+    });
     open.push(watch);
     assert.deepEqual(watch.unwatched(), []);
-    await writeFile(join(folder, 'alpha.md'), 'one\n');
-    await told;
+    const written = await toldPast(0, () => changes, (tries) => writeFile(join(folder, 'alpha.md'), `${tries}\n`));
+    assert.ok(written, 'no change told of a file written in the watched folder');
   });
 
   it('watches a folder not there yet through the folder above it, and the folder itself once it is made', async () => {
