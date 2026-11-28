@@ -235,6 +235,15 @@ export const CONNECTOR_LIMITS = {
   idPattern: /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/,
 } as const;
 
+/** Bounds on `terminalHosts`: how many outside hosts a team pins, a host's name, its sha256 and its arguments. */
+export const TERMINAL_HOST_LIMITS = {
+  maxHosts: 8,
+  namePattern: /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/,
+  sha256Pattern: /^[0-9a-f]{64}$/,
+  maxArgs: 32,
+  argMaxLength: 1024,
+} as const;
+
 /** Bounds on the fields of one review gate entry (`pushGuard.reviewPaths`). */
 export const REVIEW_PATH_LIMITS = {
   globMaxLength: 200,

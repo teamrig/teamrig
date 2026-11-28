@@ -613,6 +613,14 @@ export function isUiMode(value: unknown): value is UiMode {
   return UI_MODES.some((mode) => mode === value);
 }
 
+/**
+ * One outside terminal host the owner pinned (docs/design/public-interface.md, Terminals as a protocol): a program of
+ * one file by its own sha256, or a host of more files by its manifest's.
+ */
+export type TerminalHostPin =
+  | { readonly path: string; readonly sha256: string; readonly args: readonly string[] }
+  | { readonly manifest: string; readonly sha256: string; readonly args: readonly string[] };
+
 /** The dedicated UI `teamrig ui` starts (T4761). */
 export interface UiConfig {
   readonly mode: UiMode;
@@ -1981,6 +1989,8 @@ export interface KitConfig {
    * it (plugin-api/connector.ts), so the core never learns a connector's settings.
    */
   readonly connectors: Readonly<Record<string, JsonRecord>>;
+  /** The outside terminal hosts the owner pinned, by name. */
+  readonly terminalHosts: Readonly<Record<string, TerminalHostPin>>;
   readonly alerts: AlertsConfig;
   readonly decisions: DecisionsConfig;
   /**

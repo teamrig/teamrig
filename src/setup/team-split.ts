@@ -58,8 +58,8 @@ type ChildTake = 'split' | 'own' | 'copy';
  * a choice here: `github` is the parent's alone, as each repository's issues go to one team, and so is `connectors`,
  * as a connector's section names the tracker one team's tasks go to, and `sync` with them, as it scopes those imports;
  * `paths` are a team's own folders, and `serviceRoles` stay the parent's, as a grant is the owner's for one team and a
- * moved session holds none until the owner grants it there; every setting is copied, so the child runs as its parent
- * did.
+ * moved session holds none until the owner grants it there, and so do `terminalHosts`, as the owner pins a program for
+ * one team; every setting is copied, so the child runs as its parent did.
  */
 const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKED>, ChildTake>> = {
   configVersion: 'split',
@@ -73,6 +73,7 @@ const CHILD_TAKES: Readonly<Record<Exclude<keyof KitConfig, keyof typeof REWORKE
   connectors: 'own',
   sync: 'own',
   serviceRoles: 'own',
+  terminalHosts: 'own',
   paths: 'own',
   timeZone: 'copy',
   ownerGates: 'copy',

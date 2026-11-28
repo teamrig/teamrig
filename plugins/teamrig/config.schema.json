@@ -1781,6 +1781,41 @@
       "additionalProperties": { "type": "object" },
       "default": {}
     },
+    "terminalHosts": {
+      "description": "The outside terminal hosts teamrig may run, by name: each a program that speaks the terminal protocol, pinned by its sha256. Give one of path, for a host of one file, and manifest, for a host of more files. teamrig runs no host whose files no longer match its pin, and check says so (HOST-CHANGED). Only the owner changes it, since it says which programs teamrig runs.",
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sha256"],
+        "properties": {
+          "path": {
+            "description": "The absolute path of a host of one file.",
+            "type": "string",
+            "pattern": "^(?:[A-Za-z]:)?[\\\\/][^\\r\\n]*$"
+          },
+          "manifest": {
+            "description": "The absolute path of the teamrig-host.json of a host of more files, which lists each file by its sha256.",
+            "type": "string",
+            "pattern": "^(?:[A-Za-z]:)?[\\\\/][^\\r\\n]*$"
+          },
+          "sha256": {
+            "description": "The sha256 of the pinned file's bytes: the program's with path, the manifest's with manifest, whose one hash then pins every file it lists.",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "args": {
+            "description": "The arguments the host runs with, each as written, with no shell.",
+            "type": "array",
+            "maxItems": 32,
+            "items": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "default": []
+          }
+        }
+      },
+      "default": {}
+    },
     "alerts": {
       "description": "The alerting rule the core rules state, and where a page to the owner goes.",
       "type": "object",

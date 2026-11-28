@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
-import { KIT_MODE_ENV, ProgramOutputCapError, type Env, type ProgramRunner, type ProgramResult } from '../../../plugin-api/index.ts';
+import { KIT_MODE_ENV, ProgramOutputCapError, type Env, type ProgramRequest, type ProgramRunner, type ProgramResult } from '../../../plugin-api/index.ts';
 import type { Transport, TransportAnswer } from './client.ts';
 import { ANSWER_CAP_BYTES, failed, quoted } from './wire.ts';
 
@@ -43,6 +43,10 @@ export const SHORT_ENV_NAMES: readonly string[] = ['PATH', 'SystemRoot', 'TEMP',
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
+export function isSha256(text: string): boolean {
+  return SHA256.test(text);
+}
+
 export function sha256Of(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -52,7 +56,7 @@ export function pinProblem(pin: ProgramPin): string | undefined {
   if (!isAbsolute(pin.path)) {
     return `the terminal program's pinned path ${quoted(pin.path)} is not an absolute path`;
   }
-  return SHA256.test(pin.sha256) ? undefined : `the terminal program's pin holds no sha256 (64 lowercase hex characters)`;
+  return isSha256(pin.sha256) ? undefined : `the terminal program's pin holds no sha256 (64 lowercase hex characters)`;
 }
 
 /**
@@ -68,13 +72,13 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function answerOf(path: string, result: ProgramResult): TransportAnswer {
+function answerOf(label: string, result: ProgramResult): TransportAnswer {
   if (result.end.kind === 'signal') {
-    return failed(`the terminal program ${path} was stopped by ${result.end.signal}, as when it outlives its time limit`);
+    return failed(`${label} was stopped by ${result.end.signal}, as when it outlives its time limit`);
   }
   if (result.end.code !== 0) {
     const [first = ''] = result.stderr.trim().split(/\r?\n/);
-    return failed(`the terminal program ${path} exited with code ${result.end.code}${first === '' ? '' : `: ${quoted(first)}`}`);
+    return failed(`${label} exited with code ${result.end.code}${first === '' ? '' : `: ${quoted(first)}`}`);
   }
   return { kind: 'answered', output: result.stdout };
 }
@@ -86,6 +90,18 @@ export interface PinnedRunOptions {
    * of that name: only the conformance kit's run sets it, never a run that opens or wakes a real pane.
    */
   readonly kitWorld?: string;
+}
+
+/** Runs a checked program once and reads how it ended; `label` names it in a failure. Never a throw. */
+export async function runPinned(label: string, run: ProgramRunner, request: ProgramRequest): Promise<TransportAnswer> {
+  try {
+    return answerOf(label, await run(request));
+  } catch (error) {
+    if (error instanceof ProgramOutputCapError) {
+      return failed(`${label} printed more than ${PROTOCOL_OUTPUT_CAP_BYTES} bytes, so teamrig stopped it and used none of it`);
+    }
+    return failed(`${label} would not start: ${quoted(messageOf(error))}`);
+  }
 }
 
 /**
@@ -115,13 +131,6 @@ export function pinnedTransport(pin: ProgramPin, ports: PinnedRunPorts, options:
     } catch (error) {
       return failed(`teamrig could not read or copy the terminal program ${pin.path}: ${quoted(messageOf(error))}`);
     }
-    try {
-      return answerOf(pin.path, await ports.run({ program, args: pin.args, env, input: line }));
-    } catch (error) {
-      if (error instanceof ProgramOutputCapError) {
-        return failed(`the terminal program ${pin.path} printed more than ${PROTOCOL_OUTPUT_CAP_BYTES} bytes, so teamrig stopped it and used none of it`);
-      }
-      return failed(`the terminal program ${pin.path} would not start: ${quoted(messageOf(error))}`);
-    }
+    return runPinned(`the terminal program ${pin.path}`, ports.run, { program, args: pin.args, env, input: line });
   };
 }

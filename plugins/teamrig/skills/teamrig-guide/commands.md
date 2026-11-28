@@ -794,7 +794,9 @@ has reached 3 MiB, near the 4 MiB the task pane reads of a file at once, past wh
 that file's remedy (compact for the register and the hooks' aged logs, none yet for an inbox); it is raised once a
 file, OVER-CAP: the team has more tabs open than [open.headroom.maxTabs], naming the sessions `teamrig close` closes
 first, lowest-ranked work first; it is raised once while the team stands over its cap, and a team with no cap never
-shows it, GH-LATE: a GitHub issue or pull request has waited past its answer target
+shows it, HOST-CHANGED: the files of an outside terminal host pinned in [terminalHosts] no longer match its pin, naming
+the pinned and the found version and hash and the changed files where they are known; teamrig does not run that host, so
+it gets no requests and its sessions no wakes until the owner pins it again; it is raised once a host, GH-LATE: a GitHub issue or pull request has waited past its answer target
 (security 4 h, bug, pull request or a comment on an issue a task tracks 24 h, else 72 h) for an answer of ours, by the clocks the
 last writing `teamrig issue sync` kept; one GH-LATE names every late thread, with their count and the oldest three,
 and is raised once, and again only when a newer wait goes late, and from

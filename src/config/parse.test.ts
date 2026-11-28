@@ -4,12 +4,13 @@ import { generateKeyPairSync } from 'node:crypto';
 import { DEFAULT_BUDGET, DEFAULT_BURST, DEFAULT_RUSH, DEFAULT_CHECK_TIMEOUT_SECONDS, DEFAULT_FREEZES, DEFAULT_COMMITS, DEFAULT_FOCUS, DEFAULT_ISSUE_FIELDS, DEFAULT_QUEUE, DEFAULT_HIRING, DEFAULT_IDLE, DEFAULT_OPEN, DEFAULT_PERMISSIONS, DEFAULT_REFRESH, DEFAULT_REGISTER, DEFAULT_STATUS_LINE, DEFAULT_WAKE, DEFAULT_STABLE_PERIODS, DEFAULT_MEETING, DEFAULT_BRANCHES, DEFAULT_SYNC, DEFAULT_OWNER } from './defaults.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ADAPTER_ID } from '../plugin-api/index.ts';
-import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
+import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH, TERMINAL_HOST_LIMITS } from './limits.ts';
 import { parseConfig } from './parse.ts';
 import { CONFIG_VERSION, type AccountBudget, type BudgetConfig } from './types.ts';
 import type { ConfigIssue } from './reader.ts';
 import { shortRsaPublicKey } from '../testing/short-rsa-key.ts';
 
+const HOST_SHA = 'a'.repeat(64);
 const ROSTER = { sessions: ['alpha', 'bravo'], roles: { lead: 'alpha' } };
 
 function paths(issues: readonly ConfigIssue[]): string[] {
@@ -916,6 +917,48 @@ describe('parseConfig', () => {
     assert.deepEqual(parsed.config.connectors, {});
     const atLimit = Object.fromEntries(Object.entries(many).slice(0, CONNECTOR_LIMITS.maxConnectors));
     assert.equal(Object.keys(parseConfig({ ...ROSTER, connectors: atLimit }).config.connectors).length, CONNECTOR_LIMITS.maxConnectors);
+  });
+
+  it('pins no terminal host by default', () => {
+    assert.deepEqual(parseConfig(ROSTER).config.terminalHosts, {});
+  });
+
+  it('reads a terminal host of one file and one of a manifest, with no arguments unless given', () => {
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      terminalHosts: { term: { path: '/opt/term/host', sha256: HOST_SHA }, 'other-term': { manifest: 'C:/term/teamrig-host.json', sha256: HOST_SHA, args: ['--serve'] } },
+    });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.terminalHosts, {
+      term: { path: '/opt/term/host', sha256: HOST_SHA, args: [] },
+      'other-term': { manifest: 'C:/term/teamrig-host.json', sha256: HOST_SHA, args: ['--serve'] },
+    });
+  });
+
+  it('leaves out a terminal host on half a pin, as an issue', () => {
+    const wrong: readonly (readonly [string, unknown, string])[] = [
+      ['Term', { path: '/opt/host', sha256: HOST_SHA }, 'terminalHosts.Term'],
+      ['term', 'host', 'terminalHosts.term'],
+      ['term', { sha256: HOST_SHA }, 'terminalHosts.term'],
+      ['term', { path: '/opt/host', manifest: '/opt/teamrig-host.json', sha256: HOST_SHA }, 'terminalHosts.term'],
+      ['term', { path: 'host', sha256: HOST_SHA }, 'terminalHosts.term.path'],
+      ['term', { manifest: 'teamrig-host.json', sha256: HOST_SHA }, 'terminalHosts.term.manifest'],
+      ['term', { path: '/opt/host' }, 'terminalHosts.term.sha256'],
+      ['term', { path: '/opt/host', sha256: HOST_SHA.toUpperCase() }, 'terminalHosts.term.sha256'],
+      ['term', { path: '/opt/host', sha256: HOST_SHA, args: 'x' }, 'terminalHosts.term.args'],
+    ];
+    for (const [name, pin, at] of wrong) {
+      const parsed = parseConfig({ ...ROSTER, terminalHosts: { [name]: pin } });
+      assert.deepEqual([paths(parsed.issues), parsed.config.terminalHosts], [[at], {}], JSON.stringify(pin));
+    }
+  });
+
+  it('refuses more terminal hosts than the limit', () => {
+    const many = Object.fromEntries(Array.from({ length: TERMINAL_HOST_LIMITS.maxHosts + 1 }, (_, index) => [`t${index}`, { path: '/opt/host', sha256: HOST_SHA }]));
+    const parsed = parseConfig({ ...ROSTER, terminalHosts: many });
+    assert.deepEqual([paths(parsed.issues), parsed.config.terminalHosts], [['terminalHosts'], {}]);
+    const atLimit = Object.fromEntries(Object.entries(many).slice(0, TERMINAL_HOST_LIMITS.maxHosts));
+    assert.equal(Object.keys(parseConfig({ ...ROSTER, terminalHosts: atLimit }).config.terminalHosts).length, TERMINAL_HOST_LIMITS.maxHosts);
   });
 
   it('takes as a connector id exactly what an adapter may declare as its id', () => {

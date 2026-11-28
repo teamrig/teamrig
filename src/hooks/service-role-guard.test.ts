@@ -282,6 +282,7 @@ describe('config guard: every owner-gated key (T3083)', () => {
     github: { owners: { octo: 'alpha' }, everyMinutes: 30 },
     delivery: { repos: { web: { merge: { command: ['gh', 'pr', 'merge'] } } }, checkTimeoutSeconds: 60 },
     pushGuard: { pushToProtected: 'ask' },
+    terminalHosts: { term: { path: '/opt/term/host', sha256: 'a'.repeat(64), previous: { path: '/opt/term/host', sha256: 'e'.repeat(64) } } },
   };
   type Base = typeof base;
   const text = JSON.stringify(base, null, 2);
@@ -299,6 +300,9 @@ describe('config guard: every owner-gated key (T3083)', () => {
       ['delivery.passEnv', changed((c) => ({ ...c, delivery: { ...c.delivery, passEnv: ['GH_TOKEN'] } }))],
       ['pushGuard', changed((c) => ({ ...c, pushGuard: { pushToProtected: 'allow' } }))],
       ['alerts', changed((c) => ({ ...c, alerts: { webhookEnv: 'X' } }))],
+      ['terminalHosts', changed((c) => ({ ...c, terminalHosts: { ...c.terminalHosts, term: { ...c.terminalHosts.term, sha256: 'b'.repeat(64) } } }))],
+      ['terminalHosts', changed((c) => ({ ...c, terminalHosts: { term: { ...c.terminalHosts.term, previous: { path: '/opt/other', sha256: 'c'.repeat(64) } } } }))],
+      ['terminalHosts', changed((c) => ({ ...c, terminalHosts: { ...c.terminalHosts, mine: { path: '/tmp/mine', sha256: 'd'.repeat(64) } } }))],
       ['ui.path', changed((c) => ({ ...c, ui: { path: 'C:/work/ui/main.js' } }))],
     ];
     for (const [key, content] of changes) {

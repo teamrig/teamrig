@@ -263,8 +263,19 @@ terminal a **host**: a program teamrig runs, speaking a small protocol, in the m
   own channel. This works the same on Windows, macOS and Linux.
 - **Capabilities.** The host's first answer lists the requests it serves and the interface versions it speaks; teamrig
   uses nothing else. A host without `deliver` gets no wakes; the session sees new work at its next prompt.
-- **Pinned by the owner.** The team's config names a host by its path and its sha256, and only the owner sets them.
-  teamrig refuses to run a host whose file no longer matches, and says so.
+- **Pinned by the owner.** The team's config (`terminalHosts`) names a host by its path and its sha256, and only the
+  owner sets them. teamrig refuses to run a host whose file no longer matches, and says so.
+- **A host of more files is pinned by its manifest.** `teamrig-host.json` beside the files lists each one by its path
+  and sha256, with the host's name, version, runtime (`native` or `node`) and entry; the pin is the sha256 of the
+  manifest's bytes, which then covers every file. Each run hashes the manifest's bytes and parses those same bytes,
+  reads each file once, and runs a private copy of exactly the bytes it checked. A copy is used again only when it
+  holds every listed file and no other, checked on each run. At most 256 files and 64 MiB together; a link below the
+  manifest's folder is refused.
+- **Nothing looked up at run time.** A native entry is a program the system loads itself (on Windows an `.exe`), never
+  a script or a `.cmd`, `.bat` or `.ps1` launcher. A `node` host runs under the node teamrig runs on, with no flag and
+  no `NODE_OPTIONS`; its code is `.mjs` or `.cjs`, so no `package.json` decides how node reads it. Its bundle must be
+  **closed**: one bundled file, or every import relative and listed. Node still looks for a bare import's
+  `node_modules` in the folders above the copy; running it under node's permission model is a later slice.
 - **After a host update.** A check flag names the host and its new sha256. One command, which only the owner runs,
   shows the old and the new hash and pins the new one. Until then the host gets no wakes; its sessions see new work at
   their next prompt. A host is pinned by hash only, not by a release signing key ([Left for later](#left-for-later)).

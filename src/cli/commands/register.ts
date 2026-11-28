@@ -61,6 +61,8 @@ import { checkLines, listLines, SHORT_TITLE_CHARS, waitingOnLines, type CheckRep
 import { fiveHourWarnings } from '../five-hour-check.ts';
 import { transcriptsIfKept } from '../host.ts';
 import { idleFactsOf } from '../idle-check.ts';
+import { hostPinChanges, terminalHostsDir } from '../../composition/terminal-host-pins.ts';
+import { hostChangedWarnings } from '../host-changed-check.ts';
 import { logSizeWarnings } from '../log-size-check.ts';
 import { githubLateWarnings } from '../github-late-check.ts';
 import { githubState } from '../github-state.ts';
@@ -1192,7 +1194,8 @@ function withOverLimit(sections: readonly CheckSection[], fit: WeekFit): CheckSe
  * starts the restore and starts a file gone or something install did not set up (RESTORE-DEAD, RESTORE-STRAY,
  * src/cli/launcher-record-check.ts), each of its tabs held on a permission prompt (PROMPT-HELD,
  * src/cli/prompt-hold-page.ts), each file of its state or inbox near the task pane's read limit (LOG-SIZE,
- * src/cli/log-size-check.ts), a team past its tab cap (OVER-CAP, src/cli/tab-cap-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
+ * src/cli/log-size-check.ts), each outside terminal host whose files no longer match its pin (HOST-CHANGED,
+ * src/cli/host-changed-check.ts), a team past its tab cap (OVER-CAP, src/cli/tab-cap-check.ts) and each session left ready with no restart coming (RESTART-STALLED,
  * src/cli/restart-stalled-check.ts) are the unowned
  * warnings, which go to the lead (src/cli/unowned.ts, T951).
  */
@@ -1261,6 +1264,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const restore = await restoreLauncherWarnings(runtime.files, resolveKitHome(runtime.env, runtime.userHome));
   const holds = await promptHoldWarnings(runtime, own.paths, zone, new SecretScanner(own.config.register.secretPatterns), now.getTime());
   const logs = await logSizeWarnings(runtime.files, own.paths);
+  const changedHosts = await hostChangedWarnings(own.config.terminalHosts, hostPinChanges(terminalHostsDir(own.paths.kitHome, own.team), async (path) => await runtime.fileBytes.read(path)));
   const overCap = await tabCapWarnings(own.team, own.config.open.headroom.maxTabs, async () => {
     const kit = await openKit(runtime, own.team);
     return tabCapExcessOf(runtime, kit, own.config, own.roster, await idleFactsOf(runtime, kit, own.config, own.roster));
@@ -1269,7 +1273,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
   const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...drift, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...drift, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...changedHosts, ...overCap, ...stalled], lead, decisions };
 }
 
 /**

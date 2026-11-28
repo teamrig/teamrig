@@ -96,6 +96,7 @@ import {
   REVIEW_PATH_LIMITS,
   RULE_CONFLICT_LIMITS,
   SERVICE_ROLE_LIMITS,
+  TERMINAL_HOST_LIMITS,
 } from './limits.ts';
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from './migrate.ts';
 import { ConfigReader, describe, isValidRegex, shortLine, type Check, type ConfigIssue } from './reader.ts';
@@ -223,6 +224,7 @@ import {
   type PriorityConfig,
   type TeamDetached,
   type TeamLink,
+  type TerminalHostPin,
   type TurnLogConfig,
   type UiConfig,
   UI_MODES,
@@ -691,6 +693,7 @@ export function parseConfig(raw: JsonRecord, above?: AccountBudget): ConfigParse
     sync: parseSync(read, read.section(raw, 'sync', '')),
     serviceRoles: parseServiceRoles(read, read.section(raw, 'serviceRoles', ''), sessions),
     connectors: parseConnectors(read, read.section(raw, 'connectors', '')),
+    terminalHosts: parseTerminalHosts(read, read.section(raw, 'terminalHosts', '')),
     alerts: parseAlerts(read, read.section(raw, 'alerts', '')),
     decisions: {
       batchTimesUtc: read.stringList(decisions, 'batchTimesUtc', 'decisions', DEFAULT_DECISIONS.batchTimesUtc, isUtcTime, CONFIG_LIMITS.decisionBatchTimes.maxItems),
@@ -1069,6 +1072,52 @@ function parseConnectors(read: ConfigReader, raw: JsonRecord): Record<string, Js
     }
   }
   return connectors;
+}
+
+const isSha256: Check<string> = (text) => (TERMINAL_HOST_LIMITS.sha256Pattern.test(text) ? undefined : 'expected a sha256: 64 lowercase hex characters');
+
+/**
+ * `terminalHosts`: each outside host's pin under its name. A pin that names no program, or both a file and a manifest,
+ * is an issue and is left out, so teamrig never runs a host on half a pin.
+ */
+function parseTerminalHosts(read: ConfigReader, raw: JsonRecord): Record<string, TerminalHostPin> {
+  const names = Object.keys(raw);
+  if (names.length > TERMINAL_HOST_LIMITS.maxHosts) {
+    read.report('terminalHosts', `pins ${names.length} hosts; at most ${TERMINAL_HOST_LIMITS.maxHosts}`);
+    return {};
+  }
+  const hosts: Record<string, TerminalHostPin> = {};
+  for (const name of names) {
+    const path = `terminalHosts.${name}`;
+    if (!TERMINAL_HOST_LIMITS.namePattern.test(name)) {
+      read.report(path, 'expected a host name: lower-case words joined by -');
+      continue;
+    }
+    const entry = read.objectItem(raw[name], path);
+    const pin = entry === undefined ? undefined : parseTerminalHostPin(read, entry, path);
+    if (pin !== undefined) {
+      hosts[name] = pin;
+    }
+  }
+  return hosts;
+}
+
+function parseTerminalHostPin(read: ConfigReader, entry: JsonRecord, at: string): TerminalHostPin | undefined {
+  const issues = read.issues.length;
+  const path = read.optionalString(entry, 'path', at, isAbsoluteFile);
+  const manifest = read.optionalString(entry, 'manifest', at, isAbsoluteFile);
+  const sha256 = read.requiredString(entry, 'sha256', at, isSha256);
+  const args = read.stringList(entry, 'args', at, [], shortLine(TERMINAL_HOST_LIMITS.argMaxLength), TERMINAL_HOST_LIMITS.maxArgs);
+  if ((entry['path'] === undefined) === (entry['manifest'] === undefined)) {
+    read.report(at, 'expected one of path (a host of one file) and manifest (its teamrig-host.json)');
+  }
+  if (read.issues.length > issues) {
+    return undefined;
+  }
+  if (manifest !== undefined) {
+    return { manifest, sha256, args };
+  }
+  return path === undefined ? undefined : { path, sha256, args };
 }
 
 /** The shape of a command name in the table (`issue close`): a name of this shape the table lacks may be a newer one. */

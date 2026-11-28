@@ -11,6 +11,7 @@ import {
   CLIENT_RECEIVER_PATTERN,
   CONFIG_LIMITS,
   CONNECTOR_LIMITS,
+  TERMINAL_HOST_LIMITS,
   DB_PROGRAM_NAME_PATTERN,
   DB_WRITE_ENTRYPOINT_LIMITS,
   DB_WRITE_NAME_LIMITS,
@@ -95,6 +96,7 @@ const EVERY_KEY = {
   serviceRoles: { github: { holders: ['bravo'], commands: ['issue close'] } },
   // An empty section: the keys under an id are the connector's own, so the schema lists none of them.
   connectors: { tracker2: {} },
+  terminalHosts: { term: { manifest: '/opt/term/teamrig-host.json', sha256: 'a'.repeat(64), args: ['--serve'] } },
   paths: { state: '/s', inbox: '/i', skills: '/k' },
   exec: { path: ['C:/tools'], webhookEnv: 'EXEC_WEBHOOK_URL' },
   // A preset, not a map: the map is an anyOf branch whose level keys the levelName def describes.
@@ -622,6 +624,22 @@ describe('config.schema.json', () => {
     assert.equal(ids['pattern'], CONNECTOR_LIMITS.idPattern.source);
     assert.deepEqual(anyProperty(node), { type: 'object' });
     assert.deepEqual(node['default'], {});
+  });
+
+  it('takes the terminal hosts the parser takes: a host count, a name, a sha256 and the arguments', async () => {
+    const node = nodeAt(await loadSchema(), 'terminalHosts');
+    assert.equal(node['maxProperties'], TERMINAL_HOST_LIMITS.maxHosts);
+    const names = node['propertyNames'];
+    assert.ok(isRecord(names));
+    assert.equal(names['pattern'], TERMINAL_HOST_LIMITS.namePattern.source);
+    const pin = properties(anyProperty(node) ?? {});
+    const [sha256, args] = [pin['sha256'], pin['args']];
+    assert.ok(isRecord(sha256) && isRecord(args));
+    assert.equal(sha256['pattern'], TERMINAL_HOST_LIMITS.sha256Pattern.source);
+    assert.equal(args['maxItems'], TERMINAL_HOST_LIMITS.maxArgs);
+    const item = args['items'];
+    assert.ok(isRecord(item));
+    assert.equal(item['maxLength'], TERMINAL_HOST_LIMITS.argMaxLength);
   });
 
   it('requires exactly the roster', async () => {
