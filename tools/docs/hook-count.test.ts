@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isRecord, isStringArray, recordField, type JsonRecord } from '../../src/core/guards.ts';
+import { hookNamesOf, pluginHooks } from '../../src/testing/plugin-hooks.ts';
 
 /**
  * The docs' count of teamrig's Claude Code hooks, held to the plugin's hooks.json: a hand-kept number went stale twice
@@ -38,24 +38,12 @@ function numberWord(value: number): string {
 
 const NUMBER_WORDS: ReadonlySet<string> = new Set(Array.from({ length: 99 }, (_, index) => numberWord(index + 1)));
 
-function records(value: unknown): JsonRecord[] {
-  return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-/** The name after `hook` in each command hooks.json runs, once each, sorted. */
+/**
+ * The hooks the commands hooks.json runs run, once each, sorted: a set (`hook guards ...`, `hook after ...`) is one
+ * process for several hooks, not a hook of its own, so each hook it names counts (T5553, T5821).
+ */
 function hooksJsonNames(): string[] {
-  const parsed: unknown = JSON.parse(read(HOOKS_JSON));
-  const events = isRecord(parsed) ? recordField(parsed, 'hooks') : undefined;
-  assert.ok(events !== undefined, `${HOOKS_JSON} has a hooks object`);
-  const names = new Set<string>();
-  for (const group of Object.values(events).flatMap(records)) {
-    for (const hook of records(group['hooks'])) {
-      const args = hook['args'];
-      const name = isStringArray(args) && args.includes('hook') ? args[args.indexOf('hook') + 1] : undefined;
-      if (name !== undefined) names.add(name);
-    }
-  }
-  return [...names].sort();
+  return [...new Set(pluginHooks().flatMap(hookNamesOf))].sort();
 }
 
 /** The hook names the hooks page's first table gives Claude Code events, the mod's rows left out, once each, sorted. */

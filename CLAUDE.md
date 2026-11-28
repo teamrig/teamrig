@@ -7,7 +7,8 @@ project skills in `.claude/skills/` hold the steps of each repeated job.
   teamrig would need ships in the plugin for every user (a command or flag, a config key with a default, a hook, a
   plugin skill); only work on this repo goes in `.claude/skills/dev-*` or `tools/`, and only what hinges on one
   team stays in its team rules or session skills. The test is in CONTRIBUTING.md, [Where a change
-  lives](CONTRIBUTING.md#where-a-change-lives); the task and the pull request say which reach it has.
+  lives](CONTRIBUTING.md#where-a-change-lives); the task and the pull request say which reach it has: `plugin`,
+  `contributors`, `dev-only (<why>)` or `team`, and a dev-only change of `tools/` names its plugin carrier.
 - **Weigh every user and tool**: before a feature or fix, ask how it behaves on every AI CLI, OS, tracker, team shape
   and size, with defaults that streamline the work; only a truly specific change stays narrow. The questions are in
   CONTRIBUTING.md, [How it behaves for everyone](CONTRIBUTING.md#how-it-behaves-for-everyone).

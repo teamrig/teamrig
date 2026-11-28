@@ -6,7 +6,8 @@ import { gitSyncIn } from '../lib/git.ts';
 import { type ClearMerge, clearMergeFrom } from './approval.ts';
 import { type Gh, ghWithToken } from './github.ts';
 import { type Credential, SHIP_TOKEN_TARGET, readCredential, windowsPowerShell } from './keychain.ts';
-import { lackingSections, missingSections, pullBody } from './merge.ts';
+import { changedFiles, lackingSections, missingSections, pullBody } from './merge.ts';
+import { reachGate } from './reach.ts';
 import { type PullTaskRead, labelPull, pullFaceOf, pullTaskFrom } from './pull-task.ts';
 import { findOpenPull, openPull } from './pulls.ts';
 import { type RepoProfile, profileFor, readProfiles, slugOf } from './repos.ts';
@@ -101,11 +102,13 @@ export async function runOpenPull(args: OpenPullArgs, deps: OpenPullDeps): Promi
   // The earlier pushes' pull requests of this change, which the one found or opened replaces (T4780).
   const supersede = supersedeFrom(gh, repo, profile.main, pullCommitsOf(git, profile.main, profile.regenerated), deps.out);
   const face = pullFaceOf(gh, { repo, head, subjects, note, task: await deps.pullTask(head) }, deps.out);
+  const reachRefused = reachGate(note, profile.pullSections, () => changedFiles(git, profile.main, sha));
   const found = findOpenPull(gh, repo, head, profile.main);
   if (found !== null) {
     if (found.headSha !== sha) return refuse(deps, `pull request #${found.number} ${found.url} is at ${found.headSha.slice(0, 9)}, not ${sha.slice(0, 9)}`);
     deps.out(`found pull request #${found.number} ${found.url}`);
     if (face.unlinked !== null) deps.out(`warning: pull request #${found.number}: ${face.unlinked}`);
+    if (reachRefused !== null) deps.out(`warning: pull request #${found.number}: ${reachRefused}`);
     labelPull(gh, repo, found.number, face.labels, deps.out);
     supersede(found);
     return 0;
@@ -113,6 +116,7 @@ export async function runOpenPull(args: OpenPullArgs, deps: OpenPullDeps): Promi
   const lacks = missingSections(note, profile.pullSections);
   if (lacks !== null) return refuse(deps, lackingSections(lacks));
   if (face.unlinked !== null) return refuse(deps, face.unlinked);
+  if (reachRefused !== null) return refuse(deps, reachRefused);
   const pull = openPull(gh, repo, head, profile.main, face.title, pullBody(subjects, face.note));
   // A push between the read above and the call would open the pull request at a head nobody approved.
   if (pull.headSha !== sha) return refuse(deps, `pull request #${pull.number} ${pull.url} opened at ${pull.headSha.slice(0, 9)}, not the approved ${sha.slice(0, 9)}: ${head} moved, so close it`);

@@ -71,6 +71,7 @@ import { resetExpiryWarnings } from '../reset-expiry-check.ts';
 import { idlePassWarnings } from '../idle-pass-check.ts';
 import { restoreLauncherWarnings } from '../launcher-record-check.ts';
 import { secretGuardOffWarnings } from '../secret-guard-off-check.ts';
+import { hookDriftWarnings } from '../hook-drift-check.ts';
 import { secretHookWarnings } from '../secret-hook-check.ts';
 import { stampHookWarnings } from '../stamp-hook-check.ts';
 import { ownerBatchOf, type BatchedTeam } from '../owner-batch.ts';
@@ -1253,6 +1254,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const stamps = await stampHookWarnings(runtime.files, runtime.secretsGit, own.paths, own.config);
   const settings = await knownSettingsScope(runtime, { paths: own.paths, config: own.config, project });
   const off = await secretGuardOffWarnings(runtime.files, own.config.secretGuard, settings);
+  const drift = await hookDriftWarnings(runtime, own.config.hosts, own.team);
   const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
   const resets = resetExpiryWarnings(own.config.budget, zone, now.getTime());
   const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime());
@@ -1267,7 +1269,7 @@ export async function checkReport(args: ParsedArgs, runtime: CliRuntime): Promis
   const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
   const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
   const lead = own.config.roles.lead;
-  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
+  return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...drift, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
 }
 
 /**

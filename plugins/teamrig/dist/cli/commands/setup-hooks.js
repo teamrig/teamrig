@@ -32,27 +32,23 @@ const CONFIG_BACKUP_EXTENSION = '.bak';
 export async function hooks(args, runtime) {
     noPositionals(args);
     const port = userHooksOf(runtime, requiredFlag(args.flags, 'host'));
-    const path = runtime.platform === 'win32' ? win32 : posix;
-    const pluginRoot = pluginRootOf(runtime.self.script, path, 'setup hooks');
-    const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
-    const target = port.file(runtime.userHome);
-    const current = await readUserSettings(runtime, target);
+    const pluginRoot = pluginRootOf(runtime.self.script, pathOf(runtime), 'setup hooks');
     const write = args.switches.has('yes');
-    const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
+    const plan = await planHooksSetup(runtime, port, pluginRoot, args.flags.get('team') ?? args.common.get('team'));
+    const { target, kit, unlisted, answer, configs } = plan;
     if (write && kit.problem !== undefined) {
         throw new RefusedError(`${kit.problem}; nothing written`);
     }
-    const unlisted = await unlistedHost(runtime, userHooksHostId(runtime, port.host), args.flags.get('team') ?? args.common.get('team'));
     if (write && unlisted !== undefined) {
         throw new RefusedError(`${unlisted}; nothing written`);
     }
-    const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
     if (!answer.ok) {
         throw new RefusedError(`${answer.problem}; nothing written`);
     }
     // Every file is checked before any is written, so a refusal leaves the hooks and the config as they were.
-    const sets = await fileSetPlans(runtime, port.configFileSets ?? [], path);
-    const configs = [...(await configPlans(runtime, port.configLines)), ...sets.plans];
+    if (!configs.ok) {
+        throw new RefusedError(`${configs.file}: ${configs.problem}; nothing written`);
+    }
     const { file, counts, skipped } = answer.value;
     const counted = `inserted ${counts.inserted}, unchanged ${counts.unchanged}, changed ${counts.changed}, removed ${counts.removed}`;
     if (file === undefined) {
@@ -62,13 +58,13 @@ export async function hooks(args, runtime) {
         runtime.out.stdout(`PREVIEW nothing written (add --yes to write) ${target}: ${counted}`);
     }
     else {
-        const backup = await written(runtime, target, current.exists, port.host, file);
+        const backup = await written(runtime, target, plan.existed, port.host, file);
         runtime.out.stdout(`WROTE ${target}: ${counted}${backup === undefined ? '' : `; the old file is at ${backup}`}`);
     }
-    for (const config of configs) {
+    for (const config of configs.plans) {
         runtime.out.stdout(await configWritten(runtime, config, port.host, write));
     }
-    [...skipped, ...sets.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
+    [...skipped, ...configs.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
     if (kit.problem !== undefined) {
         runtime.out.stdout(`  NOTE --yes is refused until the kit home can run these lines: ${kit.problem}`);
     }
@@ -79,6 +75,32 @@ export async function hooks(args, runtime) {
         port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
     }
     return EXIT.ok;
+}
+function pathOf(runtime) {
+    return runtime.platform === 'win32' ? win32 : posix;
+}
+/**
+ * Plans `setup hooks` for the host whose hooks file `port` names, with the plugin installed at `pluginRoot`, for the
+ * team `team` names (the run's own team when undefined). Reads only. A missing or broken plugin hooks file refuses,
+ * as nothing can be planned from it.
+ */
+export async function planHooksSetup(runtime, port, pluginRoot, team) {
+    const path = pathOf(runtime);
+    const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
+    const target = port.file(runtime.userHome);
+    const current = await readUserSettings(runtime, target);
+    const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
+    const unlisted = await unlistedHost(runtime, userHooksHostId(runtime, port.host), team);
+    const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
+    return { target, existed: current.exists, kit, unlisted, answer, configs: await allConfigPlans(runtime, port, path) };
+}
+async function allConfigPlans(runtime, port, path) {
+    const sets = await fileSetPlans(runtime, port.configFileSets ?? [], path);
+    if (!sets.ok) {
+        return sets;
+    }
+    const main = await configPlans(runtime, port.configLines);
+    return main.ok ? { ok: true, plans: [...main.plans, ...sets.plans], skipped: sets.skipped } : main;
 }
 /**
  * Why the team this run is for cannot run the lines: each names `--host <id>`, and a hook run naming a host the team's
@@ -129,16 +151,24 @@ async function configPlans(runtime, lines) {
     for (const config of lines) {
         const file = config.file(runtime.userHome);
         const current = await runtime.files.read(file);
-        plans.push(configPlan(file, config.setting, current, config.merge(current ?? ''), MAIN_CONFIG_LABEL));
+        const plan = configPlan(file, config.setting, current, config.merge(current ?? ''), MAIN_CONFIG_LABEL);
+        if (!plan.ok) {
+            return plan;
+        }
+        plans.push(plan.plan);
     }
-    return plans;
+    return { ok: true, plans, skipped: [] };
 }
 function configPlan(file, setting, current, answer, backupLabel) {
     if (!answer.ok) {
-        throw new RefusedError(`${file}: ${answer.problem}; nothing written`);
+        return { ok: false, file, problem: answer.problem };
     }
-    return { file, setting, existed: current !== undefined, text: answer.text, backupLabel };
+    return { ok: true, plan: { file, setting, existed: current !== undefined, text: answer.text, backupLabel } };
 }
+/**
+ * Each set's files as they are in its folder, by name: plans for the plain ones; the matching entries that are no plain
+ * file (a link, a folder) are skipped, as an atomic write would replace a link, so none is written.
+ */
 async function fileSetPlans(runtime, sets, path) {
     const plans = [];
     const skipped = [];
@@ -151,11 +181,17 @@ async function fileSetPlans(runtime, sets, path) {
                 continue;
             }
             const current = await runtime.files.read(file);
-            if (current !== undefined)
-                plans.push(configPlan(file, set.setting, current, set.merge(current), name));
+            if (current === undefined) {
+                continue;
+            }
+            const plan = configPlan(file, set.setting, current, set.merge(current), name);
+            if (!plan.ok) {
+                return plan;
+            }
+            plans.push(plan.plan);
         }
     }
-    return { plans, skipped };
+    return { ok: true, plans, skipped };
 }
 /** Writes one config file's setting with --yes (keeping the old file first), and says what it found or did. */
 async function configWritten(runtime, plan, host, write) {

@@ -1511,6 +1511,23 @@
           "additionalProperties": { "$ref": "#/$defs/sessionName" },
           "default": {}
         },
+        "areaPaths": {
+          "description": "The paths each area label of areaOwners holds, such as \"area:guard\": [\"src/push-guard/**\"]: teamrig issue intake asks the session owning each area an outside pull request changes for a best-fix and overlap review. A glob reads as a review gate glob does: with no slash a file name at any depth, with one a path from the repository root, case ignored; an <owner>/<name>: prefix holds it to that repository, else it matches in every one. Each label must be one of areaOwners; matched without case. Two areas may hold the same path: each owner then reviews it.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 240 },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "default": {}
+        },
         "sessions": {
           "description": "The session that owns the issues of each repository (owner/name, one of repos; matched without case) when none of their assignees is in owners and none of their labels in areaOwners. Without one, they go to the lead.",
           "type": "object",
@@ -1665,6 +1682,17 @@
           "maxLength": 50,
           "pattern": "^[^\\r\\n]+$",
           "default": "teamrig"
+        },
+        "designAssignees": {
+          "description": "The GitHub logins teamrig issue assign may add to a design issue before it is agreed, such as the team owner every design issue goes to; matched without case. Every other login stays refused on a design issue until its design label comes off. Empty, the default: no one.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}$",
+            "maxLength": 39
+          },
+          "maxItems": 10,
+          "default": []
         }
       }
     },
@@ -1964,7 +1992,7 @@
       "type": "object",
       "properties": {
         "mode": {
-          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, in a split of the session's tmux or Windows Terminal window beside it; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
+          "description": "Where teamrig ui shows the UI: terminal, in the terminal it is run in, or, run from a session's shell, beside the session, in a split of its tmux pane or a new tab of its Windows Terminal window; window, in a terminal window of its own, opened the way open.terminal opens a session's tab; both, in the two at once. teamrig ui --mode overrides it for one run.",
           "type": "string",
           "enum": ["terminal", "window", "both"],
           "default": "terminal"
@@ -2017,7 +2045,7 @@
                     "enum": ["rsa-pkcs1-sha256", "ecdsa-p256-sha256", "ed25519"]
                   },
                   "publicKeyPem": {
-                    "description": "The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key).",
+                    "description": "The public key in PEM, of the algorithm's kind (for ecdsa-p256-sha256, a P-256 key; for rsa-pkcs1-sha256, a modulus of at least 2048 bits).",
                     "type": "string"
                   }
                 }
@@ -2381,6 +2409,13 @@
           "minimum": 0,
           "maximum": 1000000,
           "default": 20000
+        },
+        "handoverWarnBytes": {
+          "description": "A handover past this many bytes is still taken, with a note that it should move its how-tos to skills and its code map to a reference file, and teamrig doctor names its session, so a handover is cut before it reaches handoverMaxBytes. 0: no warning.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000,
+          "default": 10000
         },
         "endCommand": {
           "description": "A program (its path, then its arguments) run after an automatic restart ended a session, given Claude Code's SessionEnd hook input (reason clear) on stdin: for a SessionEnd hook the end skipped, since on Windows a process is ended without running them. Empty: none.",

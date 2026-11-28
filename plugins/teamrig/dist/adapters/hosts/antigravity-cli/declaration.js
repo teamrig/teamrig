@@ -17,6 +17,18 @@ const WIN_PERM_PROOF = {
     date: '2026-11-24',
     evidence: 'proofs/antigravity-cli.md#permissionsdeny-lines',
 };
+const WIN_TRANSCRIPT_PROOF = {
+    os: 'windows',
+    toolVersion: '1.5.14',
+    date: '2026-11-24',
+    evidence: 'proofs/antigravity-cli.md#budgettranscripts',
+};
+const WIN_USAGE_PROOF = {
+    os: 'windows',
+    toolVersion: '1.5.14',
+    date: '2026-11-24',
+    evidence: 'proofs/antigravity-cli.md#budgetusage',
+};
 const UNPROVED = {
     kind: 'partial',
     missing: 'no live run yet',
@@ -89,8 +101,18 @@ export const declaration = {
         'plugin.hook-trust': UNPROVED,
         'plugin.install-update': NO_HOST_SUPPORT('in-tab plugin reload mod'),
         'plugin.cli-on-path': UNPROVED,
-        'budget.transcripts': NOT_YET('Antigravity transcript reader'),
-        'budget.usage': NOT_YET('Antigravity usage meter'),
+        'budget.transcripts': {
+            kind: 'partial',
+            missing: 'helper/subagent thread split and disk discovery outside hook transcriptPath',
+            notice: 'reads agy transcript_full.jsonl steps (USER_INPUT, PLANNER_RESPONSE, GENERIC); helper threads are not split yet',
+            proofs: [WIN_TRANSCRIPT_PROOF],
+        },
+        'budget.usage': {
+            kind: 'partial',
+            missing: 'published Antigravity token weights',
+            notice: 'meters input_tokens, cache_read_tokens, and output_tokens with estimated weights',
+            proofs: [WIN_USAGE_PROOF],
+        },
         'budget.model-share': NOT_YET('Antigravity usage meter'),
         'budget.week-reading': NOT_YET('Antigravity usage meter'),
         'budget.five-hour': NOT_YET('Antigravity usage meter'),

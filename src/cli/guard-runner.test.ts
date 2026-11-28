@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
-import { GUARD_LIMIT_MS, isHookArgv, judgeGuard, runGuard, type GuardHost, type GuardMain } from './guard-runner.ts';
+import { GUARD_LIMIT_MS, guardSubject, isHookArgv, judgeGuard, runGuard, type GuardHost, type GuardMain } from './guard-runner.ts';
 import { EXIT, type ExitCode } from './runtime.ts';
 import type { NodeEntry } from './node-main.ts';
 
@@ -78,19 +78,19 @@ const HANGING: GuardMain = () => new Promise<ExitCode>(() => undefined);
 
 describe('judgeGuard', () => {
   it('passes on an empty answer and a JSON object, each with exit 0', () => {
-    assert.deepEqual(judgeGuard('push-guard', { kind: 'answered', code: 0, stdout: [] }), { exitCode: 0, stdout: '', stderr: '' });
-    assert.deepEqual(judgeGuard('push-guard', { kind: 'answered', code: 0, stdout: [''] }), { exitCode: 0, stdout: '', stderr: '' });
-    assert.deepEqual(judgeGuard('push-guard', { kind: 'answered', code: 0, stdout: [DENY] }), { exitCode: 0, stdout: `${DENY}\n`, stderr: '' });
+    assert.deepEqual(judgeGuard('push-guard guard', { kind: 'answered', code: 0, stdout: [] }), { exitCode: 0, stdout: '', stderr: '' });
+    assert.deepEqual(judgeGuard('push-guard guard', { kind: 'answered', code: 0, stdout: [''] }), { exitCode: 0, stdout: '', stderr: '' });
+    assert.deepEqual(judgeGuard('push-guard guard', { kind: 'answered', code: 0, stdout: [DENY] }), { exitCode: 0, stdout: `${DENY}\n`, stderr: '' });
   });
 
   it("keeps a guard's own block, moving what it printed to stderr, where Claude Code shows it", () => {
-    assert.deepEqual(judgeGuard('exec-guard', { kind: 'answered', code: EXIT.refused, stdout: ['REFUSED not yours'] }), { exitCode: 2, stdout: '', stderr: 'REFUSED not yours\n' });
-    assert.deepEqual(judgeGuard('exec-guard', { kind: 'answered', code: EXIT.refused, stdout: [] }), { exitCode: 2, stdout: '', stderr: '' });
+    assert.deepEqual(judgeGuard('exec-guard guard', { kind: 'answered', code: EXIT.refused, stdout: ['REFUSED not yours'] }), { exitCode: 2, stdout: '', stderr: 'REFUSED not yours\n' });
+    assert.deepEqual(judgeGuard('exec-guard guard', { kind: 'answered', code: EXIT.refused, stdout: [] }), { exitCode: 2, stdout: '', stderr: '' });
   });
 
   it('blocks on any other exit, naming the guard, the exit and the fix', () => {
     for (const code of [EXIT.failed, EXIT.usage, EXIT.printed]) {
-      const verdict = judgeGuard('secret-guard', { kind: 'answered', code, stdout: [DENY] });
+      const verdict = judgeGuard('secret-guard guard', { kind: 'answered', code, stdout: [DENY] });
       assert.equal(verdict.exitCode, 2);
       assert.equal(verdict.stdout, '');
       assert.match(verdict.stderr, new RegExp(`^teamrig blocked this call: its secret-guard guard ended with exit ${code}, and a guard that cannot answer must not let a call through\\. Fix: update the teamrig plugin and restart the session; if that does not clear it, tell your lead\\.\\n$`));
@@ -99,25 +99,25 @@ describe('judgeGuard', () => {
 
   it('blocks on an answer that is not one JSON object, quoting at most 200 characters of it', () => {
     for (const stdout of [['garbled'], ['[1]'], ['null'], ['"deny"'], [DENY, DENY], [`${DENY} trailing`]]) {
-      const verdict = judgeGuard('cold-send', { kind: 'answered', code: 0, stdout });
+      const verdict = judgeGuard('cold-send guard', { kind: 'answered', code: 0, stdout });
       assert.equal(verdict.exitCode, 2, stdout.join('|'));
       assert.match(verdict.stderr, /its cold-send guard printed something other than its JSON answer \(/);
     }
-    const long = judgeGuard('cold-send', { kind: 'answered', code: 0, stdout: ['x'.repeat(500)] });
+    const long = judgeGuard('cold-send guard', { kind: 'answered', code: 0, stdout: ['x'.repeat(500)] });
     assert.ok(long.stderr.includes(`("${'x'.repeat(200)}")`));
     assert.ok(!long.stderr.includes('x'.repeat(201)));
   });
 
   it('blocks a guard that could not load or crashed, with the first line of the cause', () => {
-    const load = judgeGuard('package-guard', { kind: 'load-failed', cause: new SyntaxError("Unexpected token ';'\n    at line 3") });
+    const load = judgeGuard('package-guard guard', { kind: 'load-failed', cause: new SyntaxError("Unexpected token ';'\n    at line 3") });
     assert.equal(load.exitCode, 2);
     assert.match(load.stderr, /its package-guard guard could not load \(Unexpected token ';'\), and/);
     assert.ok(!load.stderr.includes('at line 3'));
-    assert.match(judgeGuard('helper-gate', { kind: 'crashed', cause: 'a thrown string' }).stderr, /its helper-gate guard crashed \(a thrown string\), and/);
+    assert.match(judgeGuard('helper-gate guard', { kind: 'crashed', cause: 'a thrown string' }).stderr, /its helper-gate guard crashed \(a thrown string\), and/);
   });
 
   it('blocks a guard that gave no answer in time, and says to retry', () => {
-    const verdict = judgeGuard('picker-guard', { kind: 'timed-out', limitMs: 12_000 });
+    const verdict = judgeGuard('picker-guard guard', { kind: 'timed-out', limitMs: 12_000 });
     assert.equal(verdict.exitCode, 2);
     assert.match(verdict.stderr, /its picker-guard guard gave no answer within 12 s, .* Fix: retry the call; if every call times out/);
   });
@@ -205,7 +205,7 @@ describe('runGuard', () => {
   });
 
   it('blocks any argv but `hook <name>` before it loads the CLI, so the entry runs no other command (T3069)', async () => {
-    for (const argv of [[], ['hook'], ['roles', 'grant', 'github', '--holder', 'alpha'], ['hook', 'push-guard', 'extra'], ['owner', 'next', 'T1'], ['hook', '--help'], ['hook', 'Push_Guard'], ['hook', 'slash-command'], ['hook', 'route-allow']]) {
+    for (const argv of [[], ['hook'], ['roles', 'grant', 'github', '--holder', 'alpha'], ['hook', 'push-guard', 'extra'], ['owner', 'next', 'T1'], ['hook', '--help'], ['hook', 'Push_Guard'], ['hook', 'slash-command'], ['hook', 'route-allow'], ['hook', 'guards'], ['hook', 'guards', 'push-guard', 'roles']]) {
       const host = new FakeHost();
       let loads = 0;
       const load = async (): Promise<GuardMain> => {
@@ -248,6 +248,46 @@ describe('runGuard', () => {
     assert.equal(isHookArgv(['hook', 'push-guard', '--host', '--session']), false, 'a flag as the id');
     assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'a', '--host', 'b']), false, 'twice');
     assert.equal(isHookArgv(['hook', 'push-guard', '--host', 'claude-code', 'roles']), false, 'a word after it');
+  });
+
+  it('reads `hook guards <name> ...` as one run of the set guards it names, each once, before its flags (T5553)', () => {
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard']), true);
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', 'secret-guard', 'service-role-guard', '--host', 'claude-code']), true);
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', '--host-event', 'PreToolUse', '--host', 'antigravity-cli']), true);
+    assert.equal(isHookArgv(['hook', 'guards']), false, 'no guard');
+    assert.equal(isHookArgv(['hook', 'guards', '--host', 'claude-code']), false, 'flags but no guard');
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', 'push-guard']), false, 'twice');
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', 'cold-send']), false, 'a guard that runs alone');
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', 'session-start']), false, 'no guard at all');
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', '--host', 'claude-code', 'secret-guard']), false, 'a guard after the flags');
+    assert.equal(isHookArgv(['hook', 'guards', 'push-guard', '--session', 'x']), false, 'another flag');
+  });
+
+  it('names one guard, or every guard of a set, in the line that blocks a call (T5553)', () => {
+    assert.equal(guardSubject(['hook', 'push-guard', '--host', 'claude-code']), 'push-guard guard');
+    assert.equal(guardSubject(['hook', 'guards', 'push-guard']), 'guards push-guard');
+    assert.equal(guardSubject(['hook', 'guards', 'push-guard', 'secret-guard', 'exec-guard', '--host', 'claude-code']), 'guards push-guard, secret-guard and exec-guard');
+  });
+
+  it('runs a set of guards on one load of the CLI, and blocks naming each when it gives no answer (T5553)', async () => {
+    const argv = ['hook', 'guards', 'push-guard', 'secret-guard', '--host', 'claude-code'];
+    let loads = 0;
+    const answered = new FakeHost();
+    const run = answering(EXIT.ok, [DENY]);
+    await runGuard(argv, SCRIPT, async () => {
+      loads += 1;
+      return run.main;
+    }, answered);
+    assert.equal(loads, 1);
+    assert.deepEqual(run.calls.map((call) => call.argv), [argv]);
+    assert.deepEqual(answered.written, [`${DENY}\n`]);
+
+    const hung = new FakeHost();
+    void runGuard(argv, SCRIPT, async () => HANGING, hung);
+    await setImmediate();
+    hung.timeOut();
+    assert.deepEqual(hung.exits, [2]);
+    assert.match(hung.errors.join(''), /its guards push-guard and secret-guard gave no answer within 12 s/);
   });
 
   it('runs a guard hook whose line names its host (T4752)', async () => {

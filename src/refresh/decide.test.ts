@@ -76,7 +76,7 @@ function facts(overrides: Partial<FlatFacts> = {}): StopFacts {
 
 /** What every ask for the handover says between its cause and its last sentence. */
 const ASK_BODY =
-  'Write your handover to /team/handover/alpha.md, replacing the whole file (your fresh start reads all of it), with what the register lacks, not task statuses, ' +
+  'Write your handover to /team/handover/alpha.md, replacing the whole file (your fresh start reads all of it), with only the state the register lacks (a how-to goes in a skill, a code map in a reference file it names), not task statuses, ' +
   'which your fresh start reads live from the register: a `## State` section (where things are; the scratchpad files, plan file and scheduled jobs the next session ' +
   'still needs; questions still open with the user) and a `## Next steps` section (the next step of each task in progress; what to check later, and when). ';
 /** The last sentence of an ask at a turn end, and of one within a turn. */
@@ -343,6 +343,30 @@ describe('decideStop', () => {
       });
       const restart = decideStop(ASKED, stopContext({ stopHookActive: true, canRestart: true }), facts({ handover: written }));
       assert.equal(restart.kind === 'notice' ? restart.restart : undefined, true);
+    });
+
+    it('notes a handover past refresh.handoverWarnBytes and under the cap, still taken (T2537)', () => {
+      const bytes = Buffer.byteLength(written);
+      const past = decideStop(ASKED, stopContext({ settings: { ...SIZE_ONLY, handoverWarnBytes: bytes - 1 } }), facts({ handover: written }));
+      assert.equal(
+        past.kind === 'notice' ? past.message : '',
+        'teamrig: api finished T12 and wrote its handover; type /clear for a fresh start\n' +
+          `teamrig: ${HANDOVER} is ${bytes} bytes, past refresh.handoverWarnBytes (${(bytes - 1).toLocaleString('en-US')}): ` +
+          'a handover holds state only; move each how-to to a skill and a code map to a reference file it names.',
+      );
+      for (const handoverWarnBytes of [bytes, 0]) {
+        const quiet = decideStop(ASKED, stopContext({ settings: { ...SIZE_ONLY, handoverWarnBytes } }), facts({ handover: written }));
+        assert.equal(quiet.kind === 'notice' ? quiet.message : '', 'teamrig: api finished T12 and wrote its handover; type /clear for a fresh start', `warn at ${handoverWarnBytes}`);
+      }
+    });
+
+    it('notes it too when the notice comes at a later stop, once the running work ended', () => {
+      const bytes = Buffer.byteLength(written);
+      const settings: RefreshSettings = { ...SIZE_ONLY, handoverWarnBytes: bytes - 1 };
+      const held = decideStop(ASKED, stopContext({ settings }), facts({ handover: written, running: 1 }));
+      assert.equal(held.kind, 'write');
+      const later = decideStop(held.kind === 'write' ? held.state : undefined, stopContext({ settings }), facts({ handover: written }));
+      assert.match(later.kind === 'notice' ? later.message : '', /\nteamrig: \/team\/handover\/alpha\.md is \d+ bytes, past refresh\.handoverWarnBytes/);
     });
 
     it('at a later turn end too, a mid-turn ask and one a task end left standing alike', () => {

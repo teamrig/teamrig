@@ -1,7 +1,7 @@
 import { join, posix, win32 } from 'node:path';
 import { formatConfig, writeConfigWithBackup, writeTextWithBackup } from '../../config/load.ts';
 import { errorMessage, type JsonRecord } from '../../core/guards.ts';
-import type { ConfigLinesAnswer, HookLauncher, HostConfigFileSet, HostConfigLines } from '../../ports/host/index.ts';
+import type { ConfigLinesAnswer, HookLauncher, HostConfigFileSet, HostConfigLines, HostUserHooks, UserHooksAnswer } from '../../ports/host/index.ts';
 import { hookLauncher, hookLauncherProblem } from '../../kit/hook-launcher.ts';
 import { resolveKitHome } from '../../core/home.ts';
 import { noPositionals, requiredFlag, type ParsedArgs } from '../args.ts';
@@ -36,27 +36,23 @@ const CONFIG_BACKUP_EXTENSION = '.bak';
 export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<ExitCode> {
   noPositionals(args);
   const port = userHooksOf(runtime, requiredFlag(args.flags, 'host'));
-  const path = runtime.platform === 'win32' ? win32 : posix;
-  const pluginRoot = pluginRootOf(runtime.self.script, path, 'setup hooks');
-  const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
-  const target = port.file(runtime.userHome);
-  const current = await readUserSettings(runtime, target);
+  const pluginRoot = pluginRootOf(runtime.self.script, pathOf(runtime), 'setup hooks');
   const write = args.switches.has('yes');
-  const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
+  const plan = await planHooksSetup(runtime, port, pluginRoot, args.flags.get('team') ?? args.common.get('team'));
+  const { target, kit, unlisted, answer, configs } = plan;
   if (write && kit.problem !== undefined) {
     throw new RefusedError(`${kit.problem}; nothing written`);
   }
-  const unlisted = await unlistedHost(runtime, userHooksHostId(runtime, port.host), args.flags.get('team') ?? args.common.get('team'));
   if (write && unlisted !== undefined) {
     throw new RefusedError(`${unlisted}; nothing written`);
   }
-  const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
   if (!answer.ok) {
     throw new RefusedError(`${answer.problem}; nothing written`);
   }
   // Every file is checked before any is written, so a refusal leaves the hooks and the config as they were.
-  const sets = await fileSetPlans(runtime, port.configFileSets ?? [], path);
-  const configs = [...(await configPlans(runtime, port.configLines)), ...sets.plans];
+  if (!configs.ok) {
+    throw new RefusedError(`${configs.file}: ${configs.problem}; nothing written`);
+  }
   const { file, counts, skipped } = answer.value;
   const counted = `inserted ${counts.inserted}, unchanged ${counts.unchanged}, changed ${counts.changed}, removed ${counts.removed}`;
   if (file === undefined) {
@@ -64,13 +60,13 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   } else if (!write) {
     runtime.out.stdout(`PREVIEW nothing written (add --yes to write) ${target}: ${counted}`);
   } else {
-    const backup = await written(runtime, target, current.exists, port.host, file);
+    const backup = await written(runtime, target, plan.existed, port.host, file);
     runtime.out.stdout(`WROTE ${target}: ${counted}${backup === undefined ? '' : `; the old file is at ${backup}`}`);
   }
-  for (const config of configs) {
+  for (const config of configs.plans) {
     runtime.out.stdout(await configWritten(runtime, config, port.host, write));
   }
-  [...skipped, ...sets.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
+  [...skipped, ...configs.skipped].forEach((line) => runtime.out.stdout(`  SKIPPED ${line}`));
   if (kit.problem !== undefined) {
     runtime.out.stdout(`  NOTE --yes is refused until the kit home can run these lines: ${kit.problem}`);
   }
@@ -81,6 +77,60 @@ export async function hooks(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
     port.afterWrite.forEach((line) => runtime.out.stdout(`  NOTE ${line}`));
   }
   return EXIT.ok;
+}
+
+function pathOf(runtime: Pick<CliRuntime, 'platform'>): typeof posix {
+  return runtime.platform === 'win32' ? win32 : posix;
+}
+
+/** The config files' plans, or the first file that cannot be edited and why. */
+export type ConfigPlansAnswer = { readonly ok: true; readonly plans: readonly ConfigPlan[]; readonly skipped: readonly string[] } | ConfigRefusal;
+
+/** A config file that cannot be edited as it is, and why. */
+export interface ConfigRefusal {
+  readonly ok: false;
+  readonly file: string;
+  readonly problem: string;
+}
+
+/**
+ * What `setup hooks` would do for a host, read from the files as they are and writing nothing: the hooks file's merge,
+ * each config file's setting, and what refuses a write. Its refusals are answers, not throws, so a caller that only
+ * reads (a drift check) can say why, and `setup hooks` refuses in its own order.
+ */
+export interface HooksSetupPlan {
+  readonly target: string;
+  /** Whether the hooks file was there, so a write keeps the old one first. */
+  readonly existed: boolean;
+  readonly kit: KitLauncherState;
+  readonly unlisted: string | undefined;
+  readonly answer: UserHooksAnswer;
+  readonly configs: ConfigPlansAnswer;
+}
+
+/**
+ * Plans `setup hooks` for the host whose hooks file `port` names, with the plugin installed at `pluginRoot`, for the
+ * team `team` names (the run's own team when undefined). Reads only. A missing or broken plugin hooks file refuses,
+ * as nothing can be planned from it.
+ */
+export async function planHooksSetup(runtime: CliRuntime, port: HostUserHooks, pluginRoot: string, team: string | undefined): Promise<HooksSetupPlan> {
+  const path = pathOf(runtime);
+  const source = await pluginHooks(runtime, path.join(pluginRoot, ...PLUGIN_HOOKS));
+  const target = port.file(runtime.userHome);
+  const current = await readUserSettings(runtime, target);
+  const kit = await launcherOf(runtime, port.kitLauncher !== undefined);
+  const unlisted = await unlistedHost(runtime, userHooksHostId(runtime, port.host), team);
+  const answer = port.merge(current.json, source, pluginRoot, kit.launcher);
+  return { target, existed: current.exists, kit, unlisted, answer, configs: await allConfigPlans(runtime, port, path) };
+}
+
+async function allConfigPlans(runtime: CliRuntime, port: HostUserHooks, path: typeof posix): Promise<ConfigPlansAnswer> {
+  const sets = await fileSetPlans(runtime, port.configFileSets ?? [], path);
+  if (!sets.ok) {
+    return sets;
+  }
+  const main = await configPlans(runtime, port.configLines);
+  return main.ok ? { ok: true, plans: [...main.plans, ...sets.plans], skipped: sets.skipped } : main;
 }
 
 /**
@@ -100,7 +150,7 @@ async function unlistedHost(runtime: CliRuntime, hostId: string | undefined, tea
 }
 
 /** The kit launcher a host's lines run, and why the kit home cannot run them yet. */
-interface KitLauncherState {
+export interface KitLauncherState {
   readonly launcher?: HookLauncher;
   readonly problem?: string;
 }
@@ -135,7 +185,7 @@ async function pluginHooks(runtime: CliRuntime, file: string): Promise<unknown> 
 }
 
 /** A host config file's setting as `setup hooks` found it: the new text, or undefined when the file already holds it. */
-interface ConfigPlan {
+export interface ConfigPlan {
   readonly file: string;
   readonly setting: string;
   readonly existed: boolean;
@@ -146,31 +196,34 @@ interface ConfigPlan {
 
 const MAIN_CONFIG_LABEL = 'config';
 
-async function configPlans(runtime: CliRuntime, lines: readonly HostConfigLines[]): Promise<readonly ConfigPlan[]> {
+async function configPlans(runtime: CliRuntime, lines: readonly HostConfigLines[]): Promise<ConfigPlansAnswer> {
   const plans: ConfigPlan[] = [];
   for (const config of lines) {
     const file = config.file(runtime.userHome);
     const current = await runtime.files.read(file);
-    plans.push(configPlan(file, config.setting, current, config.merge(current ?? ''), MAIN_CONFIG_LABEL));
+    const plan = configPlan(file, config.setting, current, config.merge(current ?? ''), MAIN_CONFIG_LABEL);
+    if (!plan.ok) {
+      return plan;
+    }
+    plans.push(plan.plan);
   }
-  return plans;
+  return { ok: true, plans, skipped: [] };
 }
 
-function configPlan(file: string, setting: string, current: string | undefined, answer: ConfigLinesAnswer, backupLabel: string): ConfigPlan {
+type ConfigPlanAnswer = { readonly ok: true; readonly plan: ConfigPlan } | ConfigRefusal;
+
+function configPlan(file: string, setting: string, current: string | undefined, answer: ConfigLinesAnswer, backupLabel: string): ConfigPlanAnswer {
   if (!answer.ok) {
-    throw new RefusedError(`${file}: ${answer.problem}; nothing written`);
+    return { ok: false, file, problem: answer.problem };
   }
-  return { file, setting, existed: current !== undefined, text: answer.text, backupLabel };
+  return { ok: true, plan: { file, setting, existed: current !== undefined, text: answer.text, backupLabel } };
 }
 
-/** Each set's files as they are in its folder, by name: plans for the plain ones, the rest left as they are. */
-interface FileSetPlans {
-  readonly plans: readonly ConfigPlan[];
-  /** The matching entries that are no plain file (a link, a folder): an atomic write would replace a link, so none is written. */
-  readonly skipped: readonly string[];
-}
-
-async function fileSetPlans(runtime: CliRuntime, sets: readonly HostConfigFileSet[], path: typeof posix): Promise<FileSetPlans> {
+/**
+ * Each set's files as they are in its folder, by name: plans for the plain ones; the matching entries that are no plain
+ * file (a link, a folder) are skipped, as an atomic write would replace a link, so none is written.
+ */
+async function fileSetPlans(runtime: CliRuntime, sets: readonly HostConfigFileSet[], path: typeof posix): Promise<ConfigPlansAnswer> {
   const plans: ConfigPlan[] = [];
   const skipped: string[] = [];
   for (const set of sets) {
@@ -182,10 +235,17 @@ async function fileSetPlans(runtime: CliRuntime, sets: readonly HostConfigFileSe
         continue;
       }
       const current = await runtime.files.read(file);
-      if (current !== undefined) plans.push(configPlan(file, set.setting, current, set.merge(current), name));
+      if (current === undefined) {
+        continue;
+      }
+      const plan = configPlan(file, set.setting, current, set.merge(current), name);
+      if (!plan.ok) {
+        return plan;
+      }
+      plans.push(plan.plan);
     }
   }
-  return { plans, skipped };
+  return { ok: true, plans, skipped };
 }
 
 /** Writes one config file's setting with --yes (keeping the old file first), and says what it found or did. */

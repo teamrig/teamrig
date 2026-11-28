@@ -18,7 +18,7 @@ function provedOnWindows(feature: string): Support {
 }
 
 export const declaration: ConnectorDeclaration = {
-  apiVersion: '0.7.0',
+  apiVersion: '0.9.0',
   id: 'github',
   name: 'GitHub',
   kinds: ['tracker', 'codehost'],
@@ -29,6 +29,7 @@ export const declaration: ConnectorDeclaration = {
   configKeys: {},
   manifest: {
     'tracker.issue-import': provedOnWindows('tracker.issue-import'),
+    'tracker.issue-read': SUPPORTED,
     'tracker.accept-label': SUPPORTED,
     'tracker.watch': provedOnWindows('tracker.watch'),
     'tracker.issue-open': SUPPORTED,
@@ -46,6 +47,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.links': SUPPORTED,
     'tracker.fields': SUPPORTED,
     'tracker.similar': SUPPORTED,
+    'tracker.search': SUPPORTED,
     'tracker.security-alert': SUPPORTED,
     'tracker.stamp': SUPPORTED,
     'tracker.hidden-mark': { kind: 'unsupported', notice: 'GitHub shows every mark on an issue to its readers: a mark there is a label or a comment' },
@@ -55,5 +57,6 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pr-land': SUPPORTED,
     'codehost.review-posts': SUPPORTED,
     'codehost.linked-pulls': SUPPORTED,
+    'codehost.pull-files': SUPPORTED,
   },
 };

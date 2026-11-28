@@ -9,6 +9,7 @@ import type { StarterWatch } from '../delivery/starter-watch.ts';
 import type { StepRunner } from '../delivery/steps.ts';
 import type { FileBytes } from '../core/file-bytes.ts';
 import type { Files } from '../core/files.ts';
+import type { FolderSignals } from '../core/folder-signals.ts';
 import type { Env } from '../core/home.ts';
 import type { HttpClient } from '../core/http.ts';
 import type { ChatWebhook } from '../core/webhook.ts';
@@ -27,6 +28,7 @@ import type { PackageRegistry } from '../package-guard/registry.ts';
 import type { WorktreePorts } from '../worktree/remove.ts';
 import type { RestorePorts } from '../restore/ports.ts';
 import type { KitTree } from '../kit/kit-tree.ts';
+import type { InstallMark } from '../kit/install-mark.ts';
 import type { Processes } from '../open/processes.ts';
 import type { SessionProcesses } from '../open/session-processes.ts';
 import type { CommitLog } from '../push-guard/commit-size.ts';
@@ -82,7 +84,7 @@ export interface CliRuntime {
   readonly out: Output;
   /**
    * Whether this run's stdin and stdout are a terminal a person types in: false under an AI CLI's shell tool or a
-   * pipe, where `teamrig ui` cannot draw and opens a split of the session's terminal instead (T5105).
+   * pipe, where `teamrig ui` cannot draw and opens a split of the session's tmux pane or a tab of its Windows Terminal window instead (T5105, T5831).
    */
   readonly interactive: boolean;
   readonly platform: NodeJS.Platform;
@@ -116,6 +118,8 @@ export interface CliRuntime {
   readonly cpu: HostCpu;
   /** The processes that started this one, so a queued step whose launching shell was ended stops too. */
   readonly starters: StarterWatch;
+  /** Tells when anything in a folder changes, so `teamrig events` looks at its files only then (T5758). */
+  readonly folderSignals: FolderSignals;
   /** Runs the command-line tool of a connector adapter, such as `gh`, each run held to the two connector limits of time and output (plugin-api/connector.ts). */
   readonly run: ProgramRunner;
   /** How `teamrig conformance terminal` stages and runs the pinned terminal program it checks: the protocol's limits. */
@@ -141,6 +145,8 @@ export interface CliRuntime {
   readonly restore: RestorePorts;
   /** The folder copies a session start's self-install into the kit home's `versions/` takes (kit/kit-versions.ts). */
   readonly kitTree: KitTree;
+  /** The read-only mark on the kit home's install, lifted under the install lock while teamrig changes it (kit/install-mark.ts). */
+  readonly installMark: InstallMark;
   /** The working tree `teamrig queue --pre-push` checks: clean or changed, and HEAD's tree. */
   readonly trees: TreeState;
   /** The git steps `teamrig merge` takes. */

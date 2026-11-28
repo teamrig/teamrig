@@ -1,7 +1,7 @@
-import { DEFAULT_HOST } from "../../composition/adapters.js";
 import { readConnectorSteps, readHostSteps } from "../../composition/loader.js";
 import { STEPS, isStepId } from "../../features/steps.js";
 import { UsageError } from "../args.js";
+import { hostIdOf } from "../host.js";
 import { openTeamKit, requireConfig } from "../kit.js";
 import { EXIT } from "../runtime.js";
 /** The adapters of one side whose declarations loaded, each with its text of `step`; a refused one is told on stderr. */
@@ -59,7 +59,8 @@ export async function skillStep(args, runtime) {
             throw new UsageError(`--for picks a connector, and ${id} is a host step`);
         }
         const hosts = serversOf(await readHostSteps(), id, runtime);
-        for (const line of stepLines(id, hosts.filter((host) => host.id === DEFAULT_HOST), hosts))
+        const running = hostIdOf(runtime);
+        for (const line of stepLines(id, hosts.filter((host) => host.id === running), hosts))
             runtime.out.stdout(line);
         return EXIT.ok;
     }

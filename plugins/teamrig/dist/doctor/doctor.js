@@ -6,6 +6,7 @@ import { MS_PER_DAY, MS_PER_MINUTE, utcMinuteOf } from "../core/time.js";
 import { unreadSince } from "../inbox/inbox.js";
 import { wideAllowText } from "../permissions/report.js";
 import { describeRequirement } from "../requirements/requirements.js";
+import { handoverSizeWarning } from "../refresh/decide.js";
 import { CONTEXT_MAX_CHARS, TEAM_RULES_MAX_CHARS } from "../rules/pack.js";
 import { missingDenyLines } from "./deny-lines.js";
 /**
@@ -349,6 +350,13 @@ function cliPathFindings({ cliPath, command }) {
         : `cliOnPath.enabled is false, so no session start adds it: set it to true and start a session, or add the folder to the PATH yourself, then open a new terminal`;
     return [{ kind: 'cli-path', detail: `${missing}: ${fix}` }];
 }
+/** Each session whose handover is past the warning size, named as the team knows it; the size note is the refresh's own. */
+function handoverFindings({ handovers: { files, warnBytes }, roster }) {
+    return files.flatMap(({ session, path, bytes }) => {
+        const warning = handoverSizeWarning(bytes, path, warnBytes);
+        return warning === null ? [] : [{ kind: 'handover-long', detail: `${roster.nameOf(session) ?? session} (session ${session}): ${warning}` }];
+    });
+}
 /**
  * Quiet hours whose action is `ask`: in them a helper launch raises a permission prompt (`helperGate`), which nobody
  * at the host answers at night, so the tab waits until someone does (T1983: 222 minutes on 11-04). `block` refuses
@@ -375,7 +383,7 @@ function quietHoursFindings({ budget, now, zone }) {
  * inboxes nobody reads, rules too long to show, a lead's start past the cap or with a rules file cut to a pointer, text every call re-reads over its budget (files, and the lists the newest
  * session holds), a broken tree of teams or a session name two teams use, a variable that overrides every model or effort
  * choice, a launch with a model but no effort, local allow rules that approve a whole tool or program or hold a credential,
- * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, and a teamrig bin folder off the user's PATH.
+ * quiet hours that ask before a helper launch nobody answers at night, secret deny lines no settings file holds, a configured project folder that is no folder here, a PowerShell history no profile keeps credentials out of, a page webhook that gives no URL, a teamrig bin folder off the user's PATH, and a handover past its warning size.
  * It reads only; every fix is the user's.
  */
 export function doctorFindings(input) {
@@ -398,6 +406,7 @@ export function doctorFindings(input) {
         ...shellHistoryFindings(input),
         ...pageFindings(input),
         ...cliPathFindings(input),
+        ...handoverFindings(input),
     ];
 }
 export function formatFinding(finding) {

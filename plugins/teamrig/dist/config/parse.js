@@ -24,6 +24,7 @@ import { isEffort, isModel, isTerminalName } from "./launch.js";
 import { APPLY_FLAG_PATTERN, BUDGET_ACCOUNT_MAX_LENGTH, CLIENT_RECEIVER_PATTERN, CONNECTOR_LIMITS, CONFIG_LIMITS, DB_PROGRAM_NAME_PATTERN, DB_WRITE_ENTRYPOINT_LIMITS, DB_WRITE_NAME_LIMITS, GITHUB_LABEL_MAX_LENGTH, ISSUE_FIELD_NAME_MAX_LENGTH, MEETING_COLOUR_PATTERN, MEETING_HELD_TEXT_MAX_LENGTH, NODE_MODULE_PATTERN, REVIEW_PATH_LIMITS, RULE_CONFLICT_LIMITS, SERVICE_ROLE_LIMITS, } from "./limits.js";
 import { HIRE_CAP_DROPPED, IDLE_RETIRE_DROPPED, LARGE_WINDOW_DROPPED } from "./migrate.js";
 import { ConfigReader, describe, isValidRegex, shortLine } from "./reader.js";
+import { splitAreaGlob } from "./areas.js";
 import { AUTO_RESTART_LEAD, AD_HOC_RUNNERS, PACKAGE_INSTALLS, BURST_POLICIES, CONFLICT_WINNERS, DB_CLIENT_VOCABULARIES, DB_PROGRAM_SHAPES, DB_WRITES, ESCALATIONS, GOALS_MODES, isDbClientVocabulary, isDbProgramShape, isDbWrites, HIRING_POLICIES, isAdHocRunners, isPackageInstalls, isBurstPolicy, isCommitGate, isConflictWinner, isEffortLevel, isEscalation, isGoalsMode, isHiringPolicy, isOverAction, isHookAsks, isIdleLeaderKeep, isIdleMode, isOtherAreaListing, isPushToProtected, isReviewClass, isReviewPathMode, isRouteAllow, isSecretReads, isSecretWrites, isSkipHooks, isTerminalChoice, isExpiringResetKind, isResetKind, isReviewMode, isVerifyGate, isWeekday, RESET_KINDS, HOOK_ASKS, IDLE_LEADER_KEEPS, IDLE_MODES, OTHER_AREA_LISTINGS, OVER_ACTIONS, PUSH_TO_PROTECTED, REVIEW_CLASSES, REVIEW_PATH_MODES, ROUTE_ALLOWS, SECRET_READS, SECRET_WRITES, SKIP_HOOKS, REVIEW_MODES, VERIFY_GATES, WEEKDAYS, isWipMode, WIP_MODES, UI_MODES, isUiMode, } from "./types.js";
 const isSessionName = (name) => SESSION_NAME.test(name) ? undefined : 'expected a lowercase name: a letter, then letters, digits or -, at most 32';
 /** A role a team may leave to a team above it (ANCESTOR_ROLES): one of its sessions, or `<team>/<id>` (T1143). */
@@ -543,16 +544,19 @@ function parseGithub(read, raw, sessions) {
         repos.push(key);
     }
     const issueAtAdd = readIssueAtAdd(read, raw, repos);
+    const areaOwners = readGithubAreaOwners(read, read.section(raw, 'areaOwners', 'github'), sessions);
     return {
         repos,
         owners: readGithubOwners(read, read.section(raw, 'owners', 'github'), sessions),
-        areaOwners: readGithubAreaOwners(read, read.section(raw, 'areaOwners', 'github'), sessions),
+        areaOwners,
+        areaPaths: readGithubAreaPaths(read, read.section(raw, 'areaPaths', 'github'), areaOwners),
         sessions: readGithubSessions(read, read.section(raw, 'sessions', 'github'), repos, sessions),
         closedDays: read.integer(raw, 'closedDays', 'github', DEFAULT_GITHUB.closedDays, CONFIG_LIMITS.closedDays),
         probeSeconds: readProbeSeconds(read, raw),
         statusPush: read.boolean(raw, 'statusPush', 'github', DEFAULT_GITHUB.statusPush),
         fields: parseIssueFields(read, read.section(raw, 'fields', 'github')),
         acceptLabel: read.string(raw, 'acceptLabel', 'github', DEFAULT_GITHUB.acceptLabel, shortLine(GITHUB_LABEL_MAX_LENGTH)),
+        designAssignees: readDesignAssignees(read, raw),
         similarThreshold: read.number(raw, 'similarThreshold', 'github', DEFAULT_GITHUB.similarThreshold, CONFIG_LIMITS.similarThreshold),
         activity: read.boolean(raw, 'activity', 'github', DEFAULT_GITHUB.activity),
         followMax: read.integer(raw, 'followMax', 'github', DEFAULT_GITHUB.followMax, CONFIG_LIMITS.githubFollowMax),
@@ -817,6 +821,20 @@ function readServiceHolders(read, entry, path, sessions, commands) {
     });
     return holders.length === value.length ? holders : undefined;
 }
+/** `github.designAssignees` (T5461): GitHub logins kept in lowercase, as GitHub matches them; one listed twice is reported and kept once. */
+function readDesignAssignees(read, raw) {
+    const login = (value) => (GITHUB_LOGIN.test(value) ? undefined : 'expected a GitHub login: letters, digits or -, at most 39 characters');
+    const logins = [];
+    for (const listed of read.stringList(raw, 'designAssignees', 'github', DEFAULT_GITHUB.designAssignees, login, CONFIG_LIMITS.githubDesignAssignees.maxItems)) {
+        const key = listed.toLowerCase();
+        if (logins.includes(key)) {
+            read.report('github.designAssignees', `${describe(listed)} is listed twice`);
+            continue;
+        }
+        logins.push(key);
+    }
+    return logins;
+}
 /** `github.owners`: a session for each GitHub login; a wrong login or a session not on the team is reported and left out. */
 function readGithubOwners(read, raw, sessions) {
     const owners = {};
@@ -874,6 +892,38 @@ function readGithubAreaOwners(read, raw, sessions) {
         }
     }
     return owners;
+}
+/** A glob that names a path once its `<owner>/<name>:` prefix is taken off. */
+const isAreaGlob = (text) => (splitAreaGlob(text).glob.trim() === '' ? 'expected a path glob after the repository' : undefined);
+/**
+ * `github.areaPaths`: the paths each area label of `github.areaOwners` holds (T3187), the label in lowercase. A label
+ * areaOwners lacks, one listed twice or one listing no glob is reported and left out, so a path never goes to an area no
+ * session owns.
+ */
+function readGithubAreaPaths(read, raw, areaOwners) {
+    const { maxItems, maxLength } = CONFIG_LIMITS.areaPaths;
+    const areas = new Map();
+    for (const label of Object.keys(raw)) {
+        const path = `github.areaPaths.${label}`;
+        const key = label.toLowerCase();
+        if (!Object.hasOwn(areaOwners, key)) {
+            read.report(path, 'is no label of github.areaOwners: name the session that owns it there first');
+            continue;
+        }
+        if (areas.has(key)) {
+            read.report(path, 'is listed twice');
+            continue;
+        }
+        const globs = read.stringList(raw, label, 'github.areaPaths', [], shortLine(maxLength, isAreaGlob), maxItems);
+        const value = raw[label];
+        if (globs.length > 0) {
+            areas.set(key, globs);
+        }
+        else if (Array.isArray(value) && value.length === 0) {
+            read.report(path, 'lists no path: name the globs of the paths the area holds, or leave the label out');
+        }
+    }
+    return Object.fromEntries(areas);
 }
 /** Config version 1's name for `register.priorities`; the v1-to-v2 migration renames it, so a current file never holds it. */
 const RENAMED_PRIORITIES_KEY = 'tiers';
@@ -1919,7 +1969,7 @@ const HOLD_AFTER_ACTIVITY_MINUTES = { min: 0, max: 60 };
 const COUNTDOWN_SECONDS = { min: 0, max: 120 };
 /** 0 turns the stop of Claude Code's compaction off. */
 const COMPACT_CEILING_TOKENS = { min: 0, max: 10_000_000 };
-/** 0 turns the cap off; a megabyte is far past any context window. */
+/** 0 turns the cap (or the warning) off; a megabyte is far past any context window. */
 const HANDOVER_MAX_BYTES = { min: 0, max: 1_000_000 };
 /** A program and its arguments. */
 const END_COMMAND_MAX_ITEMS = 16;
@@ -1949,6 +1999,7 @@ function parseRefresh(read, raw) {
         countdownSeconds: read.integer(raw, 'countdownSeconds', path, defaults.countdownSeconds, COUNTDOWN_SECONDS),
         compactCeilingTokens: read.integer(raw, 'compactCeilingTokens', path, defaults.compactCeilingTokens, COMPACT_CEILING_TOKENS),
         handoverMaxBytes: read.integer(raw, 'handoverMaxBytes', path, defaults.handoverMaxBytes, HANDOVER_MAX_BYTES),
+        handoverWarnBytes: read.integer(raw, 'handoverWarnBytes', path, defaults.handoverWarnBytes, HANDOVER_MAX_BYTES),
         endCommand: read.stringList(raw, 'endCommand', path, defaults.endCommand, undefined, END_COMMAND_MAX_ITEMS),
         ...(handoverDir === undefined ? {} : { handoverDir }),
     };

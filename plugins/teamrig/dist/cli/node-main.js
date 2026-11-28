@@ -7,6 +7,7 @@ import { nodeTerminalPrograms } from "../composition/terminal-kit.js";
 import { resolveKitHome } from "../core/home.js";
 import { nodeFileBytes } from "../core/file-bytes.js";
 import { nodeFiles } from "../core/files.js";
+import { nodeFolderSignals } from "../core/folder-signals.js";
 import { GIT_TREES } from "../delivery/git-tree.js";
 import { nodeHostCpu } from "../delivery/cpu.js";
 import { nodeHostMemory } from "../delivery/memory.js";
@@ -17,6 +18,7 @@ import { NODE_PATH_PROBE } from "../core/path-probe.js";
 import { storeWriter } from "../core/store-program.js";
 import { NODE_STORE_FOLDERS } from "../plugin-store/node-folders.js";
 import { nodeKitTree } from "../kit/kit-tree.js";
+import { INSTALL_MARK_TIMEOUT_MS, nodeInstallMark } from "../kit/install-mark.js";
 import { chatWebhook } from "../core/webhook.js";
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from "../core/credentials.js";
 import { nodeHttpClient } from "../core/http.js";
@@ -113,6 +115,7 @@ export async function runWithNode(argv, entry) {
         processes: nodeProcesses(),
         sessionProcesses,
         starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, isSessionProcess, nodeEvery),
+        folderSignals: nodeFolderSignals,
         shell: nodeShellRunner(),
         steps: nodeStepRunner(process.platform),
         memory: nodeHostMemory(process.platform),
@@ -141,6 +144,7 @@ export async function runWithNode(argv, entry) {
             markExecutable: nodeMarkExecutable(process.platform),
         },
         kitTree: nodeKitTree(),
+        installMark: nodeInstallMark(process.platform, nodeProgramRunner(INSTALL_MARK_TIMEOUT_MS), process.env['SystemRoot']),
         mergeGit: GIT_MERGE,
         pulls: GIT_PULLS,
         changeGit: GIT_CHANGES,

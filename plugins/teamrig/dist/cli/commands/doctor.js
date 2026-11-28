@@ -11,6 +11,7 @@ import { HiringLog } from "../../hiring/log.js";
 import { retiredSessions } from "../../hiring/record.js";
 import { inboxStatus } from "../../inbox/inbox.js";
 import { JsonlRenameLog } from "../../names/log.js";
+import { RefreshStore } from "../../refresh/store.js";
 import { cliLauncherFolder } from "../../restore/cli-launcher.js";
 import { readWideAllow } from "../allow-scope.js";
 import { noPositionals } from "../args.js";
@@ -49,6 +50,11 @@ async function configuredProjects(probe, config, ids) {
         }),
     ];
     return Promise.all(named.map(async (entry) => ({ ...entry, kind: await probe.kind(entry.path) })));
+}
+/** The handover each of `ids` has written and its size in bytes; a session with none is left out. */
+async function handoverSizes(store, ids) {
+    const read = await Promise.all(ids.map(async (session) => ({ session, text: await store.handover(session) })));
+    return read.flatMap(({ session, text }) => (text === undefined ? [] : [{ session, path: store.handoverPath(session), bytes: Buffer.byteLength(text, 'utf8') }]));
 }
 /** The settings files a session started in `project` reads; none on a host whose folders teamrig does not know. */
 function sessionSettingsOf(runtime, project) {
@@ -165,6 +171,7 @@ export async function doctor(args, runtime) {
         shellHistory: await readShellHistory(runtime.files, runtime.probe, { env: runtime.env, userHome: runtime.userHome, platform: runtime.platform }),
         page: pageProblemOf(await pageCheckOf(runtime, paths.team)),
         cliPath: await cliPathOf(runtime, config),
+        handovers: { files: await handoverSizes(new RefreshStore(runtime.files, paths), roster.ids), warnBytes: config.refresh.handoverWarnBytes },
         budget: config.budget,
         now: new Date(runtime.clock.now()),
         zone: teamZone(config, runtime),

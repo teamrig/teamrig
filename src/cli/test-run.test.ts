@@ -267,6 +267,15 @@ describe('teamrig test, the tree its log names (#708)', () => {
     assert.deepEqual(trees.ranLooks, [APP]);
   });
 
+  it("names the folder a one-word line's leading cd moves to, not the one it was started in (T5550)", async () => {
+    const { kit, shell } = harness();
+    const trees = new FakeTrees();
+    trees.ran = { kind: 'git', top: '/wt', head: 'c0ffee12345', dirty: false };
+    await kit.run(['test', '--session', 'alpha', '--', 'cd /wt && npm test'], { shell: shell.prints(PASSED, 0, 1_000), trees, platform: 'linux' });
+    assert.ok(kit.files.get(join(LOGS, 'test-alpha-1.log'))?.startsWith('# folder: /wt\n# git: /wt at c0ffee12345, clean\n$ cd /wt && npm test\n'));
+    assert.deepEqual(trees.ranLooks, ['/wt']);
+  });
+
   it('marks a tree with uncommitted changes', async () => {
     const { kit, shell } = harness();
     const trees = new FakeTrees();

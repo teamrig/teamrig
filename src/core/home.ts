@@ -213,6 +213,10 @@ export interface TeamPaths {
   readonly promptAnswers: string;
   /** Taken by every write of `promptAnswers`, which archives its records older than a week (core/aged-log.ts). */
   readonly promptAnswersLock: string;
+  /** Every write command run for the team, refusals too (src/acts/act-log.ts); records over 30 days old move to the archive. */
+  readonly acts: string;
+  /** Taken by every write of `acts`, which archives its records older than 30 days (core/aged-log.ts). */
+  readonly actsLock: string;
   /** Each session's prompts and replies for the task pane (src/turn-log/), `<id>/<UTC hour>.jsonl` each. */
   readonly turnLog: string;
   /** Where each session last started: its Claude Code process and session, `<id>.json` each (src/sessions/record.ts). */
@@ -353,6 +357,8 @@ export function teamPaths(kitHome: string, team: string, hostSkills: string | un
     launchSettings: join(state, 'launch'),
     promptAnswers: join(state, 'prompt-answers.jsonl'),
     promptAnswersLock: join(state, 'prompt-answers.lock'),
+    acts: join(state, 'acts.jsonl'),
+    actsLock: join(state, 'acts.lock'),
     turnLog: join(state, 'turn-log'),
     sessions: join(state, 'sessions'),
     tabs: join(state, 'tabs'),

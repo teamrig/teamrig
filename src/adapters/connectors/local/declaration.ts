@@ -12,6 +12,7 @@ export const declaration: ConnectorDeclaration = {
   configKeys: {},
   manifest: {
     'tracker.issue-import': NONE,
+    'tracker.issue-read': NONE,
     'tracker.accept-label': NONE,
     'tracker.watch': NONE,
     'tracker.issue-open': NONE,
@@ -29,6 +30,7 @@ export const declaration: ConnectorDeclaration = {
     'tracker.links': NONE,
     'tracker.fields': NONE,
     'tracker.similar': NONE,
+    'tracker.search': NONE,
     'tracker.security-alert': NONE,
     'tracker.stamp': NONE,
     'tracker.hidden-mark': NONE,
@@ -38,5 +40,6 @@ export const declaration: ConnectorDeclaration = {
     'codehost.pr-land': NONE,
     'codehost.review-posts': NONE,
     'codehost.linked-pulls': NONE,
+    'codehost.pull-files': NONE,
   },
 };

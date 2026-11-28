@@ -5,6 +5,8 @@ import { hostPaths } from "./paths.js";
 import { antigravityPermissions } from "./permissions.js";
 import { statusLine } from "./status-line.js";
 import { toolCallShape } from "./tool-call.js";
+import { antigravityTranscriptReader } from "./transcript.js";
+import { antigravityUsageMeter } from "./usage.js";
 import { antigravityUserHooks } from "./user-hooks.js";
 /**
  * The Antigravity host adapter: translates Antigravity's `hooks.json` lifecycle events, tool call shapes, and
@@ -17,8 +19,8 @@ export default defineHost({
         return {
             hooks: hookBridge(toolCall),
             toolCall,
-            transcripts: unsupported('Antigravity transcript reader is not wired yet'),
-            usage: unsupported('Antigravity has no usage meter wired yet'),
+            transcripts: antigravityTranscriptReader,
+            usage: antigravityUsageMeter,
             statusLine,
             paths: hostPaths(deps.platform),
             secrets: { secretFiles: () => [] },

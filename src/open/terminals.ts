@@ -26,19 +26,24 @@ export function teamWindowOf(teamWindow: boolean, team: string): string | undefi
   return teamWindow ? `teamrig-${team}` : undefined;
 }
 
-/** The terminals whose window can split to show a pane beside the one a run works in. */
-export type SplitTerminal = Extract<Terminal, 'tmux' | 'windows-terminal'>;
+/** The terminals that can split the very pane a run works in, to show a pane beside it. */
+export type SplitTerminal = Extract<Terminal, 'tmux'>;
 
 /**
- * The terminal this run works in, found by the variables each sets in its panes, when it is one that can split:
- * tmux first, as it may run inside Windows Terminal and its pane is the nearer one. Other terminals have no split a
- * launcher can ask for.
+ * The terminal this run works in, found by the variables it sets in its panes, when it can split that pane: tmux
+ * alone, as its split names the run's own pane. Windows Terminal is not one: `wt.exe split-pane` splits whichever pane
+ * has the focus in its most recent window, the tab the person is reading, not the session's (T5831).
  */
 export function splittableTerminal(env: Env): SplitTerminal | undefined {
-  if ((env['TMUX'] ?? '') !== '') {
-    return 'tmux';
-  }
-  return (env['WT_SESSION'] ?? '') === '' ? undefined : 'windows-terminal';
+  return (env['TMUX'] ?? '') === '' ? undefined : 'tmux';
+}
+
+/**
+ * The terminal this run works in when it can open a tab in the run's own window but not split its pane: Windows
+ * Terminal, found by `WT_SESSION`, whose `-w 0` is its most recent window (T5831). tmux splits instead.
+ */
+export function tabbingTerminal(env: Env): Extract<Terminal, 'windows-terminal'> | undefined {
+  return (env['TMUX'] ?? '') !== '' || (env['WT_SESSION'] ?? '') === '' ? undefined : 'windows-terminal';
 }
 
 /** The terminals `auto` tries, in order: tmux inside tmux, then the platform's own. */

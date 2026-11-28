@@ -31,6 +31,8 @@ import {
   type HostCommit,
   type HostPullStand,
   type HostPullWork,
+  type HostPullFiles,
+  type PullFileRead,
   type HostReach,
   type HostRerun,
   type HostSearch,
@@ -57,6 +59,7 @@ import {
   blockedByAddArgs,
   commentsReadArgs,
   fieldValueSetArgs,
+  pullFilesArgs,
   issueAssignArgs,
   issueAssigneeReadArgs,
   issueUnassignArgs,
@@ -87,6 +90,7 @@ import {
   labelCreateArgs,
   labelFileReadArgs,
   subIssueAddArgs,
+  PULL_FILES_PAGE,
   WATCH_PATHS,
   watchProbeArgs,
   userReadArgs,
@@ -97,7 +101,7 @@ import {
   type WatchPath,
 } from './gh.ts';
 import { type ProbeAnswer, probeAnswerOf } from './probe.ts';
-import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, type ReadKind, runRead, startFailureText, unreachableText } from './issues.ts';
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, type IssueList, latestIssues, listIssues, readCommentsIn, readPullFilesIn, type ReadKind, runRead, startFailureText, unreachableText } from './issues.ts';
 import { readFields } from './fields.ts';
 import { searchIn } from './search.ts';
 import { failedLogExcerpt } from './job-log.ts';
@@ -451,6 +455,26 @@ export class GitHubIssueHost implements IssueHost {
     }
     const comments = readCommentsIn(read.stdout);
     return comments === undefined ? { kind: 'failed', reason: `gh printed no comment list for ${shown}` } : { kind: 'read', comments };
+  }
+
+  /** The changed files of a pull request (codehost.pull-files), read as pullFiles reads them. */
+  readonly changedFiles: PullFileRead = { pullFiles: (target) => this.pullFiles(target) };
+
+  /**
+   * Reads one page of the pull request's changed files (gh.ts pullFilesArgs) and keeps their paths. An issue that is
+   * no pull request, or one GitHub does not show, fails the read.
+   */
+  private async pullFiles(target: IssueTarget): Promise<HostPullFiles> {
+    const shown = `the changed files of ${targetText(target)}`;
+    const read = await this.read(target.repo, pullFilesArgs(target), shown);
+    if (read.kind === 'missing') {
+      return { kind: 'failed', reason: `GitHub shows no pull request ${targetText(target)}: it is an issue, or one this access cannot see` };
+    }
+    if (read.kind === 'failed') {
+      return read;
+    }
+    const files = readPullFilesIn(read.stdout);
+    return files === undefined ? { kind: 'failed', reason: `gh printed no file list for ${shown}` } : { kind: 'read', ...files, perRead: PULL_FILES_PAGE };
   }
 
   /**

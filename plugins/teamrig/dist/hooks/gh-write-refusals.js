@@ -33,7 +33,7 @@ export function placementInDoubt(runs) {
     return outsideGit || [...gitArgs, ...runs.opaque.map((run) => run.args)].some((args) => args.some((word) => word.dynamic || REMOTE_CHANGES.has(word.text)));
 }
 /** The `teamrig issue` commands, so a call through a program only known when it runs (`$T issue reply o/n#7`) reads as teamrig's, not gh's. */
-export const ISSUE_COMMANDS = new Set(['sync', 'watch', 'migrate', 'reply', 'edit', 'close', 'reopen', 'label', 'similar', 'search', 'show', 'open', 'assign', 'links']);
+export const ISSUE_COMMANDS = new Set(['sync', 'watch', 'migrate', 'reply', 'edit', 'close', 'reopen', 'label', 'similar', 'search', 'show', 'open', 'assign', 'links', 'intake']);
 /** The `teamrig issue` commands gh's issue group has too; teamrig's alone names its issue as `owner/name#n`, which gh never takes. */
 const SHARED_ISSUE_COMMANDS = new Set(['edit', 'close']);
 /** True when an unnamed program's words read as a `teamrig issue` call rather than a gh one. */

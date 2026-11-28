@@ -1,5 +1,5 @@
 import type { CloseReason, IssueTarget } from '../plugin-api/index.ts';
-import type { TrackerWorld, WorldIssue } from '../conformance/index.ts';
+import type { Filing, TrackerReadsWorld, TrackerWorld, WorldIssue } from '../conformance/index.ts';
 import type { GhRequest, GhResult, GhRunner } from '../adapters/connectors/github/gh.ts';
 
 /** One issue as the GitHub REST API holds it. */
@@ -84,6 +84,38 @@ function valuesOf(fields: readonly [string, string][], key: string): string[] {
   return fields.filter(([name]) => name === key).map(([, value]) => value);
 }
 
+/** A search's query as the GitHub connector sends it: `repo:<r> "<term>"... is:issue|is:pr[ is:open|is:closed]`. */
+const SEARCH_QUERY = /^repo:(\S+)((?: "[^"\s]+")+) is:(issue|pr)(?: is:(open|closed))?$/u;
+
+interface SearchAsked {
+  readonly repo: string;
+  readonly terms: readonly string[];
+  readonly pull: boolean;
+  readonly state: 'open' | 'closed' | undefined;
+  readonly perPage: number;
+}
+
+/** The search a `-f q=... -f per_page=N` pair asks for; undefined for a query this fake does not read. */
+function searchAsked(fields: readonly [string, string][]): SearchAsked | undefined {
+  const [q] = valuesOf(fields, 'q');
+  const [perPage] = valuesOf(fields, 'per_page');
+  const parts = SEARCH_QUERY.exec(q ?? '');
+  if (parts === null || perPage === undefined || fields.length !== 2) {
+    return undefined;
+  }
+  const [, repo = '', quoted = '', kind, state] = parts;
+  return {
+    repo,
+    terms: quoted
+      .trim()
+      .split(' ')
+      .map((term) => term.slice(1, -1).toLowerCase()),
+    pull: kind === 'pr',
+    state: state === 'open' || state === 'closed' ? state : undefined,
+    perPage: Number(perPage),
+  };
+}
+
 /**
  * One repository on GitHub, faked behind `gh api` as the GitHub connector calls it: the REST lines that open an issue,
  * comment on it, replace its body (their text a JSON body on stdin, or `-f` fields), close it, add and take off its labels and assignees, and read a label. It holds
@@ -133,6 +165,25 @@ export class GitHubWorld implements GhRunner {
     };
   }
 
+  /** The tracker reads contract's view of this repository: issues a person files by hand, in any state. */
+  readsWorld(): TrackerReadsWorld {
+    return {
+      repo: this.repo,
+      file: (filing: Filing) => {
+        const target = this.file(filing.title, filing.body, filing.labels ?? []);
+        const held = this.issues.get(target.number);
+        if (held !== undefined) {
+          held.assignees = [...(filing.assignees ?? [])];
+          if (filing.state === 'closed') {
+            held.state = 'closed';
+            held.stateReason = 'completed';
+          }
+        }
+        return target;
+      },
+    };
+  }
+
   private file(title: string, body: string, labels: readonly string[]): IssueTarget {
     this.last += 1;
     for (const label of labels) {
@@ -143,9 +194,28 @@ export class GitHubWorld implements GhRunner {
     return { repo: this.repo, number: this.last };
   }
 
+  /**
+   * One page of GitHub's issue search: the issues holding every term in their title or body, case aside, oldest first;
+   * none for a search of pull requests, which this repository holds none of. `total_count` counts every match.
+   */
+  private search(asked: SearchAsked): GhResult {
+    const matches =
+      asked.repo !== this.repo || asked.pull
+        ? []
+        : [...this.issues].filter(([, issue]) => (asked.state === undefined || issue.state === asked.state) && asked.terms.every((term) => `${issue.title}\n${issue.body}`.toLowerCase().includes(term)));
+    return ok({
+      total_count: matches.length,
+      items: matches.slice(0, asked.perPage).map(([number, issue]) => ({ number, title: issue.title, state: issue.state, repository_url: `https://api.github.com/repos/${this.repo}` })),
+    });
+  }
+
   private answer(args: readonly string[], input: string | undefined): GhResult {
     const [verb, path, xFlag, method, ...rest] = args;
     const fields = fieldsOf(rest, input);
+    if (verb === 'api' && path === 'search/issues' && xFlag === '-X' && method === 'GET' && fields !== undefined) {
+      const asked = searchAsked(fields);
+      return asked === undefined ? this.unknown(args) : this.search(asked);
+    }
     const base = `repos/${this.repo}/`;
     if (verb !== 'api' || path === undefined || !path.startsWith(base)) {
       return this.unknown(args);
@@ -172,6 +242,15 @@ export class GitHubWorld implements GhRunner {
   /** A line on one held issue, by the rest of its path; undefined for one this fake does not know. */
   private onIssue(issue: GitHubIssue, route: readonly string[], method: string, fields: readonly [string, string][]): GhResult | undefined {
     const [what, item] = route;
+    if (what === undefined && method === 'GET') {
+      return ok({
+        title: issue.title,
+        body: issue.body === '' ? null : issue.body,
+        state: issue.state,
+        labels: issue.labels.map((name) => ({ name })),
+        assignees: issue.assignees.map((login) => ({ login })),
+      });
+    }
     if (what === undefined && method === 'PATCH') {
       const [body] = valuesOf(fields, 'body');
       issue.body = body ?? issue.body;

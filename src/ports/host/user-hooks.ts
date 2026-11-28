@@ -46,6 +46,11 @@ export interface HostConfigFileSet {
   folder(userHome: string): string;
   /** Whether a file in the folder, by its name, is one of the set. */
   holds(name: string): boolean;
+  /**
+   * The end every file of the set has, such as `.config.toml`: the install guard keeps each name in the folder that
+   * ends so (T5542), as it cannot ask `holds` of a glob.
+   */
+  readonly suffix: string;
   /** The setting as the person reads it in each file, such as `[features] unified_exec_tty = false where set`. */
   readonly setting: string;
   /** One file's text with the setting in, or undefined when it already reads so. */

@@ -21,21 +21,7 @@
       {
         "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "push-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "package-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "secret-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "db-write-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "exec-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "pass-record-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "install-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "service-role-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "readonly-allow", "--host", "claude-code"], "timeout": 15 }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "route-allow", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "guards", "push-guard", "package-guard", "secret-guard", "db-write-guard", "exec-guard", "pass-record-guard", "install-guard", "service-role-guard", "picker-guard", "readonly-allow", "route-allow", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {
@@ -47,10 +33,7 @@
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "pass-record-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "install-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "service-role-guard", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "secret-guard", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "guards", "pass-record-guard", "install-guard", "service-role-guard", "secret-guard", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {
@@ -72,7 +55,7 @@
         ]
       },
       {
-        "matcher": "AskUserQuestion|Bash",
+        "matcher": "AskUserQuestion",
         "hooks": [
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/guard-main.js", "hook", "picker-guard", "--host", "claude-code"], "timeout": 15 }
         ]
@@ -88,13 +71,19 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|PowerShell|Read|Grep",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "secret-redact", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "secret-redact", "loop-nudge", "missing-cli", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch",
+        "matcher": "Read|Grep",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "secret-redact", "loop-nudge", "--host", "claude-code"], "timeout": 15 }
+        ]
+      },
+      {
+        "matcher": "Glob|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch",
         "hooks": [
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "loop-nudge", "--host", "claude-code"], "timeout": 15 }
         ]
@@ -102,14 +91,7 @@
       {
         "matcher": "SendMessage",
         "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "failed-send", "--host", "claude-code"], "timeout": 15 },
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "route-reminder", "--host", "claude-code"], "timeout": 15 }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "missing-cli", "--host", "claude-code"], "timeout": 15 }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/dist/cli/main.js", "hook", "after", "failed-send", "route-reminder", "--host", "claude-code"], "timeout": 15 }
         ]
       },
       {

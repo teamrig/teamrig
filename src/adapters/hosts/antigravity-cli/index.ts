@@ -5,6 +5,8 @@ import { hostPaths } from './paths.ts';
 import { antigravityPermissions } from './permissions.ts';
 import { statusLine } from './status-line.ts';
 import { toolCallShape } from './tool-call.ts';
+import { antigravityTranscriptReader } from './transcript.ts';
+import { antigravityUsageMeter } from './usage.ts';
 import { antigravityUserHooks } from './user-hooks.ts';
 
 /**
@@ -18,8 +20,8 @@ export default defineHost({
     return {
       hooks: hookBridge(toolCall),
       toolCall,
-      transcripts: unsupported('Antigravity transcript reader is not wired yet'),
-      usage: unsupported('Antigravity has no usage meter wired yet'),
+      transcripts: antigravityTranscriptReader,
+      usage: antigravityUsageMeter,
       statusLine,
       paths: hostPaths(deps.platform),
       secrets: { secretFiles: () => [] },

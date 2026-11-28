@@ -365,21 +365,25 @@ export async function coldSend(args, runtime) {
 export async function failedSend(args, runtime) {
     noPositionals(args);
     const { event } = await readHookInput(runtime);
-    const failed = event === undefined ? undefined : failedSendOf(event);
+    writeReply(runtime, 'tool-end', event === undefined ? undefined : await failedSendReplyOf(runtime, event));
+    return EXIT.ok;
+}
+/** The failed-send hook's reply to this call, alone or in a `hook after` set: the inbox line to write instead, or none. */
+export async function failedSendReplyOf(runtime, event) {
+    const failed = failedSendOf(event);
     if (failed === undefined) {
-        return EXIT.ok;
+        return undefined;
     }
-    const found = await sessionTeam(event?.cwd, runtime);
+    const found = await sessionTeam(event.cwd, runtime);
     if (found.kind !== 'team') {
-        return EXIT.ok;
+        return undefined;
     }
     const kit = await openKit(runtime, found.team);
     if (kit.load.status !== 'loaded') {
-        return EXIT.ok;
+        return undefined;
     }
     const receiver = (await rosterOf(runtime, kit, kit.load.config)).lookup(failed.to);
-    writeReply(runtime, 'tool-end', { context: failedSendLine(failed, receiver.ok ? receiver.id : undefined, KIT_NAME, kit.load.config.wake.enabled) });
-    return EXIT.ok;
+    return { context: failedSendLine(failed, receiver.ok ? receiver.id : undefined, KIT_NAME, kit.load.config.wake.enabled) };
 }
 /**
  * PostToolUse on SendMessage (T783): after a delivered message to a session under a sub-lead below the sender, hands
@@ -389,29 +393,33 @@ export async function failedSend(args, runtime) {
 export async function routeReminder(args, runtime) {
     noPositionals(args);
     const { event } = await readHookInput(runtime);
-    const sent = event === undefined ? undefined : deliveredSendOf(event);
-    if (event === undefined || sent === undefined) {
-        return EXIT.ok;
+    writeReply(runtime, 'tool-end', event === undefined ? undefined : await routeReminderReplyOf(runtime, event));
+    return EXIT.ok;
+}
+/** The route-reminder hook's reply to this call, alone or in a `hook after` set: the line to route via the sub-lead, or none. */
+export async function routeReminderReplyOf(runtime, event) {
+    const sent = deliveredSendOf(event);
+    if (sent === undefined) {
+        return undefined;
     }
     const found = await sessionTeam(event.cwd, runtime);
     if (found.kind !== 'team') {
-        return EXIT.ok;
+        return undefined;
     }
     const kit = await openKit(runtime, found.team);
     if (kit.load.status !== 'loaded') {
-        return EXIT.ok;
+        return undefined;
     }
     const { config } = kit.load;
     const roster = await rosterOf(runtime, kit, config);
     const receiver = roster.lookup(sent.to);
     const sender = await teamSessionOf(runtime, kit, roster, event.session ?? null);
     if (!receiver.ok || sender === undefined) {
-        return EXIT.ok;
+        return undefined;
     }
     const message = { from: sender, to: receiver.id, text: sent.text };
     const line = routeReminderOf(new LeadTree(config), message, (id) => roster.nameOf(id) ?? id, KIT_NAME);
-    writeReply(runtime, 'tool-end', line === undefined ? undefined : { context: line });
-    return EXIT.ok;
+    return line === undefined ? undefined : { context: line };
 }
 /**
  * PreToolUse on Agent (and the older Task): asks the person before a helper launch, or refuses it, when

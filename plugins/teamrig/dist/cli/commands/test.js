@@ -5,6 +5,7 @@ import { errorMessage } from "../../core/guards.js";
 import { ENV, resolveKitHome } from "../../core/home.js";
 import { resolveTeam } from "../../core/team.js";
 import { treeHeader } from "../../delivery/run-tree.js";
+import { stepFolderOf } from "../../delivery/step-folder.js";
 import { commandHeader, LiveLog, pruneLogs, reserveLog } from "../../test-run/logs.js";
 import { cleanOutput, parseTestOutput } from "../../test-run/parse.js";
 import { labelOf, reportLines } from "../../test-run/report.js";
@@ -83,7 +84,8 @@ export async function test(args, runtime) {
     const words = shellWordsOf(args, runtime.platform);
     const place = await logPlace(runtime, givenSession(args, runtime));
     const command = commandLine(words, runtime.platform);
-    const header = treeHeader(runtime.cwd, runtime.trees.ranIn(runtime.cwd)) + commandHeader(command);
+    const folder = stepFolderOf(words, runtime.cwd, runtime.platform);
+    const header = treeHeader(folder, runtime.trees.ranIn(folder)) + commandHeader(command);
     const log = await reserveLog(runtime.files, place.dir, place.session, header);
     const run = place.queued ? commandLine(queuedWords(runtime.self, words, place.session), runtime.platform) : command;
     const started = runtime.clock.now();

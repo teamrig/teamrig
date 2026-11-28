@@ -30,6 +30,7 @@ export const declaration = {
     configKeys: CONFIG_KEYS,
     manifest: {
         'tracker.issue-import': partial("a description's formatting, and the reporter's tie to the project", 'a Jira description is read as plain text, and Jira names no tie between a reporter and the project: every issue is read as an outsider\'s'),
+        'tracker.issue-read': partial("a description's formatting", 'a Jira description is read as plain text, and a Jira issue is never a pull request'),
         'tracker.accept-label': unsupported('the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue'),
         'tracker.watch': partial('a free look for a change', 'each look for a change is one Jira search, which counts against the site\'s rate limit'),
         'tracker.issue-open': partial('Markdown, and a type chosen for one issue', "an issue opens in Jira as the type the team's connectors.jira.issueType names, without it as a Task, or as the project's first type that is no sub-task when it has no Task, its body as plain paragraphs: its Markdown marks show as typed"),
@@ -47,6 +48,7 @@ export const declaration = {
         'tracker.links': unsupported(NOT_BUILT.links),
         'tracker.fields': unsupported('the Jira connector does not write an issue\'s priority or type yet'),
         'tracker.similar': UNPROVED,
+        'tracker.search': partial('pull requests', 'a Jira search finds issues alone: a search of pull requests finds none, as Jira holds no code'),
         'tracker.security-alert': UNPROVED,
         'tracker.stamp': UNPROVED,
         'tracker.hidden-mark': unsupported('the Jira connector keeps no hidden mark on an issue yet'),
@@ -56,5 +58,6 @@ export const declaration = {
         'codehost.pr-land': NOT_A_CODE_HOST,
         'codehost.review-posts': NOT_A_CODE_HOST,
         'codehost.linked-pulls': NOT_A_CODE_HOST,
+        'codehost.pull-files': NOT_A_CODE_HOST,
     },
 };

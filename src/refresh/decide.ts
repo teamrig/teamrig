@@ -10,7 +10,7 @@ import type { RefreshState, StandingAsk } from './state.ts';
 
 export type RefreshSettings = Pick<
   RefreshConfig,
-  'enabled' | 'contextTokens' | 'everyTasks' | 'everyTasksMinTokens' | 'tabTitle' | 'restartDelaySeconds' | 'compactCeilingTokens' | 'handoverMaxBytes'
+  'enabled' | 'contextTokens' | 'everyTasks' | 'everyTasksMinTokens' | 'tabTitle' | 'restartDelaySeconds' | 'compactCeilingTokens' | 'handoverMaxBytes' | 'handoverWarnBytes'
 >;
 
 /** A session whose handover is written, waiting for its fresh start. */
@@ -174,15 +174,39 @@ const NEXT_TEXT: Readonly<Record<NoticeNext, (context: StopContext) => { readonl
   clear: () => ({ text: 'type /clear for a fresh start', mark: 'type /clear' }),
 };
 
-/** The notice that `state`'s handover is written, and what comes `next`. */
-export function noticeOf(state: ReadyState, context: StopContext, next: NoticeNext): NoticeDecision {
+/**
+ * The one-line note for a handover past `refresh.handoverWarnBytes` (T2537): still taken, since only the cap refuses,
+ * but every fresh start reads all of it, and what makes one long is a how-to or a code map, which drift from the
+ * skills and files that should hold them. Null at or under the size, with no handover, or with the warning off (0).
+ */
+export function handoverWarning(handover: string | undefined, handoverPath: string, warnBytes: RefreshConfig['handoverWarnBytes']): string | null {
+  return handoverSizeWarning(handover === undefined ? 0 : Buffer.byteLength(handover, 'utf8'), handoverPath, warnBytes);
+}
+
+/** `handoverWarning` of a handover `bytes` long, for a reader that holds only its size (`doctor`). */
+export function handoverSizeWarning(bytes: number, handoverPath: string, warnBytes: RefreshConfig['handoverWarnBytes']): string | null {
+  if (warnBytes === 0 || bytes <= warnBytes) {
+    return null;
+  }
+  return (
+    `${handoverPath} is ${bytes.toLocaleString('en-US')} bytes, past refresh.handoverWarnBytes (${warnBytes.toLocaleString('en-US')}): ` +
+    'a handover holds state only; move each how-to to a skill and a code map to a reference file it names'
+  );
+}
+
+/**
+ * The notice that `state`'s handover is written, and what comes `next`; `handover`, the file as written, adds the note
+ * when it is past the warning size.
+ */
+export function noticeOf(state: ReadyState, context: StopContext, next: NoticeNext, handover?: string): NoticeDecision {
   const { name } = context.session;
   const { text, mark } = NEXT_TEXT[next](context);
   const finished = state.task === null ? '' : ` finished ${state.task} and`;
+  const warning = handoverWarning(handover, context.handoverPath, context.settings.handoverWarnBytes);
   return {
     kind: 'notice',
     state: { ...state, noticed: true, transcript: context.transcript },
-    message: `${context.command}: ${name}${finished} wrote its handover; ${text}`,
+    message: `${context.command}: ${name}${finished} wrote its handover; ${text}${warning === null ? '' : `\n${context.command}: ${warning}.`}`,
     title: context.settings.tabTitle ? `${sessionDisplay(context.session.team, name)}: ${mark}` : undefined,
     restart: next === 'restart',
   };
@@ -389,7 +413,7 @@ function handoverAsk(moment: AskMoment, cause: Cause, context: AskContext, runni
   const after = moment.kind === 'midTurn' ? ': the turn end takes the handover as ready and the fresh start follows it.' : ': the turn end takes the handover as ready. Do not start new work.';
   return (
     `${context.command}: ${why}${whenOf(moment)}. Write your handover to ${context.handoverPath}, replacing the whole file (your fresh start reads all of it), ` +
-    'with what the register lacks, not task statuses, which your fresh start reads live from the register: ' +
+    'with only the state the register lacks (a how-to goes in a skill, a code map in a reference file it names), not task statuses, which your fresh start reads live from the register: ' +
     'a `## State` section (where things are; the scratchpad files, plan file and scheduled jobs the next session still needs; questions still open with the user) ' +
     'and a `## Next steps` section (the next step of each task in progress; what to check later, and when). ' +
     `${runningLine(running)}Then end your turn${after}`
@@ -429,7 +453,7 @@ function takenHandover(state: RefreshState, ask: StandingAsk, facts: StopFacts, 
     if (held || due.running > 0) {
       return { kind: 'write', state: ready.state };
     }
-    return noticeOf(ready.state, context, context.canRestart ? 'restart' : 'clear');
+    return noticeOf(ready.state, context, context.canRestart ? 'restart' : 'clear', handover);
   }
   if (held || hash === ask.fixHash) {
     return undefined;
@@ -479,7 +503,7 @@ export function decideStop(state: RefreshState | undefined, context: StopContext
       return MEASURE;
     }
     // A fresh start now would cut the running work off: the notice waits for a stop after it ends.
-    return facts.due.running > 0 ? NONE : noticeOf(state, context, context.canRestart ? 'restart' : 'clear');
+    return facts.due.running > 0 ? NONE : noticeOf(state, context, context.canRestart ? 'restart' : 'clear', facts.due.handover);
   }
   // A handover written since an ask is taken here, the stop after the ask's own block too: the turn that writes it
   // ends on that block (T2533).

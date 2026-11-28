@@ -2,7 +2,7 @@ import { autoRestartOf } from '../../config/refresh.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { errorMessage } from '../../core/guards.ts';
 import { KIT_NAME, type TeamPaths } from '../../core/home.ts';
-import { boundaryOf, decideReady } from '../../refresh/decide.ts';
+import { boundaryOf, decideReady, handoverWarning } from '../../refresh/decide.ts';
 import { RefreshStore } from '../../refresh/store.ts';
 import { noPositionals, onePositional, type ParsedArgs } from '../args.ts';
 import { callerOf } from '../inputs.ts';
@@ -55,7 +55,8 @@ export async function refresh(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
   const now = new Date(runtime.clock.now()).toISOString();
 
   if (target === undefined) {
-    const decision = decideReady(await store.state(by), await store.handover(by), store.handoverPath(by), now, config.refresh.handoverMaxBytes);
+    const handover = await store.handover(by);
+    const decision = decideReady(await store.state(by), handover, store.handoverPath(by), now, config.refresh.handoverMaxBytes);
     switch (decision.kind) {
       case 'refused':
         throw new RefusedError(decision.reason);
@@ -69,6 +70,10 @@ export async function refresh(args: ParsedArgs, runtime: CliRuntime): Promise<Ex
       ? `End your turn now: ${KIT_NAME} starts you fresh once you are idle, or asks the user to type /clear`
       : 'Ask the user to type /clear';
     runtime.out.stdout(`Ready. ${next}; your next start reads ${store.handoverPath(by)}.`);
+    const warning = handoverWarning(handover, store.handoverPath(by), config.refresh.handoverWarnBytes);
+    if (warning !== null) {
+      runtime.out.stdout(`NOTE ${warning}.`);
+    }
     return EXIT.ok;
   }
 

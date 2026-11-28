@@ -12,6 +12,8 @@ export interface AssignWrite {
   readonly target: IssueTarget;
   readonly add: readonly string[];
   readonly remove: readonly string[];
+  /** The logins a design issue may be assigned to before it is agreed (`github.designAssignees`), matched without case. */
+  readonly designAssignees: readonly string[];
 }
 
 /** How an assign ended: every step done, a step failed, or it was refused before anything was sent for a reason a retry cannot change. */
@@ -28,10 +30,17 @@ export function loginRefusal(login: string): string | undefined {
   return login.length > MAX_LOGIN ? `the login ${JSON.stringify(login)} is ${login.length} characters, over the ${MAX_LOGIN} a login may hold` : undefined;
 }
 
+/** Whether `login` is one of `listed`, case aside, as the host matches logins. */
+function isDesignAssignee(listed: readonly string[], login: string): boolean {
+  const key = login.toLowerCase();
+  return listed.some((entry) => entry.toLowerCase() === key);
+}
+
 /**
  * Adds and takes off assignees through `host`, one line said for each step: ACCESS, then ASSIGNED and UNASSIGNED, or
  * FAILED or REFUSED with the reason. Before any write: an add to a design issue is refused, as design talk is no work
- * to take until it is agreed and its label comes off; and each login to add is read as one the host may assign to
+ * to take until it is agreed and its label comes off, but for the logins in `designAssignees`, such as the team owner
+ * every design issue is assigned to (T5461); and each login to add is read as one the host may assign to
  * this very item (someone with access to the repository, or someone who took part in the item, such as a commenter
  * asking to take it), so the host never drops one silently. The first failure stops it, and a failure after a write
  * says what was done.
@@ -51,8 +60,11 @@ export async function assignIssue(host: HostAccess & Labels & Assignees, write: 
       say(`FAILED ${shown}: ${labels.kind === 'failed' ? labels.reason : `${host.name} shows no such issue or pull request`}; nothing was changed`);
       return 'failed';
     }
-    if (labels.labels.includes(DESIGN_LABEL)) {
-      say(`REFUSED ${shown}: it is a design issue, talk and not work to take, so no one is assigned until it is agreed and the ${JSON.stringify(DESIGN_LABEL)} label comes off; nothing was changed`);
+    const outsider = labels.labels.includes(DESIGN_LABEL) ? write.add.find((login) => !isDesignAssignee(write.designAssignees, login)) : undefined;
+    if (outsider !== undefined) {
+      const who = write.designAssignees.length === 0 ? 'no one' : `no one but github.designAssignees (${write.designAssignees.join(', ')})`;
+      const why = write.designAssignees.length === 0 ? '' : `, and ${outsider} is not one of them`;
+      say(`REFUSED ${shown}: it is a design issue, talk and not work to take, so ${who} is assigned until it is agreed and the ${JSON.stringify(DESIGN_LABEL)} label comes off${why}; nothing was changed`);
       return 'refused';
     }
     for (const login of write.add) {

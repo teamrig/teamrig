@@ -136,6 +136,7 @@ const request = (overrides: Partial<MergeRequest> = {}): MergeRequest => ({
   opens: true,
   labels: [],
   unlinked: null,
+  reachRefused: null,
   ...overrides,
 });
 
@@ -264,6 +265,18 @@ test('opens no pull request for a task that links no issue, but merges one alrea
   const log: string[] = [];
   assert.equal((await mergeRequestOnCi(open.gh, { unlinked }, line => log.push(line))).kind, 'merged');
   assert.equal(log[1], `warning: pull request #3: ${unlinked}`);
+});
+
+test('opens no pull request whose note states no allowed reach, but merges one already open with a warning (T3417)', async () => {
+  const reachRefused = 'the pull request note cannot open the pull request: its Reach "All users" is none of plugin | contributors | dev-only (<why users do not need it>) | team';
+  const fresh = fakeGitHub({ rounds: [green] });
+  const refused = await mergeRequestOnCi(fresh.gh, { reachRefused }, () => undefined);
+  assert.deepEqual(refused.kind === 'refused' ? refused.reason : refused, reachRefused);
+  assert.equal(fresh.writes.length, 0);
+  const open = fakeGitHub({ rounds: [green], openPullSha: SHA });
+  const log: string[] = [];
+  assert.equal((await mergeRequestOnCi(open.gh, { reachRefused }, line => log.push(line))).kind, 'merged');
+  assert.equal(log[1], `warning: pull request #3: ${reachRefused}`);
 });
 
 test('labels the pull request it opened or found at the head before its checks run, and none at another head (T4796)', async () => {
@@ -1428,6 +1441,30 @@ test('--note-file opens the body of the pull request it opens, and a missing not
   const missing = runFixture();
   await assert.rejects(runMerge({ ...ARGS, noteFile: 'C:/notes/none.md' }, missing.deps), /--note-file C:\/notes\/none\.md: no such file/);
   assert.equal(missing.ghFor.mock.callCount(), 0);
+});
+
+test("a repo asking for ## Reach opens no pull request for a dev-only tooling change naming no carrier, reading the head's files (T3417)", async () => {
+  const run = async (note: string): Promise<{ code: number; err: string[]; opened: boolean; diffs: string[] }> => {
+    const { deps, ghWrites, err } = runFixture();
+    const diffs: string[] = [];
+    const git: MergeDeps['git'] = (...args) => {
+      if (args[0] !== 'diff') return deps.git(...args);
+      diffs.push(args.join(' '));
+      return 'tools/ship/merge.ts\ndocs/a.md\n';
+    };
+    const profiles = parseProfiles(`{"${REPO}":{"main":"main","gate":"ci","checks":["gates","test"],"regenerated":["out/"],"pullSections":["Reach"]}}`);
+    const gate: GateDeps = { ...deps.gate, readText: path => (path === 'C:/notes/pr.md' ? note : null) };
+    const code = await runMerge({ ...ARGS, noteFile: 'C:/notes/pr.md' }, { ...deps, git, profiles, gate });
+    return { code, err, opened: ghWrites.some(args => args[1] === `repos/${REPO}/pulls`), diffs };
+  };
+  const refused = await run('## Reach\ndev-only (the ship tool)\n');
+  assert.equal(refused.code, 1);
+  assert.match(refused.err.join('\n'), /^REFUSED the pull request note is dev-only and the change touches tools\/ship\/merge\.ts, but it names no plugin carrier/m);
+  assert.equal(refused.opened, false);
+  assert.deepEqual(refused.diffs, [`diff --name-only refs/remotes/origin/main...${SHA}`]);
+  const carried = await run('## Reach\ndev-only (the ship tool)\nPlugin carrier: none: only maintainers ship\n');
+  assert.equal(carried.code, 0, carried.err.join('\n'));
+  assert.equal(carried.opened, true);
 });
 
 test("a ship's pull request takes its issue's title, a Closes line and the repo's labels of its task; the release one is never dressed (T4796)", async () => {

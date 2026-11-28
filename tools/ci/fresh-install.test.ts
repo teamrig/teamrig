@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { delimiter, join } from 'node:path';
 import type { RunRequest, RunResult } from './dist-smoke.ts';
-import { cmdArg, freshInstall, inheritedValue, installEnv, installSteps, layoutOf, teamrigRequest, type InstallInput } from './fresh-install.ts';
+import { RecordingMark } from '../../src/testing/recording-mark.ts';
+import { cmdArg, freshInstall, inheritedValue, installEnv, installSteps, kitHomeUnder, layoutOf, removeScratchHome, teamrigRequest, type InstallInput } from './fresh-install.ts';
 
 const HOME = join('scratch', 'home');
 const { clone, plugin, project } = layoutOf(HOME);
@@ -27,7 +28,8 @@ interface Call {
 
 /**
  * A runner that answers each install step with the text it expects and each hook with nothing, recording every
- * call; `override` changes the answer to the step or hook whose args include it.
+ * call; `override` changes the answer to the step or hook one of whose args is it exactly (`sessions` is no match for
+ * team create's `--sessions`).
  */
 function fakeRunner(input: InstallInput, override?: { readonly arg: string; readonly result: RunResult }): { readonly calls: Call[]; readonly run: (request: RunRequest, cwd: string) => RunResult } {
   const expected = new Map(installSteps(input).map((step) => [JSON.stringify(step.request), step.expect ?? '']));
@@ -36,7 +38,7 @@ function fakeRunner(input: InstallInput, override?: { readonly arg: string; read
     calls,
     run: (request, cwd) => {
       calls.push({ request, cwd });
-      if (override !== undefined && request.args.some((arg) => arg.includes(override.arg))) {
+      if (override !== undefined && request.args.includes(override.arg)) {
         return override.result;
       }
       return { status: 0, stdout: expected.get(JSON.stringify(request)) ?? '', stderr: '' };
@@ -86,8 +88,12 @@ describe('installSteps', () => {
         'list',
         'set',
         'inbox read',
+        'sessions, the host memory the queue reads',
+        'queue a first step',
       ],
     );
+    // The first queued step runs as a small one, so a new host holds only the small reserve for it.
+    assert.deepEqual(steps.at(-1)?.request.args, ['queue', '--session', 'web', '--what', 'first step', '--small', '--', 'git', '--version']);
   });
 
   it('runs the .cmd launcher through cmd.exe on Windows, each argument as cmd takes it', () => {
@@ -166,10 +172,10 @@ describe('freshInstall', () => {
     });
     assert.deepEqual(report.findings, []);
     assert.deepEqual(read, [plugin]);
-    assert.equal(report.log.length, 13);
+    assert.equal(report.log.length, 15);
     assert.equal(report.log[0], 'exit 0 git clone, no login');
-    assert.equal(report.log[12], 'exit 0 PreToolUse hook (hook push-guard)');
-    const hook = calls[12];
+    assert.equal(report.log[14], 'exit 0 PreToolUse hook (hook push-guard)');
+    const hook = calls[14];
     assert.deepEqual(hook?.request.args, [`${plugin}/dist/hooks/main.js`, 'hook', 'push-guard']);
     assert.equal(hook?.request.file, 'node');
     assert.equal(hook?.cwd, project);
@@ -197,6 +203,15 @@ describe('freshInstall', () => {
     assert.equal(calls.length, 6);
   });
 
+  it('carries the reading a step shows on its log line, and leaves the line plain when the step prints none', () => {
+    const input = inputOf('linux');
+    const shown = freshInstall(input, fakeRunner(input, { arg: 'sessions', result: { status: 0, stdout: 'web idle\nhost: 5120 MB free; commit 40%\n', stderr: '' } }).run, () => MANIFEST);
+    assert.deepEqual(shown.findings, []);
+    assert.equal(shown.log[11], 'exit 0 sessions, the host memory the queue reads: host: 5120 MB free');
+    const plain = freshInstall(input, fakeRunner(input, { arg: 'sessions', result: { status: 0, stdout: 'MB free, no host line\n', stderr: '' } }).run, () => MANIFEST);
+    assert.equal(plain.log[11], 'exit 0 sessions, the host memory the queue reads');
+  });
+
   it('fails a step that exits 0 without the text it must print, and one that could not start', () => {
     const input = inputOf('linux');
     const quiet = freshInstall(input, fakeRunner(input, { arg: 'inbox', result: { status: 0, stdout: 'READ web: nothing new\n', stderr: '' } }).run, () => MANIFEST);
@@ -213,5 +228,24 @@ describe('freshInstall', () => {
     assert.match(report.findings[0] ?? '', /^Stop: a hook is not exec form/);
     assert.equal(report.findings[1], 'SessionStart hook (hook session-start): exit 2: boom');
     assert.equal(report.log.at(-1), 'exit 0 PreToolUse hook (hook push-guard)');
+  });
+});
+
+describe('removeScratchHome', () => {
+  const kitHome = kitHomeUnder(HOME);
+  const marked = `lift ${join(kitHome, 'versions')} ${join(kitHome, 'current')} ${join(kitHome, 'current.json')}`;
+
+  it("lifts the kit home's install mark before it removes the scratch home, which the mark would refuse", async () => {
+    const log: string[] = [];
+    await removeScratchHome(HOME, new RecordingMark(log), (path) => log.push(`remove ${path}`));
+    assert.deepEqual(log, [marked, `remove ${HOME}`]);
+  });
+
+  it('still removes the scratch home when the lift fails, then throws the lift error', async () => {
+    const log: string[] = [];
+    const mark = new RecordingMark(log);
+    mark.failLift = true;
+    await assert.rejects(removeScratchHome(HOME, mark, (path) => log.push(`remove ${path}`)), /lift refused/);
+    assert.deepEqual(log, [marked, `remove ${HOME}`]);
   });
 });

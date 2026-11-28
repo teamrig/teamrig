@@ -33,27 +33,27 @@ const UPDATE_FIX = 'update the teamrig plugin and restart the session; if that d
 const SLOW_FIX = 'retry the call; if every call times out, the host is overloaded or the guard hangs: tell your lead.';
 /** The most of a wrong answer the block line quotes. */
 const QUOTE_CHARS = 200;
-function blocked(hook, what, fix) {
+function blocked(subject, what, fix) {
     return {
         exitCode: 2,
         stdout: '',
-        stderr: `teamrig blocked this call: its ${hook} guard ${what}, and a guard that cannot answer must not let a call through. Fix: ${fix}\n`,
+        stderr: `teamrig blocked this call: its ${subject} ${what}, and a guard that cannot answer must not let a call through. Fix: ${fix}\n`,
     };
 }
-/** The verdict on a guard run: its answer passed on, or the call blocked. */
-export function judgeGuard(hook, outcome) {
+/** The verdict on a guard run: its answer passed on, or the call blocked. `subject` names what ran, as `guardSubject` words it. */
+export function judgeGuard(subject, outcome) {
     switch (outcome.kind) {
         case 'load-failed':
-            return blocked(hook, `could not load (${causeText(outcome.cause)})`, UPDATE_FIX);
+            return blocked(subject, `could not load (${causeText(outcome.cause)})`, UPDATE_FIX);
         case 'crashed':
-            return blocked(hook, `crashed (${causeText(outcome.cause)})`, UPDATE_FIX);
+            return blocked(subject, `crashed (${causeText(outcome.cause)})`, UPDATE_FIX);
         case 'timed-out':
-            return blocked(hook, `gave no answer within ${outcome.limitMs / 1000} s`, SLOW_FIX);
+            return blocked(subject, `gave no answer within ${outcome.limitMs / 1000} s`, SLOW_FIX);
         case 'not-a-hook':
             return {
                 exitCode: 2,
                 stdout: '',
-                stderr: `teamrig blocked this run: the guard entry runs only \`hook <name>\`, never ${JSON.stringify(outcome.argv.join(' ').slice(0, QUOTE_CHARS))}; run other commands through \`teamrig\`.\n`,
+                stderr: `teamrig blocked this run: the guard entry runs only \`hook <name>\` or \`hook guards <name> ...\`, never ${JSON.stringify(outcome.argv.join(' ').slice(0, QUOTE_CHARS))}; run other commands through \`teamrig\`.\n`,
             };
         case 'answered':
             break;
@@ -64,19 +64,21 @@ export function judgeGuard(hook, outcome) {
         return { exitCode: 2, stdout: '', stderr: text.trim() === '' ? '' : `${text}\n` };
     }
     if (outcome.code !== 0) {
-        return blocked(hook, `ended with exit ${outcome.code}`, UPDATE_FIX);
+        return blocked(subject, `ended with exit ${outcome.code}`, UPDATE_FIX);
     }
     if (text.trim() === '') {
         return { exitCode: 0, stdout: '', stderr: '' };
     }
     if (!isJsonObject(text)) {
-        return blocked(hook, `printed something other than its JSON answer (${JSON.stringify(text.slice(0, QUOTE_CHARS))})`, UPDATE_FIX);
+        return blocked(subject, `printed something other than its JSON answer (${JSON.stringify(text.slice(0, QUOTE_CHARS))})`, UPDATE_FIX);
     }
     return { exitCode: 0, stdout: `${text}\n`, stderr: '' };
 }
 /**
- * The hooks hooks.json runs through the guard entry, and so the only names it takes (guard-hooks.test.ts holds the two
- * equal): any other hook would run through an entry no guard expects it in (T3069).
+ * The hooks hooks.json runs through the guard entry one by one, and so the only names `hook <name>` takes there
+ * (guard-hooks.test.ts holds them to hooks.json and to an earlier setup's Codex lines): any other hook would run through
+ * an entry no guard expects it in (T3069). The set's guards stay here too: a Codex CLI hooks file an earlier setup wrote
+ * still runs each alone until the next setup rewrites it, and a guard the runner refused would block every call.
  */
 export const GUARD_HOOKS = new Set([
     'push-guard',
@@ -90,6 +92,25 @@ export const GUARD_HOOKS = new Set([
     'cold-send',
     'helper-gate',
     'picker-guard',
+]);
+/** The hook that runs several guards on one call in one CLI load (T5553): `hook guards <name> ...`. */
+export const GUARD_SET_HOOK = 'guards';
+/**
+ * The hooks `hook guards` may name (hook-guard-set.ts `setMembersOf`, not imported: see above; its spec holds the two
+ * equal): the guards, and the PreToolUse hooks that run beside them on a shell call (T5821).
+ */
+export const SET_GUARDS = new Set([
+    'push-guard',
+    'package-guard',
+    'secret-guard',
+    'db-write-guard',
+    'exec-guard',
+    'pass-record-guard',
+    'install-guard',
+    'service-role-guard',
+    'picker-guard',
+    'readonly-allow',
+    'route-allow',
 ]);
 /** The flag naming the host a hook line runs in (args.ts `HOST_FLAG`, not imported: see above). */
 const HOST_FLAG = '--host';
@@ -105,20 +126,32 @@ const HOOK_FLAGS = new Map([
     [HOST_EVENT_FLAG, HOST_EVENT_WORD],
 ]);
 /**
- * Whether `argv` is `hook <name>` for a guard hook, with at most `--host <id>` and `--host-event <event>` after it,
- * each once and in either order, and nothing else. The guard entry loads the whole CLI, so any other words would run a
- * CLI command no guard reads as one (`node <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
+ * The guards a guard hook line names, in its order, and the words after them; undefined when it names none the entry
+ * runs: `hook <name>` for one, `hook guards <name> ...` for a set, at least one and each once.
  */
-export function isHookArgv(argv) {
-    const [group, name, ...rest] = argv;
-    if (group !== 'hook' || name === undefined || !GUARD_HOOKS.has(name) || rest.length % 2 !== 0) {
+function guardsOf(argv) {
+    const [group, name, ...after] = argv;
+    if (group !== 'hook' || name === undefined) {
+        return undefined;
+    }
+    if (name !== GUARD_SET_HOOK) {
+        return GUARD_HOOKS.has(name) ? { guards: [name], flags: after } : undefined;
+    }
+    const end = after.findIndex((word) => word.startsWith('--'));
+    const guards = end === -1 ? after : after.slice(0, end);
+    const named = guards.length > 0 && new Set(guards).size === guards.length && guards.every((guard) => SET_GUARDS.has(guard));
+    return named ? { guards, flags: after.slice(guards.length) } : undefined;
+}
+/** Whether `flags` are at most `--host <id>` and `--host-event <event>`, each once and in either order. */
+function hookFlagsOk(flags) {
+    if (flags.length % 2 !== 0) {
         return false;
     }
     const seen = new Set();
-    for (let index = 0; index < rest.length; index += 2) {
-        const flag = rest[index] ?? '';
+    for (let index = 0; index < flags.length; index += 2) {
+        const flag = flags[index] ?? '';
         const shape = HOOK_FLAGS.get(flag);
-        const value = rest[index + 1] ?? '';
+        const value = flags[index + 1] ?? '';
         if (shape === undefined || seen.has(flag) || !shape.test(value)) {
             return false;
         }
@@ -127,24 +160,44 @@ export function isHookArgv(argv) {
     return true;
 }
 /**
- * Runs the guard `hook <name>` that `argv` names, and blocks any other argv before it loads anything: loads the CLI with `load`, runs it with its stdout kept back, and
+ * Whether `argv` is `hook <name>` for a guard hook, or `hook guards <name> ...` for a set of them, with at most
+ * `--host <id>` and `--host-event <event>` after it, each once and in either order, and nothing else. The guard entry
+ * loads the whole CLI, so any other words would run a CLI command no guard reads as one (`node
+ * <plugin>/dist/cli/guard-main.js roles grant ...`, T3069).
+ */
+export function isHookArgv(argv) {
+    const named = guardsOf(argv);
+    return named !== undefined && hookFlagsOk(named.flags);
+}
+/** What a block line calls the guard hook `argv` runs: `push-guard guard` for one, `guards a, b and c` for a set. */
+export function guardSubject(argv) {
+    const guards = guardsOf(argv)?.guards ?? [];
+    if (argv[1] !== GUARD_SET_HOOK) {
+        return `${guards[0] ?? argv[1] ?? 'hook'} guard`;
+    }
+    const last = guards.at(-1) ?? '';
+    return guards.length <= 1 ? `guards ${last}` : `guards ${guards.slice(0, -1).join(', ')} and ${last}`;
+}
+/**
+ * Runs the guard `hook <name>`, or the set `hook guards <name> ...`, that `argv` names, and blocks any other argv before
+ * it loads anything: loads the CLI with `load` once, runs it with its stdout kept back, and
  * tells Claude Code the verdict. The first outcome decides; once the answer is out, the process may finish its work
  * until the limit, then ends with the verdict's code, so Claude Code's timeout never drops a given answer.
  */
 export async function runGuard(argv, script, load, host, limitMs = GUARD_LIMIT_MS) {
     if (!isHookArgv(argv)) {
-        const refused = judgeGuard('hook', { kind: 'not-a-hook', argv });
+        const refused = judgeGuard('entry', { kind: 'not-a-hook', argv });
         host.writeError(refused.stderr);
         host.exit(refused.exitCode);
         return;
     }
-    const hook = argv[1] ?? 'hook';
+    const subject = guardSubject(argv);
     let verdict;
     const settle = (outcome) => {
         if (verdict !== undefined) {
             return verdict;
         }
-        const judged = judgeGuard(hook, outcome);
+        const judged = judgeGuard(subject, outcome);
         if (judged.stdout !== '') {
             host.write(judged.stdout);
         }

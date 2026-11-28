@@ -18,6 +18,7 @@ your main branch on your git host too.
 - [Database writes after a preview](#database-writes-after-a-preview)
 - [Privileged commands on review](#privileged-commands-on-review)
 - [Hand steps you run yourself](#hand-steps-you-run-yourself)
+- [Who did what](#who-did-what)
 - [Reads without a prompt](#reads-without-a-prompt)
 - [A guard that breaks](#a-guard-that-breaks)
 
@@ -195,7 +196,9 @@ URL, the credentials of an `Authorization` or API key header. A reference (`${DB
 placeholder (`postgres://user:password@localhost`) passes, and the reason says to pass the secret by reference: its
 env var name, a file path, stdin or `teamrig exec request`. A Write, Edit, MultiEdit or NotebookEdit whose text holds a
 secret is refused the same way, unless it writes a secret file (`.env`), so a real one is kept there and a test builds
-a secret-shaped value at run time from parts. `secretGuard.secretReads` (`deny` by default, `ask` or `allow`)
+a secret-shaped value at run time from parts. On Codex CLI, Codex's own logs and session files under its home folder
+still keep a refused write's text, secret included, since Codex records the call before teamrig's hook answers it:
+rotate a secret refused there, or delete those files. `secretGuard.secretReads` (`deny` by default, `ask` or `allow`)
 sets what a call that would print a secret gets, and `secretGuard.writes` (the same) one that holds a secret as text; `secretGuard.paths`, `secretGuard.envNames` and `secretGuard.commands` add the team's own
 files, names and dump commands, and a `!` entry keeps one printable. The read-only allow never lets such a line skip
 the prompt
@@ -216,7 +219,10 @@ A value that is exactly one placeholder (`%s`, `$NAME`, `${NAME}`, `<token>`) or
 
 Turning a secret check off is the owner's call: `teamrig check` warns the lead (SECRET-GUARD-OFF) while
 `secretGuard.secretReads` or `secretGuard.writes` is `allow`, `secretGuard.redact` is `false`, or a Claude Code
-settings file the team's sessions run under sets `disableAllHooks`, which stops every teamrig hook.
+settings file the team's sessions run under sets `disableAllHooks`, which stops every teamrig hook. A host whose hooks
+sit in a file of yours (Codex CLI) is checked the same way: once that file or its config no longer holds what
+`teamrig setup hooks` writes, `teamrig check` warns the lead (HOOK-DRIFT) until `teamrig setup hooks --host <name>
+--yes` puts it back.
 
 A secret typed or pasted into a prompt goes the same way: the prompt hook stops a prompt that holds a token,
 credentials in a URL, an Authorization or API key header, a quoted literal given to a secret-like name or a
@@ -320,6 +326,20 @@ rule is in every session's start. A card that types the step is refused, and a r
 block or a `& '<path>'` line with no sha256 beside it sends its session back once, to tell you not to run it and hand
 you the audited file instead ([a hand step typed into the
 reply](../../plugins/teamrig/skills/teamrig-guide/hooks.md#end-of-a-turn-a-hand-step-typed-into-the-reply)).
+
+## Who did what
+
+Every teamrig command that changes something is a line of the team's `state/acts.jsonl`, refusals and failures too:
+when it ran and for how long, the session it named, whether an agent ran it (by its host's mark, such as
+`$CLAUDECODE`), you did, or the host cannot tell, the host, the command and its words, and how it ended with the
+reason it printed. Each word and reason passes the secret check first, so a key of a known shape is kept as
+`[redacted ...]`. The words are checked once more joined by spaces, since some shapes span a space (an
+`Authorization: Bearer` header, a password assignment); when that line redacts more, the record keeps it as one word
+and marks `joined: true`. The value of an `--encoded-*` flag is kept only as `[encoded, N chars]`. Reads, hooks and
+a line teamrig cannot parse are not logged, nor is a run for no team. Lines over 30 days old move to
+`state/archive/acts-YYYYMMDD.jsonl`, never deleted. A log that cannot be written prints `NOTE the act log was not
+written: <why>` and leaves the command's own result as it was. Like the rest of the team
+folder, the log tells you what happened on the routine routes; a script running as your OS user can still edit it.
 
 ## Reads without a prompt
 

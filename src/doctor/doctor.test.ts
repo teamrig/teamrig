@@ -56,6 +56,7 @@ function input(overrides: Partial<DoctorInput> & { readonly names?: Record<strin
     shellHistory: { history: undefined, profiles: [], gated: false },
     page: undefined,
     cliPath: { folder: CLI_FOLDER, where: 'HKCU\\Environment Path', onPath: true, enabled: true },
+    handovers: { files: [], warnBytes: 10_000 },
     budget: { enabled: true },
     now: NOW,
     zone: TimeZone.UTC,
@@ -486,6 +487,22 @@ describe('doctorFindings of teamrig on the PATH (T5095)', () => {
 
   it('is quiet when the folder is on the PATH, whatever the switch', () => {
     assert.deepEqual(lines(input({ cliPath: { folder: CLI_FOLDER, where, onPath: true, enabled: false } })), []);
+  });
+});
+
+describe('doctorFindings of long handovers (T2537)', () => {
+  const path = '/kit/teams/app/handover/alpha.md';
+
+  it('names each session whose handover is past refresh.handoverWarnBytes, by its team name, with the size and the fix', () => {
+    const handovers = { files: [{ session: 'alpha', path, bytes: 12_345 }, { session: 'bravo', path: '/kit/teams/app/handover/bravo.md', bytes: 9_000 }], warnBytes: 10_000 };
+    assert.deepEqual(lines(input({ names: { alpha: 'app-scout' }, handovers })), [
+      `WARN handover-long app-scout (session alpha): ${path} is 12,345 bytes, past refresh.handoverWarnBytes (10,000): a handover holds state only; move each how-to to a skill and a code map to a reference file it names`,
+    ]);
+  });
+
+  it('is quiet at the warning size itself and with the warning off (0)', () => {
+    assert.deepEqual(lines(input({ handovers: { files: [{ session: 'alpha', path, bytes: 10_000 }], warnBytes: 10_000 } })), []);
+    assert.deepEqual(lines(input({ handovers: { files: [{ session: 'alpha', path, bytes: 99_999 }], warnBytes: 0 } })), []);
   });
 });
 

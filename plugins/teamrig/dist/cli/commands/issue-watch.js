@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import { ENV } from "../../core/home.js";
 import { SecretScanner } from "../../core/secrets.js";
 import { KIT_VERSION } from "../../core/version.js";
@@ -84,7 +85,9 @@ export async function ensureWatch(runtime, kit, config) {
         await runtime.processes.startHidden({
             command: runtime.self.node,
             args: [runtime.self.script, 'issue', 'watch'],
-            cwd: kit.paths.home,
+            // Node's own folder, never the team home: Windows refuses removing a folder a process runs in, and the watch
+            // runs for hours (T5882).
+            cwd: dirname(runtime.self.node),
             env: { ...runtime.env, [ENV.team]: kit.paths.team },
         });
     }

@@ -7,6 +7,7 @@ import { GUARD_LIMIT_MS } from './guard-runner.ts';
  * hook-timeouts.test.ts holds hooks.json and the hands to it, and that every `hook` command has one.
  */
 export const HOOK_TIMEOUT_MS: Readonly<Record<string, number>> = {
+  guards: GUARD_LIMIT_MS,
   'push-guard': GUARD_LIMIT_MS,
   'package-guard': GUARD_LIMIT_MS,
   'secret-guard': GUARD_LIMIT_MS,
@@ -18,6 +19,7 @@ export const HOOK_TIMEOUT_MS: Readonly<Record<string, number>> = {
   'cold-send': GUARD_LIMIT_MS,
   'helper-gate': GUARD_LIMIT_MS,
   'picker-guard': GUARD_LIMIT_MS,
+  after: 15_000,
   'failed-send': 15_000,
   'missing-cli': 15_000,
   'route-reminder': 15_000,

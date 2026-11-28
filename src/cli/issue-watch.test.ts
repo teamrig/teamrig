@@ -20,7 +20,8 @@ const OTHER_WATCH_PID = 6200;
 const STOP = JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, stop_hook_active: false });
 const START = JSON.stringify({ session_id: CLAUDE_SESSION, cwd: APP, source: 'startup' });
 const OLD_KIT = '0.1.0';
-const WATCH_START = { command: '/usr/bin/node', args: ['/opt/teamrig/dist/cli/main.js', 'issue', 'watch'], cwd: TEAM_HOME, team: 'app' };
+// Node's folder as the working folder, never the team home, which a running watch would pin on Windows (T5882).
+const WATCH_START = { command: '/usr/bin/node', args: ['/opt/teamrig/dist/cli/main.js', 'issue', 'watch'], cwd: '/usr/bin', team: 'app' };
 
 /** A turn's end in `session`'s tab; the hook must print nothing and end well. */
 async function stop(kit: CliHarness, processes: FakeProcesses, session = 'lead', env: Readonly<Record<string, string>> = {}): Promise<void> {

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { isUiMode, UI_MODES } from "../../config/types.js";
 import { ID_PATTERN, ID_RULE } from "../../core/ids.js";
 import { openSplit, openTab } from "../../open/open-tab.js";
+import { tabbingTerminal } from "../../open/terminals.js";
 import { RELEASED_UI } from "../../ui/pin.js";
 import { releasedEntry } from "../../ui/released.js";
 import { releasedEnv, uiRequest } from "../../ui/start.js";
@@ -10,6 +11,7 @@ import { resolveKitHome } from "../../core/home.js";
 import { LastTypedStore } from "../../sessions/last-typed.js";
 import { foundTeamOf, lookForTeam, openKit, requireConfig, rosterOf, sessionIdOf } from "../kit.js";
 import { EXIT, RefusedError } from "../runtime.js";
+import { startCliUiGuard, uiEndText } from "../ui-guard.js";
 import { startUiIdleTicker } from "../ui-idle-ticker.js";
 import { homeArgs, homeRuntimeOf } from "./open.js";
 /**
@@ -180,9 +182,9 @@ async function openUiWindow(runtime, config, kit, start, session, otherwise) {
     return 'none';
 }
 /**
- * Splits the terminal window this run works in and shows the UI in the new pane, beside the session, asking the
- * terminal to leave the focus on the session's pane (tmux does; Windows Terminal moves it to the split): terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell
- * tool, whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
+ * Splits the tmux pane this run works in and shows the UI in the new pane, beside the session, the focus left on the
+ * session's pane: terminal mode for a run with no terminal of its own to draw in, such as an AI CLI's shell tool,
+ * whose host has no panel (T5105). It waits for the UI to start there; when no split opens it says why.
  */
 async function openUiSplit(runtime, kit, start, session) {
     const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' };
@@ -195,12 +197,34 @@ async function openUiSplit(runtime, kit, start, session) {
     return 'none';
 }
 /**
+ * Opens a new tab in the window of the terminal this run works in when that terminal cannot split the run's own pane
+ * (`tabbingTerminal`: Windows Terminal), the focus left on the tab the person reads (T5831); when none opens it says why.
+ */
+async function openUiTab(runtime, kit, start, session, terminal) {
+    const tab = { title: uiWindowTitle(start), folder: runtime.cwd, argv: uiArgv(runtime, start, session), window: undefined, focus: 'keep' };
+    const since = runtime.clock.now();
+    const outcome = await openTab(runtime, terminal, tab);
+    if (outcome.kind === 'opened') {
+        return confirmStarted(runtime, kit.paths.kitHome, since, `a new tab of this ${outcome.terminal} window`);
+    }
+    runtime.out.stdout(`NOTE no tab of this terminal opened (${outcome.reasons.join('; ')})`);
+    return 'none';
+}
+/**
+ * What a run with no terminal of its own says when nothing opened beside the session or in a window. It runs no UI in place: its
+ * input is no terminal a person types in (an AI CLI's shell tool ends it at once), so a UI there could never take a
+ * key and, before the UI exited on input end, stayed running for days (T5756, T5760).
+ */
+export const UI_NOWHERE = 'REFUSED the UI has nowhere to show: this run has no terminal a person types in, and nothing opened beside the session or in a window; run teamrig ui in a terminal, or set open.terminal to one that opens a window';
+/**
  * Where the UI shows. A window is opened first for `window` and `both`; `window` is done once its UI starts. The
- * terminal half then shows here when this run has a terminal a person types in; else in a split of the session's
- * terminal, else in a window when none was tried yet, saying so; only when none of these opens does it run here
- * anyway. A window or split that opened with no UI starting in it ends the run as `failed`.
+ * terminal half then shows here when this run has a terminal a person types in; else beside the session: a split of
+ * its tmux pane, or a new tab of its Windows Terminal window, whose split would be of the focused tab (T5831); else in a window when none was tried yet, saying so. With no terminal here, a run where nothing opened is
+ * `refused` (`UI_NOWHERE`), and `both` whose window opened is done with it. A window or split that opened with no UI
+ * starting in it ends the run as `failed`.
  */
 async function placeUi(runtime, config, kit, mode, start, session) {
+    let windowOpened = false;
     if (mode !== 'terminal') {
         const otherwise = runtime.interactive ? 'the UI shows in this terminal' : 'the UI shows beside the session';
         const window = await openUiWindow(runtime, config, kit, start, session, otherwise);
@@ -210,33 +234,40 @@ async function placeUi(runtime, config, kit, mode, start, session) {
         if (window === 'opened' && mode === 'window') {
             return 'shown';
         }
+        windowOpened = window === 'opened';
     }
     if (runtime.interactive) {
         return 'here';
     }
-    const split = await openUiSplit(runtime, kit, start, session);
-    if (split !== 'none') {
-        return split === 'opened' ? 'shown' : 'failed';
+    const tabbing = tabbingTerminal(runtime.env);
+    const beside = tabbing === undefined ? await openUiSplit(runtime, kit, start, session) : await openUiTab(runtime, kit, start, session, tabbing);
+    if (beside !== 'none') {
+        return beside === 'opened' ? 'shown' : 'failed';
+    }
+    if (windowOpened) {
+        return 'shown';
     }
     if (mode === 'terminal') {
-        const window = await openUiWindow(runtime, config, kit, start, session, 'the UI shows in this terminal');
+        const window = await openUiWindow(runtime, config, kit, start, session, 'nothing else can show the UI from here');
         if (window !== 'none') {
             return window === 'opened' ? 'shown' : 'failed';
         }
     }
-    return 'here';
+    runtime.out.stderr(UI_NOWHERE);
+    return 'refused';
 }
 /**
  * `ui [--session <id|name>] [--team <team>] [--mode <terminal|window|both>] [--home <dir>]`: shows the dedicated UI where `--mode`,
  * else `ui.mode`, says. In this terminal, its input and output on it, it ends when the UI does; in a window, it opens
  * one running the same UI and returns; with both, it opens the window and then shows the UI here too. Run with no
- * terminal of its own (an AI CLI's shell tool), the terminal half shows in a split of the session's terminal instead
- * (`placeUi`). A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
+ * terminal of its own (an AI CLI's shell tool), the terminal half shows beside the session instead, in a split of its tmux pane or a new tab of its Windows Terminal window
+ * (`placeUi`), and it is refused when neither opens. A window or split that cannot open falls back and says so. The UI is a program of its own that teamrig loads no code of:
  * it runs under this CLI's Node.js and is handed this CLI to call back (ui/start.ts). `pin` is the released UI it
  * starts without `ui.path`: `RELEASED_UI` in the CLI, another in a spec. While the UI runs here, `startTicker` runs
- * the teams' idle passes beside it (ui-idle-ticker.ts).
+ * the teams' idle passes beside it (ui-idle-ticker.ts), and `startGuard` ends it once a newer teamrig is installed or
+ * its terminal is gone (ui-guard.ts), which ends this run as ok.
  */
-export function uiCommand(pin, startTicker = startUiIdleTicker) {
+export function uiCommand(pin, startTicker = startUiIdleTicker, startGuard = startCliUiGuard) {
     return async (args, hostRuntime) => {
         noPositionals(args);
         // The window or split this command opens hands its kit home on as --home (homeArgs), as its own environment may not carry it.
@@ -252,17 +283,30 @@ export function uiCommand(pin, startTicker = startUiIdleTicker) {
         const start = { team: kit.paths.team, pinned: args.flags.get('team') !== undefined || session !== undefined };
         const placed = await placeUi(runtime, config, kit, mode, start, session);
         if (placed !== 'here') {
-            return placed === 'shown' ? EXIT.ok : EXIT.failed;
+            return { shown: EXIT.ok, failed: EXIT.failed, refused: EXIT.refused }[placed];
         }
         const { node, script } = runtime.self;
         const request = uiRequest({ entry, node, script, ...start, cwd: runtime.cwd, env, ...(session === undefined ? {} : { session }) });
         await markUiStarted(runtime, kit.paths.kitHome);
         // While it is up, the UI runs the teams' idle passes, for a host with no wake check between turns (T5634).
         const ticker = startTicker(runtime);
+        // An old UI, or one whose terminal closed, ran on for days (T5813): the guard ends it.
+        const guard = startGuard(runtime);
         try {
-            return uiExit(runtime, node, await runtime.processes.run(request));
+            const outcome = await runtime.processes.run(request);
+            const problem = guard.problem();
+            if (problem !== undefined) {
+                runtime.out.stderr(problem);
+            }
+            const reason = guard.reason();
+            if (reason !== undefined) {
+                runtime.out.stdout(uiEndText(reason));
+                return EXIT.ok;
+            }
+            return uiExit(runtime, node, outcome);
         }
         finally {
+            guard.stop();
             ticker.stop();
         }
     };

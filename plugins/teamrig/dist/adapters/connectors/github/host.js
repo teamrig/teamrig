@@ -1,7 +1,7 @@
 import { exitText, isLogin, isRecord, LABEL_FILE, MAX_COMMENT, parseLabelFile, plainLine, targetText, withStampFooter, } from "../../../plugin-api/index.js";
-import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyCall, issueCloseArgs, issueReopenArgs, issueCommentCall, issueCreateCall, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueSearchArgs, searchTerms, widensSearch, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
+import { assigneeReadArgs, blockedByAddArgs, commentsReadArgs, fieldValueSetArgs, pullFilesArgs, issueAssignArgs, issueAssigneeReadArgs, issueUnassignArgs, issueBodyCall, issueCloseArgs, issueReopenArgs, issueCommentCall, issueCreateCall, issueLabelAddArgs, issueLabelRemoveArgs, issueReadArgs, issueSearchArgs, searchTerms, widensSearch, issueTypeSetArgs, jobLogArgs, pullApproveArgs, pullEnqueueArgs, pullMergeArgs, pullStandArgs, BASE_BRANCH, commitReadArgs, pullCompareArgs, runReadArgs, runRerunArgs, labelReadArgs, labelCreateArgs, labelFileReadArgs, subIssueAddArgs, PULL_FILES_PAGE, WATCH_PATHS, watchProbeArgs, userReadArgs, viewerReadArgs, } from "./gh.js";
 import { probeAnswerOf } from "./probe.js";
-import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, runRead, startFailureText, unreachableText } from "./issues.js";
+import { createdNumber, failureText, ghFailureKind, ISSUE_LIMIT, latestIssues, listIssues, readCommentsIn, readPullFilesIn, runRead, startFailureText, unreachableText } from "./issues.js";
 import { readFields } from "./fields.js";
 import { searchIn } from "./search.js";
 import { failedLogExcerpt } from "./job-log.js";
@@ -337,6 +337,24 @@ export class GitHubIssueHost {
         }
         const comments = readCommentsIn(read.stdout);
         return comments === undefined ? { kind: 'failed', reason: `gh printed no comment list for ${shown}` } : { kind: 'read', comments };
+    }
+    /** The changed files of a pull request (codehost.pull-files), read as pullFiles reads them. */
+    changedFiles = { pullFiles: (target) => this.pullFiles(target) };
+    /**
+     * Reads one page of the pull request's changed files (gh.ts pullFilesArgs) and keeps their paths. An issue that is
+     * no pull request, or one GitHub does not show, fails the read.
+     */
+    async pullFiles(target) {
+        const shown = `the changed files of ${targetText(target)}`;
+        const read = await this.read(target.repo, pullFilesArgs(target), shown);
+        if (read.kind === 'missing') {
+            return { kind: 'failed', reason: `GitHub shows no pull request ${targetText(target)}: it is an issue, or one this access cannot see` };
+        }
+        if (read.kind === 'failed') {
+            return read;
+        }
+        const files = readPullFilesIn(read.stdout);
+        return files === undefined ? { kind: 'failed', reason: `gh printed no file list for ${shown}` } : { kind: 'read', ...files, perRead: PULL_FILES_PAGE };
     }
     /**
      * Reads whether the login may be assigned, as GitHub spells it. GitHub's assignee check matches a login's case

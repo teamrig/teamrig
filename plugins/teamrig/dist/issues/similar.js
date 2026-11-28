@@ -1,4 +1,4 @@
-import { SECRET_BODY } from "../sync/map.js";
+import { isSecretBody } from "../sync/map.js";
 import { ACTIVE_STATUSES, isIssueRef } from "../register/model.js";
 /**
  * Duplicate candidates for an issue, found without the issue host and without a model: TF-IDF over the words of the
@@ -108,7 +108,7 @@ export function similarIssues(target, corpus, threshold, top = SIMILAR_TOP) {
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** The issue `ref`'s task as the scorer reads it: a body the import left out as a likely secret counts as none. */
 export function issueDoc(ref, task) {
-    return { ref, title: task.title, body: task.description === null || task.description === SECRET_BODY ? '' : task.description };
+    return { ref, title: task.title, body: task.description === null || isSecretBody(task.description) ? '' : task.description };
 }
 /**
  * Whether a task mirrors an issue the scorer reads: one an issue made (its ref is an issue ref, isIssueRef) still

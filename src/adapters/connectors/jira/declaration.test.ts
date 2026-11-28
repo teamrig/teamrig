@@ -6,6 +6,7 @@ import { NOT_BUILT, declaration } from './declaration.ts';
 /** How each tracker row stands today; a row moves here when its method is built or proved. */
 const TRACKER_ROWS: Readonly<Record<string, Support['kind']>> = {
   'tracker.issue-import': 'partial',
+  'tracker.issue-read': 'partial',
   'tracker.accept-label': 'unsupported',
   'tracker.watch': 'partial',
   'tracker.issue-open': 'partial',
@@ -23,6 +24,7 @@ const TRACKER_ROWS: Readonly<Record<string, Support['kind']>> = {
   'tracker.links': 'unsupported',
   'tracker.fields': 'unsupported',
   'tracker.similar': 'supported',
+  'tracker.search': 'partial',
   'tracker.security-alert': 'supported',
   'tracker.stamp': 'supported',
   'tracker.hidden-mark': 'unsupported',

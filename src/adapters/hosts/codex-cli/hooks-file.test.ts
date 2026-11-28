@@ -82,7 +82,7 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
 
   it('accounts for every handler: each is in the Codex file or in the skipped list', () => {
     const inSource = TEAMRIG_HOOKS_TEXT.match(/"type": "command"/gu)?.length ?? 0;
-    assert.ok(inSource > 40);
+    assert.ok(inSource > 30, String(inSource));
     assert.equal(handlers.length + skipped.length, inSource);
   });
 
@@ -104,25 +104,18 @@ describe("teamrig's own hooks file, rewritten for Codex", () => {
     }
   });
 
-  it('keeps every guard of a shell call under the matcher it had', () => {
+  it('keeps every PreToolUse hook of a shell call under the matcher it had, as one set handler (T5553, T5821)', () => {
     const shell = file.hooks.PreToolUse?.find((group) => group.matcher === 'Bash|PowerShell');
-    assert.deepEqual(shell?.hooks.map((handler) => handler.command.split(' ').at(-3)), [
-      'push-guard',
-      'package-guard',
-      'secret-guard',
-      'db-write-guard',
-      'exec-guard',
-      'pass-record-guard',
-      'install-guard',
-      'service-role-guard',
-      'readonly-allow',
+    const hooksOf = (command: string): readonly string[] => command.split(' hook ')[1]?.split(' --host ')[0]?.split(' ') ?? [];
+    assert.deepEqual(shell?.hooks.map((handler) => hooksOf(handler.command)), [
+      ['guards', 'push-guard', 'package-guard', 'secret-guard', 'db-write-guard', 'exec-guard', 'pass-record-guard', 'install-guard', 'service-role-guard', 'picker-guard', 'readonly-allow', 'route-allow'],
     ]);
   });
 
   it('runs each hook through the kit launcher, naming its entry and its event, with no plugin folder or variable left', () => {
     for (const [event, groups] of Object.entries(file.hooks)) {
       for (const handler of groups.flatMap((group) => group.hooks)) {
-        const line = new RegExp(`^node /srv/a/\\.teamrig/bin/teamrig\\.mjs --launcher-entry (?:guard-)?main --launcher-event ${event} hook [a-z-]+ --host codex-cli$`, 'u');
+        const line = new RegExp(`^node /srv/a/\\.teamrig/bin/teamrig\\.mjs --launcher-entry (?:guard-)?main --launcher-event ${event} hook (?:(?:guards|after)(?: [a-z-]+)+|[a-z-]+) --host codex-cli$`, 'u');
         assert.match(handler.command, line);
         assert.equal(handler.commandWindows, handler.command);
       }

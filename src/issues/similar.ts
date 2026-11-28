@@ -1,4 +1,4 @@
-import { SECRET_BODY } from '../sync/map.ts';
+import { isSecretBody } from '../sync/map.ts';
 import { ACTIVE_STATUSES, isIssueRef } from '../register/model.ts';
 import type { Task } from '../register/fold.ts';
 
@@ -142,7 +142,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The issue `ref`'s task as the scorer reads it: a body the import left out as a likely secret counts as none. */
 export function issueDoc(ref: string, task: Pick<Task, 'title' | 'description'>): SimilarDoc {
-  return { ref, title: task.title, body: task.description === null || task.description === SECRET_BODY ? '' : task.description };
+  return { ref, title: task.title, body: task.description === null || isSecretBody(task.description) ? '' : task.description };
 }
 
 /** A task an issue made: its ref names the issue. */

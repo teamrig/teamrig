@@ -269,6 +269,8 @@ export {
   type HostLanding,
   type HostOpen,
   type HostPulls,
+  type HostPullFiles,
+  type PullFileRead,
   type HostPullStand,
   type HostPullWork,
   type HostReach,

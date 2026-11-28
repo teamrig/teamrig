@@ -33,7 +33,7 @@ export async function readonlyCheckOf(runtime: CliRuntime, config: KitConfig): P
  * none. It reads the session's team, not the one of the folder the line `cd`s into, so a line never gains another
  * team's trusted prefixes.
  */
-async function readonlyAllowReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookReply | undefined> {
+export async function readonlyAllowReplyOf(runtime: CliRuntime, event: HookEvent): Promise<HookReply | undefined> {
   const found = await sessionTeam(event.cwd, runtime);
   const kit = found.kind === 'team' ? await openKit(runtime, found.team) : undefined;
   if (kit?.load.status !== 'loaded' || !kit.load.config.readonlyShell.enabled) {

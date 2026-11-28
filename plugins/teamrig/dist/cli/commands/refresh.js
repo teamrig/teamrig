@@ -1,7 +1,7 @@
 import { autoRestartOf } from "../../config/refresh.js";
 import { errorMessage } from "../../core/guards.js";
 import { KIT_NAME } from "../../core/home.js";
-import { boundaryOf, decideReady } from "../../refresh/decide.js";
+import { boundaryOf, decideReady, handoverWarning } from "../../refresh/decide.js";
 import { RefreshStore } from "../../refresh/store.js";
 import { noPositionals, onePositional } from "../args.js";
 import { callerOf } from "../inputs.js";
@@ -50,7 +50,8 @@ export async function refresh(args, runtime) {
     const store = new RefreshStore(runtime.files, kit.paths);
     const now = new Date(runtime.clock.now()).toISOString();
     if (target === undefined) {
-        const decision = decideReady(await store.state(by), await store.handover(by), store.handoverPath(by), now, config.refresh.handoverMaxBytes);
+        const handover = await store.handover(by);
+        const decision = decideReady(await store.state(by), handover, store.handoverPath(by), now, config.refresh.handoverMaxBytes);
         switch (decision.kind) {
             case 'refused':
                 throw new RefusedError(decision.reason);
@@ -64,6 +65,10 @@ export async function refresh(args, runtime) {
             ? `End your turn now: ${KIT_NAME} starts you fresh once you are idle, or asks the user to type /clear`
             : 'Ask the user to type /clear';
         runtime.out.stdout(`Ready. ${next}; your next start reads ${store.handoverPath(by)}.`);
+        const warning = handoverWarning(handover, store.handoverPath(by), config.refresh.handoverWarnBytes);
+        if (warning !== null) {
+            runtime.out.stdout(`NOTE ${warning}.`);
+        }
         return EXIT.ok;
     }
     leadOnly(roster, by, 'asks for a refresh');

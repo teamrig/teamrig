@@ -15,7 +15,7 @@ const SHA = 'abc1234def5678';
 const OTHER = 'fff9999eee0000';
 const GH_SECRET = ['github', '_pat_', 'x'].join('');
 const NOTE_FILE = 'C:/notes/pr.md';
-const NOTE = '## What\n\nA thing.\n\n## Reach\n\nAll users.';
+const NOTE = '## What\n\nA thing.\n\n## Reach\n\nplugin.';
 const OPEN_PULLS = `repos/${REPO}/pulls?state=open&base=main&head=Owner:${BRANCH}&per_page=10`;
 const ARGS: OpenPullArgs = { dir: 'C:/repo', head: BRANCH, approved: 'abc1234', noteFile: NOTE_FILE };
 
@@ -38,6 +38,8 @@ interface Fixture {
   task?: PullTask | null;
   /** The labels the repo has (T4796); none unless given, so no label is added. */
   repoLabels?: readonly string[];
+  /** The files the head changes against main (T3417); one source file unless given. */
+  files?: readonly string[];
 }
 
 /** The branch's task in the register, linked to issue #9 of REPO (whose name GitHub reads lower-cased). */
@@ -70,6 +72,7 @@ function fixture(options: Fixture = {}): {
     'fetch --quiet origin refs/pull/5/head': '',
     [workOf(pushed)]: workLog((options.subjects ?? 'cli: a\ndocs: b').split('\n')),
     [workOf(OLDER)]: workLog(options.older ?? []),
+    [`diff --name-only refs/remotes/origin/main...${pushed}`]: (options.files ?? ['src/a.ts']).join('\n'),
   };
   const writes: string[][] = [];
   const older = { number: 5, html_url: `https://github.com/${REPO}/pull/5`, head: { ref: `${BRANCH}-2`, sha: OLDER, repo: { full_name: REPO } }, base: { ref: 'main' } };
@@ -121,8 +124,29 @@ test('opens the pull request of the approved pushed head with the ship token and
   assert.equal(fieldOf(write, 'title'), 'T1: Ship titles');
   assert.equal(fieldOf(write, 'head'), BRANCH);
   assert.equal(fieldOf(write, 'base'), 'main');
-  assert.match(fieldOf(write, 'body') ?? '', /^## What\n\nA thing\.\n\n## Reach\n\nAll users\.\n\nCloses #9\n\n## Commits\n- cli: a\n- docs: b\n/);
+  assert.match(fieldOf(write, 'body') ?? '', /^## What\n\nA thing\.\n\n## Reach\n\nplugin\.\n\nCloses #9\n\n## Commits\n- cli: a\n- docs: b\n/);
   assert.deepEqual(out, [`opened pull request #7 https://github.com/${REPO}/pull/7`]);
+});
+
+test('opens no pull request whose note states no allowed reach, or is dev-only on tooling with no carrier (T3417)', async () => {
+  const cases: readonly { note: string; files?: readonly string[]; refusal: RegExp }[] = [
+    { note: '## What\n\nA thing.\n\n## Reach\n\nAll users.', refusal: /^REFUSED the pull request note cannot open the pull request: its Reach "All users\." is none of plugin/ },
+    { note: '## What\n\nA thing.\n\n## Reach\n\ndev-only (the ship tool)', files: ['tools/ship/merge.ts'], refusal: /touches tools\/ship\/merge\.ts, but it names no plugin carrier/ },
+  ];
+  for (const { note, files, refusal } of cases) {
+    const { deps, err, writes } = fixture({ note, ...(files === undefined ? {} : { files }) });
+    assert.equal(await runOpenPull(ARGS, deps), 1, note);
+    assert.match(err.join('\n'), refusal);
+    assert.deepEqual(writes, []);
+  }
+  const carried = fixture({ note: '## What\n\nA thing.\n\n## Reach\n\ndev-only (the ship tool)\nPlugin carrier: #12', files: ['tools/ship/merge.ts'] });
+  assert.equal(await runOpenPull(ARGS, carried.deps), 0, carried.err.join('\n'));
+});
+
+test('finds an open pull request whose note states no allowed reach with a warning, so no older note breaks (T3417)', async () => {
+  const { deps, out } = fixture({ openSha: SHA, note: '## What\n\nA thing.\n\n## Reach\n\nAll users.' });
+  assert.equal(await runOpenPull(ARGS, deps), 0);
+  assert.match(out[1] ?? '', /^warning: pull request #7: the pull request note cannot open the pull request: its Reach "All users\." is none of/);
 });
 
 test('prints the open pull request of the approved head and opens no second one', async () => {

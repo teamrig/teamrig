@@ -776,7 +776,12 @@ not call `teamrig stamp commit`, with the line to add (`teamrig stamp commit "$1
 read is SECRET-HOOK's alone), and SECRET-GUARD-OFF: a secret check turned off, which is the owner's call: `secretGuard.secretReads` or
 `secretGuard.writes` at `allow`, `secretGuard.redact` at `false`, or a Claude Code settings file the team's sessions
 run under (the user's, the project folder's, each `delivery.repos` repository's and its worktrees') that sets
-`disableAllHooks`, which stops every teamrig hook, the secret guard's included, AUTOMODE-STALE: the team's
+`disableAllHooks`, which stops every teamrig hook, the secret guard's included, HOOK-DRIFT: a host in the team's
+`hosts` whose hooks live in a file of the person's (Codex CLI's `hooks.json`, `config.toml` and its profiles) where
+`teamrig setup hooks --host <name>` would write anything today: a teamrig handler missing, changed or stale, the file
+gone, or a setting the guards need taken out, so that host's sessions may run unguarded; it is planned afresh at each
+check, so only the heal (`teamrig setup hooks --host <name> --yes`, the owner's step) clears it, and a run from a
+source checkout or a host whose folder is not on the machine never shows it, AUTOMODE-STALE: the team's
 `[teamrig <team>]` lines in the host's `autoMode.environment` differ from what `teamrig automode install` writes now
 (a config change such as a repository rename, or an upgrade that adds a line), so auto mode reads the team as it was;
 `teamrig automode install` shows the change, and writing it with `--yes` is the owner's call, as it changes the
@@ -1701,7 +1706,7 @@ EDITED acme/web#7: its body is now 1832 characters
 
 ### teamrig issue close
 
-Closes one issue or pull request of the team's repositories (a pull request closes unmerged), first posting
+Closes one issue or change request of the team's repositories (a change request closes unmerged), first posting
 `--comment` when given, with the same access and checks as `teamrig issue reply`. When the comment fails nothing
 is closed. When the close fails after the comment was posted, the `FAILED` line says the comment is posted: rerun
 `teamrig issue close` without `--comment`. Exit 1 when it failed, 2 when refused, else 0.
@@ -1819,6 +1824,54 @@ SIMILAR acme/web#31 (T412): 2 of 18 mirrored issues at or above 0.35 (github.sim
 0.41 acme/web#27 T405 Reset email never arrives
 ```
 
+### teamrig issue intake
+
+Takes in a change request from outside the team, named as `owner/name#number`, so each session that owns what it
+changes judges it before anyone answers its author. It reads the paths it changes once (the first 100 files; the
+reply task says when there are more), a renamed file's earlier path among them, and writes nothing to the host.
+Each session owning an area whose paths it changes (`[github.areaPaths]`, each area label's session in
+`[github.areaOwners]`) gets a task, "Best-fix and overlap review of outside PR <owner/name#number> for <session>",
+listing its paths: is this the best fix, and does an open task of ours do the same? A session owning several areas
+gets one task; the caller's own area is left to its reply. When it changes a guarded path (a review gate entry of
+class security, `[pushGuard.reviewPaths]`), or the read could not see every file (100 files or more, or a name left
+out as no plain path), the security reviewer (`[roles.securityReviewer]`, on this team or one above) gets a "Security
+review of outside PR" task too, in that reviewer's team, saying which. Last comes the caller's task, "Reply to
+outside PR <owner/name#number> once its reviews are in", planned after every review task, so the answer waits for
+each verdict; it lists the paths no area holds, for the caller to judge. A code host that cannot list a change
+request's files (no `codehost.pull-files`, see the parity page) reads nothing: every other session owning an area of
+that repository gets a review task, and the security reviewer always does, each saying the files could not be
+listed. Each task takes the priority, due date and goals given, as `teamrig add` does.
+
+It refuses, adding nothing, a caller not on the team, a target that is not `owner/name#number`, a repository not in
+`github.repos`, a missing `--priority`, and a change request taken in already while its reply task is not dropped
+(drop it to take the change request in again). A task the team's own register refuses (a goal or description rule) stops it
+at the first, with nothing added. A review another team's register refuses is named in a `FAILED` line while the rest
+still go: ask it with `teamrig add` and list it in the reply task's `--after`. A read that fails prints `FAILED
+<reason>` and adds nothing; `TEAMRIG_GITHUB=off` prints an `OFF` line and adds nothing. Exit 1 when something
+failed, 2 when refused, else 0.
+
+Flags:
+
+- `--session <id|name>`: the caller, a session of the team; its reply task is its own.
+- `--priority <p>`: the priority of every task it adds, required.
+- `--due <when>`: their due date, as `teamrig add` reads it.
+- `--goals <tags>`: the goals they serve, or `none`.
+
+Example:
+
+```sh
+teamrig issue intake acme/web#7 --priority p2
+```
+
+Output:
+
+```text
+ADDED T41 open, p2, owner guards, from lead | Best-fix and overlap review of outside PR acme/web#7 for guards
+ADDED T42 open, p2, owner docs, from lead | Best-fix and overlap review of outside PR acme/web#7 for docs
+ADDED T43 open, p2, owner security, from lead | Security review of outside PR acme/web#7
+ADDED T44 open, p2, owner lead, after T41,T42,T43, from lead | Reply to outside PR acme/web#7 once its reviews are in
+```
+
 ### teamrig issue search
 
 Searches one of the team's repositories for the issues and change requests whose text holds the words, through
@@ -1921,7 +1974,7 @@ reply`: use it once someone says they take the item, such as a commenter asking 
 comma-separated lists of the tracker's logins (a leading `@` is dropped); give at least one, no login in both, and at most 3
 logins in all. Before any change it reads the item's labels and each login to add: an add to a design issue (one
 labelled `design`, talk not yet agreed) is refused, as no one takes design talk until it is agreed and the label
-comes off; and a login the tracker would drop is refused, as it assigns only someone with access to the repository or
+comes off, but for the logins in [github.designAssignees], such as the team owner every design issue goes to; and a login the tracker would drop is refused, as it assigns only someone with access to the repository or
 someone who took part in the item (a comment counts). The logins to add go in one call, as the tracker spells them, then
 each login to remove comes off in turn; the first failure stops it, and a `FAILED` line after a change says what it
 already did. It prints `ASSIGNED <target>: <logins>` and `UNASSIGNED <target>: <login>`. Exit 1 when it failed, 2
@@ -3096,8 +3149,9 @@ until its reader ends.
 - The first frame is `hello`: `{ "interface", "event": "hello", "documents": [{ "document", "revision" }] }`, every
   followed document with the revision `teamrig read` answers for it now.
 - Then a `changed` frame each time a revision moved, naming only the documents that moved, with their new revision.
-  The files are looked at once a second, so every change inside a second is one frame, and a second with no change
-  sends nothing.
+  The follower watches the folders of the files it reads and looks at the files at most once a second, only after a
+  folder told of a change, every second while a folder cannot be watched, and at least every 30 seconds for a change
+  the system did not tell of. Every change inside one second is one frame, and a look with no change sends nothing.
 - A frame holds documents and revisions and no text of the team's: run `teamrig read <document> --json --unless
   <document>=<revision you hold>` for what changed. A `revision` of `null` means the document's files could not be
   looked at; read it to be told why.
@@ -3105,7 +3159,10 @@ until its reader ends.
 
 A refusal is `read`'s: one `REFUSED` line on stderr with exit 2, before any frame. The follower ends with exit 0
 once the program that started it is gone, or once that program reads its stdout no more, which is seen at the next
-frame's write. It writes no file, marks nothing read and takes no lock. It keeps the team, sessions and paths it
+frame's write. It also ends with exit 0 once an update makes a newer teamrig current, with one stderr line such as
+`ENDED teamrig 0.512.0 is installed, and this follower ran 0.511.0; start it again`: start it again from the CLI you
+find then. A newer version already current when it started ends nothing. It writes no file, marks nothing read and
+takes no lock. It keeps the team, sessions and paths it
 started with: start it again after the team config changed (every followed document is then named in one frame).
 
 Flags:
@@ -4901,6 +4958,16 @@ Output:
 installs one. A `NOTE no version is current` line means the records naming it are missing or disagree; `teamrig
 kit use --latest` names the newest.
 
+The kept versions and the `current` and `current.json` records are read-only to your own account: a stray edit or
+removal is refused, and only teamrig's own changes (a session start's copy, `kit use`, `kit prune`, `kit install`,
+`kit update`, `kit uninstall`) lift the mark while they hold the install lock and set it again after. On Windows it is
+a deny entry for your account in each one's access list, on macOS and Linux the write bits off. A `NOTE ... the next
+teamrig kit change sets it again` line (or a restore log line at a session start) means the mark could not be set back
+after a change that did happen; the next change sets it. The mark guards what is inside `versions` and the records'
+contents, not the kit home folder itself: `versions` can still be renamed or replaced, and `current` or `current.json`
+deleted or replaced, by your account; the planned install integrity check (design #2617) is what finds those. It guards against mistakes, not against a
+program that lifts it as teamrig does.
+
 ### teamrig kit use
 
 Moves which kept version the kit home names current; hosts run it once their hooks point at the kit home. A named
@@ -5053,7 +5120,8 @@ kit's backups folder; then it removes the launcher (`<kit home>/bin/teamrig.mjs`
 runs too), `current`, `current.json` and every kept version. Your teams, the backups and the install clone stay. Without
 `--yes` it counts what would go and removes nothing. A hooks file it cannot edit refuses the run before anything is
 removed. It changes a host's hooks, so only the person runs it: `--yes` is refused where an agent runs it. A host's
-teamrig plugin copies teamrig back in at its next session start, so remove the plugin first.
+teamrig plugin copies teamrig back in at its next session start, so remove the plugin first. The install is read-only
+to your account (see `teamrig kit versions`), so deleting the kit home by hand is refused until this has run.
 
 Flags:
 
@@ -5075,6 +5143,35 @@ NOTE /srv/ada/.teamrig/teams, the backups and the install clone stay; a host's t
 
 It is `REFUSED` while a session start copies a release in past a 30 s wait, after the hooks files are written: run it
 again. A file or folder a running process holds stays, and it exits 1 naming it.
+
+### teamrig kit sweep
+
+Ends what an older teamrig version left running after an update: its task pane watchers (`teamrig events`) and UIs
+(`teamrig ui`), each with every process it started. A process counts as an older version's when it runs a teamrig entry
+script from the kit home's `versions` folder, or the folder this teamrig runs from, whose version is older than the one
+running. Only the version the kit home names current ends any, so an old version never ends a newer one's, and never
+the tree it runs in. A session's hooks start it after an update and at most every 10 minutes. Without `--yes` it names
+what it would end and ends nothing; with it, each end, or why one failed, goes to the restore log.
+
+Flags:
+
+- `--yes`: end them; without it, only name them.
+
+Example:
+
+```sh
+teamrig kit sweep --yes
+```
+
+Output:
+
+```text
+ENDED old events 1840 (0.504.0), tree 1840
+ENDED old ui 2210 (0.504.0), tree 2210 2216
+```
+
+It notes it ended nothing when this teamrig is not the current version, and exits 1 when a process could not be ended
+or the system would not list its processes.
 
 ### teamrig restart
 
@@ -5262,7 +5359,9 @@ Claude Code or Node.js, [the check](requirements.md#the-requirements-check)), `n
 `context-lists`, `tree-id`, `tree-parent`, `tree-loop`, `tree-depth`, `tree-children`, `tree-role` (a
 `roles.securityReviewer` or `roles.deliveryOwner` of `<team>/<id>` whose team is not above this one, or whose
 session does not hold that role there), `name-two-teams`, `effort-env`, `model-env`, `settings-json`, `launch-model`, `launch-effort`,
-`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`.
+`allow-wide`, `quiet-ask`, `deny-missing`, `project-missing`, `shell-history`, `page-webhook`, `cli-path`,
+`handover-long` (a session's handover past [refresh.handoverWarnBytes], which each fresh start reads whole: move its
+how-tos to skills and its code maps to reference files it names).
 
 A `tree-parent` or `tree-role` finding of the session's own team also shows in each session start note, since what
 the team takes from the teams above (waits, roles, budget keys, rules) is missing until it is fixed: a home copied to
@@ -5381,9 +5480,12 @@ a terminal window of its own running the same UI, as [open.terminal] says (in Wi
 `teamrig-ui`, apart from any team's session window), prints `OPENED the UI in a <terminal> window` and returns; in `both` it opens that window and then
 shows the UI here too. When no window can open (say [open.terminal] is `print`) it says why in a `NOTE` line and shows
 the UI in this terminal instead. The UI draws the whole screen, so run with no terminal of its own (a session's shell
-or `/teamrig`), the terminal half shows beside the session instead: in a split of the tmux or Windows Terminal window
-the session works in, the focus left on the session's pane (`OPENED the UI in a split of this <terminal> window`);
-in another terminal, which has no split to ask for, it opens a window and says why in a `NOTE` line. An `OPENED`
+or `/teamrig`), the terminal half shows beside the session instead: in tmux, a split of the session's own pane, the focus left on it
+(`OPENED the UI in a split of this tmux window`); in Windows Terminal, whose split would be of the tab the person has
+in focus, not the session's, a new tab of its most recent window, the focus left where it was (`OPENED the UI in a
+new tab of this windows-terminal window`); in another terminal, which has neither to ask for, it opens a window and
+says why in a `NOTE` line. When nothing opens beside the session or in a window there, it is refused (`REFUSED the UI has nowhere to show`, exit 2) and runs no UI in place,
+since one there could never take a key; in `both` whose window opened, the window alone shows it. An `OPENED`
 line comes only once the UI in that window or split has started (it marks `ui/started.json` under the kit home): a
 terminal can take the window and run nothing in it, so with no UI started there within 20 s the run prints `FAILED
 <where> opened, but no UI started in it within 20 s; run teamrig ui --mode terminal in a terminal to see why` and
@@ -5423,6 +5525,17 @@ fetch the released UI:
 
 ```text
 REFUSED the UI 0.86.0 could not be fetched: <why>
+```
+
+Every 15 s it also looks whether it should still run. Once `kit install` or `kit use` made a newer teamrig the
+current one, or the terminal process it ran under has ended (taken at its first look, so a launcher that only opened
+the window does not count), it ends the UI's process tree, prints an `ENDED` line and exits 0, so no UI of an old
+version or of a closed terminal stays running. A look that cannot list the processes tries again at the next one, and
+the run prints why on stderr once the UI has ended:
+
+```text
+ENDED the UI: teamrig 0.512.0 is installed, and this UI ran 0.511.0; run teamrig ui again
+ENDED the UI: WindowsTerminal.exe 17460, which it ran under, has ended
 ```
 
 `FAILED the UI exited with code <n>` and exit 1 when the UI ended any other way.
@@ -6710,7 +6823,8 @@ reboot, get a new one from the next `teamrig start` of any session of the team o
 outlives the shell, so it watches no shell; it waits for memory and the lock like any step, and its output and the
 queue's own lines go to
 `<delivery dir>/detached/<id>.log`. That log starts with the tree the run was started on, in the two lines a
-`teamrig test` log starts with (`# folder:`, `# git:`); a tree that changed by the time its step starts gets a line,
+`teamrig test` log starts with (`# folder:`, `# git:`), the folder a one-word line's leading `cd`, `chdir` or `pushd
+... &&` moves to as there, which the ledger records too; a tree that changed by the time its step starts gets a line,
 `the tree changed while it waited; it runs on <top level> at <commit>, clean|with uncommitted changes`. Its session's inbox gets `queue <id> started: <what>; log <path>` when it takes its
 turn, and a line that wakes the session, `queue <id> ended: <what>: <last line>; log <path>`, when it ends (`DONE exit
 0`, `FAILED exit <n>`, `TIMED OUT ...`) or is refused (`REFUSED ...`). The run keeps a record,
@@ -7804,7 +7918,10 @@ model little. The whole output goes to a numbered log, `test-<session>-<n>.log` 
 every line it printed; each session keeps its newest 20. The log starts with the tree the command ran on, so a log
 cited as proof names the head it ran on: `# folder: <folder>`, then `# git: <top level> at <commit>, clean` (or `with
 uncommitted changes`, counting untracked files; `no commit yet` before the first commit), or `# git: none, it ran
-outside a git repository`, where the command still runs; then `$ <command>`. When the command ends but a process it
+outside a git repository`, where the command still runs; then `$ <command>`. A command given as one word that starts
+by moving (`cd /d <dir> && ...`, `chdir` or `pushd` in cmd.exe, `cd <dir> && ...` in a POSIX shell) names the folder
+it moves to, so a step started from a main checkout that moves into a worktree names the worktree; a folder the shell
+would expand (`%VAR%`, `$HOME`, `~`) keeps the one it was started in. When the command ends but a process it
 started still holds its output open 2 s later, the run stops reading, and the log says so on its own line ("a process
 the command started still held its output open after the command ended, so the run stopped reading it") before the
 command's end. Then one `PASS` or `FAIL` line with
@@ -8725,6 +8842,47 @@ Output, when lines are new:
 INBOX web, new in /home/you/.teamrig/teams/shop/state/inbox/web.md (each line is shown once; reading marks them read):
 - 2026-10-15 08:58 lead: api error codes are in docs/errors.md
 ```
+
+### teamrig hook guards
+
+Before a tool call, runs the guards it names on the call in one process and prints their one answer: a refusal when
+any guard refuses, with every refusing guard's reason, else an allow when any allows, with every guard's notes. The
+plugin's hooks run each tool's guards this way, with a shell line's allows and picker guard, so a call starts one
+process, not one per hook. It names only `push-guard`, `package-guard`, `secret-guard`, `db-write-guard`,
+`exec-guard`, `pass-record-guard`, `install-guard`, `service-role-guard`, `picker-guard`, `readonly-allow` and
+`route-allow`, each once; any other name is a usage error. A guard that throws refuses the call, naming it;
+`picker-guard`, `readonly-allow` and `route-allow` give no answer when they throw, as when they run alone.
+See [Hooks and permissions](hooks.md#a-guard-that-cannot-answer).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook guards push-guard secret-guard < pre-tool-use.json
+```
+
+Output: nothing when no guard has a word about the call; otherwise one JSON reply, its permission decision `deny`
+or `allow`.
+
+### teamrig hook after
+
+After a tool call, runs the `PostToolUse` hooks it names on the call in one process and prints their one reply: the
+replaced tool output `secret-redact` gives, and every hook's lines for the model, in the order named. The plugin's
+hooks run each tool's after-call hooks this way, so a shell call starts one process for them, not three. It names
+only `secret-redact`, `loop-nudge`, `missing-cli`, `failed-send` and `route-reminder`, each once; any other name is a
+usage error. A hook that throws gives no answer and leaves one stderr line naming it, so the others still answer.
+See [Hooks and permissions](hooks.md#hooks-and-permissions).
+
+Flags: none.
+
+Example:
+
+```sh
+teamrig hook after secret-redact loop-nudge missing-cli < post-tool-use.json
+```
+
+Output: nothing when no hook has a word about the call; otherwise one JSON reply to the event the call ended in.
 
 ### teamrig hook push-guard
 

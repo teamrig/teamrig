@@ -1,9 +1,9 @@
-import { DEFAULT_HOST } from '../../composition/adapters.ts';
 import { readConnectorSteps, readHostSteps, type Load, type ServedSteps } from '../../composition/loader.ts';
 import type { KitConfig } from '../../config/types.ts';
 import { STEPS, isStepId, type StepId } from '../../features/steps.ts';
 import type { ConnectorDeclaration, HostDeclaration } from '../../plugin-api/index.ts';
 import { UsageError, type ParsedArgs } from '../args.ts';
+import { hostIdOf } from '../host.ts';
 import { openTeamKit, requireConfig } from '../kit.ts';
 import { EXIT, type CliRuntime, type ExitCode } from '../runtime.ts';
 
@@ -73,7 +73,8 @@ export async function skillStep(args: ParsedArgs, runtime: CliRuntime): Promise<
       throw new UsageError(`--for picks a connector, and ${id} is a host step`);
     }
     const hosts = serversOf(await readHostSteps(), id, runtime);
-    for (const line of stepLines(id, hosts.filter((host) => host.id === DEFAULT_HOST), hosts)) runtime.out.stdout(line);
+    const running = hostIdOf(runtime);
+    for (const line of stepLines(id, hosts.filter((host) => host.id === running), hosts)) runtime.out.stdout(line);
     return EXIT.ok;
   }
   const connectors = serversOf(await readConnectorSteps(), id, runtime);

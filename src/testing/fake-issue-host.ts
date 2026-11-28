@@ -1,4 +1,4 @@
-import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueReopen, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullStand, type WatchMarks } from '../issues/host.ts';
+import { targetText, type CloseReason, type HostAssignee, type HostComments, type HostEnd, type HostIssueId, type HostIssueLabels, type HostJobLog, type HostLabel, type HostLabelFile, type HostLinks, type HostList, type HostLanding, type HostOpen, type HostPullFiles, type HostPulls, type HostPullStand, type HostPullWork, type HostReach, type HostRerun, type HostSearch, type HostThread, type HostUse, type HostViewer, type HostWatch, type IssueDraft, type IssueHost, type IssueQuery, type IssueReopen, type IssueSearch, type IssueTarget, type LabelNaming, type LabelSpec, type PullFileRead, type PullStand, type WatchMarks } from '../issues/host.ts';
 import type { FieldValue, HostField, HostFieldRead, IssueFields } from '../issues/fields.ts';
 import type { HostIssue, IssueThread, LinkedIssue } from '../issues/issue.ts';
 import type { HostPost, HostPosts } from '../issues/post.ts';
@@ -138,6 +138,40 @@ export class FakeIssueHost implements IssueHost {
   }
   private readonly threads = new Map<number, IssueThread>();
   private threadRead: HostThread | undefined;
+
+  private readonly files = new Map<string, HostPullFiles>();
+  /**
+   * No changed-files capability until a test gives a pull request's files (`changes`, `failsFiles`), as a code host
+   * built before plugin API 0.9.0 has none; from then on a read gives those files, else fails as GitHub shows no such
+   * pull request.
+   */
+  changedFiles?: PullFileRead;
+
+  private listsFiles(): void {
+    this.changedFiles = {
+      pullFiles: (target: IssueTarget): Promise<HostPullFiles> => {
+        const key = `${target.repo}#${String(target.number)}`;
+        return Promise.resolve(this.files.get(key) ?? { kind: 'failed', reason: `GitHub shows no pull request ${key}` });
+      },
+    };
+  }
+
+  /**
+   * From now on, a read of the pull request `<repo>#<number>`'s changed files gives these paths (as many left out),
+   * one file each, by a host whose one read lists at most `perRead` files.
+   */
+  changes(pull: string, paths: readonly string[], leftOut = 0, perRead = 100): this {
+    this.files.set(pull, { kind: 'read', paths, leftOut, listed: paths.length + leftOut, perRead });
+    this.listsFiles();
+    return this;
+  }
+
+  /** From now on, a read of the pull request `<repo>#<number>`'s changed files fails for `reason`. */
+  failsFiles(pull: string, reason: string): this {
+    this.files.set(pull, { kind: 'failed', reason });
+    this.listsFiles();
+    return this;
+  }
 
   /** From now on, taking an assignee off fails for `reason`. */
   failsUnassign(reason: string): this {
@@ -576,4 +610,6 @@ export class FakeIssueHost implements IssueHost {
   newComments(_target: IssueTarget, _since: number): Promise<HostComments> {
     return Promise.resolve({ kind: 'read', comments: [] });
   }
+
+
 }

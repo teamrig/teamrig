@@ -12,6 +12,7 @@ import { isStepKind, kindOfCommand, processRequest, STEP_KINDS, takesShipSlot, t
 import { recordRefusal, runRecorded, type RefusalMark, type StepOwner } from '../../delivery/recorded-step.ts';
 import { treeFieldsOf, treeHeader, treeText, type RunTree } from '../../delivery/run-tree.ts';
 import { smallReserveOf } from '../../delivery/memory-gate.ts';
+import { stepFolderOf } from '../../delivery/step-folder.ts';
 import { stepNeedOf, type NeedAsk } from '../../delivery/step-need.ts';
 import { causeOfLockWait, WaitLog } from '../../delivery/wait-log.ts';
 import { queueCutoffReason, minutesText } from '../../delivery/schedule.ts';
@@ -269,8 +270,8 @@ const UNREPORTED: Reporting = { started: async () => undefined, opened: async ()
  * The tree the step runs on, read as it starts, for its ledger record (#708). A detached run's log began with the tree
  * it was started on; one changed while it waited is said, so the log names the head that ran.
  */
-function runTree(runtime: CliRuntime, say: Say, startTree: RunTree | undefined): RunTree {
-  const tree = runtime.trees.ranIn(runtime.cwd);
+function runTree(runtime: CliRuntime, say: Say, folder: string, startTree: RunTree | undefined): RunTree {
+  const tree = runtime.trees.ranIn(folder);
   if (startTree !== undefined && treeText(tree) !== treeText(startTree)) {
     say(`the tree changed while it waited; it runs on ${treeText(tree)}`);
   }
@@ -641,9 +642,11 @@ export async function queue(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
   }
   const detachedId = detachedRunIdOf(args);
   // A detached run's log starts with the tree it was started on (#708): the log is what a reviewer is shown.
-  const startTree = detachedId === undefined ? undefined : runtime.trees.ranIn(runtime.cwd);
+  // The folder the line moves into (`cd /d <worktree> && ...`) holds the tree it tests, not the one it was queued from (T5550).
+  const folder = stepFolderOf(words, runtime.cwd, runtime.platform);
+  const startTree = detachedId === undefined ? undefined : runtime.trees.ranIn(folder);
   if (startTree !== undefined) {
-    runtime.out.stdout(treeHeader(runtime.cwd, startTree).trimEnd());
+    runtime.out.stdout(treeHeader(folder, startTree).trimEnd());
   }
   const firstArrival = arrivedAtOf(args, runtime.clock.now());
   const kit = await openTeamKit(runtime);
@@ -737,14 +740,14 @@ export async function queue(args: ParsedArgs, runtime: CliRuntime): Promise<Exit
       if (sharing !== undefined) {
         say(sharing);
       }
-      const tree = runTree(runtime, say, startTree);
+      const tree = runTree(runtime, say, folder, startTree);
       say(`running: ${what} (killed after ${minutesText(maxRunMinutes)})`);
       await reporting.started();
       // A merge that steps away while its checks run (teamrig step-away) holds nothing meanwhile: that time, and its wait
       // in line to take its share back, does not count against its limit (T4218).
       const awayMs = (): Promise<number> => lock.awayMs(taking.lock.id);
       const run = { command: commandLine(words, runtime.platform), cwd: runtime.cwd, env: underLock(step.env, taking.lock), timeoutMs: maxRunMinutes * MINUTE_MS, awayMs, stop: watching.stop };
-      const mark = { ...owner, what, ...waited, ...(taking.sharing === undefined || taking.sharing.heavy ? {} : { shared: true as const }), ranIn: treeFieldsOf(runtime.cwd, tree), request: run };
+      const mark = { ...owner, what, ...waited, ...(taking.sharing === undefined || taking.sharing.heavy ? {} : { shared: true as const }), ranIn: treeFieldsOf(folder, tree), request: run };
       const end = await runRecorded(runtime, { places, delivery, opened: (start) => reporting.opened({ ledger: places.ledger, start }) }, mark);
       const code = await report(runtime, say, end, step);
       return prePush === undefined ? code : await afterPrePush(runtime, prePush, what, code, waitedMs);

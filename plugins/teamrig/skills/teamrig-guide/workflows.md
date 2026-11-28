@@ -261,7 +261,7 @@ so it never loses work to a compaction.
    their results still need, and the fresh start waits until they all reported back:
 
    ```text
-   teamrig: your context is 132k (refresh at 120k) and you just finished T2. Write your handover to <home>/teams/shop/handover/web.md, replacing the whole file (your fresh start reads all of it), with what the register lacks, not task statuses, which your fresh start reads live from the register: a `## State` section (where things are; the scratchpad files, plan file and scheduled jobs the next session still needs; questions still open with the user) and a `## Next steps` section (the next step of each task in progress; what to check later, and when). Then end your turn: the turn end takes the handover as ready. Do not start new work.
+   teamrig: your context is 132k (refresh at 120k) and you just finished T2. Write your handover to <home>/teams/shop/handover/web.md, replacing the whole file (your fresh start reads all of it), with only the state the register lacks (a how-to goes in a skill, a code map in a reference file it names), not task statuses, which your fresh start reads live from the register: a `## State` section (where things are; the scratchpad files, plan file and scheduled jobs the next session still needs; questions still open with the user) and a `## Next steps` section (the next step of each task in progress; what to check later, and when). Then end your turn: the turn end takes the handover as ready. Do not start new work.
    ```
 
    Mid-task it says `teamrig: your context is 132k (refresh at 120k), so refresh now rather than at a task end.`
@@ -280,10 +280,15 @@ so it never loses work to a compaction.
    branches, worktrees, files, ids; the scratchpad files, plan file and scheduled jobs the next session still needs;
    questions still open with the user) and `## Next steps` (the next step of each task in progress; what to check
    later and when). Leave out task statuses, waits and due dates: the fresh start reads them live from the register
-   (step 5), and a copy here could only go stale. It must be new: the old file left as it was is not taken.
+   (step 5), and a copy here could only go stale. Hold state only: a procedure you will run again goes in a skill
+   (core rule 13), a map of the code in a reference file the handover names, since every fresh start reads all of it.
+   It must be new: the old file left as it was is not taken.
 3. End your turn. Its end takes the handover as ready, with no call: one written since the ask, with both sections,
    at most `refresh.handoverMaxBytes` (20,000 bytes). One that falls short keeps you going once per version with
-   `teamrig: your handover is not ready yet: <gap>`; fix it and end your turn again. Where only a section is
+   `teamrig: your handover is not ready yet: <gap>`; fix it and end your turn again. One past
+   `refresh.handoverWarnBytes` (10,000 bytes; 0: off) is still taken, and the notice adds `teamrig: <path> is <n>
+   bytes, past refresh.handoverWarnBytes (10,000): a handover holds state only; move each how-to to a skill and a code
+   map to a reference file it names.` (`refresh --ready` prints it as a `NOTE`); `teamrig doctor` names the session too. Where only a section is
    missing and the handover is complete as it is, `teamrig refresh --ready --session web` answers instead, printing
    `Ready. Ask the user to type /clear; your next start reads <path>.`. At the end of that turn the tab title becomes `[shop] web: type /clear` (the session's team and name;
    `refresh.tabTitle: false` turns that off; with `tabStatus.enabled`, after the tab's state circle).

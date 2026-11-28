@@ -2,31 +2,7 @@
   {
     "event": "PreToolUse",
     "index": 0,
-    "hook": "hook pass-record-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 0,
-    "hook": "hook install-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 0,
-    "hook": "hook service-role-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 0,
-    "hook": "hook secret-guard --host claude-code",
+    "hook": "hook guards pass-record-guard install-guard service-role-guard secret-guard --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -42,31 +18,7 @@
   {
     "event": "PreToolUse",
     "index": 2,
-    "hook": "hook pass-record-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 2,
-    "hook": "hook install-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 2,
-    "hook": "hook service-role-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 2,
-    "hook": "hook secret-guard --host claude-code",
+    "hook": "hook guards pass-record-guard install-guard service-role-guard secret-guard --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -82,87 +34,7 @@
   {
     "event": "PreToolUse",
     "index": 5,
-    "hook": "hook push-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook package-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook secret-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook db-write-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook exec-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook pass-record-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook install-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook service-role-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook readonly-allow --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook route-allow --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 5,
-    "hook": "hook picker-guard --host claude-code",
+    "hook": "hook guards push-guard package-guard secret-guard db-write-guard exec-guard pass-record-guard install-guard service-role-guard picker-guard readonly-allow route-allow --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -170,71 +42,7 @@
   {
     "event": "PreToolUse",
     "index": 6,
-    "hook": "hook push-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook package-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook secret-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook db-write-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook exec-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook pass-record-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook install-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook service-role-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 6,
-    "hook": "hook readonly-allow --host claude-code",
+    "hook": "hook guards push-guard package-guard secret-guard db-write-guard exec-guard pass-record-guard install-guard service-role-guard picker-guard readonly-allow route-allow --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []
@@ -242,87 +50,7 @@
   {
     "event": "PreToolUse",
     "index": 7,
-    "hook": "hook push-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook package-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook secret-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook db-write-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook exec-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook pass-record-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook install-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook service-role-guard --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook readonly-allow --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook route-allow --host claude-code",
-    "code": 0,
-    "stdout": [],
-    "stderr": []
-  },
-  {
-    "event": "PreToolUse",
-    "index": 7,
-    "hook": "hook picker-guard --host claude-code",
+    "hook": "hook guards push-guard package-guard secret-guard db-write-guard exec-guard pass-record-guard install-guard service-role-guard picker-guard readonly-allow route-allow --host claude-code",
     "code": 0,
     "stdout": [],
     "stderr": []

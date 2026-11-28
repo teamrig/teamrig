@@ -8,6 +8,7 @@ import { nodeTerminalPrograms } from '../composition/terminal-kit.ts';
 import { resolveKitHome } from '../core/home.ts';
 import { nodeFileBytes } from '../core/file-bytes.ts';
 import { nodeFiles } from '../core/files.ts';
+import { nodeFolderSignals } from '../core/folder-signals.ts';
 import { GIT_TREES } from '../delivery/git-tree.ts';
 import { nodeHostCpu } from '../delivery/cpu.ts';
 import { nodeHostMemory } from '../delivery/memory.ts';
@@ -18,6 +19,7 @@ import { NODE_PATH_PROBE } from '../core/path-probe.ts';
 import { storeWriter } from '../core/store-program.ts';
 import { NODE_STORE_FOLDERS } from '../plugin-store/node-folders.ts';
 import { nodeKitTree } from '../kit/kit-tree.ts';
+import { INSTALL_MARK_TIMEOUT_MS, nodeInstallMark } from '../kit/install-mark.ts';
 import { chatWebhook } from '../core/webhook.ts';
 import { CREDENTIAL_TIMEOUT_MS, systemCredentialKeeper, systemCredentials } from '../core/credentials.ts';
 import { nodeHttpClient } from '../core/http.ts';
@@ -130,6 +132,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
     processes: nodeProcesses(),
     sessionProcesses,
     starters: starterWatch(sessionProcesses, { pid: process.pid, shells: launchingShellsOf(process.env, process.ppid) }, isSessionProcess, nodeEvery),
+    folderSignals: nodeFolderSignals,
     shell: nodeShellRunner(),
     steps: nodeStepRunner(process.platform),
     memory: nodeHostMemory(process.platform),
@@ -160,6 +163,7 @@ export async function runWithNode(argv: readonly string[], entry: NodeEntry): Pr
       markExecutable: nodeMarkExecutable(process.platform),
     },
     kitTree: nodeKitTree(),
+    installMark: nodeInstallMark(process.platform, nodeProgramRunner(INSTALL_MARK_TIMEOUT_MS), process.env['SystemRoot']),
     mergeGit: GIT_MERGE,
     pulls: GIT_PULLS,
     changeGit: GIT_CHANGES,

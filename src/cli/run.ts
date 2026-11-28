@@ -54,6 +54,8 @@ const tabStatusCommand = () => import('./commands/hook-tab-status.ts');
 const toolEndCommand = () => import('./commands/hook-tool-end.ts');
 const readonlyAllowCommand = () => import('./commands/hook-readonly-allow.ts');
 const pickerGuardCommand = () => import('./commands/hook-picker-guard.ts');
+const guardSetCommand = () => import('./commands/hook-guard-set.ts');
+const afterSetCommand = () => import('./commands/hook-after-set.ts');
 const promptRefuseCommand = () => import('./commands/hook-prompt-refuse.ts');
 const routeAllowCommand = () => import('./commands/hook-route-allow.ts');
 const missingCliCommand = () => import('./commands/hook-missing-cli.ts');
@@ -110,6 +112,7 @@ const conformanceClientCommand = () => import('./commands/conformance-client.ts'
 const gitCredentialCommand = () => import('./commands/git-credential.ts');
 const keyCommands = () => import('./commands/key.ts');
 const kitCommands = () => import('./commands/kit.ts');
+const kitSweepCommands = () => import('./commands/kit-sweep.ts');
 const queueCommand = () => import('./commands/queue.ts');
 const withdrawCommand = () => import('./commands/withdraw.ts');
 const stepAsideCommands = () => import('./commands/step-aside.ts');
@@ -127,6 +130,7 @@ const followCommands = () => import('./commands/follow.ts');
 const issueWatchCommands = () => import('./commands/issue-watch.ts');
 const issueMigrateCommands = () => import('./commands/issue-migrate.ts');
 const issueCommands = () => import('./commands/issue.ts');
+const issueIntakeCommands = () => import('./commands/issue-intake.ts');
 const prCommands = () => import('./commands/pr.ts');
 const ciCommands = () => import('./commands/ci.ts');
 const issueLinksCommands = () => import('./commands/issue-links.ts');
@@ -243,6 +247,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'kit install': { effect: 'write', flags: ['tag', 'commit'], switches: ['yes'], load: async () => (await kitCommands()).kitInstall },
   'kit update': { effect: 'write', flags: ['channel'], switches: ['no-attestation', 'yes'], load: async () => (await kitCommands()).kitUpdate },
   'kit uninstall': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitCommands()).kitUninstall },
+  'kit sweep': { effect: 'write', flags: [], switches: ['yes'], load: async () => (await kitSweepCommands()).kitSweep },
   restart: { effect: 'internal', flags: ['team', 'at', 'project'], load: async () => (await restartCommands()).restart },
   'idle-close': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleClose },
   'idle-open': { effect: 'internal', flags: ['team', 'project'], load: async () => (await idleActCommands()).idleOpen },
@@ -288,6 +293,7 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   'issue show': { effect: 'read', flags: ['session'], load: async () => (await issueCommands()).issueShow },
   'issue open': { effect: 'write', flags: ['session', 'repo', 'title', 'body-file', 'label'], load: async () => (await issueCommands()).issueOpen },
   'issue assign': { effect: 'write', flags: ['session', 'add', 'remove'], load: async () => (await issueCommands()).issueAssign },
+  'issue intake': { effect: 'write', flags: ['session', 'priority', 'due', 'goals'], load: async () => (await issueIntakeCommands()).issueIntake },
   'pr conflicts': { effect: 'write', flags: ['base'], load: async () => (await prCommands()).prConflicts },
   'pr approve': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prApprove },
   'pr merge': { effect: 'write', flags: ['session', 'head'], switches: ['check'], load: async () => (await prCommands()).prMerge },
@@ -376,6 +382,8 @@ const COMMANDS: Readonly<Record<string, CommandSpec>> = {
   job: { effect: 'write', flags: ['session', 'what', 'targets', 'at'], load: async () => (await jobCommands()).job },
   'job end': { effect: 'write', flags: ['session', 'id', 'at'], load: async () => (await jobCommands()).jobEnd },
   'deploy-status': { effect: 'read', flags: [], load: async () => (await deployStatusCommand()).deployStatus },
+  'hook guards': { effect: 'internal', flags: [], load: async () => (await guardSetCommand()).guardSet({ table: COMMAND_TABLE }) },
+  'hook after': { effect: 'internal', flags: [], load: async () => (await afterSetCommand()).hookAfter },
   'hook push-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).pushGuard },
   'hook package-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).packageGuard },
   'hook secret-guard': { effect: 'internal', flags: [], load: async () => (await hookCommands()).secretGuard },
@@ -540,6 +548,10 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       and every kept version; teams, backups and the install clone stay; without --yes it counts what would
       go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
       a file a running process holds stays (exit 1)
+  kit sweep [--yes]            ends the task pane watchers and UIs an older teamrig version left running,
+      each with every process it started; only the version the kit home names current ends any, never its
+      own; hooks start it after an update; without --yes it names them and ends nothing; each end goes to
+      the restore log; exit 1 when one could not be ended or the processes could not be listed
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the
@@ -905,8 +917,9 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       --home reads that kit home, which a window or split this opens is handed;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
-      own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
-      Terminal window, else in a window; one that cannot open falls back and says so; OPENED only once
+      own (a session's shell), the terminal half shows in a split of the session's tmux pane or a
+      new tab of its Windows Terminal window, else in a window; one that cannot open falls back
+      and says so; OPENED only once
       the UI in it starts, else FAILED after 20 s; it runs the entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
@@ -1008,7 +1021,14 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,
-      such as a comment asking to take it), at most 3 logins in all; refused on a design issue
+      such as a comment asking to take it), at most 3 logins in all; refused on a design issue but
+      for the logins in github.designAssignees
+  issue intake <owner/name#n> --priority <p> [--due <when>] [--goals <tags>]   takes in an outside
+      pull request of the team's repositories: reads its changed paths once (one page of 100), asks the
+      session owning each area it changes (github.areaPaths, owned through github.areaOwners) a
+      best-fix and overlap review task, the security reviewer one too when it changes a guarded path,
+      then adds the caller's task to answer its author, planned after every review; writes nothing to
+      GitHub; refuses a pull request taken in already while its reply task is not dropped
   pr conflicts <owner/name#n> [--base <branch>]   in a clone of that repository, fetches the pull
       request's head and prints the files it conflicts on against origin's newest base (its default
       branch unless --base) and the rebase it needs; changes no local branch or file of the clone and
@@ -1376,7 +1396,7 @@ export const USAGE = `${KIT_NAME} <command> ...   (the caller: --session <id|nam
       one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
-  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
+  hook guards <guard> ... | hook after <hook> ... | hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]
@@ -1471,24 +1491,33 @@ export async function runCli(given: readonly string[], runtime: CliRuntime): Pro
     // Every check and the command itself work in the host the run names, never the process's default one.
     const chosen: CliRuntime = host === runtime.host ? runtime : { ...runtime, host };
     const hosted: CliRuntime = args.host === undefined ? chosen : { ...chosen, hostId: args.host };
-    refuseSettingsWrite(args.command, args.switches, hosted);
-    if (args.common.size > 0) {
-      // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
-      const common = await import('./common-flags.ts');
-      await common.checkCommonFlags(args, hosted);
+    const execute = async (run: CliRuntime): Promise<ProcessExit> => {
+      refuseSettingsWrite(args.command, args.switches, run);
+      if (args.common.size > 0) {
+        // Loaded only then, as it reads the team's config: a hook passes neither flag and loads only its own code.
+        const common = await import('./common-flags.ts');
+        await common.checkCommonFlags(args, run);
+      }
+      if (spec.effect === 'write' && spec.bindsTab !== true) {
+        // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
+        await (await tabSessionCommands()).refuseAnotherTabSession(args, run);
+      }
+      const command = await spec.load();
+      const lockDeadline = hookLockDeadline(args.command, run.clock.now());
+      const hookRuntime = lockDeadline === undefined ? run : { ...run, lockDeadline };
+      if (args.hostEvent === undefined) {
+        return await command(args, hookRuntime);
+      }
+      const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
+      return gated === undefined ? EXIT.ok : await command(args, gated);
+    };
+    // A dry run is no act: it promises to write nothing, the act log included.
+    if (spec.effect !== 'write' || args.switches.has('dry-run')) {
+      return await execute(hosted);
     }
-    if (spec.effect === 'write' && spec.bindsTab !== true) {
-      // A write runs only as the tab's own session, whatever --session says (T3082); a tab's binding has its own rule.
-      await (await tabSessionCommands()).refuseAnotherTabSession(args, hosted);
-    }
-    const command = await spec.load();
-    const lockDeadline = hookLockDeadline(args.command, hosted.clock.now());
-    const hookRuntime = lockDeadline === undefined ? hosted : { ...hosted, lockDeadline };
-    if (args.hostEvent === undefined) {
-      return await command(args, hookRuntime);
-    }
-    const gated = await guardInputGate(args.command, { ...hookRuntime, hostEvent: args.hostEvent });
-    return gated === undefined ? EXIT.ok : await command(args, gated);
+    // Every write is an act the team's log keeps, its refusals too (T4813); loaded only for a write, so a hook or a
+    // read loads none of the log's code.
+    return await (await import('./act-record.ts')).recordedRun(argv, args, hosted, execute);
   } catch (error) {
     if (error instanceof UsageError) {
       runtime.out.stderr(COMMAND_HELP.usageError(error.message, error.command ?? named));

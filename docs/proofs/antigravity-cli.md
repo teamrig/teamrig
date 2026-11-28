@@ -31,3 +31,19 @@ Scope note: `antigravityUserHooks` writes `~/.gemini/config/hooks.json`. The `1.
   4. `command(echo *)` failed to match in both `allow` (auto-denied in headless mode) and `deny` (`echo trailing_star_deny` succeeded).
   5. `read_file(~/.agy-perm-canary.txt)` did not block `~/.agy-perm-canary.txt` (`~` did not expand; `HOME_CANARY=777` was returned), whereas the full path `read_file(<home>/.agy-perm-canary.txt)` denied `read_file`.
   6. `toolPermission: "always-proceed"` ran `echo bypass_ok` without a prompt (`bypass_ok`).
+
+## `budget.transcripts`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-24`
+- **What was run:** `agy --dangerously-skip-permissions --print='Run echo tool_probe using run_command and reply with DONE.'` with a `Stop` hook capturing `transcriptPath`.
+- **What was seen:** `transcriptPath` pointed to `~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/transcript_full.jsonl`, containing `USER_INPUT`, `PLANNER_RESPONSE` (with `model`, `input_tokens`, `cache_read_tokens`, `output_tokens`, `tool_calls`), and `GENERIC` JSONL lines.
+
+## `budget.usage`
+
+- **OS:** Windows (`win32`)
+- **Tool version:** `agy` `1.5.14`
+- **Date:** `2026-11-24`
+- **What was run:** Same `agy 1.5.14` `--print` run (`77410f41-1733-4809-a15c-74e77418a40e`).
+- **What was seen:** Step 1 `PLANNER_RESPONSE` reported `input_tokens: 9552`, `cache_read_tokens: 0`, `output_tokens: 85`; step 3 reported `input_tokens: 2238`, `cache_read_tokens: 7495`, `output_tokens: 17`.

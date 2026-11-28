@@ -1,4 +1,5 @@
 import { delimiter, join } from 'node:path';
+import { kitMarkedPaths, type InstallMark } from '../../src/kit/install-mark.ts';
 import { hookCommandsOf, type RunRequest, type RunResult } from './dist-smoke.ts';
 
 /**
@@ -34,6 +35,8 @@ export interface InstallStep {
   readonly cwd: string;
   /** Text the step's stdout must hold; a step without one needs only exit 0. */
   readonly expect?: string;
+  /** A reading the step prints that its log line carries, so the CI log keeps the number (its first match). */
+  readonly show?: RegExp;
 }
 
 export interface InstallReport {
@@ -66,6 +69,24 @@ export function inheritedValue(inherited: Readonly<Record<string, string | undef
   return (key === undefined ? undefined : inherited[key]) ?? fallback;
 }
 
+/** The kit home the run writes, inside the scratch home. */
+export function kitHomeUnder(home: string): string {
+  return join(home, '.teamrig');
+}
+
+/**
+ * Removes the scratch home once the run ends. The run's session start copies teamrig into the kit home and marks that
+ * install read-only to the account (src/kit/install-mark.ts), which refuses a plain removal, so the mark is lifted
+ * first; the removal runs even when the lift fails, and the lift's error is then thrown.
+ */
+export async function removeScratchHome(home: string, mark: InstallMark, remove: (path: string) => void): Promise<void> {
+  try {
+    await mark.lift(kitMarkedPaths(kitHomeUnder(home)));
+  } finally {
+    remove(home);
+  }
+}
+
 /**
  * The developer's environment: the scratch home for every tool, git with no system config and no login
  * prompt, a commit identity, and the plugin's bin folder first on PATH. Every other variable is left out, so
@@ -83,7 +104,7 @@ export function installEnv(input: InstallInput, inherited: Readonly<Record<strin
     HOME: input.home,
     USERPROFILE: input.home,
     PATH: [join(layoutOf(input.home).plugin, 'bin'), input.path].join(delimiter),
-    TEAMRIG_HOME: join(input.home, '.teamrig'),
+    TEAMRIG_HOME: kitHomeUnder(input.home),
     TEAMRIG_TEAM: TEAM,
     TEAMRIG_SESSION: LEAD,
     CLAUDE_CONFIG_DIR: join(input.home, '.claude'),
@@ -153,7 +174,17 @@ export function installSteps(input: InstallInput): readonly InstallStep[] {
     teamrig('list', ['list'], `T2 open, Improvements`),
     teamrig('set', ['set', 'T2', '--session', WORKER, '--status', 'in-progress', '--note', 'started'], 'SET T2 in-progress'),
     teamrig('inbox read', ['inbox', 'read', '--session', WORKER], `T2 is yours (p1): ${TASK_TITLE}`),
+    // The free memory the queue's gate reads: on macOS from vm_stat's reclaimable pages, not only its free ones (T2634).
+    { ...teamrig('sessions, the host memory the queue reads', ['sessions'], 'MB free'), show: /host: \d+ MB free/ },
+    // A first queued step: the queue admits it on the host's memory, runs it and records its end.
+    teamrig('queue a first step', ['queue', '--session', WORKER, '--what', 'first step', '--small', '--', 'git', '--version'], 'DONE exit 0'),
   ];
+}
+
+/** The step's log line: its exit code and label, then the reading it prints when it names one. */
+function logLine(step: InstallStep, result: RunResult): string {
+  const shown = step.show === undefined ? null : step.show.exec(result.stdout);
+  return `exit ${result.status ?? 'none'} ${step.label}${shown === null ? '' : `: ${shown[0]}`}`;
 }
 
 /** What is wrong with a step's result, or undefined when it ran as expected. */
@@ -192,7 +223,7 @@ export function freshInstall(input: InstallInput, run: InstallRunner, readManife
   const log: string[] = [];
   for (const step of installSteps(input)) {
     const result = run(step.request, step.cwd);
-    log.push(`exit ${result.status ?? 'none'} ${step.label}`);
+    log.push(logLine(step, result));
     const finding = stepFinding(step, result);
     if (finding !== undefined) {
       return { log, findings: [finding] };

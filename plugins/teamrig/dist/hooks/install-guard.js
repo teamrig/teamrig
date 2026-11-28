@@ -6,7 +6,7 @@ import { parseShell } from "../push-guard/tokenizer.js";
 import { MAX_POSSIBLE_READINGS, resolvePossibleVariables } from "../push-guard/possible-values.js";
 import { aliasFormOf, nativePathOf, samePathKey } from "./path-spelling.js";
 import { refusal } from "./permission.js";
-import { isPattern, REST, segmentRegExp, wordPathOf } from "./shell-word-path.js";
+import { ANY, isPattern, ONE, REST, segmentRegExp, wordPathOf } from "./shell-word-path.js";
 /** The path functions of the platform. */
 function pathsOf(platform) {
     return platform === 'win32' ? win32 : posix;
@@ -26,6 +26,19 @@ export function segmentPattern(name) {
     const extension = dot > 0 ? `\\.${escaped(stripped.slice(dot + 1, dot + 4))}` : '';
     return `(?:${escaped(name)}|${escaped(base.slice(0, 2))}[^\\\\/.\\s'"]*~\\d+${extension})\\.*`;
 }
+/** The 8.3 short extension of a name's end (`.config.toml` gives `.tom`), or '' for an end with no dot. */
+function shortExtensionOf(suffix) {
+    const dot = suffix.lastIndexOf('.');
+    return dot === -1 ? '' : suffix.slice(dot, dot + 4);
+}
+/**
+ * Any one segment that ends with `suffix`, as a pattern (T5542 S1, S3): its long name with the trailing dots Windows
+ * drops, or any 8.3 short name with the suffix's short extension (`p.config.toml` is `PCONFI~1.TOM`), which no long
+ * name's end matches. That keeps every short-named file of the extension in the folder, which is wider than needed.
+ */
+export function suffixPattern(suffix) {
+    return `(?:[^\\\\/]*${escaped(suffix)}|[^\\\\/.\\s'"]*~\\d+${escaped(shortExtensionOf(suffix))})\\.*`;
+}
 /** A path's compare key with no trailing slash, so a root (`c:/`, `/`) prefixes its children as `<key>/`. */
 function keyOf(path, env) {
     return samePathKey(nativePathOf(path, env.platform), env.cwd, env.platform).replace(/\/+$/, '');
@@ -34,9 +47,13 @@ function keyOf(path, env) {
 function isWithin(key, folder) {
     return key === folder || key.startsWith(`${folder}/`);
 }
-/** The pattern of a place's entries, each a whole segment, with what follows it. */
+/** The patterns of a place's guarded names: each entry, then each name end. */
+function namePatterns(place) {
+    return [...place.entries.map(segmentPattern), ...(place.suffixes ?? []).map(suffixPattern)];
+}
+/** The pattern of a place's entries and name ends, each a whole segment, with what follows it. */
 function entriesPattern(place) {
-    return `(?:${place.entries.map(segmentPattern).join('|')})`;
+    return `(?:${namePatterns(place).join('|')})`;
 }
 /** A segment ends at a separator, a character a name cannot hold, or the end. */
 const SEGMENT_END = '(?=[\\\\/]|[^\\w.~-]|$)';
@@ -92,8 +109,8 @@ async function placeOfKeys(keys, env) {
 }
 /** True when a segment of the path is a place's folder name or entry, by name or short name. */
 function namesPlacePart(path, place, platform) {
-    const names = [pathsOf(platform).basename(place.folder), ...place.entries];
-    const pattern = new RegExp(`^(?:${names.map(segmentPattern).join('|')})$`, 'i');
+    const names = [segmentPattern(pathsOf(platform).basename(place.folder)), ...namePatterns(place)];
+    const pattern = new RegExp(`^(?:${names.join('|')})$`, 'i');
     return path.split(/[\\/]+/).some((segment) => pattern.test(segment.split(':')[0] ?? ''));
 }
 function reasonOf(reach, place) {
@@ -169,21 +186,55 @@ function segmentReaches(segment, target, flags) {
     return isPattern(segment) ? segmentRegExp(segment, flags).test(target) : new RegExp(`^${segmentPattern(target)}$`, flags).test(segment);
 }
 /**
- * True when a pattern path's segments can reach the target's: each of the target's segments matched in turn. A
+ * True when a segment pattern can name something ending in `end` (T5542 S2), read from its last character back: a
+ * run of any characters (`*`, a substitution, a variable the environment lacks) can, a `?` or class takes any one
+ * character, a plain one must be the end's. Trailing dots go first, as Windows drops them.
+ */
+function patternCanEnd(segment, end, flags) {
+    const fold = (text) => (flags.includes('i') ? text.toLowerCase() : text);
+    const marks = [...fold(segment).replace(/\.+$/, '')];
+    const wanted = [...fold(end)];
+    while (wanted.length > 0) {
+        const mark = marks.pop();
+        if (mark === undefined) {
+            return false;
+        }
+        if (mark === ANY || mark === REST) {
+            return true;
+        }
+        const character = wanted.pop();
+        if (mark !== ONE && mark !== character) {
+            return false;
+        }
+    }
+    return true;
+}
+/**
+ * True when a word's segment can be a name ending with `suffix`: a static one by the suffix's pattern, a pattern one
+ * when it can end so, or end with the short extension an 8.3 name of one has; when unsure, it can (T5542 S2).
+ */
+function segmentEnds(segment, suffix, flags) {
+    if (!isPattern(segment)) {
+        return new RegExp(`^${suffixPattern(suffix)}$`, flags).test(segment);
+    }
+    return patternCanEnd(segment, suffix, flags) || patternCanEnd(segment, shortExtensionOf(suffix), flags);
+}
+/**
+ * True when a pattern path's segments can reach the target's: each of the target's segment tests met in turn. A
  * segment the running shell ends (a substitution) reaches the target only in the place of its entry, so one right
  * after a guarded folder reaches its entries, but one after the home does not reach the kit's.
  */
-function patternReaches(segments, target, flags) {
-    for (const [index, wanted] of target.entries()) {
+function patternReaches(segments, target) {
+    for (const [index, reaches] of target.entries()) {
         const segment = segments[index];
         if (segment === undefined) {
             return false;
         }
         // Only a folder a `cd` named puts one before others (`cd ~/$(x) && rm current`); it stands for one segment there.
         if (segment.includes(REST) && index === segments.length - 1) {
-            return index === target.length - 1 && segmentReaches(segment, wanted, flags);
+            return index === target.length - 1 && reaches(segment);
         }
-        if (!segmentReaches(segment, wanted, flags)) {
+        if (!reaches(segment)) {
             return false;
         }
     }
@@ -227,7 +278,12 @@ async function placeOfPattern(native, cwd, env) {
     for (const place of env.places) {
         for (const folderKey of await folderKeysOf(place, env)) {
             const head = folderKey.split('/');
-            if (patternIsFolder(segments, head, flags) || place.entries.some((entry) => patternReaches(segments, [...head, entry], flags))) {
+            const folder = head.map((wanted) => (segment) => segmentReaches(segment, wanted, flags));
+            const names = [
+                ...place.entries.map((entry) => (segment) => segmentReaches(segment, entry, flags)),
+                ...(place.suffixes ?? []).map((suffix) => (segment) => segmentEnds(segment, suffix, flags)),
+            ];
+            if (patternIsFolder(segments, head, flags) || names.some((name) => patternReaches(segments, [...folder, name]))) {
                 return place;
             }
         }

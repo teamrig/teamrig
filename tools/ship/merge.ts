@@ -19,6 +19,7 @@ import { type LandingTurn, processLandingTurn } from './landing-turn.ts';
 import { type ReleaseCatchUpRequest, catchUpRelease } from './release-catch-up.ts';
 import { releaseRefusal } from './release-pull.ts';
 import { queueLanding } from './merge-queue.ts';
+import { reachGate } from './reach.ts';
 import { realRenamedCallersDeps, renamedCallersRefusal } from './renamed-callers.ts';
 import { type LocalChecks, type ReleasePull, type RepoProfile, profileFor, readProfiles, slugOf } from './repos.ts';
 import { APPROVED_SHA } from './ship-plan.ts';
@@ -172,6 +173,11 @@ export interface MergeRequest {
    * open merges with a warning line, as with `lacks`.
    */
   unlinked: string | null;
+  /**
+   * Why the note's reach may not open the pull request (reach.ts, T3417); null when it may. One already open merges
+   * with a warning line, as with `lacks`, so no queued merge of an older note breaks.
+   */
+  reachRefused: string | null;
 }
 
 /** What proves a pull request's head before it merges: the repo's gate. */
@@ -398,10 +404,12 @@ export async function mergeThroughPull(
   if (found === null && !request.opens) return { kind: 'refused', pull: null, reason: `no open pull request from ${head} into ${base}: the release tool opens it, never a merge` };
   if (found === null && request.lacks !== null) return { kind: 'refused', pull: null, reason: lackingSections(request.lacks) };
   if (found === null && request.unlinked !== null) return { kind: 'refused', pull: null, reason: request.unlinked };
+  if (found === null && request.reachRefused !== null) return { kind: 'refused', pull: null, reason: request.reachRefused };
   const pull = found ?? openPull(gh, repo, head, base, request.title, request.body);
   log(`${found === null ? 'opened' : 'found'} pull request #${pull.number} ${pull.url}`);
   if (found !== null && request.lacks !== null) log(`warning: pull request #${pull.number} lacks ${request.lacks}, which this repo's template asks for: add it to its text`);
   if (found !== null && request.unlinked !== null) log(`warning: pull request #${pull.number}: ${request.unlinked}`);
+  if (found !== null && request.reachRefused !== null) log(`warning: pull request #${pull.number}: ${request.reachRefused}`);
   if (pull.headSha !== sha) return { kind: 'refused', pull, reason: `the pull request head ${pull.headSha.slice(0, 7)} is not ${head} ${sha.slice(0, 7)}: push ${head} first` };
   labelPull(gh, repo, pull.number, request.labels, log);
   // Before the checks, which may run long: the earlier pushes' pull requests stop asking for review now (T4780). The
@@ -568,6 +576,11 @@ export function missingSections(note: string | null, sections: readonly string[]
   const missing = sections.filter(name => !headings.has(name));
   if (missing.length === 0) return null;
   return missing.map(name => `## ${name}`).join(', ');
+}
+
+/** The files the head changes against main's merge base, which the reach check reads for tooling (reach.ts). */
+export function changedFiles(git: (...args: string[]) => string, main: string, sha: string): string[] {
+  return git('diff', '--name-only', `refs/remotes/origin/${main}...${sha}`).split('\n').filter(line => line !== '');
 }
 
 /** What the command reaches outside itself, so a test can stand in for each. */
@@ -894,8 +907,10 @@ export async function mergeRun(args: MergeArgs, deps: MergeDeps, gate: MergeGate
       : { proof: localProof(args.dir, profile.local, deps.gate), away: () => false };
   // The release pull request is never opened here, so nothing dresses it: its tool wrote its title.
   const face = opens ? pullFaceOf(gh, { repo, head, subjects, note, task: await deps.pullTask(head) }, deps.out) : { title: head, note, labels: [], unlinked: null };
+  // The release pull request states no reach: its tool writes its note.
+  const reachRefused = opens ? reachGate(note, profile.pullSections, () => changedFiles(git, profile.main, sha)) : null;
   const result = await mergeThroughPull(
-    { repo, head, base: profile.main, sha, title: face.title, body: pullBody(subjects, face.note), lacks: missingSections(note, profile.pullSections), opens, labels: face.labels, unlinked: face.unlinked },
+    { repo, head, base: profile.main, sha, title: face.title, body: pullBody(subjects, face.note), lacks: missingSections(note, profile.pullSections), opens, labels: face.labels, unlinked: face.unlinked, reachRefused },
     gh,
     main,
     proof.proof,

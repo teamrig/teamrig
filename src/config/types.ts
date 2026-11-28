@@ -604,7 +604,7 @@ export interface TurnLogConfig {
 
 export const UI_MODES = ['terminal', 'window', 'both'] as const;
 /**
- * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, or a split beside the session when
+ * Where `teamrig ui` shows the UI (T5105): `terminal` in the terminal it is run in, or beside the session (a tmux split, a Windows Terminal tab) when
  * that is no terminal a person types in, `window` in a window of its own, `both` in the two at once.
  */
 export type UiMode = (typeof UI_MODES)[number];
@@ -784,6 +784,12 @@ export interface GithubConfig {
    * read after the assignees and before `sessions`, the first label in this list the issue carries winning.
    */
   readonly areaOwners: Readonly<Record<string, string>>;
+  /**
+   * The paths each area label of `areaOwners` holds (lowercase), such as `area:guard` for `src/push-guard/**`: globs read
+   * as the review gate reads them, each held to one repository by an `<owner>/<name>:` prefix, else matching in every one.
+   * `issue intake` asks the owner of each area an outside pull request changes for a review (areas.ts).
+   */
+  readonly areaPaths: Readonly<Record<string, readonly string[]>>;
   /** The session each repository's (lowercase) issues go to when none of their assignees is in `owners` and none of their labels in `areaOwners`; else the lead. */
   readonly sessions: Readonly<Record<string, string>>;
   /** How many days back closed issues are read, to finish the tasks they were imported as. */
@@ -808,6 +814,11 @@ export interface GithubConfig {
    * were not edited after that. Matched without case.
    */
   readonly acceptLabel: string;
+  /**
+   * The GitHub logins (lowercase) `issue assign` may add to a design issue before it is agreed, such as the team owner
+   * every design issue goes to (T5461); every other login stays refused there. Empty, the default: none.
+   */
+  readonly designAssignees: readonly string[];
   /**
    * The score, from 0 to 1, at which a mirrored issue counts as a duplicate candidate of a new one: the cosine of
    * their TF-IDF word vectors (src/issues/similar.ts). Higher lists fewer, closer candidates.
@@ -1515,6 +1526,12 @@ export interface RefreshConfig {
    * handover that grows section by section fills the next session's context before its work begins. 0: no cap.
    */
   readonly handoverMaxBytes: number;
+  /**
+   * A handover past this many bytes is still taken, with a note that it should move its how-tos to skills and its code
+   * map to a reference file, and `teamrig doctor` names its session: so a handover is cut before it reaches the cap.
+   * 0: no warning.
+   */
+  readonly handoverWarnBytes: number;
   /**
    * A program (its path, then its arguments) run after an automatic restart ended a session, given Claude
    * Code's SessionEnd hook input (reason `clear`) on stdin: for a SessionEnd hook the end skipped, since on

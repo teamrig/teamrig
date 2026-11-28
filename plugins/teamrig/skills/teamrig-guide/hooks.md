@@ -1,7 +1,7 @@
 # Hooks and permissions
 
 The plugin's `hooks/hooks.json` registers thirty Claude Code hooks, one row each below however many events a hook runs on, and one mod ([the /teamrig command](#the-mod-the-teamrig-command), [the refresh's /clear](#the-mod-the-refreshs-clear), [the reload after an install](#the-mod-the-reload-after-an-install), [the wake on urgent work](#the-mod-the-wake-on-urgent-work), [the update notice](#the-mod-the-update-notice)). Each runs
-`node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
+`node <plugin>/dist/cli/main.js hook <name>` with a 15 second timeout (`hook refresh-wake` 30, `hook tool-end` 5); the `PreToolUse` guards that can refuse a call run `node <plugin>/dist/cli/guard-main.js hook <name>`, those of one tool call together as `hook guards <name> ...` in one process, with the allows and the picker guard of a shell line (one run on a shell line, not four), which blocks the call when the guard [cannot answer](#a-guard-that-cannot-answer). The `PostToolUse` hooks of one tool call run together too, as `hook after <name> ...` in one `main.js` process (one run after a shell line, not three), each answering as it does alone; `hook tool-end` stays its own process on every call. A hook waiting on a file lock another tab holds gives up 3 seconds before its time limit (a guard: before its runner's 12 seconds), even under a longer `lock.waitMs`, so it still answers. Outside a project tied to a team (no `$TEAMRIG_TEAM` and no `.teamrig.json`)
 they all stay silent, but `hook restore-track` and `hook tool-end` still record the session ([the restore tracker](#every-session-the-restore-tracker)) and `hook missing-cli` still answers a shell that [no longer finds the bare command](#after-a-shell-call-the-cli-by-its-path).
 Each hook line names the host it runs in with `--host <id>` after the hook's name (`hook stop --host claude-code`), so a team mixing hosts loads each session's own ports. A host whose hook JSON does not name its event (Antigravity's) also passes `--host-event <Event>`, as in `hook stop --host antigravity-cli --host-event Stop`. The `Flags: none.` lines below count neither: every command takes `--host`, and `--host-event` is the host's, not the hook's.
 When the team's `hosts` does not list the host a hook line names (a team made after `setup hooks`, or a second team on the machine), `hook session-start` says so once in the host's reply, naming the `hosts` line to add before a new session; the other hooks end cleanly and write nothing, and the guards still refuse, so every tool call stays blocked until the team lists the host.
@@ -1306,7 +1306,8 @@ is the point.
 At the end of every turn, the Stop hook measures your context from the transcript. At or over
 `refresh.contextTokens` (120,000 by default), at a task end after every `refresh.everyTasks` finished tasks (3) with the context at
 `refresh.everyTasksMinTokens` (80,000) or more, or when the lead asked with `teamrig refresh <id>`, it keeps you going with one instruction: write your handover to
-`<home>/teams/<team>/handover/<id>.md`, replacing the whole file, with what the register lacks, not task statuses (the fresh start
+`<home>/teams/<team>/handover/<id>.md`, replacing the whole file, with only the state the register lacks (a how-to goes
+in a skill, a code map in a reference file it names), not task statuses (the fresh start
 [lists them live](#session-start)), in a `## State` and a `## Next steps` section, then end your turn and start
 nothing new (mid-task it says `refresh now rather than at a task end`). The turn's end takes a handover written since
 the ask with both sections as ready, with no call. One that falls short is asked to be fixed once per version:
@@ -2049,16 +2050,26 @@ thread and blocks the call (exit 2) when the guard:
   runs on its own thread, so the runner's clock keeps running;
 - ends with an exit code but 0 or 2, or prints something other than its one JSON answer.
 
-The runner runs nothing but a hook: its words must be exactly `hook <name>`, and any other (`guard-main.js owner
-next ...`, `guard-main.js exec approve ...`) exits 2, saying "teamrig blocked this run", before the CLI loads, so the
-guard entry is no second way into the CLI's commands.
+The runner runs nothing but a hook: its words must be exactly `hook <name>`, or `hook guards <name> ...` naming each
+hook once, all of them hooks that can run in a set (the eight guards before `cold-send` above, `picker-guard`,
+`readonly-allow` and `route-allow`), and any other
+(`guard-main.js owner next ...`, `guard-main.js exec approve ...`) exits 2, saying "teamrig blocked this run", before
+the CLI loads, so the guard entry is no second way into the CLI's commands.
+
+A set runs its guards side by side in one process, on one load of the CLI and the team config, where each guard once
+started its own Node.js and loaded the CLI again: a shell line ran four `PreToolUse` processes, now one. The set
+answers as the host combines separate hooks: any guard's refusal refuses the call, with every refusing guard's
+reason; else any allow; and every guard's notes are kept. A guard of the set that throws refuses the call, naming it
+(`its <name> guard crashed (...)`), whatever the others said; `picker-guard`, `readonly-allow` and `route-allow`
+print nothing on an error when they run alone, so in a set their throw is no answer and the others decide. The 12
+seconds are the set's, and its block line names every hook in it (`its guards push-guard, ... and route-allow gave
+no answer within 12 s`). A hooks file written by an earlier teamrig, with a line per guard, still runs.
 
 The model then reads `teamrig blocked this call: its <hook> guard <what went wrong>, and a guard that cannot answer
 must not let a call through. Fix: ...` ([errors](errors.md#a-blocked-tool-call)). So a broken install blocks every
 call those guards see (shell lines, reads, searches, edits, sends, helper launches and the question picker) until
-an update of the teamrig plugin and a restart of the session. `hook readonly-allow`, `hook route-allow` and
-`hook tab-status` run through the plain CLI: when an allow fails, the call gets Claude Code's own check, and tab
-status never answers for a call.
+an update of the teamrig plugin and a restart of the session. When an allow in the set throws, the call gets Claude
+Code's own check; `hook tab-status` runs through the plain CLI and never answers for a call.
 
 The runner cannot catch the process running out of memory, a broken `guard-main.js` or runner file, and a missing
 Node.js.

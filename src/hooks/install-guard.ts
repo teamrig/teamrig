@@ -7,7 +7,7 @@ import { parseShell, type ShellCommand, type ShellDialect, type ShellWord } from
 import { MAX_POSSIBLE_READINGS, resolvePossibleVariables } from '../push-guard/possible-values.ts';
 import { aliasFormOf, nativePathOf, samePathKey } from './path-spelling.ts';
 import { refusal } from './permission.ts';
-import { isPattern, REST, segmentRegExp, wordPathOf } from './shell-word-path.ts';
+import { ANY, isPattern, ONE, REST, segmentRegExp, wordPathOf } from './shell-word-path.ts';
 
 /**
  * The install guard (T5278 C1, security verdict T5292): every session's guards run from teamrig's own install (the
@@ -26,6 +26,12 @@ export interface GuardedPlace {
   readonly folder: string;
   /** The names in it the guard keeps, each with all it holds. */
   readonly entries: readonly string[];
+  /**
+   * The ends of names in it the guard keeps as well, each a constant of the host's adapter, never read from the host's
+   * config: every one segment directly in the folder that ends so, such as Codex CLI's `<name>.config.toml` profiles
+   * (T5542). None when left out.
+   */
+  readonly suffixes?: readonly string[];
   /** What the place is, for the reason: `the teamrig install`. */
   readonly what: string;
   /** What writes it instead, for the reason: `` `teamrig setup hooks` ``. */
@@ -66,6 +72,21 @@ export function segmentPattern(name: string): string {
   return `(?:${escaped(name)}|${escaped(base.slice(0, 2))}[^\\\\/.\\s'"]*~\\d+${extension})\\.*`;
 }
 
+/** The 8.3 short extension of a name's end (`.config.toml` gives `.tom`), or '' for an end with no dot. */
+function shortExtensionOf(suffix: string): string {
+  const dot = suffix.lastIndexOf('.');
+  return dot === -1 ? '' : suffix.slice(dot, dot + 4);
+}
+
+/**
+ * Any one segment that ends with `suffix`, as a pattern (T5542 S1, S3): its long name with the trailing dots Windows
+ * drops, or any 8.3 short name with the suffix's short extension (`p.config.toml` is `PCONFI~1.TOM`), which no long
+ * name's end matches. That keeps every short-named file of the extension in the folder, which is wider than needed.
+ */
+export function suffixPattern(suffix: string): string {
+  return `(?:[^\\\\/]*${escaped(suffix)}|[^\\\\/.\\s'"]*~\\d+${escaped(shortExtensionOf(suffix))})\\.*`;
+}
+
 /** A path's compare key with no trailing slash, so a root (`c:/`, `/`) prefixes its children as `<key>/`. */
 function keyOf(path: string, env: InstallGuardEnv): string {
   return samePathKey(nativePathOf(path, env.platform), env.cwd, env.platform).replace(/\/+$/, '');
@@ -76,9 +97,14 @@ function isWithin(key: string, folder: string): boolean {
   return key === folder || key.startsWith(`${folder}/`);
 }
 
-/** The pattern of a place's entries, each a whole segment, with what follows it. */
+/** The patterns of a place's guarded names: each entry, then each name end. */
+function namePatterns(place: GuardedPlace): readonly string[] {
+  return [...place.entries.map(segmentPattern), ...(place.suffixes ?? []).map(suffixPattern)];
+}
+
+/** The pattern of a place's entries and name ends, each a whole segment, with what follows it. */
 function entriesPattern(place: GuardedPlace): string {
-  return `(?:${place.entries.map(segmentPattern).join('|')})`;
+  return `(?:${namePatterns(place).join('|')})`;
 }
 
 /** A segment ends at a separator, a character a name cannot hold, or the end. */
@@ -142,8 +168,8 @@ async function placeOfKeys(keys: readonly string[], env: InstallGuardEnv): Promi
 
 /** True when a segment of the path is a place's folder name or entry, by name or short name. */
 function namesPlacePart(path: string, place: GuardedPlace, platform: NodeJS.Platform): boolean {
-  const names = [pathsOf(platform).basename(place.folder), ...place.entries];
-  const pattern = new RegExp(`^(?:${names.map(segmentPattern).join('|')})$`, 'i');
+  const names = [segmentPattern(pathsOf(platform).basename(place.folder)), ...namePatterns(place)];
+  const pattern = new RegExp(`^(?:${names.join('|')})$`, 'i');
   return path.split(/[\\/]+/).some((segment) => pattern.test(segment.split(':')[0] ?? ''));
 }
 
@@ -229,21 +255,60 @@ function segmentReaches(segment: string, target: string, flags: string): boolean
 }
 
 /**
- * True when a pattern path's segments can reach the target's: each of the target's segments matched in turn. A
+ * True when a segment pattern can name something ending in `end` (T5542 S2), read from its last character back: a
+ * run of any characters (`*`, a substitution, a variable the environment lacks) can, a `?` or class takes any one
+ * character, a plain one must be the end's. Trailing dots go first, as Windows drops them.
+ */
+function patternCanEnd(segment: string, end: string, flags: string): boolean {
+  const fold = (text: string): string => (flags.includes('i') ? text.toLowerCase() : text);
+  const marks = [...fold(segment).replace(/\.+$/, '')];
+  const wanted = [...fold(end)];
+  while (wanted.length > 0) {
+    const mark = marks.pop();
+    if (mark === undefined) {
+      return false;
+    }
+    if (mark === ANY || mark === REST) {
+      return true;
+    }
+    const character = wanted.pop();
+    if (mark !== ONE && mark !== character) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * True when a word's segment can be a name ending with `suffix`: a static one by the suffix's pattern, a pattern one
+ * when it can end so, or end with the short extension an 8.3 name of one has; when unsure, it can (T5542 S2).
+ */
+function segmentEnds(segment: string, suffix: string, flags: string): boolean {
+  if (!isPattern(segment)) {
+    return new RegExp(`^${suffixPattern(suffix)}$`, flags).test(segment);
+  }
+  return patternCanEnd(segment, suffix, flags) || patternCanEnd(segment, shortExtensionOf(suffix), flags);
+}
+
+/** A test of one segment of a pattern path against the guarded path's segment in its place. */
+type SegmentTest = (segment: string) => boolean;
+
+/**
+ * True when a pattern path's segments can reach the target's: each of the target's segment tests met in turn. A
  * segment the running shell ends (a substitution) reaches the target only in the place of its entry, so one right
  * after a guarded folder reaches its entries, but one after the home does not reach the kit's.
  */
-function patternReaches(segments: readonly string[], target: readonly string[], flags: string): boolean {
-  for (const [index, wanted] of target.entries()) {
+function patternReaches(segments: readonly string[], target: readonly SegmentTest[]): boolean {
+  for (const [index, reaches] of target.entries()) {
     const segment = segments[index];
     if (segment === undefined) {
       return false;
     }
     // Only a folder a `cd` named puts one before others (`cd ~/$(x) && rm current`); it stands for one segment there.
     if (segment.includes(REST) && index === segments.length - 1) {
-      return index === target.length - 1 && segmentReaches(segment, wanted, flags);
+      return index === target.length - 1 && reaches(segment);
     }
-    if (!segmentReaches(segment, wanted, flags)) {
+    if (!reaches(segment)) {
       return false;
     }
   }
@@ -291,7 +356,12 @@ async function placeOfPattern(native: string, cwd: string, env: InstallGuardEnv)
   for (const place of env.places) {
     for (const folderKey of await folderKeysOf(place, env)) {
       const head = folderKey.split('/');
-      if (patternIsFolder(segments, head, flags) || place.entries.some((entry) => patternReaches(segments, [...head, entry], flags))) {
+      const folder = head.map((wanted): SegmentTest => (segment) => segmentReaches(segment, wanted, flags));
+      const names: readonly SegmentTest[] = [
+        ...place.entries.map((entry): SegmentTest => (segment) => segmentReaches(segment, entry, flags)),
+        ...(place.suffixes ?? []).map((suffix): SegmentTest => (segment) => segmentEnds(segment, suffix, flags)),
+      ];
+      if (patternIsFolder(segments, head, flags) || names.some((name) => patternReaches(segments, [...folder, name]))) {
         return place;
       }
     }

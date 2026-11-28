@@ -1,18 +1,25 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { dirname } from 'node:path';
 import { isRecord, type JsonRecord } from '../../core/guards.ts';
 import { inboxLineOf } from '../../inbox/inbox.ts';
 import { DOCUMENTS, INTERFACE_VERSION } from '../../interface/index.ts';
 import { GITHUB_ACTOR } from '../../register/policy.ts';
-import { CliHarness, CONFIG_PATH, type CliResult } from '../../testing/cli-harness.ts';
+import { parseVersion } from '../../core/release-version.ts';
+import { KIT_VERSION } from '../../core/version.ts';
+import { kitCurrentPath } from '../../kit/kit-versions.ts';
+import { CliHarness, CONFIG_PATH, KIT, type CliResult } from '../../testing/cli-harness.ts';
+import { seedKitHome } from '../../testing/kit-home.ts';
+import { FakeFolderSignals } from '../../testing/fake-folder-signals.ts';
 import { FakeStarterWatch } from '../../testing/fake-starter-watch.ts';
 import { FaultyFiles, systemError } from '../../testing/faulty-files.ts';
+import { normalisePath } from '../../testing/memory-files.ts';
 import { served } from '../../testing/read-answers.ts';
 import { teamInboxOf } from '../../testing/team-tree.ts';
 import { WatchedFiles } from '../../testing/watched-files.ts';
 import type { Sleep } from '../../core/lock.ts';
 import { EXIT } from '../runtime.ts';
-import { EVENTS_PASS_MS } from './events.ts';
+import { EVENTS_FALLBACK_MS, EVENTS_PASS_MS } from './events.ts';
 
 const EVENTS = ['events', '--json', '--session', 'alpha'] as const;
 const ALPHA_INBOX = teamInboxOf('app', 'alpha');
@@ -211,11 +218,202 @@ describe('teamrig events', () => {
     assert.equal(revisionIn(hello, 'stats'), read);
   });
 
+  describe('with folders it can watch (T5758)', () => {
+    // The platform's dirname, as the recorder's: the path is joined with the platform's separator.
+    const INBOX_FOLDER = dirname(ALPHA_INBOX);
+    const quiet: Step = () => undefined;
+
+    /** `waits`, each wait moving the kit's clock by what it asked first, as a real wait does. */
+    function timedWaits(kit: CliHarness, starters: FakeStarterWatch, steps: readonly Step[]): { readonly sleep: Sleep; readonly asked: number[] } {
+      const inner = waits(starters, steps);
+      const sleep: Sleep = async (ms) => {
+        kit.clock.advance(ms);
+        await inner.sleep(ms);
+      };
+      return { sleep, asked: inner.asked };
+    }
+
+    it('takes no look while nothing changes, after the one look that follows the watch it opened', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const files = new WatchedFiles(kit.files);
+      const seen: number[] = [];
+      // Read while the follower runs: its watch is closed once it ends.
+      let watched: string[] = [];
+      const steps = Array.from({ length: 10 }, (): Step => () => {
+        seen.push(files.touched().length);
+        watched = signals.watched();
+      });
+      const { sleep, asked } = timedWaits(kit, starters, steps);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, files, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => frame['event']), ['hello']);
+      const [first = 0, second = 0, ...rest] = seen;
+      assert.ok(second > first, 'the wait after the watch opened looks once');
+      assert.deepEqual(rest, rest.map(() => second), 'no look while nothing changed');
+      assert.ok(asked.every((ms) => ms === EVENTS_PASS_MS));
+      assert.equal(signals.watchCount, 1);
+      assert.ok(watched.includes(normalisePath(INBOX_FOLDER)), watched.join(', '));
+    });
+
+    it('looks at the wait after a watched folder tells of a change, and names what moved', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const changed: Step = async () => {
+        await post(kit, 'one');
+        signals.change(INBOX_FOLDER);
+      };
+      const { sleep } = timedWaits(kit, starters, [quiet, quiet, changed, quiet]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => namedIn(frame)), [['tasks', 'inbox'], ['inbox']]);
+    });
+
+    // The look after the watch opened is at 1 s; the change at 2 s goes untold, so the next look is the fallback's.
+    const fallbackWait = EVENTS_FALLBACK_MS / EVENTS_PASS_MS;
+    for (const [what, waitsRun, events] of [
+      ['not before the fallback is due', fallbackWait, ['hello']],
+      ['at the look the fallback is due', fallbackWait + 1, ['hello', 'changed']],
+    ] as const) {
+      it(`names a change no folder told of ${what}`, async () => {
+        const kit = new CliHarness();
+        const starters = new FakeStarterWatch();
+        const signals = new FakeFolderSignals();
+        const steps = Array.from({ length: waitsRun }, (_, index): Step => (index === 1 ? () => post(kit, 'untold') : quiet));
+        const { sleep } = timedWaits(kit, starters, steps);
+        const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+        assert.deepEqual(frames.map((frame) => frame['event']), events);
+      });
+    }
+
+    it('looks every second while a folder it reads cannot be watched', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals((folder) => folder !== INBOX_FOLDER);
+      const { sleep } = timedWaits(kit, starters, [quiet, quiet, () => post(kit, 'one'), () => post(kit, 'two')]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => namedIn(frame)), [['tasks', 'inbox'], ['inbox'], ['inbox']]);
+    });
+
+    it('goes back to a look every second once a watch ends with an error', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const { sleep } = timedWaits(kit, starters, [quiet, () => signals.fail(INBOX_FOLDER), quiet, () => post(kit, 'one')]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+      assert.deepEqual(frames.map((frame) => frame['event']), ['hello', 'changed']);
+    });
+
+    it('closes its watch once its starter ends', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      const { sleep } = timedWaits(kit, starters, [quiet]);
+      framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals }));
+      assert.equal(signals.watchCount, 1);
+      assert.equal(signals.openWatches, 0);
+    });
+  });
+
   it('keeps the scope it opened: a config edit moves every revision and ends no run', async () => {
     const kit = new CliHarness();
     const starters = new FakeStarterWatch();
     const { sleep } = waits(starters, [() => kit.files.append(CONFIG_PATH, '\n')]);
     const frames = framesOf(await kit.run([...EVENTS, '--documents', 'tasks,inbox'], { starters, sleep }));
     assert.deepEqual(frames.map((frame) => namedIn(frame)), [['tasks', 'inbox'], ['tasks', 'inbox']]);
+  });
+
+  describe('once a newer teamrig is current (T5813)', () => {
+    const own = parseVersion(KIT_VERSION);
+    assert.ok(own !== undefined, KIT_VERSION);
+    const NEWER = `${own.major}.${own.minor + 1}.0`;
+    const NEWEST = `${own.major}.${own.minor + 2}.0`;
+    const OLDER = own.minor > 0 ? `${own.major}.${own.minor - 1}.0` : `${own.major}.0.0`;
+    const ENDED_LINE = new RegExp(`^ENDED teamrig ${NEWEST.replaceAll('.', '\\.')} is installed, and this follower ran ${KIT_VERSION.replaceAll('.', '\\.')}; start it again$`, 'u');
+
+    function eventsOf(result: CliResult): unknown[] {
+      return result.stdout.map((line) => {
+        const frame: unknown = JSON.parse(line);
+        return isRecord(frame) ? frame['event'] : frame;
+      });
+    }
+
+    it('ends with exit 0 and an ENDED line at the look after current moves to a newer version, the waits left unrun', async () => {
+      const kit = new CliHarness();
+      await seedKitHome(kit.files, KIT, KIT_VERSION);
+      const starters = new FakeStarterWatch();
+      const { sleep, asked } = waits(starters, [() => seedKitHome(kit.files, KIT, NEWEST), () => post(kit, 'after')]);
+      const result = await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep });
+      assert.equal(result.code, EXIT.ok);
+      assert.deepEqual(eventsOf(result), ['hello']);
+      assert.equal(result.stderr.length, 1);
+      assert.match(result.stderr[0] ?? '', ENDED_LINE);
+      assert.equal(asked.length, 1, 'no wait after the look that saw the newer version');
+    });
+
+    it('ends too when no version was current at its start and a newer one comes', async () => {
+      const kit = new CliHarness();
+      const starters = new FakeStarterWatch();
+      const { sleep } = waits(starters, [() => seedKitHome(kit.files, KIT, NEWEST)]);
+      const result = await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep });
+      assert.equal(result.code, EXIT.ok);
+      assert.match(result.stderr.join('\n'), ENDED_LINE);
+    });
+
+    it('ends nothing for a newer version already current at its start, as a reader whose CLI lags the kit starts it', async () => {
+      const kit = new CliHarness();
+      await seedKitHome(kit.files, KIT, NEWER);
+      const starters = new FakeStarterWatch();
+      const { sleep, asked } = waits(starters, [() => undefined, () => post(kit, 'one'), () => undefined]);
+      const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep }));
+      assert.deepEqual(frames.map((frame) => frame['event']), ['hello', 'changed']);
+      assert.equal(asked.length, 4, 'it ran until its starter ended');
+    });
+
+    it('ends once current moves past the newer version it started with', async () => {
+      const kit = new CliHarness();
+      await seedKitHome(kit.files, KIT, NEWER);
+      const starters = new FakeStarterWatch();
+      const { sleep } = waits(starters, [() => seedKitHome(kit.files, KIT, NEWEST)]);
+      const result = await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep });
+      assert.match(result.stderr.join('\n'), ENDED_LINE);
+    });
+
+    for (const [what, version] of [
+      ['its own version', KIT_VERSION],
+      ['an older version', OLDER],
+    ] as const) {
+      it(`ends nothing when current moves to ${what}`, async () => {
+        const kit = new CliHarness();
+        await seedKitHome(kit.files, KIT, NEWER);
+        const starters = new FakeStarterWatch();
+        const { sleep, asked } = waits(starters, [() => seedKitHome(kit.files, KIT, version), () => undefined]);
+        const frames = framesOf(await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep }));
+        assert.deepEqual(frames.map((frame) => frame['event']), ['hello']);
+        assert.equal(asked.length, 3, 'it ran until its starter ended');
+      });
+    }
+
+    it('watches the kit home, so an install wakes an idle follower at once, not at the fallback', async () => {
+      const kit = new CliHarness();
+      await seedKitHome(kit.files, KIT, KIT_VERSION);
+      const starters = new FakeStarterWatch();
+      const signals = new FakeFolderSignals();
+      let watched: string[] = [];
+      const quiet: Step = () => {
+        watched = signals.watched();
+      };
+      const installed: Step = async () => {
+        await seedKitHome(kit.files, KIT, NEWEST);
+        signals.change(dirname(kitCurrentPath(KIT)));
+      };
+      // The wait after the watch opened looks once; then two quiet waits, the install, and the look it wakes.
+      const steps = [quiet, quiet, quiet, installed, ...Array.from({ length: 5 }, (): Step => quiet)];
+      const { sleep, asked } = waits(starters, steps);
+      const result = await kit.run([...EVENTS, '--documents', 'inbox'], { starters, sleep, folderSignals: signals });
+      assert.ok(watched.includes(normalisePath(dirname(kitCurrentPath(KIT)))), watched.join(', '));
+      assert.match(result.stderr.join('\n'), ENDED_LINE);
+      assert.equal(asked.length, 4, 'it ended at the look the install woke');
+    });
   });
 });

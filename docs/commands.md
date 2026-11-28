@@ -112,6 +112,10 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       and every kept version; teams, backups and the install clone stay; without --yes it counts what would
       go and removes nothing; a hooks file it cannot edit refuses the run first; only the person runs it;
       a file a running process holds stays (exit 1)
+  kit sweep [--yes]            ends the task pane watchers and UIs an older teamrig version left running,
+      each with every process it started; only the version the kit home names current ends any, never its
+      own; hooks start it after an update; without --yes it names them and ends nothing; each end goes to
+      the restore log; exit 1 when one could not be ended or the processes could not be listed
   rules [--session <id|name>]  the team rules and who the session is, as a session start gives them
   rules scan [--kind <kind>] [--all]   every place a local rule can override a core rule (CLAUDE.md files,
       rules files, skills, memory, rules.md, hook scripts, settings autoMode lines), the kept rules, and the
@@ -477,8 +481,9 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       --home reads that kit home, which a window or split this opens is handed;
       --mode, else ui.mode (terminal), shows it in this terminal, in a window of its own opened as
       open.terminal says (teamrig-ui in Windows Terminal), or in both; run with no terminal of its
-      own (a session's shell), the terminal half shows in a split of the session's tmux or Windows
-      Terminal window, else in a window; one that cannot open falls back and says so; OPENED only once
+      own (a session's shell), the terminal half shows in a split of the session's tmux pane or a
+      new tab of its Windows Terminal window, else in a window; one that cannot open falls back
+      and says so; OPENED only once
       the UI in it starts, else FAILED after 20 s; it runs the entry script ui.path names, else
       the released UI this teamrig pins, fetched once into the kit home's ui folder, held to its sha256
       at each start and given only a few variables; refused while neither is there, ui.path names no
@@ -580,7 +585,14 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
   issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]   gives one issue or pull
       request of the team's repositories to its takers, with the same access: each login to add is
       read as one the host may assign to that item (access to the repository, or a part in the item,
-      such as a comment asking to take it), at most 3 logins in all; refused on a design issue
+      such as a comment asking to take it), at most 3 logins in all; refused on a design issue but
+      for the logins in github.designAssignees
+  issue intake <owner/name#n> --priority <p> [--due <when>] [--goals <tags>]   takes in an outside
+      pull request of the team's repositories: reads its changed paths once (one page of 100), asks the
+      session owning each area it changes (github.areaPaths, owned through github.areaOwners) a
+      best-fix and overlap review task, the security reviewer one too when it changes a guarded path,
+      then adds the caller's task to answer its author, planned after every review; writes nothing to
+      GitHub; refuses a pull request taken in already while its reply task is not dropped
   pr conflicts <owner/name#n> [--base <branch>]   in a clone of that repository, fetches the pull
       request's head and prints the files it conflicts on against origin's newest base (its default
       branch unless --base) and the rebase it needs; changes no local branch or file of the clone and
@@ -948,7 +960,7 @@ teamrig <command> ...   (the caller: --session <id|name>, else $TEAMRIG_SESSION;
       one expiring within 7 days; fails on a key GitHub refuses
   key remove <owner|owner/name>   (from a person's own terminal only) removes the saved key; revoke it
       at GitHub too, as it says
-  hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
+  hook guards <guard> ... | hook after <hook> ... | hook push-guard | hook package-guard | hook secret-guard | hook db-write-guard | hook exec-guard | hook pass-record-guard | hook install-guard | hook service-role-guard | hook cold-send | hook failed-send | hook missing-cli | hook route-reminder | hook loop-nudge | hook secret-redact | hook helper-gate | hook inbox-reminder | hook session-start | hook stop | hook subagent-start | hook subagent-stop | hook refresh-wake | hook restore-track | hook effort-writeback | hook tab-status | hook pre-compact | hook tool-end | hook readonly-allow | hook picker-guard | hook prompt-refuse | hook route-allow
       (run by the host with --host <id>, hook JSON on stdin; a host whose JSON does not name its event passes
       --host-event <Event>, such as Antigravity's hooks file)
   hook clear-dir | hook clear-claim [--hold [--why <reason>]] [--end]

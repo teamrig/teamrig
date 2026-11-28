@@ -11,6 +11,7 @@ import { bash, CONFIG_PATH, EVENTS_PATH, reasonOf } from '../testing/cli-harness
 import { FaultyFiles, systemError } from '../testing/faulty-files.ts';
 import { SUB_TEAMS, teamConfigOf, teamEventsOf, teamHomeOf, teamInboxOf, treeHarness } from '../testing/team-tree.ts';
 import type { CliHarness } from '../testing/cli-harness.ts';
+import { teamDataOf } from '../testing/team-data.ts';
 import { WakeAsks, type WakeAsk } from '../wake/asks.ts';
 import { EXIT } from './runtime.ts';
 
@@ -168,8 +169,9 @@ async function seeded(): Promise<CliHarness> {
   return kit;
 }
 
+/** Every file but the act log, which keeps a refused run too. */
 function filesOf(kit: CliHarness): [string, string | undefined][] {
-  return kit.files.paths().map((path) => [path, kit.files.get(path)]);
+  return teamDataOf(kit.files);
 }
 
 describe('teamrig list|check|plan --tree', () => {

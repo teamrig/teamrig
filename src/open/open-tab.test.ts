@@ -95,19 +95,18 @@ describe('openSplit (T5105)', () => {
     assert.deepEqual(processes.started.map((request) => request.args.slice(0, 3)), [['split-window', '-h', '-d']]);
   });
 
-  it('splits Windows Terminal inside it, with no focus script: the split raises no other window', async () => {
+  it("never splits Windows Terminal, whose split-pane is of the focused tab, not the run's own (T5831)", async () => {
     const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
     const outcome = await openSplit({ processes, env: { WT_SESSION: 'guid' }, platform: 'win32', cwd: TAB.folder }, { ...TAB, focus: 'keep' });
-    assert.deepEqual(outcome, { kind: 'opened', terminal: 'windows-terminal' });
-    assert.deepEqual(processes.started.map((request) => request.args.slice(0, 3)), [['-w', '0', 'split-pane']]);
-    assert.deepEqual(processes.ran, []);
+    assert.deepEqual(outcome, { kind: 'none', reasons: ['this terminal is not tmux, the one that splits the pane a run works in'] });
+    assert.deepEqual([processes.started, processes.ran], [[], []]);
   });
 
   it('starts nothing in a terminal that cannot split, saying so, and says why a split failed', async () => {
     const outside = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
     assert.deepEqual(await openSplit({ processes: outside, env: {}, platform: 'win32', cwd: TAB.folder }, TAB), {
       kind: 'none',
-      reasons: ['this terminal is neither tmux nor Windows Terminal, the ones that split'],
+      reasons: ['this terminal is not tmux, the one that splits the pane a run works in'],
     });
     assert.deepEqual(outside.started, []);
     assert.deepEqual(await openSplit({ processes: new FakeProcesses(), env: { TMUX: 'x' }, platform: 'linux', cwd: TAB.folder }, TAB), { kind: 'none', reasons: ['tmux: tmux is not installed'] });
@@ -116,13 +115,6 @@ describe('openSplit (T5105)', () => {
   it('says so of a terminal whose port splits no pane (T5236)', async () => {
     const deps = { processes: new FakeProcesses(), env: { TMUX: 'x' }, platform: 'linux' as const, cwd: CWD, importer: recordingTmux([], { kind: 'opened', pane: '%7' }) };
     assert.deepEqual(await openSplit(deps, TAB), { kind: 'none', reasons: ['tmux splits no pane'] });
-  });
-
-  it("says why Windows Terminal's port refused a split it would misread, and starts nothing (T5236)", async () => {
-    const processes = new FakeProcesses().onStart('wt.exe', { kind: 'started', end: 'exited' });
-    const outcome = await openSplit({ processes, env: { WT_SESSION: 'guid' }, platform: 'win32', cwd: TAB.folder }, { ...TAB, folder: 'C:\\a;b' });
-    assert.equal(outcome.kind, 'none');
-    assert.deepEqual(processes.started, []);
   });
 });
 

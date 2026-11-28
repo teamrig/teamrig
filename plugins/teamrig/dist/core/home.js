@@ -150,6 +150,8 @@ export function teamPaths(kitHome, team, hostSkills, overrides = {}) {
         launchSettings: join(state, 'launch'),
         promptAnswers: join(state, 'prompt-answers.jsonl'),
         promptAnswersLock: join(state, 'prompt-answers.lock'),
+        acts: join(state, 'acts.jsonl'),
+        actsLock: join(state, 'acts.lock'),
         turnLog: join(state, 'turn-log'),
         sessions: join(state, 'sessions'),
         tabs: join(state, 'tabs'),

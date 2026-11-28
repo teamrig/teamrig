@@ -46,6 +46,7 @@ export const EXEC_COMMANDS = new Set(['request', 'dry-run', ...REVIEW_ACTIONS, '
 export const OWNER_COMMANDS = new Set(['note', 'next', 'wake', 'decide', 'later']);
 /** Every `teamrig hook` command, by which a call through an unknown program reads as a teamrig call, not as `git hook run`. */
 export const HOOK_COMMANDS = new Set([
+    'after',
     'clear-claim',
     'clear-dir',
     'cold-send',
@@ -54,6 +55,7 @@ export const HOOK_COMMANDS = new Set([
     'effort-writeback',
     'exec-guard',
     'failed-send',
+    'guards',
     'hand-trace',
     'helper-gate',
     'inbox-reminder',

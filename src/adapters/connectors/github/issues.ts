@@ -407,6 +407,48 @@ function namesOf(connection: unknown, key: string): string[] {
   });
 }
 
+/** The longest path a pull request's file read keeps: a longer name is left out, not cut, so no path is changed. */
+export const PULL_PATH_MAX = 400;
+
+/** A path of a changed file as an outsider's pull request names it: no control or format character, within PULL_PATH_MAX. */
+function isPlainPath(name: string): boolean {
+  return name !== '' && name.length <= PULL_PATH_MAX && !/[\p{Cc}\p{Cf}]/u.test(name);
+}
+
+/** What one read of a pull request's files gave: each path once, the names left out, and how many files it listed. */
+export interface PullFilesRead {
+  readonly paths: string[];
+  readonly leftOut: number;
+  readonly listed: number;
+}
+
+/**
+ * The paths one REST read of a pull request's files printed (gh.ts pullFilesArgs), with the count of names it left
+ * out as no plain path (isPlainPath): the read keeps each file's `filename`, and a renamed file's `previous_filename`
+ * too, as a move out of a folder changes what that folder held, and nothing else of it, no patch or content. Undefined
+ * when gh printed no list.
+ */
+export function readPullFilesIn(stdout: string): PullFilesRead | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) {
+    return undefined;
+  }
+  const items: readonly unknown[] = parsed;
+  const names = items.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [undefined];
+    }
+    return [stringField(item, 'filename'), ...('previous_filename' in item ? [stringField(item, 'previous_filename')] : [])];
+  });
+  const plain = names.filter((name): name is string => name !== undefined && isPlainPath(name));
+  return { paths: [...new Set(plain)], leftOut: names.length - plain.length, listed: items.length };
+}
+
 /**
  * The comments one REST read of an issue's comments printed (gh.ts commentsReadArgs), each with its text matched for
  * a claim line and dropped, so no outsider's words leave this function; undefined when gh printed no list. A comment

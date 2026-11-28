@@ -103,7 +103,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
     ]);
   });
 
-  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, on 0.3.0 when it serves issue search, or on 0.7.0 when it reopens, all loading on this teamrig, and the rest still loads', async () => {
+  it('builds a declaration naming steps or terms on plugin API 0.2.0, the minor that brought them, on 0.3.0 when it serves issue search, on 0.7.0 when it reopens, or on 0.9.0 when it lists the changed files of a pull request, all loading on this teamrig, and the rest still loads', async () => {
     assert.equal(apiVersionNotice('0.2.0', API_VERSION), undefined);
     const { hosts, connectors, terminals } = await readDeclarations();
     const loads = [...hosts, ...connectors, ...terminals];
@@ -116,7 +116,7 @@ describe('the adapter loader, on the adapters teamrig ships', () => {
       ['claude-code', '0.2.0'],
       ['codex-cli', '0.2.0'],
       ['antigravity-cli', '0.2.0'],
-      ['github', '0.7.0'],
+      ['github', '0.9.0'],
       ['jira', '0.3.0'],
     ]);
   });

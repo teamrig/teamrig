@@ -32,9 +32,11 @@ import type { HttpClient } from '../core/http.ts';
 import type { GhRunner } from '../adapters/connectors/github/gh.ts';
 import type { ShellRunner } from '../test-run/shell.ts';
 import type { KitTree } from '../kit/kit-tree.ts';
+import type { InstallMark } from '../kit/install-mark.ts';
 import type { HostCpu } from '../delivery/cpu.ts';
 import type { HostMemory } from '../delivery/memory.ts';
 import type { StarterWatch } from '../delivery/starter-watch.ts';
+import type { FolderSignals } from '../core/folder-signals.ts';
 import type { StepRunner } from '../delivery/steps.ts';
 import type { HookRunner } from '../deploy/hooks.ts';
 import type { PullGit } from '../sync/pull-conflicts.ts';
@@ -205,6 +207,8 @@ export interface RunOptions {
   readonly restore?: RestorePorts;
   /** The folder copies of a session start's self-install; default the quiet host's, which copies nothing. */
   readonly kitTree?: KitTree;
+  /** The read-only mark on the kit home's install; default the quiet host's, which marks nothing. */
+  readonly installMark?: InstallMark;
   /** The runner `teamrig queue` runs its step in; default one whose steps exit 0 at once. */
   readonly steps?: StepRunner;
   /** The host memory (queue's watch, `teamrig sessions`); default one that lists no process and measures nothing. */
@@ -213,6 +217,8 @@ export interface RunOptions {
   readonly cpu?: HostCpu;
   /** The processes that started a `teamrig queue` run; default a shell and its Claude Code, which never end. */
   readonly starters?: StarterWatch;
+  /** The folder watches `teamrig events` looks again on, such as a `FakeFolderSignals`; default none can be watched. */
+  readonly folderSignals?: FolderSignals;
   /** The git `teamrig merge` drives; default the fake repository at /w/feat (testing/fake-merge-git.ts). */
   readonly mergeGit?: MergeGit;
   /** The git `teamrig pr conflicts` drives; default the fake clone of acme/web at /repo/web (testing/fake-pull-git.ts). */
@@ -316,10 +322,12 @@ export class CliHarness {
       ...(options.worktrees === undefined ? {} : { worktrees: options.worktrees }),
       restore: options.restore ?? cliOnPathRestore(env, userHome),
       ...(options.kitTree === undefined ? {} : { kitTree: options.kitTree }),
+      ...(options.installMark === undefined ? {} : { installMark: options.installMark }),
       ...(options.steps === undefined ? {} : { steps: options.steps }),
       ...(options.memory === undefined ? {} : { memory: options.memory }),
       ...(options.cpu === undefined ? {} : { cpu: options.cpu }),
       ...(options.starters === undefined ? {} : { starters: options.starters }),
+      ...(options.folderSignals === undefined ? {} : { folderSignals: options.folderSignals }),
       ...(options.mergeGit === undefined ? {} : { mergeGit: options.mergeGit }),
       ...(options.pulls === undefined ? {} : { pulls: options.pulls }),
       ...(options.trees === undefined ? {} : { trees: options.trees }),

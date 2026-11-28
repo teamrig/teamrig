@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isRecord, recordField, stringField, type JsonRecord } from '../core/guards.ts';
 import { hookEventOf, replyText } from '../testing/host.ts';
-import { installGuardReply, segmentPattern, type GuardedPlace, type InstallGuardEnv } from './install-guard.ts';
+import { installGuardReply, segmentPattern, suffixPattern, type GuardedPlace, type InstallGuardEnv } from './install-guard.ts';
 
 const KIT: GuardedPlace = {
   folder: 'C:/u/.teamrig',
@@ -14,6 +14,7 @@ const KIT: GuardedPlace = {
 const CODEX: GuardedPlace = {
   folder: 'C:/u/.codex',
   entries: ['hooks.json', 'config.toml'],
+  suffixes: ['.config.toml'],
   what: "Codex CLI's hook files",
   writer: '`teamrig setup hooks`',
 };
@@ -83,6 +84,58 @@ describe('segmentPattern', () => {
     assert.ok(!match('current.json', 'CURREN~1'));
     assert.ok(!match('current', 'current.bak'));
     assert.ok(!match('.teamrig', '.teamrig-old'));
+  });
+});
+
+describe('suffixPattern', () => {
+  it('matches any one segment with the end, its 8.3 short names and trailing dots, nothing past the end (T5542 S1)', () => {
+    const match = (text: string): boolean => new RegExp(`^${suffixPattern('.config.toml')}$`, 'i').test(text);
+    assert.ok(match('p.config.toml'));
+    assert.ok(match('P.CONFIG.TOML'));
+    assert.ok(match('a.b.config.toml'));
+    assert.ok(match('PCONFI~1.TOM'));
+    assert.ok(match('p.config.toml..'));
+    assert.ok(!match('PCONFI~1.TOMX'));
+    assert.ok(!match('p.config.toml.bak'));
+    assert.ok(!match('sessions/p.config.toml'));
+    assert.ok(!match('p.toml'));
+  });
+});
+
+describe('installGuardReply: Codex <name>.config.toml profiles (T5542)', () => {
+  it('refuses a Write of a profile by any spelling: case, short name, trailing dots, stream, dot segments', async () => {
+    const paths = [
+      'C:/u/.codex/p.config.toml',
+      'C:/U/.CODEX/P.CONFIG.TOML',
+      'C:/u/.codex/PCONFI~1.TOM',
+      'C:/u/.codex/p.config.toml. ',
+      'C:/u/.codex/p.config.toml::$DATA',
+      'C:/u/.codex/sessions/../p.config.toml',
+      '../u/.codex/fast.config.toml',
+    ];
+    for (const path of paths) {
+      assert.equal(await decisionOf(call('Write', { file_path: path, content: 'x' })), 'deny', path);
+    }
+  });
+
+  it('refuses a profile named through a variable that holds the Codex home', async () => {
+    const variables = { USERPROFILE: 'C:\\u', CODEX_HOME: 'C:/u/.codex', PATH: 'C:\\bin' };
+    assert.equal(await decisionOf(call('Bash', { command: 'echo x > "$CODEX_HOME/p.config.toml"' }), env({ variables })), 'deny');
+  });
+
+  it('refuses a shell line that names a profile, runs where one is, or a glob or substitution that can end like one', async () => {
+    const lines = ['cd ~/.codex && cat p.config.toml', 'rm ~/.codex/*', 'cp x ~/.codex/*.toml', 'cp x ~/.codex/*.t*', 'cp x ~/.codex/?.config.toml', 'cp x ~/.codex/[p].config.toml', 'cp x ~/.codex/p$(x)'];
+    for (const command of lines) {
+      assert.equal(await decisionOf(call('Bash', { command })), 'deny', command);
+    }
+    assert.equal(await decisionOf(call('Bash', { command: 'echo x > p.config.toml' }, 'C:/u/.codex')), 'deny');
+  });
+
+  it('passes other names and folders in the Codex home, and a Read of a profile', async () => {
+    for (const command of ['cat ~/.codex/*.jsonl', 'ls ~/.codex/sessions/*', 'cp x ~/.codex/p.config.toml.bak', 'cp x ~/.codex/sessions/x.config.toml']) {
+      assert.equal(await decisionOf(call('Bash', { command })), undefined, command);
+    }
+    assert.equal(await decisionOf(call('Read', { file_path: 'C:/u/.codex/p.config.toml' })), undefined);
   });
 });
 

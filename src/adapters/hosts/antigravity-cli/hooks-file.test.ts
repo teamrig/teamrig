@@ -46,9 +46,10 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
       ...(group?.PreToolUse ?? []).flatMap((entry) => entry.hooks),
       ...(group?.PostToolUse ?? []).flatMap((entry) => entry.hooks),
     ].map((entry) => entry.command);
-    assert.ok(lines.length > 20);
+    // The file was read: hook sets (T5553, T5821) fold many hooks into one line, so the floor is low.
+    assert.ok(lines.length > 10, String(lines.length));
     for (const line of lines) {
-      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook [a-z-]+ --host antigravity-cli --host-event [A-Za-z]+$/u);
+      assert.match(line, /^node \/opt\/teamrig\/plugin\/dist\/cli\/(?:guard-)?main\.js hook (?:(?:guards|after)(?: [a-z-]+)+|[a-z-]+) --host antigravity-cli --host-event [A-Za-z]+$/u);
       assert.equal(line.includes('${'), false);
     }
     assert.equal(group?.PreInvocation?.[0]?.command, 'node /opt/teamrig/plugin/dist/cli/main.js hook inbox-reminder --host antigravity-cli --host-event PreInvocation');
@@ -61,11 +62,20 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     );
   });
 
+  /** The hooks one command line runs: its `hook <name>`, or each member of its `hook guards|after <name> ...` set. */
+  function hooksOf(command: string): readonly string[] {
+    const words = command.split(' ');
+    const after = words.slice(words.indexOf('hook') + 1);
+    const end = after.findIndex((word) => word.startsWith('--'));
+    const named = end === -1 ? after : after.slice(0, end);
+    return named[0] === 'guards' || named[0] === 'after' ? named.slice(1) : named.slice(0, 1);
+  }
+
   /** The hooks agy runs before its tool `tool`, by name: what fires when its PreToolUse matcher matches. */
   function guardsBefore(tool: string): readonly string[] {
     return (group?.PreToolUse ?? [])
       .filter((entry) => new RegExp(entry.matcher, 'u').test(tool))
-      .flatMap((entry) => entry.hooks.map((hook) => hook.command.split(' ')[3] ?? ''));
+      .flatMap((entry) => entry.hooks.flatMap((hook) => hooksOf(hook.command)));
   }
 
   // Found by Yogev Cohen's live agy 1.5.8 e2e on #2142: a Claude Code matcher never fires on agy (T5033).
@@ -98,7 +108,7 @@ describe('antigravityHooksFile on the shipped hooks file', () => {
     for (const matcher of matchers) {
       assert.doesNotMatch(matcher, /Bash|PowerShell|Read|Grep|Write|Edit|SendMessage|Agent|Task|AskUserQuestion/u);
     }
-    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['run_command', 'run_command']);
+    assert.deepEqual(group?.PreToolUse?.map((entry) => entry.matcher).slice(0, 2), ['run_command', 'view_file|read_file|grep_search']);
     assert.ok(group?.PostToolUse?.some((entry) => entry.matcher === '*'));
   });
 

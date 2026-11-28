@@ -14,7 +14,14 @@ export async function missingCli(args, runtime) {
     const { event } = await readHookInput(runtime);
     const on = event === undefined ? undefined : missingCliOf(event);
     if (on !== undefined) {
-        writeReply(runtime, on, { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) });
+        writeReply(runtime, on, missingCliReply(runtime));
     }
     return EXIT.ok;
+}
+/** The missing-cli hook's reply to this call, alone or in a `hook after` set: the line to run the CLI by its path, or none. */
+export function missingCliReplyOf(runtime, event) {
+    return missingCliOf(event) === undefined ? undefined : missingCliReply(runtime);
+}
+function missingCliReply(runtime) {
+    return { context: missingCliLine(runtime.self.script, KIT_NAME, stepsIfKnown(runtime)) };
 }

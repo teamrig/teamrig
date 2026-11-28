@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { errorMessage, isRecord, recordField, stringField } from '../core/guards.ts';
 import { APP, USER_HOME } from './cli-harness.ts';
 import { FolderNames, PLACEHOLDERS } from './folder-names.ts';
-import { hookMatches, pluginHooks } from './plugin-hooks.ts';
+import { hookMatches, hookNamesOf, pluginHooks } from './plugin-hooks.ts';
 import { expectedFolder, GUARD_DENIES, GUARD_DENIES_FILE, pinsIn, recordedPins, TRANSCRIPT_LINES_FILE } from './recorded-pins.ts';
 import { hookFile, inputsOf, loadRecording } from './recorded.ts';
 
@@ -42,7 +42,7 @@ describe('recordedPins', () => {
   });
 
   it('pins a refusal by each guard the plugin wires to PreToolUse, run from a recorded call through its wiring (T4849)', () => {
-    const wired = new Set(pluginHooks().flatMap((hook) => (hook.event === 'PreToolUse' && hook.argv[1]?.endsWith('-guard') === true ? [hook.argv[1]] : [])));
+    const wired = new Set(pluginHooks().flatMap((hook) => (hook.event === 'PreToolUse' ? hookNamesOf(hook).filter((name) => name.endsWith('-guard')) : [])));
     assert.deepEqual(GUARD_DENIES.map(({ guard }) => guard).sort(), [...wired].sort(), 'a guard wired to PreToolUse has no pinned refusal, or one pinned is wired no more');
     const denies: unknown = JSON.parse(pins[GUARD_DENIES_FILE] ?? 'null');
     assert.ok(Array.isArray(denies));

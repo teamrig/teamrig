@@ -63,6 +63,7 @@ import { resetExpiryWarnings } from "../reset-expiry-check.js";
 import { idlePassWarnings } from "../idle-pass-check.js";
 import { restoreLauncherWarnings } from "../launcher-record-check.js";
 import { secretGuardOffWarnings } from "../secret-guard-off-check.js";
+import { hookDriftWarnings } from "../hook-drift-check.js";
 import { secretHookWarnings } from "../secret-hook-check.js";
 import { stampHookWarnings } from "../stamp-hook-check.js";
 import { ownerBatchOf } from "../owner-batch.js";
@@ -1110,6 +1111,7 @@ export async function checkReport(args, runtime) {
     const stamps = await stampHookWarnings(runtime.files, runtime.secretsGit, own.paths, own.config);
     const settings = await knownSettingsScope(runtime, { paths: own.paths, config: own.config, project });
     const off = await secretGuardOffWarnings(runtime.files, own.config.secretGuard, settings);
+    const drift = await hookDriftWarnings(runtime, own.config.hosts, own.team);
     const fiveHour = await fiveHourWarnings(runtime.files, snapshotDirOf(own.config.budget, own.paths), own.config.budget, zone, now.getTime());
     const resets = resetExpiryWarnings(own.config.budget, zone, now.getTime());
     const late = await githubLateWarnings(runtime.files, { clocks: githubState(own.paths).clocks, notices: own.paths.unownedNotices }, zone, now.getTime());
@@ -1124,7 +1126,7 @@ export async function checkReport(args, runtime) {
     const stalled = await restartStalledWarnings(transcriptsIfKept(runtime), runtime.files, sessionRuns, own.paths, own.config, zone, now.getTime());
     const autoMode = await autoModeStaleWarnings(runtime, own.paths, own.config);
     const lead = own.config.roles.lead;
-    return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
+    return { sections, scope, skills, skillsDir: own.paths.skills, hires, unowned: [...unowned, ...idle, ...hooks, ...stamps, ...off, ...drift, ...autoMode, ...fiveHour, ...resets, ...restore, ...late, ...holds, ...logs, ...overCap, ...stalled], lead, decisions };
 }
 /**
  * The batch of the owner's decisions a root team's lead asks next, over its register and every register under it; none

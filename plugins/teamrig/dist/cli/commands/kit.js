@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { writeConfigWithBackup } from "../../config/load.js";
+import { errorMessage } from "../../core/guards.js";
 import { resolveKitHome } from "../../core/home.js";
 import { WRITE_SWITCH } from "../../core/settings-writers.js";
 import { KIT_VERSION } from "../../core/version.js";
@@ -7,6 +8,7 @@ import { clientRootOf } from "../../exec/client-integrity.js";
 import { compareVersions, parseVersion } from "../../core/release-version.js";
 import { hookLauncher, syncKitLauncher } from "../../kit/hook-launcher.js";
 import { checkAttestation } from "../../kit/kit-attestation.js";
+import { kitMarkedPaths, markedMutex } from "../../kit/install-mark.js";
 import { channelReleaseOf, cloneRelease, isKitChannel, KIT_CHANNELS, listChannel } from "../../kit/kit-release.js";
 import { findProgram } from "../../open/host-program.js";
 import { cliLauncherPath, KIT_LAUNCHER_FILE } from "../../restore/cli-launcher.js";
@@ -28,9 +30,15 @@ const LATEST = 'latest';
 function kitHomeOf(runtime) {
     return resolveKitHome(runtime.env, runtime.userHome);
 }
-/** The kit home's install lock as the person's command takes it: a short wait for a session start's copy. */
+/**
+ * The kit home's install lock as the person's command takes it: a short wait for a session start's copy, with the
+ * install's read-only mark lifted while the command changes it. A mark that cannot be set again is told, not failed:
+ * the change did happen, and the next locked change sets it.
+ */
 function commandLockOf(runtime, kitHome) {
-    return fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_COMMAND_LOCK);
+    return markedMutex(fileLockOf(runtime, kitInstallLockPath(kitHome), KIT_COMMAND_LOCK), runtime.installMark, kitMarkedPaths(kitHome), (error) => {
+        runtime.out.stderr(`NOTE ${errorMessage(error)}; the next teamrig kit change sets it again`);
+    });
 }
 /** How a record names where its version came from. */
 function sourceText({ source }) {

@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { AFTER_SET_HOOK } from '../cli/commands/hook-after-set.ts';
+import { GUARD_SET_HOOK } from '../cli/guard-runner.ts';
 import { isRecord, isStringArray, stringField, type JsonRecord } from '../core/guards.ts';
 
 /** One hook the plugin's `hooks/hooks.json` wires to a host event. */
@@ -93,4 +95,23 @@ export function hookMatches(hook: WiredHook, input: JsonRecord): boolean {
   }
   const value = stringField(input, field);
   return value !== undefined && (hook.matcher ?? '').split('|').includes(value);
+}
+
+/** Whether a wired entry is a set (`hook guards ...`, `hook after ...`): one process running each hook it names. */
+export function isHookSet(hook: WiredHook): boolean {
+  const name = hook.argv[1];
+  return name === GUARD_SET_HOOK || name === AFTER_SET_HOOK;
+}
+
+/**
+ * The hooks a wired entry runs: each member a `hook guards` or `hook after` set names, before its first flag, else its
+ * one hook. A set runs several hooks in one process, so a reader asking which hooks meet a call must look inside it.
+ */
+export function hookNamesOf(hook: WiredHook): readonly string[] {
+  const [, name = '', ...after] = hook.argv;
+  if (!isHookSet(hook)) {
+    return [name];
+  }
+  const end = after.findIndex((word) => word.startsWith('--'));
+  return end === -1 ? after : after.slice(0, end);
 }

@@ -8,6 +8,7 @@ import { CONNECTOR_LIMITS, GITHUB_LABEL_MAX_LENGTH } from './limits.ts';
 import { parseConfig } from './parse.ts';
 import { CONFIG_VERSION, type AccountBudget, type BudgetConfig } from './types.ts';
 import type { ConfigIssue } from './reader.ts';
+import { shortRsaPublicKey } from '../testing/short-rsa-key.ts';
 
 const ROSTER = { sessions: ['alpha', 'bravo'], roles: { lead: 'alpha' } };
 
@@ -17,6 +18,7 @@ function paths(issues: readonly ConfigIssue[]): string[] {
 
 const PUBLIC_PEMS = {
   rsa: generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey,
+  rsa1024: shortRsaPublicKey(1024),
   ec: generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey,
   p384: generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).publicKey,
   ed25519: generateKeyPairSync('ed25519').publicKey,
@@ -43,7 +45,7 @@ describe('parseConfig', () => {
     assert.deepEqual(config.meetingNotices, { enabled: true, beforeMinutes: 10, atStart: true, missedAfterMinutes: 5, osToast: true, tabToast: true, leadInbox: true });
     assert.deepEqual(config.tests, { maxFailureChars: 4000 });
     assert.deepEqual(config.steps, { backupDays: 7 });
-    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
+    assert.deepEqual(config.github, { repos: [], owners: {}, areaOwners: {}, areaPaths: {}, sessions: {}, closedDays: 14, probeSeconds: 60, statusPush: false, acceptLabel: 'teamrig', designAssignees: [], similarThreshold: 0.35, activity: true, followMax: 20, stamp: true, fields: DEFAULT_ISSUE_FIELDS });
     assert.deepEqual(config.sync, { scope: { all: false, assigned: 'team', labels: ['teamrig'] }, maxOpen: 200, maxNewPerSync: 50 });
     assert.deepEqual(config.register, DEFAULT_REGISTER);
     assert.deepEqual(config.budget, DEFAULT_BUDGET);
@@ -407,12 +409,20 @@ describe('parseConfig', () => {
       [{ ...good, publicKeyPem: 'not a key' }, ['owner.proof.pins[0].publicKeyPem']],
       [{ ...good, algorithm: 'rsa-pkcs1-sha256' }, ['owner.proof.pins[0].publicKeyPem']],
       [{ ...good, algorithm: 'ecdsa-p256-sha256', publicKeyPem: publicPem('p384') }, ['owner.proof.pins[0].publicKeyPem']],
+      [{ ...good, algorithm: 'rsa-pkcs1-sha256', publicKeyPem: publicPem('rsa1024') }, ['owner.proof.pins[0].publicKeyPem']],
     ];
     for (const [pin, expected] of cases) {
       const { config, issues } = parseConfig({ ...ROSTER, owner: { proof: { adapter: 'polkit', pins: [pin, { ...good, keyId: 'k2' }] } } });
       assert.deepEqual(paths(issues), expected, JSON.stringify(pin));
       assert.deepEqual(config.owner.proof.pins.map((kept) => kept.keyId), ['k2'], JSON.stringify(pin));
     }
+  });
+
+  it('names the size of an owner.proof RSA pin under 2048 bits (T5792)', () => {
+    const pin = { keyId: 'hello-1', algorithm: 'rsa-pkcs1-sha256', publicKeyPem: publicPem('rsa1024') };
+    const { issues } = parseConfig({ ...ROSTER, owner: { proof: { pins: [pin] } } });
+    assert.deepEqual(paths(issues), ['owner.proof.pins[0].publicKeyPem']);
+    assert.match(issues[0]?.message ?? '', /expected an RSA key of at least 2048 bits \(got 1024\)/);
   });
 
   it('refuses an owner.proof key id pinned twice and a pin list past its cap (T4758)', () => {
@@ -688,12 +698,14 @@ describe('parseConfig', () => {
       repos: ['acme/web', 'acme/docs.site'],
       owners: { octocat: 'bravo' },
       areaOwners: {},
+      areaPaths: {},
       sessions: {},
       closedDays: 365,
       probeSeconds: 0,
       statusPush: false,
       fields: DEFAULT_ISSUE_FIELDS,
       acceptLabel: 'teamrig',
+      designAssignees: [],
       similarThreshold: 0.35,
       activity: true,
       followMax: 20,
@@ -788,6 +800,20 @@ describe('parseConfig', () => {
       const parsed = parseConfig({ ...ROSTER, github: { acceptLabel: wrong } });
       assert.deepEqual(paths(parsed.issues), ['github.acceptLabel'], JSON.stringify(wrong));
       assert.equal(parsed.config.github.acceptLabel, 'teamrig');
+    }
+  });
+
+  it('reads the github design assignees as GitHub logins in lowercase, each once, else keeps none (T5461)', () => {
+    const { config, issues } = parseConfig({ ...ROSTER, github: { designAssignees: ['OwnerLogin', 'x'.repeat(39)] } });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.github.designAssignees, ['ownerlogin', 'x'.repeat(39)]);
+    const twice = parseConfig({ ...ROSTER, github: { designAssignees: ['ownerlogin', 'OwnerLogin'] } });
+    assert.deepEqual(paths(twice.issues), ['github.designAssignees']);
+    assert.deepEqual(twice.config.github.designAssignees, ['ownerlogin']);
+    for (const wrong of [[''], ['owner login'], ['x'.repeat(40)], ['-owner'], [7], 'ownerlogin', Array.from({ length: 11 }, (_, at) => `owner${at}`)]) {
+      const parsed = parseConfig({ ...ROSTER, github: { designAssignees: wrong } });
+      assert.ok(paths(parsed.issues).every((path) => path.startsWith('github.designAssignees')) && parsed.issues.length > 0, JSON.stringify(wrong));
+      assert.ok(parsed.config.github.designAssignees.every((login) => /^[a-z0-9][a-z0-9-]{0,38}$/u.test(login)), JSON.stringify(wrong));
     }
   });
 
@@ -906,6 +932,44 @@ describe('parseConfig', () => {
       ['bug', 'bravo'],
     ]);
     assert.equal(parseConfig({ ...ROSTER, github: { areaOwners: { ['y'.repeat(GITHUB_LABEL_MAX_LENGTH)]: 'alpha' } } }).issues.length, 0);
+  });
+
+  it("reads each area label's paths, the label in lowercase, and defaults to none", () => {
+    assert.deepEqual(parseConfig(ROSTER).config.github.areaPaths, {});
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      github: { areaOwners: { 'area:guard': 'alpha', 'area:docs': 'bravo' }, areaPaths: { 'Area:Guard': ['src/guard/**', 'acme/web:docs/guard.md'], 'area:docs': ['*.md'] } },
+    });
+    assert.deepEqual(issues, []);
+    assert.deepEqual(config.github.areaPaths, { 'area:guard': ['src/guard/**', 'acme/web:docs/guard.md'], 'area:docs': ['*.md'] });
+  });
+
+  it('reports an area label github.areaOwners lacks, one listed twice, an empty list, a bad glob or too many, leaving each out', () => {
+    const { config, issues } = parseConfig({
+      ...ROSTER,
+      github: {
+        areaOwners: { 'area:guard': 'alpha', 'area:docs': 'bravo' },
+        areaPaths: { 'area:web': ['src/**'], constructor: ['src/**'], 'area:docs': [], 'area:guard': ['src/**', '', 'acme/web:', 'a\nb', 'x'.repeat(241)], 'AREA:GUARD': ['lib/**'] },
+      },
+    });
+    // Each message without the value it quotes, which the reader's own tests hold.
+    assert.deepEqual(
+      issues.map((issue) => `${issue.path}: ${issue.message.replace(/(, got | \(got ).*$/s, '')}`),
+      [
+        'github.areaPaths.area:web: is no label of github.areaOwners: name the session that owns it there first',
+        'github.areaPaths.constructor: is no label of github.areaOwners: name the session that owns it there first',
+        'github.areaPaths.area:docs: lists no path: name the globs of the paths the area holds, or leave the label out',
+        'github.areaPaths.area:guard[1]: expected a non-empty string',
+        'github.areaPaths.area:guard[2]: expected a path glob after the repository',
+        'github.areaPaths.area:guard[3]: expected a single line',
+        'github.areaPaths.area:guard[4]: expected at most 240 characters',
+        'github.areaPaths.AREA:GUARD: is listed twice',
+      ],
+    );
+    assert.deepEqual(config.github.areaPaths, { 'area:guard': ['src/**'] });
+    const many = parseConfig({ ...ROSTER, github: { areaOwners: { 'area:guard': 'alpha' }, areaPaths: { 'area:guard': Array.from({ length: 65 }, (_, index) => `src/${index}/**`) } } });
+    assert.deepEqual(many.issues.map((issue) => issue.path), ['github.areaPaths.area:guard']);
+    assert.deepEqual(many.config.github.areaPaths, {});
   });
 
   it('reports a blank, multi-line or long area label, an unknown session, a session that is no name and a label listed twice', () => {
@@ -1985,6 +2049,7 @@ describe('parseConfig', () => {
       countdownSeconds: 0,
       compactCeilingTokens: 0,
       handoverMaxBytes: 0,
+      handoverWarnBytes: 0,
       endCommand: ['node', 'end.cjs', 'end'],
       handoverDir: 'notes',
     };
@@ -2005,6 +2070,7 @@ describe('parseConfig', () => {
         countdownSeconds: -1,
         compactCeilingTokens: -1,
         handoverMaxBytes: -1,
+        handoverWarnBytes: -1,
         endCommand: 'node end.cjs',
         handoverDir: ' ',
       },
@@ -2020,6 +2086,7 @@ describe('parseConfig', () => {
       'refresh.everyTasksMinTokens',
       'refresh.handoverDir',
       'refresh.handoverMaxBytes',
+      'refresh.handoverWarnBytes',
       'refresh.holdAfterActivityMinutes',
       'refresh.restartDelaySeconds',
       'refresh.tabTitle',
@@ -2029,6 +2096,7 @@ describe('parseConfig', () => {
     assert.deepEqual(paths(parseConfig({ ...ROSTER, refresh: { endCommand: ['node', ''] } }).issues), ['refresh.endCommand[1]']);
     assert.deepEqual(paths(parseConfig({ ...ROSTER, refresh: { everyTasks: -1 } }).issues), ['refresh.everyTasks']);
     assert.deepEqual(paths(parseConfig({ ...ROSTER, refresh: { handoverMaxBytes: 1_000_001 } }).issues), ['refresh.handoverMaxBytes']);
+    assert.deepEqual(paths(parseConfig({ ...ROSTER, refresh: { handoverWarnBytes: 1_000_001 } }).issues), ['refresh.handoverWarnBytes']);
     assert.deepEqual(bad.config.refresh, DEFAULT_REFRESH);
     assert.deepEqual(paths(parseConfig({ ...ROSTER, refresh: { contextTokens: 10_000_001 } }).issues), ['refresh.contextTokens']);
   });

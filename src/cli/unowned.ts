@@ -11,7 +11,8 @@ import { formatIdlePassTrouble, type IdlePassTrouble } from './idle-pass-log.ts'
  * permissions change is the owner's gate, which the lead takes to the owner; a skill flag goes to its skill's `Owner:`, which may be missing or name no
  * session on the team; the idle pass (T1100) closes and reopens the team's sessions, so a pass that stopped or fails
  * is the whole team's; a repository's git hooks (SECRET-HOOK, T1480; STAMP-HOOK, T4869) are its own, not one session's area; a secret
- * check turned off (SECRET-GUARD-OFF, T1369) is the owner's call, which the lead takes to the owner, and so is
+ * check turned off (SECRET-GUARD-OFF, T1369) is the owner's call, which the lead takes to the owner, as is a host's
+ * hooks or config file of the person's that drifted from what `setup hooks` writes (HOOK-DRIFT, T5829), and so is
  * rewriting the team's auto mode lines once they read the team as it was (AUTOMODE-STALE, T5338); a five-hour
  * window near full (FIVE-HOUR, T1968) stalls every session on the account at once; a part of this machine that
  * starts the restore and starts a file gone or something install did not set up (RESTORE-DEAD, RESTORE-STRAY, T2030)

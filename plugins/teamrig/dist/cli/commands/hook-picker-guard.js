@@ -78,7 +78,7 @@ async function cdCompoundRefusal(runtime, kit, config, event, compound) {
     return session === undefined ? undefined : cdCompoundReason(compound);
 }
 /** The hook's reply to this call: the refusal with its reason, or none when the call goes on. */
-async function pickerGuardReplyOf(runtime, event) {
+export async function pickerGuardReplyOf(runtime, event) {
     // Every Bash line reaches this hook, so a line with no cd compound to refuse returns before any file is read.
     const bash = guardsCdCompound(true, event);
     const compound = bash ? cdCompoundOfEvent(event, { cwd: event.cwd ?? runtime.cwd, home: runtime.userHome }) : undefined;

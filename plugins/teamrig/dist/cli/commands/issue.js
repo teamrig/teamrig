@@ -239,7 +239,7 @@ export async function issueLabel(args, runtime) {
  * `issue assign <owner/name#n> [--add <login,...>] [--remove <login,...>]` (T3228): adds assignees to and takes
  * them off one issue or pull request of the team's repositories, through the same host and caller checks as `issue
  * label`. Each login to add is read as one the host may assign to that item, and an add to a design issue is
- * refused (issues/assign.ts). Refused before anything runs: neither list, a login in both or no login at all, or more
+ * refused but for the logins in github.designAssignees (issues/assign.ts). Refused before anything runs: neither list, a login in both or no login at all, or more
  * than MAX_ASSIGN_LOGINS together. Exit 2 when refused, 1 when the host failed, else 0.
  */
 export async function issueAssign(args, runtime) {
@@ -256,11 +256,13 @@ export async function issueAssign(args, runtime) {
     if (add.length + remove.length > MAX_ASSIGN_LOGINS) {
         throw new RefusedError(`issue assign takes at most ${MAX_ASSIGN_LOGINS} logins in all, not ${add.length + remove.length}: an item goes to its takers`);
     }
-    const hosts = await hostsFor(args, runtime, target.repo, undefined);
+    const checked = await checkedRepo(args, runtime, target.repo);
+    const hosts = await hostsAfter(checked, runtime, undefined);
     if (hosts === undefined) {
         return EXIT.ok;
     }
-    const end = await assignIssue(hosts.tracker, { target, add, remove }, (line) => runtime.out.stdout(line));
+    const { designAssignees } = checked.config.github;
+    const end = await assignIssue(hosts.tracker, { target, add, remove, designAssignees }, (line) => runtime.out.stdout(line));
     return end === 'done' ? EXIT.ok : end === 'refused' ? EXIT.refused : EXIT.failed;
 }
 /** The logins of a comma-separated `flag`, each trimmed, a leading @ dropped, and named once in any case; refused when one is no login. */
@@ -435,7 +437,7 @@ export async function issueOpen(args, runtime) {
     return (await openIssue(hosts.tracker, { repo, title: text.value.title, body: text.value.body, labels }, (line) => runtime.out.stdout(line))) ? EXIT.ok : EXIT.failed;
 }
 /** The issue or pull request the one positional names; refused when it names none. */
-function targetOf(args) {
+export function targetOf(args) {
     const text = onePositional(args, 'issue');
     const target = parseIssueTarget(text);
     if (target === undefined) {
@@ -455,6 +457,6 @@ async function writeOn(args, runtime, write, textFlag) {
  * The hosts of `repo` once the caller is on the team, the repository is one of the team's and the text to post (if
  * any) may be posted; undefined, after an OFF line, while GitHub is off on the machine.
  */
-async function hostsFor(args, runtime, repo, posted) {
+export async function hostsFor(args, runtime, repo, posted) {
     return hostsAfter(await checkedRepo(args, runtime, repo), runtime, posted);
 }

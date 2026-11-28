@@ -120,8 +120,8 @@ The AI CLIs a session runs in.
 
 | Feature | What it does | Claude Code | Codex CLI | Antigravity CLI |
 | --- | --- | --- | --- | --- |
-| `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity transcript reader is not built yet |
-| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | unsupported: Antigravity usage meter is not built yet |
+| `budget.transcripts` | finding the transcripts | supported, built, not proven live | unsupported: not built for Codex CLI yet | partial (missing: helper/subagent thread split and disk discovery outside hook transcriptPath), proved on [windows](proofs/antigravity-cli.md#budgettranscripts); unproved on linux, macos |
+| `budget.usage` | the usage and weighted cost of each call | supported, built, not proven live | supported, built, not proven live | partial (missing: published Antigravity token weights), proved on [windows](proofs/antigravity-cli.md#budgetusage); unproved on linux, macos |
 | `budget.model-share` | the share of each model and effort level | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.week-reading` | the week reading and the pace line | supported, proved on [windows](proofs/claude-code.md#budgetweek-reading); unproved on linux, macos | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
 | `budget.five-hour` | the five-hour forecast | supported, built, not proven live | unsupported: not built for Codex CLI yet | unsupported: Antigravity usage meter is not built yet |
@@ -149,7 +149,7 @@ The AI CLIs a session runs in.
 
 The outside tools holding a team's issues (the `tracker` rows) or its code and pull requests (the `codehost` rows).
 
-- GitHub (`github`), built on plugin API 0.7.0
+- GitHub (`github`), built on plugin API 0.9.0
 - Jira (`jira`), built on plugin API 0.3.0
 - Local (`local`), built on plugin API 0.1.0
 
@@ -158,6 +158,7 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 | Feature | What it does | GitHub | Jira | Local |
 | --- | --- | --- | --- | --- |
 | `tracker.issue-import` | a task per open issue, kept in step with it (`issue sync`) | supported, proved on [windows](proofs/github.md#trackerissue-import); unproved on linux, macos | partial (missing: a description's formatting, and the reporter's tie to the project), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.issue-read` | one issue read as it is now: its title, body, state, labels and assignees (`issue show`) | supported, built, not proven live | partial (missing: a description's formatting), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.accept-label` | an outsider's issue is taken once one of the team's people labels it accepted | supported, built, not proven live | unsupported: the Jira connector does not read who put a label on an issue yet, so the accept label takes no issue | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.watch` | a look for changes every few seconds, a sync only after one (`issue watch`) | supported, proved on [windows](proofs/github.md#trackerwatch); unproved on linux, macos | partial (missing: a free look for a change), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.issue-open` | opening a task's issue with its labels (`add --issue`, `issue migrate`) | supported, built, not proven live | partial (missing: Markdown, and a type chosen for one issue), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
@@ -175,6 +176,7 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 | `tracker.links` | parent and blocker links between issues (`issue links`) | supported, built, not proven live | unsupported: the Jira connector does not read or write issue links yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.fields` | a task's priority and type written to issue fields | supported, built, not proven live | unsupported: the Jira connector does not write an issue's priority or type yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.similar` | finding imported issues alike (`issue similar`) | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `tracker.search` | finding issues and pull requests by their words, of one state and kind (`issue search`) | supported, built, not proven live | partial (missing: pull requests), built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.security-alert` | a security-labelled issue pages the lead | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.stamp` | posted text ends with the made-with-teamrig footer | supported, built, not proven live | supported, built, not proven live | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `tracker.hidden-mark` | a mark on an issue that its readers do not see | unsupported: GitHub shows every mark on an issue to its readers: a mark there is a label or a comment | unsupported: the Jira connector keeps no hidden mark on an issue yet | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
@@ -189,6 +191,7 @@ The outside tools holding a team's issues (the `tracker` rows) or its code and p
 | `codehost.pr-land` | approve and land a lead-approved pull request at its head (`pr approve`, `pr merge`) | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `codehost.review-posts` | review comments and reviews in the mention scan | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 | `codehost.linked-pulls` | how many open pull requests close an issue | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
+| `codehost.pull-files` | the paths a pull request changes, so issue intake asks only the owners of its areas | supported, built, not proven live | unsupported: Jira is a tracker: pull requests, their checks and their reviews need a code host connector | unsupported: the local connector keeps tasks in the register: it has no outside tracker or code host |
 
 ## Terminals
 

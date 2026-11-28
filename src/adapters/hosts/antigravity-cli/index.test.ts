@@ -24,7 +24,8 @@ describe('the Antigravity CLI adapter', () => {
     assert.equal(isUnsupported(ports.paths), false);
     assert.deepEqual(!isUnsupported(ports.secrets) && ports.secrets.secretFiles(), []);
     assert.equal(ports.statusLine, statusLine);
-    assert.equal(isUnsupported(ports.transcripts), true);
+    assert.equal(isUnsupported(ports.transcripts), false);
+    assert.equal(isUnsupported(ports.usage), false);
   });
 
   it('sets every declared session mark in both recorded agy 1.5.8 hook and run_command environments', () => {

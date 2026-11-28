@@ -50,12 +50,12 @@ async function leadBoundaryLine(runtime, kit, config, text, cut, current) {
     return leadNudgeLine(turn, current, paths, config.leadBoundary.searchNudgeAt, owners);
 }
 /**
- * The lines for this hook input: the chain nudge and, on the lead's tab, the lead-boundary nudge; none for a
+ * The lines for this call: the chain nudge and, on the lead's tab, the lead-boundary nudge; none for a
  * helper's call, outside a loaded team or with both off.
  */
-async function loopNudgeLines({ event }, runtime) {
-    const transcript = event?.transcript;
-    if (event === undefined || transcript === undefined || event.helper?.id !== undefined) {
+async function loopNudgeLines(event, runtime) {
+    const transcript = event.transcript;
+    if (transcript === undefined || event.helper?.id !== undefined) {
         return [];
     }
     const found = await sessionTeam(event.cwd, runtime);
@@ -95,9 +95,12 @@ async function loopNudgeLines({ event }, runtime) {
  */
 export async function loopNudge(args, runtime) {
     noPositionals(args);
-    const lines = await loopNudgeLines(await readHookInput(runtime), runtime).catch(() => []);
-    if (lines.length > 0) {
-        writeReply(runtime, 'tool-end', { context: lines.join('\n') });
-    }
+    const { event } = await readHookInput(runtime);
+    writeReply(runtime, 'tool-end', event === undefined ? undefined : await loopNudgeReplyOf(runtime, event));
     return EXIT.ok;
+}
+/** The loop-nudge hook's reply to this call, alone or in a `hook after` set: its lines, or none, on any error too. */
+export async function loopNudgeReplyOf(runtime, event) {
+    const lines = await loopNudgeLines(event, runtime).catch(() => []);
+    return lines.length === 0 ? undefined : { context: lines.join('\n') };
 }

@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { challengeDigest, instantOf } from "./challenge.js";
 import { jcs } from "./jcs.js";
+import { RSA_MIN_MODULUS_BITS } from "./pin.js";
 /** How far ahead of this clock a challenge's issuedAt may be, for a signer whose clock runs a little fast. */
 export const ISSUED_AT_SKEW_MS = 30_000;
 /** The longest a challenge may live (owner.proof.ttlSeconds' ceiling). */
@@ -27,11 +28,11 @@ function publicKey(pem) {
         return undefined;
     }
 }
-/** The key type and, for EC, the curve each algorithm's key must be. */
+/** The key type, for EC the curve and for RSA the smallest modulus each algorithm's key must have. */
 function keyFits(key, algorithm) {
     switch (algorithm) {
         case 'rsa-pkcs1-sha256':
-            return key.asymmetricKeyType === 'rsa';
+            return key.asymmetricKeyType === 'rsa' && (key.asymmetricKeyDetails?.modulusLength ?? 0) >= RSA_MIN_MODULUS_BITS;
         case 'ecdsa-p256-sha256':
             return key.asymmetricKeyType === 'ec' && key.asymmetricKeyDetails?.namedCurve === 'prime256v1';
         case 'ed25519':

@@ -336,6 +336,22 @@ export function userHooksHostId(runtime: Pick<CliRuntime, 'shippedHosts' | 'env'
   return found?.[0];
 }
 
+/** A hooks file of the person's, with the id of the shipped host adapter that keeps it, as a team's `hosts` lists it. */
+export interface ListedUserHooks {
+  readonly id: string;
+  readonly port: HostUserHooks;
+}
+
+/** The hooks file of each host `ids` lists (a team's `hosts`) whose shipped adapter keeps one of the person's, in that order. */
+export function listedUserHooksOf(runtime: Pick<CliRuntime, 'shippedHosts' | 'env' | 'platform'>, ids: readonly string[]): readonly ListedUserHooks[] {
+  const seen = { env: runtime.env, platform: runtime.platform };
+  const shipped = new Map(Object.entries(runtime.shippedHosts));
+  return ids.flatMap((id) => {
+    const userHooks = shipped.get(id)?.ports(seen).userHooks;
+    return userHooks === undefined || isUnsupported(userHooks) ? [] : [{ id, port: userHooks }];
+  });
+}
+
 /** A hooks file of the person's whose host's lines run the kit launcher, with how teamrig's lines come out of it. */
 export interface KitLauncherHooks {
   readonly port: HostUserHooks;
@@ -387,23 +403,30 @@ export function pluginSkillsOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts'
 export function hookFilePlacesOf(runtime: Pick<CliRuntime, 'host' | 'shippedHosts' | 'env' | 'platform' | 'userHome'>): readonly GuardedPlace[] {
   const seen = { env: runtime.env, platform: runtime.platform };
   const paths = runtime.platform === 'win32' ? win32 : posix;
-  const byFolder = new Map<string, { readonly hosts: Set<string>; readonly entries: Set<string> }>();
+  const byFolder = new Map<string, { readonly hosts: Set<string>; readonly entries: Set<string>; readonly suffixes: Set<string> }>();
+  const placeOf = (folder: string, host: string): { readonly entries: Set<string>; readonly suffixes: Set<string> } => {
+    const place = byFolder.get(folder) ?? { hosts: new Set<string>(), entries: new Set<string>(), suffixes: new Set<string>() };
+    place.hosts.add(host);
+    byFolder.set(folder, place);
+    return place;
+  };
   for (const source of sourcesOf(runtime)) {
     const { userHooks } = source(seen);
     if (isUnsupported(userHooks)) {
       continue;
     }
     for (const file of [userHooks.file(runtime.userHome), ...userHooks.configLines.map((lines) => lines.file(runtime.userHome))]) {
-      const folder = paths.dirname(file);
-      const place = byFolder.get(folder) ?? { hosts: new Set<string>(), entries: new Set<string>() };
-      place.hosts.add(userHooks.host);
-      place.entries.add(paths.basename(file));
-      byFolder.set(folder, place);
+      placeOf(paths.dirname(file), userHooks.host).entries.add(paths.basename(file));
+    }
+    // A set's files are named by the person (Codex's `<name>.config.toml`), so the guard keeps every name with its end.
+    for (const set of userHooks.configFileSets ?? []) {
+      placeOf(set.folder(runtime.userHome), userHooks.host).suffixes.add(set.suffix);
     }
   }
-  return [...byFolder].map(([folder, { hosts, entries }]) => ({
+  return [...byFolder].map(([folder, { hosts, entries, suffixes }]) => ({
     folder,
     entries: [...entries],
+    ...(suffixes.size > 0 ? { suffixes: [...suffixes] } : {}),
     what: `the hook files of ${[...hosts].join(', ')}`,
     writer: '`teamrig setup hooks` writes them',
   }));

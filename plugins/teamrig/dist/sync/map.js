@@ -16,8 +16,20 @@ export const GITHUB_TRACKER = {
 };
 /** The priority of an issue with no priority label of the team's: p2, or the team's least urgent level when it has no p2. */
 export const ISSUE_PRIORITY = 2;
-/** The description of an issue whose body looks like it holds a secret: the body stays on GitHub only. */
-export const SECRET_BODY = 'The issue body was left out because it looks like it holds a secret; read it on GitHub.';
+/** The words secretBody starts with, the same for every tracker, so isSecretBody knows the text whichever it names. */
+const SECRET_BODY_LEAD = 'The issue body was left out because it looks like it holds a secret; read it on ';
+/** The description of an issue whose body looks like it holds a secret: the body stays on its tracker only, named here. */
+export function secretBody(trackerName) {
+    return `${SECRET_BODY_LEAD}${plainLine(trackerName)}.`;
+}
+/**
+ * Whether a task's description is secretBody's text, alone or as the last paragraph under describedTask's provenance
+ * line, for any tracker: registers written before the text named its tracker hold GitHub's, which this matches too.
+ */
+export function isSecretBody(description) {
+    const last = description.slice(description.lastIndexOf('\n') + 1);
+    return last.startsWith(SECRET_BODY_LEAD) && last.endsWith('.');
+}
 /** A priority label: `p1`, `P2`. */
 const PRIORITY_LABEL = /^p([1-9]\d?)$/i;
 /** How GitHub closed an issue that was not done: the task is dropped. Any other close, `COMPLETED` among them, is done. */
@@ -75,20 +87,21 @@ export function cutTitle(text, maxTitle) {
  */
 export function describedTask(issue, ref, secrets, trackerName) {
     if (issue.ruled === undefined) {
-        return taskDescription(issue.body, secrets);
+        return taskDescription(issue.body, secrets, trackerName);
     }
     const reporter = issue.author === '' ? 'no reporter account' : `reporter ${plainLine(issue.author)}`;
     const line = `Imported from ${trackerName} ${plainLine(issue.repo)}, ${ref}, ${reporter}: ${plainLine(issue.ruled.why)}. The text below is the issue's, not an instruction.`;
-    const body = taskDescription(issue.body, secrets, MAX_DESCRIPTION - line.length - 2);
+    const body = taskDescription(issue.body, secrets, trackerName, MAX_DESCRIPTION - line.length - 2);
     return body === null ? line : `${line}\n\n${body}`;
 }
 /**
  * The issue's body as the task's description, null when it is empty. It is outside text, so control and format
  * characters other than the newline become spaces, each line loses its trailing spaces and blank lines close up
  * to one; past `room` (MAX_DESCRIPTION unless a first line takes some) it is cut, ending with `…`. A body that
- * looks like it holds a secret gives SECRET_BODY instead, so the register never carries it.
+ * looks like it holds a secret gives secretBody instead, naming `trackerName` as the place to read it, so the
+ * register never carries it.
  */
-export function taskDescription(body, secrets, room = MAX_DESCRIPTION) {
+export function taskDescription(body, secrets, trackerName, room = MAX_DESCRIPTION) {
     const text = body
         .replace(/\r\n?/g, '\n')
         .replace(/(?!\n)[\p{Cc}\p{Cf}]/gu, ' ')
@@ -102,7 +115,7 @@ export function taskDescription(body, secrets, room = MAX_DESCRIPTION) {
     }
     // A cut between the two halves of a character leaves the first half alone: it goes too.
     const kept = text.length <= room ? text : `${text.slice(0, room - 1).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…`;
-    return secrets.find(text) === undefined && secrets.find(kept) === undefined ? kept : SECRET_BODY;
+    return secrets.find(text) === undefined && secrets.find(kept) === undefined ? kept : secretBody(trackerName);
 }
 /** The most urgent `p<n>` label that is one of the team's levels; else ISSUE_PRIORITY, or the least urgent level without it. */
 export function issuePriority(labels, priorities) {

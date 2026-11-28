@@ -275,6 +275,15 @@ export function userHooksHostId(runtime, name) {
     });
     return found?.[0];
 }
+/** The hooks file of each host `ids` lists (a team's `hosts`) whose shipped adapter keeps one of the person's, in that order. */
+export function listedUserHooksOf(runtime, ids) {
+    const seen = { env: runtime.env, platform: runtime.platform };
+    const shipped = new Map(Object.entries(runtime.shippedHosts));
+    return ids.flatMap((id) => {
+        const userHooks = shipped.get(id)?.ports(seen).userHooks;
+        return userHooks === undefined || isUnsupported(userHooks) ? [] : [{ id, port: userHooks }];
+    });
+}
 /**
  * Every host whose lines in the person's hooks file run the kit launcher, from every host adapter teamrig ships with
  * and the run's own host, once each by name: `kit uninstall` takes their lines out before the launcher goes.
@@ -319,22 +328,29 @@ export function hookFilePlacesOf(runtime) {
     const seen = { env: runtime.env, platform: runtime.platform };
     const paths = runtime.platform === 'win32' ? win32 : posix;
     const byFolder = new Map();
+    const placeOf = (folder, host) => {
+        const place = byFolder.get(folder) ?? { hosts: new Set(), entries: new Set(), suffixes: new Set() };
+        place.hosts.add(host);
+        byFolder.set(folder, place);
+        return place;
+    };
     for (const source of sourcesOf(runtime)) {
         const { userHooks } = source(seen);
         if (isUnsupported(userHooks)) {
             continue;
         }
         for (const file of [userHooks.file(runtime.userHome), ...userHooks.configLines.map((lines) => lines.file(runtime.userHome))]) {
-            const folder = paths.dirname(file);
-            const place = byFolder.get(folder) ?? { hosts: new Set(), entries: new Set() };
-            place.hosts.add(userHooks.host);
-            place.entries.add(paths.basename(file));
-            byFolder.set(folder, place);
+            placeOf(paths.dirname(file), userHooks.host).entries.add(paths.basename(file));
+        }
+        // A set's files are named by the person (Codex's `<name>.config.toml`), so the guard keeps every name with its end.
+        for (const set of userHooks.configFileSets ?? []) {
+            placeOf(set.folder(runtime.userHome), userHooks.host).suffixes.add(set.suffix);
         }
     }
-    return [...byFolder].map(([folder, { hosts, entries }]) => ({
+    return [...byFolder].map(([folder, { hosts, entries, suffixes }]) => ({
         folder,
         entries: [...entries],
+        ...(suffixes.size > 0 ? { suffixes: [...suffixes] } : {}),
         what: `the hook files of ${[...hosts].join(', ')}`,
         writer: '`teamrig setup hooks` writes them',
     }));

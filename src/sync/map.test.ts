@@ -4,7 +4,7 @@ import { testConfig } from '../testing/config.ts';
 import type { HostIssue } from '../issues/issue.ts';
 import { MAX_DESCRIPTION } from '../config/defaults.ts';
 import { SecretScanner } from '../core/secrets.ts';
-import { describedTask, GITHUB_TRACKER, importRules, issueOutcome, issueOwner, issuePriority, issueRef, issueTask, SECRET_BODY, taskDescription, taskTitle, type ImportRules, type ImportTracker } from './map.ts';
+import { describedTask, GITHUB_TRACKER, importRules, issueOutcome, issueOwner, issuePriority, issueRef, issueTask, isSecretBody, secretBody, taskDescription, taskTitle, type ImportRules, type ImportTracker } from './map.ts';
 
 const RULES: ImportRules = importRules(testConfig({ github: { repos: ['acme/web'], owners: { octocat: 'bravo', hubot: 'alpha' } } }));
 const SECRETS = new SecretScanner();
@@ -113,7 +113,7 @@ describe('describedTask (T5012)', () => {
   });
 
   it('keeps the line over a body left out for a secret', () => {
-    assert.equal(describedTask(ruled(`log in at ${credentialUrl()}`), 'jira:ENG-7', SECRETS, 'Jira'), `${line}\n\n${SECRET_BODY}`);
+    assert.equal(describedTask(ruled(`log in at ${credentialUrl()}`), 'jira:ENG-7', SECRETS, 'Jira'), `${line}\n\n${secretBody('Jira')}`);
   });
 
   it('gives an issue judged by its authors ties its body alone, as before', () => {
@@ -123,29 +123,57 @@ describe('describedTask (T5012)', () => {
 
 describe('taskDescription', () => {
   it('gives none for an empty or blank body', () => {
-    assert.equal(taskDescription('', SECRETS), null);
-    assert.equal(taskDescription(' \r\n\t\n ', SECRETS), null);
+    assert.equal(taskDescription('', SECRETS, 'GitHub'), null);
+    assert.equal(taskDescription(' \r\n\t\n ', SECRETS, 'GitHub'), null);
   });
 
   it('keeps the lines, turning control and format characters into spaces and closing up blank lines', () => {
     const body = '\n\n## Steps  \r\n1. log\u001b[31m in‮\r\n\r\n\r\n\r\n2. see\tthe error\n\n';
-    assert.equal(taskDescription(body, SECRETS), '## Steps\n1. log [31m in\n\n2. see the error');
+    assert.equal(taskDescription(body, SECRETS, 'GitHub'), '## Steps\n1. log [31m in\n\n2. see the error');
   });
 
   it(`cuts a body past ${MAX_DESCRIPTION} characters, ending with an ellipsis, never between the halves of a character`, () => {
     const exact = 'b'.repeat(MAX_DESCRIPTION);
-    assert.equal(taskDescription(exact, SECRETS), exact);
-    const long = taskDescription(`${'b'.repeat(MAX_DESCRIPTION - 2)} tail`, SECRETS) ?? '';
+    assert.equal(taskDescription(exact, SECRETS, 'GitHub'), exact);
+    const long = taskDescription(`${'b'.repeat(MAX_DESCRIPTION - 2)} tail`, SECRETS, 'GitHub') ?? '';
     assert.equal(long, `${'b'.repeat(MAX_DESCRIPTION - 2)}…`);
-    const split = taskDescription(`${'b'.repeat(MAX_DESCRIPTION - 2)}\u{1F600}more`, SECRETS) ?? '';
+    const split = taskDescription(`${'b'.repeat(MAX_DESCRIPTION - 2)}\u{1F600}more`, SECRETS, 'GitHub') ?? '';
     assert.equal(split, `${'b'.repeat(MAX_DESCRIPTION - 2)}…`);
     assert.ok(split.length <= MAX_DESCRIPTION);
   });
 
   it('leaves out a body that looks like it holds a secret, in the kept part or past the cut', () => {
-    assert.equal(taskDescription(`log in at ${credentialUrl()}`, SECRETS), SECRET_BODY);
-    assert.equal(taskDescription(`${'b'.repeat(MAX_DESCRIPTION)} ${credentialUrl()}`, SECRETS), SECRET_BODY);
-    assert.equal(taskDescription('uses tok_abcd1234', new SecretScanner(['tok_[a-z0-9]{8}'])), SECRET_BODY);
+    assert.equal(taskDescription(`log in at ${credentialUrl()}`, SECRETS, 'GitHub'), secretBody('GitHub'));
+    assert.equal(taskDescription(`${'b'.repeat(MAX_DESCRIPTION)} ${credentialUrl()}`, SECRETS, 'GitHub'), secretBody('GitHub'));
+    assert.equal(taskDescription('uses tok_abcd1234', new SecretScanner(['tok_[a-z0-9]{8}']), 'GitHub'), secretBody('GitHub'));
+  });
+
+  it('names the tracker the held-back body is read on, never GitHub for a Jira issue (T5301)', () => {
+    const held = taskDescription(`log in at ${credentialUrl()}`, SECRETS, 'Jira') ?? '';
+    assert.match(held, /read it on Jira\.$/);
+    assert.doesNotMatch(held, /GitHub/);
+  });
+});
+
+describe('secretBody and isSecretBody (T5301)', () => {
+  it("keeps GitHub's text as registers written before T5301 hold it", () => {
+    assert.equal(secretBody('GitHub'), 'The issue body was left out because it looks like it holds a secret; read it on GitHub.');
+  });
+
+  it('strips control characters from the tracker name, so the text stays one line', () => {
+    assert.equal(secretBody('Ji\nra\u001b').split('\n').length, 1);
+  });
+
+  it("knows the text for any tracker, alone or under a ruled issue's provenance line", () => {
+    assert.ok(isSecretBody(secretBody('GitHub')));
+    assert.ok(isSecretBody(secretBody('Jira')));
+    assert.ok(isSecretBody(`Imported from Jira acme/eng, jira:ENG-7, reporter x: inside.\n\n${secretBody('Jira')}`));
+  });
+
+  it('reads a body that only mentions the words, or any other text, as no held-back body', () => {
+    assert.equal(isSecretBody('Steps'), false);
+    assert.equal(isSecretBody(`${secretBody('Jira')}\n\nand more`), false);
+    assert.equal(isSecretBody(''), false);
   });
 });
 
